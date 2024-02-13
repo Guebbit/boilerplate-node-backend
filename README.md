@@ -1,8 +1,8 @@
-#TODO
+# TODO
  - Better security (csurf deprecated)
  - connect-flash sometimes not showing flash messages after redirect
 
-#Instructions
+# Instructions
  - Create .env file using the example
  - Create database and link it using .env variables
  - Link to services using .env variables (es: email responders are a different kind of server)
@@ -12,7 +12,7 @@
 # Rules
  - [admin scope]: defaultScope restrict to only active products. Admin can see all through unscope()
 
-#Useful info
+# Useful info
 - https://sequelize.org/docs/v6/core-concepts/model-basics/
 - https://sequelize.org/docs/v6/other-topics/typescript/
 - https://sequelize.org/docs/v6/other-topics/hooks/
