@@ -1,0 +1,27 @@
+<main class="centered">
+    <h1>Order {{ order.id }}</h1>
+    <p>{{ order.createdAt }}</p>
+    <hr />
+    <div class="grid">
+        {{#each products}}
+            <article class="card product-item small-item">
+                <header class="card__header">
+                    <h1 class="product__title">
+                        {{ [Product.title] }}
+                    </h1>
+                </header>
+                <div class="card__image">
+                    <img src="{{ [Product.imageUrl] }}" alt="{{ [Product.title] }}">
+                </div>
+                <div class="card__content">
+                    <h2 class="product__price">
+                        {{ quantity }}
+                    </h2>
+                    <h2 class="product__price">
+                        ${{ [Product.price] }}
+                    </h2>
+                </div>
+            </article>
+        {{/each}}
+    </div>
+</main>

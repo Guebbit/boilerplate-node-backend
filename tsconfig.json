@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "module": "commonjs",
+    "baseUrl": ".",
+    "moduleResolution": "Node",
+    "outDir": "dist",
+    "importsNotUsedAsValues": "remove",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "skipLibCheck": true,
+    "ignoreDeprecations": "5.0",
+    "sourceMap": true
+  },
+  "typeRoots": [
+    "./src/types",
+    "./node_modules/@types"
+  ],
+  "exclude": ["node_modules"],
+  "include": ["src/*.ts", "src/**/*.ts", "tests/**/*.ts"]
+}

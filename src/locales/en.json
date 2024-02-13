@@ -1,0 +1,21 @@
+{
+  "login": {
+    "invalid-data": "Inserted data are invalid",
+    "wrong-data": "Invalid email or password",
+    "success": "Login successful"
+  },
+  "signup": {
+    "email-already-used":  "Email was already used",
+    "registration-successful": "Registration successful, confirm via email to login",
+    "password-dont-match": "Confirmation password must be the same of password"
+  },
+  "reset": {
+    "email-not-found": "No user associated with the inserted email was found",
+    "token-not-found": "Invalid or expired token, please try again",
+    "email-sent": "An email with a link was sent, click to reset password",
+    "success": "Password changed, login with the new password"
+  },
+  "generic": {
+    "unknown-error": "Something went wrong with the request."
+  }
+}

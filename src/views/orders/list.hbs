@@ -1,0 +1,12 @@
+<main>
+    <ul class="orders">
+        {{#each orderList}}
+            <li class="orders__item">
+                <b>Order - #{{dataValues.id}}</b>
+                <span>Quantity - <b>{{dataValues.totalQuantity}}</b></span>
+                <span>Items - <b>{{dataValues.totalItems}}</b></span>
+                <a class="btn" href="/orders/details/{{dataValues.id}}">Invoice</a>
+            </li>
+        {{/each}}
+    </ul>
+</main>

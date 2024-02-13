@@ -1,0 +1,27 @@
+<main class="centered">
+    <h1>{{ product.title }}</h1>
+    <hr />
+    <div class="image">
+        <img src="{{ product.imageUrl }}" alt="{{ product.title }}">
+    </div>
+    <h2>{{ product.price }}</h2>
+    <p>{{ product.description }}</p>
+    <hr />
+    {{#if isAdmin}}
+        {{#if product.active}}
+            <p>ACTIVE</p>
+        {{else}}
+            <h3><b>NOT</b> ACTIVE</h3>
+        {{/if}}
+        <a href="/products/edit/{{ product.id }}" class="btn">Edit</a>
+        <form action="/products/delete" method="post">
+            <button class="btn" type="submit">Delete</button>
+            <input type="hidden" name="id" value="{{ product.id }}">
+        </form>
+    {{/if}}
+    <form action="/cart" method="post">
+        <button class="btn" type="submit">Add to Cart</button>
+        <input type="hidden" value="1" name="quantity">
+        <input type="hidden" name="id" value="{{ dataValues.id }}">
+    </form>
+</main>
