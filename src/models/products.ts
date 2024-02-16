@@ -1,104 +1,41 @@
-import {
-    Model,
-    DataTypes,
-    InferAttributes,
-    InferCreationAttributes,
-    CreationOptional,
-    Op, NonAttribute,
-} from 'sequelize';
-import { z } from "zod";
-import db from "../utils/db";
-import CartItems from "./cart-items";
+import mongoose, { Schema, Document } from 'mongoose';
+import { z } from 'zod';
+// import CartItems, { ICartItem } from './cart-items'; // Assuming you have a CartItems model defined
 
-/**
- * Model with typescript
- *
- * Order of InferAttributes & InferCreationAttributes is important
- *
- * id, createdAt and updatedAt are filled by MySQL automatically
- *
- * "CreationOptional" is a special type that marks the field as optional
- * when creating an instance of the model (such as using Model.create())
- */
-class Products extends Model<InferAttributes<Products>, InferCreationAttributes<Products>> {
-    declare id: CreationOptional<number>;
-    declare title: string;
-    declare price: number;
-    declare imageUrl: string;
-    declare description: string;
-    declare active: boolean;
-    declare createdAt: CreationOptional<number>;
-    declare updatedAt: CreationOptional<number>;
-    declare deletedAt: CreationOptional<number>;
-
-    /**
-     * HasMany Association (through CartItem) - Cart
-     */
-    declare CartItems: NonAttribute<CartItems>;
+export interface IProduct extends Document {
+    title: string;
+    price: number;
+    imageUrl: string;
+    description: string;
+    active: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
+    deletedAt?: Date;
 }
 
-Products.init(
+const productSchema = new Schema<IProduct>(
     {
-        id: {
-            type: DataTypes.INTEGER.UNSIGNED,
-            autoIncrement: true,
-            primaryKey: true,
-            allowNull: false,
+        title: {
+            type: String, required: true
         },
-        title: DataTypes.STRING,
         price: {
-            type: DataTypes.DOUBLE,
-            allowNull: false
+            type: Number, required: true
         },
         imageUrl: {
-            type: DataTypes.STRING,
-            allowNull: false
-        },
-        active: {
-            type: DataTypes.BOOLEAN,
-            defaultValue: true
+            type: String, required: true
         },
         description: {
-            type: new DataTypes.STRING(512),
-            allowNull: false
+            type: String, required: true
         },
-        createdAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW
+        active: {
+            type: Boolean, default: true
         },
-        updatedAt: DataTypes.DATE,
-        deletedAt: DataTypes.DATE,
+        deletedAt: { type: Date }
     },
-    {
-        sequelize: db,
-        tableName: 'products',
-        paranoid: true,
-        defaultScope: {
-            where: {
-                active: true
-            }
-        },
-        scopes: {
-            lowCost: {
-                where: {
-                    [Op.and]: [
-                        {
-                            price: {
-                                [Op.lt]: 30
-                            }
-                        },
-                        {
-                            active: true
-                        }
-                    ]
-                }
-            }
-        }
-    }
+    { timestamps: true }
 );
 
-export const ProductSchema =
+export const ProductZodSchema =
     z.object({
         id: z.number().nullish().optional(),
         title: z
@@ -115,4 +52,4 @@ export const ProductSchema =
         updatedAt: z.date().nullish().optional(),
     });
 
-export default Products;
+export default mongoose.model<IProduct>('Products', productSchema);

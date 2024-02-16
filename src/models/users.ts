@@ -1,249 +1,79 @@
-import {
-    CreationOptional,
-    DataTypes,
-    InferAttributes,
-    InferCreationAttributes,
-    Model,
-    NonAttribute,
-    HasManyCountAssociationsMixin,
-    HasManyGetAssociationsMixin,
-    HasManyHasAssociationsMixin,
-    HasManyRemoveAssociationsMixin,
-    HasManyAddAssociationsMixin,
-    HasManyAddAssociationMixin,
-    HasManyRemoveAssociationMixin, 
-    HasManySetAssociationsMixin, 
-    HasManyHasAssociationMixin,
-    HasManyCreateAssociationMixin,
-    HasOneCreateAssociationMixin,
-    HasOneGetAssociationMixin,
-} from 'sequelize';
-import { z } from "zod";
-import db from "../utils/db";
-import Orders from "./orders";
-import Tokens from "./tokens";
-import Cart from "./cart";
-import Products from "./products";
-import CartItems from "./cart-items";
+import mongoose, { Schema, Document } from 'mongoose';
+import { z } from 'zod';
+import Cart, { ICart } from './cart'; // Assuming you have a Cart model defined
+import Orders, { IOrder } from './orders'; // Assuming you have an Orders model defined
+import Tokens, { IToken } from './tokens'; // Assuming you have a Tokens model defined
+import Products, { IProduct } from './products'; // Assuming you have a Products model defined
+import CartItems, { ICartItem } from './cart-items'; // Assuming you have a CartItems model defined
 
-class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>> {
-    declare id: CreationOptional<number>;
-    declare email: string;
-    declare username: string;
-    declare password: string;
-    declare imageUrl: CreationOptional<string>;
-    declare admin: CreationOptional<boolean>;
-    declare createdAt: CreationOptional<number>;
-    declare updatedAt: CreationOptional<number>;
-    declare deletedAt: CreationOptional<number>;
+export interface IUser extends Document {
+    email: string;
+    username: string;
+    password: string;
+    imageUrl?: string;
+    admin?: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
+    deletedAt?: Date;
 
-    /**
-     * HasOne Association - Cart
-     */
-    declare createCart: HasOneCreateAssociationMixin<Cart>;
-    declare getCart: HasOneGetAssociationMixin<Cart>;
+    // Associations
+    cart: ICart['_id'];
+    orders: Array<IOrder['_id']>;
+    tokens: Array<IToken['_id']>;
 
-    /**
-     * HasMany Association - Orders
-     */
-    declare getOrders: HasManyGetAssociationsMixin<Orders>;
-    declare addOrder: HasManyAddAssociationMixin<Orders, number>;
-    declare addOrders: HasManyAddAssociationsMixin<Orders, number>;
-    declare setOrders: HasManySetAssociationsMixin<Orders, number>;
-    declare removeOrder: HasManyRemoveAssociationMixin<Orders, number>;
-    declare removeOrders: HasManyRemoveAssociationsMixin<Orders, number>;
-    declare hasOrder: HasManyHasAssociationMixin<Orders, number>;
-    declare hasOrders: HasManyHasAssociationsMixin<Orders, number>;
-    declare countOrders: HasManyCountAssociationsMixin;
-    declare createOrder: HasManyCreateAssociationMixin<Orders>;
-
-    /**
-     * HasMany Association - Tokens
-     */
-    declare createToken: HasManyCreateAssociationMixin<Tokens>;
-
-    /**
-     * defaultScope joined element
-     */
-    declare Cart: NonAttribute<Cart>;
-
-    /**
-     * Custom method
-     */
-    declare addToCart: NonAttribute<(product: Products, quantity: number) => Promise<unknown>>;
+    // Custom methods
+    addToCart: (product: IProduct, quantity?: number) => Promise<unknown>;
 }
 
-Users.init(
+const userSchema = new Schema<IUser>(
     {
-        id: {
-            type: DataTypes.INTEGER,
-            autoIncrement: true,
-            allowNull: false,
-            primaryKey: true
-        },
-        email: {
-            type: DataTypes.STRING,
-            allowNull: false,
-        },
-        username: {
-            type: new DataTypes.STRING(),
-            allowNull: false
-        },
-        password: {
-            type: new DataTypes.STRING(),
-            allowNull: false
-        },
-        imageUrl: {
-            type: DataTypes.STRING,
-            defaultValue: "https://placekitten.com/500/500",
-        },
-        admin: {
-            type: DataTypes.BOOLEAN,
-            defaultValue: false
-        },
-        createdAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW
-        },
-        updatedAt: DataTypes.DATE,
-        deletedAt: DataTypes.DATE,
+        email: { type: String, required: true },
+        username: { type: String, required: true },
+        password: { type: String, required: true },
+        imageUrl: { type: String },
+        admin: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date },
+        deletedAt: { type: Date },
+
+        // Associations
+        cart: { type: Schema.Types.ObjectId, ref: 'Cart' },
+        orders: [{ type: Schema.Types.ObjectId, ref: 'Orders' }],
+        tokens: [{ type: Schema.Types.ObjectId, ref: 'Tokens' }]
     },
-    {
-        /**
-         * database connection
-         */
-        sequelize: db,
-
-        /**
-         * Table name in the database
-         */
-        tableName: 'users',
-
-        /**
-         * Soft deletion
-         * when a row is deleted, "deletedAt" is updated instead
-         * (unless .destroy({ force: true })
-         *
-         * can use .restore({ where: * }) to revert deletion
-         */
-        paranoid: true,
-
-        /**
-         * Default scope (for every non-scoped request)
-         * can be nullified with .unscope()
-         */
-        defaultScope: {
-            // get user already joined with his cart
-            include: [{
-                    model: Cart,
-                },
-            ]
-        },
-
-        /**
-         * Hooks that happens at specific points
-         */
-        hooks: {
-            /**
-             * Hook that happen before creation and can be used for validation
-             * @param user
-             */
-            beforeCreate(user){
-                if(user.username === "not-allowed")
-                    throw new Error("username not allowed")
-            }
-        },
-    }
+    { timestamps: true }
 );
 
-/**
- * Custom method
- * Add a single product to the cart
- *
- * @param product
- * @param quantity
- */
-Users.prototype.addToCart = function(product, quantity = 0) {
+userSchema.methods.addToCart = async function(product: IProduct, quantity: number = 0) {
+    if (!product) return Promise.reject([]);
 
-    console.log("ADD PRODUCTS")
+    try {
+        const cart = await Cart.findOne({ user: this._id }).exec();
+        if (!cart) return Promise.reject('Cart not found');
 
-    if(!product)
-        return Promise.reject([]);
-
-    /**
-     * Find if already existing items in cart
-     */
-    return this.Cart
-        .getCartItems({
-            where: {
-                productId: product.id
-            }
-        })
-        .then((items): Promise<unknown> => {
-            /**
-             * Edit the cart item that where found
-             */
-            if(items.length > 0){
-                // it's the same as below
-                // for(let i = items.length; i--; ){
-                //     items[i].quantity += quantity;
-                //     items[i].save();
-                // }
-
-                // it's the same as below
-                // const promiseArray: Promise<unknown>[] = [];
-                // items.map((product) => {
-                //     product.quantity += quantity;
-                //     promiseArray.push(product.save());
-                // })
-                // return Promise.all(promiseArray);
-
-                return Promise.all(
-                    items.map((product) => {
-                        product.quantity += quantity;
-                        return product.save();
-                    })
-                );
-            }
-            
-            /**
-             * No product found, create new
-             */
-            return this.Cart
-                .addProduct(product, {
-                    through: {
-                        quantity
-                    }
-                })
-        })
+        const cartItem = await CartItems.findOne({ cart: cart._id, product: product._id }).exec();
+        if (cartItem) {
+            cartItem.quantity += quantity;
+            await cartItem.save();
+        } else {
+            await CartItems.create({ cart: cart._id, product: product._id, quantity });
+        }
+        return Promise.resolve();
+    } catch (error) {
+        return Promise.reject(error);
+    }
 };
 
-/**
- *
- */
-export const UserSchema =
-    z.object({
-        id: z.number().nullish().optional(),
-        email: z
-            .string({
-                required_error: "Email is required",
-            })
-            .email("Not a valid email"),
-        username: z
-            .string({
-                required_error: "Username is required",
-            })
-            .min(3, "Name is too short"),
-        password: z
-            .string({
-                required_error: "Username is required",
-            })
-            .min(8, "Password is too short"),
-        imageUrl: z.string().nullish().optional(),
-        admin: z.boolean().nullish().optional(),
-        createdAt: z.date().nullish().optional(),
-        updatedAt: z.date().nullish().optional(),
-    });
+const Users = mongoose.model<IUser>('Users', userSchema);
+
+export const UserSchema = z.object({
+    email: z.string().email('Not a valid email').nonempty('Email is required'),
+    username: z.string().min(3, 'Username is too short').nonempty('Username is required'),
+    password: z.string().min(8, 'Password is too short').nonempty('Password is required'),
+    imageUrl: z.string().optional(),
+    admin: z.boolean().optional(),
+    createdAt: z.date().nullable(),
+    updatedAt: z.date().nullable(),
+});
 
 export default Users;

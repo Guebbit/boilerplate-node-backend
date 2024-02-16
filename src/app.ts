@@ -8,18 +8,16 @@ import i18next from 'i18next';
 import helmet from "helmet";
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
+import mongoose from "mongoose";
 import { engine } from 'express-handlebars';
 
-// import database
-import db from './utils/db';
-
-import { store, session, flash, userConnect } from "./utils/session";
+import { session, flash, userConnect } from "./utils/session";
 import { rateLimiter } from "./middlewares/security";
 
 import productRoutes from "./routes/products";
-import authRoutes from "./routes/auth";
-import orderRoutes from "./routes/orders";
-import cartRoutes from "./routes/cart";
+// import authRoutes from "./routes/auth";
+// import orderRoutes from "./routes/orders";
+// import cartRoutes from "./routes/cart";
 import indexRoutes from "./routes";
 import errorRoutes from "./routes/errors";
 
@@ -41,14 +39,16 @@ app.engine('hbs',
 app.set('view engine', 'hbs');
 app.set('views', './src/views');
 
+// mongoose
+//     .connect(process.env.NODE_DB_URI || "")
+//     .then(result => app.listen(process.env.NODE_PORT || 3000))
+
 /**
  * Sync database then start server
  * AFTER sync we can use the database, since it is initialized
  */
-db
-    .sync({ force: true })
-    // .sync()
-    .then(() => store.sync())
+mongoose
+    .connect(process.env.NODE_DB_URI || "")
     .then(() => i18next.init({
         debug: true,
         lng: process.env.NODE_DEFAULT_LOCALE || 'en',
@@ -61,7 +61,7 @@ db
     }))
     .then(() => {
         console.log("------------- SERVER START -------------")
-        app.listen( process.env.NODE_PORT || 3000);
+        app.listen(process.env.NODE_PORT || 3000);
     })
     .catch(err => console.log("------------- SERVER START ERROR -------------", err));
 
@@ -116,6 +116,7 @@ app.use(bodyParser.urlencoded({
 //     });
 // });
 
+
 /**
  * Parse and secure cookies
  */
@@ -154,9 +155,9 @@ app.use((req, res, next) => {
 });
 
 app.use('/products', productRoutes);
-app.use('/account', authRoutes);
-app.use('/orders', orderRoutes);
-app.use('/cart', cartRoutes);
+// app.use('/account', authRoutes);
+// app.use('/orders', orderRoutes);
+// app.use('/cart', cartRoutes);
 app.use('/', indexRoutes);
 app.use('/error', errorRoutes);
 // catch all routes

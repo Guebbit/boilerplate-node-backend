@@ -11,16 +11,16 @@ const router = express.Router();
 
 router.get('/', getAllProducts);
 
-router.get('/details/:productId', getTargetProduct);
-
-router.get('/add', isAuth, isAdmin, getAddProduct);
-
-router.post('/add', isAuth, isAdmin, postEditProduct);
-
-router.get('/edit/:productId', isAuth, isAdmin, getAddProduct);
-
-router.post('/edit/:productId', isAuth, isAdmin, postEditProduct);
-
-router.post('/delete', isAuth, isAdmin, postDeleteProduct);
+// router.get('/details/:productId', getTargetProduct);
+//
+// router.get('/add', isAuth, isAdmin, getAddProduct);
+//
+// router.post('/add', isAuth, isAdmin, postEditProduct);
+//
+// router.get('/edit/:productId', isAuth, isAdmin, getAddProduct);
+//
+// router.post('/edit/:productId', isAuth, isAdmin, postEditProduct);
+//
+// router.post('/delete', isAuth, isAdmin, postDeleteProduct);
 
 export default router;

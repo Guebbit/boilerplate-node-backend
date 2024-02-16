@@ -6,24 +6,17 @@
  */
 import expressSession from "express-session";
 import connectFlash from "connect-flash";
-import db from './db';
+import { default as connectMongoDBSession } from 'connect-mongodb-session';
 import type { Request, Response, NextFunction } from "express";
-import Users from "../models/users";
+// import Users from "../models/users";
 
 /**
- * Sequelize connection
+ * MongoDB connection
  */
-const SequelizeStore = require("connect-session-sequelize")(expressSession.Store);
-
-/**
- *
- */
-export const store = new SequelizeStore({
-    db,
-    // The interval at which to clean up expired sessions in milliseconds.
-    checkExpirationInterval: 15 * 60 * 1000,
-    // The maximum age (in milliseconds) of a valid session.
-    expiration: 24 * 60 * 60 * 1000,
+const MongoDBStore = connectMongoDBSession(expressSession);
+export const store = new MongoDBStore({
+    uri: process.env.NODE_DB_URI || "",
+    collection: "sessions",
 });
 
 /**
@@ -66,18 +59,19 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
     // only authorized
     if(!req.session.user)
         return next();
-    Users.findByPk(req.session.user.id)
-        .then((user) => {
-            if(!user)
-                throw "error";
-            // to show user data through the UI
-            res.locals.currentUser = req.session.user;
-            res.locals.isAuthenticated = true;
-            res.locals.isAdmin = req.session.user?.admin;
-            // user model
-            req.user = user;
-            return user;
-        })
-        // proceed
-        .then(() => next())
+    next();
+    // Users.findByPk(req.session.user.id)
+    //     .then((user) => {
+    //         if(!user)
+    //             throw "error";
+    //         // to show user data through the UI
+    //         res.locals.currentUser = req.session.user;
+    //         res.locals.isAuthenticated = true;
+    //         res.locals.isAdmin = req.session.user?.admin;
+    //         // user model
+    //         req.user = user;
+    //         return user;
+    //     })
+    //     // proceed
+    //     .then(() => next())
 };

@@ -1,42 +1,36 @@
-import {
-    Model,
-    DataTypes,
-    InferAttributes,
-    InferCreationAttributes,
-    CreationOptional,
-    ForeignKey
-} from 'sequelize';
-import db from "../utils/db";
-import Orders from "./orders";
+import mongoose, {Schema, Document} from 'mongoose';
+import Orders, {IOrder} from './orders'; // Assuming you have an Orders model defined
 
-class OrderItems extends Model<InferAttributes<OrderItems>, InferCreationAttributes<OrderItems>> {
-    declare id: CreationOptional<number>;
-    declare quantity: number;
-    declare orderId: ForeignKey<Orders['id']>;
-    declare createdAt: CreationOptional<number>;
-    declare updatedAt: CreationOptional<number>;
+export interface IOrderItem extends Document {
+    quantity: number;
+    orderId: IOrder['_id'];
+    createdAt: Date;
+    updatedAt?: Date;
 }
 
-OrderItems.init(
+const orderItemSchema = new Schema<IOrderItem>(
     {
-        id: {
-            type: DataTypes.INTEGER,
-            autoIncrement: true,
-            allowNull: false,
-            primaryKey: true
+        quantity: {
+            type: Number,
+            required: true
         },
-        quantity: DataTypes.INTEGER,
-        createdAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW
+        orderId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Orders',
+            required: true
         },
-        updatedAt: DataTypes.DATE,
+        // createdAt: {
+        //     type: Date,
+        //     default: Date.now,
+        //     required: true
+        // },
+        // updatedAt: {
+        //     type: Date
+        // }
     },
     {
-        sequelize: db,
-        tableName: 'order-items'
+        timestamps: true
     }
 );
 
-export default OrderItems;
+export default mongoose.model<IOrderItem>('OrderItems', orderItemSchema);
