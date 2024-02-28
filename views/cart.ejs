@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("./_layouts/main-head.ejs"); %>
+<body>
+<%- include("./_layouts/default-header.ejs"); %>
+<%- include("./_layouts/default-aside.ejs"); %>
+<main>
+    <% if(productList && productList.length > 0){ %>
+        <ul class="cart__item-list">
+            <% productList.forEach(function(item) { %>
+                <li class="cart__item">
+                    <div class="card__image">
+                        <img src="<%= item.product.imageUrl %>" alt="<%= item.product.title %>">
+                    </div>
+                    <div><%= item.product.title %></div>
+                    <div>Quantity: <b><%= item.quantity %></b></div>
+                    <form method="POST">
+                        <input type="text" value="1" name="quantity">
+                        <input type="hidden" name="_id" value="<%= item.product.id %>">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn" type="submit">Add quantity</button>
+                    </form>
+                    <form action="/cart/delete" method="POST">
+                        <input type="hidden" name="_id" value="<%= item.product.id %>">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn danger" type="submit">Remove</button>
+                    </form>
+                </li>
+            <% }); %>
+        </ul>
+        <hr />
+        <div class="centered">
+            <a class="btn" href="/checkout">Order Now!</a>
+        </div>
+    <% }else{ %>
+        <h1>EMPTY CART</h1>
+    <% } %>
+</main>
+<%- include("./_layouts/default-footer.ejs"); %>
+</body>
+</html>

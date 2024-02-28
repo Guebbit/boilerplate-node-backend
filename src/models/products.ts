@@ -1,41 +1,31 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import { z } from 'zod';
-// import CartItems, { ICartItem } from './cart-items'; // Assuming you have a CartItems model defined
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import { z } from "zod"
 
-export interface IProduct extends Document {
+/**
+ * Typing
+ */
+export interface IProduct {
     title: string;
     price: number;
     imageUrl: string;
     description: string;
     active: boolean;
-    createdAt?: Date;
-    updatedAt?: Date;
     deletedAt?: Date;
 }
 
-const productSchema = new Schema<IProduct>(
-    {
-        title: {
-            type: String, required: true
-        },
-        price: {
-            type: Number, required: true
-        },
-        imageUrl: {
-            type: String, required: true
-        },
-        description: {
-            type: String, required: true
-        },
-        active: {
-            type: Boolean, default: true
-        },
-        deletedAt: { type: Date }
-    },
-    { timestamps: true }
-);
+export interface IProductDocument extends IProduct, Document{}
 
-export const ProductZodSchema =
+export interface IProductMethods {}
+
+export interface IProductModel extends Model<IProductDocument, {}, IProductMethods>{
+    validateData: (data: IProduct) => string[]
+}
+
+/**
+ * Zod Schema
+ */
+export const ZodProductSchema =
     z.object({
         id: z.number().nullish().optional(),
         title: z
@@ -48,8 +38,73 @@ export const ProductZodSchema =
             .string({
                 required_error: "Image is required",
             }),
+        active: z.boolean().nullish().optional(),
         createdAt: z.date().nullish().optional(),
         updatedAt: z.date().nullish().optional(),
+        deletedAt: z.date().nullish().optional(),
     });
 
-export default mongoose.model<IProduct>('Products', productSchema);
+export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>({
+    title: {
+        type: String, 
+        required: true,
+    },
+    price: { 
+        type: Number, 
+        required: true
+    },
+    description: { 
+        type: String, 
+        default: ""
+    },
+    imageUrl: { 
+        type: String, 
+        default: "https://placekitten.com/400/400"
+    },
+    active: {
+      type: Boolean,
+      default: false
+    },
+    deletedAt: {
+        type: Date 
+    },
+}, {
+    timestamps: true
+});
+
+/**
+ * Data validation
+ * Check if product info are compliant
+ */
+productSchema.static('validateData', function({
+    title,
+    imageUrl,
+    price,
+    description,
+    active,
+}: IProduct) {
+    /**
+     * Validation
+     */
+    const parseResult = ZodProductSchema
+        .safeParse({
+            title,
+            imageUrl,
+            price,
+            description,
+            active,
+        });
+
+    /**
+     * Validation error
+     */
+    if (!parseResult.success)
+        return parseResult.error.issues.reduce((errorArray, { message }) => {
+            errorArray.push(message);
+            return errorArray;
+        }, [] as string[]);
+    
+    return [];
+});
+
+export default model<IProductDocument, IProductModel>('Product', productSchema);

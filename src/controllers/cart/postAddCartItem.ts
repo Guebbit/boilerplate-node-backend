@@ -1,37 +1,32 @@
 import type { Request, Response } from "express";
 import Products from "../../models/products";
+import {t} from "i18next";
 
 /**
- *
+ * Page POST data
  */
-export interface postAddCartItemBodyParameters {
-    id: string,
+export interface postAddCartItemPostData {
+    _id: string,
     quantity: string,
 }
 
 /**
- * Add a product (with its quantity) to cart
- * Create a CartItem row
+ * Add a product (with its quantity) to cart, check availability, etc
+ * Create a CartItem row.
  *
  * @param req
  * @param res
  */
-export default (req: Request<{}, {}, postAddCartItemBodyParameters>, res: Response) => {
-    if (!req.user)
-        return res.status(500).redirect('/errors/500-unknown');
-
-    Products.findByPk(req.body.id)
+export default (req: Request<{}, {}, postAddCartItemPostData>, res: Response) =>
+    Products.findOne({ _id: req.body._id, active: true, deletedAt: undefined })
         .then((product) => {
-            if(!product)
+            // not found, something happened
+            if(!product){
+                req.flash('error', [t("ecommerce.product-not-found")]);
                 return;
-            return req.user!.addToCart(product, parseInt(req.body.quantity));
+            }
+            req.flash('success', [t("ecommerce.product-added-to-cart")]);
+            // check done before entering the route
+            return req.user!.cartAdd(product, parseInt(req.body.quantity));
         })
-        .then(() =>
-            req.user!.Cart.getProducts({
-                joinTableAttributes: [
-                    'quantity'
-                ]
-            })
-        )
         .then(() => res.redirect('/cart'));
-};

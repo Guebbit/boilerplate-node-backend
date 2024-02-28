@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
+<main>
+    <form class="login-form" action="/account/signup" method="POST" novalidate>
+        <div class="form-control">
+            <label for="email">E-Mail</label>
+            <input type="email" name="email" id="email" value="<%= filledInputs.email %>">
+        </div>
+        <div class="form-control">
+            <label for="username">Username</label>
+            <input type="text" name="username" id="username" value="<%= filledInputs.username %>">
+        </div>
+        <div class="form-control">
+            <label for="imageUrl">Image</label>
+            <input type="text" name="imageUrl" id="imageUrl" value="<%= filledInputs.imageUrl %>">
+        </div>
+        <div class="form-control">
+            <label for="password">Password</label>
+            <input type="password" name="password" id="password">
+        </div>
+        <div class="form-control">
+            <label for="passwordConfirm">Confirm Password</label>
+            <input type="password" name="passwordConfirm" id="passwordConfirm">
+        </div>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn" type="submit">Signup</button>
+    </form>
+</main>
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

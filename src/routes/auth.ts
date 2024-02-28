@@ -5,7 +5,7 @@ import getLogin from "../controllers/auth/getLogin";
 import getSignup from "../controllers/auth/getSignup";
 import postLogin from "../controllers/auth/postLogin";
 import postSignup from "../controllers/auth/postSignup";
-import postLogout from "../controllers/auth/postLogout";
+import getLogout from "../controllers/auth/getLogout";
 import getReset from "../controllers/auth/getReset";
 import postReset from "../controllers/auth/postReset";
 import getResetConfirm from "../controllers/auth/getResetConfirm";
@@ -21,7 +21,7 @@ router.post('/login', isGuest, postLogin);
 
 router.post('/signup', isGuest, postSignup);
 
-router.post('/logout',isAuth, postLogout);
+router.get('/logout',isAuth, getLogout);
 
 router.get('/reset', isGuest, getReset);
 

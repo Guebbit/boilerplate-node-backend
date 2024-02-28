@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
+<main>
+    <form class="product-form" method="POST">
+        <div class="form-control">
+            <label for="title">Title</label>
+            <input type="text" name="title" id="title" value="<%= product.title %>">
+        </div>
+
+        <div class="form-control">
+            <label for="price">Price</label>
+            <input type="number" name="price" id="price" step="0.01" value="<%= product.price %>">
+        </div>
+
+        <div class="form-control">
+            <label for="imageUrl">Image</label>
+            <input type="text" name="imageUrl" id="imageUrl" value="<%= product.imageUrl %>">
+        </div>
+
+        <div class="form-control">
+            <label for="description">Description</label>
+            <textarea name="description" id="description" rows="5"><%= product.description %></textarea>
+        </div>
+
+        <div class="form-control">
+            <label for="active">Active</label>
+            <input type="checkbox" <% if (product.active) { %>checked<% } %> id="active" name="active">
+        </div>
+
+        <% if (product.id) { %>
+            <button class="btn" type="submit">Edit Product</button>
+        <% } else { %>
+            <button class="btn" type="submit">Add Product</button>
+        <% } %>
+
+        <input type="hidden" name="id" value="<%= product.id %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    </form>
+</main>
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

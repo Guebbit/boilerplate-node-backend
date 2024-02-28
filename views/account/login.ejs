@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
+<main>
+    <form class="login-form" action="/account/login" method="POST">
+        <div class="form-control">
+            <label for="email">E-Mail</label>
+            <input
+                    type="email"
+                    name="email"
+                    id="email"
+            >
+        </div>
+        <div class="form-control">
+            <label for="password">Password</label>
+            <input
+                    type="password"
+                    name="password"
+                    id="password"
+            >
+        </div>
+        <button class="btn" type="submit">Login</button>
+        <input type="hidden" name="_csrf" value="<% csrfToken %>">
+    </form>
+    <div class="centered">
+        <a href="/account/reset">Reset Password</a>
+    </div>
+</main>
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

@@ -1,10 +1,11 @@
 import type { Request, Response } from "express";
+import type { CastError } from "mongoose";
 import Products from "../../models/products";
 
 /**
- *
+ * Page POST data
  */
-export interface postEditProductsBodyParameters {
+export interface postEditProductsPostData {
     id: string,
     title: string,
     imageUrl: string,
@@ -17,7 +18,10 @@ export interface postEditProductsBodyParameters {
  * @param req
  * @param res
  */
-export default (req: Request<{}, {}, postEditProductsBodyParameters>, res: Response) => {
+export default (req: Request<{}, {}, postEditProductsPostData>, res: Response) => {
+    /**
+     * get POST data
+     */
     const {
         id,
         title = "",
@@ -28,7 +32,37 @@ export default (req: Request<{}, {}, postEditProductsBodyParameters>, res: Respo
     } = req.body;
 
     /**
-     * No ID = new product
+     * Data validation
+     */
+    const issues = Products.validateData({
+        title,
+        imageUrl,
+        price: parseInt(price),
+        description,
+        active: !!active
+    });
+
+    /**
+     * Validation error
+     */
+    if(issues.length > 0){
+        req.flash('error', issues);
+        req.flash('filled', [
+            title,
+            imageUrl,
+            price,
+            description,
+            active,
+        ]);
+        if (!id || id === '')
+            res.redirect('/products/add');
+        else
+            res.redirect('/products/edit/' + id);
+        return;
+    }
+
+    /**
+     * NO ID = new product
      */
     if (!id || id === '')
         Products.create({
@@ -38,37 +72,29 @@ export default (req: Request<{}, {}, postEditProductsBodyParameters>, res: Respo
             description,
             active: !!active,
         })
-            .then((product) => {
-                console.log("Products.create OK", product)
-                // return res.redirect('/products/details/' + product.id);
-                return res.redirect('/products/');
-            })
-            .catch((err) => {
-                console.log("Products.create ERROR", err);
+            .then(() => res.redirect('/products/'))
+            .catch((error: CastError) => {
+                console.log("Products.create ERROR", error);
                 return res.redirect('/error/unknown');
             });
     /**
      * ID = edit product
      */
     else
-        Products.findByPk(id)
+        Products.findById(id)
             .then((product) => {
                 if (!product)
-                    throw 404;
+                    throw new Error("404");
                 product.title = title;
                 product.imageUrl = imageUrl;
                 product.price = parseInt(price);
                 product.description = description;
                 product.active = !!active;
-                // product.updatedAt = new Date();
                 return product.save();
             })
-            .then((product) => {
-                console.log("Products.findByPk EDIT OK", product)
-                return res.redirect('/products/details/' + product.id);
-            })
-            .catch((err) => {
-                console.log("Products.findByPk ERROR", err);
+            .then((product) => res.redirect('/products/details/' + product.id))
+            .catch((error: CastError) => {
+                console.log("Products.findById ERROR", error);
                 return res.redirect('/error/unknown');
             });
 };

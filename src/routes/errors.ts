@@ -6,6 +6,8 @@ import get500 from "../controllers/errors/get500";
 
 const router = express.Router();
 
+router.get('/page-not-found', get404);
+
 router.get('/product-not-found', get404product);
 
 router.get('/page-not-found', get404);

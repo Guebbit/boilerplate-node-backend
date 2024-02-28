@@ -8,7 +8,7 @@ import expressSession from "express-session";
 import connectFlash from "connect-flash";
 import { default as connectMongoDBSession } from 'connect-mongodb-session';
 import type { Request, Response, NextFunction } from "express";
-// import Users from "../models/users";
+import Users from "../models/users";
 
 /**
  * MongoDB connection
@@ -20,7 +20,7 @@ export const store = new MongoDBStore({
 });
 
 /**
- *
+ * Session storage and cookies
  */
 export const session = expressSession({
     secret: process.env.NODE_SESSION_SECRET || "",
@@ -42,36 +42,43 @@ export const session = expressSession({
 });
 
 /**
- *
+ * connect-flash
  */
 export const flash = connectFlash();
 
 /**
- * Store user model in req (don't like it, but seems the standard since session can't store the model)
+ * Store user model in req
+ * (don't like it, but seems the standard since session can't store the model)
+ *
  * @param req
  * @param res
  * @param next
  */
 export const userConnect = (req: Request, res: Response, next: NextFunction) => {
+    res.locals.csrfToken = "0"; //TODO
     // flash messages
     res.locals.errorMessages = req.flash('error');
     res.locals.successMessages = req.flash('success');
     // only authorized
-    if(!req.session.user)
+    if(!req.session.user){
+        res.locals.currentUser = {};
+        res.locals.isAuthenticated = false;
+        res.locals.isAdmin = false;
         return next();
-    next();
-    // Users.findByPk(req.session.user.id)
-    //     .then((user) => {
-    //         if(!user)
-    //             throw "error";
-    //         // to show user data through the UI
-    //         res.locals.currentUser = req.session.user;
-    //         res.locals.isAuthenticated = true;
-    //         res.locals.isAdmin = req.session.user?.admin;
-    //         // user model
-    //         req.user = user;
-    //         return user;
-    //     })
-    //     // proceed
-    //     .then(() => next())
+    }
+    Users.findById(req.session.user._id)
+        .then((user) => {
+            if(!user)
+                return req.session.destroy(() => res.redirect('/'));
+            // to show user data through the UI
+            res.locals.currentUser = req.session.user;
+            res.locals.isAuthenticated = true;
+            res.locals.isAdmin = req.session.user?.admin;
+            // user model
+            req.user = user;
+            return user;
+        })
+        // proceed
+        .then(() => next())
+        .catch(() => res.status(500).redirect('/errors/unknown'))
 };

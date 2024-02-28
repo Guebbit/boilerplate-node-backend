@@ -1,21 +1,39 @@
+import type { CastError } from "mongoose";
 import type { Request, Response } from "express";
 import Products from "../../models/products";
+
+/**
+ * Page POST data
+ */
+export interface postDeleteProductPostData {
+    _id: string,
+    hardDelete?: string,
+}
 
 /**
  *
  * @param req
  * @param res
  */
-export default (req: Request, res: Response) => {
-    Products.findByPk(req.body.id)
+export default (req: Request<{}, {}, postDeleteProductPostData>, res: Response) =>
+    Products.findById(req.body._id)
         .then((product) => {
             if (!product)
-                throw 404;
-            return product.destroy();
+                throw new Error("404");
+            // HARD delete
+            if(req.body.hardDelete){
+                product.deleteOne();
+                return;
+            }
+            // SOFT delete. If deletedAt already present: UNDELETE
+            if(product.deletedAt)
+                product.deletedAt = undefined
+            else
+                product.deletedAt = new Date();
+            return product.save();
         })
         .then(() => res.redirect('/products/'))
-        .catch((err) => {
-            console.log("postDeleteProduct ERROR", err);
+        .catch((error: CastError) => {
+            console.log("postDeleteProduct ERROR", error);
             return res.redirect('/error/unknown');
         });
-};

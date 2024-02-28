@@ -1,46 +1,97 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import Users, { IUser } from './users'; // Assuming you have a Users model defined
-import Products, { IProduct } from './products'; // Assuming you have a Products model defined
-import OrderItems, { IOrderItem } from './order-items'; // Assuming you have a OrderItems model defined
+import {type CastError, model, Schema, Types} from 'mongoose';
+import type { Document, Model, PipelineStage } from 'mongoose';
+import { productSchema, type IProduct } from "./products";
 
-export interface IOrder extends Document {
-    userId: IUser['_id'];
-    createdAt: Date;
-    updatedAt?: Date;
-    // You may need to adjust the types for products and order items
-    products: Array<IProduct['_id']>;
-    orderItems: Array<IOrderItem['_id']>;
+/**
+ * Same as ICartItem in ./users.ts,
+ * but instead of only productId I store the entire product data.
+ * If the product data change, it must not change for the order.
+ */
+export interface IOrderProduct {
+    product: IProduct;
+    quantity: number;
 }
 
-export const orderSchema = new Schema<IOrder>(
-    {
-        userId: {
-            type: Schema.Types.ObjectId,
-            ref: 'Users',
-            required: true
-        },
-        // createdAt: {
-        //     type: Date,
-        //     default: Date.now,
-        //     required: true
-        // },
-        // updatedAt: {
-        //     type: Date
-        // },
-        // Define the reference to the Products model
-        products: [{
-            type: Schema.Types.ObjectId,
-            ref: 'Products'
-        }],
-        // Define the reference to the OrderItems model
-        orderItems: [{
-            type: Schema.Types.ObjectId,
-            ref: 'OrderItems'
-        }]
-    },
-    {
-        timestamps: true
-    }
-);
+export interface IOrder {
+    userId: Types.ObjectId;
+    email: string;
+    products: IOrderProduct[];
+    createdAt: Date;
+}
 
-export default mongoose.model<IOrder>('Orders', orderSchema);
+export interface IOrderDocument extends IOrder, Document {}
+
+/**
+ * Statics
+ */
+export interface IOrderModel extends Model<IOrderDocument, {}, {}> {
+    getAll: (pipeline: PipelineStage[]) => Promise<IOrderDocument[]>
+}
+
+
+export const orderSchema = new Schema<IOrderDocument>({
+    userId: {
+        type: Schema.Types.ObjectId,
+        required: true,
+    },
+    email: {
+        type: String,
+        required: true
+    },
+    products: [{
+        product: productSchema,
+        quantity: {
+            type: Number,
+            required: true
+        }
+    }],
+    // only createdAt, without updatedAt
+    createdAt: {
+        type: Date,
+        default: Date.now,
+    }
+});
+
+/**
+ * Get all orders
+ * Only admin can see other people orders
+ *
+ * Add total quantity, total items and total price
+ *
+ * @param id
+ * @param admin
+ */
+orderSchema.static('getAll', async function(pipeline: PipelineStage[] = []){
+    return this.aggregate([
+        ...pipeline,
+        {
+            $addFields: {
+                // Count all OrderItems
+                totalItems: {
+                    $size: "$products"
+                },
+                // Sum quantities from all OrderItems
+                totalQuantity: {
+                    $sum: "$products.quantity"
+                },
+                // Sum of all prices multiplied for quantity
+                totalPrice: {
+                    $sum: {
+                        $map: {
+                            input: "$products",
+                            as: "product",
+                            in: {
+                                $multiply: ["$$product.product.price", "$$product.quantity"]
+                            }
+                        }
+                    }
+                },
+            }
+        }
+    ])
+    .catch((error: CastError) => {
+        console.log("ERRORRRRRRRRRRRRRRRRRRRR", error)
+    });
+});
+
+export default model<IOrderDocument, IOrderModel>('Order', orderSchema);

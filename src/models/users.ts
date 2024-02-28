@@ -1,79 +1,504 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import { z } from 'zod';
-import Cart, { ICart } from './cart'; // Assuming you have a Cart model defined
-import Orders, { IOrder } from './orders'; // Assuming you have an Orders model defined
-import Tokens, { IToken } from './tokens'; // Assuming you have a Tokens model defined
-import Products, { IProduct } from './products'; // Assuming you have a Products model defined
-import CartItems, { ICartItem } from './cart-items'; // Assuming you have a CartItems model defined
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import type { IProductDocument } from "./products";
+import Orders, { IOrder } from "./orders";
+import { z } from "zod"
+import { t } from "i18next";
+import bcrypt from "bcrypt";
+import { randomBytes } from "crypto";
 
-export interface IUser extends Document {
-    email: string;
-    username: string;
-    password: string;
-    imageUrl?: string;
-    admin?: boolean;
-    createdAt?: Date;
-    updatedAt?: Date;
-    deletedAt?: Date;
-
-    // Associations
-    cart: ICart['_id'];
-    orders: Array<IOrder['_id']>;
-    tokens: Array<IToken['_id']>;
-
-    // Custom methods
-    addToCart: (product: IProduct, quantity?: number) => Promise<unknown>;
+/**
+ * Cart Item interface
+ * Reference to product and quantity
+ */
+export interface ICartItem {
+    // IProductDocument only after populate()
+    product: IProductDocument['_id'] | IProductDocument;
+    quantity: number;
 }
 
-const userSchema = new Schema<IUser>(
-    {
-        email: { type: String, required: true },
-        username: { type: String, required: true },
-        password: { type: String, required: true },
-        imageUrl: { type: String },
-        admin: { type: Boolean, default: false },
-        createdAt: { type: Date, default: Date.now },
-        updatedAt: { type: Date },
-        deletedAt: { type: Date },
+/**
+ * User tokens
+ * Token is like an ID, but not really an ID
+ */
+export interface IToken {
+    token: string;
+    type: string;
+    expiration?: Date;
+}
 
-        // Associations
-        cart: { type: Schema.Types.ObjectId, ref: 'Cart' },
-        orders: [{ type: Schema.Types.ObjectId, ref: 'Orders' }],
-        tokens: [{ type: Schema.Types.ObjectId, ref: 'Tokens' }]
+/**
+ * User interface
+ */
+export interface IUser {
+    /**
+     * User attributes
+     */
+    email: string;
+    password: string;
+    imageUrl?: string;
+    admin: boolean;
+    deletedAt?: Date;
+
+    /**
+     * Cart management through items
+     */
+    cart: {
+        items: ICartItem[];
+        updatedAt: Date;
+    };
+
+    /**
+     * Tokens
+     * - reset password
+     * - 2fa
+     * - etc
+     */
+    tokens: IToken[];
+}
+
+/**
+ * User Document interface
+ */
+export interface IUserDocument extends IUser, Document {}
+
+/**
+ * User Document methods
+ */
+export interface IUserMethods {
+    getCart: () => Promise<ICartItem[]>;
+    cartAdd: (product: IProductDocument, quantity?: number) => Promise<IUserDocument>;
+    cartRemove: (id: string) => Promise<IUserDocument>;
+    cartRemoveAll: () => Promise<IUserDocument>;
+    orderConfirm: () => Promise<IOrder>;
+    tokenAdd: (type: string, expirationTime?: number) => string
+    passwordChange: (password: string, passwordConfirm: string) => Promise<IUserDocument>
+}
+
+/**
+ * Statics
+ */
+export interface IUserModel extends Model<IUserDocument, {}, IUserMethods> {
+    signup: (
+        email: string,
+        username: string,
+        imageUrl: string,
+        password: string,
+        passwordConfirm: string
+    ) => Promise<IUserDocument | undefined>
+    login: (email: string, password: string) => Promise<IUserDocument | undefined>
+}
+
+
+/**
+ * User Schema
+ */
+export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
+    email: {
+        type: String,
+        required: true,
+        match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[a-zA-Z]{2,7}$/
     },
-    { timestamps: true }
-);
-
-userSchema.methods.addToCart = async function(product: IProduct, quantity: number = 0) {
-    if (!product) return Promise.reject([]);
-
-    try {
-        const cart = await Cart.findOne({ user: this._id }).exec();
-        if (!cart) return Promise.reject('Cart not found');
-
-        const cartItem = await CartItems.findOne({ cart: cart._id, product: product._id }).exec();
-        if (cartItem) {
-            cartItem.quantity += quantity;
-            await cartItem.save();
-        } else {
-            await CartItems.create({ cart: cart._id, product: product._id, quantity });
+    password: {
+        type: String,
+        required: true
+    },
+    imageUrl: {
+        type: String,
+        default: "https://placekitten.com/600/600"
+    },
+    admin: {
+        type: Boolean,
+        default: false,
+    },
+    cart: {
+        // sub documents always have _id
+        items: [{
+            product: {
+                type: Schema.Types.ObjectId,
+                ref: 'Product', 
+                required: true
+            },
+            quantity: {
+                type: Number, required: true
+            }
+        }],
+        deletedAt: Date
+    },
+    // sub documents always have _id
+    tokens: [{
+        type: {
+            type: String,
+            required: true
+        },
+        token: {
+            type: String,
+            required: true
+        },
+        expiration: {
+            type: Date,
+            required: false
         }
-        return Promise.resolve();
-    } catch (error) {
-        return Promise.reject(error);
-    }
-};
-
-const Users = mongoose.model<IUser>('Users', userSchema);
-
-export const UserSchema = z.object({
-    email: z.string().email('Not a valid email').nonempty('Email is required'),
-    username: z.string().min(3, 'Username is too short').nonempty('Username is required'),
-    password: z.string().min(8, 'Password is too short').nonempty('Password is required'),
-    imageUrl: z.string().optional(),
-    admin: z.boolean().optional(),
-    createdAt: z.date().nullable(),
-    updatedAt: z.date().nullable(),
+    }],
+    deletedAt: {
+        type: Date
+    },
+}, {
+    timestamps: true
 });
 
-export default Users;
+
+/**
+ * Zod validation schema
+ */
+export const ZodUserSchema =
+    z.object({
+        id: z.number().nullish().optional(),
+        email: z
+            .string({
+                required_error: "Email is required",
+            })
+            .email("Not a valid email"),
+        username: z
+            .string({
+                required_error: "Username is required",
+            })
+            .min(3, "Name is too short"),
+        password: z
+            .string({
+                required_error: "Username is required",
+            })
+            .min(8, "Password is too short"),
+        imageUrl: z.string().nullish().optional(),
+        admin: z.boolean().nullish().optional(),
+        createdAt: z.date().nullish().optional(),
+        updatedAt: z.date().nullish().optional(),
+    });
+
+/**
+ * SCHEMA METHOD
+ *
+ * Get user cart populated with product details
+ */
+userSchema.methods.getCart = async function() {
+    return this.populate('cart.items.product')
+        .then(({ cart: { items = [] } }) => items);
+};
+
+/**
+ * SCHEMA METHOD
+ *
+ * @param product
+ * @param quantity
+ */
+userSchema.methods.cartAdd = async function (product: IProductDocument, quantity = 1): Promise<IUserDocument> {
+    /**
+     * Check if already present
+     */
+    const cartProductIndex = this.cart.items
+        .findIndex(item => item.product.toString() === product._id.toString());
+
+    /**
+     * if present: directly update the quantity
+     * if not: add
+     */
+    if (cartProductIndex >= 0)
+        this.cart.items[cartProductIndex].quantity += quantity;
+    else
+        this.cart.items.push({
+            product: product._id,
+            quantity
+        });
+
+    /**
+     * Save
+     */
+    return this.save();
+};
+
+/**
+ * SCHEMA METHOD
+ *
+ * Remove target product from cart
+ * @param id
+ */
+userSchema.methods.cartRemove = async function (id: string): Promise<IUserDocument> {
+    this.cart.updatedAt = new Date();
+    this.cart.items = this.cart.items
+        .filter(({ product }: ICartItem) =>
+            !product.equals(id)
+        );
+    return this.save();
+};
+
+/**
+ * SCHEMA METHOD
+ *
+ * Remove all products from cart
+ */
+userSchema.methods.cartRemoveAll = async function (): Promise<IUserDocument> {
+    this.cart = {
+        items: [],
+        updatedAt: new Date(),
+    };
+    return this.save();
+};
+
+/**
+ * SCHEMA METHOD
+ *
+ * Create order and empty cart
+ */
+userSchema.methods.orderConfirm = async function (): Promise<IOrder> {
+    return this.getCart()
+        .then((products) =>
+            Orders.create({
+                userId: this._id,
+                email: this.email,
+                products
+            })
+        )
+        .then((order) => {
+            this.cartRemoveAll();
+            return order;
+        })
+};
+
+/**
+ * SCHEMA METHOD
+ *
+ * Add token to user
+ * (like password reset)
+ *
+ * Tokens will be removed when consumed in the appropriate method.
+ * Example: password token will be consumed in "passwordChange" method.
+ *
+ * @param type
+ * @param expirationTime - undefined = expire only upon use
+ */
+userSchema.methods.tokenAdd = function (type: string, expirationTime?: number) {
+    const token = randomBytes(16).toString('hex');
+    if(!this.tokens)
+        this.tokens = [];
+    this.tokens.push({
+        type,
+        token,
+        expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined,
+    });
+    // no need to wait
+    this.save();
+    // TODO send mail
+    // transporter.sendMail({
+    //     to: req.body.email,
+    //     from: 'shop@node-complete.com',
+    //     subject: 'Password reset',
+    //     html: `
+    //         <p>You requested a password reset</p>
+    //         <p>Click this <a href="http://localhost:3000/reset/${token}">link</a> to set a new password.</p>
+    //       `
+    // });
+    return token;
+};
+
+/**
+ * SCHEMA METHOD
+ *
+ * Change password
+ */
+userSchema.methods.passwordChange = async function (password = "", passwordConfirm = ""): Promise<IUserDocument> {
+    /**
+     * Data validation
+     * Check if password and passwordConfirm are equals and compliant
+     */
+    const parseResult = ZodUserSchema
+        .pick({
+            password: true,
+        })
+        .extend({
+            passwordConfirm: z.string(),
+        })
+        .superRefine(({passwordConfirm, password}, ctx) => {
+            if (passwordConfirm !== password) {
+                ctx.addIssue({
+                    code: "custom",
+                    message: t("signup.password-dont-match")
+                });
+            }
+        })
+        .safeParse({
+            password,
+            passwordConfirm
+        });
+
+    /**
+     * Validation error
+     */
+    if (!parseResult.success)
+        return Promise.reject(
+            parseResult.error.issues.reduce((errorArray, { message }) => {
+                errorArray.push(message);
+                return errorArray;
+            }, [] as string[])
+        );
+
+    /**
+     * Everything is ok, change password with the requested one.
+     * Encryption will be done automatically by another hook
+     */
+    this.password = password;
+    return this.save();
+}
+
+/**
+ * Hook to make edits pre saving
+ *
+ * Hash all passwords (if they have been changed)
+ */
+userSchema.pre('save', async function(next) {
+    if (!this.isModified('password'))
+        return next();
+    return bcrypt.hash(this.password, 12)
+        .then(hashedPassword => {
+            this.password = hashedPassword;
+            next()
+        });
+});
+
+
+/**
+ * MODEL STATIC
+ * Register new user
+ *
+ * @param email
+ * @param password
+ */
+userSchema.static('signup', async function(
+    email,
+    username,
+    imageUrl,
+    password,
+    passwordConfirm
+) {
+    /**
+     * Data validation
+     * Check if user data are compliant
+     */
+    const parseResult = ZodUserSchema
+        .extend({
+            passwordConfirm: z.string(),
+        })
+        .superRefine(({passwordConfirm, password}, ctx) => {
+            if (passwordConfirm !== password)
+                ctx.addIssue({
+                    code: "custom",
+                    message: t("signup.password-dont-match")
+                });
+        }).safeParse({
+            email,
+            username,
+            imageUrl,
+            password,
+            passwordConfirm,
+        });
+
+    /**
+     * Validation error
+     */
+    if (!parseResult.success)
+        return Promise.reject(
+            parseResult.error.issues.reduce((errorArray, { message }) => {
+                errorArray.push(message);
+                return errorArray;
+            }, [] as string[])
+        );
+
+    /**
+     * Check if email is already used (user exist already probably)
+     * If that's the case: return error and stop the creation process
+     */
+    return this.findOne({
+        email,
+    })
+        .then((user) => {
+            // Email already exists
+            if (user)
+                return Promise.reject([
+                    t('signup.email-already-used')
+                ]);
+
+            /**
+             * Everything is ok, proceed to create a new user.
+             * Encryption will be done automatically by another hook
+             */
+            return this.create({
+                username,
+                email,
+                imageUrl,
+                password,
+            });
+        });
+});
+
+/**
+ * MODEL STATIC (like class static)
+ * Login user
+ *
+ * @param email
+ * @param password
+ */
+userSchema.static('login', async function(email?: string, password?: string) {
+    /**
+     * Data validation
+     * Check if password and passwordConfirm are equals and compliant
+     */
+    const parseResult = ZodUserSchema
+        .pick({
+            email: true
+        }).extend({
+            password: z.string(),
+        }).safeParse({
+            email,
+            password
+        });
+
+    /**
+     * Validation error
+     */
+    if (!parseResult.success)
+        return Promise.reject(
+            parseResult.error.issues.reduce((errorArray, { message }) => {
+                errorArray.push(message);
+                return errorArray;
+            }, [] as string[])
+        );
+
+    /**
+     * Everything is ok, login the user
+     */
+    return this.findOne({
+        email
+    })
+        .then(user => {
+            // user not found
+            if (!user)
+                return Promise.reject([
+                    t('login.wrong-data')
+                ]);
+            return bcrypt
+                .compare(password || "", user.password)
+                .then(doMatch => {
+                    // User found but password doesn't match
+                    if (!doMatch) {
+                        return Promise.reject([
+                            t('login.wrong-data')
+                        ]);
+                    }
+                    return user;
+                });
+        });
+});
+
+/**
+ * Model
+ */
+export default model<IUserDocument, IUserModel>('User', userSchema);

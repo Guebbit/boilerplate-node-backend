@@ -13,6 +13,5 @@ export default (req: Request, res: Response) =>
             "/css/auth.css",
             "/css/forms.css",
         ],
-        errorMessages: req.flash('error'),
-        successMessages: req.flash('success'),
+        token: "",
     });

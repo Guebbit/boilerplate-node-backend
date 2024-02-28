@@ -17,5 +17,9 @@
   },
   "generic": {
     "unknown-error": "Something went wrong with the request."
+  },
+  "ecommerce": {
+    "product-not-found": "The requested product was not found",
+    "product-added-to-cart": "Product succesfully added to cart"
   }
 }

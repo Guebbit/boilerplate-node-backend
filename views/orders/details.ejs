@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
+<main class="centered">
+    <h1>Order <%= order._id %></h1>
+    <p><%= order.createdAt %></p>
+    <ul>
+        <li><b>Email</b>: <%= order.email %></li>
+        <li><b>Total Items</b>: <%= order.totalItems %></li>
+        <li><b>Total Quantity</b>: <%= order.totalQuantity %></li>
+        <li><b>Total Price</b>: <%= order.totalPrice %></li>
+    </ul>
+    <hr />
+    <div class="grid">
+        <% order.products.forEach(function(item) { %>
+            <article class="card product-item small-item">
+                <header class="card__header">
+                    <h1 class="product__title">
+                        <%= item.product.title %>
+                    </h1>
+                </header>
+                <div class="card__image">
+                    <img src="<%= item.product.imageUrl %>" alt="<%= item.product.title %>">
+                </div>
+                <div class="card__content">
+                    <h2 class="product__price">
+                        <%= item.quantity %>
+                    </h2>
+                    <h2 class="product__price">
+                        $<%= item.product.price %>
+                    </h2>
+                </div>
+            </article>
+        <% }); %>
+    </div>
+</main>
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

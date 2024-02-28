@@ -1,5 +1,7 @@
 // import all models and their associations
-import "./models";
+import "./models/users";
+import "./models/products";
+import "./models/orders";
 
 import 'dotenv/config';
 import path from 'path';
@@ -9,15 +11,14 @@ import helmet from "helmet";
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import mongoose from "mongoose";
-import { engine } from 'express-handlebars';
 
 import { session, flash, userConnect } from "./utils/session";
 import { rateLimiter } from "./middlewares/security";
 
 import productRoutes from "./routes/products";
-// import authRoutes from "./routes/auth";
-// import orderRoutes from "./routes/orders";
-// import cartRoutes from "./routes/cart";
+import authRoutes from "./routes/auth";
+import orderRoutes from "./routes/orders";
+import cartRoutes from "./routes/cart";
 import indexRoutes from "./routes";
 import errorRoutes from "./routes/errors";
 
@@ -29,19 +30,8 @@ const app = express();
 /**
  * Templating engine
  */
-app.engine('hbs',
-    engine({
-        layoutsDir: './src/views/layouts/',
-        defaultLayout: 'default-layout',
-        extname: 'hbs'
-    })
-);
-app.set('view engine', 'hbs');
-app.set('views', './src/views');
-
-// mongoose
-//     .connect(process.env.NODE_DB_URI || "")
-//     .then(result => app.listen(process.env.NODE_PORT || 3000))
+app.set('view engine', 'ejs');
+app.set('views', './views');
 
 /**
  * Sync database then start server
@@ -71,7 +61,7 @@ mongoose
  */
 app.use(
     express.static(
-        path.join(__dirname, 'public'),
+        path.join(__dirname, '../public'),
         {
             maxAge: 60 // 1 min of cache (expressed in seconds)
         }
@@ -155,9 +145,9 @@ app.use((req, res, next) => {
 });
 
 app.use('/products', productRoutes);
-// app.use('/account', authRoutes);
-// app.use('/orders', orderRoutes);
-// app.use('/cart', cartRoutes);
+app.use('/account', authRoutes);
+app.use('/orders', orderRoutes);
+app.use('/', cartRoutes);
 app.use('/', indexRoutes);
 app.use('/error', errorRoutes);
 // catch all routes

@@ -1,13 +1,12 @@
 import type { Request, Response } from "express";
 import { t } from "i18next";
-import Tokens from "../../models/tokens";
-import {getTargetOrderParameters} from "../orders/getTargetOrder";
+import Users from "../../models/users";
 
 /**
- *
+ * Url parameters
  */
 export interface getResetConfirmParameters {
-    orderId: string,
+    token: string,
 }
 
 /**
@@ -17,14 +16,12 @@ export interface getResetConfirmParameters {
  * @param res
  */
 export default (req: Request & { params: getResetConfirmParameters }, res: Response) =>
-    Tokens.findOne({
-        where: {
-            token: req.params.token
-        }
+    Users.findOne({
+        'tokens.token': req.params.token
     })
-        .then(token => {
+        .then(async (user) => {
             // not valid
-            if (!token) {
+            if (!user) {
                 req.flash('error', [t("reset.token-not-found")]);
                 res.redirect('/account/reset')
                 return;
@@ -36,12 +33,10 @@ export default (req: Request & { params: getResetConfirmParameters }, res: Respo
                     "/css/auth.css",
                     "/css/forms.css",
                 ],
-                errorMessages: req.flash('error'),
-                successMessages: req.flash('success'),
-                token: token.token
+                token: req.params.token
             });
         })
-        .catch(err => {
+        .catch(() => {
             req.flash('error', [t("generic.unknown-error")]);
             res.redirect('/account/reset')
         });
