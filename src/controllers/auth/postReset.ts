@@ -1,13 +1,12 @@
 import type { Request, Response } from 'express';
-import { randomBytes } from "crypto";
 import { t } from "i18next";
-import { z } from "zod";
 import Users from "../../models/users";
+import nodemailer from "../../utils/nodemailer";
 
 /**
  * Page POST data
  */
-export interface postResetPostData {
+export interface IPostResetPostData {
     email: string,
 }
 
@@ -17,7 +16,7 @@ export interface postResetPostData {
  * @param req
  * @param res
  */
-export default (req: Request<{}, {}, postResetPostData>, res: Response) =>
+export default (req: Request<unknown, unknown, IPostResetPostData>, res: Response) =>
     Users.findOne({
         email: req.body.email
     })
@@ -27,7 +26,21 @@ export default (req: Request<{}, {}, postResetPostData>, res: Response) =>
                 res.redirect('/account/reset');
                 return;
             }
-            user.tokenAdd("password", 86400000);
+            const token = user.tokenAdd("password", 86400000);
+            // Send token (no need to wait)
+            nodemailer({
+                    to: req.body.email,
+                    subject: 'Password reset',
+                },
+                "emailResetRequest.ejs",
+                {
+                    ...res.locals,
+                    pageMetaTitle: 'Password reset requested',
+                    pageMetaLinks: [],
+                    name: user.username,
+                    token,
+                });
+            // send success message
             req.flash('success', [t('reset.email-sent')]);
             res.redirect('/account/reset');
         })

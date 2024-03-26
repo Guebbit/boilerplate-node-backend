@@ -1,11 +1,12 @@
 import type { Request, Response } from 'express';
 import { t } from "i18next";
 import Users from "../../models/users";
+import nodemailer from "../../utils/nodemailer";
 
 /**
  * Page POST data
  */
-export interface postResetConfirmPostData {
+export interface IPostResetConfirmPostData {
     token: string,
     password: string,
     passwordConfirm: string,
@@ -17,7 +18,7 @@ export interface postResetConfirmPostData {
  * @param req
  * @param res
  */
-export default async (req: Request<{}, {}, postResetConfirmPostData>, res: Response) => {
+export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response) => {
     const {
         password,
         passwordConfirm,
@@ -28,17 +29,31 @@ export default async (req: Request<{}, {}, postResetConfirmPostData>, res: Respo
         'tokens.token': token
     })
         .then(user => {
-
             // wrong token
             if (!user) {
                 req.flash('error', [t("reset.token-not-found")]);
                 res.redirect('/account/reset')
                 return;
             }
-
             // change password
             return user.passwordChange(password, passwordConfirm)
                 .then(() => {
+                    // consume the token
+                    user.tokens = user.tokens
+                        .filter(({ token: t }) => token !== t );
+                    user.save();
+                    // send confirmation email (no need to wait)
+                    nodemailer({
+                            to: user.email,
+                            subject: 'Password change confirmed',
+                        },
+                        "emailResetConfirm.ejs",
+                        {
+                            ...res.locals,
+                            pageMetaTitle: 'Password change confirmed',
+                            pageMetaLinks: [],
+                            name: user.username,
+                        });
                     // success message
                     req.flash('success', [t("reset.success")]);
                     res.redirect("/account/login");
@@ -51,7 +66,7 @@ export default async (req: Request<{}, {}, postResetConfirmPostData>, res: Respo
         })
         .catch(err => {
             console.log("postResetConfirm ERROR", err)
-            req.flash('error', [t("generic.unknown-error")]);
+            req.flash('error', [t("generic.error-unknown")]);
             res.redirect('/account/reset')
             return;
         });

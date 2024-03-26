@@ -12,7 +12,7 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import mongoose from "mongoose";
 
-import { session, flash, userConnect } from "./utils/session";
+import { session, flash, userConnect } from "./middlewares/session";
 import { rateLimiter } from "./middlewares/security";
 
 import productRoutes from "./routes/products";
@@ -63,7 +63,7 @@ app.use(
     express.static(
         path.join(__dirname, '../public'),
         {
-            maxAge: 60 // 1 min of cache (expressed in seconds)
+            maxAge: process.env.NODE_ENV === 'production' ? 0 : (process.env.NODE_STATIC_MAXAGE || 0)  // (expressed in seconds)
         }
     )
 );
@@ -150,6 +150,11 @@ app.use('/orders', orderRoutes);
 app.use('/', cartRoutes);
 app.use('/', indexRoutes);
 app.use('/error', errorRoutes);
+
+// app.use((error, req, res, next) => {
+//     console.log("TEST", error)
+// });
+
 // catch all routes
 app.use('/', (req, res) =>
     res.status(404).redirect("/error/page-not-found"));

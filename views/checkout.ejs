@@ -14,8 +14,12 @@
                     <div class="card__image" style="height: 60px">
                         <img src="<%= item.product.imageUrl %>" alt="<%= item.product.title %>">
                     </div>
-                    <div><%= item.product.title %></div>
-                    <div>Quantity: <b><%= item.quantity %></b></div>
+                    <h3><%= item.product.title %></h3>
+                    <ul>
+                        <li>Quantity: <b><%= item.quantity %></b></li>
+                        <li>Price: <b><%= item.product.price %></b></li>
+                        <li>Total: <b><%= item.product.price * item.quantity %></b></li>
+                    </ul>
                 </li>
             <% }); %>
         </ul>

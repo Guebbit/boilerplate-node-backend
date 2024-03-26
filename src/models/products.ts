@@ -1,4 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
+import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { z } from "zod"
 
@@ -18,7 +18,7 @@ export interface IProductDocument extends IProduct, Document{}
 
 export interface IProductMethods {}
 
-export interface IProductModel extends Model<IProductDocument, {}, IProductMethods>{
+export interface IProductModel extends Model<IProductDocument, unknown, IProductMethods>{
     validateData: (data: IProduct) => string[]
 }
 
@@ -44,6 +44,9 @@ export const ZodProductSchema =
         deletedAt: z.date().nullish().optional(),
     });
 
+/**
+ *
+ */
 export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>({
     title: {
         type: String, 

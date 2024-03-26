@@ -5,7 +5,7 @@ import Products from "../../models/products";
 /**
  * Url parameters
  */
-export interface getEditProductParameters {
+export interface IGetEditProductParameters {
     productId: string,
 }
 
@@ -14,7 +14,7 @@ export interface getEditProductParameters {
  * @param req
  * @param res
  */
-export default (req: Request & { params: getEditProductParameters }, res: Response) => {
+export default (req: Request & { params: IGetEditProductParameters }, res: Response) => {
     Products.findById(req.params.productId)
         .then(product => {
             const [

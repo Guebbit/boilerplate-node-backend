@@ -1,11 +1,15 @@
 import type { Request, Response } from "express";
 import Orders from "../../models/orders";
-import { Types, type CastError} from "mongoose";
+import {
+    Types,
+    type CastError,
+    type PipelineStage
+} from "mongoose";
 
 /**
  * Url parameters
  */
-export interface getTargetOrderParameters {
+export interface IGetTargetOrderParameters {
     orderId: string,
 }
 
@@ -15,23 +19,20 @@ export interface getTargetOrderParameters {
  * @param req
  * @param res
  */
-export default (req: Request & { params: getTargetOrderParameters }, res: Response) => {
+export default (req: Request & { params: IGetTargetOrderParameters }, res: Response) => {
     // if it's not valid it could throw an error
     if(!Types.ObjectId.isValid(req.params.orderId))
         return res.redirect('/error/page-not-found');
 
-    const match = {
+    // empty match
+    const match: PipelineStage.Match = {
         $match: {}
     };
+    // If user is NOT admin, it's limited to his own orders
     if(!req.session.user?.admin)
-        match.$match = {
-            ...match.$match,
-            userId: req.session.user?._id
-        };
-    match.$match = {
-        ...match.$match,
-       _id: new Types.ObjectId(req.params.orderId)
-    };
+        match.$match.userId = req.session.user?._id;
+    // single out the order
+    match.$match._id = new Types.ObjectId(req.params.orderId);
 
     Orders.getAll([match])
         .then((orders) => {
@@ -45,6 +46,7 @@ export default (req: Request & { params: getTargetOrderParameters }, res: Respon
                 order: orders[0]
             })
         })
+        // TODO global error catches
         .catch((error: CastError) => {
             console.log("getTargetProduct ERROR", error)
             if(error.message == "404" || error.kind === "ObjectId")

@@ -5,7 +5,7 @@ import Users from "../../models/users";
 /**
  * Url parameters
  */
-export interface getResetConfirmParameters {
+export interface IGetResetConfirmParameters {
     token: string,
 }
 
@@ -15,7 +15,7 @@ export interface getResetConfirmParameters {
  * @param req
  * @param res
  */
-export default (req: Request & { params: getResetConfirmParameters }, res: Response) =>
+export default (req: Request & { params: IGetResetConfirmParameters }, res: Response) =>
     Users.findOne({
         'tokens.token': req.params.token
     })
@@ -37,6 +37,6 @@ export default (req: Request & { params: getResetConfirmParameters }, res: Respo
             });
         })
         .catch(() => {
-            req.flash('error', [t("generic.unknown-error")]);
+            req.flash('error', [t("generic.error-unknown")]);
             res.redirect('/account/reset')
         });

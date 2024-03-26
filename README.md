@@ -17,16 +17,4 @@
 
 # TODO
 - Better security (csurf deprecated)
-- connect-flash sometimes not showing flash messages after redirect
-
-#TODO mvc-sequelize-mysql
- - handlebar => hjs (copypaste)
- - mettere logica nei modelli più che nei controller
- - postResetConfirm ho già l'utente, non ri-cercarlo
- - BodyParameters => PostData
- - update locals .en
- - update soft delete?
- - cart routes from /cart to / then checkout inserted within cart routes
- - better graphics
- - admin see all orders, other users see only theirs
- - new folder structure
+- better graphics

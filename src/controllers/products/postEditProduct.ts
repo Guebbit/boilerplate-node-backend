@@ -5,7 +5,7 @@ import Products from "../../models/products";
 /**
  * Page POST data
  */
-export interface postEditProductsPostData {
+export interface IPostEditProductsPostData {
     id: string,
     title: string,
     imageUrl: string,
@@ -18,7 +18,7 @@ export interface postEditProductsPostData {
  * @param req
  * @param res
  */
-export default (req: Request<{}, {}, postEditProductsPostData>, res: Response) => {
+export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: Response) => {
     /**
      * get POST data
      */

@@ -5,7 +5,7 @@ import Users from "../../models/users";
 /**
  * Page POST data
  */
-export interface postLoginPostData {
+export interface IPostLoginPostData {
     email: string,
     password: string,
 }
@@ -17,7 +17,7 @@ export interface postLoginPostData {
  * @param req
  * @param res
  */
-export default async (req: Request<{}, {}, postLoginPostData>, res: Response) => {
+export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: Response) => {
 
     /**
      * get POST data
@@ -32,8 +32,6 @@ export default async (req: Request<{}, {}, postLoginPostData>, res: Response) =>
      */
     return Users.login(email, password)
         .then((user) => {
-            if(!user)
-                return res.redirect('/account/login');
             // User found and login is correct: Update and regenerate session
             return req.session.regenerate(() => {
                 req.session.user = user.toObject();

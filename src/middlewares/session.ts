@@ -33,7 +33,8 @@ export const session = expressSession({
      */
     proxy: true,
     cookie: {
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 1 month
+        // In mongodb, session expiration is tied with the cookie expiration
+        maxAge: process.env.NODE_SESSION_MAXAGE ? parseInt(process.env.NODE_SESSION_MAXAGE) : 86400000,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: true,

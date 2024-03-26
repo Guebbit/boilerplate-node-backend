@@ -5,7 +5,7 @@ import {t} from "i18next";
 /**
  * Page POST data
  */
-export interface postAddCartItemPostData {
+export interface IPostAddCartItemPostData {
     _id: string,
     quantity: string,
 }
@@ -17,8 +17,8 @@ export interface postAddCartItemPostData {
  * @param req
  * @param res
  */
-export default (req: Request<{}, {}, postAddCartItemPostData>, res: Response) =>
-    Products.findOne({ _id: req.body._id, active: true, deletedAt: undefined })
+export default (req: Request<unknown, unknown, IPostAddCartItemPostData>, res: Response) =>
+    Products.findOne({ _id: req.body._id, active: true, deletedAt: null })
         .then((product) => {
             // not found, something happened
             if(!product){
@@ -27,6 +27,6 @@ export default (req: Request<{}, {}, postAddCartItemPostData>, res: Response) =>
             }
             req.flash('success', [t("ecommerce.product-added-to-cart")]);
             // check done before entering the route
-            return req.user!.cartAdd(product, parseInt(req.body.quantity));
+            return req.user!.cartItemSet(product, parseInt(req.body.quantity));
         })
         .then(() => res.redirect('/cart'));

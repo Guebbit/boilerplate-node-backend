@@ -8,8 +8,10 @@
     "dev": "tsx watch ./src/app.ts",
     "start": "tsx ./src/app.ts",
     "debug": "tsx --inspect-brk ./src/app.ts",
-    "kill": "cmd \"/C TASKKILL /IM node.exe /F\"",
-    "ts-check": "tsc --noEmit"
+    "ts-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx",
+    "build": "npm run lint && npm run ts-check",
+    "kill": "cmd \"/C TASKKILL /IM node.exe /F\""
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -17,14 +19,16 @@
     "@types/connect-mongodb-session": "^2.4.7",
     "@types/cookie-parser": "^1.4.6",
     "@types/dotenv": "^8.2.0",
+    "@types/ejs": "^3.1.5",
     "@types/express": "^4.17.21",
     "@types/express-session": "^1.17.10",
     "@types/mongoose": "^5.11.97",
     "@types/node": "^20.11.14",
-    "@typescript-eslint/eslint-plugin": "^6.20.0",
-    "@typescript-eslint/parser": "^6.20.0",
+    "@types/nodemailer": "^6.4.14",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "body-parser": "^1.20.2",
-    "eslint": "^8.56.0",
+    "eslint": "^8.57.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   },
@@ -42,6 +46,8 @@
     "i18next": "^23.8.2",
     "mongodb": "^6.3.0",
     "mongoose": "^8.1.2",
+    "nodemailer": "^6.9.11",
+    "winston": "^3.13.0",
     "zod": "^3.22.4"
   }
 }

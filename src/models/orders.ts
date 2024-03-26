@@ -24,11 +24,13 @@ export interface IOrderDocument extends IOrder, Document {}
 /**
  * Statics
  */
-export interface IOrderModel extends Model<IOrderDocument, {}, {}> {
+export interface IOrderModel extends Model<IOrderDocument, unknown, unknown> {
     getAll: (pipeline: PipelineStage[]) => Promise<IOrderDocument[]>
 }
 
-
+/**
+ *
+ */
 export const orderSchema = new Schema<IOrderDocument>({
     userId: {
         type: Schema.Types.ObjectId,

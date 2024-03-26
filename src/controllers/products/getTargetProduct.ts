@@ -13,7 +13,7 @@ export default (req: Request, res: Response) =>
     (
         req.session.user?.admin ?
         Products.findById(req.params.productId) :
-        Products.findOne({ _id: req.params.productId, active: true, deletedAt: undefined })
+        Products.findOne({ _id: req.params.productId, active: true, deletedAt: null })
     )
             .then(product => {
                 console.log("WHATHEFUCK", product)

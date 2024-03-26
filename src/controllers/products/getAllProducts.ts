@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import Products, { IProduct } from "../../models/products";
+import Products from "../../models/products";
 
 /**
  * Get all products
@@ -12,8 +12,8 @@ export default async (req: Request, res: Response) =>
     Promise.all([
         req.session.user?.admin ?
             Products.find() :
-            Products.find({ active: true, deletedAt: undefined }),
-        Products.find({ price: { $lt: 30 }, active: true, deletedAt: undefined })
+            Products.find({ active: true, deletedAt: null }),
+        Products.find({ price: { $lt: 30 }, active: true, deletedAt: null })
     ])
         .then(([productList, productListLC]) =>
             res.render('products/list', {

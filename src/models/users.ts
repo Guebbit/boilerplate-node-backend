@@ -1,4 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
+import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { IProductDocument } from "./products";
 import Orders, { IOrder } from "./orders";
@@ -35,6 +35,7 @@ export interface IUser {
      * User attributes
      */
     email: string;
+    username: string;
     password: string;
     imageUrl?: string;
     admin: boolean;
@@ -66,11 +67,11 @@ export interface IUserDocument extends IUser, Document {}
  * User Document methods
  */
 export interface IUserMethods {
-    getCart: () => Promise<ICartItem[]>;
-    cartAdd: (product: IProductDocument, quantity?: number) => Promise<IUserDocument>;
-    cartRemove: (id: string) => Promise<IUserDocument>;
-    cartRemoveAll: () => Promise<IUserDocument>;
-    orderConfirm: () => Promise<IOrder>;
+    cartGet: () => Promise<ICartItem[]>;
+    cartRemove: () => Promise<IUserDocument>;
+    cartItemSet: (product: IProductDocument, quantity?: number) => Promise<IUserDocument>;
+    cartItemRemove: (id: string) => Promise<IUserDocument>;
+    orderConfirm: () => Promise<IOrder | undefined>;
     tokenAdd: (type: string, expirationTime?: number) => string
     passwordChange: (password: string, passwordConfirm: string) => Promise<IUserDocument>
 }
@@ -78,15 +79,15 @@ export interface IUserMethods {
 /**
  * Statics
  */
-export interface IUserModel extends Model<IUserDocument, {}, IUserMethods> {
+export interface IUserModel extends Model<IUserDocument, unknown, IUserMethods> {
     signup: (
         email: string,
         username: string,
         imageUrl: string,
         password: string,
         passwordConfirm: string
-    ) => Promise<IUserDocument | undefined>
-    login: (email: string, password: string) => Promise<IUserDocument | undefined>
+    ) => Promise<IUserDocument>
+    login: (email: string, password: string) => Promise<IUserDocument>
 }
 
 
@@ -176,22 +177,22 @@ export const ZodUserSchema =
     });
 
 /**
- * SCHEMA METHOD
+ * INSTANCE (schema) method
  *
  * Get user cart populated with product details
  */
-userSchema.methods.getCart = async function() {
+userSchema.methods.cartGet = async function() {
     return this.populate('cart.items.product')
         .then(({ cart: { items = [] } }) => items);
 };
 
 /**
- * SCHEMA METHOD
+ * INSTANCE (schema) method
  *
  * @param product
  * @param quantity
  */
-userSchema.methods.cartAdd = async function (product: IProductDocument, quantity = 1): Promise<IUserDocument> {
+userSchema.methods.cartItemSet = async function (product: IProductDocument, quantity = 1): Promise<IUserDocument> {
     /**
      * Check if already present
      */
@@ -203,7 +204,7 @@ userSchema.methods.cartAdd = async function (product: IProductDocument, quantity
      * if not: add
      */
     if (cartProductIndex >= 0)
-        this.cart.items[cartProductIndex].quantity += quantity;
+        this.cart.items[cartProductIndex].quantity = quantity;
     else
         this.cart.items.push({
             product: product._id,
@@ -217,12 +218,12 @@ userSchema.methods.cartAdd = async function (product: IProductDocument, quantity
 };
 
 /**
- * SCHEMA METHOD
+ * INSTANCE (schema) method
  *
  * Remove target product from cart
  * @param id
  */
-userSchema.methods.cartRemove = async function (id: string): Promise<IUserDocument> {
+userSchema.methods.cartItemRemove = async function (id: string): Promise<IUserDocument> {
     this.cart.updatedAt = new Date();
     this.cart.items = this.cart.items
         .filter(({ product }: ICartItem) =>
@@ -232,11 +233,11 @@ userSchema.methods.cartRemove = async function (id: string): Promise<IUserDocume
 };
 
 /**
- * SCHEMA METHOD
+ * INSTANCE (schema) method
  *
  * Remove all products from cart
  */
-userSchema.methods.cartRemoveAll = async function (): Promise<IUserDocument> {
+userSchema.methods.cartRemove = async function (): Promise<IUserDocument> {
     this.cart = {
         items: [],
         updatedAt: new Date(),
@@ -245,27 +246,29 @@ userSchema.methods.cartRemoveAll = async function (): Promise<IUserDocument> {
 };
 
 /**
- * SCHEMA METHOD
+ * INSTANCE (schema) method
  *
  * Create order and empty cart
  */
-userSchema.methods.orderConfirm = async function (): Promise<IOrder> {
-    return this.getCart()
-        .then((products) =>
-            Orders.create({
+userSchema.methods.orderConfirm = async function () {
+    return this.cartGet()
+        .then((products) => {
+            if(products.length > 0)
+                throw new Error(t('generic.error-missing-data'))
+            return Orders.create({
                 userId: this._id,
                 email: this.email,
                 products
             })
-        )
+        })
         .then((order) => {
-            this.cartRemoveAll();
+            this.cartRemove();
             return order;
         })
 };
 
 /**
- * SCHEMA METHOD
+ * INSTANCE (schema) method
  *
  * Add token to user
  * (like password reset)
@@ -287,21 +290,11 @@ userSchema.methods.tokenAdd = function (type: string, expirationTime?: number) {
     });
     // no need to wait
     this.save();
-    // TODO send mail
-    // transporter.sendMail({
-    //     to: req.body.email,
-    //     from: 'shop@node-complete.com',
-    //     subject: 'Password reset',
-    //     html: `
-    //         <p>You requested a password reset</p>
-    //         <p>Click this <a href="http://localhost:3000/reset/${token}">link</a> to set a new password.</p>
-    //       `
-    // });
     return token;
 };
 
 /**
- * SCHEMA METHOD
+ * INSTANCE (schema) method
  *
  * Change password
  */
@@ -366,11 +359,15 @@ userSchema.pre('save', async function(next) {
 
 
 /**
- * MODEL STATIC
+ * STATIC (Model) method
+ * 
  * Register new user
  *
  * @param email
+ * @param username
+ * @param imageUrl
  * @param password
+ * @param passwordConfirm
  */
 userSchema.static('signup', async function(
     email,
@@ -425,7 +422,6 @@ userSchema.static('signup', async function(
                 return Promise.reject([
                     t('signup.email-already-used')
                 ]);
-
             /**
              * Everything is ok, proceed to create a new user.
              * Encryption will be done automatically by another hook
@@ -440,7 +436,8 @@ userSchema.static('signup', async function(
 });
 
 /**
- * MODEL STATIC (like class static)
+ * STATIC (Model) method
+ *
  * Login user
  *
  * @param email
@@ -476,7 +473,8 @@ userSchema.static('login', async function(email?: string, password?: string) {
      * Everything is ok, login the user
      */
     return this.findOne({
-        email
+        email,
+        deletedAt: null
     })
         .then(user => {
             // user not found

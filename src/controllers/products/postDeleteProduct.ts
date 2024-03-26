@@ -5,7 +5,7 @@ import Products from "../../models/products";
 /**
  * Page POST data
  */
-export interface postDeleteProductPostData {
+export interface IPostDeleteProductPostData {
     _id: string,
     hardDelete?: string,
 }
@@ -15,7 +15,7 @@ export interface postDeleteProductPostData {
  * @param req
  * @param res
  */
-export default (req: Request<{}, {}, postDeleteProductPostData>, res: Response) =>
+export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res: Response) =>
     Products.findById(req.body._id)
         .then((product) => {
             if (!product)

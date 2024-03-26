@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { t } from "i18next";
 import Users from "../../models/users";
+import nodemailer from "../../utils/nodemailer";
 
-export interface postSignupPostData {
+export interface IPostSignupPostData {
     email: string,
     username: string,
     imageUrl: string,
@@ -16,7 +17,7 @@ export interface postSignupPostData {
  * @param req
  * @param res
  */
-export default async (req: Request<{}, {}, postSignupPostData>, res: Response) => {
+export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: Response) => {
 
     /**
      * get POST data
@@ -40,17 +41,22 @@ export default async (req: Request<{}, {}, postSignupPostData>, res: Response) =
         passwordConfirm
     )
         .then((user) => {
+            // Registration confirmation (no need to wait)
+            nodemailer({
+                    to: user.email,
+                    subject: 'Signup succeeded!',
+                },
+                "emailRegistrationConfirm.ejs",
+                {
+                    ...res.locals,
+                    pageMetaTitle: 'Signup succeeded!',
+                    pageMetaLinks: [],
+                    name: user.username,
+                })
             // Registration successful,
-            // send to the login and wait email confirmation
+            // send to the login and
             req.flash('success', [t('signup.registration-successful')]);
             return res.redirect('/account/login');
-            // TODO
-            // return transporter.sendMail({
-            //   to: user.email || "",
-            //   from: 'shop@node-complete.com',
-            //   subject: 'Signup succeeded!',
-            //   html: '<h1>You successfully signed up!</h1>'
-            // });
         })
         .catch((issues :string[] = []) => {
             // So the user doesn't need to fill the form again
