@@ -7,13 +7,16 @@ import {
     ForeignKey
 } from 'sequelize';
 import db from "../utils/db";
+import Products from "./products";
+import Cart from "./cart";
 
 class CartItems extends Model<InferAttributes<CartItems>, InferCreationAttributes<CartItems>> {
     declare id: CreationOptional<number>;
     declare quantity: number;
-    // declare userId: ForeignKey<User['id']>;
-    // declare createdAt: CreationOptional<number>;
-    // declare updatedAt: CreationOptional<number>;
+    declare cartId: ForeignKey<Cart['id']>;
+    declare productId: ForeignKey<Products['id']>;
+    declare createdAt: CreationOptional<number>;
+    declare updatedAt: CreationOptional<number>;
 }
 
 CartItems.init(
@@ -25,12 +28,12 @@ CartItems.init(
             primaryKey: true
         },
         quantity: DataTypes.INTEGER,
-        // createdAt: {
-        //     type: DataTypes.DATE,
-        //     allowNull: false,
-        //     defaultValue: DataTypes.NOW
-        // },
-        // updatedAt: DataTypes.DATE,
+        createdAt: {
+            type: DataTypes.DATE,
+            allowNull: false,
+            defaultValue: DataTypes.NOW
+        },
+        updatedAt: DataTypes.DATE,
     },
     {
         sequelize: db,

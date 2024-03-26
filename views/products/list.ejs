@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
+<main>
+    <h2 class="centered">All Products</h2>
+    <div class="grid">
+        <% productList.forEach(function(product) { %>
+            <article class="card product-item">
+                <header class="card__header">
+                    <h1 class="product__title">
+                        <%= product.title %>
+                    </h1>
+                </header>
+                <div class="card__image">
+                    <img src="<%= product.imageUrl %>" alt="<%= product.title %>">
+                </div>
+                <div class="card__content centered">
+                    <h2 class="product__price">$<%= product.price %></h2>
+                    <p class="product__description">
+                        <%= product.description %>
+                    </p>
+                    <% if (product.active) { %>
+                        <p>ACTIVE</p>
+                    <% } else { %>
+                        <h3><b>NOT</b> ACTIVE</h3>
+                    <% } %>
+                    <% if (product.deletedAt) { %>
+                        <h3><b>SOFT DELETED</b></h3>
+                    <% } %>
+                </div>
+                <div class="card__actions">
+                    <a href="/products/details/<%= product.id %>" class="btn">Details</a>
+                    <% if (isAdmin) { %>
+                        <a href="/products/edit/<%= product.id %>" class="btn">Edit</a>
+                        <form action="/products/delete" method="post">
+                            <% if (product.deletedAt) { %>
+                                <button class="btn" type="submit">Un-delete</button>
+                            <% } else { %>
+                                <button class="btn" type="submit">Delete</button>
+                            <% } %>
+                            <input type="hidden" name="id" value="<%= product.id %>">
+                        </form>
+                    <% } %>
+                    <% if (isAuthenticated && !product.deletedAt && product.active) { %>
+                        <form action="/cart" method="post">
+                            <button class="btn" type="submit">Add quantity to Cart</button>
+                            <input type="text" value="1" name="quantity">
+                            <input type="hidden" name="id" value="<%= product.id %>">
+                        </form>
+                    <% } %>
+                </div>
+            </article>
+        <% }); %>
+    </div>
+    <h2 class="centered">LOW PRICE Products</h2>
+    <div class="grid">
+        <% productListLC.forEach(function(product) { %>
+            <article class="card product-item small-item">
+                <header class="card__header">
+                    <h1 class="product__title">
+                        <%= product.title %>
+                    </h1>
+                </header>
+                <div class="card__image">
+                    <img src="<%= product.imageUrl %>" alt="<%= product.title %>">
+                </div>
+                <div class="card__content">
+                    <h2 class="product__price">$<%= product.price %></h2>
+                </div>
+                <div class="card__actions">
+                    <% if (isAuthenticated && !product.deletedAt && product.active) { %>
+                        <form action="/cart" method="post">
+                            <button class="btn" type="submit">Add quantity to Cart</button>
+                            <input type="text" value="1" name="quantity">
+                            <input type="hidden" name="id" value="<%= product.id %>">
+                        </form>
+                    <% } %>
+                </div>
+            </article>
+        <% }); %>
+    </div>
+    <hr />
+    <div class="centered">
+        <% if (isAdmin) { %>
+            <a href="/products/add" class="btn" style="width: 200px">Add new</a>
+        <% } %>
+    </div>
+</main>
+
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

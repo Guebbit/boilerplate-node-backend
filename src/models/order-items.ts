@@ -4,10 +4,12 @@ import {
     InferAttributes,
     InferCreationAttributes,
     CreationOptional,
-    ForeignKey
+    ForeignKey,
+    NonAttribute
 } from 'sequelize';
 import db from "../utils/db";
 import Orders from "./orders";
+import Products from "./products";
 
 class OrderItems extends Model<InferAttributes<OrderItems>, InferCreationAttributes<OrderItems>> {
     declare id: CreationOptional<number>;
@@ -15,6 +17,11 @@ class OrderItems extends Model<InferAttributes<OrderItems>, InferCreationAttribu
     declare orderId: ForeignKey<Orders['id']>;
     declare createdAt: CreationOptional<number>;
     declare updatedAt: CreationOptional<number>;
+
+    /**
+     * belongsTo Association
+     */
+    declare Product?: NonAttribute<Products>;
 }
 
 OrderItems.init(

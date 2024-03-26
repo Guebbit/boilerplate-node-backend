@@ -1,10 +1,9 @@
 import type { Request, Response } from 'express';
-import { z } from "zod";
 import { t } from "i18next";
-import bcrypt from "bcrypt";
-import Users, { UserSchema } from "../../models/users";
+import Users from "../../models/users";
+import nodemailer from "../../utils/nodemailer";
 
-export interface postSignupBodyParameters {
+export interface IPostSignupPostData {
     email: string,
     username: string,
     imageUrl: string,
@@ -13,29 +12,16 @@ export interface postSignupBodyParameters {
 }
 
 /**
- * Add passwordConfirm to confirm (valid) password
- */
-export const UserRegistrationSchema = UserSchema
-    .extend({
-        passwordConfirm: z.string(),
-    })
-    .superRefine(({passwordConfirm, password}, ctx) => {
-        if (passwordConfirm !== password) {
-            ctx.addIssue({
-                code: "custom",
-                message: t("signup.password-dont-match")
-            });
-        }
-    });
-
-/**
- * Registration of new user
+ * Register new user
  *
  * @param req
  * @param res
  */
-export default async (req: Request<{}, {}, postSignupBodyParameters>, res: Response) => {
-    // get POST data
+export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: Response) => {
+
+    /**
+     * get POST data
+     */
     const {
         email,
         username,
@@ -44,70 +30,43 @@ export default async (req: Request<{}, {}, postSignupBodyParameters>, res: Respo
         passwordConfirm,
     } = req.body;
 
-    // validation
-    const parseResult = UserRegistrationSchema
-        .safeParse({
-            email,
-            username,
-            imageUrl,
-            password,
-            passwordConfirm,
-        })
-
-    // validation negative result
-    if (!parseResult.success) {
-        const { issues = [] } = parseResult.error;
-        req.flash('error', issues.reduce((errorArray, { message }) => {
-            errorArray.push(message);
-            return errorArray;
-        }, [] as string[]));
-        req.flash('filled', [
-            email,
-            username,
-            imageUrl,
-        ]);
-        return res.status(422).redirect('/account/signup');
-    }
-
-    // check if email is already used
-    return Users.findOne({
-        where: {
-            email,
-        }
-    })
+    /**
+     * Signup
+     */
+    return Users.signup(
+        email,
+        username,
+        imageUrl,
+        password,
+        passwordConfirm
+    )
         .then((user) => {
-            if (user) {
-                req.flash('error', [t('signup.email-already-used')]);
-                return res.redirect('/account/signup');
-            }
-            // everything is ok, proceed to create a new user.
-            // Encrypt password and save in database
-            return bcrypt.hash(password, 12)
-                .then(hashedPassword =>
-                    new Users({
-                        username,
-                        email,
-                        imageUrl,
-                        password: hashedPassword,
-                    }).save()
-                )
-                .then(user => {
-                    user.createCart();
-                    // Registration successful,
-                    // send to the login and wait email confirmation
-                    req.flash('success', [t('signup.registration-successful')]);
-                    return res.redirect('/account/login');
-                    // TODO
-                    // return transporter.sendMail({
-                    //   to: email,
-                    //   from: 'shop@node-complete.com',
-                    //   subject: 'Signup succeeded!',
-                    //   html: '<h1>You successfully signed up!</h1>'
-                    // });
-                });
+            // Registration confirmation (no need to wait)
+            nodemailer({
+                    to: user.email,
+                    subject: 'Signup succeeded!',
+                },
+                "emailRegistrationConfirm.ejs",
+                {
+                    ...res.locals,
+                    pageMetaTitle: 'Signup succeeded!',
+                    pageMetaLinks: [],
+                    name: user.username,
+                })
+            // Registration successful,
+            // send to the login and
+            req.flash('success', [t('signup.registration-successful')]);
+            return res.redirect('/account/login');
         })
-        .catch((error) => {
-            console.log("postSignup ERROR", error)
-            res.status(500).redirect('/errors/500-unknown');
+        .catch((issues :string[] = []) => {
+            // So the user doesn't need to fill the form again
+            req.flash('filled', [
+                email,
+                username,
+                imageUrl,
+            ]);
+            req.flash('error', issues);
+            res.redirect('/account/signup');
+            return;
         });
 };

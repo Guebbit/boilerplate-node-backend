@@ -7,4 +7,4 @@ import type { Request, Response } from 'express';
  * @param res
  */
 export default (req: Request, res: Response) =>
-    req.session.destroy(error => res.redirect('/'));
+    req.session.destroy(() => res.redirect('/'));

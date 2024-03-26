@@ -1,14 +1,14 @@
 import type { Request, Response } from 'express';
 import { t } from "i18next";
 import { z } from "zod";
-import Users, { UserSchema } from "../../models/users";
+import Users, { ZodUserSchema } from "../../models/users";
 import Tokens from "../../models/tokens";
-import bcrypt from "bcrypt";
+import nodemailer from "../../utils/nodemailer";
 
 /**
  * Check password is valid and passwordConfirm is equal
  */
-export const UserResetPasswordSchema = UserSchema
+export const UserResetPasswordSchema = ZodUserSchema
     .pick({
         password: true,
     })
@@ -27,7 +27,7 @@ export const UserResetPasswordSchema = UserSchema
 /**
  *
  */
-export interface postResetConfirmBodyParameters {
+export interface IPostResetConfirmPostData {
     token: string,
     password: string,
     passwordConfirm: string,
@@ -39,67 +39,67 @@ export interface postResetConfirmBodyParameters {
  * @param req
  * @param res
  */
-export default (req: Request<{}, {}, postResetConfirmBodyParameters>, res: Response) =>
-    Tokens.findOne({
+export default (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response) => {
+    /**
+     * Post Data
+     */
+    const {
+        password,
+        passwordConfirm,
+        token
+    } = req.body;
+
+    /**
+     * Search user by token
+     */
+    return Tokens.findOne({
         where: {
-            token: req.body.token
-        }
+            token
+        },
+        include: [
+            Users
+        ]
     })
         .then(token => {
-            const {
-                password,
-                passwordConfirm,
-            } = req.body;
-
+            // retrieving User
+            const { User } = token as Tokens & { User: Users } | null || {};
             // wrong token
-            if (!token) {
+            if (!token || !User) {
                 req.flash('error', [t("reset.token-not-found")]);
                 res.redirect('/account/reset')
                 return;
             }
-
-            // check if password and passwordConfirm are compliant
-            const parseResult = UserResetPasswordSchema
-                .safeParse({
-                    password,
-                    passwordConfirm
-                });
-
-            // validation negative result
-            if (!parseResult.success) {
-                const { issues = [] } = parseResult.error;
-                req.flash('error', issues.reduce((errorArray, {message}) => {
-                    errorArray.push(message);
-                    return errorArray;
-                }, [] as string[]));
-                res.redirect('/account/reset')
-                return;
-            }
-
-            // Everything is ok, change password with the requested one
-            return token.getUser()
-                .then((user) => {
-                    // apply change
-                    bcrypt.hash(password, 12)
-                        .then(hashedPassword => {
-                            user.password = hashedPassword;
-                            return user.save();
-                        })
-                    // no need to wait for the password to be changed
+            // change password
+            return User.passwordChange(password, passwordConfirm)
+                .then(() => {
+                    // consume the token
+                    token.destroy();
+                    // send confirmation email (no need to wait)
+                    nodemailer({
+                            to: User.email,
+                            subject: 'Password change confirmed',
+                        },
+                        "emailResetConfirm.ejs",
+                        {
+                            ...res.locals,
+                            pageMetaTitle: 'Password change confirmed',
+                            pageMetaLinks: [],
+                            name: User.username,
+                        });
+                    // success message
                     req.flash('success', [t("reset.success")]);
                     res.redirect("/account/login");
-                    //save changes (don't update session.user, not needed)
                 })
-                // consume the token upon use
-                .then(() => token.destroy())
-                .catch(() => {
-                    // It should be impossible for this error to happen
-                    throw Error(t("reset.token-not-found"))
-                })
+                .catch((issues :string[] = []) => {
+                    req.flash('error', issues);
+                    res.redirect('/account/reset');
+                    return;
+                });
         })
         .catch(err => {
             console.log("postResetConfirm ERROR", err)
-            req.flash('error', [t("generic.unknown-error")]);
+            req.flash('error', [t("generic.error-unknown")]);
             res.redirect('/account/reset')
             return;
         });
+}

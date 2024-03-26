@@ -4,6 +4,7 @@ export default (req: Request, res: Response) => {
     res
         .status(404)
         .render('errors/404-product', {
-            pageTitle: 'Product Not Found',
+            pageMetaTitle: 'Product Not Found',
+            pageMetaLinks: [],
         });
 };

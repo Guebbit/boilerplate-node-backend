@@ -28,8 +28,8 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
     declare description: string;
     declare active: boolean;
     declare createdAt: CreationOptional<number>;
-    declare updatedAt: CreationOptional<number>;
-    declare deletedAt: CreationOptional<number>;
+    declare updatedAt: CreationOptional<number | null>;
+    declare deletedAt: CreationOptional<number | null>;
 
     /**
      * HasMany Association (through CartItem) - Cart
@@ -67,8 +67,14 @@ Products.init(
             allowNull: false,
             defaultValue: DataTypes.NOW
         },
-        updatedAt: DataTypes.DATE,
-        deletedAt: DataTypes.DATE,
+        updatedAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+        deletedAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
     },
     {
         sequelize: db,
@@ -76,7 +82,14 @@ Products.init(
         paranoid: true,
         defaultScope: {
             where: {
-                active: true
+                [Op.and]: [
+                    {
+                        deletedAt: null
+                    },
+                    {
+                        active: true
+                    }
+                ]
             }
         },
         scopes: {
@@ -98,7 +111,10 @@ Products.init(
     }
 );
 
-export const ProductSchema =
+/**
+ * Zod validation schema
+ */
+export const ZodProductSchema =
     z.object({
         id: z.number().nullish().optional(),
         title: z

@@ -1,6 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
 <main>
     <form class="login-form" method="POST">
-        {{#if token}}
+        <% if (token && token.length > 0) { %>
             <div class="form-control">
                 <label for="password">Password</label>
                 <input
@@ -17,19 +23,23 @@
                         id="passwordConfirm"
                 >
             </div>
-        {{else}}
+        <% } else { %>
             <div class="form-control">
                 <label for="email">E-Mail</label>
-                <input type="email" name="email" id="email" value="{{email}}">
+                <input type="email" name="email" id="email">
             </div>
-        {{/if}}
+        <% } %>
 
-        {{#if email}}
+        <% if (token && token.length > 0) { %>
             <button class="btn" type="submit">Confirm Password</button>
-        {{else}}
+        <% } else { %>
             <button class="btn" type="submit">Reset Password</button>
-        {{/if}}
-        <input type="hidden" name="_csrf" value="{{ csrfToken }}">
-        <input type="hidden" name="token" value="{{ token }}">
+        <% } %>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="token" value="<%= token %>">
     </form>
 </main>
+
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

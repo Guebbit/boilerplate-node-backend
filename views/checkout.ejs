@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("./_layouts/main-head.ejs"); %>
+<body>
+<%- include("./_layouts/default-header.ejs"); %>
+<%- include("./_layouts/default-aside.ejs"); %>
+<main class="centered">
+    <h1>CHECKOUT PAGE</h1>
+    <% if(productList && productList.length > 0){ %>
+        <h3>Various shipment info, addresses, etc</h3>
+        <ul class="cart__item-list">
+            <% productList.forEach(function(item) { %>
+                <li class="cart__item">
+                    <div class="card__image" style="height: 60px">
+                        <img src="<%= item.Product.imageUrl %>" alt="<%= item.Product.title %>">
+                    </div>
+                    <h3><%= item.Product.title %></h3>
+                    <ul>
+                        <li>Quantity: <b><%= item.quantity %></b></li>
+                        <li>Price: <b><%= item.Product.price %></b></li>
+                        <li>Total: <b><%= item.Product.price * item.quantity %></b></li>
+                    </ul>
+                </li>
+            <% }); %>
+        </ul>
+        <form action="/orders/new" method="post">
+            <button class="btn" type="submit">Confirm order</button>
+        </form>
+    <% }else{ %>
+        <h1>No products in cart</h1>
+    <% } %>
+</main>
+<%- include("./_layouts/default-footer.ejs"); %>
+</body>
+</html>

@@ -1,0 +1,8 @@
+<aside>
+    <% errorMessages.forEach(function(message) { %>
+        <div class="user-message user-message--error"><%= message %></div>
+    <% }); %>
+    <% successMessages.forEach(function(message) { %>
+        <div class="user-message user-message--success"><%= message %></div>
+    <% }); %>
+</aside>

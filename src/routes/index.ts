@@ -1,12 +1,10 @@
 import express from 'express';
 import getHome from "../controllers/getHome";
-import getCheckout from "../controllers/getCheckout";
-import { isAuth } from "../middlewares/authorizations";
+import postGenerateDatabase from "../controllers/postGenerateDatabase";
 
 const router = express.Router();
 
 router.get('/', getHome);
-
-router.get('/checkout', isAuth, getCheckout);
+router.post('/generate-database', postGenerateDatabase);
 
 export default router;

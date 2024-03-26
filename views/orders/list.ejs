@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
+<main>
+    <ul class="orders">
+        <% orders.forEach(function(order) { %>
+            <li class="orders__item">
+                <b>Order - #<%= order.dataValues.id %></b>
+                <% if(isAdmin){ %>
+                    <small>(UserId - #<%= order.dataValues.UserId %>)</small>
+                <% } %>
+                <span><b>Email</b>: <%= order.dataValues.email %></span>
+                <span><b>Total Items</b>: <%= order.totalItems %></span>
+                <span><b>Total Quantity</b>: <%= order.totalQuantity %></span>
+                <span><b>Total Price</b>: <%= order.totalPrice %></span>
+                <a class="btn" href="/orders/details/<%= order.dataValues.id %>">Invoice</a>
+            </li>
+        <% }); %>
+    </ul>
+</main>
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

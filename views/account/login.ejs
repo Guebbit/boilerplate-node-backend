@@ -1,3 +1,9 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
 <main>
     <form class="login-form" action="/account/login" method="POST">
         <div class="form-control">
@@ -17,9 +23,12 @@
             >
         </div>
         <button class="btn" type="submit">Login</button>
-        <input type="hidden" name="_csrf" value="{{ csrfToken }}">
+        <input type="hidden" name="_csrf" value="<% csrfToken %>">
     </form>
     <div class="centered">
         <a href="/account/reset">Reset Password</a>
     </div>
 </main>
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

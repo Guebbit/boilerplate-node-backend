@@ -1,37 +1,23 @@
 import type { Request, Response } from "express";
-import OrderItems from "../../models/order-items";
-import { fn, col } from "sequelize";
+import Orders from "../../models/orders";
 
-export default (req: Request, res: Response) => {
-    if(!req.user)
-        return res.redirect('/account/login');
-
-    /**
-     *
-     * Get sum of quantities and prices
-     * TODO price
-     */
-    req.user.getOrders({
-        attributes: [
-            'id',
-            [fn('SUM', col('quantity')), 'totalQuantity'],
-            [fn('COUNT', col('OrderItems.id')), 'totalItems']
-        ],
-        include: [{
-            model: OrderItems,
-            attributes: [],     // no need of fields from OrderItems
-            required: false,    // perform a LEFT JOIN
-            duplicating: false  // avoid duplicate rows
-        }],
-        group: ['UserId', 'Orders.id'], // GROUP BY
-    })
-        .then((orderList) =>
+/**
+ * Get ALL orders info
+ * Only of current user if NOT admin
+ *
+ * @param req
+ * @param res
+ */
+export default (req: Request, res: Response) =>
+    Orders.getAll(
+        !req.session.user?.admin ? req.session.user?.id : "*"
+    )
+        .then((orders) =>
             res.render('orders/list', {
                 pageMetaTitle: 'Your Orders',
                 pageMetaLinks: [
                     "/css/order-list.css",
                 ],
-                orderList
+                orders
             })
-        )
-};
+        );

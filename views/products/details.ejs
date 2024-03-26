@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+    <%- include("../_layouts/default-header.ejs"); %>
+    <%- include("../_layouts/default-aside.ejs"); %>
+    <main class="centered">
+        <h1><%= product.title %></h1>
+        <hr />
+        <div class="image">
+            <img src="<%= product.imageUrl %>" alt="<%= product.title %>">
+        </div>
+        <h2><%= product.price %></h2>
+        <p><%= product.description %></p>
+        <hr />
+        <% if (isAdmin) { %>
+            <% if (product.active) { %>
+                <p>ACTIVE</p>
+            <% } else { %>
+                <h3><b>NOT</b> ACTIVE</h3>
+            <% } %>
+            <% if (product.deletedAt) { %>
+                <h3><b>SOFT DELETED</b></h3>
+            <% } %>
+            <a href="/products/edit/<%= product.id %>" class="btn">Edit</a>
+            <form action="/products/delete" method="post">
+                <% if (product.deletedAt) { %>
+                    <button class="btn" type="submit">Un-delete</button>
+                <% } else { %>
+                    <button class="btn" type="submit">Delete</button>
+                <% } %>
+                <input type="hidden" name="id" value="<%= product.id %>">
+            </form>
+        <% } %>
+        <% if (isAuthenticated && !product.deletedAt && product.active) { %>
+            <form action="/cart" method="post">
+                <button class="btn" type="submit">Add quantity to Cart</button>
+                <input type="text" value="1" name="quantity">
+                <input type="hidden" name="id" value="<%= product.id %>">
+            </form>
+        <% } %>
+    </main>
+    <%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

@@ -1,17 +1,19 @@
 import type { Request, Response } from "express";
 
-export default (req: Request, res: Response) => {
-    if (!req.user)
-        return res.status(500).redirect('/errors/500-unknown');
+/**
+ * Page POST data
+ */
+export interface IPostDeleteCartItemPostData {
+    id: string,
+}
 
-    req.user.Cart
-        .getProducts(
-            {
-                where: {
-                    id: req.body.id
-                }
-            }
-        )
-        .then(([product]) => product.CartItems.destroy())
+/**
+ * Delete target cart item
+ *
+ * @param req
+ * @param res
+ */
+export default (req: Request<unknown, unknown, IPostDeleteCartItemPostData>, res: Response) =>
+    // check done before entering the route
+    req.user!.cartItemRemove(req.body.id)
         .then(() => res.redirect('/cart'));
-};

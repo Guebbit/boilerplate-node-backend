@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("./_layouts/main-head.ejs"); %>
+<body>
+<%- include("./_layouts/default-header.ejs"); %>
+<%- include("./_layouts/default-aside.ejs"); %>
+<main>
+    <% if(productList && productList.length > 0){ %>
+        <ul class="cart__item-list">
+            <% productList.forEach(function(item) { %>
+                <li class="cart__item">
+                    <div class="card__image">
+                        <img src="<%= item.Product.imageUrl %>" alt="<%= item.Product.title %>">
+                    </div>
+                    <h3><%= item.Product.title %></h3>
+                    <div>
+                        <form method="POST">
+                            <input type="text" value="<%= item.quantity %>" name="quantity">
+                            <input type="hidden" name="id" value="<%= item.Product.id %>">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <button class="btn" type="submit">Change quantity</button>
+                        </form>
+                        <br/>
+                        <form action="/cart/delete" method="POST">
+                            <input type="hidden" name="id" value="<%= item.Product.id %>">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <button class="btn danger" type="submit">Remove all</button>
+                        </form>
+                    </div>
+                    <ul>
+                        <li>Price: <b><%= item.Product.price %></b></li>
+                        <li>Total: <b><%= item.Product.price * item.quantity %></b></li>
+                    </ul>
+                </li>
+            <% }); %>
+        </ul>
+        <hr />
+        <div class="centered">
+            <a class="btn" href="/checkout">Order Now!</a>
+            <form action="/cart/delete-all" method="POST">
+                <button class="btn danger" type="submit">Remove All</button>
+            </form>
+        </div>
+    <% }else{ %>
+        <h1>EMPTY CART</h1>
+    <% } %>
+</main>
+<%- include("./_layouts/default-footer.ejs"); %>
+</body>
+</html>

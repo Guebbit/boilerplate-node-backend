@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/email-template-head.ejs"); %>
+<body>
+    <main class="centered">
+        <h1>Hello, <%= name %>!</h1>
+        <p>To reset password, click on the link below:</p>
+        <p>Click this <a href="<%= process.env.NODE_URL + 'reset/' + token %>">link</a> to set a new password.</p>
+    </main>
+    <%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>
