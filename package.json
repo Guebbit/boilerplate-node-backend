@@ -23,6 +23,7 @@
     "@types/express": "^4.17.21",
     "@types/express-session": "^1.17.10",
     "@types/mongoose": "^5.11.97",
+    "@types/multer": "^1.4.11",
     "@types/node": "^20.11.14",
     "@types/nodemailer": "^6.4.14",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -46,6 +47,7 @@
     "i18next": "^23.8.2",
     "mongodb": "^6.3.0",
     "mongoose": "^8.1.2",
+    "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.9.11",
     "winston": "^3.13.0",
     "zod": "^3.22.4"

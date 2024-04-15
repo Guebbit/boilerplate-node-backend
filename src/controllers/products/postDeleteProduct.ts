@@ -1,6 +1,8 @@
 import type { CastError } from "mongoose";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { t } from "i18next";
 import Products from "../../models/products";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -11,20 +13,23 @@ export interface IPostDeleteProductPostData {
 }
 
 /**
+ * Delete a product
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res: Response) =>
+export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res: Response, next: NextFunction) =>
     Products.findById(req.body._id)
-        .then((product) => {
-            if (!product)
-                throw new Error("404");
-            // HARD delete
-            if(req.body.hardDelete){
-                product.deleteOne();
+        .then(product => {
+            if (!product){
+                next(new ExtendedError("404", 404, t("ecommerce.product-not-found")));
                 return;
             }
+            // HARD delete
+            if(req.body.hardDelete)
+                return product.deleteOne()
+                    .then(() => null)
             // SOFT delete. If deletedAt already present: UNDELETE
             if(product.deletedAt)
                 product.deletedAt = undefined
@@ -34,6 +39,7 @@ export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res:
         })
         .then(() => res.redirect('/products/'))
         .catch((error: CastError) => {
-            console.log("postDeleteProduct ERROR", error);
-            return res.redirect('/error/unknown');
-        });
+            if(error.message == "404" || error.kind === "ObjectId")
+                return next(new ExtendedError(t("ecommerce.product-not-found"), 404, ""));
+            return next(new ExtendedError(error.kind, parseInt(error.message), "", false));
+        })

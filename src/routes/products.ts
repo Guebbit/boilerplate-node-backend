@@ -1,5 +1,6 @@
 import express from 'express';
 import { isAuth, isAdmin } from "../middlewares/authorizations";
+import multer from "../utils/multer";
 
 import getAllProducts from "../controllers/products/getAllProducts";
 import getTargetProduct from "../controllers/products/getTargetProduct";
@@ -15,11 +16,11 @@ router.get('/details/:productId', getTargetProduct);
 
 router.get('/add', isAuth, isAdmin, getEditProduct);
 
-router.post('/add', isAuth, isAdmin, postEditProduct);
+router.post('/add', isAuth, isAdmin, multer.single('imageUpload'), postEditProduct);
 
 router.get('/edit/:productId', isAuth, isAdmin, getEditProduct);
 
-router.post('/edit/:productId', isAuth, isAdmin, postEditProduct);
+router.post('/edit/:productId', isAuth, isAdmin, multer.single('imageUpload'), postEditProduct);
 
 router.post('/delete', isAuth, isAdmin, postDeleteProduct);
 

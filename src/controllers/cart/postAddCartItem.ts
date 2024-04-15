@@ -1,6 +1,8 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { t } from "i18next";
 import Products from "../../models/products";
-import {t} from "i18next";
+import type { CastError } from "mongoose";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -16,8 +18,9 @@ export interface IPostAddCartItemPostData {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request<unknown, unknown, IPostAddCartItemPostData>, res: Response) =>
+export default (req: Request<unknown, unknown, IPostAddCartItemPostData>, res: Response, next: NextFunction) =>
     Products.findOne({ _id: req.body._id, active: true, deletedAt: null })
         .then((product) => {
             // not found, something happened
@@ -29,4 +32,6 @@ export default (req: Request<unknown, unknown, IPostAddCartItemPostData>, res: R
             // check done before entering the route
             return req.user!.cartItemSet(product, parseInt(req.body.quantity));
         })
-        .then(() => res.redirect('/cart'));
+        .then(() => res.redirect('/cart'))
+        .catch((error: CastError) =>
+            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))

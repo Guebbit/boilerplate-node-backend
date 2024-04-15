@@ -43,6 +43,11 @@
                             <% } %>
                             <input type="hidden" name="_id" value="<%= product._id %>">
                         </form>
+                        <form action="/products/delete" method="post">
+                            <button class="btn" type="submit">HARD Delete</button>
+                            <input type="hidden" name="_id" value="<%= product._id %>">
+                            <input type="hidden" name="hardDelete" value="true">
+                        </form>
                     <% } %>
                     <% if (isAuthenticated && !product.deletedAt && product.active) { %>
                         <form action="/cart" method="post">

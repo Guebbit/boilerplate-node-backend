@@ -1,4 +1,4 @@
-import {type CastError, model, Schema, Types} from 'mongoose';
+import { model, Schema, Types } from 'mongoose';
 import type { Document, Model, PipelineStage } from 'mongoose';
 import { productSchema, type IProduct } from "./products";
 
@@ -91,9 +91,6 @@ orderSchema.static('getAll', async function(pipeline: PipelineStage[] = []){
             }
         }
     ])
-    .catch((error: CastError) => {
-        console.log("ERRORRRRRRRRRRRRRRRRRRRR", error)
-    });
 });
 
 export default model<IOrderDocument, IOrderModel>('Order', orderSchema);

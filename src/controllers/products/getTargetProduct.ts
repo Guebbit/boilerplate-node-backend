@@ -1,6 +1,8 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import type { CastError } from "mongoose";
+import { t } from "i18next";
 import Products from "../../models/products";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Get (single) product page
@@ -8,17 +10,23 @@ import Products from "../../models/products";
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request, res: Response) =>
+export default (req: Request, res: Response, next: NextFunction) =>
     (
         req.session.user?.admin ?
+            // admin can search inactive or deleted products
         Products.findById(req.params.productId) :
-        Products.findOne({ _id: req.params.productId, active: true, deletedAt: null })
+            // NON admin can only search active and NOT (soft) deleted products
+        Products.findOne({
+            _id: req.params.productId,
+            active: true,
+            deletedAt: null
+        })
     )
             .then(product => {
-                console.log("WHATHEFUCK", product)
                 if (!product)
-                    throw new Error("404");
+                    return next(new ExtendedError("404", 404, t("ecommerce.product-not-found")));
                 res.render('products/details', {
                     pageMetaTitle: product.title,
                     pageMetaLinks: [
@@ -28,8 +36,7 @@ export default (req: Request, res: Response) =>
                 });
             })
             .catch((error: CastError) => {
-                console.log("getTargetProduct ERROR", error)
                 if(error.message == "404" || error.kind === "ObjectId")
-                    return res.redirect('/error/product-not-found');
-                return res.redirect('/error/unknown');
-            });
+                    return next(new ExtendedError(t("ecommerce.product-not-found"), 404, ""));
+                return next(new ExtendedError(error.kind, parseInt(error.message), "", false));
+            })

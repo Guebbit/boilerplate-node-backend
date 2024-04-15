@@ -1,6 +1,7 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { z } from "zod"
+import { z } from "zod";
+import { t } from "i18next";
 
 /**
  * Typing
@@ -30,13 +31,16 @@ export const ZodProductSchema =
         id: z.number().nullish().optional(),
         title: z
             .string({
-                required_error: "Title is required",
+                required_error: t('ecommerce.product-invalid-title-required'),
             })
-            .min(5, "Title is too short"),
-        price: z.number(),
+            .min(5, t('ecommerce.product-invalid-title-min')),
+        price: z.number({
+            required_error: t('ecommerce.product-invalid-price-required'),
+            invalid_type_error: t('ecommerce.product-invalid-price-invalid')
+        }),
         imageUrl: z
             .string({
-                required_error: "Image is required",
+                required_error: t('ecommerce.product-invalid-image-required'),
             }),
         active: z.boolean().nullish().optional(),
         createdAt: z.date().nullish().optional(),
@@ -79,24 +83,12 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
  * Data validation
  * Check if product info are compliant
  */
-productSchema.static('validateData', function({
-    title,
-    imageUrl,
-    price,
-    description,
-    active,
-}: IProduct) {
+productSchema.static('validateData', function(productData: IProduct) {
     /**
      * Validation
      */
     const parseResult = ZodProductSchema
-        .safeParse({
-            title,
-            imageUrl,
-            price,
-            description,
-            active,
-        });
+        .safeParse(productData);
 
     /**
      * Validation error

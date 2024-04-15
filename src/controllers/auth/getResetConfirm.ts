@@ -1,6 +1,8 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Users from "../../models/users";
+import type { CastError } from "mongoose";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Url parameters
@@ -14,8 +16,9 @@ export interface IGetResetConfirmParameters {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request & { params: IGetResetConfirmParameters }, res: Response) =>
+export default (req: Request & { params: IGetResetConfirmParameters }, res: Response, next: NextFunction) =>
     Users.findOne({
         'tokens.token': req.params.token
     })
@@ -36,7 +39,5 @@ export default (req: Request & { params: IGetResetConfirmParameters }, res: Resp
                 token: req.params.token
             });
         })
-        .catch(() => {
-            req.flash('error', [t("generic.error-unknown")]);
-            res.redirect('/account/reset')
-        });
+        .catch((error: CastError) =>
+            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))

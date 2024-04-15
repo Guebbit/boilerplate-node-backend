@@ -1,7 +1,9 @@
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import Users from "../../models/users";
 import nodemailer from "../../utils/nodemailer";
+import type { CastError } from "mongoose";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -17,8 +19,9 @@ export interface IPostResetConfirmPostData {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response) => {
+export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response, next: NextFunction) => {
     const {
         password,
         passwordConfirm,
@@ -58,16 +61,14 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
                     req.flash('success', [t("reset.success")]);
                     res.redirect("/account/login");
                 })
-                .catch((issues :string[] = []) => {
+                .catch((issues :string[] | CastError) => {
+                    // bounced in the next catch
+                    if(!Array.isArray(issues))
+                        throw issues;
                     req.flash('error', issues);
                     res.redirect('/account/reset');
-                    return;
                 });
         })
-        .catch(err => {
-            console.log("postResetConfirm ERROR", err)
-            req.flash('error', [t("generic.error-unknown")]);
-            res.redirect('/account/reset')
-            return;
-        });
+        .catch((error: CastError) =>
+            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))
 }

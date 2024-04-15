@@ -1,10 +1,12 @@
-import type { Request, Response } from "express";
-import Orders from "../../models/orders";
+import type { Request, Response, NextFunction } from "express";
 import {
     Types,
     type CastError,
     type PipelineStage
 } from "mongoose";
+import { t } from "i18next";
+import Orders from "../../models/orders";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Url parameters
@@ -18,12 +20,16 @@ export interface IGetTargetOrderParameters {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request & { params: IGetTargetOrderParameters }, res: Response) => {
+export default (req: Request & { params: IGetTargetOrderParameters }, res: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
     if(!Types.ObjectId.isValid(req.params.orderId))
-        return res.redirect('/error/page-not-found');
+        return next(new ExtendedError(t("ecommerce.order-not-found"), 404, ""));
 
+    /**
+     * Where build
+     */
     // empty match
     const match: PipelineStage.Match = {
         $match: {}
@@ -34,10 +40,13 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
     // single out the order
     match.$match._id = new Types.ObjectId(req.params.orderId);
 
+    /**
+     * Get orders
+     */
     Orders.getAll([match])
         .then((orders) => {
-            if(orders.length < 1)
-                throw new Error("404");
+            if (orders.length < 1)
+                return next(new ExtendedError("404", 404, t("ecommerce.order-not-found")));
             return res.render('orders/details', {
                 pageMetaTitle: 'Order',
                 pageMetaLinks: [
@@ -46,11 +55,9 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
                 order: orders[0]
             })
         })
-        // TODO global error catches
         .catch((error: CastError) => {
-            console.log("getTargetProduct ERROR", error)
             if(error.message == "404" || error.kind === "ObjectId")
-                return res.redirect('/error/product-not-found');
-            return res.redirect('/error/unknown');
-        });
+                return next(new ExtendedError(t("ecommerce.order-not-found"), 404, ""));
+            return next(new ExtendedError(error.kind, parseInt(error.message), "", false));
+        })
 };

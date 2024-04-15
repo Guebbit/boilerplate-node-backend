@@ -39,6 +39,7 @@ export interface IUser {
     password: string;
     imageUrl?: string;
     admin: boolean;
+    // soft delete
     deletedAt?: Date;
 
     /**
@@ -157,23 +158,25 @@ export const ZodUserSchema =
         id: z.number().nullish().optional(),
         email: z
             .string({
-                required_error: "Email is required",
+                required_error: t('signup.user-field-email-required'),
             })
-            .email("Not a valid email"),
+            .email(t('signup.user-field-email-invalid')),
         username: z
             .string({
-                required_error: "Username is required",
+                required_error: t('signup.user-field-username-required'),
             })
-            .min(3, "Name is too short"),
+            .min(3, t('signup.user-field-username-min')),
         password: z
             .string({
-                required_error: "Username is required",
+                required_error: t('signup.user-field-password-required'),
             })
-            .min(8, "Password is too short"),
+            .min(8, t('signup.user-field-password-min')),
         imageUrl: z.string().nullish().optional(),
         admin: z.boolean().nullish().optional(),
+        active: z.boolean().nullish().optional(),
         createdAt: z.date().nullish().optional(),
         updatedAt: z.date().nullish().optional(),
+        deletedAt: z.date().nullish().optional(),
     });
 
 /**
@@ -253,7 +256,7 @@ userSchema.methods.cartRemove = async function (): Promise<IUserDocument> {
 userSchema.methods.orderConfirm = async function () {
     return this.cartGet()
         .then((products) => {
-            if(products.length > 0)
+            if(products.length < 1)
                 throw new Error(t('generic.error-missing-data'))
             return Orders.create({
                 userId: this._id,

@@ -1,6 +1,8 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import type { CastError } from "mongoose";
 import Products from "../../models/products";
+import { deleteFile } from "../../utils/filesystem-helpers";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -8,28 +10,36 @@ import Products from "../../models/products";
 export interface IPostEditProductsPostData {
     id: string,
     title: string,
-    imageUrl: string,
     price: string,
     description: string,
     active: string,
 }
+
 /**
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: Response) => {
+export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: Response, next: NextFunction) => {
     /**
      * get POST data
      */
     const {
         id,
         title = "",
-        imageUrl = "",
         price = "0",
         description = "",
         active
     } = req.body;
+
+    /**
+     * Get URL of updated image it's on req.file,
+     * but it's good to know that it could be within an array
+     */
+    const imageUrlRaw = (req.file ? req.file.path : req.files ? (req.files as Express.Multer.File[])[0].path : "");
+    // remove "public" at root ("/" remain as root)
+    const imageUrl = imageUrlRaw.replace("public", "");
 
     /**
      * Data validation
@@ -46,19 +56,19 @@ export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: 
      * Validation error
      */
     if(issues.length > 0){
+        // Record was not created, so revert server changes by removing the uploaded file
+        if(imageUrlRaw.length > 0)
+            deleteFile(imageUrlRaw);
         req.flash('error', issues);
         req.flash('filled', [
             title,
-            imageUrl,
             price,
             description,
             active,
         ]);
         if (!id || id === '')
-            res.redirect('/products/add');
-        else
-            res.redirect('/products/edit/' + id);
-        return;
+            return res.redirect('/products/add');
+        return res.redirect('/products/edit/' + id);
     }
 
     /**
@@ -73,9 +83,10 @@ export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: 
             active: !!active,
         })
             .then(() => res.redirect('/products/'))
-            .catch((error: CastError) => {
-                console.log("Products.create ERROR", error);
-                return res.redirect('/error/unknown');
+            .catch((err: CastError) => {
+                if(imageUrlRaw.length > 0)
+                    deleteFile(imageUrlRaw);
+                return next(new ExtendedError(err.kind, 500, err.message));
             });
     /**
      * ID = edit product
@@ -94,7 +105,8 @@ export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: 
             })
             .then((product) => res.redirect('/products/details/' + product.id))
             .catch((error: CastError) => {
-                console.log("Products.findById ERROR", error);
-                return res.redirect('/error/unknown');
+                if(imageUrlRaw.length > 0)
+                    deleteFile(imageUrlRaw);
+                return next(new ExtendedError(error.kind, 500, error.message));
             });
 };

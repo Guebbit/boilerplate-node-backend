@@ -1,6 +1,16 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
+import type { CastError } from "mongoose";
+import { ExtendedError } from "../../utils/error-helpers";
 
-export default (req: Request, res: Response) =>
+
+/**
+ * Get cart of user to display the order data (and proceed to checkout)
+ *
+ * @param req
+ * @param res
+ * @param next
+ */
+export default (req: Request, res: Response, next: NextFunction) =>
     // check done before entering the route
     req.user!.cartGet()
         .then((productList) => {
@@ -12,3 +22,5 @@ export default (req: Request, res: Response) =>
                 productList,
             })
         })
+        .catch((error: CastError) =>
+            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))

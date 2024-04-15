@@ -65,7 +65,8 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
         res.locals.currentUser = {};
         res.locals.isAuthenticated = false;
         res.locals.isAdmin = false;
-        return next();
+        next();
+        return;
     }
     Users.findById(req.session.user._id)
         .then((user) => {

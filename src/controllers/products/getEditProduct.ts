@@ -1,6 +1,9 @@
-import type { Request, Response } from "express";
-import type { CastError } from "mongoose";
+import type { Request, Response, NextFunction } from "express";
+import { t } from "i18next";
 import Products from "../../models/products";
+import { ExtendedError } from "../../utils/error-helpers";
+import type { CastError } from "mongoose";
+
 
 /**
  * Url parameters
@@ -10,16 +13,17 @@ export interface IGetEditProductParameters {
 }
 
 /**
+ * Get product insertion page
+ * If productId is provided: it's an editing page
  *
  * @param req
  * @param res
  */
-export default (req: Request & { params: IGetEditProductParameters }, res: Response) => {
+export default (req: Request & { params: IGetEditProductParameters }, res: Response, next: NextFunction) => {
     Products.findById(req.params.productId)
         .then(product => {
             const [
                 title,
-                imageUrl,
                 price,
                 description,
                 active,
@@ -33,7 +37,6 @@ export default (req: Request & { params: IGetEditProductParameters }, res: Respo
                 product: product || {
                     // filled inputs (if any)
                     title,
-                    imageUrl,
                     price,
                     description,
                     active,
@@ -41,7 +44,8 @@ export default (req: Request & { params: IGetEditProductParameters }, res: Respo
             });
         })
         .catch((error: CastError) => {
-            console.log("getTargetProduct ERROR", error)
-            return res.redirect('/error/unknown');
-        });
+            if(error.message == "404" || error.kind === "ObjectId")
+                return next(new ExtendedError(t("ecommerce.product-not-found"), 404, ""));
+            return next(new ExtendedError(error.kind, parseInt(error.message), "", false));
+        })
 };

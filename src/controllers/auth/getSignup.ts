@@ -10,7 +10,6 @@ export default (req: Request, res: Response) => {
     const [
         email,
         username,
-        imageUrl,
     ] = req.flash('filled');
 
     return res.render('account/signup', {
@@ -22,7 +21,6 @@ export default (req: Request, res: Response) => {
         filledInputs: {
             email,
             username,
-            imageUrl,
         },
     });
 }

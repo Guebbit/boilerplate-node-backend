@@ -1,5 +1,7 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import Orders from "../../models/orders";
+import type { CastError } from "mongoose";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Get all orders
@@ -9,8 +11,9 @@ import Orders from "../../models/orders";
  *
  * @param req
  * @param res
+ * @param next
  */
-export default async (req: Request, res: Response) =>
+export default async (req: Request, res: Response, next: NextFunction) =>
     Orders.getAll([
         {
             $match: req.session.user?.admin ? {} : {
@@ -26,4 +29,6 @@ export default async (req: Request, res: Response) =>
                 ],
                 orderList
             })
-        );
+        )
+        .catch((error: CastError) =>
+            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))

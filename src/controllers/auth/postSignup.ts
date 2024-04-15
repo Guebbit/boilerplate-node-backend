@@ -1,7 +1,9 @@
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import Users from "../../models/users";
 import nodemailer from "../../utils/nodemailer";
+import type { CastError } from "mongoose";
+import {ExtendedError} from "../../utils/error-helpers";
 
 export interface IPostSignupPostData {
     email: string,
@@ -16,8 +18,9 @@ export interface IPostSignupPostData {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: Response) => {
+export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -58,15 +61,15 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
             req.flash('success', [t('signup.registration-successful')]);
             return res.redirect('/account/login');
         })
-        .catch((issues :string[] = []) => {
+        .catch((issues :string[] | CastError) => {
+            if(Object.prototype.hasOwnProperty.call(issues, 'kind'))
+                return next(new ExtendedError((issues as CastError).kind, parseInt((issues as CastError).message), "", false));
             // So the user doesn't need to fill the form again
             req.flash('filled', [
                 email,
                 username,
-                imageUrl,
             ]);
-            req.flash('error', issues);
+            req.flash('error', issues as string[]);
             res.redirect('/account/signup');
-            return;
         });
 };
