@@ -1,9 +1,10 @@
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import { z } from "zod";
 import Users, { ZodUserSchema } from "../../models/users";
 import Tokens from "../../models/tokens";
 import nodemailer from "../../utils/nodemailer";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Check password is valid and passwordConfirm is equal
@@ -38,8 +39,9 @@ export interface IPostResetConfirmPostData {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response) => {
+export default (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response, next: NextFunction) => {
     /**
      * Post Data
      */
@@ -90,16 +92,12 @@ export default (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: 
                     req.flash('success', [t("reset.success")]);
                     res.redirect("/account/login");
                 })
-                .catch((issues :string[] = []) => {
+                .catch((issues :string[] | Error) => {
+                    if(!Array.isArray(issues))
+                        return next(new ExtendedError("500", 500, issues.message, false))
                     req.flash('error', issues);
                     res.redirect('/account/reset');
                     return;
                 });
         })
-        .catch(err => {
-            console.log("postResetConfirm ERROR", err)
-            req.flash('error', [t("generic.error-unknown")]);
-            res.redirect('/account/reset')
-            return;
-        });
 }

@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import { t } from "i18next";
 import Products from "../../models/products";
-import type { IStatusError } from "../../types";
+import { ExtendedError } from "../../utils/error-helpers";
+
+
 
 /**
  * Get single product details
@@ -11,15 +13,11 @@ import type { IStatusError } from "../../types";
  * @param next
  */
 export default (req: Request, res: Response, next: NextFunction) =>
-    // [admin scope] rule
-    (req.session.user?.admin ? Products.unscoped() : Products)
+    (req.session.user?.admin ? Products.scope("admin") : Products)
         .findByPk(req.params.productId)
         .then(product => {
-            if (!product){
-                const error: IStatusError = new Error(t("ecommerce.product-not-found"));
-                error.status = 404;
-                return next(error);
-            }
+            if (!product)
+                return next(new ExtendedError("404", 404, t("ecommerce.product-not-found")));
             res.render("products/details", {
                 pageMetaTitle: product.dataValues.title,
                 pageMetaLinks: [
@@ -28,8 +26,5 @@ export default (req: Request, res: Response, next: NextFunction) =>
                 product: product.dataValues,
             });
         })
-        .catch((err) => {
-            const error: IStatusError = new Error(err);
-            error.status = 500;
-            return next(error);
-        });
+        .catch(err =>
+            next(new ExtendedError("500", 500, err, false)));

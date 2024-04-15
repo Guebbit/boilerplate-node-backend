@@ -59,14 +59,9 @@ class Orders extends Model<InferAttributes<Orders>, InferCreationAttributes<Orde
      * Only admin can see other people orders
      *
      * Add total quantity, total items and total price
-     * TODO separare o cmq fare in modo di poter ottenere le seguenti varianti:
-     *  - tutti gli utenti
-     *  - tutti gli ordini
-     *  - solo l'utente orderId
-     *  - solo l'ordine userId
      *
-     * @param userId
-     * @param orderId
+     * @param userId - * = all orders, otherwise is target user
+     * @param orderId - empty = all orders, otherwise get order by ID
      */
     static async getAll(userId = "", orderId = ""){
         const where: WhereOptions = {};

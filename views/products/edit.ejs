@@ -5,7 +5,7 @@
 <%- include("../_layouts/default-header.ejs"); %>
 <%- include("../_layouts/default-aside.ejs"); %>
 <main>
-    <form class="product-form" method="POST">
+    <form class="product-form" method="POST" enctype="multipart/form-data">
         <div class="form-control">
             <label for="title">Title</label>
             <input type="text" name="title" id="title" value="<%= product.title %>">
@@ -17,8 +17,8 @@
         </div>
 
         <div class="form-control">
-            <label for="imageUrl">Image</label>
-            <input type="text" name="imageUrl" id="imageUrl" value="<%= product.imageUrl %>">
+            <label for="imageUpload">Image</label>
+            <input type="file" name="imageUpload" id="imageUpload">
         </div>
 
         <div class="form-control">

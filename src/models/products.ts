@@ -4,11 +4,38 @@ import {
     InferAttributes,
     InferCreationAttributes,
     CreationOptional,
-    Op, NonAttribute,
+    Op,
+    NonAttribute,
 } from 'sequelize';
 import { z } from "zod";
+import { t } from "i18next";
 import db from "../utils/db";
 import CartItems from "./cart-items";
+
+/**
+ * Zod validation schema
+ */
+export const ZodProductSchema =
+    z.object({
+        id: z.number().nullish().optional(),
+        title: z
+            .string({
+                required_error: t('ecommerce.product-field-title-required'),
+            })
+            .min(5, t('ecommerce.product-field-title-min')),
+        price: z.number({
+            required_error: t('ecommerce.product-field-price-required'),
+            invalid_type_error: t('ecommerce.product-field-price-invalid')
+        }),
+        imageUrl: z
+            .string({
+                required_error: t('ecommerce.product-field-image-required'),
+            }),
+        active: z.boolean().nullish().optional(),
+        createdAt: z.date().nullish().optional(),
+        updatedAt: z.date().nullish().optional(),
+        deletedAt: z.date().nullish().optional(),
+    });
 
 /**
  * Model with typescript
@@ -26,15 +53,34 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
     declare price: number;
     declare imageUrl: string;
     declare description: string;
-    declare active: boolean;
-    declare createdAt: CreationOptional<number>;
-    declare updatedAt: CreationOptional<number | null>;
-    declare deletedAt: CreationOptional<number | null>;
+    declare active: CreationOptional<boolean>;
+    declare createdAt: CreationOptional<Date>;
+    declare updatedAt: CreationOptional<Date | null>;
+    declare deletedAt: CreationOptional<Date | null>;
 
     /**
      * HasMany Association (through CartItem) - Cart
      */
     declare CartItems: NonAttribute<CartItems>;
+
+    static validateData(productData: Partial<Products>){
+        /**
+         * Validation
+         */
+        const parseResult = ZodProductSchema
+            .safeParse(productData);
+
+        /**
+         * Validation error
+         */
+        if (!parseResult.success)
+            return parseResult.error.issues.reduce((errorArray, { message }) => {
+                errorArray.push(message);
+                return errorArray;
+            }, [] as string[]);
+
+        return [];
+    }
 }
 
 Products.init(
@@ -93,6 +139,9 @@ Products.init(
             }
         },
         scopes: {
+            admin: {
+                paranoid: false
+            },
             lowCost: {
                 where: {
                     [Op.and]: [
@@ -110,25 +159,5 @@ Products.init(
         }
     }
 );
-
-/**
- * Zod validation schema
- */
-export const ZodProductSchema =
-    z.object({
-        id: z.number().nullish().optional(),
-        title: z
-            .string({
-                required_error: "Title is required",
-            })
-            .min(5, "Title is too short"),
-        price: z.number(),
-        imageUrl: z
-            .string({
-                required_error: "Image is required",
-            }),
-        createdAt: z.date().nullish().optional(),
-        updatedAt: z.date().nullish().optional(),
-    });
 
 export default Products;

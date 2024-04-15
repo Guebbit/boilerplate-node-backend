@@ -17,7 +17,7 @@ import {
     HasManyCreateAssociationMixin,
     HasOneCreateAssociationMixin,
     HasOneGetAssociationMixin,
-    WhereOptions,
+    WhereOptions, Op,
 } from 'sequelize';
 import bcrypt from "bcrypt";
 import { z } from "zod";
@@ -43,9 +43,10 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
     declare password: string;
     declare imageUrl: CreationOptional<string>;
     declare admin: CreationOptional<boolean>;
-    declare createdAt: CreationOptional<number>;
-    declare updatedAt: CreationOptional<number>;
-    declare deletedAt: CreationOptional<number>;
+    declare active: CreationOptional<boolean>;
+    declare createdAt: CreationOptional<Date>;
+    declare updatedAt: CreationOptional<Date | null>;
+    declare deletedAt: CreationOptional<Date | null>;
 
     /**
      * HasOne Association - Cart
@@ -207,12 +208,12 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
             )
             .then(({ cart, products }) => {
                 if(products.length < 1)
-                    throw new Error("empty");
+                    throw new Error(t('generic.error-missing-data'));
                 return this.createOrder({
                     email: this.email
                 })
-                    .then((order) =>
-                        Promise.all([
+                    .then(async (order) => {
+                        await Promise.all([
                             ...products.map((product) => {
                                 return order.addProduct(product, {
                                     through: {
@@ -222,7 +223,8 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
                             }),
                             cart.removeProducts(products),
                         ])
-                    )
+                        return order;
+                    })
             })
     }
 
@@ -476,6 +478,10 @@ Users.init(
             type: DataTypes.BOOLEAN,
             defaultValue: false
         },
+        active: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: true
+        },
         createdAt: {
             type: DataTypes.DATE,
             allowNull: false,
@@ -505,15 +511,35 @@ Users.init(
         paranoid: true,
 
         /**
-         * Default scope (for every non-scoped request)
-         * can be nullified with .unscope()
+         * Default scope (for regular users)
          */
         defaultScope: {
+            where: {
+                [Op.and]: [
+                    {
+                        deletedAt: null
+                    },
+                    {
+                        active: true
+                    }
+                ]
+            },
             // get user already joined with his cart
             include: [{
+                model: Cart,
+            }]
+        },
+
+        scopes: {
+            /**
+             * Show all
+             */
+            admin: {
+                paranoid: false,
+                include: [{
                     model: Cart,
-                },
-            ]
+                }]
+            },
         },
 
         /**
@@ -526,8 +552,8 @@ Users.init(
              */
             beforeCreate(user){
                 // regular but not allowed names
-                if(user.username === "not-allowed")
-                    throw new Error("username not allowed");
+                if(user.username === 'not-allowed')
+                    throw new Error('username not allowed');
                 // hash password at every creation
                 return bcrypt.hash(user.password, 12)
                     .then(hashedPassword => {
@@ -558,23 +584,25 @@ export const ZodUserSchema =
         id: z.number().nullish().optional(),
         email: z
             .string({
-                required_error: "Email is required",
+                required_error: t('signup.user-field-email-required'),
             })
-            .email("Not a valid email"),
+            .email(t('signup.user-field-email-invalid')),
         username: z
             .string({
-                required_error: "Username is required",
+                required_error: t('signup.user-field-username-required'),
             })
-            .min(3, "Name is too short"),
+            .min(3, t('signup.user-field-username-min')),
         password: z
             .string({
-                required_error: "Username is required",
+                required_error: t('signup.user-field-password-required'),
             })
-            .min(8, "Password is too short"),
+            .min(8, t('signup.user-field-password-min')),
         imageUrl: z.string().nullish().optional(),
         admin: z.boolean().nullish().optional(),
+        active: z.boolean().nullish().optional(),
         createdAt: z.date().nullish().optional(),
         updatedAt: z.date().nullish().optional(),
+        deletedAt: z.date().nullish().optional(),
     });
 
 export default Users;

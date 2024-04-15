@@ -71,7 +71,8 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
         res.locals.currentUser = {};
         res.locals.isAuthenticated = false;
         res.locals.isAdmin = false;
-        return next();
+        next();
+        return;
     }
     Users.findByPk(req.session.user.id)
         .then((user) => {

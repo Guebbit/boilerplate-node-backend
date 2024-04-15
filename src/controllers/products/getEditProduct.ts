@@ -1,19 +1,23 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import Products from "../../models/products";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  *
  */
-export interface IGetAddProductParameters {
+export interface IGetEditProductParameters {
     productId: string,
 }
 
 /**
- *
+ * Get product insertion page
+ * If productId is provided: it's an editing page 
+ * 
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request & { params: IGetAddProductParameters }, res: Response) => {
+export default (req: Request & { params: IGetEditProductParameters }, res: Response, next: NextFunction) => {
     Products.findByPk(req.params.productId)
         .then(product => {
             res.render('products/edit', {
@@ -24,10 +28,6 @@ export default (req: Request & { params: IGetAddProductParameters }, res: Respon
                 product: {...product?.dataValues || {}},
             });
         })
-        .catch((error) => {
-            console.log("getTargetProduct ERROR", error)
-            if (error == 404)
-                return res.redirect('/error/product-not-found');
-            return res.redirect('/error/unknown');
-        });
+        .catch(err =>
+            next(new ExtendedError("500", 500, err, false)));
 };

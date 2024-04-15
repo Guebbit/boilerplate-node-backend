@@ -1,6 +1,7 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Tokens from "../../models/tokens";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  *
@@ -14,8 +15,9 @@ export interface IGetResetConfirmParameters {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request & { params: IGetResetConfirmParameters }, res: Response) =>
+export default (req: Request & { params: IGetResetConfirmParameters }, res: Response, next: NextFunction) =>
     Tokens.findOne({
         where: {
             token: req.params.token
@@ -38,7 +40,5 @@ export default (req: Request & { params: IGetResetConfirmParameters }, res: Resp
                 token: token.token
             });
         })
-        .catch(() => {
-            req.flash('error', [t("generic.error-unknown")]);
-            res.redirect('/account/reset')
-        });
+        .catch(err =>
+            next(new ExtendedError("500", 500, err, false)));

@@ -1,5 +1,7 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
+import nodemailer from "../../utils/nodemailer";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Create a new order
@@ -8,9 +10,25 @@ import { t } from "i18next";
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request, res: Response) =>
+export default (req: Request, res: Response, next: NextFunction) =>
     req.user!.orderConfirm()
-        .then(() => req.flash('success', [t('ecommerce.order-creation-success')]))
-        .catch(({message}: Error) => req.flash('error', [message]))
+        .then((order) => {
+            if(!order)
+                next(new ExtendedError("500", 500, t('ecommerce.order-creation-failure')))
+            req.flash('success', [t('ecommerce.order-creation-success')]);
+            nodemailer({
+                    to: req.user!.email,
+                    subject: 'Order confirmed',
+                },
+                "emailOrderConfirm.ejs",
+                {
+                    ...res.locals,
+                    pageMetaTitle: 'Order confirmed',
+                    pageMetaLinks: [],
+                    name: req.user!.username
+                });
+        })
+        .catch(({ message }: Error) => next(new ExtendedError("500", 500, message, false)))
         .finally(() => res.redirect('/orders'))

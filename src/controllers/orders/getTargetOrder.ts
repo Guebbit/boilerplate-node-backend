@@ -1,5 +1,8 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { t } from "i18next";
 import Orders from "../../models/orders";
+import { ExtendedError } from "../../utils/error-helpers";
+
 
 /**
  * 
@@ -13,8 +16,9 @@ export interface IGetTargetOrderParameters {
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request & { params: IGetTargetOrderParameters }, res: Response) => {
+export default (req: Request & { params: IGetTargetOrderParameters }, res: Response, next: NextFunction) => {
     if(!req.user)
         return res.redirect('/account/login');
     Orders.getAll(
@@ -22,8 +26,10 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
         req.params.orderId
     )
         .then((orders) => {
-            if(orders.length < 1)
-                throw 404;
+            if(orders.length < 1){
+                next(new ExtendedError("404", 404, t("ecommerce.order-not-found")));
+                return;
+            }
             res.render('orders/details', {
                 pageMetaTitle: 'Order',
                 pageMetaLinks: [
@@ -32,8 +38,6 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
                 order: orders[0]
             })
         })
-        .catch(() => {
-            // TODO global error catchers
-            return res.redirect('/error/404');
-        });
+        .catch(err =>
+            next(new ExtendedError("500", 500, err, false)));
 };

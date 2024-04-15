@@ -1,5 +1,6 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import Orders from "../../models/orders";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Get ALL orders info
@@ -7,8 +8,9 @@ import Orders from "../../models/orders";
  *
  * @param req
  * @param res
+ * @param next
  */
-export default (req: Request, res: Response) =>
+export default (req: Request, res: Response, next: NextFunction) =>
     Orders.getAll(
         !req.session.user?.admin ? req.session.user?.id : "*"
     )
@@ -20,4 +22,6 @@ export default (req: Request, res: Response) =>
                 ],
                 orders
             })
-        );
+        )
+        .catch(err =>
+            next(new ExtendedError("500", 500, err, false)));

@@ -4,17 +4,19 @@ import "./models";
 import 'dotenv/config';
 import path from 'path';
 import express from 'express';
+// import os from "os";
+// import cluster from 'cluster';
+import type { ErrorRequestHandler, Request, Response, NextFunction } from "express";
 import i18next from 'i18next';
 import helmet from "helmet";
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-
-// import database
+import { MulterError } from "multer";
+import { ExtendedError } from "./utils/error-helpers";
 import db from './utils/db';
-
+import logger from "./utils/winston";
 import { store, session, flash, userConnect } from "./middlewares/session";
 import { rateLimiter } from "./middlewares/security";
-
 import productRoutes from "./routes/products";
 import authRoutes from "./routes/auth";
 import orderRoutes from "./routes/orders";
@@ -53,6 +55,11 @@ db
     }))
     .then(() => {
         console.log("------------- SERVER START -------------")
+        // TODO clusters?
+        // https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
+        // const cpuCount = os.cpus().length;
+        // console.log(`The total number of CPUs is ${cpuCount}`);
+        // console.log(`Primary pid=${process.pid}`);
         app.listen( process.env.NODE_PORT || 3000);
     })
     .catch(err => console.log("------------- SERVER START ERROR -------------", err));
@@ -83,6 +90,7 @@ app.use(helmet({
                 "'self'",
                 // allow external src on images
                 "https://placekitten.com",
+                // https://placebear.com/
             ],
         }
     }
@@ -145,6 +153,9 @@ app.use((req, res, next) => {
     next();
 });
 
+/**
+ * All routes
+ */
 app.use('/products', productRoutes);
 app.use('/account', authRoutes);
 app.use('/orders', orderRoutes);
@@ -152,11 +163,78 @@ app.use('/', cartRoutes);
 app.use('/', indexRoutes);
 app.use('/error', errorRoutes);
 
-// app.use((error, req, res, next) => {
-//     console.log("TEST", error)
-// });
+/**
+ * Error handler.
+ * Distinguish operational error from critical programmer error
+ * Operational error: User redirected to error page explaining the problem
+ * Critical errors: Error documented for later study, then current worker is suppressed and a new one is born
+ *      TODO clusters: come gestire la visuale dell'utente in questo caso?
+ */
+app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request, res: Response, next: NextFunction) => {
+    // If headers already has been sent (shouldn't happen) delegate to the default Express error handler
+    if (res.headersSent)
+        return next(error);
 
-// app.use('/error', errorRoutes);
-// catch all routes
+    // File upload error
+    if(error instanceof MulterError){
+        logger.info(error);
+        req.flash('error-title', [error.code]);
+        req.flash('error-description', [error.name + ": " + error.message + " on " + error.field]);
+        res.status(400).redirect("/error/");
+        return;
+    }
+
+    // Check if the error is operational
+    if (error instanceof ExtendedError && error.isOperational){
+        logger.info(error);
+        req.flash('error-title', [error.name]);
+        req.flash('error-description', [error.description]);
+        res.status(error.httpCode).redirect("/error/");
+        return;
+    }
+
+    // Dangerous error, must be documented fully
+    logger.error({
+        ...error,
+        stack: error instanceof ExtendedError ? error.stack : "",
+    });
+    req.flash('error-title', ['UNKNOWN ERROR']);
+    req.flash('error-description', ['Something happened. Please contact support']);
+    res.status(500).redirect("/error/");
+    // Terminate the current process signaling that it has exited with an error.
+    // TODO clusters: process.exit(1);
+});
+
+/**
+ * Catch all routes
+ */
 app.use('/', (req, res) =>
-    res.status(404).redirect("/error/page-not-found"));
+    res.redirect("/error/page-not-found"));
+
+/**
+ * Error handling LAST RESORT
+ * Nothing should go there.
+ */
+const unhandledRejections = new Map();
+process
+    // emitted when the list of unhandled rejections grows
+    .on('unhandledRejection', (reason, promise) => {
+        // helps prevent promises from failing silently, ensuring that every rejection is either accounted for or resolved
+        logger.error(reason);
+        unhandledRejections.set(promise, reason);
+    })
+    // emitted when the list of unhandled rejections shrinks.
+    .on('rejectionHandled', (promise) =>
+        unhandledRejections.delete(promise)
+    )
+    // safeguard against unexpected errors that could crash the application
+    .on('uncaughtException', (error, origin) => {
+        // if development: no need (otherwise I would log all test errors + node server closing
+        if(process.env.NODE_ENV !== 'production')
+            return;
+        logger.error({
+            error,
+            origin
+        });
+        // TODO clusters process.exit(1);
+    });

@@ -2,14 +2,15 @@ import type { Request, Response } from "express";
 import Products from "../../models/products";
 
 /**
+ * Get all products page
  *
  * @param req
  * @param res
+ * @param next
  */
 export default (req: Request, res: Response) =>
     Promise.all([
-        // [admin scope] rule
-        (req.session.user?.admin ? Products.unscoped() : Products )
+        (req.session.user?.admin ? Products.scope("admin") : Products )
             .findAll(),
         Products.scope("lowCost")
             .findAll()
@@ -24,7 +25,3 @@ export default (req: Request, res: Response) =>
                 productListLC,
             })
         )
-        .catch((error) => {
-            console.log("getAllProducts ERROR", error)
-            return res.redirect('/error/unknown');
-        });

@@ -2,7 +2,13 @@
   "login": {
     "invalid-data": "Inserted data are invalid.",
     "wrong-data": "Invalid email or password.",
-    "success": "Login successful."
+    "success": "Login successful.",
+    "user-field-email-required": "Email is required",
+    "user-field-email-invalid": "Not a valid email",
+    "user-field-username-required": "Username is required",
+    "user-field-username-min": "Name is too short",
+    "user-field-password-required": "Password is required",
+    "user-field-password-min": "Password is too short"
   },
   "signup": {
     "email-already-used":  "Email was already used.",
@@ -17,8 +23,15 @@
   },
   "ecommerce": {
     "product-not-found": "The requested product was not found.",
-    "product-added-to-cart": "Product succesfully added to cart.",
-    "order-creation-success": "Order created with success."
+    "product-field-title-required": "Title is required",
+    "product-field-title-min": "Title is too short",
+    "product-field-price-required": "Price is missing",
+    "product-field-price-invalid": "Price is missing or invalid",
+    "product-field-image-required": "Image is required",
+    "product-added-to-cart": "Product successfully added to cart.",
+    "order-not-found": "The requested order was not found",
+    "order-creation-success": "Order created with success.",
+    "order-creation-failure": "Order creation failed."
   },
   "generic": {
     "error-unknown": "Something went wrong with the request.",
