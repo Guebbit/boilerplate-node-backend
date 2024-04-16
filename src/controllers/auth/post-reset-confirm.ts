@@ -1,29 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
-import { z } from "zod";
-import Users, { ZodUserSchema } from "../../models/users";
+import Users from "../../models/users";
 import Tokens from "../../models/tokens";
 import nodemailer from "../../utils/nodemailer";
 import { ExtendedError } from "../../utils/error-helpers";
-
-/**
- * Check password is valid and passwordConfirm is equal
- */
-export const UserResetPasswordSchema = ZodUserSchema
-    .pick({
-        password: true,
-    })
-    .extend({
-        passwordConfirm: z.string(),
-    })
-    .superRefine(({passwordConfirm, password}, ctx) => {
-        if (passwordConfirm !== password) {
-            ctx.addIssue({
-                code: "custom",
-                message: t("signup.password-dont-match")
-            });
-        }
-    });
 
 /**
  *
@@ -64,6 +44,7 @@ export default (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: 
     })
         .then(token => {
             // retrieving User
+            // eslint-disable-next-line 
             const { User } = token as Tokens & { User: Users } | null || {};
             // wrong token
             if (!token || !User) {

@@ -97,7 +97,6 @@ app.use(helmet({
 }));
 
 /**
- * TODO bodyParse file upload
  * https://www.udemy.com/course/nodejs-the-complete-guide/learn/lecture/11561900#overview
  */
 app.use(bodyParser.urlencoded({

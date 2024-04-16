@@ -15,7 +15,3 @@
 # TODO
 - Better security (csurf deprecated)
 - connect-flash sometimes not showing flash messages after redirect (SEQUELIZE ONLY)
-
-#TODO mvc-sequelize-mysql
-- update soft delete?
-- better graphics

@@ -2,11 +2,11 @@ import express from 'express';
 import { isAuth, isAdmin } from "../middlewares/authorizations";
 import multer from "../utils/multer";
 
-import getAllProducts from "../controllers/products/getAllProducts";
-import getTargetProduct from "../controllers/products/getTargetProduct";
-import getEditProduct from "../controllers/products/getEditProduct";
-import postEditProduct from "../controllers/products/postEditProduct";
-import postDeleteProduct from "../controllers/products/postDeleteProduct";
+import getAllProducts from "../controllers/products/get-all-products";
+import getTargetProduct from "../controllers/products/get-target-product";
+import getEditProduct from "../controllers/products/get-edit-product";
+import postEditProduct from "../controllers/products/post-edit-product";
+import postDeleteProduct from "../controllers/products/post-delete-product";
 
 const router = express.Router();
 

@@ -1,7 +1,7 @@
 import express from 'express';
 
-import get404 from "../controllers/errors/get404";
-import getCustom from "../controllers/errors/getCustom";
+import get404 from "../controllers/errors/get-not-found";
+import getCustom from "../controllers/errors/get-custom";
 
 const router = express.Router();
 

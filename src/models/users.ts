@@ -261,7 +261,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
          * Data validation
          * Check if password and passwordConfirm are equals and compliant
          */
-        const parseResult = ZodUserSchema
+        const parseResult = zodUserSchema
             .pick({
                 password: true,
             })
@@ -322,7 +322,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
          * Data validation
          * Check if user data are compliant
          */
-        const parseResult = ZodUserSchema
+        const parseResult = zodUserSchema
             .extend({
                 passwordConfirm: z.string(),
             })
@@ -399,7 +399,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
          * Data validation
          * Check if password and passwordConfirm are equals and compliant
          */
-        const parseResult = ZodUserSchema
+        const parseResult = zodUserSchema
             .pick({
                 email: true
             }).extend({
@@ -579,7 +579,7 @@ Users.init(
 /**
  * Zod validation schema
  */
-export const ZodUserSchema =
+export const zodUserSchema =
     z.object({
         id: z.number().nullish().optional(),
         email: z

@@ -15,7 +15,7 @@ import CartItems from "./cart-items";
 /**
  * Zod validation schema
  */
-export const ZodProductSchema =
+export const zodProductSchema =
     z.object({
         id: z.number().nullish().optional(),
         title: z
@@ -67,7 +67,7 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
         /**
          * Validation
          */
-        const parseResult = ZodProductSchema
+        const parseResult = zodProductSchema
             .safeParse(productData);
 
         /**

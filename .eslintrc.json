@@ -1,12 +1,19 @@
 {
   "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
+  "plugins": [
+    "@typescript-eslint", 
+    "filenames"
+  ],
   "extends": [
     "plugin:@typescript-eslint/recommended"
   ],
   "rules": {
     "@typescript-eslint/naming-convention": [
       "error",
+      {
+        "selector": "variable",
+        "format": ["camelCase", "UPPER_CASE"]
+      },
       {
         "selector": "interface",
         "format": ["PascalCase"],
@@ -15,6 +22,15 @@
           "match": true
         }
       }
-    ]
-  }
+    ],
+    "filenames/match-regex": ["error", "^[a-z-]+$", true]
+  },
+  "overrides": [
+    {
+      "files": ["*.d.ts"],
+      "rules": {
+        "filenames/match-regex": "off"
+      }
+    }
+  ]
 }
