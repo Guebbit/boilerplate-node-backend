@@ -11,8 +11,22 @@
     "@typescript-eslint/naming-convention": [
       "error",
       {
+        "selector": "default",
+        "format": ["camelCase", "PascalCase"],
+        "leadingUnderscore": "allow",
+        "trailingUnderscore": "allow"
+      },
+      {
         "selector": "variable",
         "format": ["camelCase", "UPPER_CASE"]
+      },
+      {
+        "selector": ["class", "typeLike", "typeParameter", "enum"],
+        "format": ["PascalCase"]
+      },
+      {
+        "selector": ["function"],
+        "format": ["camelCase"]
       },
       {
         "selector": "interface",
@@ -21,6 +35,10 @@
           "regex": "^I[A-Z]",
           "match": true
         }
+      },
+      {
+        "selector": ["memberLike", "enumMember"],
+        "format": ["camelCase", "PascalCase", "UPPER_CASE", "snake_case"]
       }
     ],
     "filenames/match-regex": ["error", "^[a-z-]+$", true]
