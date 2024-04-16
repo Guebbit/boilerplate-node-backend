@@ -13,8 +13,8 @@ import Users from "../models/users";
 /**
  * MongoDB connection
  */
-const MongoDBStore = connectMongoDBSession(expressSession);
-export const store = new MongoDBStore({
+const mongoDBStore = connectMongoDBSession(expressSession);
+export const store = new mongoDBStore({
     uri: process.env.NODE_DB_URI || "",
     collection: "sessions",
 });

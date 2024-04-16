@@ -153,7 +153,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
 /**
  * Zod validation schema
  */
-export const ZodUserSchema =
+export const zodUserSchema =
     z.object({
         id: z.number().nullish().optional(),
         email: z
@@ -306,7 +306,7 @@ userSchema.methods.passwordChange = async function (password = "", passwordConfi
      * Data validation
      * Check if password and passwordConfirm are equals and compliant
      */
-    const parseResult = ZodUserSchema
+    const parseResult = zodUserSchema
         .pick({
             password: true,
         })
@@ -383,7 +383,7 @@ userSchema.static('signup', async function(
      * Data validation
      * Check if user data are compliant
      */
-    const parseResult = ZodUserSchema
+    const parseResult = zodUserSchema
         .extend({
             passwordConfirm: z.string(),
         })
@@ -451,7 +451,7 @@ userSchema.static('login', async function(email?: string, password?: string) {
      * Data validation
      * Check if password and passwordConfirm are equals and compliant
      */
-    const parseResult = ZodUserSchema
+    const parseResult = zodUserSchema
         .pick({
             email: true
         }).extend({

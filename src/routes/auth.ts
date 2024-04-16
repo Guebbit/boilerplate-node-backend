@@ -1,15 +1,15 @@
 import express from 'express';
 import { isGuest, isAuth } from "../middlewares/authorizations";
 
-import getLogin from "../controllers/auth/getLogin";
-import getSignup from "../controllers/auth/getSignup";
-import postLogin from "../controllers/auth/postLogin";
-import postSignup from "../controllers/auth/postSignup";
-import getLogout from "../controllers/auth/getLogout";
-import getReset from "../controllers/auth/getReset";
-import postReset from "../controllers/auth/postReset";
-import getResetConfirm from "../controllers/auth/getResetConfirm";
-import postResetConfirm from "../controllers/auth/postResetConfirm";
+import getLogin from "../controllers/auth/get-login";
+import getSignup from "../controllers/auth/get-signup";
+import postLogin from "../controllers/auth/post-login";
+import postSignup from "../controllers/auth/post-signup";
+import getLogout from "../controllers/auth/get-logout";
+import getReset from "../controllers/auth/get-reset";
+import postReset from "../controllers/auth/post-reset";
+import getResetConfirm from "../controllers/auth/get-reset-confirm";
+import postResetConfirm from "../controllers/auth/post-reset-confirm";
 
 const router = express.Router();
 

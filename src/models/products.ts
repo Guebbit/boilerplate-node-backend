@@ -26,7 +26,7 @@ export interface IProductModel extends Model<IProductDocument, unknown, IProduct
 /**
  * Zod Schema
  */
-export const ZodProductSchema =
+export const zodProductSchema =
     z.object({
         id: z.number().nullish().optional(),
         title: z
@@ -87,7 +87,7 @@ productSchema.static('validateData', function(productData: IProduct) {
     /**
      * Validation
      */
-    const parseResult = ZodProductSchema
+    const parseResult = zodProductSchema
         .safeParse(productData);
 
     /**

@@ -1,11 +1,11 @@
 import express from 'express';
 import { isAuth } from "../middlewares/authorizations";
 
-import getCart from "../controllers/cart/getCart";
-import getCheckout from "../controllers/cart/getCheckout";
-import postAddCartItem from "../controllers/cart/postAddCartItem";
-import postDeleteCartItem from "../controllers/cart/postDeleteCartItem";
-import postDeleteCart from "../controllers/cart/postDeleteCart";
+import getCart from "../controllers/cart/get-cart";
+import getCheckout from "../controllers/cart/get-checkout";
+import postAddCartItem from "../controllers/cart/post-add-cart-item";
+import postDeleteCartItem from "../controllers/cart/post-delete-cart-item";
+import postDeleteCart from "../controllers/cart/post-delete-cart";
 
 const router = express.Router();
 
