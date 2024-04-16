@@ -20,6 +20,7 @@ export interface IGetResetConfirmParameters {
  */
 export default (req: Request & { params: IGetResetConfirmParameters }, res: Response, next: NextFunction) =>
     Users.findOne({
+        // eslint-disable-next-line
         'tokens.token': req.params.token
     })
         .then(async (user) => {

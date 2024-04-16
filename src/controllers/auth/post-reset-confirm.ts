@@ -29,6 +29,7 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
     } = req.body;
 
     return Users.findOne({
+        // eslint-disable-next-line
         'tokens.token': token
     })
         .then(user => {
