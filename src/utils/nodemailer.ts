@@ -29,6 +29,8 @@ export const transporter = createTransport({
  * Send email to requested target
  * Retrieve the selected template and apply the requested options
  *
+ * If file already exists: it will be overwritten
+ *
  * @param request
  * @param templateName
  * @param data
@@ -41,9 +43,9 @@ export default (request: SendMailOptions, templateName: string, data: Data): Pro
             // Populate the template
             data,
             // callback
-            (err: Error | null, html: string) => {
-                if (err)
-                    return reject(err);
+            (error: Error | null, html: string) => {
+                if (error)
+                    return reject(error);
                 /**
                  * Send email
                  */

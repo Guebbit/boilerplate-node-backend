@@ -26,5 +26,5 @@ export default (req: Request, res: Response, next: NextFunction) =>
                 product: product.dataValues,
             });
         })
-        .catch(err =>
-            next(new ExtendedError("500", 500, err, false)));
+        .catch((error: Error) =>
+            next(new ExtendedError("500", 500, error.message, false)))

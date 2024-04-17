@@ -35,5 +35,5 @@ export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res:
                 .then(() => null)
         })
         .then(() => res.redirect('/products/'))
-        .catch(err =>
-            next(new ExtendedError("500", 500, err, false)));
+        .catch((error: Error) =>
+            next(new ExtendedError("500", 500, error.message, false)))

@@ -21,7 +21,7 @@ export interface IPostResetConfirmPostData {
  * @param res
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response, next: NextFunction) => {
+export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>, res: Response, next: NextFunction) => {
     /**
      * Post Data
      */

@@ -28,6 +28,6 @@ export default (req: Request & { params: IGetEditProductParameters }, res: Respo
                 product: {...product?.dataValues || {}},
             });
         })
-        .catch(err =>
-            next(new ExtendedError("500", 500, err, false)));
+        .catch((error: Error) =>
+            next(new ExtendedError("500", 500, error.message, false)))
 };

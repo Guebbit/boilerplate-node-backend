@@ -47,5 +47,5 @@ export default (req: Request<unknown, unknown, IPostResetPostData>, res: Respons
             req.flash('success', [t('reset.email-sent')]);
             res.redirect('/account/reset');
         })
-            .catch(err =>
-                next(new ExtendedError("500", 500, err, false)));
+            .catch((error: Error) =>
+                next(new ExtendedError("500", 500, error.message, false)))

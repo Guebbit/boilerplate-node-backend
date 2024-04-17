@@ -40,5 +40,5 @@ export default (req: Request & { params: IGetResetConfirmParameters }, res: Resp
                 token: token.token
             });
         })
-        .catch(err =>
-            next(new ExtendedError("500", 500, err, false)));
+        .catch((error: Error) =>
+            next(new ExtendedError("500", 500, error.message, false)))

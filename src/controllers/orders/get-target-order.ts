@@ -19,8 +19,7 @@ export interface IGetTargetOrderParameters {
  * @param next
  */
 export default (req: Request & { params: IGetTargetOrderParameters }, res: Response, next: NextFunction) => {
-    if(!req.user)
-        return res.redirect('/account/login');
+    // get target order (must be owner or admin)
     Orders.getAll(
         !req.session.user?.admin ? req.session.user?.id : "*",
         req.params.orderId
@@ -38,6 +37,6 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
                 order: orders[0]
             })
         })
-        .catch(err =>
-            next(new ExtendedError("500", 500, err, false)));
+        .catch((error: Error) =>
+            next(new ExtendedError("500", 500, error.message, false)))
 };
