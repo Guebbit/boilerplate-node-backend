@@ -1,3 +1,12 @@
 {"level":"error","message":{"code":"ENOENT","errno":-4058,"path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\uploads\\images\\5d70f447771b473be5fa0d22e3d10fe3.jpg","stack":"","storageErrors":[],"syscall":"open"},"service":"user-service"}
 {"level":"error","message":{"code":"ENOENT","errno":-4058,"path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\uploads\\793bf0f4e538244e7a95bbed6b274022.jpg","stack":"","storageErrors":[],"syscall":"open"},"service":"user-service"}
 {"level":"error","message":{"code":"ENOENT","errno":-4058,"path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\srcs\\uploads\\284d2c3a7884e4992853950eb3e91665.jpg","stack":"","storageErrors":[],"syscall":"open"},"service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}
+{"level":"error","path":"C:\\Users\\guerz\\Lavoro\\boilerplate-node-backend-mongodb\\views\\templates\\invoice-order-file.ejs","service":"user-service"}

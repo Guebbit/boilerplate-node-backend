@@ -17,6 +17,7 @@
                 <span><b>Total Quantity</b>: <%= order.totalQuantity %></span>
                 <span><b>Total Price</b>: <%= order.totalPrice %></span>
                 <a class="btn" href="/orders/details/<%= order._id %>">Invoice</a>
+                <a class="btn" href="/orders/invoice/<%= order._id %>">Download Invoice</a>
             </li>
         <% }); %>
     </ul>

@@ -41,7 +41,7 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
     match.$match._id = new Types.ObjectId(req.params.orderId);
 
     /**
-     * Get orders
+     * Get info from database
      */
     Orders.getAll([match])
         .then((orders) => {
