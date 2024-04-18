@@ -29,23 +29,25 @@ export default (req: Request<unknown, unknown, IPostResetPostData>, res: Respons
                 res.redirect('/account/reset');
                 return;
             }
-            const token = user.tokenAdd("password", 86400000);
-            // Send token (no need to wait)
-            nodemailer({
-                    to: req.body.email,
-                    subject: 'Password reset',
-                },
-                "emailResetRequest.ejs",
-                {
-                    ...res.locals,
-                    pageMetaTitle: 'Password reset requested',
-                    pageMetaLinks: [],
-                    name: user.username,
-                    token,
-                });
-            // send success message
-            req.flash('success', [t('reset.email-sent')]);
-            res.redirect('/account/reset');
+            return user.tokenAdd("password", 86400000)
+                .then(token => {
+                    // Send token (no need to wait)
+                    nodemailer({
+                            to: req.body.email,
+                            subject: 'Password reset',
+                        },
+                        "emailResetRequest.ejs",
+                        {
+                            ...res.locals,
+                            pageMetaTitle: 'Password reset requested',
+                            pageMetaLinks: [],
+                            name: user.username,
+                            token,
+                        });
+                    // send success message
+                    req.flash('success', [t('reset.email-sent')]);
+                    res.redirect('/account/reset');
+                })
         })
         .catch((error: CastError) =>
             next(new ExtendedError(error.kind, parseInt(error.message), "", false)))

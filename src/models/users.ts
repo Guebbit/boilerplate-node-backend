@@ -73,7 +73,7 @@ export interface IUserMethods {
     cartItemSet: (product: IProductDocument, quantity?: number) => Promise<IUserDocument>;
     cartItemRemove: (id: string) => Promise<IUserDocument>;
     orderConfirm: () => Promise<IOrder | undefined>;
-    tokenAdd: (type: string, expirationTime?: number) => string
+    tokenAdd: (type: string, expirationTime?: number) => Promise<string>
     passwordChange: (password: string, passwordConfirm: string) => Promise<IUserDocument>
 }
 
@@ -282,7 +282,7 @@ userSchema.methods.orderConfirm = async function () {
  * @param type
  * @param expirationTime - undefined = expire only upon use
  */
-userSchema.methods.tokenAdd = function (type: string, expirationTime?: number) {
+userSchema.methods.tokenAdd = async function (type: string, expirationTime?: number) {
     const token = randomBytes(16).toString('hex');
     if(!this.tokens)
         this.tokens = [];
@@ -292,8 +292,8 @@ userSchema.methods.tokenAdd = function (type: string, expirationTime?: number) {
         expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined,
     });
     // no need to wait
-    this.save();
-    return token;
+    return this.save()
+        .then(() => token);
 };
 
 /**
