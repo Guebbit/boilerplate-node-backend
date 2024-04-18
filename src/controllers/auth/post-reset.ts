@@ -30,22 +30,24 @@ export default (req: Request<unknown, unknown, IPostResetPostData>, res: Respons
                 res.redirect('/account/reset');
                 return;
             }
-            const token = user.tokenAdd("password", 86400000);
-            // Send token (no need to wait)
-            nodemailer({
-                    to: req.body.email,
-                    subject: 'Password reset',
-                },
-                "emailResetRequest.ejs",
-                {
-                    ...res.locals,
-                    pageMetaTitle: 'Password reset requested',
-                    pageMetaLinks: [],
-                    name: user.username,
-                    token,
-                });
-            req.flash('success', [t('reset.email-sent')]);
-            res.redirect('/account/reset');
+            return user.tokenAdd("password", 86400000)
+                .then(token => {
+                    // Send token (no need to wait)
+                    nodemailer({
+                            to: req.body.email,
+                            subject: 'Password reset',
+                        },
+                        "emailResetRequest.ejs",
+                        {
+                            ...res.locals,
+                            pageMetaTitle: 'Password reset requested',
+                            pageMetaLinks: [],
+                            name: user.username,
+                            token,
+                        });
+                    req.flash('success', [t('reset.email-sent')]);
+                    res.redirect('/account/reset');
+                })
         })
             .catch((error: Error) =>
                 next(new ExtendedError("500", 500, error.message, false)))

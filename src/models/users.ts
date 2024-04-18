@@ -161,7 +161,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
      * @param productId
      */
     async cartItemRemove(productId: string) {
-        this.getCart()
+        return this.getCart()
             .then((cart) => CartItems.destroy({
                 where: {
                     cartId: cart.id,
@@ -169,7 +169,6 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
                 }
             })
         )
-        return this;
     }
 
     /**
@@ -178,14 +177,13 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
      * Remove ALL items from cart
      */
     async cartRemove() {
-        this.getCart()
+        return this.getCart()
             .then((cart) => CartItems.destroy({
                     where: {
                         cartId: cart.id
                     }
                 })
             )
-        return this;
     }
 
     /**
@@ -237,18 +235,14 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
      * @param type
      * @param expirationTime - undefined = expire only upon use
      */
-    tokenAdd(type: string, expirationTime?: number) {
+    async tokenAdd(type: string, expirationTime?: number) {
         const token = randomBytes(16).toString('hex');
-
-        this.createToken({
+        return this.createToken({
             type,
             token,
             expiration: expirationTime ? (Date.now() + expirationTime) : undefined,
         })
-            .catch((error: Error) => {
-                console.log("tokenAdd ERROR", error)
-            });
-        return token;
+            .then(() => token)
     };
 
     /**
