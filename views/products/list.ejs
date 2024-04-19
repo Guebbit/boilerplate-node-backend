@@ -60,33 +60,8 @@
             </article>
         <% }); %>
     </div>
-    <h2 class="centered">LOW PRICE Products</h2>
-    <div class="grid">
-        <% productListLC.forEach(function(product) { %>
-            <article class="card product-item small-item">
-                <header class="card__header">
-                    <h1 class="product__title">
-                        <%= product.title %>
-                    </h1>
-                </header>
-                <div class="card__image">
-                    <img src="<%= product.imageUrl %>" alt="<%= product.title %>">
-                </div>
-                <div class="card__content">
-                    <h2 class="product__price">$<%= product.price %></h2>
-                </div>
-                <div class="card__actions">
-                    <% if (isAuthenticated && !product.deletedAt && product.active) { %>
-                        <form action="/cart" method="post">
-                            <button class="btn" type="submit">Add quantity to Cart</button>
-                            <input type="text" value="1" name="quantity">
-                            <input type="hidden" name="id" value="<%= product.id %>">
-                        </form>
-                    <% } %>
-                </div>
-            </article>
-        <% }); %>
-    </div>
+    <hr />
+    <%- include("../_components/pagination.ejs", { productsTotal, pageCurrent, pageTotal }); %>
     <hr />
     <div class="centered">
         <% if (isAdmin) { %>

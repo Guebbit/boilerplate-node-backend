@@ -3,7 +3,12 @@ import { t } from "i18next";
 import Products from "../../models/products";
 import { ExtendedError } from "../../utils/error-helpers";
 
-
+/**
+ * Url parameters
+ */
+export interface IGetTargetProductParameters {
+    productId: string,
+}
 
 /**
  * Get single product details
@@ -12,7 +17,7 @@ import { ExtendedError } from "../../utils/error-helpers";
  * @param res
  * @param next
  */
-export default (req: Request, res: Response, next: NextFunction) =>
+export default (req: Request & { params: IGetTargetProductParameters }, res: Response, next: NextFunction) =>
     (req.session.user?.admin ? Products.scope("admin") : Products)
         .findByPk(req.params.productId)
         .then(product => {

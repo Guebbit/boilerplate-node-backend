@@ -140,7 +140,7 @@ Products.init(
         },
         scopes: {
             admin: {
-                paranoid: false
+                paranoid: false,
             },
             lowCost: {
                 where: {

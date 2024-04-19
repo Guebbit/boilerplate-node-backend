@@ -17,7 +17,8 @@ import {
     HasManyCreateAssociationMixin,
     HasOneCreateAssociationMixin,
     HasOneGetAssociationMixin,
-    WhereOptions, Op,
+    WhereOptions,
+    Op,
 } from 'sequelize';
 import bcrypt from "bcrypt";
 import { z } from "zod";
