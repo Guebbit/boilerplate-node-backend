@@ -148,7 +148,8 @@ form {
 }
 
 .btn:hover,
-.btn:active {
+.btn:active,
+.btn.active {
   background-color: #00695c;
   color: white;
 }

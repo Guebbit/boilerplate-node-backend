@@ -1,0 +1,21 @@
+<div class="pagination">
+    <% if(pageCurrent !== 1){ %>
+        <a href="/products/1">First</a>
+    <% } %>
+    <% if(pageCurrent !== 1){ %>
+        <a href="/products/<%= pageCurrent - 1 %>">Prev</a>
+    <% } %>
+    <% for(let i = 1; i <= pageTotal; i++) { %>
+        <a class="<%= pageCurrent === i ? "active" : '' %>" href="/products/<%= i %>"><%= i %></a>
+    <% } %>
+    <% if(pageCurrent < pageTotal){ %>
+        <a href="/products/<%= pageCurrent + 1 %>">Next</a>
+    <% } %>
+    <% if(pageCurrent !== pageTotal){ %>
+        <a href="/products/<%= pageTotal %>">Last</a>
+    <% } %>
+</div>
+<ul>
+    <li>Total products: <%= productsTotal %></li>
+    <li>Total Pages: <%= pageTotal %></li>
+</ul>

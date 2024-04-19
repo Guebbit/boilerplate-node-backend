@@ -10,8 +10,6 @@ import postDeleteProduct from "../controllers/products/post-delete-product";
 
 const router = express.Router();
 
-router.get('/', getAllProducts);
-
 router.get('/details/:productId', getTargetProduct);
 
 router.get('/add', isAuth, isAdmin, getEditProduct);
@@ -23,5 +21,9 @@ router.get('/edit/:productId', isAuth, isAdmin, getEditProduct);
 router.post('/edit/:productId', isAuth, isAdmin, multer.single('imageUpload'), postEditProduct);
 
 router.post('/delete', isAuth, isAdmin, postDeleteProduct);
+
+router.get('/:page', getAllProducts);
+
+router.get('/', getAllProducts);
 
 export default router;
