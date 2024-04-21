@@ -4,8 +4,6 @@ import "./models";
 import 'dotenv/config';
 import path from 'path';
 import express from 'express';
-// import os from "os";
-// import cluster from 'cluster';
 import type { ErrorRequestHandler, Request, Response, NextFunction } from "express";
 import i18next from 'i18next';
 import helmet from "helmet";
@@ -55,11 +53,6 @@ db
     }))
     .then(() => {
         console.log("------------- SERVER START -------------")
-        // TODO clusters?
-        // https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
-        // const cpuCount = os.cpus().length;
-        // console.log(`The total number of CPUs is ${cpuCount}`);
-        // console.log(`Primary pid=${process.pid}`);
         app.listen( process.env.NODE_PORT || 3000);
     })
     .catch(err => console.log("------------- SERVER START ERROR -------------", err));
@@ -166,8 +159,7 @@ app.use('/error', errorRoutes);
  * Error handler.
  * Distinguish operational error from critical programmer error
  * Operational error: User redirected to error page explaining the problem
- * Critical errors: Error documented for later study, then current worker is suppressed and a new one is born
- *      TODO clusters: come gestire la visuale dell'utente in questo caso?
+ * Critical errors: Error documented for later study, then current worker is suppressed so a new one is born (from cluster management)
  */
 app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request, res: Response, next: NextFunction) => {
     // If headers already has been sent (shouldn't happen) delegate to the default Express error handler
@@ -201,7 +193,7 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request,
     req.flash('error-description', ['Something happened. Please contact support']);
     res.status(500).redirect("/error/");
     // Terminate the current process signaling that it has exited with an error.
-    // TODO clusters: process.exit(1);
+    process.exit(1);
 });
 
 /**
@@ -235,5 +227,5 @@ process
             error,
             origin
         });
-        // TODO clusters process.exit(1);
+        process.exit(1);
     });
