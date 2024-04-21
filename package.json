@@ -1,13 +1,13 @@
 {
   "name": "boilerplate-node-backend",
   "version": "0.0.0",
-  "main": "src/app.ts",
+  "main": "src/cluster.ts",
   "license": "AGPLv3.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx watch ./src/app.ts",
-    "start": "tsx ./src/app.ts",
-    "debug": "tsx --inspect-brk ./src/app.ts",
+    "dev": "tsx watch src/cluster.ts",
+    "start": "tsx src/cluster.ts",
+    "debug": "tsx --inspect-brk src/cluster.ts",
     "ts-check": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx",
     "build": "npm run lint && npm run ts-check",
