@@ -30,6 +30,7 @@ import Cart from "./cart";
 import Products from "./products";
 import CartItems from "./cart-items";
 import { randomBytes } from "crypto";
+import {ExtendedError} from "../utils/error-helpers";
 
 export type CartGetResponse = InferAttributes<Cart> & {
     CartItems?: Array<CartItems & {
@@ -309,9 +310,9 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
     static async signup(
         email: string,
         username: string,
-        imageUrl: string,
         password: string,
-        passwordConfirm: string
+        passwordConfirm: string,
+        imageUrl = "",
     ){
         /**
          * Data validation
@@ -378,7 +379,16 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
                         user.createCart();
                         return user;
                     })
-            });
+            })
+            /**
+             * Something has gone wrong
+             */
+            .catch((error: Error) => {
+                new ExtendedError("500", 500, error.message, false);
+                return Promise.reject([
+                    t('generic.error-unknown')
+                ]);
+            })
     }
 
     /**
@@ -522,6 +532,7 @@ Users.init(
             // get user already joined with his cart
             include: [{
                 model: Cart,
+                required: false // it should be always present
             }]
         },
 
@@ -533,6 +544,7 @@ Users.init(
                 paranoid: false,
                 include: [{
                     model: Cart,
+                    required: false // it should be always present
                 }]
             },
         },

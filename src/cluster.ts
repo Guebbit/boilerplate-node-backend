@@ -1,3 +1,7 @@
+/**
+ * This is the MAIN file of the repo (check "package.json") so we can use clusters.
+ * If you don't need clusters, you can just change the MAIN attribute in the "package.json" and use "app.ts"
+ */
 import os from "os";
 import cluster from "cluster";
 

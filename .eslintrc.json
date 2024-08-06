@@ -47,7 +47,7 @@
   },
   "overrides": [
     {
-      "files": ["*.d.ts"],
+      "files": ["*.d.ts", "*.test.ts"],
       "rules": {
         "filenames/match-regex": "off"
       }
