@@ -3,18 +3,8 @@
  - Create database and link it using .env variables
  - Link to services using .env variables (es: email responders are a different kind of server)
  - Cron job needed to clean expired tokens in the table "tokens" (or in the users data if nosql)
- - FOUC and minor problems are expected, will resolve (if needed) in the future.
-
-# Rules
- - [admin scope]: defaultScope restrict to only active products. Admin can see all through unscope()
-
-# Useful info
-- https://sequelize.org/docs/v6/core-concepts/model-basics/
-- https://sequelize.org/docs/v6/other-topics/typescript/
-- https://sequelize.org/docs/v6/other-topics/hooks/
-- https://stackoverflow.com/questions/22958683/how-to-implement-many-to-many-association-in-sequelize
-- https://github.com/melardev/ApiEcomSequelizeExpress/blob/master/models/product.model.js
+ - FOUC (Flash of Unstyled Content) and minor problems are expected, will resolve (if needed) in the future.
 
 # TODO
 - Better security (csurf deprecated)
-- better graphics
+- complete the tests

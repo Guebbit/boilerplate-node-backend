@@ -1,0 +1,84 @@
+import 'dotenv/config';
+import mongoose from "mongoose";
+
+import Users from "../../src/models/users";
+
+/**
+ * test user factory
+ */
+const testUser = {
+    id: '',
+    email: 'test@test.com',
+    username: 'Test',
+    password: 'tester@password',
+    passwordConfirm: 'tester@password'
+};
+
+/**
+ * Create a user, login with it,
+ * test its authentication and navigate some pages
+ */
+describe('Auth Controller', () => {
+    /**
+     * Start of all tests
+     */
+    beforeAll(async () => {
+        /**
+         * Connect to database
+         */
+        return mongoose
+            .connect(process.env.NODE_DB_URI || "")
+            /**
+             * Register the test user
+             * (will be created only for this test)
+             */
+            .then(() => Users.signup(
+                testUser.email,
+                testUser.username,
+                testUser.password,
+                testUser.passwordConfirm
+            ))
+            /**
+             * Remember the id (that is random)
+             * so I can delete this user at the end
+             */
+            .then(user => testUser.id = user._id);
+    });
+
+    /**
+     * I still haven't logged with the test user
+     */
+    it('Test that we are a guest', async () => {
+        // TODO isGuest YES
+        expect(true);
+    });
+
+    /**
+     * I still haven't logged with the test user
+     */
+    it('Login and test that we are are an active user', async () => {
+        return Users.login(testUser.email, testUser.password)
+            .then((user) => expect(user).toBeTruthy());
+        // TODO mock middleware: isAuth YES & isAdmin NOT
+    });
+
+    /**
+     *
+     */
+    it('Navigate some pages', async () => {
+        // TODO mock controller: isAuth page & isAdmin Page
+        expect(true);
+    });
+
+    /**
+     * End of test
+     */
+    afterAll(async () => {
+        /**
+         * Remove the user that has been created only for this test
+         */
+        return Users.findById(testUser.id)
+            .then(user => user?.deleteOne())
+            .finally(() => mongoose.disconnect())
+    });
+});

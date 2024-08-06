@@ -39,9 +39,9 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
     return Users.signup(
         email,
         username,
-        imageUrl,
         password,
-        passwordConfirm
+        passwordConfirm,
+        imageUrl
     )
         .then((user) => {
             // Registration confirmation (no need to wait)

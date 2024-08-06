@@ -84,9 +84,9 @@ export interface IUserModel extends Model<IUserDocument, unknown, IUserMethods> 
     signup: (
         email: string,
         username: string,
-        imageUrl: string,
         password: string,
-        passwordConfirm: string
+        passwordConfirm: string,
+        imageUrl?: string,
     ) => Promise<IUserDocument>
     login: (email: string, password: string) => Promise<IUserDocument>
 }
@@ -375,9 +375,9 @@ userSchema.pre('save', async function(next) {
 userSchema.static('signup', async function(
     email,
     username,
-    imageUrl,
     password,
-    passwordConfirm
+    passwordConfirm,
+    imageUrl,
 ) {
     /**
      * Data validation
