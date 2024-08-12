@@ -165,6 +165,10 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request,
     // If headers already has been sent (shouldn't happen) delegate to the default Express error handler
     if (res.headersSent)
         return next(error);
+    // An error (like a database one) could occur during session, so before flash got initialized. Just ignore and go to Home
+    if(!req?.flash)
+        return res.status(200).redirect("/");
+
 
     // File upload error
     if(error instanceof MulterError){
