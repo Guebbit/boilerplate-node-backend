@@ -1,7 +1,7 @@
 // import all models and their associations
-import "./models/users";
-import "./models/products";
-import "./models/orders";
+// import "./models/users";
+// import "./models/products";
+// import "./models/orders";
 
 import 'dotenv/config';
 import path from 'path';
