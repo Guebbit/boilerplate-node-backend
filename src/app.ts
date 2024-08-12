@@ -11,9 +11,9 @@ import i18next from 'i18next';
 import helmet from "helmet";
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-import mongoose from "mongoose";
 import { MulterError } from "multer";
 import { ExtendedError } from "./utils/error-helpers";
+import db from "./utils/db";
 import logger from "./utils/winston";
 import { session, flash, userConnect } from "./middlewares/session";
 import { rateLimiter } from "./middlewares/security";
@@ -40,8 +40,7 @@ app.set('views', './views');
  * Sync database then start server
  * AFTER sync we can use the database, since it is initialized
  */
-mongoose
-    .connect(process.env.NODE_DB_URI || "")
+db
     .then(() => i18next.init({
         debug: true,
         lng: process.env.NODE_DEFAULT_LOCALE || 'en',
