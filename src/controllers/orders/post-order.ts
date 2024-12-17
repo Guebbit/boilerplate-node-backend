@@ -16,8 +16,9 @@ export default (req: Request, res: Response, next: NextFunction) =>
     req.user!.orderConfirm()
         .then((order) => {
             if(!order)
-                next(new ExtendedError("500", 500, t('ecommerce.order-creation-failure')))
+                next(new ExtendedError("500", 500, true, [t('ecommerce.order-creation-failure')]))
             req.flash('success', [t('ecommerce.order-creation-success')]);
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             nodemailer({
                     to: req.user!.email,
                     subject: 'Order confirmed',
@@ -30,5 +31,5 @@ export default (req: Request, res: Response, next: NextFunction) =>
                     name: req.user!.username
                 });
         })
-        .catch(({ message }: Error) => next(new ExtendedError("500", 500, message, false)))
+        .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [message])))
         .finally(() => res.redirect('/orders'))

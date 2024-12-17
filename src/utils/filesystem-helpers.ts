@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import { lookup } from 'mime-types';
 import logger from "./winston";
 
@@ -14,7 +14,7 @@ export function deleteFile(filePath: string) {
         .then(() => true)
         .catch(error => {
             // file doesn't exists
-            if (error.code === 'ENOENT')
+            if ((error as Error & { code?: string } | undefined)?.code === 'ENOENT')
                 return false;
             // Other error occurred: log error
             logger.error(error);
@@ -30,7 +30,10 @@ export function deleteFile(filePath: string) {
  */
 export function fileToBase64(filePath: string) {
     return fs.readFile(filePath, { encoding: 'base64' })
-        .then((fileBuffer) =>
-            'data:' + lookup(filePath) + ';base64,' + fileBuffer)
+        .then((fileBuffer) => {
+            const lookupString = lookup(filePath);
+            if(lookupString)
+                return 'data:' + lookupString + ';base64,' + fileBuffer;
+        })
         .catch(() => "")
 }

@@ -13,6 +13,7 @@ export async function createPDF(
     htmlContent: string,
     filename = 'output.pdf',
     outputPath = 'src/data/files',
+    // eslint-disable-next-line unicorn/no-object-as-default-parameter
     options: PDFOptions = {
         format: 'A4',
         printBackground: true
@@ -31,15 +32,16 @@ export async function createPDF(
                                 ...options,
                                 path: outputPath + '/' + filename,
                             })
-                                .then(() => {
-                                    browser.close();
-                                    return outputPath + '/' + filename;
-                                })
+                                .then(() =>
+                                    browser.close()
+                                        .finally(() => outputPath + '/' + filename)
+                                )
                         )
                 )
-                .catch((error) => {
-                    browser.close();
-                    throw error;
-                })
+                .catch((error) =>
+                    browser.close().finally(() => {
+                        throw error
+                    })
+                )
         )
 }

@@ -1,12 +1,12 @@
 import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
+import {CastError} from "mongoose";
 import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Page POST data
  */
 export interface IPostDeleteCartItemPostData {
-    _id: string,
+    _id: string
 }
 
 /**
@@ -21,4 +21,4 @@ export default (req: Request<unknown, unknown, IPostDeleteCartItemPostData>, res
     req.user!.cartItemRemove(req.body._id)
         .then(() => res.redirect('/cart'))
         .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))
+            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))

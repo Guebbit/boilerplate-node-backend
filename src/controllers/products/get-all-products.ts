@@ -13,7 +13,7 @@ export interface IGetAllProductsParameters {
 /**
  * Max items per page
  */
-const paginationPageSize = parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE || "10");
+const paginationPageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? "10");
 
 /**
  * Get all products
@@ -22,19 +22,19 @@ const paginationPageSize = parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SI
  * @param res
  * @param next
  */
-export default async (req: Request & { params: IGetAllProductsParameters }, res: Response, next: NextFunction) => {
+export default (req: Request & { params: IGetAllProductsParameters }, res: Response, next: NextFunction) => {
     // Empty where
     const whereCondition :FilterQuery<IProductDocument> = {};
 
     // current page
-    const paginationCurrentPage = parseInt(req.params.page || "1");
+    const paginationCurrentPage = Number.parseInt(req.params.page ?? "1");
     // Query total records
     let paginationTotalItems = 0;
 
     // Only admin can see non-active and (soft) deleted products
     if(!req.session.user?.admin){
         whereCondition.active = true;
-        whereCondition.deletedAt = null;
+        whereCondition.deletedAt = undefined;
     }
 
     // Add filter conditions
@@ -66,5 +66,5 @@ export default async (req: Request & { params: IGetAllProductsParameters }, res:
             })
         )
         .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))
+            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
 }

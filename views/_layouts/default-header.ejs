@@ -15,7 +15,7 @@
     </nav>
     <% if (isAuthenticated) { %>
         <div class="main-header__info">
-            <%= currentUser?.username || "" %>
+            <%= currentUser?.username ?? "" %>
             <img class="main-header__avatar" alt="avatar" src="<%= currentUser.imageUrl %>"/>
         </div>
     <% } %>

@@ -15,7 +15,7 @@ import Users from "../models/users";
  */
 const mongoDBStore = connectMongoDBSession(expressSession);
 export const store = new mongoDBStore({
-    uri: process.env.NODE_DB_URI || "",
+    uri: process.env.NODE_DB_URI ?? "",
     collection: "sessions",
 });
 
@@ -23,7 +23,7 @@ export const store = new mongoDBStore({
  * Session storage and cookies
  */
 export const session = expressSession({
-    secret: process.env.NODE_SESSION_SECRET || "",
+    secret: process.env.NODE_SESSION_SECRET ?? "",
     resave: false,
     saveUninitialized: false,
     /**
@@ -34,7 +34,7 @@ export const session = expressSession({
     proxy: true,
     cookie: {
         // In mongodb, session expiration is tied with the cookie expiration
-        maxAge: process.env.NODE_SESSION_MAXAGE ? parseInt(process.env.NODE_SESSION_MAXAGE) : 86400000,
+        maxAge: process.env.NODE_SESSION_MAXAGE ? Number.parseInt(process.env.NODE_SESSION_MAXAGE) : 86_400_000,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: true,
@@ -71,7 +71,7 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
     Users.findById(req.session.user._id)
         .then((user) => {
             if(!user)
-                return req.session.destroy(() => res.redirect('/'));
+                return req.session.destroy(() => { res.redirect('/'); });
             // to show user data through the UI
             res.locals.currentUser = req.session.user;
             res.locals.isAuthenticated = true;
@@ -81,6 +81,6 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
             return user;
         })
         // proceed
-        .then(() => next())
-        .catch(() => res.status(500).redirect('/errors/unknown'))
+        .then(() => { next(); })
+        .catch(() => { res.status(500).redirect('/errors/unknown'); })
 };

@@ -20,7 +20,7 @@ export interface IGetResetConfirmParameters {
  */
 export default (req: Request & { params: IGetResetConfirmParameters }, res: Response, next: NextFunction) =>
     Users.findOne({
-        // eslint-disable-next-line
+        // eslint-disable-next-line @typescript-eslint/naming-convention
         'tokens.token': req.params.token
     })
         .then(async (user) => {
@@ -41,4 +41,4 @@ export default (req: Request & { params: IGetResetConfirmParameters }, res: Resp
             });
         })
         .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))
+            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))

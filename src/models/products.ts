@@ -17,7 +17,7 @@ export interface IProduct {
 
 export interface IProductDocument extends IProduct, Document{}
 
-export interface IProductMethods {}
+export type IProductMethods = unknown
 
 export interface IProductModel extends Model<IProductDocument, unknown, IProductMethods>{
     validateData: (data: IProduct) => string[]
@@ -94,10 +94,10 @@ productSchema.static('validateData', function(productData: IProduct) {
      * Validation error
      */
     if (!parseResult.success)
-        return parseResult.error.issues.reduce((errorArray, { message }) => {
+        return parseResult.error.issues.reduce<string[]>((errorArray, { message }) => {
             errorArray.push(message);
             return errorArray;
-        }, [] as string[]);
+        }, []);
     
     return [];
 });

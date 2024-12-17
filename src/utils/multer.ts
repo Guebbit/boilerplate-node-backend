@@ -1,6 +1,6 @@
 import { Request } from 'express';
 import multer, { FileFilterCallback } from 'multer';
-import { randomBytes } from "crypto";
+import { randomBytes } from "node:crypto";
 
 
 /**
@@ -9,7 +9,7 @@ import { randomBytes } from "crypto";
  * @param filename
  */
 export function getExtension(filename: string){
-    return filename.substring(filename.lastIndexOf('.')+1, filename.length) || filename;
+    return filename.slice(filename.lastIndexOf('.')+1);
 }
 
 /**
@@ -31,6 +31,7 @@ export const fileStorage = multer.diskStorage({
         callback: (error: Error | null, destination: string) => void
     ) => {
         if (file.fieldname === "imageUpload")
+            // eslint-disable-next-line unicorn/no-null
             callback(null, 'public/images/');
         // if (file.fieldname === "pdfUpload")
         //     callback(null, 'src/uploads/');
@@ -49,6 +50,7 @@ export const fileStorage = multer.diskStorage({
         callback: (error: Error | null, filename: string) => void
     ) => {
         // randomize name for security reason
+        // eslint-disable-next-line unicorn/no-null
         callback(null, randomBytes(16).toString('hex') + "." + getExtension(file.originalname));
     }
 })
@@ -70,7 +72,9 @@ export const fileFilter = (
         file.mimetype === 'image/jpg' ||
         file.mimetype === 'image/jpeg'
     ) ?
+        // eslint-disable-next-line unicorn/no-null
         callback(null, true) :
+        // eslint-disable-next-line unicorn/no-null
         callback(null, false)
 
 /**

@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
-import Users from "../../models/users";
-import type { CastError } from "mongoose";
+import Users, {IUser} from "../../models/users";
+import {CastError, Require_id} from "mongoose";
 import { ExtendedError } from "../../utils/error-helpers";
 
 /**
@@ -33,10 +33,15 @@ export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: R
      * Login
      */
     return Users.login(email, password)
-        .then((user) => {
+        .then(({ success, data, error }) => {
+            if(!success || !data){
+                req.flash('error', error.details);
+                res.redirect('/account/login');
+                return;
+            }
             // User found and login is correct: Update and regenerate session
             return req.session.regenerate(() => {
-                req.session.user = user.toObject();
+                req.session.user = data.toObject<IUser>();
                 req.session
                     .save(() => {
                         req.flash('success', [t('login.success')]);
@@ -44,10 +49,10 @@ export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: R
                     });
             });
         })
-        .catch((issues :string[] | CastError) => {
-            if(Object.prototype.hasOwnProperty.call(issues, 'kind'))
-                return next(new ExtendedError((issues as CastError).kind, parseInt((issues as CastError).message), "", false));
-            req.flash('error', issues as string[]);
+        .catch((error: CastError) => {
+            if(Object.prototype.hasOwnProperty.call(error, 'kind'))
+                return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
+            req.flash('error', [error.kind]);
             res.redirect('/account/login');
         });
 };

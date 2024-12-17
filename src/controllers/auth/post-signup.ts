@@ -45,6 +45,7 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
     )
         .then((user) => {
             // Registration confirmation (no need to wait)
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             nodemailer({
                     to: user.email,
                     subject: 'Signup succeeded!',
@@ -61,15 +62,15 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
             req.flash('success', [t('signup.registration-successful')]);
             return res.redirect('/account/login');
         })
-        .catch((issues :string[] | CastError) => {
-            if(Object.prototype.hasOwnProperty.call(issues, 'kind'))
-                return next(new ExtendedError((issues as CastError).kind, parseInt((issues as CastError).message), "", false));
+        .catch((error:string[] | CastError) => {
+            if(Object.prototype.hasOwnProperty.call(error, 'kind'))
+                return next(new ExtendedError((error as CastError).kind, Number.parseInt((error as CastError).message), false));
             // So the user doesn't need to fill the form again
             req.flash('filled', [
                 email,
                 username,
             ]);
-            req.flash('error', issues as string[]);
+            req.flash('error', error as string[]);
             res.redirect('/account/signup');
         });
 };

@@ -21,7 +21,7 @@ export interface IPostAddCartItemPostData {
  * @param next
  */
 export default (req: Request<unknown, unknown, IPostAddCartItemPostData>, res: Response, next: NextFunction) =>
-    Products.findOne({ _id: req.body._id, active: true, deletedAt: null })
+    Products.findOne({ _id: req.body._id, active: true, deletedAt: undefined })
         .then((product) => {
             // not found, something happened
             if(!product){
@@ -30,8 +30,8 @@ export default (req: Request<unknown, unknown, IPostAddCartItemPostData>, res: R
             }
             req.flash('success', [t("ecommerce.product-added-to-cart")]);
             // check done before entering the route
-            return req.user!.cartItemSet(product, parseInt(req.body.quantity));
+            return req.user!.cartItemSet(product, Number.parseInt(req.body.quantity));
         })
         .then(() => res.redirect('/cart'))
         .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))
+            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))

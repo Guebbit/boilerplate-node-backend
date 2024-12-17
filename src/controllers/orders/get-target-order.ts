@@ -25,7 +25,7 @@ export interface IGetTargetOrderParameters {
 export default (req: Request & { params: IGetTargetOrderParameters }, res: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
     if(!Types.ObjectId.isValid(req.params.orderId))
-        return next(new ExtendedError(t("ecommerce.order-not-found"), 404, ""));
+        return next(new ExtendedError(t("ecommerce.order-not-found"), 404));
 
     /**
      * Where build
@@ -45,8 +45,8 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
      */
     Orders.getAll([match])
         .then((orders) => {
-            if (orders.length < 1)
-                return next(new ExtendedError("404", 404, t("ecommerce.order-not-found")));
+            if (orders.length === 0)
+                return next(new ExtendedError("404", 404, false, [t("ecommerce.order-not-found")]));
             return res.render('orders/details', {
                 pageMetaTitle: 'Order',
                 pageMetaLinks: [
@@ -57,7 +57,7 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
         })
         .catch((error: CastError) => {
             if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError(t("ecommerce.order-not-found"), 404, ""));
-            return next(new ExtendedError(error.kind, parseInt(error.message), "", false));
+                return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
+            return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
         })
 };

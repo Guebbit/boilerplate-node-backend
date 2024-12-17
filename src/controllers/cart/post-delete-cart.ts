@@ -14,4 +14,4 @@ export default (req: Request, res: Response, next: NextFunction) =>
     req.user!.cartRemove()
         .then(() => res.redirect('/cart'))
         .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))
+            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import mongoose from "mongoose";
 
-import Users from "../../src/models/users";
+import Users, {IUser} from "../../src/models/users";
 
 /**
  * test user factory
@@ -27,7 +27,7 @@ describe('Auth Controller', () => {
          * Connect to database
          */
         return mongoose
-            .connect(process.env.NODE_DB_URI || "")
+            .connect(process.env.NODE_DB_URI ?? "")
             /**
              * Register the test user
              * (will be created only for this test)
@@ -42,13 +42,16 @@ describe('Auth Controller', () => {
              * Remember the id (that is random)
              * so I can delete this user at the end
              */
-            .then(user => testUser.id = user._id);
+            .then(({ success, data }) => {
+                if(success && data)
+                    testUser.id = data.toObject<IUser>()._id.toString()
+            });
     });
 
     /**
      * I still haven't logged with the test user
      */
-    it('Test that we are a guest', async () => {
+    it('Test that we are a guest', () => {
         // TODO isGuest YES
         expect(true);
     });
@@ -65,7 +68,7 @@ describe('Auth Controller', () => {
     /**
      *
      */
-    it('Navigate some pages', async () => {
+    it('Navigate some pages', () => {
         // TODO mock controller: isAuth page & isAdmin Page
         expect(true);
     });
@@ -79,6 +82,7 @@ describe('Auth Controller', () => {
          */
         return Users.findById(testUser.id)
             .then(user => user?.deleteOne())
+            // eslint-disable-next-line @typescript-eslint/no-misused-promises
             .finally(() => mongoose.disconnect())
     });
 });

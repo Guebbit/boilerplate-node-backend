@@ -34,7 +34,7 @@ export default (req: Request & { params: IGetEditProductParameters }, res: Respo
                     "/css/forms.css"
                 ],
                 // old object (if any)
-                product: product || {
+                product: product ?? {
                     // filled inputs (if any)
                     title,
                     price,
@@ -45,7 +45,7 @@ export default (req: Request & { params: IGetEditProductParameters }, res: Respo
         })
         .catch((error: CastError) => {
             if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError(t("ecommerce.product-not-found"), 404, ""));
-            return next(new ExtendedError(error.kind, parseInt(error.message), "", false));
+                return next(new ExtendedError(t("ecommerce.product-not-found"), 404));
+            return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
         })
 };

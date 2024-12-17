@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import type { Request, Response, NextFunction } from "express";
 import ejs from "ejs";
 import {
@@ -30,7 +30,7 @@ export interface IGetTargetInvoiceParameters {
 export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
     if(!Types.ObjectId.isValid(req.params.orderId))
-        return next(new ExtendedError(t("ecommerce.order-not-found"), 404, ""));
+        return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
 
     /**
      * Where build (same as get-target-order.ts
@@ -44,8 +44,8 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
 
     Orders.getAll([match])
         .then((orders) => {
-            if (orders.length < 1)
-                return next(new ExtendedError("404", 404, t("ecommerce.order-not-found")));
+            if (orders.length === 0)
+                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
             const order = orders[0];
             /**
              * Create PDF file
@@ -71,7 +71,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
             //   </html>
             // `;
             // Use an ejs template
-            ejs.renderFile(
+            return ejs.renderFile(
                 // Retrieve the template
                 path.resolve(__dirname, '../../../views/templates', 'invoice-order-file.ejs'),
                 // Populate the template
@@ -96,7 +96,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                             fs.readFile(invoicePath, (err, data) => {
                                 if(err)
                                     throw err;
-                                // return next(new ExtendedError("500", 500, err.message, false))M
+                                // return next(new ExtendedError("500", 500, false, [err.message]))
                                 res.setHeader('Content-Type', 'application/pdf');
                                 res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
                                 // send data (with custom headers)
@@ -112,7 +112,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
         })
         .catch((error: CastError) => {
             if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError(t("ecommerce.order-not-found"), 404, ""));
-            return next(new ExtendedError(error.kind, parseInt(error.message), "", false));
+                return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
+            return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
         })
 };

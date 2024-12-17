@@ -29,9 +29,10 @@ export default (req: Request<unknown, unknown, IPostResetPostData>, res: Respons
                 res.redirect('/account/reset');
                 return;
             }
-            return user.tokenAdd("password", 86400000)
+            return user.tokenAdd("password", 86_400_000)
                 .then(token => {
                     // Send token (no need to wait)
+                    // eslint-disable-next-line @typescript-eslint/no-floating-promises
                     nodemailer({
                             to: req.body.email,
                             subject: 'Password reset',
@@ -50,5 +51,5 @@ export default (req: Request<unknown, unknown, IPostResetPostData>, res: Respons
                 })
         })
         .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, parseInt(error.message), "", false)))
+            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
 
