@@ -42,11 +42,13 @@
                                 <button class="btn" type="submit">Delete</button>
                             <% } %>
                             <input type="hidden" name="_id" value="<%= product._id %>">
+                            <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                         </form>
                         <form action="/products/delete" method="post">
                             <button class="btn" type="submit">HARD Delete</button>
                             <input type="hidden" name="_id" value="<%= product._id %>">
                             <input type="hidden" name="hardDelete" value="true">
+                            <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                         </form>
                     <% } %>
                     <% if (isAuthenticated) { %>

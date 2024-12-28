@@ -15,11 +15,11 @@ router.get('/details/:productId', getTargetProduct);
 
 router.get('/add', isAuth, isAdmin, getEditProduct);
 
-router.post('/add', isAuth, isAdmin, csrfSynchronisedProtection, multer.single('imageUpload'), postEditProduct);
+router.post('/add', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditProduct);
 
 router.get('/edit/:productId', isAuth, isAdmin, getEditProduct);
 
-router.post('/edit/:productId', isAuth, csrfSynchronisedProtection, isAdmin, multer.single('imageUpload'), postEditProduct);
+router.post('/edit/:productId', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditProduct);
 
 router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteProduct);
 

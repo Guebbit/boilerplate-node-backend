@@ -16,12 +16,12 @@
     "outDir": "./dist",
     "importsNotUsedAsValues": "remove",
     "ignoreDeprecations": "5.0",
-    "types": ["node", "jest"]
+    "types": ["node", "jest"],
+    "typeRoots": [
+      "./src/types",
+      "./node_modules/@types"
+    ]
   },
-  "typeRoots": [
-    "./src/types",
-    "./node_modules/@types"
-  ],
   "exclude": [
     "node_modules"
   ],
