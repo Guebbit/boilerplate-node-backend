@@ -19,10 +19,13 @@ export interface IOrder {
     createdAt: Date;
 }
 
+/**
+ * Order Document interface
+ */
 export interface IOrderDocument extends IOrder, Document {}
 
 /**
- * Statics
+ * Order Document static methods
  */
 export interface IOrderModel extends Model<IOrderDocument, unknown, unknown> {
     getAll: (pipeline: PipelineStage[]) => Promise<IOrderDocument[]>

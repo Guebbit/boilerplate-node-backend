@@ -6,5 +6,4 @@
  - FOUC (Flash of Unstyled Content) and minor problems are expected, will resolve (if needed) in the future.
 
 # TODO
-- Better security (csurf deprecated)
 - complete the tests

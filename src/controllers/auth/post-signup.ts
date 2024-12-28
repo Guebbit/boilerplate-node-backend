@@ -3,7 +3,7 @@ import { t } from "i18next";
 import Users from "../../models/users";
 import nodemailer from "../../utils/nodemailer";
 import type { CastError } from "mongoose";
-import {ExtendedError} from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
 
 export interface IPostSignupPostData {
     email: string,
@@ -43,34 +43,36 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
         passwordConfirm,
         imageUrl
     )
-        .then((user) => {
+        .then(({ success, data, errors= []}) => {
+            if(!success){
+                // So the user doesn't need to fill the form again
+                req.flash('filled', [
+                    email,
+                    username,
+                ]);
+                req.flash('error', [
+                    t('login.invalid-data'),
+                    ...errors
+                ]);
+                res.redirect('/account/signup');
+            }
             // Registration confirmation (no need to wait)
             // eslint-disable-next-line @typescript-eslint/no-floating-promises
             nodemailer({
-                    to: user.email,
+                    to: data!.email,
                     subject: 'Signup succeeded!',
                 },
-                "emailRegistrationConfirm.ejs",
+                "email-registration-confirm.ejs",
                 {
                     ...res.locals,
                     pageMetaTitle: 'Signup succeeded!',
                     pageMetaLinks: [],
-                    name: user.username,
+                    name: data!.username,
                 })
             // Registration successful,
             // send to the login and
             req.flash('success', [t('signup.registration-successful')]);
             return res.redirect('/account/login');
         })
-        .catch((error:string[] | CastError) => {
-            if(Object.prototype.hasOwnProperty.call(error, 'kind'))
-                return next(new ExtendedError((error as CastError).kind, Number.parseInt((error as CastError).message), false));
-            // So the user doesn't need to fill the form again
-            req.flash('filled', [
-                email,
-                username,
-            ]);
-            req.flash('error', error as string[]);
-            res.redirect('/account/signup');
-        });
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
 };

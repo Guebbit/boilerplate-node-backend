@@ -3,7 +3,7 @@ import { t } from "i18next";
 import Users from "../../models/users";
 import nodemailer from "../../utils/nodemailer";
 import type {CastError} from "mongoose";
-import {ExtendedError} from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -37,7 +37,7 @@ export default (req: Request<unknown, unknown, IPostResetPostData>, res: Respons
                             to: req.body.email,
                             subject: 'Password reset',
                         },
-                        "emailResetRequest.ejs",
+                        "email-reset-request.ejs",
                         {
                             ...res.locals,
                             pageMetaTitle: 'Password reset requested',
@@ -50,6 +50,5 @@ export default (req: Request<unknown, unknown, IPostResetPostData>, res: Respons
                     res.redirect('/account/reset');
                 })
         })
-        .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
 

@@ -1,5 +1,6 @@
 import express from 'express';
 import { isAuth } from "../middlewares/authorizations";
+import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
 import getAllOrders from "../controllers/orders/get-all-orders";
 import getTargetOrder from "../controllers/orders/get-target-order";
@@ -14,6 +15,6 @@ router.get('/details/:orderId', isAuth, getTargetOrder);
 
 router.get('/invoice/:orderId', isAuth, getTargetInvoice);
 
-router.post('/new', isAuth, postOrder);
+router.post('/new', isAuth, csrfSynchronisedProtection, postOrder);
 
 export default router;

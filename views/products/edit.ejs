@@ -16,6 +16,10 @@
             <input type="number" name="price" id="price" step="0.01" value="<%= product.price %>">
         </div>
 
+        <div class="image">
+            <img src="<%= product.imageUrl %>" alt="<%= product.title %>">
+        </div>
+
         <div class="form-control">
             <label for="imageUpload">Image</label>
             <input type="file" name="imageUpload" id="imageUpload">
@@ -38,7 +42,7 @@
         <% } %>
 
         <input type="hidden" name="id" value="<%= product.id %>">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
     </form>
 </main>
 <%- include("../_layouts/default-footer.ejs"); %>

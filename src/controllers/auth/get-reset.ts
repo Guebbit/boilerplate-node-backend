@@ -13,5 +13,5 @@ export default (req: Request, res: Response) =>
             "/css/auth.css",
             "/css/forms.css",
         ],
-        token: "",
+        token: ""
     });

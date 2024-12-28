@@ -30,6 +30,14 @@ export default tseslint.config(
      */
     eslintPluginUnicorn.configs['flat/recommended'],
 
+    {
+        ignores: [
+            "eslint.config.mjs",
+            'dist/**/*',
+            'node_modules/**/*',
+        ],
+    },
+
     /**
      *
      */
@@ -46,12 +54,6 @@ export default tseslint.config(
      *
      */
     {
-        ignores: [
-            'dist/**/*',
-            'node_modules/**/*',
-            'eslint.config.mjs'
-        ],
-
         plugins: {
             html
             // unicorn: eslintPluginUnicorn
@@ -73,12 +75,14 @@ export default tseslint.config(
             '@typescript-eslint/no-confusing-void-expression': 'off',
             '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
 
+            "@typescript-eslint/restrict-plus-operands": "off",
             '@typescript-eslint/restrict-template-expressions': [
                 'error',
                 {
                     allowNumber: true,
                 },
             ],
+
 
             '@typescript-eslint/naming-convention': [
                 'error',
@@ -155,23 +159,6 @@ export default tseslint.config(
             ]
         }
     },
-
-    /**
-     *
-     */
-    // WARNING: Slows down a lot
-    // {
-    //     files: ['**/*.tsx'],
-    //
-    //     rules: {
-    //         'unicorn/filename-case': [
-    //             'error',
-    //             {
-    //                 'case': 'pascalCase'
-    //             }
-    //         ]
-    //     }
-    // },
 
     /**
      *

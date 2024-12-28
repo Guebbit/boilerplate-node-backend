@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Orders from "../../models/orders";
 import type { CastError } from "mongoose";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
 
 /**
  * Get all orders
@@ -30,5 +30,4 @@ export default async (req: Request, res: Response, next: NextFunction) =>
                 orderList
             })
         )
-        .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

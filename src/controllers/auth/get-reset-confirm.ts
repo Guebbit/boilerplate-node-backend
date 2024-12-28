@@ -2,7 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Users from "../../models/users";
 import type { CastError } from "mongoose";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
+
 
 /**
  * Url parameters
@@ -23,7 +24,7 @@ export default (req: Request & { params: IGetResetConfirmParameters }, res: Resp
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'tokens.token': req.params.token
     })
-        .then(async (user) => {
+        .then((user) => {
             // not valid
             if (!user) {
                 req.flash('error', [t("reset.token-not-found")]);
@@ -40,5 +41,4 @@ export default (req: Request & { params: IGetResetConfirmParameters }, res: Resp
                 token: req.params.token
             });
         })
-        .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

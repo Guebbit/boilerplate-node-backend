@@ -10,7 +10,8 @@ import {
 import { t } from "i18next";
 import Orders from "../../models/orders";
 import { createPDF } from "../../utils/pdf-helpers";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
+import { getDirname } from "../../utils/get-file-url";
 
 
 /**
@@ -73,7 +74,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
             // Use an ejs template
             return ejs.renderFile(
                 // Retrieve the template
-                path.resolve(__dirname, '../../../views/templates', 'invoice-order-file.ejs'),
+                path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
                 // Populate the template
                 {
                     ...res.locals,
@@ -86,7 +87,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                 // callback
                 async (error: Error | null, htmlContent: string) => {
                     if(error)
-                        throw error;
+                        return next(new ExtendedError(error.message, 500));
                     return createPDF(htmlContent, order._id + '.pdf', 'src/data/invoices')
                         .then(() => {
                             /**
@@ -95,8 +96,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                             // PRELOADING data
                             fs.readFile(invoicePath, (err, data) => {
                                 if(err)
-                                    throw err;
-                                // return next(new ExtendedError("500", 500, false, [err.message]))
+                                    return next(new ExtendedError(err.message, 500));
                                 res.setHeader('Content-Type', 'application/pdf');
                                 res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
                                 // send data (with custom headers)
@@ -112,7 +112,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
         })
         .catch((error: CastError) => {
             if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
-            return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
+                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+            return next(databaseErrorConverter(error));
         })
 };

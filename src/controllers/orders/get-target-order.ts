@@ -6,7 +6,7 @@ import {
 } from "mongoose";
 import { t } from "i18next";
 import Orders from "../../models/orders";
-import { ExtendedError } from "../../utils/error-helpers";
+import { databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
 
 /**
  * Url parameters
@@ -25,7 +25,7 @@ export interface IGetTargetOrderParameters {
 export default (req: Request & { params: IGetTargetOrderParameters }, res: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
     if(!Types.ObjectId.isValid(req.params.orderId))
-        return next(new ExtendedError(t("ecommerce.order-not-found"), 404));
+        return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
 
     /**
      * Where build
@@ -57,7 +57,7 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
         })
         .catch((error: CastError) => {
             if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
-            return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
+                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+            return next(databaseErrorConverter(error));
         })
 };

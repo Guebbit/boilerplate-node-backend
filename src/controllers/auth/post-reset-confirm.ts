@@ -1,9 +1,9 @@
-import type { Request, Response, NextFunction } from 'express';
-import { t } from "i18next";
+import type {Request, Response, NextFunction} from 'express';
+import {t} from "i18next";
 import Users from "../../models/users";
 import nodemailer from "../../utils/nodemailer";
-import type { CastError } from "mongoose";
-import { ExtendedError } from "../../utils/error-helpers";
+import type {CastError} from "mongoose";
+import {databaseErrorConverter} from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -41,11 +41,16 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
             }
             // change password
             return user.passwordChange(password, passwordConfirm)
-                .then(() => {
+                .then(async ({success, errors = []}) => {
+                    if (!success) {
+                        req.flash('error', errors);
+                        return res.redirect('/account/reset');
+                    }
                     // consume the token
                     user.tokens = user.tokens
-                        .filter(({ token: t }) => token !== t );
-                    return user.save()
+                        .filter(({token: t}) => token !== t);
+                    // save and send email
+                    await user.save()
                         .then(() => {
                             // send confirmation email (no need to wait)
                             // eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -53,7 +58,7 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
                                     to: user.email,
                                     subject: 'Password change confirmed',
                                 },
-                                "emailResetConfirm.ejs",
+                                "email-reset-confirm.ejs",
                                 {
                                     ...res.locals,
                                     pageMetaTitle: 'Password change confirmed',
@@ -62,17 +67,9 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
                                 });
                             // success message
                             req.flash('success', [t("reset.success")]);
-                            res.redirect("/account/login");
                         })
+                    return res.redirect("/account/login");
                 })
-                .catch((error:string[] | CastError) => {
-                    // bounced in the next catch
-                    if(!Array.isArray(error))
-                        throw error;
-                    req.flash('error', error);
-                    res.redirect('/account/reset');
-                });
         })
-        .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
 }

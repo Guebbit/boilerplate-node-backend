@@ -8,6 +8,7 @@ import expressSession from "express-session";
 import connectFlash from "connect-flash";
 import { default as connectMongoDBSession } from 'connect-mongodb-session';
 import type { Request, Response, NextFunction } from "express";
+import { generateToken } from "../middlewares/csrf";
 import Users from "../models/users";
 
 /**
@@ -56,7 +57,8 @@ export const flash = connectFlash();
  * @param next
  */
 export const userConnect = (req: Request, res: Response, next: NextFunction) => {
-    res.locals.csrfToken = "0"; //TODO
+    // it will be requested only on certain POST requests, but it is not a problem to put it here
+    res.locals.csrfToken = generateToken(req)
     // flash messages
     res.locals.errorMessages = req.flash('error');
     res.locals.successMessages = req.flash('success');
@@ -81,6 +83,6 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
             return user;
         })
         // proceed
-        .then(() => { next(); })
-        .catch(() => { res.status(500).redirect('/errors/unknown'); })
+        .then(() => next())
+        .catch(() => res.status(500).redirect('/errors/unknown'))
 };

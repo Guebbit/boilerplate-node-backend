@@ -32,7 +32,7 @@ export const fileStorage = multer.diskStorage({
     ) => {
         if (file.fieldname === "imageUpload")
             // eslint-disable-next-line unicorn/no-null
-            callback(null, 'public/images/');
+            callback(null, (process.env.NODE_PUBLIC_PATH ?? "public") + '/images/');
         // if (file.fieldname === "pdfUpload")
         //     callback(null, 'src/uploads/');
     },

@@ -1,6 +1,7 @@
 import path from "node:path";
 import ejs, { type Data } from "ejs";
 import { createTransport, type SendMailOptions, type SentMessageInfo } from "nodemailer";
+import { getDirname } from "./get-file-url";
 
 
 
@@ -39,7 +40,7 @@ export default (request: SendMailOptions, templateName: string, data: Data): Pro
     new Promise((resolve, reject) =>
         ejs.renderFile(
             // Retrieve the template
-            path.resolve(__dirname, '../../views/templates', templateName),
+            path.resolve(getDirname(import.meta.url), '../../views/templates', templateName),
             // Populate the template
             data,
             // callback

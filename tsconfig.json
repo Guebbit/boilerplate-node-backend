@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES6",
-    "module": "commonjs",
+    "module": "es2020",
     "baseUrl": ".",
     "strict": true,
     "composite": true,
@@ -11,6 +11,7 @@
     "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
     "noPropertyAccessFromIndexSignature": false,
+    "resolveJsonModule": true,
     "moduleResolution": "Node",
     "outDir": "./dist",
     "importsNotUsedAsValues": "remove",
@@ -21,6 +22,13 @@
     "./src/types",
     "./node_modules/@types"
   ],
-  "exclude": ["node_modules"],
-  "include": ["src/*.ts", "src/**/*.ts", "tests/**/*.test.ts"]
+  "exclude": [
+    "node_modules"
+  ],
+  "include": [
+    "src/*.ts",
+    "src/**/*.ts",
+    "src/**/*.json",
+    "tests/**/*.test.ts"
+  ]
 }

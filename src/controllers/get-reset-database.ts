@@ -8,14 +8,14 @@ import Orders from "../models/orders";
 
 /**
  * Create example database
+ * Could add "unzipper" to unzip images backup folder automatically but don't want to add unnecessary dependencies
  *
  * @param req
  * @param res
  */
 export default (req: Request, res: Response) =>
     db
-        .then(() => mongoose.connection.db.dropDatabase())
-        // they can be all put together because the relationsare all within the data
+        .then(() => mongoose.connection.db?.dropDatabase())
         .then(() =>
             Promise.all([
                 // users

@@ -1,10 +1,13 @@
-import { model, Schema } from 'mongoose';
+import {model, Schema, Types} from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { z } from "zod";
 import { t } from "i18next";
+import {generateReject, generateSuccess, IResponseReject, type IResponseSuccess} from "../utils/response";
+import {deleteFile} from "../utils/filesystem-helpers";
+import Users from "./users";
 
 /**
- * Typing
+ * Product type
  */
 export interface IProduct {
     title: string;
@@ -15,12 +18,23 @@ export interface IProduct {
     deletedAt?: Date;
 }
 
+/**
+ * Product Document interface
+ */
 export interface IProductDocument extends IProduct, Document{}
 
-export type IProductMethods = unknown
+/**
+ * Product Document instance methods
+ */
+export type IProductMethods = unknown;
 
+/**
+ * Product Document static methods
+ */
 export interface IProductModel extends Model<IProductDocument, unknown, IProductMethods>{
-    validateData: (data: IProduct) => string[]
+    validateData: (data: IProduct) => string[],
+    productRemoveById: (id: string, hardDelete?: boolean) => Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject>;
+    productRemove: (product: IProductDocument, hardDelete?: boolean) => Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject>;
 }
 
 /**
@@ -53,19 +67,19 @@ export const zodProductSchema =
  */
 export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>({
     title: {
-        type: String, 
+        type: String,
         required: true,
     },
-    price: { 
-        type: Number, 
+    price: {
+        type: Number,
         required: true
     },
-    description: { 
-        type: String, 
+    description: {
+        type: String,
         default: ""
     },
-    imageUrl: { 
-        type: String, 
+    imageUrl: {
+        type: String,
         default: "https://placekitten.com/400/400"
     },
     active: {
@@ -73,17 +87,56 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
       default: false
     },
     deletedAt: {
-        type: Date 
+        type: Date
     },
 }, {
     timestamps: true
+});
+
+
+
+/**
+ * INSTANCE (schema) method
+ *
+ * Set quantity of target product in cart
+ * @param id
+ * @param hardDelete
+ */
+productSchema.static('productRemoveById', async function (id: string, hardDelete = false): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> {
+    return modelProduct
+        .findById(id)
+        .then((product) => {
+            // not found, something happened
+            if(!product)
+                return generateReject(404, "404", [t("ecommerce.product-not-found")]);
+            // HARD delete
+            if(hardDelete)
+                return Users.productRemoveFromCarts((product._id as Types.ObjectId).toString())
+                    .then(() => product.deleteOne())
+                    .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + product.imageUrl))
+                    .then(() => generateSuccess(undefined, 200, t("ecommerce.product-hard-deleted")));
+            // SOFT delete. If deletedAt already present: UNDELETE
+            product.deletedAt = product.deletedAt ? undefined : new Date();
+            return Users.productRemoveFromCarts((product._id as Types.ObjectId).toString())
+                .then(async () => generateSuccess(await product.save(), 200, t("ecommerce.product-soft-deleted")));
+        })
+});
+
+/**
+ * INSTANCE (schema) method
+ *
+ * @param product
+ * @param hardDelete
+ */
+productSchema.static('productRemove', async function (product: IProductDocument, hardDelete = false): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> {
+    return this.productRemoveById((product._id as Types.ObjectId).toString(), hardDelete as boolean);
 });
 
 /**
  * Data validation
  * Check if product info are compliant
  */
-productSchema.static('validateData', function(productData: IProduct) {
+productSchema.static('validateData', function (productData: IProduct): string[] {
     /**
      * Validation
      */
@@ -91,15 +144,14 @@ productSchema.static('validateData', function(productData: IProduct) {
         .safeParse(productData);
 
     /**
-     * Validation error
+     * Validation errors
      */
     if (!parseResult.success)
-        return parseResult.error.issues.reduce<string[]>((errorArray, { message }) => {
-            errorArray.push(message);
-            return errorArray;
-        }, []);
-    
+        return parseResult.error.issues.map(({message}) => message)
+
     return [];
 });
 
-export default model<IProductDocument, IProductModel>('Product', productSchema);
+export const modelProduct = model<IProductDocument, IProductModel>('Product', productSchema);
+
+export default modelProduct;

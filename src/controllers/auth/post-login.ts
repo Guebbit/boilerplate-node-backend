@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import Users, {IUser} from "../../models/users";
-import {CastError, Require_id} from "mongoose";
 import { ExtendedError } from "../../utils/error-helpers";
+import type { CastError } from "mongoose";
 
 /**
  * Page POST data
@@ -19,7 +19,7 @@ export interface IPostLoginPostData {
  * @param res
  * @param next
  */
-export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: Response, next: NextFunction) => {
+export default (req: Request<unknown, unknown, IPostLoginPostData>, res: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -33,14 +33,14 @@ export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: R
      * Login
      */
     return Users.login(email, password)
-        .then(({ success, data, error }) => {
+        .then(({ success, data, errors }) => {
             if(!success || !data){
-                req.flash('error', error.details);
+                req.flash('error', errors);
                 res.redirect('/account/login');
                 return;
             }
             // User found and login is correct: Update and regenerate session
-            return req.session.regenerate(() => {
+            req.session.regenerate(() => {
                 req.session.user = data.toObject<IUser>();
                 req.session
                     .save(() => {
@@ -49,10 +49,5 @@ export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: R
                     });
             });
         })
-        .catch((error: CastError) => {
-            if(Object.prototype.hasOwnProperty.call(error, 'kind'))
-                return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
-            req.flash('error', [error.kind]);
-            res.redirect('/account/login');
-        });
+        .catch((error: CastError) => next(new ExtendedError(error.kind, Number.parseInt(error.message))));
 };

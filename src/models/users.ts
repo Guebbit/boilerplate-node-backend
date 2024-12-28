@@ -1,11 +1,13 @@
-import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
-import type { IProductDocument } from "./products";
-import Orders, { IOrder } from "./orders";
-import { z } from "zod"
-import { t } from "i18next";
+import {model, Schema, Types} from 'mongoose';
+import type {Document, Model, CastError} from 'mongoose';
+import {z} from "zod"
+import {t} from "i18next";
 import bcrypt from "bcrypt";
-import { randomBytes } from "crypto";
+import {randomBytes} from "node:crypto";
+import {generateSuccess, generateReject, type IResponseReject, type IResponseSuccess} from "../utils/response";
+import Orders, {IOrder} from "./orders";
+import type {IProductDocument} from "./products";
+import {databaseErrorInterpreter} from "../utils/error-helpers";
 
 /**
  * Cart Item interface
@@ -13,7 +15,7 @@ import { randomBytes } from "crypto";
  */
 export interface ICartItem {
     // IProductDocument only after populate()
-    product: IProductDocument['_id'] | IProductDocument;
+    product: Types.ObjectId;
     quantity: number;
 }
 
@@ -62,23 +64,28 @@ export interface IUser {
 /**
  * User Document interface
  */
-export interface IUserDocument extends IUser, Document {}
-
-/**
- * User Document methods
- */
-export interface IUserMethods {
-    cartGet: () => Promise<ICartItem[]>;
-    cartRemove: () => Promise<IUserDocument>;
-    cartItemSet: (product: IProductDocument, quantity?: number) => Promise<IUserDocument>;
-    cartItemRemove: (id: string) => Promise<IUserDocument>;
-    orderConfirm: () => Promise<IOrder | undefined>;
-    tokenAdd: (type: string, expirationTime?: number) => Promise<string>
-    passwordChange: (password: string, passwordConfirm: string) => Promise<IUserDocument>
+export interface IUserDocument extends IUser, Document {
 }
 
 /**
- * Statics
+ * User Document instance methods
+ */
+export interface IUserMethods {
+    cartGet: () => Promise<ICartItem[]>;
+    cartRemove: () => Promise<IResponseSuccess<IUserDocument>>;
+    cartItemSetById: (id: string, quantity?: number) => Promise<IResponseSuccess<IUserDocument>>;
+    cartItemSet: (product: IProductDocument, quantity?: number) => Promise<IResponseSuccess<IUserDocument>>;
+    cartItemAddById: (id: string, quantity?: number) => Promise<IResponseSuccess<IUserDocument>>;
+    cartItemAdd: (product: IProductDocument, quantity?: number) => Promise<IResponseSuccess<IUserDocument>>;
+    cartItemRemoveById: (id: string) => Promise<IResponseSuccess<IUserDocument>>;
+    cartItemRemove: (product: IProductDocument) => Promise<IResponseSuccess<IUserDocument>>;
+    orderConfirm: () => Promise<IResponseSuccess<IOrder> | IResponseReject>;
+    tokenAdd: (type: string, expirationTime?: number) => Promise<string>
+    passwordChange: (password: string, passwordConfirm: string) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
+}
+
+/**
+ * User Document static methods
  */
 export interface IUserModel extends Model<IUserDocument, unknown, IUserMethods> {
     signup: (
@@ -87,8 +94,9 @@ export interface IUserModel extends Model<IUserDocument, unknown, IUserMethods> 
         password: string,
         passwordConfirm: string,
         imageUrl?: string,
-    ) => Promise<IUserDocument>
-    login: (email: string, password: string) => Promise<IUserDocument>
+    ) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
+    login: (email: string, password: string) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
+    productRemoveFromCarts: (id: string) => Promise<IResponseSuccess<undefined> | IResponseReject>
 }
 
 
@@ -99,7 +107,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
     email: {
         type: String,
         required: true,
-        match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[a-zA-Z]{2,7}$/
+        match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
     },
     password: {
         type: String,
@@ -118,7 +126,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
         items: [{
             product: {
                 type: Schema.Types.ObjectId,
-                ref: 'Product', 
+                ref: 'Product',
                 required: true
             },
             quantity: {
@@ -184,9 +192,42 @@ export const zodUserSchema =
  *
  * Get user cart populated with product details
  */
-userSchema.methods.cartGet = async function() {
+userSchema.methods.cartGet = async function () {
     return this.populate('cart.items.product')
-        .then(({ cart: { items = [] } }) => items);
+        .then(({cart: {items = []}}) => items);
+};
+
+/**
+ * INSTANCE (schema) method
+ *
+ * Set quantity of target product in cart
+ * @param id
+ * @param quantity
+ */
+userSchema.methods.cartItemSetById = async function (id: string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> {
+    /**
+     * Check if already present
+     */
+    const cartProductIndex = this.cart.items
+        .findIndex(item => item.product.equals(id))
+
+    /**
+     * if present: directly update the quantity
+     * if not: add
+     */
+    if (cartProductIndex === -1)
+        this.cart.items.push({
+            product: new Types.ObjectId(id),
+            quantity
+        });
+    else
+        this.cart.items[cartProductIndex].quantity = quantity;
+
+    /**
+     * Save
+     */
+    this.cart.updatedAt = new Date();
+    return generateSuccess(await this.save());
 };
 
 /**
@@ -195,44 +236,75 @@ userSchema.methods.cartGet = async function() {
  * @param product
  * @param quantity
  */
-userSchema.methods.cartItemSet = async function (product: IProductDocument, quantity = 1): Promise<IUserDocument> {
-    /**
-     * Check if already present
-     */
-    const cartProductIndex = this.cart.items
-        .findIndex(item => item.product.toString() === product._id.toString());
-
-    /**
-     * if present: directly update the quantity
-     * if not: add
-     */
-    if (cartProductIndex >= 0)
-        this.cart.items[cartProductIndex].quantity = quantity;
-    else
-        this.cart.items.push({
-            product: product._id,
-            quantity
-        });
-
-    /**
-     * Save
-     */
-    return this.save();
+userSchema.methods.cartItemSet = function (product: IProductDocument, quantity = 1): Promise<IResponseSuccess<IUserDocument>> {
+    return this.cartItemSetById((product._id as Types.ObjectId).toString(), quantity)
 };
 
 /**
  * INSTANCE (schema) method
  *
+ * Add quantity of target product to quantity in cart
+ * @param id
+ * @param quantity
+ */
+userSchema.methods.cartItemAddById = async function (id: string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> {
+    /**
+     * Check if already present
+     */
+    const cartProductIndex = this.cart.items
+        .findIndex(item => item.product.equals(id))
+
+    /**
+     * if present: directly update the quantity
+     * if not: add
+     */
+    if (cartProductIndex === -1)
+        this.cart.items.push({
+            product: new Types.ObjectId(id),
+            quantity
+        });
+    else
+        this.cart.items[cartProductIndex].quantity = this.cart.items[cartProductIndex].quantity + quantity;
+
+    /**
+     * Save
+     */
+    this.cart.updatedAt = new Date();
+    return generateSuccess(await this.save());
+};
+
+/**
+ * INSTANCE (schema) method
+ *
+ * @param product
+ * @param quantity
+ */
+userSchema.methods.cartItemAdd = function (product: IProductDocument, quantity = 1): Promise<IResponseSuccess<IUserDocument>> {
+    return this.cartItemAddById((product._id as Types.ObjectId).toString(), quantity)
+};
+
+
+/**
+ * INSTANCE (schema) method
  * Remove target product from cart
+ *
  * @param id
  */
-userSchema.methods.cartItemRemove = async function (id: string): Promise<IUserDocument> {
-    this.cart.updatedAt = new Date();
+userSchema.methods.cartItemRemoveById = async function (id: string) {
     this.cart.items = this.cart.items
-        .filter(({ product }: ICartItem) =>
-            !product.equals(id)
-        );
-    return this.save();
+        .filter(({product}: ICartItem) => !product.equals(id));
+    this.cart.updatedAt = new Date();
+    return generateSuccess(await this.save());
+};
+
+/**
+ * INSTANCE (schema) method
+ * Remove target product from cart
+ *
+ * @param product
+ */
+userSchema.methods.cartItemRemove = async function (product) {
+    return this.cartItemRemoveById((product._id as Types.ObjectId).toString())
 };
 
 /**
@@ -240,12 +312,12 @@ userSchema.methods.cartItemRemove = async function (id: string): Promise<IUserDo
  *
  * Remove all products from cart
  */
-userSchema.methods.cartRemove = async function (): Promise<IUserDocument> {
+userSchema.methods.cartRemove = async function (): Promise<IResponseSuccess<IUserDocument>> {
     this.cart = {
         items: [],
         updatedAt: new Date(),
     };
-    return this.save();
+    return generateSuccess(await this.save());
 };
 
 /**
@@ -253,21 +325,24 @@ userSchema.methods.cartRemove = async function (): Promise<IUserDocument> {
  *
  * Create order and empty cart
  */
-userSchema.methods.orderConfirm = async function () {
+userSchema.methods.orderConfirm = async function (): Promise<IResponseSuccess<IOrder> | IResponseReject> {
     return this.cartGet()
-        .then((products) => {
-            if(products.length < 1)
-                throw new Error(t('generic.error-missing-data'))
-            return Orders.create({
+        .then(async (products) => {
+            if (products.length === 0)
+                return generateReject(
+                    409,
+                    "empty cart",
+                    [t('generic.error-missing-data')]
+                )
+            const order = await Orders.create({
                 userId: this._id,
                 email: this.email,
                 products
-            })
+            });
+            await this.cartRemove();
+            return generateSuccess<IOrder>(order)
         })
-        .then((order) => {
-            this.cartRemove();
-            return order;
-        })
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
 };
 
 /**
@@ -282,10 +357,8 @@ userSchema.methods.orderConfirm = async function () {
  * @param type
  * @param expirationTime - undefined = expire only upon use
  */
-userSchema.methods.tokenAdd = async function (type: string, expirationTime?: number) {
+userSchema.methods.tokenAdd = async function (type: string, expirationTime?: number): Promise<string> {
     const token = randomBytes(16).toString('hex');
-    if(!this.tokens)
-        this.tokens = [];
     this.tokens.push({
         type,
         token,
@@ -301,7 +374,7 @@ userSchema.methods.tokenAdd = async function (type: string, expirationTime?: num
  *
  * Change password
  */
-userSchema.methods.passwordChange = async function (password = "", passwordConfirm = ""): Promise<IUserDocument> {
+userSchema.methods.passwordChange = async function (password = "", passwordConfirm = ""): Promise<IResponseSuccess<IUserDocument> | IResponseReject> {
     /**
      * Data validation
      * Check if password and passwordConfirm are equals and compliant
@@ -330,19 +403,20 @@ userSchema.methods.passwordChange = async function (password = "", passwordConfi
      * Validation error
      */
     if (!parseResult.success)
-        return Promise.reject(
-            parseResult.error.issues.reduce((errorArray, { message }) => {
-                errorArray.push(message);
-                return errorArray;
-            }, [] as string[])
-        );
+        return generateReject(
+            400,
+            "passwordChange - bad request",
+            parseResult.error.issues.map(({message}) => message)
+        )
 
     /**
      * Everything is ok, change password with the requested one.
      * Encryption will be done automatically by another hook
      */
     this.password = password;
-    return this.save();
+    return this.save()
+        .then((user) => generateSuccess<IUserDocument>(user))
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
 }
 
 /**
@@ -350,9 +424,11 @@ userSchema.methods.passwordChange = async function (password = "", passwordConfi
  *
  * Hash all passwords (if they have been changed)
  */
-userSchema.pre('save', async function(next) {
-    if (!this.isModified('password'))
-        return next();
+userSchema.pre('save', async function (next) {
+    if (!this.isModified('password')) {
+        next();
+        return;
+    }
     return bcrypt.hash(this.password, 12)
         .then(hashedPassword => {
             this.password = hashedPassword;
@@ -363,7 +439,7 @@ userSchema.pre('save', async function(next) {
 
 /**
  * STATIC (Model) method
- * 
+ *
  * Register new user
  *
  * @param email
@@ -372,13 +448,13 @@ userSchema.pre('save', async function(next) {
  * @param password
  * @param passwordConfirm
  */
-userSchema.static('signup', async function(
-    email,
-    username,
-    password,
-    passwordConfirm,
-    imageUrl,
-) {
+userSchema.static('signup', async function (
+    email: string,
+    username: string,
+    password: string,
+    passwordConfirm: string,
+    imageUrl: string,
+): Promise<IResponseSuccess<IUserDocument> | IResponseReject> {
     /**
      * Data validation
      * Check if user data are compliant
@@ -405,12 +481,11 @@ userSchema.static('signup', async function(
      * Validation error
      */
     if (!parseResult.success)
-        return Promise.reject(
-            parseResult.error.issues.reduce((errorArray, { message }) => {
-                errorArray.push(message);
-                return errorArray;
-            }, [] as string[])
-        );
+        return generateReject(
+            400,
+            "signup - bad request",
+            parseResult.error.issues.map(({message}) => message)
+        )
 
     /**
      * Check if email is already used (user exist already probably)
@@ -419,23 +494,28 @@ userSchema.static('signup', async function(
     return this.findOne({
         email,
     })
-        .then((user) => {
+        .then(async (user) => {
             // Email already exists
             if (user)
-                return Promise.reject([
-                    t('signup.email-already-used')
-                ]);
+                return generateReject(
+                    409,
+                    "signup - email already used",
+                    [t('signup.email-already-used')]
+                )
             /**
              * Everything is ok, proceed to create a new user.
              * Encryption will be done automatically by another hook
              */
-            return this.create({
-                username,
-                email,
-                imageUrl,
-                password,
-            });
-        });
+            return generateSuccess<IUserDocument>(
+                await this.create({
+                    username,
+                    email,
+                    imageUrl,
+                    password,
+                })
+            )
+        })
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
 });
 
 /**
@@ -446,7 +526,7 @@ userSchema.static('signup', async function(
  * @param email
  * @param password
  */
-userSchema.static('login', async function(email?: string, password?: string) {
+userSchema.static('login', async function (email?: string, password?: string) {
     /**
      * Data validation
      * Check if password and passwordConfirm are equals and compliant
@@ -465,38 +545,83 @@ userSchema.static('login', async function(email?: string, password?: string) {
      * Validation error
      */
     if (!parseResult.success)
-        return Promise.reject(
-            parseResult.error.issues.reduce((errorArray, { message }) => {
-                errorArray.push(message);
-                return errorArray;
-            }, [] as string[])
-        );
+        return generateReject(
+            400,
+            "login - bad request",
+            parseResult.error.issues.map(({message}) => message)
+        )
 
     /**
      * Everything is ok, login the user
      */
     return this.findOne({
         email,
-        deletedAt: null
+        deletedAt: undefined
     })
         .then(user => {
             // user not found
             if (!user)
-                return Promise.reject([
-                    t('login.wrong-data')
-                ]);
+                return generateReject(
+                    401,
+                    "login - wrong credentials",
+                    [t('login.wrong-data')]
+                )
             return bcrypt
-                .compare(password || "", user.password)
+                .compare(password ?? "", user.password)
                 .then(doMatch => {
                     // User found but password doesn't match
-                    if (!doMatch) {
-                        return Promise.reject([
-                            t('login.wrong-data')
-                        ]);
-                    }
-                    return user;
-                });
-        });
+                    if (!doMatch)
+                        return generateReject(
+                            401,
+                            "login - wrong credentials",
+                            [t('login.wrong-data')]
+                        )
+                    return generateSuccess<IUserDocument>(user);
+                })
+        })
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
+});
+
+
+/**
+ * STATIC (Model) method
+ *
+ * Remove a product from all users' carts
+ *
+ * @param id
+ */
+userSchema.static('productRemoveFromCarts', async function (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> {
+    return this.updateMany(
+        {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            "cart.items.product": id
+        },
+        {
+            // Remove the product from their cart
+            $pull: {
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                "cart.items": {
+                    product: id
+                }
+            },
+            // Update the cart's updatedAt timestamp
+            $set: {
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                "cart.updatedAt": new Date()
+            }
+        }
+    )
+        .then((result) =>
+            generateSuccess(
+                undefined,
+                200,
+                t('ecommerce.product-was-deleted-from-all-carts', {
+                    product: id,
+                    count: result.modifiedCount
+                })
+            )
+        )
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
 });
 
 /**

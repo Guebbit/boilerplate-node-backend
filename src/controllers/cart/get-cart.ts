@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { CastError } from "mongoose";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
 
 /**
  * Get cart of current user
@@ -21,5 +21,4 @@ export default (req: Request, res: Response, next: NextFunction) =>
                 productList,
             })
         )
-        .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

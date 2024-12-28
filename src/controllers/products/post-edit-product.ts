@@ -2,7 +2,7 @@ import type {NextFunction, Request, Response} from "express";
 import type {CastError} from "mongoose";
 import Products from "../../models/products";
 import {deleteFile} from "../../utils/filesystem-helpers";
-import {ExtendedError} from "../../utils/error-helpers";
+import { ExtendedError } from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -36,10 +36,12 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
     /**
      * Get URL of updated image it's on req.file,
      * but it's good to know that it could be within an array
+     * If no image was uploaded: it's empty
+     * If image was uploaded: delete the old one (if any) on save
      */
     const imageUrlRaw = (req.file ? req.file.path : (req.files ? (req.files as Express.Multer.File[])[0].path : ""));
     // remove "public" at root ("/" remain as root)
-    const imageUrl = imageUrlRaw.replace("public", "");
+    const imageUrl = imageUrlRaw.replace((process.env.NODE_PUBLIC_PATH ?? "public"), "");
 
     /**
      * Data validation
@@ -93,19 +95,24 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
      */
     else
         Products.findById(id)
-            .then((product) => {
+            .then(async (product) => {
                 if (!product)
                     throw new Error("404");
                 product.title = title;
-                product.imageUrl = imageUrl;
+                // if empty: no image was uploaded
+                const oldImageUrl = product.imageUrl;
+                if(oldImageUrl !== imageUrl)
+                    product.imageUrl = imageUrl;
                 product.price = Number.parseInt(price);
                 product.description = description;
                 product.active = !!active;
-                return product.save();
+                // save the updated product (not necessary to use newProduct variable since the ID doesn't change, but normally it would be necessary)
+                const newProduct = await product.save();
+                // after saving the new product image, delete the old one
+                if(oldImageUrl !== imageUrl)
+                    await deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + oldImageUrl);
+                res.redirect('/products/details/' + (newProduct.id as string))
             })
-            .then((product) =>
-                res.redirect('/products/details/' + (product.id as string))
-            )
             .catch(async (error: CastError) => {
                 if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);

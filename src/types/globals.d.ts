@@ -4,8 +4,7 @@ import {Require_id} from "mongoose";
 declare module "express-session" {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     interface SessionData  {
-        user?: Require_id<IUser>,
-        csrfToken?: string,
+        user?: Require_id<IUser>
     }
 }
 

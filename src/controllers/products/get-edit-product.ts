@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Products from "../../models/products";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
 import type { CastError } from "mongoose";
 
 
@@ -45,7 +45,7 @@ export default (req: Request & { params: IGetEditProductParameters }, res: Respo
         })
         .catch((error: CastError) => {
             if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError(t("ecommerce.product-not-found"), 404));
-            return next(new ExtendedError(error.kind, Number.parseInt(error.message), false));
+                return next(new ExtendedError("404", 404, true, [t("ecommerce.product-not-found")]));
+            return next(databaseErrorConverter(error));
         })
 };

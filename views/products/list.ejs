@@ -49,12 +49,16 @@
                             <input type="hidden" name="hardDelete" value="true">
                         </form>
                     <% } %>
-                    <% if (isAuthenticated && !product.deletedAt && product.active) { %>
-                        <form action="/cart" method="post">
-                            <button class="btn" type="submit">Add quantity to Cart</button>
-                            <input type="text" value="1" name="quantity">
-                            <input type="hidden" name="_id" value="<%= product._id %>">
-                        </form>
+                    <% if (isAuthenticated) { %>
+                        <% if (!product.deletedAt && product.active) { %>
+                            <form action="/cart" method="post">
+                                <button class="btn" type="submit">Set quantity on Cart</button>
+                                <input type="text" value="1" name="quantity">
+                                <input type="hidden" name="_id" value="<%= product._id %>">
+                                <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
+                            </form>
+                        <% } %>
+                    <p>Quantity in the cart: <%= product.quantity %></p>
                     <% } %>
                 </div>
             </article>

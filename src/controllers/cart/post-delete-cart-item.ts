@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import {CastError} from "mongoose";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -18,7 +18,10 @@ export interface IPostDeleteCartItemPostData {
  */
 export default (req: Request<unknown, unknown, IPostDeleteCartItemPostData>, res: Response, next: NextFunction) =>
     // check done before entering the route
-    req.user!.cartItemRemove(req.body._id)
-        .then(() => res.redirect('/cart'))
-        .catch((error: CastError) =>
-            next(new ExtendedError(error.kind, Number.parseInt(error.message), false)))
+    req.user!.cartItemRemoveById(req.body._id)
+        .then(({success}) => {
+            if (!success)
+                throw new Error("cartItemRemoveById error");
+            return res.redirect('/cart');
+        })
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

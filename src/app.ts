@@ -1,24 +1,32 @@
+#!/usr/bin/env node
+
 import 'dotenv/config';
-import path from 'path';
+import path from 'node:path';
 import express from 'express';
-import type { ErrorRequestHandler, Request, Response, NextFunction } from "express";
+import type {ErrorRequestHandler, Request, Response, NextFunction} from "express";
 import i18next from 'i18next';
 import helmet from "helmet";
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-import { MulterError } from "multer";
-import { ExtendedError } from "./utils/error-helpers";
+import {MulterError} from "multer";
+import {ExtendedError} from "./utils/error-helpers";
 import db from "./utils/db";
 import logger from "./utils/winston";
-import { session, flash, userConnect } from "./middlewares/session";
-import { rateLimiter } from "./middlewares/security";
+import {getDirname} from "./utils/get-file-url";
+import {session, flash, userConnect} from "./middlewares/session";
+import {rateLimiter} from "./middlewares/security";
 
+// languages
+import enTranslation from './locales/en.json';
+
+// routes
 import productRoutes from "./routes/products";
 import authRoutes from "./routes/auth";
 import orderRoutes from "./routes/orders";
 import cartRoutes from "./routes/cart";
 import indexRoutes from "./routes";
 import errorRoutes from "./routes/errors";
+
 
 /**
  * Server start
@@ -37,30 +45,33 @@ app.set('views', './views');
  */
 db
     .then(() => i18next.init({
-        debug: true,
-        lng: process.env.NODE_DEFAULT_LOCALE || 'en',
-        fallbackLng: process.env.NODE_FALLBACK_LOCALE || 'en',
+        // debug: true,
+        lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
+        fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
         resources: {
             en: {
-                translation: require("./locales/en.json"),
+                translation: enTranslation as Record<string, unknown>,
             }
         }
     }))
     .then(() => {
-        console.log("------------- SERVER START -------------");
-        app.listen(process.env.NODE_PORT || 3000);
+        // console.log("------------- SERVER START -------------");
+        app.listen(process.env.NODE_PORT ?? 3000);
     })
-    .catch(err => console.log("------------- SERVER START ERROR -------------", err));
-
+    // eslint-disable-next-line unicorn/prefer-top-level-await, no-console
+    .catch(error => console.log("------------- SERVER ERROR -------------", error));
 
 /**
  * The files in /public folder will be served as static
  */
 app.use(
     express.static(
-        path.join(__dirname, '../public'),
+        path.join(getDirname(import.meta.url), '../' + (process.env.NODE_PUBLIC_PATH ?? "public")),
         {
-            maxAge: process.env.NODE_ENV === 'production' ? 0 : (process.env.NODE_STATIC_MAXAGE || 0)  // (expressed in seconds)
+            maxAge: process.env.NODE_ENV === 'production' ? (process.env.NODE_STATIC_MAXAGE ?? 0) : 0, // (expressed in seconds)
+            // setHeaders: (res) => {
+            //     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            // }
         }
     )
 );
@@ -78,6 +89,7 @@ app.use(helmet({
                 "'self'",
                 // allow external src on images
                 "https://placekitten.com",
+                "https://placedog.net",
             ],
         }
     }
@@ -101,7 +113,6 @@ app.use(bodyParser.urlencoded({
 //         next();
 //     });
 // });
-
 
 /**
  * Parse and secure cookies
@@ -136,7 +147,8 @@ app.use(rateLimiter);
  * otherwise response will be sent and connection with client closed
  */
 app.use((req, res, next) => {
-    console.log("------------- CONNECTION START -------------");
+    // eslint-disable-next-line no-console
+    console.log(`Entering URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
     next();
 });
 
@@ -155,23 +167,32 @@ app.use('/error', errorRoutes);
  */
 app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request, res: Response, next: NextFunction) => {
     // If headers already has been sent (shouldn't happen) delegate to the default Express error handler
-    if (res.headersSent)
-        return next(error);
+    if (res.headersSent) {
+        next(error);
+        return;
+    }
+
+    // An error (like a database one) could occur during session, so before flash got initialized. Just ignore and go to Home
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (!req.flash) {
+        res.status(200).redirect("/");
+        return;
+    }
 
     // File upload error
-    if(error instanceof MulterError){
+    if (error instanceof MulterError) {
         logger.info(error);
         req.flash('error-title', [error.code]);
-        req.flash('error-description', [error.name + ": " + error.message + " on " + error.field]);
+        req.flash('error-description', [error.name + ": " + error.message + " on " + (error.field ?? "")]);
         res.status(400).redirect("/error/");
         return;
     }
 
     // Check if the error is operational
-    if (error instanceof ExtendedError && error.isOperational){
+    if (error instanceof ExtendedError && error.isOperational) {
         logger.info(error);
         req.flash('error-title', [error.name]);
-        req.flash('error-description', [error.description]);
+        req.flash('error-description', error.errors);
         res.status(error.httpCode).redirect("/error/");
         return;
     }
@@ -189,12 +210,12 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request,
 });
 
 
-
 /**
  * Catch all routes
  */
-app.use('/', (req, res) =>
-    res.redirect("/error/page-not-found"));
+app.use('/', (req, res) => {
+    res.redirect("/error/page-not-found");
+});
 
 /**
  * Error handling LAST RESORT
@@ -215,7 +236,7 @@ process
     // safeguard against unexpected errors that could crash the application
     .on('uncaughtException', (error, origin) => {
         // if development: no need (otherwise I would log all test errors + node server closing
-        if(process.env.NODE_ENV !== 'production')
+        if (process.env.NODE_ENV !== 'production')
             return;
         logger.error({
             error,
