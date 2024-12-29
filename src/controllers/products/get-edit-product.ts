@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Products from "../../models/products";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 /**
  *
@@ -25,9 +26,8 @@ export default (req: Request & { params: IGetEditProductParameters }, res: Respo
                 pageMetaLinks: [
                     "/css/forms.css"
                 ],
-                product: {...product?.dataValues || {}},
+                product: {...product?.dataValues },
             });
         })
-        .catch((error: Error) =>
-            next(new ExtendedError("500", 500, error.message, false)))
+        .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))
 };

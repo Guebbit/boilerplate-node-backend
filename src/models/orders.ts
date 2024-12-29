@@ -63,7 +63,7 @@ class Orders extends Model<InferAttributes<Orders>, InferCreationAttributes<Orde
      * @param userId - * = all orders, otherwise is target user
      * @param orderId - empty = all orders, otherwise get order by ID
      */
-    static async getAll(userId = "", orderId = ""){
+    static async getAll(userId: string | number = "", orderId = ""){
         const where: WhereOptions = {};
         // admin can search by *, all users
         if(userId !== "*")
@@ -87,7 +87,7 @@ class Orders extends Model<InferAttributes<Orders>, InferCreationAttributes<Orde
                         totalQuantity: order.OrderItems!
                             .reduce((tot, { quantity }) => tot + quantity, 0),
                         totalPrice: order.OrderItems!
-                            .reduce((sum, { quantity, Product }) => sum + (quantity * (Product?.price || 0)), 0),
+                            .reduce((sum, { quantity, Product }) => sum + (quantity * (Product?.price ?? 0)), 0),
                     };
                 }) as IOrdersExtended[]
             )

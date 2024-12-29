@@ -20,7 +20,7 @@ Sessions.init(
             primaryKey: true,
         },
         expires: DataTypes.DATE,
-        data: DataTypes.STRING(50000)
+        data: DataTypes.STRING(50_000)
     },
     {
         sequelize: db,

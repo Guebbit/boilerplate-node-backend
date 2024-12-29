@@ -1,7 +1,7 @@
-import type { Request, Response, NextFunction } from 'express';
-import { t } from "i18next";
+import type {Request, Response, NextFunction} from 'express';
+import {t} from "i18next";
 import Users from "../../models/users";
-import { ExtendedError } from "../../utils/error-helpers";
+import {ExtendedError} from "../../utils/error-helpers";
 
 /**
  * Page POST data
@@ -33,22 +33,26 @@ export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: R
      * Login
      */
     return Users.login(email, password)
-        .then((user) => {
+        .then(({success, data, errors}) => {
+            if (!success || !data) {
+                req.flash('error', errors);
+                res.redirect('/account/login');
+                return;
+            }
             // User found and login is correct: Update and regenerate session
-            return req.session.regenerate(() => {
-                req.session.user = user.dataValues
+            req.session.regenerate(() => {
+                req.session.user = data
+                req.flash('success', [t('login.success')]);
                 req.session
                     .save(() => {
-                        req.flash('success', [t('login.success')]);
                         res.redirect('/')
                     });
             });
         })
-        .catch((issues :string[] | Error) => {
-            if(!Array.isArray(issues))
-                return next(new ExtendedError("500", 500, issues.message, false))
-            req.flash('error', issues);
+        .catch((error: string[] | Error) => {
+            if (!Array.isArray(error))
+                return next(new ExtendedError(error.message, 500))
+            req.flash('error', error);
             res.redirect('/account/login');
-            return;
         });
 };

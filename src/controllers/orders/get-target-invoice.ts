@@ -1,11 +1,13 @@
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import type { Request, Response, NextFunction } from "express";
 import ejs from "ejs";
 import { t } from "i18next";
 import Orders from "../../models/orders";
 import { createPDF } from "../../utils/pdf-helpers";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
+import { getDirname } from "../../utils/get-file-url";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 
 /**
@@ -25,12 +27,12 @@ export interface IGetTargetInvoiceParameters {
 export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Response, next: NextFunction) => {
     // get target order (must be owner or admin)
     Orders.getAll(
-        !req.session.user?.admin ? req.session.user?.id : "*",
+        req.session.user?.admin ? "*" : req.session.user?.id,
         req.params.orderId
     )
         .then((orders) => {
-            if(orders.length < 1){
-                next(new ExtendedError("404", 404, t("ecommerce.order-not-found")));
+            if(orders.length  === 0){
+                next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
                 return;
             }
             return orders[0];
@@ -38,7 +40,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
         .then((order) => {
             // Should be impossible
             if(!order)
-                throw new Error();
+                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
             /**
              * Create PDF file
              * Create PDF using get-target-order template OR pure HTML content
@@ -63,9 +65,9 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
             //   </html>
             // `;
             // Use an ejs template
-            ejs.renderFile(
+            return ejs.renderFile(
                 // Retrieve the template
-                path.resolve(__dirname, '../../../views/templates', 'invoice-order-file.ejs'),
+                path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
                 // Populate the template
                 {
                     ...res.locals,
@@ -78,10 +80,9 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                 // callback
                 async (error: Error | null, htmlContent: string) => {
                     if(error)
-                        throw error;
+                        return next(new ExtendedError(error.message, 500));
                     return createPDF(htmlContent, order.dataValues.id + '.pdf', 'src/data/invoices')
                         .then(() => {
-                            console.log("OKKK", invoicePath)
                             /**
                              * Download file
                              */
@@ -89,7 +90,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                             fs.readFile(invoicePath, (err, data) => {
                                 if(err)
                                     throw err;
-                                // return next(new ExtendedError("500", 500, err.message, false))M
+                                // return next(new ExtendedError(err.message, 500))
                                 res.setHeader('Content-Type', 'application/pdf');
                                 res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
                                 // send data (with custom headers)
@@ -103,6 +104,5 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                         })
                 })
         })
-        .catch((error: Error) =>
-            next(new ExtendedError("500", 500, error.message, false)))
+        .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))
 };

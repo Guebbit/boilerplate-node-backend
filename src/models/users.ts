@@ -18,25 +18,20 @@ import {
     HasOneCreateAssociationMixin,
     HasOneGetAssociationMixin,
     WhereOptions,
-    Op,
+    Op, ValidationError, DatabaseError,
 } from 'sequelize';
+import {randomBytes} from "node:crypto";
 import bcrypt from "bcrypt";
-import { z } from "zod";
-import { t } from "i18next";
+import {z} from "zod";
+import {t} from "i18next";
 import db from "../utils/db";
+import {generateSuccess, generateReject} from "../utils/response";
 import Orders from "./orders";
 import Tokens from "./tokens";
-import Cart from "./cart";
+import Carts from "./carts";
 import Products from "./products";
 import CartItems from "./cart-items";
-import { randomBytes } from "crypto";
-import {ExtendedError} from "../utils/error-helpers";
-
-export type CartGetResponse = InferAttributes<Cart> & {
-    CartItems?: Array<CartItems & {
-        Product: Products
-    }>
-}
+import {databaseErrorInterpreter} from "../utils/error-helpers";
 
 class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>> {
     declare id: CreationOptional<number>;
@@ -53,8 +48,8 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
     /**
      * HasOne Association - Cart
      */
-    declare createCart: HasOneCreateAssociationMixin<Cart>;
-    declare getCart: HasOneGetAssociationMixin<Cart>;
+    declare createCart: HasOneCreateAssociationMixin<Carts>;
+    declare getCart: HasOneGetAssociationMixin<Carts>;
 
     /**
      * HasMany Association - Orders
@@ -78,7 +73,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
     /**
      * defaultScope joined element
      */
-    declare Cart: NonAttribute<Cart>;
+    declare Cart: NonAttribute<Carts>;
 
     /**
      * INSTANCE method
@@ -100,7 +95,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
                 }],
             }]
         })
-            .then((cart) => cart.toJSON() as CartGetResponse);
+            .then((cart) => cart.toJSON());
     }
 
     /**
@@ -117,74 +112,83 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
                     productId: product.id
                 }
             })
-            .then((items): Promise<unknown> => {
+            .then(async (items) => {
                 /**
                  * An array of 1 is returned (if already present)
                  * For testing purposes I update all items in array (in multiple ways)
                  */
-                if(items.length > 0){
+                if (items.length > 0) {
                     // it's the same as below
                     // for(let i = items.length; i--; ){
                     //     items[i].quantity = quantity;
-                    //     items[i].save();
+                    //     await items[i].save();
                     // }
 
-                    // it's the same as below
-                    // const promiseArray: Promise<unknown>[] = [];
-                    // items.map((product) => {
-                    //     product.quantity = quantity;
-                    //     promiseArray.push(product.save());
-                    // })
-                    // return Promise.all(promiseArray);
-
-                    return Promise.all(
+                    await Promise.all(
                         items.map((product) => {
                             product.quantity = quantity;
                             return product.save();
                         })
-                    );
+                    )
+                    return generateSuccess(await this.cartGet())
                 }
 
                 /**
                  * No product found, create new
                  */
-                return this.Cart
-                    .addProduct(product, {
-                        through: {
-                            quantity
-                        }
-                    })
+                await this.Cart.addProduct(product, {
+                    through: {
+                        quantity
+                    }
+                })
+                return generateSuccess(await this.cartGet())
             })
+    }
+
+    /**
+     * INSTANCE (schema) method
+     *
+     * Remove target product from cart
+     * @param productId
+     */
+    async cartItemRemoveById(productId: string | number) {
+        return this.getCart()
+            .then(async (cart) => {
+                await CartItems.destroy({
+                    where: {
+                        CartId: cart.id,
+                        productId
+                    }
+                })
+                return generateSuccess(await this.getCart());
+            })
+    }
+
+    /**
+     * INSTANCE (schema) method
+     *
+     * Remove target product from cart
+     * @param product
+     */
+    async cartItemRemove(product: Products) {
+        return this.cartItemRemoveById(product.id);
     }
 
     /**
      * INSTANCE method
      *
-     * @param productId
-     */
-    async cartItemRemove(productId: string) {
-        return this.getCart()
-            .then((cart) => CartItems.destroy({
-                where: {
-                    cartId: cart.id,
-                    productId
-                }
-            })
-        )
-    }
-
-    /**
-     * INSTANCE method
-     * 
      * Remove ALL items from cart
      */
     async cartRemove() {
         return this.getCart()
-            .then((cart) => CartItems.destroy({
-                    where: {
-                        cartId: cart.id
-                    }
-                })
+            .then(async (cart) =>
+                generateSuccess(
+                    await CartItems.destroy({
+                        where: {
+                            CartId: cart.id
+                        }
+                    })
+                )
             )
     }
 
@@ -194,7 +198,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
      * Create a new order with the current cart
      * then reset the cart
      */
-    async orderConfirm(){
+    async orderConfirm() {
         return this
             .getCart()
             .then((cart) =>
@@ -206,25 +210,31 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
                         }
                     })
             )
-            .then(({ cart, products }) => {
-                if(products.length < 1)
-                    throw new Error(t('generic.error-missing-data'));
-                return this.createOrder({
-                    email: this.email
-                })
-                    .then(async (order) => {
-                        await Promise.all([
-                            ...products.map((product) => {
-                                return order.addProduct(product, {
-                                    through: {
-                                        quantity: product.CartItems.quantity
-                                    }
-                                })
-                            }),
-                            cart.removeProducts(products),
-                        ])
-                        return order;
+            .then(async ({cart, products}) => {
+                if (products.length === 0)
+                    return generateReject(
+                        404,
+                        "no products",
+                        [t('generic.error-missing-data')]
+                    )
+                return generateSuccess(
+                    await this.createOrder({
+                        email: this.email
                     })
+                        .then(async (order) => {
+                            await Promise.all([
+                                ...products.map((product) => {
+                                    return order.addProduct(product, {
+                                        through: {
+                                            quantity: product.CartItems.quantity
+                                        }
+                                    })
+                                }),
+                                cart.removeProducts(products),
+                            ])
+                            return order;
+                        })
+                );
             })
     }
 
@@ -281,24 +291,27 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
          * Validation error
          */
         if (!parseResult.success)
-            return Promise.reject(
-                parseResult.error.issues.reduce((errorArray, { message }) => {
-                    errorArray.push(message);
-                    return errorArray;
-                }, [] as string[])
-            );
+            return generateReject(
+                400,
+                "passwordChange - bad request",
+                parseResult.error.issues.map(({message}) => message)
+            )
 
         /**
          * Everything is ok, change password with the requested one.
          * Encryption will be done automatically by another hook
          */
         this.password = password;
-        return this.save();
+        return this.save()
+            .then((user) => generateSuccess(user))
+            .catch((error: ValidationError | DatabaseError | Error) =>
+                generateReject(500, databaseErrorInterpreter(error).join(", "))
+            );
     }
 
     /**
      * STATIC method
-     * 
+     *
      * Register new user
      *
      * @param email
@@ -313,7 +326,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
         password: string,
         passwordConfirm: string,
         imageUrl = "",
-    ){
+    ) {
         /**
          * Data validation
          * Check if user data are compliant
@@ -340,12 +353,11 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
          * Validation error
          */
         if (!parseResult.success)
-            return Promise.reject(
-                parseResult.error.issues.reduce((errorArray, { message }) => {
-                    errorArray.push(message);
-                    return errorArray;
-                }, [] as string[])
-            );
+            return generateReject(
+                400,
+                "signup - bad request",
+                parseResult.error.issues.map(({message}) => message)
+            )
 
         /**
          * Check if email is already used (user exist already probably)
@@ -356,38 +368,33 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
                 email,
             }
         })
-            .then((user) => {
+            .then(async (user) => {
                 // Email already exists
                 if (user)
-                    return Promise.reject([
-                        t('signup.email-already-used')
-                    ]);
+                    return generateReject(
+                        409,
+                        "signup - email already used",
+                        [t('signup.email-already-used')]
+                    )
 
                 /**
                  * Everything is ok, proceed to create a new user.
                  * Encryption will be done automatically by another hook
                  */
-                return new Users({
-                    username,
-                    email,
-                    imageUrl,
-                    password,
-                })
-                    .save()
-                    .then((user) => {
-                        // User creation successful, now create their cart
-                        user.createCart();
-                        return user;
+                return generateSuccess(
+                    await new Users({
+                        username,
+                        email,
+                        imageUrl,
+                        password,
                     })
-            })
-            /**
-             * Something has gone wrong
-             */
-            .catch((error: Error) => {
-                new ExtendedError("500", 500, error.message, false);
-                return Promise.reject([
-                    t('generic.error-unknown')
-                ]);
+                        .save()
+                        .then(async (user) => {
+                            // User creation successful, now create their cart
+                            await user.createCart();
+                            return user;
+                        })
+                )
             })
     }
 
@@ -399,7 +406,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
      * @param email
      * @param password
      */
-    static async login(email?: string, password?: string){
+    static async login(email?: string, password?: string) {
         /**
          * Data validation
          * Check if password and passwordConfirm are equals and compliant
@@ -418,12 +425,11 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
          * Validation error
          */
         if (!parseResult.success)
-            return Promise.reject(
-                parseResult.error.issues.reduce((errorArray, { message }) => {
-                    errorArray.push(message);
-                    return errorArray;
-                }, [] as string[])
-            );
+            return generateReject(
+                400,
+                "login - bad request",
+                parseResult.error.issues.map(({message}) => message)
+            )
 
         /**
          * Everything is ok, login the user
@@ -431,25 +437,29 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
         return this.findOne({
             where: {
                 email,
+                // eslint-disable-next-line unicorn/no-null
                 deletedAt: null
             } as WhereOptions
         })
             .then(user => {
                 // user not found
                 if (!user)
-                    return Promise.reject([
-                        t('login.wrong-data')
-                    ]);
+                    return generateReject(
+                        401,
+                        "login - wrong credentials",
+                        [t('login.wrong-data')]
+                    )
                 return bcrypt
-                    .compare(password || "", user.password)
+                    .compare(password ?? "", user.password)
                     .then(doMatch => {
                         // User found but password doesn't match
-                        if (!doMatch) {
-                            return Promise.reject([
-                                t('login.wrong-data')
-                            ]);
-                        }
-                        return user;
+                        if (!doMatch)
+                            return generateReject(
+                                401,
+                                "login - wrong credentials",
+                                [t('login.wrong-data')]
+                            )
+                        return generateSuccess(user);
                     });
             });
     }
@@ -522,6 +532,7 @@ Users.init(
             where: {
                 [Op.and]: [
                     {
+                        // eslint-disable-next-line unicorn/no-null
                         deletedAt: null
                     },
                     {
@@ -531,7 +542,7 @@ Users.init(
             },
             // get user already joined with his cart
             include: [{
-                model: Cart,
+                model: Carts,
                 required: false // it should be always present
             }]
         },
@@ -543,7 +554,7 @@ Users.init(
             admin: {
                 paranoid: false,
                 include: [{
-                    model: Cart,
+                    model: Carts,
                     required: false // it should be always present
                 }]
             },
@@ -557,9 +568,9 @@ Users.init(
              * Hook that happen before creation and can be used for validation
              * @param user
              */
-            beforeCreate(user){
+            beforeCreate(user) {
                 // regular but not allowed names
-                if(user.username === 'not-allowed')
+                if (user.username === 'not-allowed')
                     throw new Error('username not allowed');
                 // hash password at every creation
                 return bcrypt.hash(user.password, 12)

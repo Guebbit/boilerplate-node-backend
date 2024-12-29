@@ -1,23 +1,24 @@
 import Users from "./users";
 import Products from "./products";
-import Cart from "./cart";
+import Carts from "./carts";
 import CartItems from "./cart-items";
 import Orders from "./orders";
 import OrderItems from "./order-items";
 import Tokens from "./tokens";
 
-Users.hasOne(Cart);
-Cart.belongsTo(Users);
+Users.hasOne(Carts);
+Carts.belongsTo(Users);
 
 Users.hasMany(Orders);
 Orders.belongsTo(Users);
 
-Cart.belongsToMany(Products, {
+Carts.belongsToMany(Products, {
     through: CartItems
 });
-Cart.hasMany(CartItems);
-CartItems.belongsTo(Cart);
+Carts.hasMany(CartItems);
+CartItems.belongsTo(Carts);
 CartItems.belongsTo(Products);
+Products.hasMany(CartItems)
 
 Orders.belongsToMany(Products, {
     through: OrderItems

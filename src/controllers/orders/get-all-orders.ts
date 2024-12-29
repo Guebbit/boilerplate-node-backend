@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Orders from "../../models/orders";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 /**
  * Get ALL orders info
@@ -12,7 +13,7 @@ import { ExtendedError } from "../../utils/error-helpers";
  */
 export default (req: Request, res: Response, next: NextFunction) =>
     Orders.getAll(
-        !req.session.user?.admin ? req.session.user?.id : "*"
+        req.session.user?.admin ? "*" : req.session.user?.id
     )
         .then((orders) =>
             res.render('orders/list', {
@@ -23,5 +24,4 @@ export default (req: Request, res: Response, next: NextFunction) =>
                 orders
             })
         )
-        .catch((error: Error) =>
-            next(new ExtendedError("500", 500, error.message, false)))
+        .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))

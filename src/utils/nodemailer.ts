@@ -1,25 +1,25 @@
-import path from "path";
+import path from "node:path";
 import ejs, { type Data } from "ejs";
 import { createTransport, type SendMailOptions, type SentMessageInfo } from "nodemailer";
-
+import { getDirname } from "./get-file-url";
 
 
 
 // Create a transporter object using the default SMTP transport
 export const transporter = createTransport({
-    name: process.env.NODE_SMTP_NAME || "",
-    host: process.env.NODE_SMTP_HOST || "",
-    port: process.env.NODE_SMTP_PORT ? parseInt(process.env.NODE_SMTP_PORT) : 587,
+    name: process.env.NODE_SMTP_NAME ?? "",
+    host: process.env.NODE_SMTP_HOST ?? "",
+    port: process.env.NODE_SMTP_PORT ? Number.parseInt(process.env.NODE_SMTP_PORT) : 587,
     secure: process.env.NODE_SMTP_PORT === "465", // True for 465, false for other ports (587 = TCP)
     auth: {
-        user: process.env.NODE_SMTP_USER || "",
-        pass: process.env.NODE_SMTP_PASS || ""
+        user: process.env.NODE_SMTP_USER ?? "",
+        pass: process.env.NODE_SMTP_PASS ?? ""
     },
 });
 // const transporter = nodemailer.createTransport(
 //     sendgridTransport({
 //         auth: {
-//             api_key: process.env.NODE_APIKEY_SENDGRID || ""
+//             api_key: process.env.NODE_APIKEY_SENDGRID ?? ""
 //         }
 //     })
 // );
@@ -39,7 +39,7 @@ export default (request: SendMailOptions, templateName: string, data: Data): Pro
     new Promise((resolve, reject) =>
         ejs.renderFile(
             // Retrieve the template
-            path.resolve(__dirname, '../../views/templates', templateName),
+            path.resolve(getDirname(import.meta.url), '../../views/templates', templateName),
             // Populate the template
             data,
             // callback
@@ -54,6 +54,7 @@ export default (request: SendMailOptions, templateName: string, data: Data): Pro
                     html,
                     ...request
                 }, (error, info) => {
+                    // eslint-disable-next-line no-console
                     console.log('Message sent: %s', info.messageId);
                     // error happened
                     if (error)

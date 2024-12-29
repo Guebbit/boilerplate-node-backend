@@ -1,4 +1,6 @@
 import puppeteer, {type PDFOptions} from 'puppeteer';
+import {databaseErrorConverter} from "./error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 /**
  * Creates a PDF from HTML content
@@ -13,6 +15,7 @@ export async function createPDF(
     htmlContent: string,
     filename = 'output.pdf',
     outputPath = 'src/data/files',
+    // eslint-disable-next-line unicorn/no-object-as-default-parameter
     options: PDFOptions = {
         format: 'A4',
         printBackground: true
@@ -31,15 +34,15 @@ export async function createPDF(
                                 ...options,
                                 path: outputPath + '/' + filename,
                             })
-                                .then(() => {
-                                    browser.close();
+                                .then(async () => {
+                                    await browser.close();
                                     return outputPath + '/' + filename;
                                 })
                         )
                 )
-                .catch((error) => {
-                    browser.close();
-                    throw error;
+                .catch(async (error: Error | ValidationError | DatabaseError) => {
+                    await browser.close();
+                    throw databaseErrorConverter(error);
                 })
         )
 }

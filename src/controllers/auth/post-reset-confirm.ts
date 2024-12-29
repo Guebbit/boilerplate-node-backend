@@ -44,8 +44,8 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
     })
         .then(token => {
             // retrieving User
-            // eslint-disable-next-line 
-            const { User } = token as Tokens & { User: Users } | null || {};
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            const { User } = token as Tokens & { User: Users } | null ?? {};
             // wrong token
             if (!token || !User) {
                 req.flash('error', [t("reset.token-not-found")]);
@@ -54,10 +54,15 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
             }
             // change password
             return User.passwordChange(password, passwordConfirm)
-                .then(() => {
+                .then(async ({success, errors = []}) => {
+                    if (!success) {
+                        req.flash('error', errors);
+                        return res.redirect('/account/reset');
+                    }
                     // consume the token
-                    token.destroy();
+                    await token.destroy();
                     // send confirmation email (no need to wait)
+                    // eslint-disable-next-line @typescript-eslint/no-floating-promises
                     nodemailer({
                             to: User.email,
                             subject: 'Password change confirmed',
@@ -71,12 +76,12 @@ export default async (req: Request<unknown, unknown, IPostResetConfirmPostData>,
                         });
                     // success message
                     req.flash('success', [t("reset.success")]);
-                    res.redirect("/account/login");
+                    return res.redirect("/account/login");
                 })
-                .catch((issues :string[] | Error) => {
-                    if(!Array.isArray(issues))
-                        return next(new ExtendedError("500", 500, issues.message, false))
-                    req.flash('error', issues);
+                .catch((error:string[] | Error) => {
+                    if(!Array.isArray(error))
+                        return next(new ExtendedError(error.message, 500))
+                    req.flash('error', error);
                     res.redirect('/account/reset');
                     return;
                 });

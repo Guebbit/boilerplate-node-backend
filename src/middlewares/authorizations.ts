@@ -9,7 +9,7 @@ import type { Request, Response, NextFunction } from 'express';
  */
 export const isAuth = (req: Request, res: Response, next: NextFunction) => {
     if(!req.session.user)
-        return res.status(401).redirect('/account/login');
+        { res.status(401).redirect('/account/login'); return; }
     next();
 }
 
@@ -21,8 +21,8 @@ export const isAuth = (req: Request, res: Response, next: NextFunction) => {
  * @param next
  */
 export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
-    if(!req.session.user || !req.session.user?.admin)
-        return res.status(403).redirect('/account/login');
+    if(!req.session.user?.admin)
+        { res.status(403).redirect('/account/login'); return; }
     next();
 }
 
@@ -35,6 +35,6 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction) => {
  */
 export const isGuest = (req: Request, res: Response, next: NextFunction) => {
     if(req.session.user)
-        return res.redirect('/');
+        { res.redirect('/'); return; }
     next();
 }

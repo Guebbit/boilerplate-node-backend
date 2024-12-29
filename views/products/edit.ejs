@@ -38,7 +38,7 @@
         <% } %>
 
         <input type="hidden" name="id" value="<%= product.id %>">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
     </form>
 </main>
 <%- include("../_layouts/default-footer.ejs"); %>

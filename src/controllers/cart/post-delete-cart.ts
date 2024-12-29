@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 
 /**
@@ -12,5 +13,10 @@ import { ExtendedError } from "../../utils/error-helpers";
 export default (req: Request, res: Response, next: NextFunction) =>
     // check done before entering the route
     req.user!.cartRemove()
-        .then(() => res.redirect('/cart'))
-        .catch(({ message }: Error) => next(new ExtendedError("500", 500, message, false)))
+        .then(({success}) => {
+            if (!success)
+                throw new Error("cartRemove error");
+            return res.redirect('/cart');
+        })
+        .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))
+

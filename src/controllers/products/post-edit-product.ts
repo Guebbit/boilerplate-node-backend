@@ -2,7 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Products from "../../models/products";
 import { deleteFile } from "../../utils/filesystem-helpers";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 /**
  * Page POST data
@@ -23,7 +24,7 @@ export interface IPostEditProductsPostData {
  * @param res
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: Response, next: NextFunction) => {
+export default async (req: Request<unknown, unknown, IPostEditProductsPostData>, res: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -40,7 +41,7 @@ export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: 
      * Get URL of updated image it's on req.file,
      * but it's good to know that it could be within an array
      */
-    const imageUrlRaw = (req.file ? req.file.path : req.files ? (req.files as Express.Multer.File[])[0].path : "");
+    const imageUrlRaw = (req.file ? req.file.path : (req.files ? (req.files as Express.Multer.File[])[0].path : ""));
     // remove "public" at root ("/" remain as root)
     const imageUrl = imageUrlRaw.replace("public", "");
 
@@ -50,7 +51,7 @@ export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: 
     const issues = Products.validateData({
         title,
         imageUrl,
-        price: parseInt(price),
+        price: Number.parseInt(price),
         description,
         active: !!active
     });
@@ -61,7 +62,7 @@ export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: 
     if(issues.length > 0){
         // Record was not created, so revert server changes by removing the uploaded file
         if(imageUrlRaw.length > 0)
-            deleteFile(imageUrlRaw);
+            await deleteFile(imageUrlRaw);
         req.flash('error', issues);
         req.flash('filled', [
             title,
@@ -81,48 +82,52 @@ export default (req: Request<unknown, unknown, IPostEditProductsPostData>, res: 
         Products.create({
             title,
             imageUrl,
-            price: parseInt(price),
+            price: Number.parseInt(price),
             description,
             active: !!active,
         })
             .then(() => res.redirect('/products/'))// res.redirect('/products/details/' + product.id)
-            .catch((err) => {
+            .catch(async (error: Error | ValidationError | DatabaseError) => {
                 if(imageUrlRaw.length > 0)
-                    deleteFile(imageUrlRaw);
-                next(new ExtendedError("500", 500, err, false));
+                    await deleteFile(imageUrlRaw);
+                next(databaseErrorConverter(error));
             })
     /**
      * ID = edit product
      */
     else
-        (req.session.user?.admin ? Products.scope("admin") : Products).findByPk(id)
-            .then((product) => {
+        (
+            req.session.user?.admin ?
+                Products.scope("admin") :
+                Products
+        ).findByPk(id)
+            .then(async (product) => {
                 // trying to edit a product that doesn't exist
                 if (!product){
                     if(imageUrlRaw.length > 0)
-                        deleteFile(imageUrlRaw);
-                    next(new ExtendedError("404", 404, t("ecommerce.product-not-found")));
+                        await deleteFile(imageUrlRaw);
+                    next(new ExtendedError("404", 404, true, [t("ecommerce.product-not-found")]));
                     return;
                 }
                 product.title = title;
                 product.imageUrl = imageUrl;
-                product.price = parseInt(price);
+                product.price = Number.parseInt(price);
                 product.description = description;
                 product.active = !!active;
                 return product.save();
             })
-            .then((product) => {
+            .then(async (product) => {
                 if(!product){
                     if(imageUrlRaw.length > 0)
-                        deleteFile(imageUrlRaw);
-                    next(new ExtendedError("404", 404, t("ecommerce.product-not-found")));
+                        await deleteFile(imageUrlRaw);
+                    next(new ExtendedError("404", 404, false, [t("ecommerce.product-not-found")]));
                     return;
                 }
                 return res.redirect('/products/details/' + product.id);
             })
-            .catch((error) => {
+            .catch(async (error: Error | ValidationError | DatabaseError) => {
                 if(imageUrlRaw.length > 0)
-                    deleteFile(imageUrlRaw);
-                next(new ExtendedError("500", 500, error, false));
+                    await deleteFile(imageUrlRaw);
+                next(databaseErrorConverter(error));
             })
 };

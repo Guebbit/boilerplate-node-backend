@@ -41,4 +41,5 @@ export default (req: Request & { params: IGetResetConfirmParameters }, res: Resp
             });
         })
         .catch((error: Error) =>
-            next(new ExtendedError("500", 500, error.message, false)))
+            next(new ExtendedError(error.message, 500))
+        )

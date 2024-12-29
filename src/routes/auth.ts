@@ -1,5 +1,6 @@
 import express from 'express';
 import { isGuest, isAuth } from "../middlewares/authorizations";
+import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
 import getLogin from "../controllers/auth/get-login";
 import getSignup from "../controllers/auth/get-signup";
@@ -13,22 +14,22 @@ import postResetConfirm from "../controllers/auth/post-reset-confirm";
 
 const router = express.Router();
 
-router.get('/login', getLogin);
+router.get('/login', isGuest, getLogin);
 
-router.get('/signup', getSignup);
+router.post('/login', isGuest, csrfSynchronisedProtection, postLogin);
 
-router.post('/login', isGuest, postLogin);
+router.get('/signup', isGuest, getSignup);
 
-router.post('/signup', isGuest, postSignup);
-
-router.get('/logout', isAuth, getLogout);
+router.post('/signup', isGuest, csrfSynchronisedProtection, postSignup);
 
 router.get('/reset', isGuest, getReset);
 
-router.post('/reset', isGuest, postReset);
+router.post('/reset', isGuest, csrfSynchronisedProtection, postReset);
 
 router.get('/reset/:token', isGuest, getResetConfirm);
 
-router.post('/reset/:token', isGuest, postResetConfirm);
+router.post('/reset/:token', isGuest, csrfSynchronisedProtection, postResetConfirm);
+
+router.get('/logout', isAuth, getLogout);
 
 export default router;

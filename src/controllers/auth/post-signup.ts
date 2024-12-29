@@ -42,10 +42,23 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
         passwordConfirm,
         imageUrl,
     )
-        .then((user) => {
+        .then(({ success, data, errors }) => {
+            if(!success){
+                // So the user doesn't need to fill the form again
+                req.flash('filled', [
+                    email,
+                    username,
+                ]);
+                req.flash('error', [
+                    t('login.invalid-data'),
+                    ...errors
+                ]);
+                res.redirect('/account/signup');
+            }
             // Registration confirmation (no need to wait)
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             nodemailer({
-                    to: user.email,
+                    to: data!.email,
                     subject: 'Signup succeeded!',
                 },
                 "emailRegistrationConfirm.ejs",
@@ -53,22 +66,22 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
                     ...res.locals,
                     pageMetaTitle: 'Signup succeeded!',
                     pageMetaLinks: [],
-                    name: user.username,
+                    name: data!.username,
                 })
             // Registration successful,
             // send to the login and
             req.flash('success', [t('signup.registration-successful')]);
             return res.redirect('/account/login');
         })
-        .catch((issues :string[] | Error) => {
-            if(!Array.isArray(issues))
-                return next(new ExtendedError("500", 500, issues.message, false))
+        .catch((error:string[] | Error) => {
+            if(!Array.isArray(error))
+                return next(new ExtendedError(error.message, 500))
             // So the user doesn't need to fill the form again
             req.flash('filled', [
                 email,
                 username,
             ]);
-            req.flash('error', issues);
+            req.flash('error', error);
             res.redirect('/account/signup');
             return;
         });

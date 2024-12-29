@@ -5,16 +5,20 @@
  * - connect-flash
  */
 import expressSession from "express-session";
+import initSessionSequelize from "connect-session-sequelize";
 import connectFlash from "connect-flash";
 import db from '../utils/db';
 import type { Request, Response, NextFunction } from "express";
 import Users from "../models/users";
+import { generateToken } from "./csrf";
+import {databaseErrorConverter} from "../utils/error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 /**
  * Sequelize connection
  */
-// eslint-disable-next-line
-const SequelizeStore = require("connect-session-sequelize")(expressSession.Store);
+// eslint-disable-next-line @typescript-eslint/naming-convention
+const SequelizeStore = initSessionSequelize(expressSession.Store);
 
 /**
  *
@@ -22,16 +26,17 @@ const SequelizeStore = require("connect-session-sequelize")(expressSession.Store
 export const store = new SequelizeStore({
     db,
     // The interval at which to clean up expired sessions in milliseconds.
-    checkExpirationInterval: 900000,
+    // @ts-expect-error difficulties with sequelize inferred types
+    checkExpirationInterval: 900_000,
     // The maximum age (in milliseconds) of a valid session.
-    expiration: process.env.NODE_SESSION_MAXAGE ? parseInt(process.env.NODE_SESSION_MAXAGE) : 86400000,
+    expiration: process.env.NODE_SESSION_MAXAGE ? Number.parseInt(process.env.NODE_SESSION_MAXAGE) : 86_400_000,
 });
 
 /**
  *
  */
 export const session = expressSession({
-    secret: process.env.NODE_SESSION_SECRET || "",
+    secret: process.env.NODE_SESSION_SECRET ?? "",
     resave: false,
     saveUninitialized: false,
     /**
@@ -42,7 +47,7 @@ export const session = expressSession({
     proxy: true,
     cookie: {
         // Cookie duration in milliseconds
-        maxAge: process.env.NODE_COOKIE_MAXAGE ? parseInt(process.env.NODE_COOKIE_MAXAGE) : 86400000,
+        maxAge: process.env.NODE_COOKIE_MAXAGE ? Number.parseInt(process.env.NODE_COOKIE_MAXAGE) : 86_400_000,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: true,
@@ -62,7 +67,8 @@ export const flash = connectFlash();
  * @param next
  */
 export const userConnect = (req: Request, res: Response, next: NextFunction) => {
-    res.locals.csrfToken = "0"; //TODO
+    // it will be requested only on certain POST requests, but it is not a problem to put it here
+    res.locals.csrfToken = generateToken(req)
     // flash messages
     res.locals.errorMessages = req.flash('error');
     res.locals.successMessages = req.flash('success');
@@ -74,18 +80,19 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
         next();
         return;
     }
-    Users.findByPk(req.session.user.id)
+    return Users.findByPk(req.session.user.id)
         .then((user) => {
             if(!user)
-                throw "error";
+                return req.session.destroy(() => res.redirect('/'));
             // to show user data through the UI
             res.locals.currentUser = req.session.user;
             res.locals.isAuthenticated = true;
             res.locals.isAdmin = req.session.user?.admin;
             // user model
             req.user = user;
-            return user;
+            // return user;
         })
         // proceed
         .then(() => next())
+        .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))
 };

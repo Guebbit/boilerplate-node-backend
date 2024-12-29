@@ -10,7 +10,10 @@ import {
 import { z } from "zod";
 import { t } from "i18next";
 import db from "../utils/db";
+import Carts from "./carts";
 import CartItems from "./cart-items";
+import {generateReject, generateSuccess, IResponseReject, IResponseSuccess} from "../utils/response";
+import {deleteFile} from "../utils/filesystem-helpers";
 
 /**
  * Zod validation schema
@@ -63,6 +66,13 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
      */
     declare CartItems: NonAttribute<CartItems>;
 
+    /**
+     * STATIC method
+     * Data validation
+     * Check if product info are compliant
+     *
+     * @param productData
+     */
     static validateData(productData: Partial<Products>){
         /**
          * Validation
@@ -74,12 +84,51 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
          * Validation error
          */
         if (!parseResult.success)
-            return parseResult.error.issues.reduce((errorArray, { message }) => {
-                errorArray.push(message);
-                return errorArray;
-            }, [] as string[]);
+            return parseResult.error.issues.map(({message}) => message)
 
         return [];
+    }
+
+    /**
+     * STATIC method
+     * Remove product from database by ID
+     *
+     * @param id
+     * @param hardDelete
+     */
+    static async productRemoveById(id: string, hardDelete = false): Promise<IResponseSuccess<Products> | IResponseSuccess<undefined> | IResponseReject>{
+        return Products.scope("admin").findByPk(id)
+            .then(async (product) => {
+                if(!product)
+                    return generateReject(404, "404", [t("ecommerce.product-not-found")]);
+                // HARD delete
+                if(hardDelete){
+                    return Carts.productRemoveFromCarts(id)
+                        .then(() => product.destroy({ force: true }))
+                        .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + product.imageUrl))
+                        .then(() => generateSuccess(undefined, 200, t("ecommerce.product-hard-deleted")));                }
+                // If deletedAt already present: it's soft deleted: RESTORE
+                if(product.deletedAt)
+                    return product.restore()
+                        .then(() => generateSuccess(product))
+                // SOFT delete.
+                return Carts.productRemoveFromCarts(id)
+                    .then(() => product.destroy())
+                    // eslint-disable-next-line unicorn/no-useless-undefined
+                    .then(() => generateSuccess(undefined))
+            })
+    }
+
+
+    /**
+     * INSTANCE method
+     * Remove product from database
+     *
+     * @param id
+     * @param hardDelete
+     */
+    static async productRemove(id: string, hardDelete = false){
+        return this.productRemoveById(id, hardDelete);
     }
 }
 
@@ -130,6 +179,7 @@ Products.init(
             where: {
                 [Op.and]: [
                     {
+                        // eslint-disable-next-line unicorn/no-null
                         deletedAt: null
                     },
                     {

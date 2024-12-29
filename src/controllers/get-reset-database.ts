@@ -4,13 +4,14 @@ import Users from "../models/users";
 import Products from "../models/products";
 import Orders from "../models/orders";
 import OrderItems from "../models/order-items";
-import Carts from "../models/cart";
+import Carts from "../models/carts";
 import CartItems from "../models/cart-items";
 import Tokens from "../models/tokens";
 
 
 /**
  * Create example database
+ * Could add "unzipper" to unzip images backup folder automatically but don't want to add unnecessary dependencies
  *
  * @param req
  * @param res
@@ -34,7 +35,7 @@ export default (req: Request, res: Response) =>
                     email: 'root@root.it',
                     username: 'Root',
                     password: 'rootroot',
-                    imageUrl: '\\images\\96346b77daf138a279677cb75c400ee9.jpg',
+                    imageUrl: String.raw`\images\9726c4217f5998511f372afab4800ac8.jpg`,
                     admin: true,
                     active: true,
                 }),
@@ -44,7 +45,7 @@ export default (req: Request, res: Response) =>
                     email: 'test@test.com',
                     username: 'Test',
                     password: 'testtest',
-                    imageUrl: '\\images\\96346b77daf138a279677cb75c400ee9.jpg',
+                    imageUrl: String.raw`\images\96346b77daf138a279677cb75c400ee9.jpg`,
                     admin: false,
                     active: true,
                 }),
@@ -54,7 +55,7 @@ export default (req: Request, res: Response) =>
                     "id": 1,
                     "title": "Sallyno Panino",
                     "price": 100,
-                    "imageUrl": "\\images\\ad2e01890eebf72d06481c4fac3522ac.jpg",
+                    "imageUrl": String.raw`\images\ad2e01890eebf72d06481c4fac3522ac.jpg`,
                     "active": true,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 }),
@@ -62,7 +63,7 @@ export default (req: Request, res: Response) =>
                     "id": 2,
                     "title": "Sallyno Carino",
                     "price": 50,
-                    "imageUrl": "\\images\\96346b77daf138a279677cb75c400ee9.jpg",
+                    "imageUrl": String.raw`\images\96346b77daf138a279677cb75c400ee9.jpg`,
                     "active": true,
                     "description": "Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.",
                 })
@@ -71,7 +72,7 @@ export default (req: Request, res: Response) =>
                     "id": 3,
                     "title": "Miciona inutile",
                     "price": 1,
-                    "imageUrl": "\\images\\60de15db7aed7174ef2d53d21e1f57a5.jpg",
+                    "imageUrl": String.raw`\images\60de15db7aed7174ef2d53d21e1f57a5.jpg`,
                     "active": true,
                     "description": "Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire",
                 }),
@@ -79,7 +80,7 @@ export default (req: Request, res: Response) =>
                     "id": 4,
                     "title": "Micino pufettino",
                     "price": 77,
-                    "imageUrl": "\\images\\f12ba2e44fe347010397f1dcba399808.jpg",
+                    "imageUrl": String.raw`\images\f12ba2e44fe347010397f1dcba399808.jpg`,
                     "active": true,
                     "description": "Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.",
                 }),
@@ -87,7 +88,7 @@ export default (req: Request, res: Response) =>
                     "id": 5,
                     "title": "Bundle micini",
                     "price": 40,
-                    "imageUrl": "\\images\\043cf5b2517fc99ce9a2c2f84288416d.jpg",
+                    "imageUrl": String.raw`\images\043cf5b2517fc99ce9a2c2f84288416d.jpg`,
                     "active": false,
                     "description": "Produttori di rumori molesti a tutte le ore. Inactive product.",
                 }),
@@ -144,15 +145,15 @@ export default (req: Request, res: Response) =>
                 CartItems.create({
                     id: 1,
                     quantity: 2,
-                    // @ts-expect-error should use instances but this is faster
                     CartId: 1,
+                    // @ts-expect-error difficulties with sequelize inferred types
                     ProductId: 1
                 }),
                 CartItems.create({
                     id: 2,
                     quantity: 3,
-                    // @ts-expect-error should use instances but this is faster
                     CartId: 1,
+                    // @ts-expect-error difficulties with sequelize inferred types
                     ProductId: 3
                 }),
             ])

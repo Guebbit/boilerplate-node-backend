@@ -8,12 +8,12 @@ import {
 } from 'sequelize';
 import db from "../utils/db";
 import Products from "./products";
-import Cart from "./cart";
+import Carts from "./carts";
 
 class CartItems extends Model<InferAttributes<CartItems>, InferCreationAttributes<CartItems>> {
     declare id: CreationOptional<number>;
     declare quantity: number;
-    declare cartId: ForeignKey<Cart['id']>;
+    declare CartId: ForeignKey<Carts['id']>;
     declare productId: ForeignKey<Products['id']>;
     declare createdAt: CreationOptional<number>;
     declare updatedAt: CreationOptional<number>;

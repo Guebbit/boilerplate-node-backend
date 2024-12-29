@@ -3,7 +3,6 @@
 - Create database and link it using .env variables
 - Link to services using .env variables (es: email responders are a different kind of server)
 - Cron job needed to clean expired tokens in the table "tokens" (or in the users data if nosql)
-- FOUC (Flash of Unstyled Content) and minor problems are expected, will resolve (if needed) in the future.
 
 # Useful info
 - https://sequelize.org/docs/v6/core-concepts/model-basics/
@@ -13,6 +12,9 @@
 - https://github.com/melardev/ApiEcomSequelizeExpress/blob/master/models/product.model.js
 
 # TODO
-- Better security (csurf deprecated)
+- Connect-flash could show messages after a reload, there is an async problem in some cases
+  - https://github.com/mweibel/connect-session-sequelize/issues/20
+  - https://github.com/mweibel/connect-session-sequelize/issues/7
+- Hard delete of products or their edits change the orders history, must use OrderItems to hard save the necessary product data at the time of the order
+- Correct sequelize's difficulties with inferred types and remove @ts-expect-error
 - complete the tests
-- connect-flash sometimes not showing flash messages after redirect (SEQUELIZE ONLY)

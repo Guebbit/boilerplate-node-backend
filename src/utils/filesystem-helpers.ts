@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import { lookup } from 'mime-types';
 import logger from "./winston";
 
@@ -12,7 +12,7 @@ export function deleteFile(filePath: string) {
         // delete it
         .then(() => fs.unlink(filePath))
         .then(() => true)
-        .catch(error => {
+        .catch((error: NodeJS.ErrnoException) => {
             // file doesn't exists
             if (error.code === 'ENOENT')
                 return false;

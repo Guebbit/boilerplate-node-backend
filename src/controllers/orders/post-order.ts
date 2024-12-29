@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import nodemailer from "../../utils/nodemailer";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 /**
  * Create a new order
@@ -14,10 +15,11 @@ import { ExtendedError } from "../../utils/error-helpers";
  */
 export default (req: Request, res: Response, next: NextFunction) =>
     req.user!.orderConfirm()
-        .then((order) => {
-            if(!order)
-                next(new ExtendedError("500", 500, t('ecommerce.order-creation-failure')))
+        .then(({ success }) => {
+            if(!success)
+                return next(new ExtendedError("500", 500, false, [t('ecommerce.order-creation-failure')]))
             req.flash('success', [t('ecommerce.order-creation-success')]);
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
             nodemailer({
                     to: req.user!.email,
                     subject: 'Order confirmed',
@@ -29,6 +31,6 @@ export default (req: Request, res: Response, next: NextFunction) =>
                     pageMetaLinks: [],
                     name: req.user!.username
                 });
+            return res.redirect('/orders');
         })
-        .catch(({ message }: Error) => next(new ExtendedError("500", 500, message, false)))
-        .finally(() => res.redirect('/orders'))
+        .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))

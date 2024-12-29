@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
-import { t } from "i18next";
 import Products from "../../models/products";
-import { ExtendedError } from "../../utils/error-helpers";
+import {databaseErrorConverter} from "../../utils/error-helpers";
+import type {DatabaseError, ValidationError} from "sequelize";
 
 /**
  * Page POST data
@@ -20,20 +20,13 @@ export interface IPostDeleteProductPostData {
  * @param next
  */
 export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res: Response, next: NextFunction) =>
-    (req.session.user?.admin ? Products.scope("admin") : Products).findByPk(req.body.id)
-        .then((product) => {
-            if (!product)
-                return next(new ExtendedError("404", 404, t("ecommerce.product-not-found")));
-            // HARD delete
-            if(req.body.hardDelete)
-                product.destroy({ force: true })
-                    .then(() => null)
-            // SOFT delete. If deletedAt already present: UNDELETE
-            if(product.deletedAt)
-                return product.restore()
-            return product.destroy()
-                .then(() => null)
+    // isAdmin protected route: user is admin
+    Products.productRemoveById(req.body.id, !!req.body.hardDelete)
+        .then(({ success, message, errors }) => {
+            if(success)
+                req.flash('success', [message]);
+            else
+                req.flash('error', errors);
+            res.redirect('/products/')
         })
-        .then(() => res.redirect('/products/'))
-        .catch((error: Error) =>
-            next(new ExtendedError("500", 500, error.message, false)))
+        .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))

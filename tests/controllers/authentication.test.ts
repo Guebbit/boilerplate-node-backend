@@ -58,7 +58,7 @@ describe('Auth Controller', () => {
     /**
      * I still haven't logged with the test user
      */
-    it('Test that we are a guest', async () => {
+    it('Test that we are a guest', () => {
         // TODO isGuest YES
         expect(true);
     });
@@ -66,7 +66,7 @@ describe('Auth Controller', () => {
     /**
      * I still haven't logged with the test user
      */
-    it('Login and test that we are are an active user', async () => {
+    it('Login and test that we are are an active user', () => {
         // TODO dopo aver risolto il bug di Signup
         // return Users.login(testUser.email, testUser.password)
         //     .then((user) => expect(user).toBeTruthy());
@@ -76,7 +76,7 @@ describe('Auth Controller', () => {
     /**
      *
      */
-    it('Navigate some pages', async () => {
+    it('Navigate some pages', () => {
         // TODO mock controller: isAuth page & isAdmin Page
         expect(true);
     });
@@ -84,7 +84,7 @@ describe('Auth Controller', () => {
     /**
      * End of test
      */
-    afterAll(async () => {
+    afterAll(() => {
         /**
          * Remove the user that has been created only for this test
          */
