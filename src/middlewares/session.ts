@@ -8,7 +8,7 @@ import expressSession from "express-session";
 import connectFlash from "connect-flash";
 import { default as connectMongoDBSession } from 'connect-mongodb-session';
 import type { Request, Response, NextFunction } from "express";
-import { generateToken } from "../middlewares/csrf";
+import { generateToken } from "./csrf";
 import Users from "../models/users";
 
 /**
@@ -73,7 +73,7 @@ export const userConnect = (req: Request, res: Response, next: NextFunction) => 
     Users.findById(req.session.user._id)
         .then((user) => {
             if(!user)
-                return req.session.destroy(() => { res.redirect('/'); });
+                return req.session.destroy(() => res.redirect('/'));
             // to show user data through the UI
             res.locals.currentUser = req.session.user;
             res.locals.isAuthenticated = true;

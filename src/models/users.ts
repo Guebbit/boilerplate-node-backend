@@ -96,6 +96,7 @@ export interface IUserModel extends Model<IUserDocument, unknown, IUserMethods> 
         imageUrl?: string,
     ) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
     login: (email: string, password: string) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
+    productRemoveFromCartsById: (id: string) => Promise<IResponseSuccess<undefined> | IResponseReject>
     productRemoveFromCarts: (id: string) => Promise<IResponseSuccess<undefined> | IResponseReject>
 }
 
@@ -585,12 +586,11 @@ userSchema.static('login', async function (email?: string, password?: string) {
 
 /**
  * STATIC (Model) method
- *
- * Remove a product from all users' carts
+ * Remove a product from all users' carts by product ID
  *
  * @param id
  */
-userSchema.static('productRemoveFromCarts', async function (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> {
+userSchema.static('productRemoveFromCartsById', async function (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> {
     return this.updateMany(
         {
             // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -625,6 +625,18 @@ userSchema.static('productRemoveFromCarts', async function (id: string): Promise
 });
 
 /**
+ * STATIC (Model) method
+ * Remove a product from all users' carts
+ *
+ * @param product
+ */
+userSchema.static('productRemoveFromCarts', function (product: IProductDocument): Promise<IResponseSuccess<undefined> | IResponseReject> {
+    return userModel.productRemoveFromCartsById((product._id as Types.ObjectId).toString());
+});
+
+/**
  * Model
  */
-export default model<IUserDocument, IUserModel>('User', userSchema);
+export const userModel = model<IUserDocument, IUserModel>('User', userSchema);
+
+export default userModel;

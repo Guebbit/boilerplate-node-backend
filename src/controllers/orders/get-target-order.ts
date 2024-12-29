@@ -46,7 +46,7 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
     Orders.getAll([match])
         .then((orders) => {
             if (orders.length === 0)
-                return next(new ExtendedError("404", 404, false, [t("ecommerce.order-not-found")]));
+                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
             return res.render('orders/details', {
                 pageMetaTitle: 'Order',
                 pageMetaLinks: [

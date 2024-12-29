@@ -96,14 +96,14 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
 
 
 /**
- * INSTANCE (schema) method
+ * STATIC method
+ * Remove product from database by ID
  *
- * Set quantity of target product in cart
  * @param id
  * @param hardDelete
  */
 productSchema.static('productRemoveById', async function (id: string, hardDelete = false): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> {
-    return modelProduct
+    return productModel
         .findById(id)
         .then((product) => {
             // not found, something happened
@@ -115,15 +115,17 @@ productSchema.static('productRemoveById', async function (id: string, hardDelete
                     .then(() => product.deleteOne())
                     .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + product.imageUrl))
                     .then(() => generateSuccess(undefined, 200, t("ecommerce.product-hard-deleted")));
-            // SOFT delete. If deletedAt already present: UNDELETE
+            // If deletedAt already present: it's soft deleted: RESTORE
             product.deletedAt = product.deletedAt ? undefined : new Date();
+            // SOFT delete
             return Users.productRemoveFromCarts((product._id as Types.ObjectId).toString())
                 .then(async () => generateSuccess(await product.save(), 200, t("ecommerce.product-soft-deleted")));
         })
 });
 
 /**
- * INSTANCE (schema) method
+ * STATIC method
+ * Remove product from database
  *
  * @param product
  * @param hardDelete
@@ -133,8 +135,11 @@ productSchema.static('productRemove', async function (product: IProductDocument,
 });
 
 /**
+ * STATIC method
  * Data validation
  * Check if product info are compliant
+ *
+ * @param productData
  */
 productSchema.static('validateData', function (productData: IProduct): string[] {
     /**
@@ -152,6 +157,6 @@ productSchema.static('validateData', function (productData: IProduct): string[] 
     return [];
 });
 
-export const modelProduct = model<IProductDocument, IProductModel>('Product', productSchema);
+export const productModel = model<IProductDocument, IProductModel>('Product', productSchema);
 
-export default modelProduct;
+export default productModel;

@@ -1,6 +1,6 @@
 {
   "name": "boilerplate-node-mvc-mongoose",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "src/cluster.ts",
   "license": "AGPLv3.0",
   "scripts": {
