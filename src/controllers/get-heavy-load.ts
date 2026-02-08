@@ -4,10 +4,10 @@ import type { Request, Response } from "express";
 /**
  * Heavy load test
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default (req: Request, res: Response) => {
+export const getHeavyLoad = (request: Request, response: Response) => {
     const totalLoad = 20_000;
     let progressLoad = 0;
     for (let i = 0; i < totalLoad; i++) {
@@ -15,5 +15,5 @@ export default (req: Request, res: Response) => {
         // eslint-disable-next-line no-console
         console.log(`Worker ${process.pid} at ${Math.round((progressLoad/totalLoad) * 100)}% of task`)
     }
-    res.send(`The result of the CPU intensive task is ${progressLoad}\n`);
+    response.send(`The result of the CPU intensive task is ${progressLoad}\n`);
 }

@@ -16,21 +16,21 @@ export interface IPostSetCartItemPostData {
  * Add a product (with its quantity) to cart, check availability, etc
  * Create a CartItem row.
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostSetCartItemPostData>, res: Response, next: NextFunction) =>
-    Products.findOne({ _id: req.body._id, active: true, deletedAt: undefined })
+export const postSetCartItem = (request: Request<unknown, unknown, IPostSetCartItemPostData>, response: Response, next: NextFunction) =>
+    Products.findOne({ _id: request.body._id, active: true, deletedAt: undefined })
         .then((product) => {
             // not found, something happened
             if(!product){
-                req.flash('error', [t("ecommerce.product-not-found")]);
+                request.flash('error', [t("ecommerce.product-not-found")]);
                 return;
             }
-            req.flash('success', [t("ecommerce.product-added-to-cart")]);
+            request.flash('success', [t("ecommerce.product-added-to-cart")]);
             // check done before entering the route
-            return req.user!.cartItemSet(product, Number.parseInt(req.body.quantity));
+            return request.user!.cartItemSet(product, Number.parseInt(request.body.quantity));
         })
-        .then(() => res.redirect('/cart'))
+        .then(() => response.redirect('/cart'))
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

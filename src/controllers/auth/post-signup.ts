@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import Users from "../../models/users";
-import nodemailer from "../../utils/nodemailer";
+import { nodemailer } from "../../utils/nodemailer";
 import type { CastError } from "mongoose";
 import {databaseErrorConverter} from "../../utils/error-helpers";
 
@@ -16,11 +16,11 @@ export interface IPostSignupPostData {
 /**
  * Register new user
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: Response, next: NextFunction) => {
+export const postSignup = async (request: Request<unknown, unknown, IPostSignupPostData>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -31,7 +31,7 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
         imageUrl,
         password,
         passwordConfirm,
-    } = req.body;
+    } = request.body;
 
     /**
      * Login
@@ -46,33 +46,33 @@ export default async (req: Request<unknown, unknown, IPostSignupPostData>, res: 
         .then(({ success, data, errors= []}) => {
             if(!success){
                 // So the user doesn't need to fill the form again
-                req.flash('filled', [
+                request.flash('filled', [
                     email,
                     username,
                 ]);
-                req.flash('error', [
+                request.flash('error', [
                     t('login.invalid-data'),
                     ...errors
                 ]);
-                res.redirect('/account/signup');
+                response.redirect('/account/signup');
             }
             // Registration confirmation (no need to wait)
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
             nodemailer({
                     to: data!.email,
                     subject: 'Signup succeeded!',
                 },
                 "email-registration-confirm.ejs",
                 {
-                    ...res.locals,
+                    ...response.locals,
                     pageMetaTitle: 'Signup succeeded!',
                     pageMetaLinks: [],
                     name: data!.username,
                 })
             // Registration successful,
             // send to the login and
-            req.flash('success', [t('signup.registration-successful')]);
-            return res.redirect('/account/login');
+            request.flash('success', [t('signup.registration-successful')]);
+            return response.redirect('/account/login');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
 };

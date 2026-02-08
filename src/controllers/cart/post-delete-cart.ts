@@ -1,20 +1,20 @@
 import type {Request, Response, NextFunction} from "express";
 import type {CastError} from "mongoose";
-import {databaseErrorConverter} from "../../utils/error-helpers";
+import { databaseErrorConverter } from "../../utils/error-helpers";
 
 /**
  * Remove ALL items in the user cart
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request, res: Response, next: NextFunction) =>
+export const postDeleteCart = (request: Request, response: Response, next: NextFunction) =>
     // check done before entering the route
-    req.user!.cartRemove()
+    request.user!.cartRemove()
         .then(({success}) => {
             if (!success)
                 throw new Error("cartRemove error");
-            return res.redirect('/cart');
+            return response.redirect('/cart');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));

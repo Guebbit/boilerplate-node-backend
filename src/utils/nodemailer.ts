@@ -36,7 +36,7 @@ export const transporter = createTransport({
  * @param templateName
  * @param data
  */
-export default (request: SendMailOptions, templateName: string, data: Data): Promise<SentMessageInfo> =>
+export const nodemailer = (request: SendMailOptions, templateName: string, data: Data): Promise<SentMessageInfo> =>
     new Promise((resolve, reject) =>
         ejs.renderFile(
             // Retrieve the template

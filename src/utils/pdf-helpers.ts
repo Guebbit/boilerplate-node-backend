@@ -1,4 +1,5 @@
-import puppeteer, {type PDFOptions} from 'puppeteer';
+import puppeteer, { type PDFOptions } from 'puppeteer-core';
+import { getBrowserConfig } from "./puppeteer.config";
 
 /**
  * Creates a PDF from HTML content
@@ -9,7 +10,7 @@ import puppeteer, {type PDFOptions} from 'puppeteer';
  * @param options - puppeteer options
  * @return string | Error
  */
-export async function createPDF(
+export async function createPDF (
     htmlContent: string,
     filename = 'output.pdf',
     outputPath = 'src/data/files',
@@ -23,19 +24,19 @@ export async function createPDF(
             browser.newPage()
                 .then(page =>
                     page.setContent(htmlContent, {
-                        // Wait until there are no more than 0 network connections for at least 500 milliseconds:
-                        // The page is considered fully loaded when there has been a half-second period with no new network requests
-                        waitUntil: 'networkidle0'
-                    })
+                            // Wait until there are no more than 0 network connections for at least 500 milliseconds:
+                            // The page is considered fully loaded when there has been a half-second period with no new network requests
+                            waitUntil: 'networkidle0'
+                        })
                         .then(() =>
                             page.pdf({
-                                ...options,
-                                path: outputPath + '/' + filename,
-                            })
-                                .then(() =>
-                                    browser.close()
-                                        .finally(() => outputPath + '/' + filename)
-                                )
+                                    ...options,
+                                    path: outputPath + '/' + filename,
+                                })
+                                .then(async () => {
+                                    await browser.close();
+                                    return outputPath + '/' + filename;
+                                })
                         )
                 )
                 .catch((error) =>

@@ -12,16 +12,16 @@ export interface IPostDeleteCartItemPostData {
 /**
  * Delete target cart item
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostDeleteCartItemPostData>, res: Response, next: NextFunction) =>
+export const postDeleteCartItem = (request: Request<unknown, unknown, IPostDeleteCartItemPostData>, response: Response, next: NextFunction) =>
     // check done before entering the route
-    req.user!.cartItemRemoveById(req.body._id)
+    request.user!.cartItemRemoveById(request.body._id)
         .then(({success}) => {
             if (!success)
                 throw new Error("cartItemRemoveById error");
-            return res.redirect('/cart');
+            return response.redirect('/cart');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

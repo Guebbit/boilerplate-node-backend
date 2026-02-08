@@ -15,11 +15,11 @@ export interface IPostLoginPostData {
 /**
  * Authenticate user
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostLoginPostData>, res: Response, next: NextFunction) => {
+export const postLogin = (request: Request<unknown, unknown, IPostLoginPostData>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -27,7 +27,7 @@ export default (req: Request<unknown, unknown, IPostLoginPostData>, res: Respons
     const {
         email,
         password,
-    } = req.body;
+    } = request.body;
 
     /**
      * Login
@@ -35,17 +35,17 @@ export default (req: Request<unknown, unknown, IPostLoginPostData>, res: Respons
     return Users.login(email, password)
         .then(({ success, data, errors }) => {
             if(!success || !data){
-                req.flash('error', errors);
-                res.redirect('/account/login');
+                request.flash('error', errors);
+                response.redirect('/account/login');
                 return;
             }
             // User found and login is correct: Update and regenerate session
-            req.session.regenerate(() => {
-                req.session.user = data.toObject<IUser>();
-                req.session
+            request.session.regenerate(() => {
+                request.session.user = data.toObject<IUser>();
+                request.session
                     .save(() => {
-                        req.flash('success', [t('login.success')]);
-                        res.redirect('/')
+                        request.flash('success', [t('login.success')]);
+                        response.redirect('/')
                     });
             });
         })

@@ -15,30 +15,30 @@ export interface IGetResetConfirmParameters {
 /**
  * If token was provided (and valid), ask for new password
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetResetConfirmParameters }, res: Response, next: NextFunction) =>
+export const getResetConfirm = (request: Request & { params: IGetResetConfirmParameters }, response: Response, next: NextFunction) =>
     Users.findOne({
         // eslint-disable-next-line @typescript-eslint/naming-convention
-        'tokens.token': req.params.token
+        'tokens.token': request.params.token
     })
         .then((user) => {
             // not valid
             if (!user) {
-                req.flash('error', [t("reset.token-not-found")]);
-                res.redirect('/account/reset')
+                request.flash('error', [t("reset.token-not-found")]);
+                response.redirect('/account/reset')
                 return;
             }
             // valid, next step: change password
-            return res.render('account/reset', {
+            return response.render('account/reset', {
                 pageMetaTitle: "Reset Password",
                 pageMetaLinks: [
                     "/css/auth.css",
                     "/css/forms.css",
                 ],
-                token: req.params.token
+                token: request.params.token
             });
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

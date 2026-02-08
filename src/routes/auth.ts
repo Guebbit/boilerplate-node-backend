@@ -2,15 +2,15 @@ import express from 'express';
 import { isGuest, isAuth } from "../middlewares/authorizations";
 import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
-import getLogin from "../controllers/auth/get-login";
-import postLogin from "../controllers/auth/post-login";
-import getSignup from "../controllers/auth/get-signup";
-import postSignup from "../controllers/auth/post-signup";
-import getReset from "../controllers/auth/get-reset";
-import postReset from "../controllers/auth/post-reset";
-import getResetConfirm from "../controllers/auth/get-reset-confirm";
-import postResetConfirm from "../controllers/auth/post-reset-confirm";
-import getLogout from "../controllers/auth/get-logout";
+import { getLogin } from "../controllers/auth/get-login";
+import { postLogin } from "../controllers/auth/post-login";
+import { getSignup } from "../controllers/auth/get-signup";
+import { postSignup } from "../controllers/auth/post-signup";
+import { getReset } from "../controllers/auth/get-reset";
+import { postReset } from "../controllers/auth/post-reset";
+import { getResetConfirm } from "../controllers/auth/get-reset-confirm";
+import { postResetConfirm } from "../controllers/auth/post-reset-confirm";
+import { getLogout } from "../controllers/auth/get-logout";
 
 const router = express.Router();
 

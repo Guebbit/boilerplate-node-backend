@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import nodemailer from "../../utils/nodemailer";
+import { nodemailer } from "../../utils/nodemailer";
 import { ExtendedError } from "../../utils/error-helpers";
 
 /**
@@ -8,28 +8,28 @@ import { ExtendedError } from "../../utils/error-helpers";
  * using the current user cart,
  * then empty the cart
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request, res: Response, next: NextFunction) =>
-    req.user!.orderConfirm()
+export const postOrder = (request: Request, response: Response, next: NextFunction) =>
+    request.user!.orderConfirm()
         .then(({ success }) => {
             if(!success)
                 return next(new ExtendedError("500", 500, false, [t('ecommerce.order-creation-failure')]))
-            req.flash('success', [t('ecommerce.order-creation-success')]);
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            request.flash('success', [t('ecommerce.order-creation-success')]);
+
             nodemailer({
-                    to: req.user!.email,
+                    to: request.user!.email,
                     subject: 'Order confirmed',
                 },
                 "email-order-confirm.ejs",
                 {
-                    ...res.locals,
+                    ...response.locals,
                     pageMetaTitle: 'Order confirmed',
                     pageMetaLinks: [],
-                    name: req.user!.username
+                    name: request.user!.username
                 });
         })
         .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [message])))
-        .finally(() => res.redirect('/orders'))
+        .finally(() => response.redirect('/orders'))

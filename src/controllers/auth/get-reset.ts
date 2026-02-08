@@ -3,11 +3,11 @@ import type { Request, Response } from "express";
 /**
  * Get initial (empty) reset password page
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default (req: Request, res: Response) =>
-    res.render('account/reset', {
+export const getReset = (request: Request, response: Response) =>
+    response.render('account/reset', {
         pageMetaTitle: "Reset Password",
         pageMetaLinks: [
             "/css/auth.css",

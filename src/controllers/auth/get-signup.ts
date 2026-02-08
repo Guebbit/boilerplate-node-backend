@@ -4,16 +4,16 @@ import type { Request, Response } from 'express';
 /**
  * Registration form
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default (req: Request, res: Response) => {
+export const getSignup = (request: Request, response: Response) => {
     const [
         email,
         username,
-    ] = req.flash('filled');
+    ] = request.flash('filled');
 
-    return res.render('account/signup', {
+    return response.render('account/signup', {
         pageMetaTitle: "Signup",
         pageMetaLinks: [
             "/css/auth.css",

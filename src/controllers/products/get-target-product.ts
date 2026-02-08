@@ -16,18 +16,18 @@ export interface IGetTargetProductParameters {
  * Get (single) product page
  * Only admin can see non-active products
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetTargetProductParameters }, res: Response, next: NextFunction) =>
+export const getTargetProduct = (request: Request & { params: IGetTargetProductParameters }, response: Response, next: NextFunction) =>
     (
-        req.session.user?.admin ?
+        request.session.user?.admin ?
             // admin can search inactive or deleted products
-            Products.findById(req.params.productId) :
+            Products.findById(request.params.productId) :
             // NON admin can only search active and NOT (soft) deleted products
             Products.findOne({
-                _id: req.params.productId,
+                _id: request.params.productId,
                 active: true,
                 deletedAt: undefined
             })
@@ -37,9 +37,9 @@ export default (req: Request & { params: IGetTargetProductParameters }, res: Res
             if (!product)
                 return next(new ExtendedError("404", 404, false, [t("ecommerce.product-not-found")]));
             // add quantity of product in cart to product details page
-            const productsInCart = req.user ? await req.user.cartGet() : [];
+            const productsInCart = request.user ? await request.user.cartGet() : [];
             const { quantity = 0 } = productsInCart.find(cartProduct => cartProduct.product._id.equals(product._id as ObjectId)) ?? {};
-            res.render('products/details', {
+            response.render('products/details', {
                 pageMetaTitle: product.title,
                 pageMetaLinks: [
                     "/css/product.css"

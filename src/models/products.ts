@@ -42,7 +42,7 @@ export interface IProductModel extends Model<IProductDocument, unknown, IProduct
  */
 export const zodProductSchema =
     z.object({
-        id: z.number().nullish().optional(),
+        id: z.number().optional().nullable(),
         title: z
             .string({
                 required_error: t('ecommerce.product-invalid-title-required'),
@@ -56,10 +56,10 @@ export const zodProductSchema =
             .string({
                 required_error: t('ecommerce.product-invalid-image-required'),
             }),
-        active: z.boolean().nullish().optional(),
-        createdAt: z.date().nullish().optional(),
-        updatedAt: z.date().nullish().optional(),
-        deletedAt: z.date().nullish().optional(),
+        active: z.boolean().optional().nullable(),
+        createdAt: z.date().optional().nullable(),
+        updatedAt: z.date().optional().nullable(),
+        deletedAt: z.date().optional().nullable(),
     });
 
 /**

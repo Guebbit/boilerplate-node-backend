@@ -19,21 +19,21 @@ const paginationPageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_
 /**
  * Get all products
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default async (req: Request & { params: IGetAllProductsParameters }, res: Response, next: NextFunction) => {
+export const getAllProducts = async (request: Request & { params: IGetAllProductsParameters }, response: Response, next: NextFunction) => {
     // Empty where
     const whereCondition :FilterQuery<IProductDocument> = {};
 
     // current page
-    const paginationCurrentPage = Number.parseInt(req.params.page ?? "1");
+    const paginationCurrentPage = Number.parseInt(request.params.page ?? "1");
     // Query total records
     let paginationTotalItems = 0;
 
     // Only admin can see non-active and (soft) deleted products
-    if(!req.session.user?.admin){
+    if(!request.session.user?.admin){
         whereCondition.active = true;
         whereCondition.deletedAt = undefined;
     }
@@ -44,8 +44,8 @@ export default async (req: Request & { params: IGetAllProductsParameters }, res:
 
     // First retrieve total count (estimatedDocumentCount is faster but doesn't use filters)
     await Products.countDocuments(whereCondition)
-        .then(num => {
-            paginationTotalItems = num;
+        .then(number_ => {
+            paginationTotalItems = number_;
             // true search
             // eslint-disable-next-line unicorn/no-array-callback-reference
             return Products.find(whereCondition)
@@ -59,7 +59,7 @@ export default async (req: Request & { params: IGetAllProductsParameters }, res:
         // then show products (and pagination)
         .then(async (productListRaw) => {
             // Search for the correspondent product in the cart and add the quantity (in the cart) to the product info
-            const productsInCart = req.user ? await req.user.cartGet() : [];
+            const productsInCart = request.user ? await request.user.cartGet() : [];
             const productList = productListRaw.map(product => {
                 const { quantity = 0 } = productsInCart.find(cartProduct => cartProduct.product._id.equals(product._id as ObjectId)) ?? {};
                 return {
@@ -68,7 +68,7 @@ export default async (req: Request & { params: IGetAllProductsParameters }, res:
                 }
             });
             // render page
-            return res.render('products/list', {
+            return response.render('products/list', {
                 pageMetaTitle: 'All Products',
                 pageMetaLinks: [
                     "/css/product.css"

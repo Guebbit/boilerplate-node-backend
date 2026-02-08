@@ -3,11 +3,11 @@ import type { Request, Response } from 'express';
 /**
  * Login form
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default (req: Request, res: Response) =>
-    res.render('account/login', {
+export const getLogin = (request: Request, response: Response) =>
+    response.render('account/login', {
         pageMetaTitle: "Login",
         pageMetaLinks: [
             "/css/auth.css",

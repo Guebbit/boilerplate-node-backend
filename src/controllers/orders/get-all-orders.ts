@@ -9,20 +9,20 @@ import {databaseErrorConverter} from "../../utils/error-helpers";
  *
  * Add total quantity, total items and total price
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default async (req: Request, res: Response, next: NextFunction) =>
+export const getAllOrders = async (request: Request, response: Response, next: NextFunction) =>
     Orders.getAll([
         {
-            $match: req.session.user?.admin ? {} : {
-                userId: req.session.user?._id
+            $match: request.session.user?.admin ? {} : {
+                userId: request.session.user?._id
             }
         },
     ])
         .then((orderList) =>
-            res.render('orders/list', {
+            response.render('orders/list', {
                 pageMetaTitle: 'All Orders',
                 pageMetaLinks: [
                     "/css/order-list.css"

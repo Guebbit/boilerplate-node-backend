@@ -17,11 +17,11 @@ export interface IPostEditProductsPostData {
 
 /**
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default async (req: Request<unknown, unknown, IPostEditProductsPostData>, res: Response, next: NextFunction) => {
+export const postEditProduct = async (request: Request<unknown, unknown, IPostEditProductsPostData>, response: Response, next: NextFunction) => {
     /**
      * get POST data
      */
@@ -31,7 +31,7 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
         price = "0",
         description = "",
         active
-    } = req.body;
+    } = request.body;
 
     /**
      * Get URL of updated image it's on req.file,
@@ -39,7 +39,7 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
      * If no image was uploaded: it's empty
      * If image was uploaded: delete the old one (if any) on save
      */
-    const imageUrlRaw = (req.file ? req.file.path : (req.files ? (req.files as Express.Multer.File[])[0].path : ""));
+    const imageUrlRaw = (request.file ? request.file.path : (request.files ? (request.files as Express.Multer.File[])[0].path : ""));
     // remove "public" at root ("/" remain as root)
     const imageUrl = imageUrlRaw.replace((process.env.NODE_PUBLIC_PATH ?? "public"), "");
 
@@ -61,16 +61,16 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
         // Record was not created, so revert server changes by removing the uploaded file
         if (imageUrlRaw.length > 0)
             await deleteFile(imageUrlRaw);
-        req.flash('error', issues);
-        req.flash('filled', [
+        request.flash('error', issues);
+        request.flash('filled', [
             title,
             price,
             description,
             active,
         ]);
         if (!id || id === '')
-            return res.redirect('/products/add');
-        return res.redirect('/products/edit/' + id);
+            return response.redirect('/products/add');
+        return response.redirect('/products/edit/' + id);
     }
 
     /**
@@ -84,7 +84,7 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
             description,
             active: !!active,
         })
-            .then(() => res.redirect('/products/'))
+            .then(() => response.redirect('/products/'))
             .catch(async (error: CastError) => {
                 if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);
@@ -111,7 +111,7 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
                 // after saving the new product image, delete the old one
                 if(oldImageUrl !== imageUrl)
                     await deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + oldImageUrl);
-                res.redirect('/products/details/' + (newProduct.id as string))
+                response.redirect('/products/details/' + (newProduct.id as string))
             })
             .catch(async (error: CastError) => {
                 if (imageUrlRaw.length > 0)

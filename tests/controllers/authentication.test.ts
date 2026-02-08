@@ -82,7 +82,7 @@ describe('Auth Controller', () => {
          */
         return Users.findById(testUser.id)
             .then(user => user?.deleteOne())
-            // eslint-disable-next-line @typescript-eslint/no-misused-promises
+             
             .finally(() => mongoose.disconnect())
     });
 });

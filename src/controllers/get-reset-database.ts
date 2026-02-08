@@ -1,6 +1,6 @@
 import type {Request, Response} from "express";
 import mongoose, {Types} from "mongoose";
-import db from "../utils/db";
+import database from "../utils/database";
 import Users from "../models/users";
 import Products from "../models/products";
 import Orders from "../models/orders";
@@ -10,11 +10,11 @@ import Orders from "../models/orders";
  * Create example database
  * Could add "unzipper" to unzip images backup folder automatically but don't want to add unnecessary dependencies
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default (req: Request, res: Response) =>
-    db
+export const getResetDatabase = (request: Request, response: Response) =>
+    database
         .then(() => mongoose.connection.db?.dropDatabase())
         .then(() =>
             Promise.all([
@@ -143,4 +143,4 @@ export default (req: Request, res: Response) =>
                 }),
             ])
         )
-        .then(() => res.redirect('/'));
+        .then(() => response.redirect('/'));

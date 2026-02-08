@@ -164,28 +164,28 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
  */
 export const zodUserSchema =
     z.object({
-        id: z.number().nullish().optional(),
+        id: z.number().optional().nullable(),
         email: z
             .string({
-                required_error: t('signup.user-field-email-required'),
+                required_error: t('signup.user-field-email-required') as string,
             })
             .email(t('signup.user-field-email-invalid')),
         username: z
             .string({
-                required_error: t('signup.user-field-username-required'),
+                required_error: t('signup.user-field-username-required') as string,
             })
             .min(3, t('signup.user-field-username-min')),
         password: z
             .string({
-                required_error: t('signup.user-field-password-required'),
+                required_error: t('signup.user-field-password-required') as string,
             })
             .min(8, t('signup.user-field-password-min')),
-        imageUrl: z.string().nullish().optional(),
-        admin: z.boolean().nullish().optional(),
-        active: z.boolean().nullish().optional(),
-        createdAt: z.date().nullish().optional(),
-        updatedAt: z.date().nullish().optional(),
-        deletedAt: z.date().nullish().optional(),
+        imageUrl: z.string().optional().nullable(),
+        admin: z.boolean().optional().nullable(),
+        active: z.boolean().optional().nullable(),
+        createdAt: z.date().optional().nullable(),
+        updatedAt: z.date().optional().nullable(),
+        deletedAt: z.date().optional().nullable(),
     });
 
 /**
@@ -387,9 +387,9 @@ userSchema.methods.passwordChange = async function (password = "", passwordConfi
         .extend({
             passwordConfirm: z.string(),
         })
-        .superRefine(({passwordConfirm, password}, ctx) => {
+        .superRefine(({passwordConfirm, password}, context) => {
             if (passwordConfirm !== password) {
-                ctx.addIssue({
+                context.addIssue({
                     code: "custom",
                     message: t("signup.password-dont-match")
                 });
@@ -464,9 +464,9 @@ userSchema.static('signup', async function (
         .extend({
             passwordConfirm: z.string(),
         })
-        .superRefine(({passwordConfirm, password}, ctx) => {
+        .superRefine(({passwordConfirm, password}, context) => {
             if (passwordConfirm !== password)
-                ctx.addIssue({
+                context.addIssue({
                     code: "custom",
                     message: t("signup.password-dont-match")
                 });

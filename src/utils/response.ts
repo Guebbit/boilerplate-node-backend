@@ -38,18 +38,18 @@ export const generateSuccess = <T>(
 
 /**
  * Success Response wrapped and ready to be sent
- * @param res
+ * @param response
  * @param data
  * @param status
  * @param message
  */
 export const successResponse = <T>(
-    res: Response,
+    response: Response,
     data: T,
     status = 200,
     message = '',
 ) =>
-    res.status(status).json(generateSuccess(data, status, message)) as Response<IResponseSuccess<T>>
+    response.status(status).json(generateSuccess(data, status, message)) as Response<IResponseSuccess<T>>
 
 /**
  *
@@ -70,15 +70,15 @@ export const generateReject = (
 
 /**
  *
- * @param res
+ * @param response
  * @param status
  * @param message
  * @param errors
  */
 export const rejectResponse = (
-    res: Response,
+    response: Response,
     status = 400,
     message = '',
     errors: string[] = [],
 ) =>
-    res.status(status).json(generateReject(status, message, errors)) as Response<IResponseReject>
+    response.status(status).json(generateReject(status, message, errors)) as Response<IResponseReject>

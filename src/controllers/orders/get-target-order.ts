@@ -18,13 +18,13 @@ export interface IGetTargetOrderParameters {
 /**
  * Get target order info
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetTargetOrderParameters }, res: Response, next: NextFunction) => {
+export const getTargetOrder = (request: Request & { params: IGetTargetOrderParameters }, response: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
-    if(!Types.ObjectId.isValid(req.params.orderId))
+    if(!Types.ObjectId.isValid(request.params.orderId))
         return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
 
     /**
@@ -35,10 +35,10 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
         $match: {}
     };
     // If user is NOT admin, it's limited to his own orders
-    if(!req.session.user?.admin)
-        match.$match.userId = req.session.user?._id;
+    if(!request.session.user?.admin)
+        match.$match.userId = request.session.user?._id;
     // single out the order
-    match.$match._id = new Types.ObjectId(req.params.orderId);
+    match.$match._id = new Types.ObjectId(request.params.orderId);
 
     /**
      * Get info from database
@@ -47,7 +47,7 @@ export default (req: Request & { params: IGetTargetOrderParameters }, res: Respo
         .then((orders) => {
             if (orders.length === 0)
                 return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
-            return res.render('orders/details', {
+            return response.render('orders/details', {
                 pageMetaTitle: 'Order',
                 pageMetaLinks: [
                     "/css/order-details.css",

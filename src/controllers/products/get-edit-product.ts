@@ -16,19 +16,20 @@ export interface IGetEditProductParameters {
  * Get product insertion page
  * If productId is provided: it's an editing page
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
+ * @param next
  */
-export default (req: Request & { params: IGetEditProductParameters }, res: Response, next: NextFunction) => {
-    Products.findById(req.params.productId)
+export const getEditProduct = (request: Request & { params: IGetEditProductParameters }, response: Response, next: NextFunction) => {
+    Products.findById(request.params.productId)
         .then(product => {
             const [
                 title,
                 price,
                 description,
                 active,
-            ] = req.flash('filled');
-            res.render('products/edit', {
+            ] = request.flash('filled');
+            response.render('products/edit', {
                 pageMetaTitle: product ? "Edit product" : "Add product",
                 pageMetaLinks: [
                     "/css/forms.css"

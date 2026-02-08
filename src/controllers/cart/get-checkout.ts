@@ -6,15 +6,15 @@ import {databaseErrorConverter} from "../../utils/error-helpers";
 /**
  * Get cart of user to display the order data (and proceed to checkout)
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request, res: Response, next: NextFunction) =>
+export const getCheckout = (request: Request, response: Response, next: NextFunction) =>
     // check done before entering the route
-    req.user!.cartGet()
+    request.user!.cartGet()
         .then((productList) => {
-            res.render('checkout', {
+            response.render('checkout', {
                 pageMetaTitle: 'Checkout',
                 pageMetaLinks: [
                     "/css/cart.css",

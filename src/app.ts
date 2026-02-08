@@ -10,7 +10,7 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import {MulterError} from "multer";
 import {ExtendedError} from "./utils/error-helpers";
-import db from "./utils/db";
+import database from "./utils/database";
 import logger from "./utils/winston";
 import {getDirname} from "./utils/get-file-url";
 import {session, flash, userConnect} from "./middlewares/session";
@@ -43,7 +43,7 @@ app.set('views', './views');
  * Sync database then start server
  * AFTER sync we can use the database, since it is initialized
  */
-db
+database
     .then(() => i18next.init({
         // debug: true,
         lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
@@ -58,7 +58,7 @@ db
         // console.log("------------- SERVER START -------------");
         app.listen(process.env.NODE_PORT ?? 3000);
     })
-    // eslint-disable-next-line unicorn/prefer-top-level-await, no-console
+    // eslint-disable-next-line no-console
     .catch(error => console.log("------------- SERVER ERROR -------------", error));
 
 /**
@@ -69,8 +69,8 @@ app.use(
         path.join(getDirname(import.meta.url), '../' + (process.env.NODE_PUBLIC_PATH ?? "public")),
         {
             maxAge: process.env.NODE_ENV === 'production' ? (process.env.NODE_STATIC_MAXAGE ?? 0) : 0, // (expressed in seconds)
-            // setHeaders: (res) => {
-            //     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            // setHeaders: (response) => {
+            //     response.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
             // }
         }
     )
@@ -101,15 +101,15 @@ app.use(helmet({
 app.use(bodyParser.urlencoded({
     extended: true
 }));
-// app.use((req, res, next) => {
+// app.use((req, response, next) => {
 //     req.on("data", (chunk) => {
 //         console.log("------------- REQUEST CHUNK DATA -------------", chunk)
 //     });
 //     req.on("end", () => {
 //         console.log("------------- REQUEST END -------------")
-//         // res.statusCode = 200;
-//         // res.setHeader("Location", "/");
-//         // res.end();
+//         // response.statusCode = 200;
+//         // response.setHeader("Location", "/");
+//         // response.end();
 //         next();
 //     });
 // });
@@ -146,9 +146,9 @@ app.use(rateLimiter);
  * next() required to proceed in the chain,
  * otherwise response will be sent and connection with client closed
  */
-app.use((req, res, next) => {
+app.use((request, response, next) => {
     // eslint-disable-next-line no-console
-    console.log(`Entering URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+    console.log(`Entering URL: ${request.protocol}://${request.get('host')}${request.originalUrl}`);
     next();
 });
 
@@ -165,35 +165,35 @@ app.use('/error', errorRoutes);
  * Operational error: User redirected to error page explaining the problem
  * Critical errors: Error documented for later study, then current worker is suppressed so a new one is born (from cluster management)
  */
-app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request, res: Response, next: NextFunction) => {
+app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Request, response: Response, next: NextFunction) => {
     // If headers already has been sent (shouldn't happen) delegate to the default Express error handler
-    if (res.headersSent) {
+    if (response.headersSent) {
         next(error);
         return;
     }
 
     // An error (like a database one) could occur during session, so before flash got initialized. Just ignore and go to Home
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    if (!req.flash) {
-        res.status(200).redirect("/");
+
+    if (!request.flash) {
+        response.status(200).redirect("/");
         return;
     }
 
     // File upload error
     if (error instanceof MulterError) {
         logger.info(error);
-        req.flash('error-title', [error.code]);
-        req.flash('error-description', [error.name + ": " + error.message + " on " + (error.field ?? "")]);
-        res.status(400).redirect("/error/");
+        request.flash('error-title', [error.code]);
+        request.flash('error-description', [error.name + ": " + error.message + " on " + (error.field ?? "")]);
+        response.status(400).redirect("/error/");
         return;
     }
 
     // Check if the error is operational
     if (error instanceof ExtendedError && error.isOperational) {
         logger.info(error);
-        req.flash('error-title', [error.name]);
-        req.flash('error-description', error.errors);
-        res.status(error.httpCode).redirect("/error/");
+        request.flash('error-title', [error.name]);
+        request.flash('error-description', error.errors);
+        response.status(error.httpCode).redirect("/error/");
         return;
     }
 
@@ -202,9 +202,9 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request,
         ...error,
         stack: error instanceof ExtendedError ? error.stack : "",
     });
-    req.flash('error-title', ['UNKNOWN ERROR']);
-    req.flash('error-description', ['Something happened. Please contact support']);
-    res.status(500).redirect("/error/");
+    request.flash('error-title', ['UNKNOWN ERROR']);
+    request.flash('error-description', ['Something happened. Please contact support']);
+    response.status(500).redirect("/error/");
     // Terminate the current process signaling that it has exited with an error.
     process.exit(1);
 });
@@ -213,8 +213,8 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, req: Request,
 /**
  * Catch all routes
  */
-app.use('/', (req, res) => {
-    res.redirect("/error/page-not-found");
+app.use('/', (request, response) => {
+    response.redirect("/error/page-not-found");
 });
 
 /**

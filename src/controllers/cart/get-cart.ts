@@ -5,15 +5,15 @@ import {databaseErrorConverter} from "../../utils/error-helpers";
 /**
  * Get cart of current user
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request, res: Response, next: NextFunction) =>
+export const getCart = (request: Request, response: Response, next: NextFunction) =>
     // check done before entering the route
-    req.user!.cartGet()
+    request.user!.cartGet()
         .then((productList) =>
-            res.render('cart', {
+            response.render('cart', {
                 pageMetaTitle: 'Your Cart',
                 pageMetaLinks: [
                     "/css/cart.css",

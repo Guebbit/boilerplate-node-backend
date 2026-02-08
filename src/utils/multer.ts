@@ -21,12 +21,12 @@ export const fileStorage = multer.diskStorage({
      * Write file into destination
      * WARNING: Do not upload all files in a single directory. Create subdirectories with a maximum number of files?
      *
-     * @param req
+     * @param request
      * @param file
      * @param callback
      */
     destination: (
-        req: Request,
+        request: Request,
         file: Express.Multer.File,
         callback: (error: Error | null, destination: string) => void
     ) => {
@@ -40,12 +40,12 @@ export const fileStorage = multer.diskStorage({
     /**
      * Change file name
      *
-     * @param req
+     * @param request
      * @param file
      * @param callback
      */
     filename: (
-        req: Request,
+        request: Request,
         file: Express.Multer.File,
         callback: (error: Error | null, filename: string) => void
     ) => {
@@ -58,12 +58,12 @@ export const fileStorage = multer.diskStorage({
 /**
  * Whitelist for file type
  *
- * @param req
+ * @param request
  * @param file
  * @param callback
  */
 export const fileFilter = (
-    req: Request,
+    request: Request,
     file: Express.Multer.File,
     callback: FileFilterCallback
 ): void =>

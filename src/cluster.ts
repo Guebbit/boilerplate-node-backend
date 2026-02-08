@@ -9,7 +9,7 @@ import cluster from "node:cluster";
  * Cluster management
  * https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
  */
-if (cluster.isPrimary) {
+if (cluster.isPrimary && process.env.NODE_ENABLE_CLUSTERING === '1') {
 
     /**
      * Master monitor and manage workers
@@ -34,7 +34,7 @@ if (cluster.isPrimary) {
     /**
      * Workers execute the app module
      */
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
     import('./app');
 }
 

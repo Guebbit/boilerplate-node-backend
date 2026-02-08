@@ -15,16 +15,16 @@ export interface IPostDeleteProductPostData {
 /**
  * Delete a product
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res: Response, next: NextFunction) =>
-    Products.productRemoveById(req.body._id, !!req.body.hardDelete)
+export const postDeleteProduct = (request: Request<unknown, unknown, IPostDeleteProductPostData>, response: Response, next: NextFunction) =>
+    Products.productRemoveById(request.body._id, !!request.body.hardDelete)
         .then(({ success, message }) => {
             if(success)
-                req.flash('success', [message]);
-            res.redirect('/products/')
+                request.flash('success', [message]);
+            response.redirect('/products/')
         })
         .catch((error: CastError) => {
             if(error.message == "404" || error.kind === "ObjectId")
