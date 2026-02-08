@@ -7,7 +7,7 @@ import {
     ForeignKey,
     NonAttribute
 } from 'sequelize';
-import db from "../utils/db";
+import database from "../utils/database";
 import Orders from "./orders";
 import Products from "./products";
 
@@ -41,7 +41,7 @@ OrderItems.init(
         updatedAt: DataTypes.DATE,
     },
     {
-        sequelize: db,
+        sequelize: database,
         tableName: 'order-items'
     }
 );

@@ -2,7 +2,7 @@ import { Store } from "express-session";
 import { Sequelize } from "sequelize";
 
 declare module "connect-session-sequelize" {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
+     
     interface SequelizeStoreOptions {
         db: Sequelize;
         tableName?: string;

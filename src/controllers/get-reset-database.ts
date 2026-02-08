@@ -1,5 +1,5 @@
 import type {Request, Response} from "express";
-import db from '../utils/db';
+import database from '../utils/database';
 import Users from "../models/users";
 import Products from "../models/products";
 import Orders from "../models/orders";
@@ -13,10 +13,10 @@ import Tokens from "../models/tokens";
  * Create example database
  * Could add "unzipper" to unzip images backup folder automatically but don't want to add unnecessary dependencies
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default (req: Request, res: Response) =>
+export const getResetDatabase = (request: Request, response: Response) =>
     // Can't do db.drop() because I would incur in a session error
     // Can't do Promise.all because relations would break
     // Needs of clear timings in the insertion because of the various foreign key restrictions (due to relations)
@@ -27,7 +27,7 @@ export default (req: Request, res: Response) =>
         .then(() => Tokens.drop())
         .then(() => Users.drop())
         .then(() => Products.drop())
-        .then(() => db.sync())
+        .then(() => database.sync())
         .then(() =>
             Promise.all([
                 Users.create({
@@ -158,7 +158,7 @@ export default (req: Request, res: Response) =>
                 }),
             ])
         )
-        .then(() => res.redirect('/'))
+        .then(() => response.redirect('/'))
 
 
 

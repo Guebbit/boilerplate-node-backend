@@ -15,11 +15,11 @@ export interface IPostLoginPostData {
 /**
  * Authenticate user
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: Response, next: NextFunction) => {
+export const postLogin = async (request: Request<unknown, unknown, IPostLoginPostData>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -27,7 +27,7 @@ export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: R
     const {
         email,
         password,
-    } = req.body;
+    } = request.body;
 
     /**
      * Login
@@ -35,24 +35,24 @@ export default async (req: Request<unknown, unknown, IPostLoginPostData>, res: R
     return Users.login(email, password)
         .then(({success, data, errors}) => {
             if (!success || !data) {
-                req.flash('error', errors);
-                res.redirect('/account/login');
+                request.flash('error', errors);
+                response.redirect('/account/login');
                 return;
             }
             // User found and login is correct: Update and regenerate session
-            req.session.regenerate(() => {
-                req.session.user = data
-                req.flash('success', [t('login.success')]);
-                req.session
+            request.session.regenerate(() => {
+                request.session.user = data
+                request.flash('success', [t('login.success')]);
+                request.session
                     .save(() => {
-                        res.redirect('/')
+                        response.redirect('/')
                     });
             });
         })
         .catch((error: string[] | Error) => {
             if (!Array.isArray(error))
                 return next(new ExtendedError(error.message, 500))
-            req.flash('error', error);
-            res.redirect('/account/login');
+            request.flash('error', error);
+            response.redirect('/account/login');
         });
 };

@@ -6,7 +6,7 @@ import {
     CreationOptional,
     ForeignKey
 } from 'sequelize';
-import db from "../utils/db";
+import database from "../utils/database";
 import Products from "./products";
 import Carts from "./carts";
 
@@ -36,7 +36,7 @@ CartItems.init(
         updatedAt: DataTypes.DATE,
     },
     {
-        sequelize: db,
+        sequelize: database,
         tableName: 'cart-items'
     }
 );

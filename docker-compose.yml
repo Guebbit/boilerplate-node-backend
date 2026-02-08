@@ -1,0 +1,138 @@
+# Top level block where each service (container) is defined
+services:
+
+  # Single service (container). Name used as network hostname
+  app:
+    # (Optional) Custom container name
+    # container_name: boilerplate-node
+
+    # Build the image from the Dockerfile.
+    # The name will be derived from this folder and the container name
+    build:
+      context: .
+      # Better to keep the "Dockerfile" name and use folders to group files per container/service
+      dockerfile: .docker/Dockerfile
+
+    # Port mapping HOST:CONTAINER.
+    # The requests on the localhost:HOST port get forwarded to the port of the localhost:CONTAINER
+    ports:
+      - "3000:3000"
+
+    # Enviroment variables that get injected into the container at runtime
+    # If the .env variable change: a rebuild is necessary to apply the change.
+    environment:
+      NODE_DB_LOCALHOST: "database"
+      NODE_DB_DATABASE: "${NODE_DB_DATABASE:-mysql-node-boilerplate}"
+      NODE_DB_USERNAME: "${NODE_DB_USERNAME:-root}"
+      NODE_DB_PASSWORD: "${NODE_DB_PASSWORD:-}"
+      NODE_ENV: "development" # Node environment (production or development)
+
+    # Persist data.
+    # Compose manages the lifecycle of this volume when up/down
+    # WARNING: You muse consider UID/GID mapping when bind-mounting host folders.
+    #     Best practice is to run container processes as non-root
+    volumes:
+      # BIND-MOUNT volume (host path : container path). The container reads the live /app files directly from your host folder (hot reload).
+      #     Meaning: "Use the . folder (current) on my machine and make it appear at /app inside the container."
+      - .:/app
+      # ANONYMOUS volume managed by docker/podman mounted at /app/node_modules inside the container.
+      #     It preserves/install node_modules independently of the host folder.
+      #     Good for ephemeral per-container storage. Use when you don't care about managing the volume later
+      - /app/node_modules
+      # NAMED volume (need to be listed in the "volumes" section): same as the anonymous volume,
+      #     but easy to reuse, inspect, backup, control lifecycle and, more importantly, to SHARE between containers.
+      # - example-volume:/data/db
+
+    # Commands to be executed at RUNTIME when the container starts. Replaces Dockerfile commands (if any)
+    command: ["npm", "run", "dev"]
+
+    # Containers which this container depends on. Affects container start order.
+    depends_on:
+      - database
+
+    # Health check to verify the container is ready to accept traffic
+    # Inspect with "podman ps" or "podman inspect <container name>"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/valid/endpoint"]
+      # How often to run the test
+      interval: 2m
+      # How long to wait for the test to complete
+      timeout: 5s
+      # How many consecutive failures needed to consider the container unhealthy
+      retries: 3
+      # Initial grace period to wait before starting health check
+      start_period: 10s
+
+
+  # Another container
+  database:
+    # Same
+    # container_name: boilerplate-mysql
+
+    # Official mysql image, downloaded from the web as is
+    # from docker hub (if not already present locally)
+    image: mysql:9.6.0
+
+    # no (default): Don't restart the container automatically
+    # always: Always restart the container if it stops for any reason (even manual stop)
+    # unless-stopped: same as "always", unless the container is manually stopped
+    # on-failure: Restart the container if it exits with a non-zero exit code (on-failure:N to limit to N retries)
+    restart: unless-stopped
+
+    # deploy:
+    #     resources:
+    #         limits:
+    #             cpus: '1.0'
+    #             memory: 1G
+    #         reservations:
+    #             cpus: '0.5'
+    #             memory: 512M
+
+    # command: >
+    #    --performance-schema=OFF
+    #     --innodb-buffer-pool-size=128M
+    #     --innodb-log-file-size=32M
+    #     --innodb-flush-log-at-trx-commit=2
+    #     --max-connections=50
+
+    # Same
+    environment:
+      MYSQL_DATABASE: ${NODE_DB_DATABASE:-mysql-node-boilerplate}
+      MYSQL_ROOT_PASSWORD: ${NODE_DB_PASSWORD:-}
+      # Manually set to "yes" in .env when NODE_DB_PASSWORD is empty
+      MYSQL_ALLOW_EMPTY_PASSWORD: ${MYSQL_ALLOW_EMPTY_PASSWORD:-}
+
+    # Same
+    ports:
+      - "3306:3306"
+
+    # Same
+    volumes:
+      # NAMED volume. Store mongodb data on the host machine
+      - boilerplate_mysql_volume:/var/lib/mysql
+
+# Volumes that will be used by the containers (and will persist unless removed manually)
+volumes:
+  boilerplate_mysql_volume:
+
+# Commands:
+# podman ps: list running containers (-a for all)
+# podman compose build: Build the images (not the containers) (--no-cache to force fresh build)
+# podman compose up: Create (if needed) and start the containers (-d to run in background, stands for "detached")
+# podman compose down: Stop and remove the containers and the network (necessary before rebuilding)
+# podman logs <container name>: Show logs of a container
+# podman exec -it <container name> bash: Open a shell inside a container (-it stands for "interactive")
+
+
+# How to handle code changes (.dev, .hybrid and .prod yml files for more examples)
+# COPY (build-time): The code from host directory (es: this repo) is baked in the image.
+#       Changes require rebuilding the image to be reflected inside the container.
+#       Great for CI/production, slow for dev iteration.
+# BIND (runtime/dev-time): the container reads the code directly from the host directory (container sees host files live)
+#       Changes are immediate inside the container (no rebuild)
+#       Warning: rootless mode or mismatched UIDs can cause permissions problems (especially on Linux).
+# HYBRID: ????
+# Notes:
+# - Always add .dockerignore with node_modules, .env, etc to prevent slow builds and leaks
+# - Use service name (mongo) in Compose. Do NOT use localhost for service-to-service
+# - Check UID/GID or run container user mapping. You may need to chown files or run the container process as the host user

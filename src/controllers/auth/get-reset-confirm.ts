@@ -13,25 +13,25 @@ export interface IGetResetConfirmParameters {
 /**
  * If token was provided (and valid), ask for new password
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetResetConfirmParameters }, res: Response, next: NextFunction) =>
+export const getResetConfirm = (request: Request & { params: IGetResetConfirmParameters }, response: Response, next: NextFunction) =>
     Tokens.findOne({
         where: {
-            token: req.params.token
+            token: request.params.token
         }
     })
         .then(token => {
             // not valid
             if (!token) {
-                req.flash('error', [t("reset.token-not-found")]);
-                res.redirect('/account/reset')
+                request.flash('error', [t("reset.token-not-found")]);
+                response.redirect('/account/reset')
                 return;
             }
             // valid, next step: change password
-            return res.render('account/reset', {
+            return response.render('account/reset', {
                 pageMetaTitle: "Reset Password",
                 pageMetaLinks: [
                     "/css/auth.css",

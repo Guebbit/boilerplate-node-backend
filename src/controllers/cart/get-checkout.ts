@@ -5,21 +5,21 @@ import type {DatabaseError, ValidationError} from "sequelize";
 /**
  * Same as getCart, but with different template
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request, res: Response, next: NextFunction) =>
+export const getCheckout = (request: Request, response: Response, next: NextFunction) =>
     // check done before entering the route
-    req.user!.cartGet()
+    request.user!.cartGet()
         .then((cart) => {
-            res.render('checkout', {
+            response.render('checkout', {
                 pageMetaTitle: 'Checkout',
                 pageMetaLinks: [
                     "/css/cart.css",
                 ],
                 // @ts-expect-error difficulties with sequelize inferred types
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
                 productList: cart.CartItems ?? [],
             })
         })

@@ -20,15 +20,15 @@ export interface IGetTargetInvoiceParameters {
 /**
  * Get target invoice file and download it
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Response, next: NextFunction) => {
+export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceParameters }, response: Response, next: NextFunction) => {
     // get target order (must be owner or admin)
     Orders.getAll(
-        req.session.user?.admin ? "*" : req.session.user?.id,
-        req.params.orderId
+        request.session.user?.admin ? "*" : request.session.user?.id,
+        request.params.orderId
     )
         .then((orders) => {
             if(orders.length  === 0){
@@ -70,7 +70,7 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                 path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
                 // Populate the template
                 {
-                    ...res.locals,
+                    ...response.locals,
                     pageMetaTitle: 'Order',
                     pageMetaLinks: [
                         "/css/order-details.css",
@@ -87,20 +87,20 @@ export default (req: Request & { params: IGetTargetInvoiceParameters }, res: Res
                              * Download file
                              */
                             // PRELOADING data
-                            fs.readFile(invoicePath, (err, data) => {
-                                if(err)
-                                    throw err;
+                            fs.readFile(invoicePath, (error_, data) => {
+                                if(error_)
+                                    throw error_;
                                 // return next(new ExtendedError(err.message, 500))
-                                res.setHeader('Content-Type', 'application/pdf');
-                                res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
+                                response.setHeader('Content-Type', 'application/pdf');
+                                response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
                                 // send data (with custom headers)
-                                res.send(data);
+                                response.send(data);
                             });
                             // STREAMING data (alternative)
                             // const file = fs.createReadStream(invoicePath);
-                            // res.setHeader('Content-Type', 'application/pdf');
-                            // res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
-                            // file.pipe(res);
+                            // response.setHeader('Content-Type', 'application/pdf');
+                            // response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
+                            // file.pipe(response);
                         })
                 })
         })

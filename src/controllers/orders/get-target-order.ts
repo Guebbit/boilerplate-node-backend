@@ -6,7 +6,7 @@ import type {DatabaseError, ValidationError} from "sequelize";
 
 
 /**
- * 
+ *
  */
 export interface IGetTargetOrderParameters {
     orderId?: string,
@@ -15,26 +15,26 @@ export interface IGetTargetOrderParameters {
 /**
  * Get target order info
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetTargetOrderParameters }, res: Response, next: NextFunction) => {
+export const getTargetOrder = (request: Request & { params: IGetTargetOrderParameters }, response: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
-    if(!req.params.orderId)
+    if(!request.params.orderId)
         return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
 
     // get target order (must be owner or admin)
     Orders.getAll(
-        req.session.user?.admin ? "*" : req.session.user?.id,
-        req.params.orderId
+        request.session.user?.admin ? "*" : request.session.user?.id,
+        request.params.orderId
     )
         .then((orders) => {
             if(orders.length  === 0){
                 next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
                 return;
             }
-            res.render('orders/details', {
+            response.render('orders/details', {
                 pageMetaTitle: 'Order',
                 pageMetaLinks: [
                     "/css/order-details.css",

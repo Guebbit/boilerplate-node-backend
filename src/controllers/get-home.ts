@@ -3,11 +3,11 @@ import type { Request, Response } from "express";
 /**
  * Homepage
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default (req: Request, res: Response) =>
-    res.render('home', {
+export const getHome = (request: Request, response: Response) =>
+    response.render('home', {
         pageMetaTitle: 'Home',
         pageMetaLinks: [],
     })

@@ -10,7 +10,7 @@ import {
     NonAttribute,
     WhereOptions
 } from 'sequelize';
-import db from "../utils/db";
+import database from "../utils/database";
 import Users from "./users";
 import Products from "./products";
 import OrderItems from "./order-items";
@@ -113,7 +113,7 @@ Orders.init(
         },
     },
     {
-        sequelize: db,
+        sequelize: database,
         tableName: 'orders'
     }
 );

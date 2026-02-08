@@ -5,7 +5,7 @@ import {
     InferCreationAttributes,
     Model
 } from 'sequelize';
-import db from "../utils/db";
+import database from "../utils/database";
 
 class Sessions extends Model<InferAttributes<Sessions>, InferCreationAttributes<Sessions>> {
     declare sid: CreationOptional<number>;
@@ -23,7 +23,7 @@ Sessions.init(
         data: DataTypes.STRING(50_000)
     },
     {
-        sequelize: db,
+        sequelize: database,
         tableName: 'sessions'
     }
 );

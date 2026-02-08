@@ -7,7 +7,7 @@
 import expressSession from "express-session";
 import initSessionSequelize from "connect-session-sequelize";
 import connectFlash from "connect-flash";
-import db from '../utils/db';
+import database from '../utils/database';
 import type { Request, Response, NextFunction } from "express";
 import Users from "../models/users";
 import { generateToken } from "./csrf";
@@ -24,7 +24,7 @@ const SequelizeStore = initSessionSequelize(expressSession.Store);
  *
  */
 export const store = new SequelizeStore({
-    db,
+    db: database,
     // The interval at which to clean up expired sessions in milliseconds.
     // @ts-expect-error difficulties with sequelize inferred types
     checkExpirationInterval: 900_000,
@@ -61,35 +61,35 @@ export const session = expressSession({
 export const flash = connectFlash();
 
 /**
- * Store user model in req (don't like it, but seems the standard since session can't store the model)
- * @param req
- * @param res
+ * Store user model in request (don't like it, but seems the standard since session can't store the model)
+ * @param request
+ * @param response
  * @param next
  */
-export const userConnect = (req: Request, res: Response, next: NextFunction) => {
+export const userConnect = (request: Request, response: Response, next: NextFunction) => {
     // it will be requested only on certain POST requests, but it is not a problem to put it here
-    res.locals.csrfToken = generateToken(req)
+    response.locals.csrfToken = generateToken(request)
     // flash messages
-    res.locals.errorMessages = req.flash('error');
-    res.locals.successMessages = req.flash('success');
+    response.locals.errorMessages = request.flash('error');
+    response.locals.successMessages = request.flash('success');
     // only authorized
-    if(!req.session.user){
-        res.locals.currentUser = {};
-        res.locals.isAuthenticated = false;
-        res.locals.isAdmin = false;
+    if(!request.session.user){
+        response.locals.currentUser = {};
+        response.locals.isAuthenticated = false;
+        response.locals.isAdmin = false;
         next();
         return;
     }
-    return Users.findByPk(req.session.user.id)
+    return Users.findByPk(request.session.user.id)
         .then((user) => {
             if(!user)
-                return req.session.destroy(() => res.redirect('/'));
+                return request.session.destroy(() => response.redirect('/'));
             // to show user data through the UI
-            res.locals.currentUser = req.session.user;
-            res.locals.isAuthenticated = true;
-            res.locals.isAdmin = req.session.user?.admin;
+            response.locals.currentUser = request.session.user;
+            response.locals.isAuthenticated = true;
+            response.locals.isAdmin = request.session.user?.admin;
             // user model
-            req.user = user;
+            request.user = user;
             // return user;
         })
         // proceed

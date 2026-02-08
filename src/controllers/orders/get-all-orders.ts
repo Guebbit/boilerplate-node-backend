@@ -7,16 +7,16 @@ import type {DatabaseError, ValidationError} from "sequelize";
  * Get ALL orders info
  * Only of current user if NOT admin
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request, res: Response, next: NextFunction) =>
+export const getAllOrders = (request: Request, response: Response, next: NextFunction) =>
     Orders.getAll(
-        req.session.user?.admin ? "*" : req.session.user?.id
+        request.session.user?.admin ? "*" : request.session.user?.id
     )
         .then((orders) =>
-            res.render('orders/list', {
+            response.render('orders/list', {
                 pageMetaTitle: 'Your Orders',
                 pageMetaLinks: [
                     "/css/order-list.css",

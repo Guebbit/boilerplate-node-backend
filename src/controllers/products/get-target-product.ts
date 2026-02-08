@@ -14,23 +14,23 @@ export interface IGetTargetProductParameters {
 /**
  * Get single product details
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetTargetProductParameters }, res: Response, next: NextFunction) =>
-    (req.session.user?.admin ? Products.scope("admin") : Products)
-        .findByPk(req.params.productId)
+export const getTargetProduct = (request: Request & { params: IGetTargetProductParameters }, response: Response, next: NextFunction) =>
+    (request.session.user?.admin ? Products.scope("admin") : Products)
+        .findByPk(request.params.productId)
         .then(async (product) => {
             if (!product)
                 return next(new ExtendedError("404", 404, true, [t("ecommerce.product-not-found")]));
             // find the quantity of the product in the current user's cart
-            const cart = await req.user!.cartGet();
+            const cart = await request.user!.cartGet();
             // @ts-expect-error difficulties with sequelize inferred types
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+
             const cartItem = cart.CartItems?.find(item => item.ProductId === product.id);
             // alternative
-            // const cartItem = await req.user!.cartGet()
+            // const cartItem = await request.user!.cartGet()
             //     .then((cart) =>
             //         CartItems.findOne({
             //             where: {
@@ -39,14 +39,14 @@ export default (req: Request & { params: IGetTargetProductParameters }, res: Res
             //             },
             //         })
             //     )
-            res.render("products/details", {
+            response.render("products/details", {
                 pageMetaTitle: product.dataValues.title,
                 pageMetaLinks: [
                     "/css/product.css"
                 ],
                 product: {
                     ...product.dataValues,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+
                     quantity: cartItem?.quantity ?? 0,
                 },
             });

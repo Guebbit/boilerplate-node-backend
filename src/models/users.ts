@@ -24,7 +24,7 @@ import {randomBytes} from "node:crypto";
 import bcrypt from "bcrypt";
 import {z} from "zod";
 import {t} from "i18next";
-import db from "../utils/db";
+import database from "../utils/database";
 import {generateSuccess, generateReject} from "../utils/response";
 import Orders from "./orders";
 import Tokens from "./tokens";
@@ -274,9 +274,9 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
             .extend({
                 passwordConfirm: z.string(),
             })
-            .superRefine(({passwordConfirm, password}, ctx) => {
+            .superRefine(({passwordConfirm, password}, context) => {
                 if (passwordConfirm !== password) {
-                    ctx.addIssue({
+                    context.addIssue({
                         code: "custom",
                         message: t("signup.password-dont-match")
                     });
@@ -335,9 +335,9 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
             .extend({
                 passwordConfirm: z.string(),
             })
-            .superRefine(({passwordConfirm, password}, ctx) => {
+            .superRefine(({passwordConfirm, password}, context) => {
                 if (passwordConfirm !== password)
-                    ctx.addIssue({
+                    context.addIssue({
                         code: "custom",
                         message: t("signup.password-dont-match")
                     });
@@ -509,7 +509,7 @@ Users.init(
         /**
          * database connection
          */
-        sequelize: db,
+        sequelize: database,
 
         /**
          * Table name in the database
@@ -599,7 +599,7 @@ Users.init(
  */
 export const zodUserSchema =
     z.object({
-        id: z.number().nullish().optional(),
+        id: z.number().optional().nullable(),
         email: z
             .string({
                 required_error: t('signup.user-field-email-required'),
@@ -615,12 +615,12 @@ export const zodUserSchema =
                 required_error: t('signup.user-field-password-required'),
             })
             .min(8, t('signup.user-field-password-min')),
-        imageUrl: z.string().nullish().optional(),
-        admin: z.boolean().nullish().optional(),
-        active: z.boolean().nullish().optional(),
-        createdAt: z.date().nullish().optional(),
-        updatedAt: z.date().nullish().optional(),
-        deletedAt: z.date().nullish().optional(),
+        imageUrl: z.string().optional().nullable(),
+        admin: z.boolean().optional().nullable(),
+        active: z.boolean().optional().nullable(),
+        createdAt: z.date().optional().nullable(),
+        updatedAt: z.date().optional().nullable(),
+        deletedAt: z.date().optional().nullable(),
     });
 
 export default Users;

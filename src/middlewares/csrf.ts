@@ -23,10 +23,10 @@ export const {
     /**
      * Normally it would retrieve the token from the headers,
      * but I have it on the request body.
-     * @param req
+     * @param request
      */
-    getTokenFromRequest: (req) =>
-        (req.body as {CSRFToken: string}).CSRFToken,
+    getTokenFromRequest: (request) =>
+        (request.body as {CSRFToken: string}).CSRFToken,
 
     // /**
     //  *
@@ -35,28 +35,28 @@ export const {
     //
     // /**
     //  * Used to retrieve the token from state.
-    //  * @param req
+    //  * @param request
     //  */
-    // getTokenFromState: (req) => {
-    //     return req.session.csrfToken;
+    // getTokenFromState: (request) => {
+    //     return request.session.csrfToken;
     // },
     //
     // /**
     //  * Used to retrieve the token submitted by the request from headers
-    //  * @param req
+    //  * @param request
     //  */
-    // getTokenFromRequest: (req) =>  {
-    //     return req.headers['x-csrf-token'];
+    // getTokenFromRequest: (request) =>  {
+    //     return request.headers['x-csrf-token'];
     // },
     //
     // /**
     //  * Used to store the token in state.
     //  *
-    //  * @param req
+    //  * @param request
     //  * @param token
     //  */
-    // storeTokenInState: (req, token) => {
-    //     req.session.csrfToken = token;
+    // storeTokenInState: (request, token) => {
+    //     request.session.csrfToken = token;
     // },
     //
     // /**

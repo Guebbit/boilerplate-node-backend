@@ -16,7 +16,7 @@ import {
 } from 'sequelize';
 
 
-import db from "../utils/db";
+import database from "../utils/database";
 import Users from "./users";
 import Products from "./products";
 import CartItems from "./cart-items";
@@ -90,7 +90,7 @@ Carts.init(
         updatedAt: DataTypes.DATE,
     },
     {
-        sequelize: db,
+        sequelize: database,
         tableName: 'cart'
     }
 );

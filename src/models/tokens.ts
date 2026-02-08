@@ -6,7 +6,7 @@ import {
     Model,
     BelongsToGetAssociationMixin
 } from 'sequelize';
-import db from "../utils/db";
+import database from "../utils/database";
 import Users from "./users";
 
 class Tokens extends Model<InferAttributes<Tokens>, InferCreationAttributes<Tokens>> {
@@ -42,7 +42,7 @@ Tokens.init(
         },
     },
     {
-        sequelize: db,
+        sequelize: database,
         tableName: 'tokens'
     }
 );

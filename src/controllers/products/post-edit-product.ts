@@ -20,11 +20,11 @@ export interface IPostEditProductsPostData {
  * Create new product
  * If productId is provided: Edit target product
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default async (req: Request<unknown, unknown, IPostEditProductsPostData>, res: Response, next: NextFunction) => {
+export const postEditProduct = async (request: Request<unknown, unknown, IPostEditProductsPostData>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -35,13 +35,13 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
         price = "0",
         description = "",
         active
-    } = req.body;
+    } = request.body;
 
     /**
-     * Get URL of updated image it's on req.file,
+     * Get URL of updated image it's on request.file,
      * but it's good to know that it could be within an array
      */
-    const imageUrlRaw = (req.file ? req.file.path : (req.files ? (req.files as Express.Multer.File[])[0].path : ""));
+    const imageUrlRaw = (request.file ? request.file.path : (request.files ? (request.files as Express.Multer.File[])[0].path : ""));
     // remove "public" at root ("/" remain as root)
     const imageUrl = imageUrlRaw.replace("public", "");
 
@@ -63,16 +63,16 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
         // Record was not created, so revert server changes by removing the uploaded file
         if(imageUrlRaw.length > 0)
             await deleteFile(imageUrlRaw);
-        req.flash('error', issues);
-        req.flash('filled', [
+        request.flash('error', issues);
+        request.flash('filled', [
             title,
             price,
             description,
             active,
         ]);
         if (!id || id === '')
-            return res.redirect('/products/add');
-        return res.redirect('/products/edit/' + id);
+            return response.redirect('/products/add');
+        return response.redirect('/products/edit/' + id);
     }
 
     /**
@@ -86,7 +86,7 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
             description,
             active: !!active,
         })
-            .then(() => res.redirect('/products/'))// res.redirect('/products/details/' + product.id)
+            .then(() => response.redirect('/products/'))// response.redirect('/products/details/' + product.id)
             .catch(async (error: Error | ValidationError | DatabaseError) => {
                 if(imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);
@@ -97,7 +97,7 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
      */
     else
         (
-            req.session.user?.admin ?
+            request.session.user?.admin ?
                 Products.scope("admin") :
                 Products
         ).findByPk(id)
@@ -123,7 +123,7 @@ export default async (req: Request<unknown, unknown, IPostEditProductsPostData>,
                     next(new ExtendedError("404", 404, false, [t("ecommerce.product-not-found")]));
                     return;
                 }
-                return res.redirect('/products/details/' + product.id);
+                return response.redirect('/products/details/' + product.id);
             })
             .catch(async (error: Error | ValidationError | DatabaseError) => {
                 if(imageUrlRaw.length > 0)

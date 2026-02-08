@@ -1,7 +1,7 @@
 import type {NextFunction, Request, Response} from 'express';
 import {t} from "i18next";
 import Users from "../../models/users";
-import nodemailer from "../../utils/nodemailer";
+import { nodemailer } from "../../utils/nodemailer";
 import {databaseErrorConverter} from "../../utils/error-helpers";
 import type {DatabaseError, ValidationError} from "sequelize";
 
@@ -15,40 +15,40 @@ export interface IPostResetPostData {
 /**
  * Ask to guest if they want to reset the password
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostResetPostData>, res: Response, next: NextFunction) =>
+export const postReset = (request: Request<unknown, unknown, IPostResetPostData>, response: Response, next: NextFunction) =>
     Users.findOne({
         where: {
-            email: req.body.email
+            email: request.body.email
         }
     })
         .then((user) => {
             if (!user) {
-                req.flash('error', [t('reset.email-not-found')]);
-                res.redirect('/account/reset');
+                request.flash('error', [t('reset.email-not-found')]);
+                response.redirect('/account/reset');
                 return;
             }
             return user.tokenAdd("password", 86_400_000)
                 .then(token => {
                     // Send token (no need to wait)
-                    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
                     nodemailer({
-                            to: req.body.email,
+                            to: request.body.email,
                             subject: 'Password reset',
                         },
                         "emailResetRequest.ejs",
                         {
-                            ...res.locals,
+                            ...response.locals,
                             pageMetaTitle: 'Password reset requested',
                             pageMetaLinks: [],
                             name: user.username,
                             token,
                         });
-                    req.flash('success', [t('reset.email-sent')]);
-                    res.redirect('/account/reset');
+                    request.flash('success', [t('reset.email-sent')]);
+                    response.redirect('/account/reset');
                 })
         })
         .catch((error: Error | DatabaseError | ValidationError) => next(databaseErrorConverter(error)))

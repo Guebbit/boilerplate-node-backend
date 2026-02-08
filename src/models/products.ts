@@ -9,7 +9,7 @@ import {
 } from 'sequelize';
 import { z } from "zod";
 import { t } from "i18next";
-import db from "../utils/db";
+import database from "../utils/database";
 import Carts from "./carts";
 import CartItems from "./cart-items";
 import {generateReject, generateSuccess, IResponseReject, IResponseSuccess} from "../utils/response";
@@ -20,7 +20,7 @@ import {deleteFile} from "../utils/filesystem-helpers";
  */
 export const zodProductSchema =
     z.object({
-        id: z.number().nullish().optional(),
+        id: z.number().optional().nullable(),
         title: z
             .string({
                 required_error: t('ecommerce.product-field-title-required'),
@@ -34,10 +34,10 @@ export const zodProductSchema =
             .string({
                 required_error: t('ecommerce.product-field-image-required'),
             }),
-        active: z.boolean().nullish().optional(),
-        createdAt: z.date().nullish().optional(),
-        updatedAt: z.date().nullish().optional(),
-        deletedAt: z.date().nullish().optional(),
+        active: z.boolean().optional().nullable(),
+        createdAt: z.date().optional().nullable(),
+        updatedAt: z.date().optional().nullable(),
+        deletedAt: z.date().optional().nullable(),
     });
 
 /**
@@ -172,7 +172,7 @@ Products.init(
         },
     },
     {
-        sequelize: db,
+        sequelize: database,
         tableName: 'products',
         paranoid: true,
         defaultScope: {

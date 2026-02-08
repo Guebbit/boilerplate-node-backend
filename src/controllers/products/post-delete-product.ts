@@ -15,18 +15,18 @@ export interface IPostDeleteProductPostData {
 /**
  * Delete a product
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostDeleteProductPostData>, res: Response, next: NextFunction) =>
+export const postDeleteProduct = (request: Request<unknown, unknown, IPostDeleteProductPostData>, response: Response, next: NextFunction) =>
     // isAdmin protected route: user is admin
-    Products.productRemoveById(req.body.id, !!req.body.hardDelete)
+    Products.productRemoveById(request.body.id, !!request.body.hardDelete)
         .then(({ success, message, errors }) => {
             if(success)
-                req.flash('success', [message]);
+                request.flash('success', [message]);
             else
-                req.flash('error', errors);
-            res.redirect('/products/')
+                request.flash('error', errors);
+            response.redirect('/products/')
         })
         .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))

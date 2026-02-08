@@ -19,45 +19,45 @@ const paginationPageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_
 /**
  * Get all products page
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request & { params: IGetAllProductsParameters }, res: Response, next: NextFunction) => {
+export const getAllProducts = (request: Request & { params: IGetAllProductsParameters }, response: Response, next: NextFunction) => {
     // Empty where
     const whereCondition: WhereOptions = {};
 
     // current page
-    const paginationCurrentPage = Number.parseInt(req.params.page ?? "1");
+    const paginationCurrentPage = Number.parseInt(request.params.page ?? "1");
     // Query total records
     let paginationTotalItems = 0;
 
     // // Commented because we have scopes to restrict non-admin vision
-    // if (!req.session.user?.admin) {
+    // if (!request.session.user?.admin) {
     //     whereCondition.active = true;
     //     whereCondition.deletedAt = null;
     // }
 
     // // Add filter conditions
     // // Alternative: Products.scope("lowCost").findAll()
-    // if (req.params.maxPrice)
+    // if (request.params.maxPrice)
     //     whereCondition.price = {
-    //         [Op.lt]: Number.parseInt(req.params.maxPrice)
+    //         [Op.lt]: Number.parseInt(request.params.maxPrice)
     //     };
 
     // First retrieve total count
     Products
-        .scope(req.session.user?.admin ? "admin" : undefined)
+        .scope(request.session.user?.admin ? "admin" : undefined)
         .count({
             where: whereCondition
         })
-        .then(async (num) => {
-            const cart = req.user ? await req.user.cartGet() : { id: undefined };
-            paginationTotalItems = num;
+        .then(async (number_) => {
+            const cart = request.user ? await request.user.cartGet() : { id: undefined };
+            paginationTotalItems = number_;
             // true search
             return Products
                 // Only admin can see non-active and (soft) deleted products
-                .scope(req.session.user?.admin ? "admin" : undefined)
+                .scope(request.session.user?.admin ? "admin" : undefined)
                 .findAll({
                     where: whereCondition,
                     offset: (paginationCurrentPage - 1) * paginationPageSize,
@@ -76,16 +76,16 @@ export default (req: Request & { params: IGetAllProductsParameters }, res: Respo
         .then((productListRaw) => {
             const productList = productListRaw.map(product => {
                 // @ts-expect-error difficulties with sequelize inferred types
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unnecessary-condition, @typescript-eslint/no-unsafe-member-access
+
                 const { quantity = 0 } = product.CartItems?.[0]?.dataValues ?? {};
                 return {
                     ...product.dataValues,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
                     quantity
                 }
             });
 
-            res.render('products/list', {
+            response.render('products/list', {
                 pageMetaTitle: 'All Products',
                 pageMetaLinks: [
                     "/css/product.css"

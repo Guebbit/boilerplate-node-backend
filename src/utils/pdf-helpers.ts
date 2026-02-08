@@ -1,6 +1,7 @@
-import puppeteer, {type PDFOptions} from 'puppeteer';
-import {databaseErrorConverter} from "./error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import puppeteer, { type PDFOptions } from 'puppeteer-core';
+import { databaseErrorConverter } from "./error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
+import { getBrowserConfig } from "./puppeteer.config";
 
 /**
  * Creates a PDF from HTML content
@@ -11,7 +12,7 @@ import type {DatabaseError, ValidationError} from "sequelize";
  * @param options - puppeteer options
  * @return string | Error
  */
-export async function createPDF(
+export async function createPDF (
     htmlContent: string,
     filename = 'output.pdf',
     outputPath = 'src/data/files',
@@ -19,21 +20,22 @@ export async function createPDF(
     options: PDFOptions = {
         format: 'A4',
         printBackground: true
-    }) {
-    return puppeteer.launch()
+    }
+) {
+    return puppeteer.launch(getBrowserConfig())
         .then(browser =>
             browser.newPage()
                 .then(page =>
                     page.setContent(htmlContent, {
-                        // Wait until there are no more than 0 network connections for at least 500 milliseconds:
-                        // The page is considered fully loaded when there has been a half-second period with no new network requests
-                        waitUntil: 'networkidle0'
-                    })
+                            // Wait until there are no more than 0 network connections for at least 500 milliseconds:
+                            // The page is considered fully loaded when there has been a half-second period with no new network requests
+                            waitUntil: 'networkidle0'
+                        })
                         .then(() =>
                             page.pdf({
-                                ...options,
-                                path: outputPath + '/' + filename,
-                            })
+                                    ...options,
+                                    path: outputPath + '/' + filename,
+                                })
                                 .then(async () => {
                                     await browser.close();
                                     return outputPath + '/' + filename;
@@ -44,5 +46,5 @@ export async function createPDF(
                     await browser.close();
                     throw databaseErrorConverter(error);
                 })
-        )
+        );
 }

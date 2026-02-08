@@ -4,6 +4,10 @@
 - Link to services using .env variables (es: email responders are a different kind of server)
 - Cron job needed to clean expired tokens in the table "tokens" (or in the users data if nosql)
 
+# .dev docker instructions
+ - podman compose build --no-cache
+ - podman compose up -d
+
 # Useful info
 - https://sequelize.org/docs/v6/core-concepts/model-basics/
 - https://sequelize.org/docs/v6/other-topics/typescript/
@@ -12,6 +16,7 @@
 - https://github.com/melardev/ApiEcomSequelizeExpress/blob/master/models/product.model.js
 
 # TODO
+- Test PUPPETEER (new createPDF)
 - Connect-flash could show messages after a reload, there is an async problem in some cases
   - https://github.com/mweibel/connect-session-sequelize/issues/20
   - https://github.com/mweibel/connect-session-sequelize/issues/7

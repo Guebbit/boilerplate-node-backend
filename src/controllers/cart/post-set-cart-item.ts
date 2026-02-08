@@ -16,19 +16,19 @@ export interface IPostSetCartItemPostData {
  * Add a product (with its quantity) to cart, check availability, etc
  * Create a CartItem row.
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export default (req: Request<unknown, unknown, IPostSetCartItemPostData>, res: Response, next: NextFunction) =>
-    Products.findByPk(req.body.id)
+export const postSetCartItem = (request: Request<unknown, unknown, IPostSetCartItemPostData>, response: Response, next: NextFunction) =>
+    Products.findByPk(request.body.id)
         .then(async (product) => {
             // not found, something happened
             if (!product)
                 return next(new ExtendedError("404", 404, false, [t("ecommerce.product-not-found")]));
-            req.flash('success', [t("ecommerce.product-added-to-cart")]);
+            request.flash('success', [t("ecommerce.product-added-to-cart")]);
             // check done before entering the route
-            await req.user!.cartItemSet(product, Number.parseInt(req.body.quantity));
-            res.redirect('/cart')
+            await request.user!.cartItemSet(product, Number.parseInt(request.body.quantity));
+            response.redirect('/cart')
         })
         .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))
