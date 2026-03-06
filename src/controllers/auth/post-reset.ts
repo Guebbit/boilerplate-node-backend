@@ -3,14 +3,8 @@ import { t } from "i18next";
 import Users from "../../models/users";
 import { nodemailer } from "../../utils/nodemailer";
 import type {CastError} from "mongoose";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-
-/**
- * Page POST data
- */
-export interface IPostResetPostData {
-    email: string,
-}
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { ResetRequest } from "@api/api";
 
 /**
  * Ask to guest if they want to reset the password
@@ -19,7 +13,7 @@ export interface IPostResetPostData {
  * @param response
  * @param next
  */
-export const postReset = (request: Request<unknown, unknown, IPostResetPostData>, response: Response, next: NextFunction) =>
+export const postReset = (request: Request<unknown, unknown, ResetRequest>, response: Response, next: NextFunction) =>
     Users.findOne({
         email: request.body.email
     })

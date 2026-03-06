@@ -1,18 +1,10 @@
-import type {Request, Response, NextFunction} from 'express';
-import {t} from "i18next";
+import type { Request, Response, NextFunction } from 'express';
+import { t } from "i18next";
 import Users from "../../models/users";
 import { nodemailer } from "../../utils/nodemailer";
-import type {CastError} from "mongoose";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-
-/**
- * Page POST data
- */
-export interface IPostResetConfirmPostData {
-    token: string,
-    password: string,
-    passwordConfirm: string,
-}
+import type { CastError } from "mongoose";
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { ResetConfirmRequest } from "@api/api";
 
 /**
  * Ask to guest if they want to reset the password
@@ -21,7 +13,8 @@ export interface IPostResetConfirmPostData {
  * @param response
  * @param next
  */
-export const postResetConfirm = async (request: Request<unknown, unknown, IPostResetConfirmPostData>, response: Response, next: NextFunction) => {
+export const postResetConfirm = async (request: Request<unknown, unknown, ResetConfirmRequest>, response: Response, next: NextFunction) => {
+    // TODO POST /account/reset/{token}
     const {
         password,
         passwordConfirm,
@@ -29,9 +22,9 @@ export const postResetConfirm = async (request: Request<unknown, unknown, IPostR
     } = request.body;
 
     return Users.findOne({
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        'tokens.token': token
-    })
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'tokens.token': token
+        })
         .then(user => {
             // wrong token
             if (!user) {
@@ -41,14 +34,14 @@ export const postResetConfirm = async (request: Request<unknown, unknown, IPostR
             }
             // change password
             return user.passwordChange(password, passwordConfirm)
-                .then(async ({success, errors = []}) => {
+                .then(async ({ success, errors = [] }) => {
                     if (!success) {
                         request.flash('error', errors);
                         return response.redirect('/account/reset');
                     }
                     // consume the token
                     user.tokens = user.tokens
-                        .filter(({token: t}) => token !== t);
+                        .filter(({ token: t }) => token !== t);
                     // save and send email
                     await user.save()
                         .then(() => {

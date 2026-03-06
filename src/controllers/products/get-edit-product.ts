@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Products from "../../models/products";
-import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
+import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
 import type { CastError } from "mongoose";
 
 
@@ -20,7 +20,9 @@ export interface IGetEditProductParameters {
  * @param response
  * @param next
  */
-export const getEditProduct = (request: Request & { params: IGetEditProductParameters }, response: Response, next: NextFunction) => {
+export const getEditProduct = (request: Request & {
+    params: IGetEditProductParameters
+}, response: Response, next: NextFunction) => {
     Products.findById(request.params.productId)
         .then(product => {
             const [
@@ -45,8 +47,8 @@ export const getEditProduct = (request: Request & { params: IGetEditProductParam
             });
         })
         .catch((error: CastError) => {
-            if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, true, [t("ecommerce.product-not-found")]));
+            if (error.message == "404" || error.kind === "ObjectId")
+                return next(new ExtendedError("404", 404, true, [ t("ecommerce.product-not-found") ]));
             return next(databaseErrorConverter(error));
         })
 };

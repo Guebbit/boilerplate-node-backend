@@ -3,15 +3,8 @@ import { t } from "i18next";
 import Users from "../../models/users";
 import { nodemailer } from "../../utils/nodemailer";
 import type { CastError } from "mongoose";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-
-export interface IPostSignupPostData {
-    email: string,
-    username: string,
-    imageUrl: string,
-    password: string,
-    passwordConfirm: string,
-}
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { SignupRequest } from "@api/api";
 
 /**
  * Register new user
@@ -20,7 +13,7 @@ export interface IPostSignupPostData {
  * @param response
  * @param next
  */
-export const postSignup = async (request: Request<unknown, unknown, IPostSignupPostData>, response: Response, next: NextFunction) => {
+export const postSignup = async (request: Request<unknown, unknown, SignupRequest>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -37,14 +30,14 @@ export const postSignup = async (request: Request<unknown, unknown, IPostSignupP
      * Login
      */
     return Users.signup(
-        email,
-        username,
-        password,
-        passwordConfirm,
-        imageUrl
-    )
-        .then(({ success, data, errors= []}) => {
-            if(!success){
+            email,
+            username,
+            password,
+            passwordConfirm,
+            imageUrl
+        )
+        .then(({ success, data, errors = [] }) => {
+            if (!success) {
                 // So the user doesn't need to fill the form again
                 request.flash('filled', [
                     email,

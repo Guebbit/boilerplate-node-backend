@@ -1,7 +1,7 @@
-import type {NextFunction, Request, Response} from "express";
-import type {CastError} from "mongoose";
+import type { NextFunction, Request, Response } from "express";
+import type { CastError } from "mongoose";
 import Products from "../../models/products";
-import {deleteFile} from "../../utils/filesystem-helpers";
+import { deleteFile } from "../../utils/filesystem-helpers";
 import { ExtendedError } from "../../utils/error-helpers";
 
 /**
@@ -88,7 +88,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, IPostEd
             .catch(async (error: CastError) => {
                 if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);
-                return next(new ExtendedError(error.kind, 500, false, [error.message]));
+                return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
             });
     /**
      * ID = edit product
@@ -101,7 +101,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, IPostEd
                 product.title = title;
                 // if empty: no image was uploaded
                 const oldImageUrl = product.imageUrl;
-                if(oldImageUrl !== imageUrl)
+                if (oldImageUrl !== imageUrl)
                     product.imageUrl = imageUrl;
                 product.price = Number.parseInt(price);
                 product.description = description;
@@ -109,13 +109,13 @@ export const postEditProduct = async (request: Request<unknown, unknown, IPostEd
                 // save the updated product (not necessary to use newProduct variable since the ID doesn't change, but normally it would be necessary)
                 const newProduct = await product.save();
                 // after saving the new product image, delete the old one
-                if(oldImageUrl !== imageUrl)
+                if (oldImageUrl !== imageUrl)
                     await deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + oldImageUrl);
                 response.redirect('/products/details/' + (newProduct.id as string))
             })
             .catch(async (error: CastError) => {
                 if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);
-                return next(new ExtendedError(error.kind, 500, false, [error.message]));
+                return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
             });
 };

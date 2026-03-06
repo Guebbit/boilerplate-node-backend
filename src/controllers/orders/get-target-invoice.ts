@@ -10,9 +10,8 @@ import {
 import { t } from "i18next";
 import Orders from "../../models/orders";
 import { createPDF } from "../../utils/pdf-helpers";
-import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
+import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
 import { getDirname } from "../../utils/get-file-url";
-
 
 /**
  *
@@ -28,32 +27,34 @@ export interface IGetTargetInvoiceParameters {
  * @param response
  * @param next
  */
-export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceParameters }, response: Response, next: NextFunction) => {
+export const getTargetInvoice = (request: Request & {
+    params: IGetTargetInvoiceParameters
+}, response: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
-    if(!Types.ObjectId.isValid(request.params.orderId))
+    if (!Types.ObjectId.isValid(request.params.orderId))
         return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
 
     /**
      * Where build (same as get-target-order.ts
      */
     const match: PipelineStage.Match = {
-            $match: {}
-        };
-    if(!request.session.user?.admin)
+        $match: {}
+    };
+    if (!request.session.user?.admin)
         match.$match.userId = request.session.user?._id;
     match.$match._id = new Types.ObjectId(request.params.orderId);
 
-    Orders.getAll([match])
+    Orders.getAll([ match ])
         .then((orders) => {
             if (orders.length === 0)
-                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             const order = orders[0];
             /**
              * Create PDF file
              * Create PDF using get-target-order template OR pure HTML content
              * WARNING: Images and other link-related info will NOT work. Need to convert the images in base64 to embed them correctly in a PDF
              */
-            // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
             const invoiceName = order._id + '.pdf'; // filename
             // save path
             const invoicePath = path.join('src', 'data', 'invoices', invoiceName);
@@ -86,7 +87,7 @@ export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceP
                 },
                 // callback
                 async (error: Error | null, htmlContent: string) => {
-                    if(error)
+                    if (error)
                         return next(new ExtendedError(error.message, 500));
                     // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
                     return createPDF(htmlContent, order._id + '.pdf', 'src/data/invoices')
@@ -96,7 +97,7 @@ export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceP
                              */
                             // PRELOADING data
                             fs.readFile(invoicePath, (error_, data) => {
-                                if(error_)
+                                if (error_)
                                     return next(new ExtendedError(error_.message, 500));
                                 response.setHeader('Content-Type', 'application/pdf');
                                 response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
@@ -112,8 +113,8 @@ export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceP
                 })
         })
         .catch((error: CastError) => {
-            if(error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+            if (error.message == "404" || error.kind === "ObjectId")
+                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             return next(databaseErrorConverter(error));
         })
 };

@@ -93,7 +93,7 @@ export interface IUserModel extends Model<IUserDocument, unknown, IUserMethods> 
         username: string,
         password: string,
         passwordConfirm: string,
-        imageUrl?: string,
+        imageUrl?: string | null,
     ) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
     login: (email: string, password: string) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
     productRemoveFromCartsById: (id: string) => Promise<IResponseSuccess<undefined> | IResponseReject>
@@ -454,7 +454,7 @@ userSchema.static('signup', async function (
     username: string,
     password: string,
     passwordConfirm: string,
-    imageUrl: string,
+    imageUrl?: string | null,
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> {
     /**
      * Data validation

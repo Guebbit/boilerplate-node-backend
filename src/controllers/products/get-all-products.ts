@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from "express";
-import type {CastError, FilterQuery} from "mongoose";
+import type { CastError, FilterQuery } from "mongoose";
 import Products, { type IProductDocument } from "../../models/products";
-import {databaseErrorConverter} from "../../utils/error-helpers";
+import { databaseErrorConverter } from "../../utils/error-helpers";
 import type { ObjectId } from "mongodb";
+import type { ProductListResponse } from "@api/api";
 
 /**
  * Url parameters
@@ -23,9 +24,11 @@ const paginationPageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_
  * @param response
  * @param next
  */
-export const getAllProducts = async (request: Request & { params: IGetAllProductsParameters }, response: Response, next: NextFunction) => {
+export const getAllProducts = async (request: Request & {
+    params: IGetAllProductsParameters
+}, response: Response, next: NextFunction) => {
     // Empty where
-    const whereCondition :FilterQuery<IProductDocument> = {};
+    const whereCondition: FilterQuery<IProductDocument> = {};
 
     // current page
     const paginationCurrentPage = Number.parseInt(request.params.page ?? "1");
@@ -33,7 +36,7 @@ export const getAllProducts = async (request: Request & { params: IGetAllProduct
     let paginationTotalItems = 0;
 
     // Only admin can see non-active and (soft) deleted products
-    if(!request.session.user?.admin){
+    if (!request.session.user?.admin) {
         whereCondition.active = true;
         whereCondition.deletedAt = undefined;
     }

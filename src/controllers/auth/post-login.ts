@@ -3,14 +3,8 @@ import { t } from "i18next";
 import Users, {IUser} from "../../models/users";
 import { ExtendedError } from "../../utils/error-helpers";
 import type { CastError } from "mongoose";
+import type { LoginRequest } from "@api/api";
 
-/**
- * Page POST data
- */
-export interface IPostLoginPostData {
-    email: string,
-    password: string,
-}
 
 /**
  * Authenticate user
@@ -19,7 +13,7 @@ export interface IPostLoginPostData {
  * @param response
  * @param next
  */
-export const postLogin = (request: Request<unknown, unknown, IPostLoginPostData>, response: Response, next: NextFunction) => {
+export const postLogin = (request: Request<unknown, unknown, LoginRequest>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data

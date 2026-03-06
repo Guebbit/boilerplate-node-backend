@@ -15,9 +15,9 @@ import { ExtendedError } from "../../utils/error-helpers";
 export const postOrder = (request: Request, response: Response, next: NextFunction) =>
     request.user!.orderConfirm()
         .then(({ success }) => {
-            if(!success)
-                return next(new ExtendedError("500", 500, false, [t('ecommerce.order-creation-failure')]))
-            request.flash('success', [t('ecommerce.order-creation-success')]);
+            if (!success)
+                return next(new ExtendedError("500", 500, false, [ t('ecommerce.order-creation-failure') ]))
+            request.flash('success', [ t('ecommerce.order-creation-success') ]);
 
             nodemailer({
                     to: request.user!.email,
@@ -31,5 +31,5 @@ export const postOrder = (request: Request, response: Response, next: NextFuncti
                     name: request.user!.username
                 });
         })
-        .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [message])))
+        .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [ message ])))
         .finally(() => response.redirect('/orders'))

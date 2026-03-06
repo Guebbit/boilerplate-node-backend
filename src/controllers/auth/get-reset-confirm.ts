@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Users from "../../models/users";
 import type { CastError } from "mongoose";
-import {databaseErrorConverter} from "../../utils/error-helpers";
+import { databaseErrorConverter } from "../../utils/error-helpers";
 
 
 /**
@@ -19,11 +19,13 @@ export interface IGetResetConfirmParameters {
  * @param response
  * @param next
  */
-export const getResetConfirm = (request: Request & { params: IGetResetConfirmParameters }, response: Response, next: NextFunction) =>
+export const getResetConfirm = (request: Request & {
+    params: IGetResetConfirmParameters
+}, response: Response, next: NextFunction) =>
     Users.findOne({
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        'tokens.token': request.params.token
-    })
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'tokens.token': request.params.token
+        })
         .then((user) => {
             // not valid
             if (!user) {

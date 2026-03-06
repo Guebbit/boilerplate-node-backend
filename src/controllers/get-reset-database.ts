@@ -1,5 +1,5 @@
-import type {Request, Response} from "express";
-import mongoose, {Types} from "mongoose";
+import type { Request, Response } from "express";
+import mongoose, { Types } from "mongoose";
 import database from "../utils/database";
 import Users from "../models/users";
 import Products from "../models/products";
@@ -47,7 +47,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                     password: "$2b$12$HwOdA7il/qvuU.psvWDOyuSMJ7ji/qMeFS3ma7DB8W6A/tGfCYEX.",
                     imageUrl: String.raw`\images\96346b77daf138a279677cb75c400ee9.jpg`,
                     admin: false,
-                    cart: {'items': []},
+                    cart: { 'items': [] },
                     tokens: [],
                 }),
 

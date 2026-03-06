@@ -13,7 +13,7 @@ export const getHeavyLoad = (request: Request, response: Response) => {
     for (let i = 0; i < totalLoad; i++) {
         progressLoad++;
         // eslint-disable-next-line no-console
-        console.log(`Worker ${process.pid} at ${Math.round((progressLoad/totalLoad) * 100)}% of task`)
+        console.log(`Worker ${ process.pid } at ${ Math.round((progressLoad / totalLoad) * 100) }% of task`)
     }
-    response.send(`The result of the CPU intensive task is ${progressLoad}\n`);
+    response.send(`The result of the CPU intensive task is ${ progressLoad }\n`);
 }
