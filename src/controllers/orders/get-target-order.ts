@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Orders from "../../models/orders";
-import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 
 /**
@@ -19,10 +19,12 @@ export interface IGetTargetOrderParameters {
  * @param response
  * @param next
  */
-export const getTargetOrder = (request: Request & { params: IGetTargetOrderParameters }, response: Response, next: NextFunction) => {
+export const getTargetOrder = (request: Request & {
+    params: IGetTargetOrderParameters
+}, response: Response, next: NextFunction) => {
     // if it's not valid it could throw an error
-    if(!request.params.orderId)
-        return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+    if (!request.params.orderId)
+        return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
 
     // get target order (must be owner or admin)
     Orders.getAll(
@@ -30,8 +32,8 @@ export const getTargetOrder = (request: Request & { params: IGetTargetOrderParam
         request.params.orderId
     )
         .then((orders) => {
-            if(orders.length  === 0){
-                next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+            if (orders.length === 0) {
+                next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
                 return;
             }
             response.render('orders/details', {

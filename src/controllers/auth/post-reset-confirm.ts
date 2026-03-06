@@ -4,15 +4,7 @@ import Users from "../../models/users";
 import Tokens from "../../models/tokens";
 import { nodemailer } from "../../utils/nodemailer";
 import { ExtendedError } from "../../utils/error-helpers";
-
-/**
- *
- */
-export interface IPostResetConfirmPostData {
-    token: string,
-    password: string,
-    passwordConfirm: string,
-}
+import type { ResetConfirmRequest } from "@api/api";
 
 /**
  * Ask to guest if they want to reset the password
@@ -21,7 +13,7 @@ export interface IPostResetConfirmPostData {
  * @param response
  * @param next
  */
-export const postResetConfirm = async (request: Request<unknown, unknown, IPostResetConfirmPostData>, response: Response, next: NextFunction) => {
+export const postResetConfirm = async (request: Request<unknown, unknown, ResetConfirmRequest>, response: Response, next: NextFunction) => {
     /**
      * Post Data
      */
@@ -35,13 +27,13 @@ export const postResetConfirm = async (request: Request<unknown, unknown, IPostR
      * Search user by token
      */
     return Tokens.findOne({
-        where: {
-            token
-        },
-        include: [
-            Users
-        ]
-    })
+            where: {
+                token
+            },
+            include: [
+                Users
+            ]
+        })
         .then(token => {
             // retrieving User
             // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -54,7 +46,7 @@ export const postResetConfirm = async (request: Request<unknown, unknown, IPostR
             }
             // change password
             return User.passwordChange(password, passwordConfirm)
-                .then(async ({success, errors = []}) => {
+                .then(async ({ success, errors = [] }) => {
                     if (!success) {
                         request.flash('error', errors);
                         return response.redirect('/account/reset');
@@ -78,8 +70,8 @@ export const postResetConfirm = async (request: Request<unknown, unknown, IPostR
                     request.flash('success', [t("reset.success")]);
                     return response.redirect("/account/login");
                 })
-                .catch((error:string[] | Error) => {
-                    if(!Array.isArray(error))
+                .catch((error: string[] | Error) => {
+                    if (!Array.isArray(error))
                         return next(new ExtendedError(error.message, 500))
                     request.flash('error', error);
                     response.redirect('/account/reset');

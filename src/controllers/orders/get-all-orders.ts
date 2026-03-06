@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Orders from "../../models/orders";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 /**
  * Get ALL orders info

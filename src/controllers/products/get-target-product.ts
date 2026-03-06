@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import { t } from "i18next";
 import Products from "../../models/products";
-import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 /**
  * Url parameters
@@ -18,12 +18,14 @@ export interface IGetTargetProductParameters {
  * @param response
  * @param next
  */
-export const getTargetProduct = (request: Request & { params: IGetTargetProductParameters }, response: Response, next: NextFunction) =>
+export const getTargetProduct = (request: Request & {
+    params: IGetTargetProductParameters
+}, response: Response, next: NextFunction) =>
     (request.session.user?.admin ? Products.scope("admin") : Products)
         .findByPk(request.params.productId)
         .then(async (product) => {
             if (!product)
-                return next(new ExtendedError("404", 404, true, [t("ecommerce.product-not-found")]));
+                return next(new ExtendedError("404", 404, true, [ t("ecommerce.product-not-found") ]));
             // find the quantity of the product in the current user's cart
             const cart = await request.user!.cartGet();
             // @ts-expect-error difficulties with sequelize inferred types

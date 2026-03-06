@@ -5,9 +5,9 @@ import ejs from "ejs";
 import { t } from "i18next";
 import Orders from "../../models/orders";
 import { createPDF } from "../../utils/pdf-helpers";
-import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
+import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
 import { getDirname } from "../../utils/get-file-url";
-import type {DatabaseError, ValidationError} from "sequelize";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 
 /**
@@ -24,29 +24,31 @@ export interface IGetTargetInvoiceParameters {
  * @param response
  * @param next
  */
-export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceParameters }, response: Response, next: NextFunction) => {
+export const getTargetInvoice = (request: Request & {
+    params: IGetTargetInvoiceParameters
+}, response: Response, next: NextFunction) => {
     // get target order (must be owner or admin)
     Orders.getAll(
         request.session.user?.admin ? "*" : request.session.user?.id,
         request.params.orderId
     )
         .then((orders) => {
-            if(orders.length  === 0){
-                next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+            if (orders.length === 0) {
+                next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
                 return;
             }
             return orders[0];
         })
         .then((order) => {
             // Should be impossible
-            if(!order)
-                return next(new ExtendedError("404", 404, true, [t("ecommerce.order-not-found")]));
+            if (!order)
+                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             /**
              * Create PDF file
              * Create PDF using get-target-order template OR pure HTML content
              * WARNING: Images and other link-related info will NOT work. Need to convert the images in base64 to embed them correctly in a PDF
              */
-            // filename
+                // filename
             const invoiceName = order.dataValues.id + '.pdf';
             // save path
             const invoicePath = path.join('src', 'data', 'invoices', invoiceName);
@@ -79,7 +81,7 @@ export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceP
                 },
                 // callback
                 async (error: Error | null, htmlContent: string) => {
-                    if(error)
+                    if (error)
                         return next(new ExtendedError(error.message, 500));
                     return createPDF(htmlContent, order.dataValues.id + '.pdf', 'src/data/invoices')
                         .then(() => {
@@ -88,7 +90,7 @@ export const getTargetInvoice = (request: Request & { params: IGetTargetInvoiceP
                              */
                             // PRELOADING data
                             fs.readFile(invoicePath, (error_, data) => {
-                                if(error_)
+                                if (error_)
                                     throw error_;
                                 // return next(new ExtendedError(err.message, 500))
                                 response.setHeader('Content-Type', 'application/pdf');

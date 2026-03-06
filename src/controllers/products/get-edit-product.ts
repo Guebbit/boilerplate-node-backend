@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Products from "../../models/products";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 /**
  *
@@ -18,7 +18,9 @@ export interface IGetEditProductParameters {
  * @param response
  * @param next
  */
-export const getEditProduct = (request: Request & { params: IGetEditProductParameters }, response: Response, next: NextFunction) => {
+export const getEditProduct = (request: Request & {
+    params: IGetEditProductParameters
+}, response: Response, next: NextFunction) => {
     Products.findByPk(request.params.productId)
         .then(product => {
             response.render('products/edit', {
@@ -26,7 +28,7 @@ export const getEditProduct = (request: Request & { params: IGetEditProductParam
                 pageMetaLinks: [
                     "/css/forms.css"
                 ],
-                product: {...product?.dataValues },
+                product: { ...product?.dataValues },
             });
         })
         .catch((error: Error | ValidationError | DatabaseError) => next(databaseErrorConverter(error)))

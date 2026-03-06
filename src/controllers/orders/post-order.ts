@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import { nodemailer } from "../../utils/nodemailer";
-import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 /**
  * Create a new order
@@ -16,9 +16,9 @@ import type {DatabaseError, ValidationError} from "sequelize";
 export const postOrder = (request: Request, response: Response, next: NextFunction) =>
     request.user!.orderConfirm()
         .then(({ success }) => {
-            if(!success)
-                return next(new ExtendedError("500", 500, false, [t('ecommerce.order-creation-failure')]))
-            request.flash('success', [t('ecommerce.order-creation-success')]);
+            if (!success)
+                return next(new ExtendedError("500", 500, false, [ t('ecommerce.order-creation-failure') ]))
+            request.flash('success', [ t('ecommerce.order-creation-success') ]);
 
             nodemailer({
                     to: request.user!.email,

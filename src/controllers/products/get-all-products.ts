@@ -1,8 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
-import type {DatabaseError, ValidationError, WhereOptions} from "sequelize";
+import type { DatabaseError, ValidationError, WhereOptions } from "sequelize";
 import Products from "../../models/products";
-import {databaseErrorConverter} from "../../utils/error-helpers";
+import { databaseErrorConverter } from "../../utils/error-helpers";
 import CartItems from "../../models/cart-items";
+import type { ProductListResponse } from "@api/api";
 
 /**
  * Url parameters
@@ -23,7 +24,9 @@ const paginationPageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_
  * @param response
  * @param next
  */
-export const getAllProducts = (request: Request & { params: IGetAllProductsParameters }, response: Response, next: NextFunction) => {
+export const getAllProducts = (request: Request & {
+    params: IGetAllProductsParameters
+}, response: Response, next: NextFunction) => {
     // Empty where
     const whereCondition: WhereOptions = {};
 
@@ -63,14 +66,14 @@ export const getAllProducts = (request: Request & { params: IGetAllProductsParam
                     offset: (paginationCurrentPage - 1) * paginationPageSize,
                     limit: paginationPageSize,
                     // this is only needed to get the quantity of the product in the cart (if any)
-                    include: [{
+                    include: [ {
                         model: CartItems,
                         required: false,
                         where: {
                             CartId: cart.id
                         },
-                        attributes: ['quantity'],
-                    }]
+                        attributes: [ 'quantity' ],
+                    } ]
                 })
         })
         .then((productListRaw) => {

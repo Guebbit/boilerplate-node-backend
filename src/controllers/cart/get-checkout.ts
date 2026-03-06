@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 /**
  * Same as getCart, but with different template

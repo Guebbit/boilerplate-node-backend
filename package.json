@@ -1,6 +1,6 @@
 {
   "name": "boilerplate-node-mvc-sequelize",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "main": "src/cluster.ts",
   "license": "AGPLv3.0",
   "scripts": {
@@ -10,6 +10,8 @@
     "ts-check": "tsc --noEmit",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
+    "lint:openapi": "spectral lint ./.dev/openapi.yaml",
+    "lint:openapi:fix": "spectral lint ./.dev/openapi.yaml --format stylish",
     "test": "npm run test:unit",
     "test:unit": "jest",
     "test:unit:target": "npx jest tests/controllers/authentication.test.ts",
@@ -19,10 +21,12 @@
     "kill:win": "cmd \"/C TASKKILL /IM node.exe /F\"",
     "kill:gnu": "pkill -9 node",
     "pre-publish": "npm run lint && npm run test:unit && npm run build",
-    "genapi": "openapi-generator-cli generate -i ./.dev/openapi.yaml -g typescript-axios -o ./src/api",
+    "genapi": "rm -rf src/api && openapi-generator-cli generate -i ./.dev/openapi.yaml -g typescript-node -o ./src/api",
     "update:all": "npx npm-check-updates -u"
   },
   "devDependencies": {
+    "@stoplight/spectral-cli": "^6.15.0",
+    "@stoplight/spectral-rulesets": "^1.22.0",
     "@types/bcrypt": "^6.0.0",
     "@types/connect-flash": "^0.0.40",
     "@types/cookie-parser": "^1.4.10",

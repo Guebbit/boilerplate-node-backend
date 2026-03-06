@@ -3,14 +3,7 @@ import { t } from "i18next";
 import Users from "../../models/users";
 import { nodemailer } from "../../utils/nodemailer";
 import { ExtendedError } from "../../utils/error-helpers";
-
-export interface IPostSignupPostData {
-    email: string,
-    username: string,
-    imageUrl: string,
-    password: string,
-    passwordConfirm: string,
-}
+import type { SignupRequest } from "@api/api";
 
 /**
  * Register new user
@@ -19,7 +12,7 @@ export interface IPostSignupPostData {
  * @param response
  * @param next
  */
-export const postSignup = async (request: Request<unknown, unknown, IPostSignupPostData>, response: Response, next: NextFunction) => {
+export const postSignup = async (request: Request<unknown, unknown, SignupRequest>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -36,14 +29,14 @@ export const postSignup = async (request: Request<unknown, unknown, IPostSignupP
      * Signup
      */
     return Users.signup(
-        email,
-        username,
-        password,
-        passwordConfirm,
-        imageUrl,
-    )
+            email,
+            username,
+            password,
+            passwordConfirm,
+            imageUrl,
+        )
         .then(({ success, data, errors }) => {
-            if(!success){
+            if (!success) {
                 // So the user doesn't need to fill the form again
                 request.flash('filled', [
                     email,
@@ -73,8 +66,8 @@ export const postSignup = async (request: Request<unknown, unknown, IPostSignupP
             request.flash('success', [t('signup.registration-successful')]);
             return response.redirect('/account/login');
         })
-        .catch((error:string[] | Error) => {
-            if(!Array.isArray(error))
+        .catch((error: string[] | Error) => {
+            if (!Array.isArray(error))
                 return next(new ExtendedError(error.message, 500))
             // So the user doesn't need to fill the form again
             request.flash('filled', [

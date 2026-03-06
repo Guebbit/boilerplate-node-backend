@@ -7,7 +7,7 @@ import { ExtendedError } from "../../utils/error-helpers";
  *
  */
 export interface IGetResetConfirmParameters {
-    orderId: string,
+    token: string,
 }
 
 /**
@@ -17,12 +17,14 @@ export interface IGetResetConfirmParameters {
  * @param response
  * @param next
  */
-export const getResetConfirm = (request: Request & { params: IGetResetConfirmParameters }, response: Response, next: NextFunction) =>
+export const getResetConfirm = (request: Request & {
+    params: IGetResetConfirmParameters
+}, response: Response, next: NextFunction) =>
     Tokens.findOne({
-        where: {
-            token: request.params.token
-        }
-    })
+            where: {
+                token: request.params.token
+            }
+        })
         .then(token => {
             // not valid
             if (!token) {

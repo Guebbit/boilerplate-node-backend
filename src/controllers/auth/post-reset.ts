@@ -1,16 +1,11 @@
-import type {NextFunction, Request, Response} from 'express';
-import {t} from "i18next";
+import type { NextFunction, Request, Response } from 'express';
+import { t } from "i18next";
 import Users from "../../models/users";
 import { nodemailer } from "../../utils/nodemailer";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
+import type { ResetRequest } from "@api/api";
 
-/**
- *
- */
-export interface IPostResetPostData {
-    email: string,
-}
 
 /**
  * Ask to guest if they want to reset the password
@@ -19,7 +14,7 @@ export interface IPostResetPostData {
  * @param response
  * @param next
  */
-export const postReset = (request: Request<unknown, unknown, IPostResetPostData>, response: Response, next: NextFunction) =>
+export const postReset = (request: Request<unknown, unknown, ResetRequest>, response: Response, next: NextFunction) =>
     Users.findOne({
         where: {
             email: request.body.email
@@ -27,7 +22,7 @@ export const postReset = (request: Request<unknown, unknown, IPostResetPostData>
     })
         .then((user) => {
             if (!user) {
-                request.flash('error', [t('reset.email-not-found')]);
+                request.flash('error', [ t('reset.email-not-found') ]);
                 response.redirect('/account/reset');
                 return;
             }
@@ -47,7 +42,7 @@ export const postReset = (request: Request<unknown, unknown, IPostResetPostData>
                             name: user.username,
                             token,
                         });
-                    request.flash('success', [t('reset.email-sent')]);
+                    request.flash('success', [ t('reset.email-sent') ]);
                     response.redirect('/account/reset');
                 })
         })

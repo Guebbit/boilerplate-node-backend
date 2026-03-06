@@ -1,16 +1,8 @@
-import type {Request, Response, NextFunction} from 'express';
-import {t} from "i18next";
+import type { Request, Response, NextFunction } from 'express';
+import { t } from "i18next";
 import Users from "../../models/users";
-import {ExtendedError} from "../../utils/error-helpers";
-
-/**
- * Page POST data
- */
-export interface IPostLoginPostData {
-    email: string,
-    password: string,
-}
-
+import { ExtendedError } from "../../utils/error-helpers";
+import type { LoginRequest } from "@api/api";
 
 /**
  * Authenticate user
@@ -19,7 +11,7 @@ export interface IPostLoginPostData {
  * @param response
  * @param next
  */
-export const postLogin = async (request: Request<unknown, unknown, IPostLoginPostData>, response: Response, next: NextFunction) => {
+export const postLogin = async (request: Request<unknown, unknown, LoginRequest>, response: Response, next: NextFunction) => {
 
     /**
      * get POST data
@@ -33,7 +25,7 @@ export const postLogin = async (request: Request<unknown, unknown, IPostLoginPos
      * Login
      */
     return Users.login(email, password)
-        .then(({success, data, errors}) => {
+        .then(({ success, data, errors }) => {
             if (!success || !data) {
                 request.flash('error', errors);
                 response.redirect('/account/login');
@@ -42,7 +34,7 @@ export const postLogin = async (request: Request<unknown, unknown, IPostLoginPos
             // User found and login is correct: Update and regenerate session
             request.session.regenerate(() => {
                 request.session.user = data
-                request.flash('success', [t('login.success')]);
+                request.flash('success', [ t('login.success') ]);
                 request.session
                     .save(() => {
                         response.redirect('/')

@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Products from "../../models/products";
-import {databaseErrorConverter} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 /**
  * Page POST data
@@ -23,8 +23,8 @@ export const postDeleteProduct = (request: Request<unknown, unknown, IPostDelete
     // isAdmin protected route: user is admin
     Products.productRemoveById(request.body.id, !!request.body.hardDelete)
         .then(({ success, message, errors }) => {
-            if(success)
-                request.flash('success', [message]);
+            if (success)
+                request.flash('success', [ message ]);
             else
                 request.flash('error', errors);
             response.redirect('/products/')

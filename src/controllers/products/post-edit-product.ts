@@ -2,8 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Products from "../../models/products";
 import { deleteFile } from "../../utils/filesystem-helpers";
-import {databaseErrorConverter, ExtendedError} from "../../utils/error-helpers";
-import type {DatabaseError, ValidationError} from "sequelize";
+import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
+import type { DatabaseError, ValidationError } from "sequelize";
 
 /**
  * Page POST data
@@ -59,9 +59,9 @@ export const postEditProduct = async (request: Request<unknown, unknown, IPostEd
     /**
      * Validation error
      */
-    if(issues.length > 0){
+    if (issues.length > 0) {
         // Record was not created, so revert server changes by removing the uploaded file
-        if(imageUrlRaw.length > 0)
+        if (imageUrlRaw.length > 0)
             await deleteFile(imageUrlRaw);
         request.flash('error', issues);
         request.flash('filled', [
@@ -88,7 +88,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, IPostEd
         })
             .then(() => response.redirect('/products/'))// response.redirect('/products/details/' + product.id)
             .catch(async (error: Error | ValidationError | DatabaseError) => {
-                if(imageUrlRaw.length > 0)
+                if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);
                 next(databaseErrorConverter(error));
             })
@@ -103,10 +103,10 @@ export const postEditProduct = async (request: Request<unknown, unknown, IPostEd
         ).findByPk(id)
             .then(async (product) => {
                 // trying to edit a product that doesn't exist
-                if (!product){
-                    if(imageUrlRaw.length > 0)
+                if (!product) {
+                    if (imageUrlRaw.length > 0)
                         await deleteFile(imageUrlRaw);
-                    next(new ExtendedError("404", 404, true, [t("ecommerce.product-not-found")]));
+                    next(new ExtendedError("404", 404, true, [ t("ecommerce.product-not-found") ]));
                     return;
                 }
                 product.title = title;
@@ -117,16 +117,16 @@ export const postEditProduct = async (request: Request<unknown, unknown, IPostEd
                 return product.save();
             })
             .then(async (product) => {
-                if(!product){
-                    if(imageUrlRaw.length > 0)
+                if (!product) {
+                    if (imageUrlRaw.length > 0)
                         await deleteFile(imageUrlRaw);
-                    next(new ExtendedError("404", 404, false, [t("ecommerce.product-not-found")]));
+                    next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));
                     return;
                 }
                 return response.redirect('/products/details/' + product.id);
             })
             .catch(async (error: Error | ValidationError | DatabaseError) => {
-                if(imageUrlRaw.length > 0)
+                if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);
                 next(databaseErrorConverter(error));
             })

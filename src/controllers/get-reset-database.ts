@@ -1,4 +1,4 @@
-import type {Request, Response} from "express";
+import type { Request, Response } from "express";
 import database from '../utils/database';
 import Users from "../models/users";
 import Products from "../models/products";
@@ -39,7 +39,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                     admin: true,
                     active: true,
                 }),
-                    // .then((user) => user.createCart()),
+                // .then((user) => user.createCart()),
                 Users.create({
                     id: 2,
                     email: 'test@test.com',
@@ -49,7 +49,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                     admin: false,
                     active: true,
                 }),
-                    // .then((user) => user.createCart()),
+                // .then((user) => user.createCart()),
 
                 Products.create({
                     "id": 1,

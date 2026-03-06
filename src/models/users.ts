@@ -325,7 +325,7 @@ class Users extends Model<InferAttributes<Users>, InferCreationAttributes<Users>
         username: string,
         password: string,
         passwordConfirm: string,
-        imageUrl = "",
+        imageUrl: string | null = "",
     ) {
         /**
          * Data validation
