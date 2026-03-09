@@ -15,7 +15,6 @@ servers:
         description: Production
 
 tags:
-    -   name: System
     -   name: Auth
     -   name: Account
     -   name: Users
@@ -744,21 +743,12 @@ components:
                     type: string
 
 paths:
-    /:
-        get:
-            tags: [ System ]
-            summary: Home
-            operationId: getHome
-            security: [ ]
-            responses:
-                '200': { $ref: '#/components/responses/Success' }
-                '500': { $ref: '#/components/responses/InternalError' }
-
     # --------- Authentication and profile ---------
     /account:
         get:
             tags: [ Account ]
             summary: Current user info
+            description: Returns the full profile of the currently authenticated user
             operationId: getAccount
             security:
                 -   bearerAuth: [ ]
@@ -775,6 +765,7 @@ paths:
         post:
             tags: [ Auth ]
             summary: Login
+            description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests.
             operationId: login
             security: [ ]
             requestBody:
@@ -798,6 +789,7 @@ paths:
         post:
             tags: [ Auth ]
             summary: Signup
+            description: Registers a new user account. Returns the newly created user profile on success.
             operationId: signup
             security: [ ]
             requestBody:
@@ -820,6 +812,7 @@ paths:
         post:
             tags: [ Auth ]
             operationId: requestPasswordReset
+            description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
             security: [ ]
             requestBody:
                 required: true
@@ -836,6 +829,7 @@ paths:
         post:
             tags: [ Auth ]
             operationId: confirmPasswordReset
+            description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
             security: [ ]
             requestBody:
                 required: true
@@ -853,6 +847,7 @@ paths:
         get:
             tags: [ Users ]
             summary: List users (paginated)
+            description: Returns a paginated list of user accounts.
             operationId: listUsers
             security:
                 -   bearerAuth: [ ]
@@ -874,6 +869,7 @@ paths:
         post:
             tags: [ Users ]
             summary: Create user
+            description: Creates a new user account with the supplied email, username, and password.
             operationId: createUser
             security:
                 -   bearerAuth: [ ]
@@ -897,6 +893,7 @@ paths:
         put:
             tags: [ Users ]
             summary: Edit user
+            description: Updates an existing user's email or password. 
             operationId: updateUser
             security:
                 -   bearerAuth: [ ]
@@ -920,6 +917,7 @@ paths:
         delete:
             tags: [ Users ]
             summary: Delete user
+            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record.
             operationId: deleteUser
             security:
                 -   bearerAuth: [ ]
@@ -941,6 +939,7 @@ paths:
         get:
             tags: [ Users ]
             summary: User details
+            description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?userId={id}`. 
             operationId: getUserById
             security:
                 -   bearerAuth: [ ]
@@ -960,6 +959,7 @@ paths:
         put:
             tags: [ Users ]
             summary: Edit user
+            description: Updates the email or password of the user identified by `{id}` in the path.
             operationId: updateUserById
             security:
                 -   bearerAuth: [ ]
@@ -987,6 +987,7 @@ paths:
         delete:
             tags: [ Users ]
             summary: Delete user
+            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`. 
             operationId: deleteUserById
             security:
                 -   bearerAuth: [ ]
@@ -1008,6 +1009,7 @@ paths:
         post:
             tags: [ Users ]
             summary: Search users (DTO-friendly)
+            description: Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
             operationId: searchUsers
             security:
                 -   bearerAuth: [ ]
@@ -1028,11 +1030,12 @@ paths:
                 '500': { $ref: '#/components/responses/InternalError' }
 
     # ----- Products -----
-    
+
     /products:
         get:
             tags: [ Products ]
             summary: List products (paginated)
+            description: Returns a paginated list of products.
             operationId: listProducts
             parameters:
                 -   $ref: '#/components/parameters/ProductIdParam'
@@ -1063,6 +1066,7 @@ paths:
         post:
             tags: [ Products ]
             summary: Create product
+            description: Creates a new product
             operationId: createProduct
             security:
                 -   bearerAuth: [ ]
@@ -1085,6 +1089,7 @@ paths:
         put:
             tags: [ Products ]
             summary: Edit product
+            description: Updates an existing product
             operationId: updateProduct
             security:
                 -   bearerAuth: [ ]
@@ -1107,6 +1112,7 @@ paths:
         delete:
             tags: [ Products ]
             summary: Delete product
+            description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record
             operationId: deleteProduct
             security:
                 -   bearerAuth: [ ]
@@ -1132,6 +1138,7 @@ paths:
         get:
             tags: [ Products ]
             summary: Product details
+            description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?productId={id}`.
             operationId: getProductById
             parameters:
                 -   $ref: '#/components/parameters/IdPathParam'
@@ -1148,6 +1155,7 @@ paths:
         put:
             tags: [ Products ]
             summary: Edit product
+            description: Updates the product identified by `{id}` in the path. Functionally equivalent to `PUT /products` with the id in the body.
             operationId: updateProductById
             security:
                 -   bearerAuth: [ ]
@@ -1174,6 +1182,7 @@ paths:
         delete:
             tags: [ Products ]
             summary: Delete product
+            description: Deletes the product identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /products`.
             operationId: deleteProductById
             security:
                 -   bearerAuth: [ ]
@@ -1194,6 +1203,7 @@ paths:
         post:
             tags: [ Products ]
             summary: Search products (DTO-friendly)
+            description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
             operationId: searchProducts
             requestBody:
                 required: true
@@ -1215,6 +1225,7 @@ paths:
         get:
             tags: [ Cart ]
             summary: Get cart
+            description: Returns all items currently in the authenticated user's cart along with a computed summary
             operationId: getCart
             security:
                 -   bearerAuth: [ ]
@@ -1230,6 +1241,7 @@ paths:
         post:
             tags: [ Cart ]
             summary: Add cart item
+            description: Adds a product to the authenticated user's cart. Returns the updated cart.
             operationId: addCartItem
             security:
                 -   bearerAuth: [ ]
@@ -1251,6 +1263,7 @@ paths:
         put:
             tags: [ Cart ]
             summary: Update cart item
+            description: Sets the quantity of a product already in the authenticated user's cart. The entire cart line is replaced with the supplied quantity. Returns the updated cart.
             operationId: updateCartItem
             security:
                 -   bearerAuth: [ ]
@@ -1272,6 +1285,7 @@ paths:
         delete:
             tags: [ Cart ]
             summary: Empty cart or remove target cart item
+            description: Removes a specific product from the authenticated user's cart. Returns the updated cart after the removal.
             operationId: clearCart
             security:
                 -   bearerAuth: [ ]
@@ -1296,6 +1310,7 @@ paths:
         put:
             tags: [ Cart ]
             summary: Set cart item quantity
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `PUT /cart`. Returns the updated cart.
             operationId: setCartItemQuantity
             security:
                 -   bearerAuth: [ ]
@@ -1321,6 +1336,7 @@ paths:
         delete:
             tags: [ Cart ]
             summary: Remove item from cart
+            description: Removes the cart line for the product identified by `{productId}` in the path from the authenticated user's cart. Returns the updated cart.
             operationId: removeCartItem
             security:
                 -   bearerAuth: [ ]
@@ -1341,6 +1357,7 @@ paths:
         get:
             tags: [ Cart ]
             summary: Get cart summary
+            description: Returns a lightweight summary of the authenticated user's cart.
             operationId: getCartSummary
             security:
                 -   bearerAuth: [ ]
@@ -1358,6 +1375,7 @@ paths:
         post:
             tags: [ Orders ]
             summary: Checkout (place order from cart)
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. An optional email address and order notes can be supplied in the request body. Returns the created order.
             operationId: checkout
             security:
                 -   bearerAuth: [ ]
@@ -1382,6 +1400,7 @@ paths:
         get:
             tags: [ Orders ]
             summary: List orders (paginated)
+            description: Returns a paginated list of orders.
             operationId: listOrders
             security:
                 -   bearerAuth: [ ]
@@ -1407,6 +1426,7 @@ paths:
         post:
             tags: [ Orders ]
             summary: Create order
+            description: Creates a new order directly from the supplied payload.
             operationId: createOrder
             security:
                 -   bearerAuth: [ ]
@@ -1428,6 +1448,7 @@ paths:
         put:
             tags: [ Orders ]
             summary: Update order
+            description: Updates an existing order identified by `orderId` in the request body.
             operationId: updateOrder
             security:
                 -   bearerAuth: [ ]
@@ -1449,6 +1470,7 @@ paths:
         delete:
             tags: [ Orders ]
             summary: Delete order
+            description: Permanently removes the order identified by `orderId`.
             operationId: deleteOrder
             security:
                 -   bearerAuth: [ ]
@@ -1470,6 +1492,7 @@ paths:
         post:
             tags: [ Orders ]
             summary: Search orders (DTO-friendly)
+            description: Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
             operationId: searchOrders
             security:
                 -   bearerAuth: [ ]
@@ -1494,6 +1517,7 @@ paths:
         get:
             tags: [ Orders ]
             summary: Order details
+            description: Returns the full details of the order identified by `{id}`. Functionally equivalent to `GET /orders?orderId={id}`.
             operationId: getOrderById
             security:
                 -   bearerAuth: [ ]
@@ -1512,6 +1536,7 @@ paths:
         put:
             tags: [ Orders ]
             summary: Edit order
+            description: Updates the order identified by `{id}` in the path.
             operationId: updateOrderById
             security:
                 -   bearerAuth: [ ]
@@ -1539,6 +1564,7 @@ paths:
         get:
             tags: [ Orders ]
             summary: Download order invoice (PDF)
+            description: Generates and returns the invoice for the order identified by `{id}` as a binary PDF file. The client should save or stream the response with an appropriate `Content-Disposition` header.
             operationId: getOrderInvoice
             security:
                 -   bearerAuth: [ ]
