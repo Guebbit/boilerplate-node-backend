@@ -20,9 +20,10 @@
     "build": "run-p type-check-only \"build-only {@}\" --",
     "kill:win": "cmd \"/C TASKKILL /IM node.exe /F\"",
     "kill:gnu": "pkill -9 node",
-    "complete": "npm run lint && npm run test:unit && npm run build",
     "genapi": "rm -rf src/api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./src/api",
-    "update:all": "npx npm-check-updates -u"
+    "update:all": "npx npm-check-updates -u",
+    "complete": "npm run lint && npm run test:unit && npm run build",
+    "publish:public": "npm publish --access public"
   },
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.15.0",
