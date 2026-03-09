@@ -13,7 +13,7 @@ import type { ResetRequest } from "@api/api";
  * @param response
  * @param next
  */
-export const postReset = (request: Request<unknown, unknown, ResetRequest>, response: Response, next: NextFunction) =>
+export const postResetRequest = (request: Request<unknown, unknown, ResetRequest>, response: Response, next: NextFunction) =>
     Users.findOne({
         email: request.body.email
     })

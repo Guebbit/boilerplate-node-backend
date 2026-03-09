@@ -4,9 +4,8 @@ import Users from "../../models/users";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "../../utils/error-helpers";
 
-
 /**
- * Url parameters
+ * This token is provided in the url within the email that has been sent to the user
  */
 export interface IGetResetConfirmParameters {
     token: string,
@@ -19,7 +18,7 @@ export interface IGetResetConfirmParameters {
  * @param response
  * @param next
  */
-export const getResetConfirm = (request: Request & {
+export const pageResetConfirm = (request: Request & {
     params: IGetResetConfirmParameters
 }, response: Response, next: NextFunction) =>
     Users.findOne({

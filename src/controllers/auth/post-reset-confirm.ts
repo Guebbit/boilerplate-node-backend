@@ -14,13 +14,18 @@ import type { ResetConfirmRequest } from "@api/api";
  * @param next
  */
 export const postResetConfirm = async (request: Request<unknown, unknown, ResetConfirmRequest>, response: Response, next: NextFunction) => {
-    // TODO POST /account/reset/{token}
+    /**
+     * Post Data
+     */
     const {
         password,
         passwordConfirm,
         token
     } = request.body;
 
+    /**
+     * Search user by token
+     */
     return Users.findOne({
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'tokens.token': token

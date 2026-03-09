@@ -6,7 +6,7 @@ import type { Request, Response } from "express";
  * @param request
  * @param response
  */
-export const getReset = (request: Request, response: Response) =>
+export const pageReset = (request: Request, response: Response) =>
     response.render('account/reset', {
         pageMetaTitle: "Reset Password",
         pageMetaLinks: [

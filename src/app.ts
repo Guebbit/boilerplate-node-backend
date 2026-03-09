@@ -24,7 +24,7 @@ import productRoutes from "./routes/products";
 import authRoutes from "./routes/auth";
 import orderRoutes from "./routes/orders";
 import cartRoutes from "./routes/cart";
-import indexRoutes from "./routes";
+import systemRoutes from "./routes";
 import errorRoutes from "./routes/errors";
 
 
@@ -156,7 +156,7 @@ app.use('/products', productRoutes);
 app.use('/account', authRoutes);
 app.use('/orders', orderRoutes);
 app.use('/', cartRoutes);
-app.use('/', indexRoutes);
+app.use('/', systemRoutes);
 app.use('/error', errorRoutes);
 
 /**

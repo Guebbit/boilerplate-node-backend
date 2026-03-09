@@ -6,7 +6,7 @@ import type { Request, Response } from 'express';
  * @param request
  * @param response
  */
-export const getLogin = (request: Request, response: Response) =>
+export const pageLogin = (request: Request, response: Response) =>
     response.render('account/login', {
         pageMetaTitle: "Login",
         pageMetaLinks: [

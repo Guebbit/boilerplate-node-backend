@@ -2,31 +2,31 @@ import express from 'express';
 import { isGuest, isAuth } from "../middlewares/authorizations";
 import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
-import { getLogin } from "../controllers/auth/get-login";
+import { pageLogin } from "../controllers/auth/page-login";
 import { postLogin } from "../controllers/auth/post-login";
-import { getSignup } from "../controllers/auth/get-signup";
+import { pageSignup } from "../controllers/auth/page-signup";
 import { postSignup } from "../controllers/auth/post-signup";
-import { getReset } from "../controllers/auth/get-reset";
-import { postReset } from "../controllers/auth/post-reset";
-import { getResetConfirm } from "../controllers/auth/get-reset-confirm";
+import { pageReset } from "../controllers/auth/page-reset";
+import { postResetRequest } from "../controllers/auth/post-reset-request";
+import { pageResetConfirm } from "../controllers/auth/page-reset-confirm";
 import { postResetConfirm } from "../controllers/auth/post-reset-confirm";
-import { getLogout } from "../controllers/auth/get-logout";
+import { getLogout } from "../controllers/auth/page-logout";
 
 const router = express.Router();
 
-router.get('/login', isGuest, getLogin);
+router.get('/login', isGuest, pageLogin);
 
 router.post('/login', isGuest, csrfSynchronisedProtection, postLogin);
 
-router.get('/signup', isGuest, getSignup);
+router.get('/signup', isGuest, pageSignup);
 
 router.post('/signup', isGuest, csrfSynchronisedProtection, postSignup);
 
-router.get('/reset', isGuest, getReset);
+router.get('/reset', isGuest, pageReset);
 
-router.post('/reset', isGuest, csrfSynchronisedProtection, postReset);
+router.post('/reset', isGuest, csrfSynchronisedProtection, postResetRequest);
 
-router.get('/reset/:token', isGuest, getResetConfirm);
+router.get('/reset/:token', isGuest, pageResetConfirm);
 
 router.post('/reset/:token', isGuest, csrfSynchronisedProtection, postResetConfirm);
 

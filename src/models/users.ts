@@ -162,31 +162,33 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
 /**
  * Zod validation schema
  */
-export const zodUserSchema =
-    z.object({
-        id: z.number().optional().nullable(),
-        email: z
-            .string({
-                required_error: t('signup.user-field-email-required') as string,
-            })
-            .email(t('signup.user-field-email-invalid')),
-        username: z
-            .string({
-                required_error: t('signup.user-field-username-required') as string,
-            })
-            .min(3, t('signup.user-field-username-min')),
-        password: z
-            .string({
-                required_error: t('signup.user-field-password-required') as string,
-            })
-            .min(8, t('signup.user-field-password-min')),
-        imageUrl: z.string().optional().nullable(),
-        admin: z.boolean().optional().nullable(),
-        active: z.boolean().optional().nullable(),
-        createdAt: z.date().optional().nullable(),
-        updatedAt: z.date().optional().nullable(),
-        deletedAt: z.date().optional().nullable(),
-    });
+export const zodUserSchema = z.object({
+    id: z.number().nullish(),
+
+    email: z
+        .string()
+        .min(1, { message: t('signup.user-field-email-required') as string })
+        .email({ message: t('signup.user-field-email-invalid') as string }),
+
+    username: z
+        .string()
+        .min(1, { message: t('signup.user-field-username-required') as string })
+        .min(3, { message: t('signup.user-field-username-min') as string }),
+
+    password: z
+        .string()
+        .min(1, { message: t('signup.user-field-password-required') as string })
+        .min(8, { message: t('signup.user-field-password-min') as string }),
+
+    imageUrl: z.string().nullish(),
+
+    admin: z.boolean().nullish(),
+    active: z.boolean().nullish(),
+
+    createdAt: z.date().nullish(),
+    updatedAt: z.date().nullish(),
+    deletedAt: z.date().nullish(),
+});
 
 /**
  * INSTANCE (schema) method
@@ -425,16 +427,10 @@ userSchema.methods.passwordChange = async function (password = "", passwordConfi
  *
  * Hash all passwords (if they have been changed)
  */
-userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) {
-        next();
-        return;
-    }
-    return bcrypt.hash(this.password, 12)
-        .then(hashedPassword => {
-            this.password = hashedPassword;
-            next()
-        });
+userSchema.pre('save', async function () {
+    if (!this.isModified('password')) return;
+
+    this.password = await bcrypt.hash(this.password, 12);
 });
 
 
@@ -511,7 +507,7 @@ userSchema.static('signup', async function (
                 await this.create({
                     username,
                     email,
-                    imageUrl,
+                    imageUrl: imageUrl ?? "",
                     password,
                 })
             )

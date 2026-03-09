@@ -1,0 +1,64 @@
+extends:
+    - "spectral:oas"
+
+rules:
+    # --- Quality gates ---
+    operation-operationId: error
+    operation-tags: error
+
+    # --- operationId naming: camelCase ---
+    operation-operationId-casing:
+        description: "operationId must be camelCase (e.g. productsList, ordersSearch)."
+        message: "{{property}} should be camelCase: {{value}}"
+        severity: error
+        given: "$.paths[*][*].operationId"
+        then:
+            function: casing
+            functionOptions:
+                type: camel
+
+    operationId-resource-verb:
+        description: "operationId should look like resourceVerb (e.g. usersList, productsSearch)."
+        severity: warn
+        given: "$.paths[*][*].operationId"
+        then:
+            function: pattern
+            functionOptions:
+                match: "^[a-z][a-zA-Z0-9]*(List|Search|Get|Create|Update|Delete|Upsert|Login|Signup|Logout|Refresh)$"
+
+    # --- Schema component naming: PascalCase ---
+    schemas-pascal-case:
+        description: "components.schemas keys should be PascalCase."
+        message: "Schema name '{{property}}' should be PascalCase."
+        severity: warn
+        given: "$.components.schemas"
+        then:
+            function: pattern
+            functionOptions:
+                match: "^(?:[A-Z][a-z0-9]+)+$"
+
+    # --- Parameter component naming: PascalCase (Param suffix optional) ---
+    parameters-pascal-case:
+        description: "components.parameters keys should be PascalCase."
+        severity: warn
+        given: "$.components.parameters"
+        then:
+            function: pattern
+            functionOptions:
+                match: "^(?:[A-Z][a-z0-9]+)+$"
+
+    # --- Avoid nullable (optional) ---
+    avoid-nullable:
+        description: "Prefer optional properties over nullable=true for codegen friendliness."
+        severity: warn
+        given: "$..nullable"
+        then:
+            function: falsy
+
+    # --- Catch the common typo: $refs instead of $ref ---
+    no-refs-typo:
+        description: "Do not use '$refs' (typo). Use '$ref'."
+        severity: error
+        given: "$..$refs"
+        then:
+            function: truthy

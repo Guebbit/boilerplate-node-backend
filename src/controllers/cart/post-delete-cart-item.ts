@@ -6,7 +6,7 @@ import { databaseErrorConverter } from "../../utils/error-helpers";
  * Page POST data
  */
 export interface IPostDeleteCartItemPostData {
-    _id: string
+    productId: string
 }
 
 /**
@@ -18,7 +18,7 @@ export interface IPostDeleteCartItemPostData {
  */
 export const postDeleteCartItem = (request: Request<unknown, unknown, IPostDeleteCartItemPostData>, response: Response, next: NextFunction) =>
     // check done before entering the route
-    request.user!.cartItemRemoveById(request.body._id)
+    request.user!.cartItemRemoveById(request.body.productId)
         .then(({ success }) => {
             if (!success)
                 throw new Error("cartItemRemoveById error");

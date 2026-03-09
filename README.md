@@ -9,7 +9,7 @@
 # TODO
 - Test PUPPETEER (new createPDF)
 - Check Dredd for automated contract tests (Spec conformance tests, Consumer-driven contract tests)
-
+- Separate controllers & services
 
 # AI TODO
  - Create/complete tests
@@ -25,6 +25,6 @@ post-reset-confirm.ts => POST /account/reset/{token}
 get-reset-database is there a better way?
 Added page size to item lists (users, products and orders)
 pagination changed in item lists
-creare lista (UsersListRequest), inserimento, modifica e cancellazione di un utenti
-orders list filter ProductParam
+orders list filter ProductParams
+- Check all controller routes, the openapi update created new routes (+ add JSON restapi only routes)
 - update insomnia for new openapi.yaml + create a test server? I don't remember the software name for reverse insomnia

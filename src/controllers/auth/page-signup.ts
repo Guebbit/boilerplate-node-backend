@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
  * @param request
  * @param response
  */
-export const getSignup = (request: Request, response: Response) => {
+export const pageSignup = (request: Request, response: Response) => {
     const [
         email,
         username,

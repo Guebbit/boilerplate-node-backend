@@ -3,14 +3,7 @@ import { t } from "i18next";
 import Products from "../../models/products";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "../../utils/error-helpers";
-
-/**
- * Page POST data
- */
-export interface IPostSetCartItemPostData {
-    _id: string,
-    quantity: string,
-}
+import type { CartItemUpsertRequest } from "@api/api";
 
 /**
  * Add a product (with its quantity) to cart, check availability, etc
@@ -20,8 +13,8 @@ export interface IPostSetCartItemPostData {
  * @param response
  * @param next
  */
-export const postSetCartItem = (request: Request<unknown, unknown, IPostSetCartItemPostData>, response: Response, next: NextFunction) =>
-    Products.findOne({ _id: request.body._id, active: true, deletedAt: undefined })
+export const postSetCartItem = (request: Request<unknown, unknown, CartItemUpsertRequest>, response: Response, next: NextFunction) =>
+    Products.findOne({ _id: request.body.productId, active: true, deletedAt: undefined })
         .then((product) => {
             // not found, something happened
             if (!product) {
@@ -30,7 +23,7 @@ export const postSetCartItem = (request: Request<unknown, unknown, IPostSetCartI
             }
             request.flash('success', [ t("ecommerce.product-added-to-cart") ]);
             // check done before entering the route
-            return request.user!.cartItemSet(product, Number.parseInt(request.body.quantity));
+            return request.user!.cartItemSet(product, request.body.quantity);
         })
         .then(() => response.redirect('/cart'))
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
