@@ -100,7 +100,6 @@ components:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/MessageResponse'
-
         Unauthorized:
             description: Unauthorized
             content:
@@ -341,8 +340,8 @@ components:
                     type: string
                     format: date-time
 
-        # ---------- Request DTOs AUTHENTICATION ----------
-        PostLoginRequest:
+        # ---------- Request DTOs — Auth ----------
+        LoginRequest:
             type: object
             additionalProperties: false
             required: [ email, password ]
@@ -352,7 +351,7 @@ components:
                 password:
                     $ref: '#/components/schemas/Password'
 
-        PostSignupRequest:
+        SignupRequest:
             type: object
             additionalProperties: false
             required: [ email, username, password, passwordConfirm ]
@@ -370,7 +369,7 @@ components:
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
 
-        PostResetRequest:
+        PasswordResetRequest:
             type: object
             additionalProperties: false
             required: [ email ]
@@ -378,7 +377,7 @@ components:
                 email:
                     $ref: '#/components/schemas/Email'
 
-        PostResetConfirmRequest:
+        PasswordResetConfirmRequest:
             type: object
             additionalProperties: false
             required: [ token, password, passwordConfirm ]
@@ -391,8 +390,8 @@ components:
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
 
-        # ---------- Request DTOs USERS ----------
-        PostUsersSearchRequest:
+        # ---------- Request DTOs — Users ----------
+        SearchUsersRequest:
             type: object
             additionalProperties: false
             properties:
@@ -411,7 +410,7 @@ components:
                 active:
                     type: boolean
 
-        PostUserRequest:
+        CreateUserRequest:
             type: object
             additionalProperties: false
             required: [ email, username, password ]
@@ -427,7 +426,7 @@ components:
                 active:
                     type: boolean
 
-        PutUserRequest:
+        UpdateUserRequest:
             type: object
             additionalProperties: false
             required: [ id ]
@@ -450,8 +449,8 @@ components:
                     type: boolean
                     default: false
 
-        # ---------- Request DTOs PRODUCTS ----------
-        PostProductsSearchRequest:
+        # ---------- Request DTOs — Products ----------
+        SearchProductsRequest:
             type: object
             additionalProperties: false
             properties:
@@ -470,7 +469,7 @@ components:
                     format: double
                     minimum: 0
 
-        PostProductRequest:
+        CreateProductRequest:
             type: object
             additionalProperties: false
             required: [ title, price ]
@@ -486,7 +485,7 @@ components:
                 active:
                     type: boolean
 
-        PutProductRequest:
+        UpdateProductRequest:
             type: object
             additionalProperties: false
             required: [ id, title, price ]
@@ -506,7 +505,7 @@ components:
                     format: uri
                 active:
                     type: boolean
-        
+
         DeleteProductRequest:
             type: object
             additionalProperties: false
@@ -518,8 +517,8 @@ components:
                     type: boolean
                     default: false
 
-        # ---------- Request DTOs CART ----------
-        PostCartItemUpsertRequest:
+        # ---------- Request DTOs — Cart ----------
+        AddCartItemRequest:
             type: object
             additionalProperties: false
             required: [ productId, quantity ]
@@ -530,15 +529,7 @@ components:
                     type: integer
                     minimum: 1
 
-        DeleteCartItemRequest:
-            type: object
-            additionalProperties: false
-            required: [ productId ]
-            properties:
-                productId:
-                    $ref: '#/components/schemas/Id'
-        
-        PutCartItemRequest:
+        UpdateCartItemRequest:
             type: object
             additionalProperties: false
             required: [ quantity ]
@@ -547,8 +538,16 @@ components:
                     type: integer
                     minimum: 1
                     description: Quantity to set for this item
-        
-        PostCheckoutRequest:
+
+        RemoveCartItemRequest:
+            type: object
+            additionalProperties: false
+            required: [ productId ]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+
+        CheckoutRequest:
             type: object
             additionalProperties: false
             required: [ email ]
@@ -559,8 +558,9 @@ components:
                     type: string
                     nullable: true
                     description: Optional order notes
-        
-        PostOrdersSearchRequest:
+
+        # ---------- Request DTOs — Orders ----------
+        SearchOrdersRequest:
             type: object
             additionalProperties: false
             properties:
@@ -577,7 +577,7 @@ components:
                 email:
                     $ref: '#/components/schemas/Email'
 
-        PostOrderRequest:
+        CreateOrderRequest:
             type: object
             additionalProperties: false
             required: [ userId, email, items ]
@@ -593,7 +593,7 @@ components:
                         $ref: '#/components/schemas/CartItem'
             description: Create a new order.
 
-        PutOrderRequest:
+        UpdateOrderRequest:
             type: object
             additionalProperties: false
             properties:
@@ -620,17 +620,17 @@ components:
             properties:
                 orderId:
                     $ref: '#/components/schemas/Id'
-        
+
         # --------------- RESPONSES ---------------
-        # ---------- Response DTOs USERS ----------
-        GetUserTargetResponse:
+        # ---------- Response DTOs — Users ----------
+        UserResponse:
             type: object
             required: [ user ]
             properties:
                 user:
                     $ref: '#/components/schemas/User'
 
-        GetUsersResponse:
+        UsersResponse:
             type: object
             required: [ items, meta ]
             properties:
@@ -641,8 +641,8 @@ components:
                 meta:
                     $ref: '#/components/schemas/PaginationMeta'
 
-        # ---------- Response DTOs PRODUCTS ----------
-        GetProductsResponse:
+        # ---------- Response DTOs — Products ----------
+        ProductsResponse:
             type: object
             required: [ items, meta ]
             properties:
@@ -653,8 +653,8 @@ components:
                 meta:
                     $ref: '#/components/schemas/PaginationMeta'
 
-        # ---------- Response DTOs CART ----------
-        GetOrdersResponse:
+        # ---------- Response DTOs — Orders ----------
+        OrdersResponse:
             type: object
             required: [ items, meta ]
             properties:
@@ -664,8 +664,9 @@ components:
                         $ref: '#/components/schemas/Order'
                 meta:
                     $ref: '#/components/schemas/PaginationMeta'
-        
-        GetCartSummaryResponse:
+
+        # ---------- Response DTOs — Cart ----------
+        CartSummaryResponse:
             type: object
             required: [ itemsCount, totalQuantity, total ]
             properties:
@@ -686,7 +687,7 @@ components:
                     type: string
                     description: ISO-4217 currency code (e.g. USD)
 
-        GetCartResponse:
+        CartResponse:
             type: object
             required: [ items, summary ]
             properties:
@@ -695,9 +696,9 @@ components:
                     items:
                         $ref: '#/components/schemas/CartItem'
                 summary:
-                    $ref: '#/components/schemas/GetCartSummaryResponse'
+                    $ref: '#/components/schemas/CartSummaryResponse'
 
-        PostCheckoutResponse:
+        CheckoutResponse:
             type: object
             required: [ order ]
             properties:
@@ -706,6 +707,7 @@ components:
                 message:
                     type: string
                     nullable: true
+
 paths:
     /:
         get:
@@ -731,21 +733,21 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetUserTargetResponse'
+                                $ref: '#/components/schemas/UserResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
 
     /account/login:
         post:
             tags: [ Auth ]
             summary: Login
-            operationId: postLogin
-            security: [ ]    # means: public
+            operationId: login
+            security: [ ]
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostLoginRequest'
+                            $ref: '#/components/schemas/LoginRequest'
             responses:
                 '200':
                     description: Auth tokens
@@ -761,14 +763,14 @@ paths:
         post:
             tags: [ Auth ]
             summary: Signup
-            operationId: postSignup
+            operationId: signup
             security: [ ]
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostSignupRequest'
+                            $ref: '#/components/schemas/SignupRequest'
             responses:
                 '201':
                     description: Created
@@ -779,34 +781,33 @@ paths:
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
-    # No need for {token} because that's in the GET page that gives only the form and put the token in the form hidden input.
     /account/reset:
         post:
             tags: [ Auth ]
-            operationId: postPasswordReset
+            operationId: requestPasswordReset
             security: [ ]
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostResetRequest'
+                            $ref: '#/components/schemas/PasswordResetRequest'
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
-    
+
     /account/reset-confirm:
         post:
             tags: [ Auth ]
-            operationId: postConfirmPasswordReset
+            operationId: confirmPasswordReset
             security: [ ]
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostResetConfirmRequest'
+                            $ref: '#/components/schemas/PasswordResetConfirmRequest'
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -817,7 +818,7 @@ paths:
         get:
             tags: [ Users ]
             summary: List users (paginated)
-            operationId: getUsers
+            operationId: listUsers
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -827,18 +828,18 @@ paths:
                 -   $ref: '#/components/parameters/TextParam'
             responses:
                 '200':
-                    description: Users List page
+                    description: Users list page
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetUsersResponse'
+                                $ref: '#/components/schemas/UsersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [ Users ]
             summary: Create user
-            operationId: postUserCreate
+            operationId: createUser
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -846,14 +847,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostUserRequest'
+                            $ref: '#/components/schemas/CreateUserRequest'
             responses:
                 '201':
                     description: Created user
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetUsersResponse'
+                                $ref: '#/components/schemas/UsersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -861,7 +862,7 @@ paths:
         put:
             tags: [ Users ]
             summary: Edit user
-            operationId: putUsersEdit
+            operationId: updateUser
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -869,14 +870,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PutUserRequest'
+                            $ref: '#/components/schemas/UpdateUserRequest'
             responses:
                 '201':
-                    description: Created user
+                    description: Updated user
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetUsersResponse'
+                                $ref: '#/components/schemas/UsersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -905,7 +906,7 @@ paths:
         get:
             tags: [ Users ]
             summary: User details
-            operationId: getUser
+            operationId: getUserById
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -916,16 +917,15 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetUsersResponse'
+                                $ref: '#/components/schemas/UsersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '500': { $ref: '#/components/responses/InternalError' }
-        # Same as PUT /users
         put:
             tags: [ Users ]
             summary: Edit user
-            operationId: putUserEdit
+            operationId: updateUserById
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -935,7 +935,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PutUserRequest'
+                            $ref: '#/components/schemas/UpdateUserRequest'
             responses:
                 '200':
                     description: Updated user
@@ -948,12 +948,11 @@ paths:
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '500': { $ref: '#/components/responses/InternalError' }
-        
         # Same as DELETE /users
         delete:
             tags: [ Users ]
             summary: Delete user
-            operationId: deleteUserPath
+            operationId: deleteUserById
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -974,7 +973,7 @@ paths:
         post:
             tags: [ Users ]
             summary: Search users (DTO-friendly)
-            operationId: postUsersSearch
+            operationId: searchUsers
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -982,14 +981,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostUsersSearchRequest'
+                            $ref: '#/components/schemas/SearchUsersRequest'
             responses:
                 '200':
                     description: Users search results
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetUsersResponse'
+                                $ref: '#/components/schemas/UsersResponse'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -999,7 +998,7 @@ paths:
         get:
             tags: [ Products ]
             summary: List products (paginated)
-            operationId: getProducts
+            operationId: listProducts
             parameters:
                 -   $ref: '#/components/parameters/ProductIdParam'
                 -   $ref: '#/components/parameters/PageParam'
@@ -1024,12 +1023,12 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetProductsResponse'
+                                $ref: '#/components/schemas/ProductsResponse'
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [ Products ]
             summary: Create product
-            operationId: postProductCreate
+            operationId: createProduct
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1037,10 +1036,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostProductRequest'
+                            $ref: '#/components/schemas/CreateProductRequest'
             responses:
                 '201':
-                    description: Deleted product
+                    description: Created product
                     content:
                         application/json:
                             schema:
@@ -1051,7 +1050,7 @@ paths:
         put:
             tags: [ Products ]
             summary: Edit product
-            operationId: putProductEdit
+            operationId: updateProduct
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1059,10 +1058,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PutProductRequest'
+                            $ref: '#/components/schemas/UpdateProductRequest'
             responses:
                 '200':
-                    description: Created product
+                    description: Updated product
                     content:
                         application/json:
                             schema:
@@ -1084,7 +1083,7 @@ paths:
                             $ref: '#/components/schemas/DeleteProductRequest'
             responses:
                 '200':
-                    description: Created product
+                    description: Deleted product
                     content:
                         application/json:
                             schema:
@@ -1098,7 +1097,7 @@ paths:
         get:
             tags: [ Products ]
             summary: Product details
-            operationId: getProduct
+            operationId: getProductById
             parameters:
                 -   $ref: '#/components/parameters/IdPathParam'
             responses:
@@ -1114,7 +1113,7 @@ paths:
         put:
             tags: [ Products ]
             summary: Edit product
-            operationId: putProductEditPath
+            operationId: updateProductById
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -1124,7 +1123,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PutProductRequest'
+                            $ref: '#/components/schemas/UpdateProductRequest'
             responses:
                 '200':
                     description: Updated product
@@ -1140,7 +1139,7 @@ paths:
         delete:
             tags: [ Products ]
             summary: Delete product
-            operationId: deleteProductPath
+            operationId: deleteProductById
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -1160,20 +1159,20 @@ paths:
         post:
             tags: [ Products ]
             summary: Search products (DTO-friendly)
-            operationId: postProductsSearch
+            operationId: searchProducts
             requestBody:
                 required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostProductsSearchRequest'
+                            $ref: '#/components/schemas/SearchProductsRequest'
             responses:
                 '200':
                     description: Products search results
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetProductsResponse'
+                                $ref: '#/components/schemas/ProductsResponse'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1190,13 +1189,13 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCartResponse'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [ Cart ]
-            summary: Add/update cart item
-            operationId: postCartUpsert
+            summary: Add cart item
+            operationId: addCartItem
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1204,20 +1203,20 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostCartItemUpsertRequest' # TODO change name
+                            $ref: '#/components/schemas/AddCartItemRequest'
             responses:
                 '200':
                     description: Updated cart
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCartResponse'
+                                $ref: '#/components/schemas/CartResponse'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         put:
             tags: [ Cart ]
             summary: Update cart item
-            operationId: putCartUpsert
+            operationId: updateCartItem
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1225,20 +1224,20 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostCartItemUpsertRequest'
+                            $ref: '#/components/schemas/AddCartItemRequest'
             responses:
                 '200':
                     description: Updated cart
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCartResponse'
+                                $ref: '#/components/schemas/CartResponse'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         delete:
             tags: [ Cart ]
             summary: Empty cart or remove target cart item
-            operationId: deleteCart
+            operationId: clearCart
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1246,14 +1245,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/DeleteCartItemRequest'
+                            $ref: '#/components/schemas/RemoveCartItemRequest'
             responses:
                 '200':
                     description: Cart cleared
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCartResponse'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1261,8 +1260,8 @@ paths:
         # Same as PUT /cart?productId={productId}
         put:
             tags: [ Cart ]
-            summary: Add/update cart item (set quantity)
-            operationId: cartSetItemQuantityPath
+            summary: Set cart item quantity
+            operationId: setCartItemQuantity
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -1272,23 +1271,22 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PutCartItemRequest'
+                            $ref: '#/components/schemas/UpdateCartItemRequest'
             responses:
                 '200':
                     description: Updated cart
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCartResponse'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
-        # Same as /cart?productId={productId}
         delete:
             tags: [ Cart ]
             summary: Remove item from cart
-            operationId: deleteCartItem
+            operationId: removeCartItem
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -1299,7 +1297,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCartResponse'
+                                $ref: '#/components/schemas/CartResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -1317,9 +1315,10 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetCartSummaryResponse'
+                                $ref: '#/components/schemas/CartSummaryResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
+
     /cart/checkout:
         post:
             tags: [ Orders ]
@@ -1332,22 +1331,23 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostCheckoutRequest'
+                            $ref: '#/components/schemas/CheckoutRequest'
             responses:
                 '201':
                     description: Order created
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/PostCheckoutResponse'
+                                $ref: '#/components/schemas/CheckoutResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
+
     /orders:
         get:
             tags: [ Orders ]
             summary: List orders (paginated)
-            operationId: getOrders
+            operationId: listOrders
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -1358,22 +1358,21 @@ paths:
                 -   $ref: '#/components/parameters/ProductIdParam'
                 -   name: email
                     in: query
-                    schema: {
+                    schema:
                         $ref: '#/components/schemas/Email'
-                    }
             responses:
                 '200':
                     description: Orders page
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetOrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [ Orders ]
-            summary: Add order item
-            operationId: postOrderItemCreate
+            summary: Create order
+            operationId: createOrder
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1381,20 +1380,20 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostOrderRequest'
+                            $ref: '#/components/schemas/CreateOrderRequest'
             responses:
                 '200':
                     description: Updated order
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetOrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponse'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         put:
             tags: [ Orders ]
-            summary: Update order item
-            operationId: putOrderItemEdit
+            summary: Update order
+            operationId: updateOrder
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1402,14 +1401,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PutOrderRequest'
+                            $ref: '#/components/schemas/UpdateOrderRequest'
             responses:
                 '200':
-                    description: Updated cart
+                    description: Updated order
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetOrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponse'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         delete:
@@ -1436,7 +1435,7 @@ paths:
         post:
             tags: [ Orders ]
             summary: Search orders (DTO-friendly)
-            operationId: postOrdersSearch
+            operationId: searchOrders
             security:
                 -   bearerAuth: [ ]
             requestBody:
@@ -1444,14 +1443,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PostOrdersSearchRequest'
+                            $ref: '#/components/schemas/SearchOrdersRequest'
             responses:
                 '200':
                     description: Orders search results
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetOrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponse'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1460,7 +1459,7 @@ paths:
         get:
             tags: [ Orders ]
             summary: Order details
-            operationId: getOrder
+            operationId: getOrderById
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -1471,14 +1470,14 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetOrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '500': { $ref: '#/components/responses/InternalError' }
         put:
             tags: [ Orders ]
             summary: Edit order
-            operationId: putOrder
+            operationId: updateOrderById
             security:
                 -   bearerAuth: [ ]
             parameters:
@@ -1488,14 +1487,14 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PutOrderRequest'
+                            $ref: '#/components/schemas/UpdateOrderRequest'
             responses:
                 '200':
                     description: Updated order
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetOrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1505,7 +1504,7 @@ paths:
         get:
             tags: [ Orders ]
             summary: Download order invoice (PDF)
-            operationId: ordersInvoice
+            operationId: getOrderInvoice
             security:
                 -   bearerAuth: [ ]
             parameters:
