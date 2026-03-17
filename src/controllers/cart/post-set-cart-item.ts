@@ -3,7 +3,7 @@ import { t } from "i18next";
 import Products from "../../models/products";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "../../utils/error-helpers";
-import type { CartItemUpsertRequest } from "@api/api";
+import type { UpsertCartItemRequest } from "@api/api";
 
 /**
  * Add a product (with its quantity) to cart, check availability, etc
@@ -13,7 +13,7 @@ import type { CartItemUpsertRequest } from "@api/api";
  * @param response
  * @param next
  */
-export const postSetCartItem = (request: Request<unknown, unknown, CartItemUpsertRequest>, response: Response, next: NextFunction) =>
+export const postSetCartItem = (request: Request<unknown, unknown, UpsertCartItemRequest>, response: Response, next: NextFunction) =>
     Products.findOne({ _id: request.body.productId, active: true, deletedAt: undefined })
         .then((product) => {
             // not found, something happened

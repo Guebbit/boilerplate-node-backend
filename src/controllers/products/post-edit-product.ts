@@ -3,17 +3,7 @@ import type { CastError } from "mongoose";
 import Products from "../../models/products";
 import { deleteFile } from "../../utils/filesystem-helpers";
 import { ExtendedError } from "../../utils/error-helpers";
-
-/**
- * Page POST data
- */
-export interface IPostEditProductsPostData {
-    id: string,
-    title: string,
-    price: string,
-    description: string,
-    active: string,
-}
+import { UpdateProductRequest } from "@api/api";
 
 /**
  *
@@ -21,7 +11,7 @@ export interface IPostEditProductsPostData {
  * @param response
  * @param next
  */
-export const postEditProduct = async (request: Request<unknown, unknown, IPostEditProductsPostData>, response: Response, next: NextFunction) => {
+export const postEditProduct = async (request: Request<unknown, unknown, UpdateProductRequest>, response: Response, next: NextFunction) => {
     /**
      * get POST data
      */

@@ -8,7 +8,7 @@
     <ul class="orders">
         <% orderList.forEach(function(order) { %>
             <li class="orders__item">
-                <b>Order - #<%= order._id %></b>
+                <b>Order - #<%= order.id %></b>
                 <% if(isAdmin){ %>
                     <small>(UserId - #<%= order.userId %>)</small>
                 <% } %>
@@ -16,8 +16,8 @@
                 <span><b>Total Items</b>: <%= order.totalItems %></span>
                 <span><b>Total Quantity</b>: <%= order.totalQuantity %></span>
                 <span><b>Total Price</b>: <%= order.totalPrice %></span>
-                <a class="btn" href="/orders/details/<%= order._id %>">Invoice</a>
-                <a class="btn" href="/orders/invoice/<%= order._id %>">Download Invoice</a>
+                <a class="btn" href="/orders/details/<%= order.id %>">Invoice</a>
+                <a class="btn" href="/orders/invoice/<%= order.id %>">Download Invoice</a>
             </li>
         <% }); %>
     </ul>

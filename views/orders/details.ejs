@@ -5,7 +5,7 @@
 <%- include("../_layouts/default-header.ejs"); %>
 <%- include("../_layouts/default-aside.ejs"); %>
 <main class="centered">
-    <h1>Order <%= order._id %></h1>
+    <h1>Order <%= order.id %></h1>
     <p><%= order.createdAt %></p>
     <ul>
         <li><b>Email</b>: <%= order.email %></li>
@@ -37,7 +37,7 @@
         <% }); %>
     </div>
     <br/><br/>
-    <a class="btn" href="/orders/invoice/<%= order._id %>">Download Invoice</a>
+    <a class="btn" href="/orders/invoice/<%= order.id %>">Download Invoice</a>
 </main>
 <%- include("../_layouts/default-footer.ejs"); %>
 </body>

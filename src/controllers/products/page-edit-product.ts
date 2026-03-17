@@ -20,7 +20,7 @@ export interface IGetEditProductParameters {
  * @param response
  * @param next
  */
-export const getEditProduct = (request: Request & {
+export const pageEditProduct = (request: Request & {
     params: IGetEditProductParameters
 }, response: Response, next: NextFunction) => {
     Products.findById(request.params.productId)

@@ -303,6 +303,9 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
 
         CartItem:
             type: object
@@ -474,6 +477,8 @@ components:
                     $ref: '#/components/schemas/PageSize'
                 text:
                     $ref: '#/components/schemas/Text'
+                id:
+                    $ref: '#/components/schemas/Id'
                 minPrice:
                     type: number
                     format: double
@@ -909,7 +914,7 @@ paths:
         put:
             tags: [ Users ]
             summary: Edit user
-            description: Updates an existing user's email or password. 
+            description: Updates an existing user's email or password.
             operationId: updateUser
             security:
                 -   bearerAuth: [ ]
@@ -1003,7 +1008,7 @@ paths:
         delete:
             tags: [ Users ]
             summary: Delete user
-            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`. 
+            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`.
             operationId: deleteUserById
             security:
                 -   bearerAuth: [ ]
@@ -1303,11 +1308,11 @@ paths:
                 '500': { $ref: '#/components/responses/InternalError' }
 
     /cart/{productId}:
-        # Same as PUT /cart?productId={productId}
+        # Same as POST /cart?productId={productId}
         put:
             tags: [ Cart ]
             summary: Set cart item quantity
-            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `PUT /cart`. Returns the updated cart.
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
             operationId: updateCartItemById
             security:
                 -   bearerAuth: [ ]

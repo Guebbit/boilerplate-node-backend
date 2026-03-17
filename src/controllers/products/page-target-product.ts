@@ -20,7 +20,7 @@ export interface IGetTargetProductParameters {
  * @param response
  * @param next
  */
-export const getTargetProduct = (request: Request & {
+export const pageTargetProduct = (request: Request & {
     params: IGetTargetProductParameters
 }, response: Response, next: NextFunction) =>
     (

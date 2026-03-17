@@ -32,21 +32,21 @@
                     <% } %>
                 </div>
                 <div class="card__actions">
-                    <a href="/products/details/<%= product._id %>" class="btn">Details</a>
+                    <a href="/products/details/<%= product.id %>" class="btn">Details</a>
                     <% if (isAdmin) { %>
-                        <a href="/products/edit/<%= product._id %>" class="btn">Edit</a>
+                        <a href="/products/edit/<%= product.id %>" class="btn">Edit</a>
                         <form action="/products/delete" method="post">
                             <% if (product.deletedAt) { %>
                                 <button class="btn" type="submit">Un-delete</button>
                             <% } else { %>
                                 <button class="btn" type="submit">Delete</button>
                             <% } %>
-                            <input type="hidden" name="_id" value="<%= product._id %>">
+                            <input type="hidden" name="id" value="<%= product.id %>">
                             <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                         </form>
                         <form action="/products/delete" method="post">
                             <button class="btn" type="submit">HARD Delete</button>
-                            <input type="hidden" name="_id" value="<%= product._id %>">
+                            <input type="hidden" name="id" value="<%= product.id %>">
                             <input type="hidden" name="hardDelete" value="true">
                             <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                         </form>
@@ -56,7 +56,7 @@
                             <form action="/cart" method="post">
                                 <button class="btn" type="submit">Set quantity on Cart</button>
                                 <input type="text" value="1" name="quantity">
-                                <input type="hidden" name="_id" value="<%= product._id %>">
+                                <input type="hidden" name="id" value="<%= product.id %>">
                                 <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                             </form>
                         <% } %>

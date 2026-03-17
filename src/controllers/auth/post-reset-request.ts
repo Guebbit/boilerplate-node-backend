@@ -4,7 +4,7 @@ import Users from "../../models/users";
 import { nodemailer } from "../../utils/nodemailer";
 import type {CastError} from "mongoose";
 import { databaseErrorConverter } from "../../utils/error-helpers";
-import type { ResetRequest } from "@api/api";
+import type { PasswordResetRequest } from "@api/api";
 
 /**
  * Ask to guest if they want to reset the password
@@ -13,7 +13,7 @@ import type { ResetRequest } from "@api/api";
  * @param response
  * @param next
  */
-export const postResetRequest = (request: Request<unknown, unknown, ResetRequest>, response: Response, next: NextFunction) =>
+export const postResetRequest = (request: Request<unknown, unknown, PasswordResetRequest>, response: Response, next: NextFunction) =>
     Users.findOne({
         email: request.body.email
     })

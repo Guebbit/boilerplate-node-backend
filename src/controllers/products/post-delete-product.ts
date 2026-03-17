@@ -3,14 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import Products from "../../models/products";
 import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
-
-/**
- * Page POST data
- */
-export interface IPostDeleteProductPostData {
-    _id: string,
-    hardDelete?: string,
-}
+import type { DeleteProductRequest } from "@api/api"
 
 /**
  * Delete a product
@@ -19,8 +12,8 @@ export interface IPostDeleteProductPostData {
  * @param response
  * @param next
  */
-export const postDeleteProduct = (request: Request<unknown, unknown, IPostDeleteProductPostData>, response: Response, next: NextFunction) =>
-    Products.productRemoveById(request.body._id, !!request.body.hardDelete)
+export const postDeleteProduct = (request: Request<unknown, unknown, DeleteProductRequest>, response: Response, next: NextFunction) =>
+    Products.productRemoveById(request.body.id, !!request.body.hardDelete)
         .then(({ success, message }) => {
             if (success)
                 request.flash('success', [ message ]);

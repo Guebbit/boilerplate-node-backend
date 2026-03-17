@@ -5,9 +5,10 @@ import {t} from "i18next";
 import bcrypt from "bcrypt";
 import {randomBytes} from "node:crypto";
 import {generateSuccess, generateReject, type IResponseReject, type IResponseSuccess} from "../utils/response";
-import Orders, {IOrder} from "./orders";
+import Orders from "./orders";
 import type {IProductDocument} from "./products";
 import {databaseErrorInterpreter} from "../utils/error-helpers";
+import { Order } from "@api/api"
 
 /**
  * Cart Item interface
@@ -79,7 +80,7 @@ export interface IUserMethods {
     cartItemAdd: (product: IProductDocument, quantity?: number) => Promise<IResponseSuccess<IUserDocument>>;
     cartItemRemoveById: (id: string) => Promise<IResponseSuccess<IUserDocument>>;
     cartItemRemove: (product: IProductDocument) => Promise<IResponseSuccess<IUserDocument>>;
-    orderConfirm: () => Promise<IResponseSuccess<IOrder> | IResponseReject>;
+    orderConfirm: () => Promise<IResponseSuccess<Order> | IResponseReject>;
     tokenAdd: (type: string, expirationTime?: number) => Promise<string>
     passwordChange: (password: string, passwordConfirm: string) => Promise<IResponseSuccess<IUserDocument> | IResponseReject>
 }
@@ -328,7 +329,7 @@ userSchema.methods.cartRemove = async function (): Promise<IResponseSuccess<IUse
  *
  * Create order and empty cart
  */
-userSchema.methods.orderConfirm = async function (): Promise<IResponseSuccess<IOrder> | IResponseReject> {
+userSchema.methods.orderConfirm = async function (): Promise<IResponseSuccess<Order> | IResponseReject> {
     return this.cartGet()
         .then(async (products) => {
             if (products.length === 0)
@@ -343,7 +344,7 @@ userSchema.methods.orderConfirm = async function (): Promise<IResponseSuccess<IO
                 products
             });
             await this.cartRemove();
-            return generateSuccess<IOrder>(order)
+            return generateSuccess<Order>(order)
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
 };
