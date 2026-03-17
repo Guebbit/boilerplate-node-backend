@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -12,19 +12,25 @@
 
 import { RequestFile } from './models';
 import { ErrorDetail } from './errorDetail';
-import { FieldError } from './fieldError';
+import { ValidationErrorResponseAllOfErrors } from './validationErrorResponseAllOfErrors';
 
 export class ValidationErrorResponse {
+    'success': boolean;
     'error': ErrorDetail;
     /**
     * Correlation ID for support/debugging
     */
     'traceId'?: string;
-    'errors': Array<FieldError>;
+    'errors': Array<ValidationErrorResponseAllOfErrors>;
 
     static discriminator: string | undefined = undefined;
 
     static attributeTypeMap: Array<{name: string, baseName: string, type: string}> = [
+        {
+            "name": "success",
+            "baseName": "success",
+            "type": "boolean"
+        },
         {
             "name": "error",
             "baseName": "error",
@@ -38,7 +44,7 @@ export class ValidationErrorResponse {
         {
             "name": "errors",
             "baseName": "errors",
-            "type": "Array<FieldError>"
+            "type": "Array<ValidationErrorResponseAllOfErrors>"
         }    ];
 
     static getAttributeTypeMap() {

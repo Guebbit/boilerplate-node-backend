@@ -18,27 +18,30 @@ import {deleteFile} from "../utils/filesystem-helpers";
 /**
  * Zod validation schema
  */
-export const zodProductSchema =
-    z.object({
-        id: z.number().optional().nullable(),
-        title: z
-            .string({
-                required_error: t('ecommerce.product-field-title-required'),
-            })
-            .min(5, t('ecommerce.product-field-title-min')),
-        price: z.number({
-            required_error: t('ecommerce.product-field-price-required'),
-            invalid_type_error: t('ecommerce.product-field-price-invalid')
+export const zodProductSchema = z.object({
+    id: z.number().optional().nullable(),
+
+    title: z
+        .string({
+            error: t('ecommerce.product-field-title-required'),
+        })
+        .min(5, {
+            error: t('ecommerce.product-field-title-min'),
         }),
-        imageUrl: z
-            .string({
-                required_error: t('ecommerce.product-field-image-required'),
-            }),
-        active: z.boolean().optional().nullable(),
-        createdAt: z.date().optional().nullable(),
-        updatedAt: z.date().optional().nullable(),
-        deletedAt: z.date().optional().nullable(),
-    });
+
+    price: z.number({
+        error: t('ecommerce.product-field-price-required'),
+    }),
+
+    imageUrl: z.string({
+        error: t('ecommerce.product-field-image-required'),
+    }),
+
+    active: z.boolean().optional().nullable(),
+    createdAt: z.date().optional().nullable(),
+    updatedAt: z.date().optional().nullable(),
+    deletedAt: z.date().optional().nullable(),
+});
 
 /**
  * Model with typescript

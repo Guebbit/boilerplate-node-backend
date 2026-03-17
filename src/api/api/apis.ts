@@ -1,3 +1,5 @@
+export * from './accountApi';
+import { AccountApi } from './accountApi';
 export * from './authApi';
 import { AuthApi } from './authApi';
 export * from './cartApi';
@@ -6,8 +8,6 @@ export * from './ordersApi';
 import { OrdersApi } from './ordersApi';
 export * from './productsApi';
 import { ProductsApi } from './productsApi';
-export * from './systemApi';
-import { SystemApi } from './systemApi';
 export * from './usersApi';
 import { UsersApi } from './usersApi';
 import * as http from 'http';
@@ -21,4 +21,4 @@ export class HttpError extends Error {
 
 export { RequestFile } from '../model/models';
 
-export const APIS = [AuthApi, CartApi, OrdersApi, ProductsApi, SystemApi, UsersApi];
+export const APIS = [AccountApi, AuthApi, CartApi, OrdersApi, ProductsApi, UsersApi];

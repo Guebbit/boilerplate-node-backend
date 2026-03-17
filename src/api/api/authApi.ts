@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -18,6 +18,9 @@ import http from 'http';
 import { AuthTokens } from '../model/authTokens';
 import { ErrorResponse } from '../model/errorResponse';
 import { LoginRequest } from '../model/loginRequest';
+import { MessageResponse } from '../model/messageResponse';
+import { PasswordResetConfirmRequest } from '../model/passwordResetConfirmRequest';
+import { PasswordResetRequest } from '../model/passwordResetRequest';
 import { SignupRequest } from '../model/signupRequest';
 import { User } from '../model/user';
 import { ValidationErrorResponse } from '../model/validationErrorResponse';
@@ -98,11 +101,79 @@ export class AuthApi {
     }
 
     /**
-     * 
+     * Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user\'s password to the supplied value.
+     * @param passwordResetConfirmRequest 
+     */
+    public async confirmPasswordReset (passwordResetConfirmRequest: PasswordResetConfirmRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: MessageResponse;  }> {
+        const localVarPath = this.basePath + '/account/reset-confirm';
+        let localVarQueryParameters: any = {};
+        let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
+        const produces = ['application/json'];
+        // give precedence to 'application/json'
+        if (produces.indexOf('application/json') >= 0) {
+            localVarHeaderParams.Accept = 'application/json';
+        } else {
+            localVarHeaderParams.Accept = produces.join(',');
+        }
+        let localVarFormParams: any = {};
+
+        // verify required parameter 'passwordResetConfirmRequest' is not null or undefined
+        if (passwordResetConfirmRequest === null || passwordResetConfirmRequest === undefined) {
+            throw new Error('Required parameter passwordResetConfirmRequest was null or undefined when calling confirmPasswordReset.');
+        }
+
+        (<any>Object).assign(localVarHeaderParams, options.headers);
+
+        let localVarUseFormData = false;
+
+        let localVarRequestOptions: localVarRequest.Options = {
+            method: 'POST',
+            qs: localVarQueryParameters,
+            headers: localVarHeaderParams,
+            uri: localVarPath,
+            useQuerystring: this._useQuerystring,
+            json: true,
+            body: ObjectSerializer.serialize(passwordResetConfirmRequest, "PasswordResetConfirmRequest")
+        };
+
+        let authenticationPromise = Promise.resolve();
+        authenticationPromise = authenticationPromise.then(() => this.authentications.default.applyToRequest(localVarRequestOptions));
+
+        let interceptorPromise = authenticationPromise;
+        for (const interceptor of this.interceptors) {
+            interceptorPromise = interceptorPromise.then(() => interceptor(localVarRequestOptions));
+        }
+
+        return interceptorPromise.then(() => {
+            if (Object.keys(localVarFormParams).length) {
+                if (localVarUseFormData) {
+                    (<any>localVarRequestOptions).formData = localVarFormParams;
+                } else {
+                    localVarRequestOptions.form = localVarFormParams;
+                }
+            }
+            return new Promise<{ response: http.IncomingMessage; body: MessageResponse;  }>((resolve, reject) => {
+                localVarRequest(localVarRequestOptions, (error, response, body) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        if (response.statusCode && response.statusCode >= 200 && response.statusCode <= 299) {
+                            body = ObjectSerializer.deserialize(body, "MessageResponse");
+                            resolve({ response: response, body: body });
+                        } else {
+                            reject(new HttpError(response, body, response.statusCode));
+                        }
+                    }
+                });
+            });
+        });
+    }
+    /**
+     * Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests.
      * @summary Login
      * @param loginRequest 
      */
-    public async authLogin (loginRequest: LoginRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: AuthTokens;  }> {
+    public async login (loginRequest: LoginRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: AuthTokens;  }> {
         const localVarPath = this.basePath + '/account/login';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -117,7 +188,7 @@ export class AuthApi {
 
         // verify required parameter 'loginRequest' is not null or undefined
         if (loginRequest === null || loginRequest === undefined) {
-            throw new Error('Required parameter loginRequest was null or undefined when calling authLogin.');
+            throw new Error('Required parameter loginRequest was null or undefined when calling login.');
         }
 
         (<any>Object).assign(localVarHeaderParams, options.headers);
@@ -167,11 +238,79 @@ export class AuthApi {
         });
     }
     /**
-     * 
+     * Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
+     * @param passwordResetRequest 
+     */
+    public async requestPasswordReset (passwordResetRequest: PasswordResetRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: MessageResponse;  }> {
+        const localVarPath = this.basePath + '/account/reset';
+        let localVarQueryParameters: any = {};
+        let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
+        const produces = ['application/json'];
+        // give precedence to 'application/json'
+        if (produces.indexOf('application/json') >= 0) {
+            localVarHeaderParams.Accept = 'application/json';
+        } else {
+            localVarHeaderParams.Accept = produces.join(',');
+        }
+        let localVarFormParams: any = {};
+
+        // verify required parameter 'passwordResetRequest' is not null or undefined
+        if (passwordResetRequest === null || passwordResetRequest === undefined) {
+            throw new Error('Required parameter passwordResetRequest was null or undefined when calling requestPasswordReset.');
+        }
+
+        (<any>Object).assign(localVarHeaderParams, options.headers);
+
+        let localVarUseFormData = false;
+
+        let localVarRequestOptions: localVarRequest.Options = {
+            method: 'POST',
+            qs: localVarQueryParameters,
+            headers: localVarHeaderParams,
+            uri: localVarPath,
+            useQuerystring: this._useQuerystring,
+            json: true,
+            body: ObjectSerializer.serialize(passwordResetRequest, "PasswordResetRequest")
+        };
+
+        let authenticationPromise = Promise.resolve();
+        authenticationPromise = authenticationPromise.then(() => this.authentications.default.applyToRequest(localVarRequestOptions));
+
+        let interceptorPromise = authenticationPromise;
+        for (const interceptor of this.interceptors) {
+            interceptorPromise = interceptorPromise.then(() => interceptor(localVarRequestOptions));
+        }
+
+        return interceptorPromise.then(() => {
+            if (Object.keys(localVarFormParams).length) {
+                if (localVarUseFormData) {
+                    (<any>localVarRequestOptions).formData = localVarFormParams;
+                } else {
+                    localVarRequestOptions.form = localVarFormParams;
+                }
+            }
+            return new Promise<{ response: http.IncomingMessage; body: MessageResponse;  }>((resolve, reject) => {
+                localVarRequest(localVarRequestOptions, (error, response, body) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        if (response.statusCode && response.statusCode >= 200 && response.statusCode <= 299) {
+                            body = ObjectSerializer.deserialize(body, "MessageResponse");
+                            resolve({ response: response, body: body });
+                        } else {
+                            reject(new HttpError(response, body, response.statusCode));
+                        }
+                    }
+                });
+            });
+        });
+    }
+    /**
+     * Registers a new user account. Returns the newly created user profile on success.
      * @summary Signup
      * @param signupRequest 
      */
-    public async authSignup (signupRequest: SignupRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: User;  }> {
+    public async signup (signupRequest: SignupRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: User;  }> {
         const localVarPath = this.basePath + '/account/signup';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -186,7 +325,7 @@ export class AuthApi {
 
         // verify required parameter 'signupRequest' is not null or undefined
         if (signupRequest === null || signupRequest === undefined) {
-            throw new Error('Required parameter signupRequest was null or undefined when calling authSignup.');
+            throw new Error('Required parameter signupRequest was null or undefined when calling signup.');
         }
 
         (<any>Object).assign(localVarHeaderParams, options.headers);

@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -14,7 +14,7 @@ import { RequestFile } from './models';
 
 export class ErrorDetail {
     'code': string;
-    'message': string;
+    'message'?: string;
     'details'?: { [key: string]: any; };
 
     static discriminator: string | undefined = undefined;

@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -14,6 +14,7 @@ import { RequestFile } from './models';
 import { ErrorDetail } from './errorDetail';
 
 export class ErrorResponse {
+    'success': boolean;
     'error': ErrorDetail;
     /**
     * Correlation ID for support/debugging
@@ -23,6 +24,11 @@ export class ErrorResponse {
     static discriminator: string | undefined = undefined;
 
     static attributeTypeMap: Array<{name: string, baseName: string, type: string}> = [
+        {
+            "name": "success",
+            "baseName": "success",
+            "type": "boolean"
+        },
         {
             "name": "error",
             "baseName": "error",

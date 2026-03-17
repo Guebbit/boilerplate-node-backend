@@ -4,7 +4,7 @@ import Users from "../../models/users";
 import Tokens from "../../models/tokens";
 import { nodemailer } from "../../utils/nodemailer";
 import { ExtendedError } from "../../utils/error-helpers";
-import type { ResetConfirmRequest } from "@api/api";
+import type { PasswordResetConfirmRequest } from "@api/api";
 
 /**
  * Ask to guest if they want to reset the password
@@ -13,7 +13,7 @@ import type { ResetConfirmRequest } from "@api/api";
  * @param response
  * @param next
  */
-export const postResetConfirm = async (request: Request<unknown, unknown, ResetConfirmRequest>, response: Response, next: NextFunction) => {
+export const postResetConfirm = async (request: Request<unknown, unknown, PasswordResetConfirmRequest>, response: Response, next: NextFunction) => {
     /**
      * Post Data
      */

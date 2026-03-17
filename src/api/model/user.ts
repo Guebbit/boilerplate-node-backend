@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -13,14 +13,17 @@
 import { RequestFile } from './models';
 
 export class User {
+    /**
+    * Resource identifier
+    */
     'id': string;
     'email': string;
     'username': string;
-    'admin': boolean;
-    'active': boolean;
-    'imageUrl'?: string | null;
-    'createdAt'?: Date | null;
-    'updatedAt'?: Date | null;
+    'admin'?: boolean;
+    'active'?: boolean;
+    'imageUrl'?: string;
+    'createdAt'?: Date;
+    'updatedAt'?: Date;
 
     static discriminator: string | undefined = undefined;
 

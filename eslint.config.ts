@@ -8,7 +8,7 @@ import path from 'node:path'
 
 export default tseslint.config(
     {
-        files: ['**/*.{ts,mts,tsx,vue}']
+        files: ['**/*.{ts,mts,tsx}']
     },
 
     /**
@@ -53,10 +53,6 @@ export default tseslint.config(
         rules: {
             'no-console': 'warn',
             'no-debugger': 'warn',
-            'vue/script-indent': 'off',
-            'vue/multi-word-component-names': 'off',
-            'vue/require-default-prop': 'off',
-            'vue/no-v-html': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
             // '@typescript-eslint/no-confusing-void-expression': 'off',
             '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
@@ -125,7 +121,7 @@ export default tseslint.config(
             'unicorn/consistent-destructuring': 'warn',
 
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/filename-case.md
-            // Every file is camelCase except Vue components and tests (see below)
+            // Every file is camelCase
             'unicorn/filename-case': [
                 'error',
                 {

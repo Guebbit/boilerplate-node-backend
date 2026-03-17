@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -20,11 +20,11 @@ export class AuthTokens {
     /**
     * Refresh token if returned by backend
     */
-    'refreshToken'?: string | null;
+    'refreshToken'?: string;
     /**
     * Access token expiry in seconds
     */
-    'expiresIn'?: number | null;
+    'expiresIn'?: number;
 
     static discriminator: string | undefined = undefined;
 

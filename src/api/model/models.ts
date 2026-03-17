@@ -1,31 +1,45 @@
 import localVarRequest from 'request';
 
-export * from './addProductRequestJson';
-export * from './addUserRequestJson';
 export * from './authTokens';
 export * from './cartItem';
-export * from './cartItemInput';
 export * from './cartResponse';
-export * from './editProductByIdRequestJson';
-export * from './editProductRequestJson';
-export * from './editUserRequestJson';
+export * from './cartSummaryResponse';
+export * from './checkoutRequest';
+export * from './checkoutResponse';
+export * from './createOrderRequest';
+export * from './createProductRequest';
+export * from './createUserRequest';
+export * from './deleteOrderRequest';
+export * from './deleteProductRequest';
+export * from './deleteUserRequest';
 export * from './errorDetail';
 export * from './errorResponse';
-export * from './fieldError';
-export * from './invoice';
 export * from './loginRequest';
 export * from './messageResponse';
 export * from './order';
-export * from './orderListResponse';
+export * from './ordersResponse';
 export * from './paginationMeta';
+export * from './passwordResetConfirmRequest';
+export * from './passwordResetRequest';
 export * from './product';
-export * from './productListResponse';
-export * from './resetConfirmRequest';
-export * from './resetRequest';
+export * from './productsResponse';
+export * from './removeCartItemRequest';
+export * from './searchOrdersRequest';
+export * from './searchProductsRequest';
+export * from './searchUsersRequest';
 export * from './signupRequest';
+export * from './updateCartItemByIdRequest';
+export * from './updateOrderByIdRequest';
+export * from './updateOrderRequest';
+export * from './updateProductByIdRequest';
+export * from './updateProductRequest';
+export * from './updateUserByIdRequest';
+export * from './updateUserRequest';
+export * from './upsertCartItemRequest';
 export * from './user';
-export * from './userListResponse';
+export * from './usersResponse';
 export * from './validationErrorResponse';
+export * from './validationErrorResponseAllOfErrors';
 
 import * as fs from 'fs';
 
@@ -40,32 +54,46 @@ export interface RequestDetailedFile {
 export type RequestFile = string | Buffer | fs.ReadStream | RequestDetailedFile;
 
 
-import { AddProductRequestJson } from './addProductRequestJson';
-import { AddUserRequestJson } from './addUserRequestJson';
 import { AuthTokens } from './authTokens';
 import { CartItem } from './cartItem';
-import { CartItemInput } from './cartItemInput';
 import { CartResponse } from './cartResponse';
-import { EditProductByIdRequestJson } from './editProductByIdRequestJson';
-import { EditProductRequestJson } from './editProductRequestJson';
-import { EditUserRequestJson } from './editUserRequestJson';
+import { CartSummaryResponse } from './cartSummaryResponse';
+import { CheckoutRequest } from './checkoutRequest';
+import { CheckoutResponse } from './checkoutResponse';
+import { CreateOrderRequest } from './createOrderRequest';
+import { CreateProductRequest } from './createProductRequest';
+import { CreateUserRequest } from './createUserRequest';
+import { DeleteOrderRequest } from './deleteOrderRequest';
+import { DeleteProductRequest } from './deleteProductRequest';
+import { DeleteUserRequest } from './deleteUserRequest';
 import { ErrorDetail } from './errorDetail';
 import { ErrorResponse } from './errorResponse';
-import { FieldError } from './fieldError';
-import { Invoice } from './invoice';
 import { LoginRequest } from './loginRequest';
 import { MessageResponse } from './messageResponse';
 import { Order } from './order';
-import { OrderListResponse } from './orderListResponse';
+import { OrdersResponse } from './ordersResponse';
 import { PaginationMeta } from './paginationMeta';
+import { PasswordResetConfirmRequest } from './passwordResetConfirmRequest';
+import { PasswordResetRequest } from './passwordResetRequest';
 import { Product } from './product';
-import { ProductListResponse } from './productListResponse';
-import { ResetConfirmRequest } from './resetConfirmRequest';
-import { ResetRequest } from './resetRequest';
+import { ProductsResponse } from './productsResponse';
+import { RemoveCartItemRequest } from './removeCartItemRequest';
+import { SearchOrdersRequest } from './searchOrdersRequest';
+import { SearchProductsRequest } from './searchProductsRequest';
+import { SearchUsersRequest } from './searchUsersRequest';
 import { SignupRequest } from './signupRequest';
+import { UpdateCartItemByIdRequest } from './updateCartItemByIdRequest';
+import { UpdateOrderByIdRequest } from './updateOrderByIdRequest';
+import { UpdateOrderRequest } from './updateOrderRequest';
+import { UpdateProductByIdRequest } from './updateProductByIdRequest';
+import { UpdateProductRequest } from './updateProductRequest';
+import { UpdateUserByIdRequest } from './updateUserByIdRequest';
+import { UpdateUserRequest } from './updateUserRequest';
+import { UpsertCartItemRequest } from './upsertCartItemRequest';
 import { User } from './user';
-import { UserListResponse } from './userListResponse';
+import { UsersResponse } from './usersResponse';
 import { ValidationErrorResponse } from './validationErrorResponse';
+import { ValidationErrorResponseAllOfErrors } from './validationErrorResponseAllOfErrors';
 
 /* tslint:disable:no-unused-variable */
 let primitives = [
@@ -81,35 +109,51 @@ let primitives = [
 
 let enumsMap: {[index: string]: any} = {
         "Order.StatusEnum": Order.StatusEnum,
+        "UpdateOrderByIdRequest.StatusEnum": UpdateOrderByIdRequest.StatusEnum,
+        "UpdateOrderRequest.StatusEnum": UpdateOrderRequest.StatusEnum,
 }
 
 let typeMap: {[index: string]: any} = {
-    "AddProductRequestJson": AddProductRequestJson,
-    "AddUserRequestJson": AddUserRequestJson,
     "AuthTokens": AuthTokens,
     "CartItem": CartItem,
-    "CartItemInput": CartItemInput,
     "CartResponse": CartResponse,
-    "EditProductByIdRequestJson": EditProductByIdRequestJson,
-    "EditProductRequestJson": EditProductRequestJson,
-    "EditUserRequestJson": EditUserRequestJson,
+    "CartSummaryResponse": CartSummaryResponse,
+    "CheckoutRequest": CheckoutRequest,
+    "CheckoutResponse": CheckoutResponse,
+    "CreateOrderRequest": CreateOrderRequest,
+    "CreateProductRequest": CreateProductRequest,
+    "CreateUserRequest": CreateUserRequest,
+    "DeleteOrderRequest": DeleteOrderRequest,
+    "DeleteProductRequest": DeleteProductRequest,
+    "DeleteUserRequest": DeleteUserRequest,
     "ErrorDetail": ErrorDetail,
     "ErrorResponse": ErrorResponse,
-    "FieldError": FieldError,
-    "Invoice": Invoice,
     "LoginRequest": LoginRequest,
     "MessageResponse": MessageResponse,
     "Order": Order,
-    "OrderListResponse": OrderListResponse,
+    "OrdersResponse": OrdersResponse,
     "PaginationMeta": PaginationMeta,
+    "PasswordResetConfirmRequest": PasswordResetConfirmRequest,
+    "PasswordResetRequest": PasswordResetRequest,
     "Product": Product,
-    "ProductListResponse": ProductListResponse,
-    "ResetConfirmRequest": ResetConfirmRequest,
-    "ResetRequest": ResetRequest,
+    "ProductsResponse": ProductsResponse,
+    "RemoveCartItemRequest": RemoveCartItemRequest,
+    "SearchOrdersRequest": SearchOrdersRequest,
+    "SearchProductsRequest": SearchProductsRequest,
+    "SearchUsersRequest": SearchUsersRequest,
     "SignupRequest": SignupRequest,
+    "UpdateCartItemByIdRequest": UpdateCartItemByIdRequest,
+    "UpdateOrderByIdRequest": UpdateOrderByIdRequest,
+    "UpdateOrderRequest": UpdateOrderRequest,
+    "UpdateProductByIdRequest": UpdateProductByIdRequest,
+    "UpdateProductRequest": UpdateProductRequest,
+    "UpdateUserByIdRequest": UpdateUserByIdRequest,
+    "UpdateUserRequest": UpdateUserRequest,
+    "UpsertCartItemRequest": UpsertCartItemRequest,
     "User": User,
-    "UserListResponse": UserListResponse,
+    "UsersResponse": UsersResponse,
     "ValidationErrorResponse": ValidationErrorResponse,
+    "ValidationErrorResponseAllOfErrors": ValidationErrorResponseAllOfErrors,
 }
 
 // Check if a string starts with another string without using es6 features

@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -13,11 +13,17 @@
 import { RequestFile } from './models';
 
 export class MessageResponse {
+    'success': boolean;
     'message': string;
 
     static discriminator: string | undefined = undefined;
 
     static attributeTypeMap: Array<{name: string, baseName: string, type: string}> = [
+        {
+            "name": "success",
+            "baseName": "success",
+            "type": "boolean"
+        },
         {
             "name": "message",
             "baseName": "message",

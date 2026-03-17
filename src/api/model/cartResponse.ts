@@ -1,5 +1,5 @@
 /**
- * Node Demo API
+ * Ecommerce Demo API
  * Stable, codegen-oriented OpenAPI contract. Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs). 
  *
  * The version of the OpenAPI document: 2.0.0
@@ -12,9 +12,11 @@
 
 import { RequestFile } from './models';
 import { CartItem } from './cartItem';
+import { CartSummaryResponse } from './cartSummaryResponse';
 
 export class CartResponse {
     'items': Array<CartItem>;
+    'summary': CartSummaryResponse;
 
     static discriminator: string | undefined = undefined;
 
@@ -23,6 +25,11 @@ export class CartResponse {
             "name": "items",
             "baseName": "items",
             "type": "Array<CartItem>"
+        },
+        {
+            "name": "summary",
+            "baseName": "summary",
+            "type": "CartSummaryResponse"
         }    ];
 
     static getAttributeTypeMap() {
