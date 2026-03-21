@@ -1,11 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
 import type { CastError } from "mongoose";
-import Products from "../../models/products";
 import { deleteFile } from "../../utils/filesystem-helpers";
 import { ExtendedError } from "../../utils/error-helpers";
 import type { UpdateProductRequestBody } from "@api/api";
+import * as ProductService from "../../services/products";
 
 /**
+ * Create or update a product.
+ * Handles image upload, data validation, and redirects.
  *
  * @param request
  * @param response
@@ -33,7 +35,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
     /**
      * Data validation
      */
-    const issues = Products.validateData({
+    const issues = ProductService.validateData({
         title,
         imageUrl,
         price,
@@ -59,7 +61,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      * NO ID = new product
      */
     if (!id || id === '')
-        Products.create({
+        ProductService.create({
             title,
             imageUrl,
             price,
@@ -76,25 +78,13 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      * ID = edit product
      */
     else
-        Products.findById(id)
-            .then(async (product) => {
-                if (!product)
-                    throw new Error("404");
-                product.title = title;
-                // if empty: no image was uploaded
-                const oldImageUrl = product.imageUrl;
-                if (oldImageUrl !== imageUrl)
-                    product.imageUrl = imageUrl;
-                product.price = price;
-                product.description = description;
-                product.active = !!active;
-                // save the updated product (not necessary to use newProduct variable since the ID doesn't change, but normally it would be necessary)
-                const newProduct = await product.save();
-                // after saving the new product image, delete the old one
-                if (oldImageUrl !== imageUrl)
-                    await deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + oldImageUrl);
-                response.redirect('/products/details/' + (newProduct.id as string))
-            })
+        ProductService.update(id, {
+            title,
+            price,
+            description,
+            active: !!active,
+        }, imageUrl)
+            .then((updatedProduct) => response.redirect('/products/details/' + (updatedProduct.id as string)))
             .catch(async (error: CastError) => {
                 if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);

@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import type { CastError } from "mongoose";
 import { t } from "i18next";
-import Products from "../../models/products";
 import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
 import type { ObjectId } from "mongodb";
+import * as ProductService from "../../services/products";
 
 /**
  * Url parameters
@@ -23,18 +23,7 @@ export interface IGetTargetProductParameters {
 export const pageTargetProduct = (request: Request & {
     params: IGetTargetProductParameters
 }, response: Response, next: NextFunction) =>
-    (
-        request.session.user?.admin ?
-            // admin can search inactive or deleted products
-            Products.findById(request.params.productId) :
-            // NON admin can only search active and NOT (soft) deleted products
-            Products.findOne({
-                _id: request.params.productId,
-                active: true,
-                deletedAt: undefined
-            })
-    )
-        .lean()
+    ProductService.getById(request.params.productId, request.session.user?.admin)
         .then(async (product) => {
             if (!product)
                 return next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));

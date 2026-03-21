@@ -1,15 +1,15 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import Products from "../../models/products";
 import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
 import type { CastError } from "mongoose";
+import * as ProductService from "../../services/products";
 
 
 /**
  * Url parameters
  */
 export interface IGetEditProductParameters {
-    productId: string,
+    productId?: string,
 }
 
 /**
@@ -23,7 +23,8 @@ export interface IGetEditProductParameters {
 export const pageEditProduct = (request: Request & {
     params: IGetEditProductParameters
 }, response: Response, next: NextFunction) => {
-    Products.findById(request.params.productId)
+    // Admin context: can see any product for editing (including inactive/deleted)
+    ProductService.getById(request.params.productId, true)
         .then(product => {
             const [
                 title,

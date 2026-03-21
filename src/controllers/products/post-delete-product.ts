@@ -1,9 +1,9 @@
 import type { CastError } from "mongoose";
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import Products from "../../models/products";
 import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
 import type { DeleteProductRequest } from "@api/api"
+import * as ProductService from "../../services/products";
 
 /**
  * Delete a product
@@ -13,7 +13,7 @@ import type { DeleteProductRequest } from "@api/api"
  * @param next
  */
 export const postDeleteProduct = (request: Request<unknown, unknown, DeleteProductRequest>, response: Response, next: NextFunction) =>
-    Products.removeById(request.body.id, !!request.body.hardDelete)
+    ProductService.remove(request.body.id, !!request.body.hardDelete)
         .then(({ success, message }) => {
             if (success)
                 request.flash('success', [ message ]);
