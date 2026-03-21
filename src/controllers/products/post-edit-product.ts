@@ -3,7 +3,7 @@ import type { CastError } from "mongoose";
 import Products from "../../models/products";
 import { deleteFile } from "../../utils/filesystem-helpers";
 import { ExtendedError } from "../../utils/error-helpers";
-import { UpdateProductRequest } from "@api/api";
+import type { UpdateProductRequestBody } from "@api/api";
 
 /**
  *
@@ -11,17 +11,14 @@ import { UpdateProductRequest } from "@api/api";
  * @param response
  * @param next
  */
-export const postEditProduct = async (request: Request<unknown, unknown, UpdateProductRequest>, response: Response, next: NextFunction) => {
-    /**
-     * get POST data
-     */
+export const postEditProduct = async (request: Request<unknown, unknown, UpdateProductRequestBody>, response: Response, next: NextFunction) => {
     const {
         id,
-        title = "",
-        price = "0",
+        title,
         description = "",
         active
     } = request.body;
+    const price = Number.parseInt(request.body.price);
 
     /**
      * Get URL of updated image it's on req.file,
@@ -39,7 +36,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
     const issues = Products.validateData({
         title,
         imageUrl,
-        price: Number.parseInt(price),
+        price,
         description,
         active: !!active
     });
@@ -52,12 +49,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
         if (imageUrlRaw.length > 0)
             await deleteFile(imageUrlRaw);
         request.flash('error', issues);
-        request.flash('filled', [
-            title,
-            price,
-            description,
-            active,
-        ]);
+        request.flash('filled', Object.values(request.body));
         if (!id || id === '')
             return response.redirect('/products/add');
         return response.redirect('/products/edit/' + id);
@@ -70,7 +62,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
         Products.create({
             title,
             imageUrl,
-            price: Number.parseInt(price),
+            price,
             description,
             active: !!active,
         })
@@ -93,7 +85,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
                 const oldImageUrl = product.imageUrl;
                 if (oldImageUrl !== imageUrl)
                     product.imageUrl = imageUrl;
-                product.price = Number.parseInt(price);
+                product.price = price;
                 product.description = description;
                 product.active = !!active;
                 // save the updated product (not necessary to use newProduct variable since the ID doesn't change, but normally it would be necessary)

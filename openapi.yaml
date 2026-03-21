@@ -525,6 +525,26 @@ components:
                 active:
                     type: boolean
 
+        # To be used in GET /products:
+        UpdateProductRequestBody:
+            type: object
+            additionalProperties: false
+            required: [ id, title, price ]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: string
+                imageUrl:
+                    type: string
+                    format: uri
+                active:
+                    type: string
+
         UpdateProductByIdRequest:
             type: object
             additionalProperties: false
@@ -1060,6 +1080,7 @@ paths:
             summary: List products (paginated)
             description: Returns a paginated list of products.
             operationId: listProducts
+            # Use UpdateProductRequestBody
             parameters:
                 -   $ref: '#/components/parameters/ProductIdParam'
                 -   $ref: '#/components/parameters/PageParam'

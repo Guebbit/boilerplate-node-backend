@@ -10,11 +10,6 @@ import type { SearchProductsRequest } from "@api/api";
 export type IGetAllProductsParameters = Partial<Record<keyof SearchProductsRequest, string>>;
 
 /**
- * Max items per page
- */
-const paginationPageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? "10");
-
-/**
  * Get all products
  *
  * Updated to use Products.search(...) for consistency with DTO-friendly endpoints
@@ -25,48 +20,28 @@ const paginationPageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_
  */
 export const pageAllProducts = async (request: Request & {
     params: IGetAllProductsParameters
-}, response: Response, next: NextFunction) => {
-    // current page
-    const paginationCurrentPage = Number.parseInt(request.params.page ?? "1");
-
-    return Products.search(
+}, response: Response, next: NextFunction) =>
+    Products.search(
         {
             ...request.params,
             minPrice: request.params?.minPrice ? Number.parseInt(request.params.minPrice) : undefined,
             maxPrice: request.params?.maxPrice ? Number.parseInt(request.params.maxPrice) : undefined,
-            page: paginationCurrentPage,
-            pageSize: paginationPageSize,
+            page: Number.parseInt(request.params.page ?? "1"),
+            pageSize: Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? "10"),
         },
-        // Only admin can see non-active and (soft) deleted products
         request.session.user?.admin
-            ? {}
-            : { active: true, deletedAt: undefined }
     )
-        .then(async ({ items, meta }) => {
-            // Search for the correspondent product in the cart and add the quantity (in the cart) to the product info
-            const productsInCart = request.user ? await request.user.cartGet() : [];
-            const productList = items.map(product => {
-                const { quantity = 0 } = productsInCart.find(cartProduct =>
-                    cartProduct.product._id.equals(product.id)
-                ) ?? {};
-
-                return {
-                    ...product,
-                    quantity
-                };
-            });
-
-            return response.render('products/search', {
+        .then(async ({ items, meta }) =>
+            response.render('products/search', {
                 pageMetaTitle: 'All Products',
                 pageMetaLinks: [
                     "/css/product.css"
                 ],
-                productList,
+                productList: items,
                 productsTotal: meta.totalItems,
                 pageCurrent: meta.page,
                 pageTotal: meta.totalPages,
                 search: { page: meta.page, pageSize: meta.pageSize },
-            });
-        })
+            })
+        )
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
-};

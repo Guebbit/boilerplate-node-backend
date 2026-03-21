@@ -21,10 +21,10 @@ export type IProductMethods = unknown;
  * Product Document static methods
  */
 export interface IProductModel extends Model<IProductDocument, unknown, IProductMethods> {
-    validateData: (data: Product) => string[],
-    productRemoveById: (id: string, hardDelete?: boolean) => Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject>;
-    productRemove: (product: IProductDocument, hardDelete?: boolean) => Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject>;
-    search: (search: SearchProductsRequest, scope?: QueryFilter<IProductDocument>) => Promise<ProductsResponse>;
+    validateData: (data: Omit<Product, 'id'>) => string[],
+    removeById: (id: string, hardDelete?: boolean) => Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject>;
+    remove: (product: IProductDocument, hardDelete?: boolean) => Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject>;
+    search: (search: SearchProductsRequest, admin?: boolean) => Promise<ProductsResponse>;
 }
 
 /**
@@ -93,34 +93,26 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
  * Pagination: page (1-based), pageSize
  *
  * @param search
- * @param scope - optional additional filters (e.g. non-admin: active=true, deletedAt=undefined)
+ * @param admin scope (e.g. non-admin: active=true, deletedAt=undefined)
  */
 productSchema.static('search', async function (
-    search: SearchProductsRequest = {},
-    scope: QueryFilter<IProductDocument> = {}
+    filters: SearchProductsRequest = {},
+    admin = false,
 ): Promise<ProductsResponse> {
-    const page = Math.max(1, Number(search.page ?? 1) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));
+    // Pagination
+    const page = Math.max(1, Number(filters.page ?? 1) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
     const skip = (page - 1) * pageSize;
+    // Query builder
+    const where: QueryFilter<IProductDocument> = {};
 
-    const where: QueryFilter<IProductDocument> = { ...scope };
+    // Filter by ID
+    if (filters.id && String(filters.id).trim() !== "")
+        where._id = new Types.ObjectId(String(filters.id));
 
-    if (search.id && String(search.id).trim() !== "") {
-        where._id = new Types.ObjectId(String(search.id));
-    }
-
-    if (search.minPrice !== undefined && search.minPrice !== null && !Number.isNaN(Number(search.minPrice))) {
-        // TODO CHECK
-        where.price = { ...where.price, $gte: Number(search.minPrice) };
-    }
-
-    if (search.maxPrice !== undefined && search.maxPrice !== null && !Number.isNaN(Number(search.maxPrice))) {
-        // TODO CHECK
-        where.price = { ...where.price, $lte: Number(search.maxPrice) };
-    }
-
-    if (search.text && String(search.text).trim() !== "") {
-        const text = String(search.text).trim();
+    // Filter by text (search in title and description)
+    if (filters.text && String(filters.text).trim() !== "") {
+        const text = String(filters.text).trim();
         // Simple, effective search across title/description (case-insensitive)
         where.$or = [
             { title: { $regex: text, $options: "i" } },
@@ -128,7 +120,25 @@ productSchema.static('search', async function (
         ];
     }
 
+    // Filter by price range
+    const priceConditions: Record<string, number> = {};
+    if (filters.minPrice !== undefined && filters.minPrice !== null && !Number.isNaN(Number(filters.minPrice)))
+        priceConditions.$gte = Number(filters.minPrice);
+    if (filters.maxPrice !== undefined && filters.maxPrice !== null && !Number.isNaN(Number(filters.maxPrice)))
+        priceConditions.$lte = Number(filters.maxPrice);
+    if (Object.keys(priceConditions).length > 0)
+        where.price = priceConditions;
+
+    // If not admin, filter out inactive and (soft) deleted products
+    if(!admin) {
+        where.active = true;
+        where.deletedAt = undefined;
+    }
+
+    // First count the total number of products matching the query
     const totalItems = await this.countDocuments(where);
+
+    // Then paginate the results
     const items = await this.find(where)
         .lean()
         .sort({ createdAt: -1 })
@@ -153,7 +163,7 @@ productSchema.static('search', async function (
  * @param id
  * @param hardDelete
  */
-productSchema.static('productRemoveById', async function (id: string, hardDelete = false): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> {
+productSchema.static('removeById', async function (id: string, hardDelete = false): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> {
     return productModel
         .findById(id)
         .then((product) => {
@@ -181,8 +191,8 @@ productSchema.static('productRemoveById', async function (id: string, hardDelete
  * @param product
  * @param hardDelete
  */
-productSchema.static('productRemove', async function (product: IProductDocument, hardDelete = false): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> {
-    return this.productRemoveById((product._id as Types.ObjectId).toString(), hardDelete as boolean);
+productSchema.static('remove', async function (product: IProductDocument, hardDelete = false): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> {
+    return this.removeById((product._id as Types.ObjectId).toString(), hardDelete as boolean);
 });
 
 /**
@@ -192,7 +202,7 @@ productSchema.static('productRemove', async function (product: IProductDocument,
  *
  * @param productData
  */
-productSchema.static('validateData', function (productData: Product): string[] {
+productSchema.static('validateData', function (productData: Omit<Product, 'id'>): string[] {
     /**
      * Validation
      */

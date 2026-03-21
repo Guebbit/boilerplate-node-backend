@@ -13,7 +13,7 @@ import type { DeleteProductRequest } from "@api/api"
  * @param next
  */
 export const postDeleteProduct = (request: Request<unknown, unknown, DeleteProductRequest>, response: Response, next: NextFunction) =>
-    Products.productRemoveById(request.body.id, !!request.body.hardDelete)
+    Products.removeById(request.body.id, !!request.body.hardDelete)
         .then(({ success, message }) => {
             if (success)
                 request.flash('success', [ message ]);
