@@ -33,6 +33,7 @@ export * from './updateOrderByIdRequest';
 export * from './updateOrderRequest';
 export * from './updateProductByIdRequest';
 export * from './updateProductRequest';
+export * from './updateProductRequestBody';
 export * from './updateUserByIdRequest';
 export * from './updateUserRequest';
 export * from './upsertCartItemRequest';
@@ -87,6 +88,7 @@ import { UpdateOrderByIdRequest } from './updateOrderByIdRequest';
 import { UpdateOrderRequest } from './updateOrderRequest';
 import { UpdateProductByIdRequest } from './updateProductByIdRequest';
 import { UpdateProductRequest } from './updateProductRequest';
+import { UpdateProductRequestBody } from './updateProductRequestBody';
 import { UpdateUserByIdRequest } from './updateUserByIdRequest';
 import { UpdateUserRequest } from './updateUserRequest';
 import { UpsertCartItemRequest } from './upsertCartItemRequest';
@@ -147,6 +149,7 @@ let typeMap: {[index: string]: any} = {
     "UpdateOrderRequest": UpdateOrderRequest,
     "UpdateProductByIdRequest": UpdateProductByIdRequest,
     "UpdateProductRequest": UpdateProductRequest,
+    "UpdateProductRequestBody": UpdateProductRequestBody,
     "UpdateUserByIdRequest": UpdateUserByIdRequest,
     "UpdateUserRequest": UpdateUserRequest,
     "UpsertCartItemRequest": UpsertCartItemRequest,

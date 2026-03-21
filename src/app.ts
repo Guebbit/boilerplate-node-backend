@@ -2,26 +2,24 @@
 
 // import all models and their associations
 import "./models";
-
+//
 import 'dotenv/config';
 import path from 'node:path';
 import express from 'express';
-import type {ErrorRequestHandler, Request, Response, NextFunction} from "express";
+import type { ErrorRequestHandler, Request, Response, NextFunction } from "express";
 import i18next from 'i18next';
 import helmet from "helmet";
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-import {MulterError} from "multer";
-import {ExtendedError} from "./utils/error-helpers";
-import database from './utils/database';
+import { MulterError } from "multer";
+import { ExtendedError } from "./utils/error-helpers";
+import { start, database } from './utils/database';
 import logger from "./utils/winston";
-import {getDirname} from "./utils/get-file-url";
-import {store, session, flash, userConnect} from "./middlewares/session";
-import {rateLimiter} from "./middlewares/security";
-
+import { getDirname } from "./utils/get-file-url";
+import { store, session, flash, userConnect } from "./middlewares/session";
+import { rateLimiter } from "./middlewares/security";
 // languages
 import enTranslation from './locales/en.json';
-
 // routes
 import productRoutes from "./routes/products";
 import authRoutes from "./routes/auth";
@@ -46,11 +44,9 @@ app.set('views', './views');
  * Sync database then start server
  * AFTER sync we can use the database, since it is initialized
  */
-database
-    // .sync({ force: true })
-    .sync()
+start()
+    .then(() => database.sync()) // .sync({ force: true })
     // @ts-expect-error difficulties with sequelize inferred types
-
     .then(() => store.sync())
     .then(() => i18next.init({
         // debug: true,
@@ -159,7 +155,7 @@ app.use(rateLimiter);
  */
 app.use((request, response, next) => {
     // eslint-disable-next-line no-console
-    console.log(`Entering URL: ${request.protocol}://${request.get('host')}${request.originalUrl}`);
+    console.log(`Entering URL: ${ request.protocol }://${ request.get('host') }${ request.originalUrl }`);
     next();
 });
 
@@ -196,8 +192,8 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Requ
     // File upload error
     if (error instanceof MulterError) {
         logger.info(error);
-        request.flash('error-title', [error.code]);
-        request.flash('error-description', [error.name + ": " + error.message + " on " + (error.field ?? "")]);
+        request.flash('error-title', [ error.code ]);
+        request.flash('error-description', [ error.name + ": " + error.message + " on " + (error.field ?? "") ]);
         response.status(400).redirect("/error/");
         return;
     }
@@ -205,7 +201,7 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Requ
     // Check if the error is operational
     if (error instanceof ExtendedError && error.isOperational) {
         logger.info(error);
-        request.flash('error-title', [error.name]);
+        request.flash('error-title', [ error.name ]);
         request.flash('error-description', error.errors);
         response.status(error.httpCode).redirect("/error/");
         return;
@@ -216,8 +212,8 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Requ
         ...error,
         stack: error instanceof ExtendedError ? error.stack : "",
     });
-    request.flash('error-title', ['UNKNOWN ERROR']);
-    request.flash('error-description', ['Something happened. Please contact support']);
+    request.flash('error-title', [ 'UNKNOWN ERROR' ]);
+    request.flash('error-description', [ 'Something happened. Please contact support' ]);
     response.status(500).redirect("/error/");
     // Terminate the current process signaling that it has exited with an error.
     process.exit(1);

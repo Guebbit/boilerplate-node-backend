@@ -9,14 +9,14 @@ import cluster from "node:cluster";
  * Cluster management
  * https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
  */
-if (cluster.isPrimary) {
+if (cluster.isPrimary && process.env.NODE_ENABLE_CLUSTERING === '1') {
 
     /**
      * Master monitor and manage workers
      */
-    // // Windows OS only settings (to guarantee standard round robin approach):
-    // cluster.schedulingPolicy = cluster.SCHED_RR;
-    // Get number of CPU
+        // // Windows OS only settings (to guarantee standard round robin approach):
+        // cluster.schedulingPolicy = cluster.SCHED_RR;
+        // Get number of CPU
     const cpuCount = os.cpus().length;
     // eslint-disable-next-line no-console
     console.log(`The total number of CPUs is ${cpuCount}. Primary pid=${process.pid}`);
@@ -34,7 +34,7 @@ if (cluster.isPrimary) {
     /**
      * Workers execute the app module
      */
-     
+
     import('./app');
 }
 

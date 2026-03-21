@@ -43,6 +43,7 @@ model/updateOrderByIdRequest.ts
 model/updateOrderRequest.ts
 model/updateProductByIdRequest.ts
 model/updateProductRequest.ts
+model/updateProductRequestBody.ts
 model/updateUserByIdRequest.ts
 model/updateUserRequest.ts
 model/upsertCartItemRequest.ts

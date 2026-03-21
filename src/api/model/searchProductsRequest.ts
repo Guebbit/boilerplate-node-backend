@@ -29,7 +29,6 @@ export class SearchProductsRequest {
     * Resource identifier
     */
     'id'?: string;
-    'price'?: number;
     'minPrice'?: number;
     'maxPrice'?: number;
 
@@ -55,11 +54,6 @@ export class SearchProductsRequest {
             "name": "id",
             "baseName": "id",
             "type": "string"
-        },
-        {
-            "name": "price",
-            "baseName": "price",
-            "type": "number"
         },
         {
             "name": "minPrice",

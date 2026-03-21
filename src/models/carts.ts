@@ -53,7 +53,7 @@ class Carts extends Model<InferAttributes<Carts>, InferCreationAttributes<Carts>
      *
      * @param id
      */
-    static async productRemoveFromCarts(id: string): Promise<IResponseSuccess<undefined> | IResponseReject> {
+    static async removeFromCarts(id: string): Promise<IResponseSuccess<undefined> | IResponseReject> {
         return CartItems.destroy({
             where: {
                 productId: id

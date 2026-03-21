@@ -1,3 +1,5 @@
+# WARNING: The MVC version is flawed because the true focus is in the restAPI versions
+
 # Instructions
 
 - Create .env file using the example
@@ -5,6 +7,7 @@
 - Link to services using .env variables (es: email responders are a different kind of server)
 - Cron job needed to clean expired tokens in the table "tokens" (or in the users data if nosql)
 - Optional: use docker/podman to run the app
+
 
 # Useful info
 
@@ -15,33 +18,11 @@
 - https://github.com/melardev/ApiEcomSequelizeExpress/blob/master/models/product.model.js
 
 # TODO
-  - Hard delete of products or their edits change the orders history, must use OrderItems to hard save the necessary product data at the time of the order
-  - Test PUPPETEER (new createPDF)
-  - Check Dredd for automated contract tests (Spec conformance tests, Consumer-driven contract tests)
+  - CHECK boilerplate-node-backend-mongodb TODO 
 
 # TODO Sequelize
+  - Hard delete of products or their edits change the orders history, must use OrderItems to hard save the necessary product data at the time of the order
   - https://github.com/mweibel/connect-session-sequelize/issues/20
   - https://github.com/mweibel/connect-session-sequelize/issues/7
   - Connect-flash could show messages after a reload, there is an async problem in some cases
   - Correct sequelize's difficulties with inferred types and remove @ts-expect-error
-
-# AI TODO
-
-- Create/complete tests
-- Create documentation
-- From import type { Request, Response, NextFunction } from "express"; to import type { RequestHandler } from "express"
-- Create routes:
-    - Create /auth/get-accounts (use /account from openapi
-    - Create /cart/get-cart (use page-cart but json only)
-    - Create /cart/get-checkout (use page-checkout but json only)
-    - TODO
-
-### TODO IMPORTANT ###
-
-Update ZOD
-post-reset-confirm.ts => POST /account/reset/{token}
-get-reset-database is there a better way?
-Added page size to list users, list products and list orders
-
-- ALL "path" parameters are now "query", also now I added JSON only responses
-- update insomnia for new openapi.yaml + create a test server? I don't remember the software name for reverse insomnia

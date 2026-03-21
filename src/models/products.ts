@@ -6,14 +6,17 @@ import {
     CreationOptional,
     Op,
     NonAttribute,
+    WhereOptions,
 } from 'sequelize';
 import { z } from "zod";
 import { t } from "i18next";
 import database from "../utils/database";
 import Carts from "./carts";
 import CartItems from "./cart-items";
-import {generateReject, generateSuccess, IResponseReject, IResponseSuccess} from "../utils/response";
-import {deleteFile} from "../utils/filesystem-helpers";
+import { generateReject, generateSuccess, IResponseReject, IResponseSuccess } from "../utils/response";
+import { deleteFile } from "../utils/filesystem-helpers";
+import { Product, SearchProductsRequest, ProductsResponse } from "@api/api"
+
 
 /**
  * Zod validation schema
@@ -76,7 +79,7 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
      *
      * @param productData
      */
-    static validateData(productData: Partial<Products>){
+    static validateData(productData: Partial<Products>) {
         /**
          * Validation
          */
@@ -87,7 +90,7 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
          * Validation error
          */
         if (!parseResult.success)
-            return parseResult.error.issues.map(({message}) => message)
+            return parseResult.error.issues.map(({ message }) => message)
 
         return [];
     }
@@ -99,23 +102,24 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
      * @param id
      * @param hardDelete
      */
-    static async productRemoveById(id: string, hardDelete = false): Promise<IResponseSuccess<Products> | IResponseSuccess<undefined> | IResponseReject>{
+    static async removeById(id: string, hardDelete = false): Promise<IResponseSuccess<Products> | IResponseSuccess<undefined> | IResponseReject> {
         return Products.scope("admin").findByPk(id)
             .then(async (product) => {
-                if(!product)
-                    return generateReject(404, "404", [t("ecommerce.product-not-found")]);
+                if (!product)
+                    return generateReject(404, "404", [ t("ecommerce.product-not-found") ]);
                 // HARD delete
-                if(hardDelete){
-                    return Carts.productRemoveFromCarts(id)
+                if (hardDelete) {
+                    return Carts.removeFromCarts(id)
                         .then(() => product.destroy({ force: true }))
                         .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? "public") + product.imageUrl))
-                        .then(() => generateSuccess(undefined, 200, t("ecommerce.product-hard-deleted")));                }
+                        .then(() => generateSuccess(undefined, 200, t("ecommerce.product-hard-deleted")));
+                }
                 // If deletedAt already present: it's soft deleted: RESTORE
-                if(product.deletedAt)
+                if (product.deletedAt)
                     return product.restore()
                         .then(() => generateSuccess(product))
                 // SOFT delete.
-                return Carts.productRemoveFromCarts(id)
+                return Carts.removeFromCarts(id)
                     .then(() => product.destroy())
                     // eslint-disable-next-line unicorn/no-useless-undefined
                     .then(() => generateSuccess(undefined))
@@ -130,8 +134,83 @@ class Products extends Model<InferAttributes<Products>, InferCreationAttributes<
      * @param id
      * @param hardDelete
      */
-    static async productRemove(id: string, hardDelete = false){
-        return this.productRemoveById(id, hardDelete);
+    static async remove(id: string, hardDelete = false) {
+        return this.removeById(id, hardDelete);
+    }
+
+    /**
+     * STATIC method
+     * Search products with filters
+     * Supports filtering by: text (title/description), id, minPrice, maxPrice
+     *
+     * @param filters - Search filter criteria
+     * @param admin scope (e.g. non-admin: active=true, deletedAt=undefined)
+     * @returns Promise resolving to array of products
+     */
+    static async search(filters: SearchProductsRequest, admin = false): Promise<ProductsResponse> {
+        // Pagination
+        const page = Math.max(1, Number(filters.page ?? 1) || 1);
+        const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
+        const skip = (page - 1) * pageSize;
+        // Query builder
+        const where: WhereOptions<InferAttributes<Products>>[] = [];
+
+        // Filter by ID
+        if (filters.id !== undefined)
+            where.push({ id: filters.id });
+
+        // Filter by text (search in title and description)
+        if (filters.text)
+            where.push({
+                [Op.or]: [
+                    {
+                        title: {
+                            [Op.like]: `%${ filters.text }%`
+                        }
+                    },
+                    {
+                        description: {
+                            [Op.like]: `%${ filters.text }%`
+                        }
+                    }
+                ]
+            });
+
+        // Filter by price range
+        if (filters.minPrice !== undefined)
+            where.push({
+                price: {
+                    [Op.gte]: filters.minPrice
+                }
+            });
+        if (filters.maxPrice !== undefined)
+            where.push({
+                price: {
+                    [Op.lte]: filters.maxPrice
+                }
+            });
+
+        const { count: totalItems, rows: items } = await Products
+            .scope(admin ? "admin" : undefined)
+            .findAndCountAll({
+                where: where.length > 0 ? { [Op.and]: where } : {},
+                order: [["createdAt", "DESC"]],
+                offset: skip,
+                limit: pageSize,
+            });
+
+        return {
+            items: items.map(item => ({
+                ...item,
+                id: String(item.id),
+            } as Product)),
+            meta: {
+                page,
+                pageSize,
+                totalItems,
+                totalPages: Math.ceil(totalItems / pageSize),
+            },
+        };
     }
 }
 
@@ -157,60 +236,81 @@ Products.init(
             defaultValue: true
         },
         description: {
-            type: new DataTypes.STRING(512),
+            type: new DataTypes.STRING
+
+            (
+                512
+            ),
             allowNull: false
-        },
+        }
+
+        ,
         createdAt: {
             type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW
-        },
+            allowNull:
+                false,
+            defaultValue:
+            DataTypes.NOW
+        }
+        ,
         updatedAt: {
             type: DataTypes.DATE,
-            allowNull: true,
-        },
+            allowNull:
+                true,
+        }
+        ,
         deletedAt: {
             type: DataTypes.DATE,
-            allowNull: true,
-        },
+            allowNull:
+                true,
+        }
+        ,
     },
     {
         sequelize: database,
-        tableName: 'products',
-        paranoid: true,
-        defaultScope: {
-            where: {
-                [Op.and]: [
-                    {
-                        // eslint-disable-next-line unicorn/no-null
-                        deletedAt: null
-                    },
-                    {
-                        active: true
-                    }
-                ]
+        tableName:
+            'products',
+        paranoid:
+            true,
+        defaultScope:
+            {
+                where: {
+                    [Op.and]:
+                        [
+                            {
+                                // eslint-disable-next-line unicorn/no-null
+                                deletedAt: null
+                            },
+                            {
+                                active: true
+                            }
+                        ]
+                }
             }
-        },
+        ,
         scopes: {
             admin: {
                 paranoid: false,
-            },
+            }
+            ,
             lowCost: {
                 where: {
-                    [Op.and]: [
-                        {
-                            price: {
-                                [Op.lt]: 30
+                    [Op.and]:
+                        [
+                            {
+                                price: {
+                                    [Op.lt]: 30
+                                }
+                            },
+                            {
+                                active: true
                             }
-                        },
-                        {
-                            active: true
-                        }
-                    ]
+                        ]
                 }
             }
         }
     }
-);
+)
+;
 
 export default Products;

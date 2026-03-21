@@ -109,7 +109,7 @@ class Orders extends Model<InferAttributes<Orders>, InferCreationAttributes<Orde
         const offset = (page - 1) * pageSize;
         const limit = pageSize;
 
-        const where: WhereOptions = {};
+        const where: WhereOptions<InferAttributes<Orders>>[] = [];
 
         if (dto.id !== undefined && dto.id !== null && String(dto.id).trim() !== "") {
             where.id = dto.id;

@@ -7,6 +7,83 @@
 <main>
     <h2 class="centered"><%= pageMetaTitle || "All Products" %></h2>
 
+    <!-- DTO-friendly search form for POST /products/search -->
+    <section class="products-search centered" style="margin: 20px 0;">
+        <form method="post" style="max-width: 900px; margin: 0 auto;">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:flex-end;">
+                <label>
+                    Text
+                    <input
+                            type="text"
+                            name="text"
+                            value="<%= (search && search.text) ? search.text : '' %>"
+                            placeholder="title or description"
+                    />
+                </label>
+
+                <label>
+                    Product ID
+                    <input
+                            type="text"
+                            name="productId"
+                            value="<%= (search && search.productId) ? search.productId : '' %>"
+                            placeholder="optional"
+                    />
+                </label>
+
+                <label>
+                    Min Price
+                    <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            name="minPrice"
+                            value="<%= (search && (search.minPrice !== undefined && search.minPrice !== null)) ? search.minPrice : '' %>"
+                    />
+                </label>
+
+                <label>
+                    Max Price
+                    <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            name="maxPrice"
+                            value="<%= (search && (search.maxPrice !== undefined && search.maxPrice !== null)) ? search.maxPrice : '' %>"
+                    />
+                </label>
+
+                <label>
+                    Page
+                    <input
+                            type="number"
+                            min="1"
+                            name="page"
+                            value="<%= (search && search.page) ? search.page : (pageCurrent || 1) %>"
+                            style="width:90px"
+                    />
+                </label>
+
+                <label>
+                    Page Size
+                    <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            name="pageSize"
+                            value="<%= (search && search.pageSize) ? search.pageSize : '' %>"
+                            style="width:110px"
+                    />
+                </label>
+
+                <button class="btn" type="submit">Search</button>
+                <a class="btn" href="/products">Reset</a>
+
+                <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
+            </div>
+        </form>
+    </section>
+
     <div class="grid">
         <% productList.forEach(function(product) { %>
             <article class="card product-item">
@@ -67,9 +144,14 @@
             </article>
         <% }); %>
     </div>
+
     <hr />
+
+    <!-- keep your existing pagination component -->
     <%- include("../_components/pagination.ejs", { productsTotal, pageCurrent, pageTotal }); %>
+
     <hr />
+
     <div class="centered">
         <% if (isAdmin) { %>
             <a href="/products/add" class="btn" style="width: 200px">Add new</a>

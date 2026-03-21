@@ -21,7 +21,7 @@ export interface IPostDeleteProductPostData {
  */
 export const postDeleteProduct = (request: Request<unknown, unknown, IPostDeleteProductPostData>, response: Response, next: NextFunction) =>
     // isAdmin protected route: user is admin
-    Products.productRemoveById(request.body.id, !!request.body.hardDelete)
+    Products.removeById(request.body.id, !!request.body.hardDelete)
         .then(({ success, message, errors }) => {
             if (success)
                 request.flash('success', [ message ]);
