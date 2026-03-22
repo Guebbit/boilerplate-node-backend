@@ -128,15 +128,16 @@ app.use(session);
 app.use(flash);
 
 /**
+ * Security
+ * Limit user to access multiple times and overload the server.
+ * Placed before userConnect so the rate limiter fires before any DB access.
+ */
+app.use(rateLimiter);
+
+/**
  * Connect user (optimize data retrieve)
  */
 app.use(userConnect);
-
-/**
- * Security
- * Limit user to access multiple times and overload the server
- */
-app.use(rateLimiter);
 
 /**
  * Generic middleware

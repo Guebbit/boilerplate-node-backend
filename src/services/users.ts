@@ -6,13 +6,13 @@ import { randomBytes } from 'node:crypto';
 import type { CastError } from 'mongoose';
 import { generateSuccess, generateReject, type IResponseSuccess, type IResponseReject } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/error-helpers';
-import orderModel from '@models/orders';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import type { Order } from '@api/api';
 import UserRepository from '@repositories/users';
+import OrderRepository from '@repositories/orders';
 
 /**
  * User Service
@@ -167,7 +167,7 @@ export const orderConfirm = async (user: IUserDocument): Promise<IResponseSucces
                 'empty cart',
                 [t('generic.error-missing-data')],
             );
-        const order = await orderModel.create({
+        const order = await OrderRepository.create({
             userId: user._id as Types.ObjectId,
             email: user.email,
             // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema

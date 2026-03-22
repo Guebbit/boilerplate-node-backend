@@ -185,7 +185,7 @@ export const remove = async (
 
     // HARD delete
     if (hardDelete)
-        return UserService.productRemoveFromCarts((product._id as Types.ObjectId).toString())
+        return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
             .then(() => ProductRepository.deleteOne(product))
             .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
@@ -194,7 +194,7 @@ export const remove = async (
     product.deletedAt = product.deletedAt ? undefined : new Date();
 
     // SOFT delete (or restore)
-    return UserService.productRemoveFromCarts((product._id as Types.ObjectId).toString())
+    return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
         .then(async () => generateSuccess(await ProductRepository.save(product), 200, t('ecommerce.product-soft-deleted')));
 };
 
