@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
+import UserService from "@services/users";
 
 
 /**
@@ -12,7 +13,7 @@ import { databaseErrorConverter } from "@utils/error-helpers";
  */
 export const pageCheckout = (request: Request, response: Response, next: NextFunction) =>
     // check done before entering the route
-    request.user!.cartGet()
+    UserService.cartGet(request.user!)
         .then((productList) => {
             response.render('checkout', {
                 pageMetaTitle: 'Checkout',

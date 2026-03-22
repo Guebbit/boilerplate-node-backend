@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import Users from "@models/users";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
+import UserRepository from "@repositories/users";
 
 /**
  * This token is provided in the url within the email that has been sent to the user
@@ -21,7 +21,7 @@ export interface IGetResetConfirmParameters {
 export const pageResetConfirm = (request: Request & {
     params: IGetResetConfirmParameters
 }, response: Response, next: NextFunction) =>
-    Users.findOne({
+    UserRepository.findOne({
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'tokens.token': request.params.token
         })

@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
-import Users from "@models/users";
 import { nodemailer } from "@utils/nodemailer";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { PasswordResetConfirmRequest } from "@api/api";
+import UserRepository from "@repositories/users";
+import UserService from "@services/users";
 
 /**
  * Ask to guest if they want to reset the password
@@ -26,7 +27,7 @@ export const postResetConfirm = async (request: Request<unknown, unknown, Passwo
     /**
      * Search user by token
      */
-    return Users.findOne({
+    return UserRepository.findOne({
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'tokens.token': token
         })
@@ -38,7 +39,7 @@ export const postResetConfirm = async (request: Request<unknown, unknown, Passwo
                 return;
             }
             // change password
-            return user.passwordChange(password, passwordConfirm)
+            return UserService.passwordChange(user, password, passwordConfirm)
                 .then(async ({ success, errors = [] }) => {
                     if (!success) {
                         request.flash('error', errors);
@@ -48,7 +49,7 @@ export const postResetConfirm = async (request: Request<unknown, unknown, Passwo
                     user.tokens = user.tokens
                         .filter(({ token: t }) => token !== t);
                     // save and send email
-                    await user.save()
+                    await UserRepository.save(user)
                         .then(() => {
                             // send confirmation email (no need to wait)
 

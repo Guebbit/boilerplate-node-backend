@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
-import Users from "@models/users";
 import { nodemailer } from "@utils/nodemailer";
 import type {CastError} from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { PasswordResetRequest } from "@api/api";
+import UserRepository from "@repositories/users";
+import UserService from "@services/users";
 
 /**
  * Ask to guest if they want to reset the password
@@ -14,7 +15,7 @@ import type { PasswordResetRequest } from "@api/api";
  * @param next
  */
 export const postResetRequest = (request: Request<unknown, unknown, PasswordResetRequest>, response: Response, next: NextFunction) =>
-    Users.findOne({
+    UserRepository.findOne({
         email: request.body.email
     })
         .then((user) => {
@@ -23,7 +24,7 @@ export const postResetRequest = (request: Request<unknown, unknown, PasswordRese
                 response.redirect('/account/reset');
                 return;
             }
-            return user.tokenAdd("password", 86_400_000)
+            return UserService.tokenAdd(user, "password", 86_400_000)
                 .then(token => {
                     // Send token (no need to wait)
 

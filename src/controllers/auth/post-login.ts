@@ -1,9 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
-import Users, {IUser} from "@models/users";
+import type { IUser } from "@models/users";
 import { ExtendedError } from "@utils/error-helpers";
 import type { CastError } from "mongoose";
 import type { LoginRequest } from "@api/api";
+import UserService from "@services/users";
 
 
 /**
@@ -26,7 +27,7 @@ export const postLogin = (request: Request<unknown, unknown, LoginRequest>, resp
     /**
      * Login
      */
-    return Users.login(email, password)
+    return UserService.login(email, password)
         .then(({ success, data, errors }) => {
             if(!success || !data){
                 request.flash('error', errors);

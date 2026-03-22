@@ -4,7 +4,7 @@ import type { QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, ProductsResponse, Product } from '@api/api';
 import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
 import { deleteFile } from '@utils/filesystem-helpers';
-import Users from '@models/users';
+import UserService from '@services/users';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import ProductRepository from '@repositories/products';
@@ -185,7 +185,7 @@ export const remove = async (
 
     // HARD delete
     if (hardDelete)
-        return Users.productRemoveFromCarts((product._id as Types.ObjectId).toString())
+        return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
             .then(() => ProductRepository.deleteOne(product))
             .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
@@ -194,7 +194,7 @@ export const remove = async (
     product.deletedAt = product.deletedAt ? undefined : new Date();
 
     // SOFT delete (or restore)
-    return Users.productRemoveFromCarts((product._id as Types.ObjectId).toString())
+    return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
         .then(async () => generateSuccess(await ProductRepository.save(product), 200, t('ecommerce.product-soft-deleted')));
 };
 

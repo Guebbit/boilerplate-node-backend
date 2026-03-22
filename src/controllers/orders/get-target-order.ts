@@ -5,7 +5,7 @@ import {
     type PipelineStage
 } from "mongoose";
 import { t } from "i18next";
-import Orders from "@models/orders";
+import OrderService from "@services/orders";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 
 /**
@@ -45,7 +45,7 @@ export const getTargetOrder = (request: Request & {
     /**
      * Get info from database
      */
-    Orders.getAll([ match ])
+    OrderService.getAll([ match ])
         .then((orders) => {
             if (orders.length === 0)
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));

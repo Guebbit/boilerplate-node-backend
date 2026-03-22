@@ -8,7 +8,7 @@ import {
     type PipelineStage
 } from "mongoose";
 import { t } from "i18next";
-import Orders from "@models/orders";
+import OrderService from "@services/orders";
 import { createPDF } from "@utils/pdf-helpers";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 import { getDirname } from "@utils/get-file-url";
@@ -44,7 +44,7 @@ export const getTargetInvoice = (request: Request & {
         match.$match.userId = request.session.user?._id;
     match.$match._id = new Types.ObjectId(request.params.orderId);
 
-    Orders.getAll([ match ])
+    OrderService.getAll([ match ])
         .then((orders) => {
             if (orders.length === 0)
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));

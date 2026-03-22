@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import { nodemailer } from "@utils/nodemailer";
 import { ExtendedError } from "@utils/error-helpers";
+import UserService from "@services/users";
 
 /**
  * Create a new order
@@ -13,7 +14,7 @@ import { ExtendedError } from "@utils/error-helpers";
  * @param next
  */
 export const postOrder = (request: Request, response: Response, next: NextFunction) =>
-    request.user!.orderConfirm()
+    UserService.orderConfirm(request.user!)
         .then(({ success }) => {
             if (!success)
                 return next(new ExtendedError("500", 500, false, [ t('ecommerce.order-creation-failure') ]))
