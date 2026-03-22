@@ -86,6 +86,10 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
         required: true,
         match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
     },
+    username: {
+        type: String,
+        required: true,
+    },
     password: {
         type: String,
         required: true

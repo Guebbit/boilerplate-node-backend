@@ -61,7 +61,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      * NO ID = new product
      */
     if (!id || id === '')
-        create({
+        return create({
             title,
             imageUrl,
             price,
@@ -78,17 +78,16 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
     /**
      * ID = edit product
      */
-    else
-        update(id, {
-            title,
-            price,
-            description,
-            active: !!active,
-        }, imageUrl)
-            .then((updatedProduct) => response.redirect('/products/details/' + (updatedProduct.id as string)))
-            .catch(async (error: CastError) => {
-                if (imageUrlRaw.length > 0)
-                    await deleteFile(imageUrlRaw);
-                return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
-            });
+    return update(id, {
+        title,
+        price,
+        description,
+        active: !!active,
+    }, imageUrl)
+        .then((updatedProduct) => response.redirect('/products/details/' + (updatedProduct.id as string)))
+        .catch(async (error: CastError) => {
+            if (imageUrlRaw.length > 0)
+                await deleteFile(imageUrlRaw);
+            return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
+        });
 };

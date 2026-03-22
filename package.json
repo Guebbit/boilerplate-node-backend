@@ -42,6 +42,7 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^25.3.5",
     "@types/nodemailer": "^7.0.11",
+    "@types/request": "^2.48.13",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.56.1",
     "body-parser": "^2.2.2",
