@@ -9,7 +9,7 @@ import connectFlash from "connect-flash";
 import connectMongoDBSession from 'connect-mongodb-session';
 import type { Request, Response, NextFunction } from "express";
 import { generateToken } from "./csrf";
-import Users from "../models/users";
+import Users from "@models/users";
 
 /**
  * MongoDB connection

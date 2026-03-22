@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
+import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 import type { CastError } from "mongoose";
-import * as ProductService from "../../services/products";
+import { getById } from "@services/products";
 
 
 /**
@@ -24,7 +24,7 @@ export const pageEditProduct = (request: Request & {
     params: IGetEditProductParameters
 }, response: Response, next: NextFunction) => {
     // Admin context: can see any product for editing (including inactive/deleted)
-    ProductService.getById(request.params.productId, true)
+    getById(request.params.productId, true)
         .then(product => {
             const [
                 title,

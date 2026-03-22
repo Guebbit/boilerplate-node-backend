@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import mongoose, { Types } from "mongoose";
-import database from "../utils/database";
-import Users from "../models/users";
-import Products from "../models/products";
-import Orders from "../models/orders";
+import database from "@utils/database";
+import Users from "@models/users";
+import Products from "@models/products";
+import Orders from "@models/orders";
 
 
 /**

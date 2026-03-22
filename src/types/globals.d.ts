@@ -1,4 +1,4 @@
-import type { IUser, IUserDocument, IUserMethods } from "../models/users";
+import type { IUser, IUserDocument, IUserMethods } from "@models/users";
 import {Require_id} from "mongoose";
 
 declare module "express-session" {

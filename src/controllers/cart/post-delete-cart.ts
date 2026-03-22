@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { CastError } from "mongoose";
-import { databaseErrorConverter } from "../../utils/error-helpers";
+import { databaseErrorConverter } from "@utils/error-helpers";
 
 /**
  * Remove ALL items in the user cart

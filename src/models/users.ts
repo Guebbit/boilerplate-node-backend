@@ -1,13 +1,13 @@
-import {model, Schema, Types} from 'mongoose';
-import type {Document, Model, CastError} from 'mongoose';
-import {z} from "zod"
-import {t} from "i18next";
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model, CastError } from 'mongoose';
+import { z } from "zod"
+import { t } from "i18next";
 import bcrypt from "bcrypt";
-import {randomBytes} from "node:crypto";
-import {generateSuccess, generateReject, type IResponseReject, type IResponseSuccess} from "../utils/response";
+import { randomBytes } from "node:crypto";
+import { generateSuccess, generateReject, type IResponseReject, type IResponseSuccess } from "@utils/response";
 import Orders from "./orders";
-import type {IProductDocument} from "./products";
-import {databaseErrorInterpreter} from "../utils/error-helpers";
+import type { IProductDocument } from "./products";
+import { databaseErrorInterpreter } from "@utils/error-helpers";
 import { Order } from "@api/api"
 
 /**
@@ -125,7 +125,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
     },
     cart: {
         // sub documents always have _id
-        items: [{
+        items: [ {
             product: {
                 type: Schema.Types.ObjectId,
                 ref: 'Product',
@@ -134,11 +134,11 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
             quantity: {
                 type: Number, required: true
             }
-        }],
+        } ],
         deletedAt: Date
     },
     // sub documents always have _id
-    tokens: [{
+    tokens: [ {
         type: {
             type: String,
             required: true
@@ -151,7 +151,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
             type: Date,
             required: false
         }
-    }],
+    } ],
     deletedAt: {
         type: Date
     },
@@ -198,7 +198,7 @@ export const zodUserSchema = z.object({
  */
 userSchema.methods.cartGet = async function () {
     return this.populate('cart.items.product')
-        .then(({cart: {items = []}}) => items);
+        .then(({ cart: { items = [] } }) => items);
 };
 
 /**
@@ -296,7 +296,7 @@ userSchema.methods.cartItemAdd = function (product: IProductDocument, quantity =
  */
 userSchema.methods.cartItemRemoveById = async function (id: string) {
     this.cart.items = this.cart.items
-        .filter(({product}: ICartItem) => !product.equals(id));
+        .filter(({ product }: ICartItem) => !product.equals(id));
     this.cart.updatedAt = new Date();
     return generateSuccess(await this.save());
 };
@@ -336,10 +336,10 @@ userSchema.methods.orderConfirm = async function (): Promise<IResponseSuccess<Or
                 return generateReject(
                     409,
                     "empty cart",
-                    [t('generic.error-missing-data')]
+                    [ t('generic.error-missing-data') ]
                 )
             const order = await Orders.create({
-                userId: this._id,
+                userId: this._id.toString(),
                 email: this.email,
                 products
             });
@@ -390,7 +390,7 @@ userSchema.methods.passwordChange = async function (password = "", passwordConfi
         .extend({
             passwordConfirm: z.string(),
         })
-        .superRefine(({passwordConfirm, password}, context) => {
+        .superRefine(({ passwordConfirm, password }, context) => {
             if (passwordConfirm !== password) {
                 context.addIssue({
                     code: "custom",
@@ -410,7 +410,7 @@ userSchema.methods.passwordChange = async function (password = "", passwordConfi
         return generateReject(
             400,
             "passwordChange - bad request",
-            parseResult.error.issues.map(({message}) => message)
+            parseResult.error.issues.map(({ message }) => message)
         )
 
     /**
@@ -461,7 +461,7 @@ userSchema.static('signup', async function (
         .extend({
             passwordConfirm: z.string(),
         })
-        .superRefine(({passwordConfirm, password}, context) => {
+        .superRefine(({ passwordConfirm, password }, context) => {
             if (passwordConfirm !== password)
                 context.addIssue({
                     code: "custom",
@@ -482,7 +482,7 @@ userSchema.static('signup', async function (
         return generateReject(
             400,
             "signup - bad request",
-            parseResult.error.issues.map(({message}) => message)
+            parseResult.error.issues.map(({ message }) => message)
         )
 
     /**
@@ -498,7 +498,7 @@ userSchema.static('signup', async function (
                 return generateReject(
                     409,
                     "signup - email already used",
-                    [t('signup.email-already-used')]
+                    [ t('signup.email-already-used') ]
                 )
             /**
              * Everything is ok, proceed to create a new user.
@@ -546,7 +546,7 @@ userSchema.static('login', async function (email?: string, password?: string) {
         return generateReject(
             400,
             "login - bad request",
-            parseResult.error.issues.map(({message}) => message)
+            parseResult.error.issues.map(({ message }) => message)
         )
 
     /**
@@ -562,7 +562,7 @@ userSchema.static('login', async function (email?: string, password?: string) {
                 return generateReject(
                     401,
                     "login - wrong credentials",
-                    [t('login.wrong-data')]
+                    [ t('login.wrong-data') ]
                 )
             return bcrypt
                 .compare(password ?? "", user.password)
@@ -572,7 +572,7 @@ userSchema.static('login', async function (email?: string, password?: string) {
                         return generateReject(
                             401,
                             "login - wrong credentials",
-                            [t('login.wrong-data')]
+                            [ t('login.wrong-data') ]
                         )
                     return generateSuccess<IUserDocument>(user);
                 })

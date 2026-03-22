@@ -4,7 +4,13 @@
     "module": "es2020",
     "baseUrl": ".",
     "paths": {
-      "@api/*": ["src/api/*"]
+      "@api/*": ["src/api/*"],
+      "@controllers/*": ["src/controllers/*"],
+      "@services/*": ["src/services/*"],
+      "@repositories/*": ["src/repositories/*"],
+      "@models/*": ["src/models/*"],
+      "@middlewares/*": ["src/middlewares/*"],
+      "@utils/*": ["src/utils/*"]
     },
     "strict": true,
     "composite": true,

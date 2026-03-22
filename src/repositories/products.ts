@@ -1,5 +1,5 @@
-import productModel from '../models/products';
-import type { IProductDocument } from '../models/products';
+import productModel from '@models/products';
+import type { IProductDocument } from '@models/products';
 import type { QueryFilter } from 'mongoose';
 
 /**
@@ -84,3 +84,6 @@ export const deleteOne = (product: IProductDocument): Promise<void> =>
     product.deleteOne().then(() => {
         // explicit void return to satisfy TypeScript's Promise<void> type
     });
+
+
+export default { findById, findOne, findAll, count, create, save, deleteOne };

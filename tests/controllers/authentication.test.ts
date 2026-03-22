@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import mongoose from "mongoose";
-
-import Users, {IUser} from "../../src/models/users";
+import Users, { IUser } from "@models/users";
 
 /**
  * test user factory
@@ -43,7 +42,7 @@ describe('Auth Controller', () => {
              * so I can delete this user at the end
              */
             .then(({ success, data }) => {
-                if(success && data)
+                if (success && data)
                     testUser.id = data.toObject<IUser>()._id.toString()
             });
     });
@@ -82,7 +81,7 @@ describe('Auth Controller', () => {
          */
         return Users.findById(testUser.id)
             .then(user => user?.deleteOne())
-             
+
             .finally(() => mongoose.disconnect())
     });
 });

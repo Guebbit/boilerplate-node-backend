@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
-import Orders from "../../models/orders";
+import Orders from "@models/orders";
 import type { CastError } from "mongoose";
-import { databaseErrorConverter } from "../../utils/error-helpers";
+import { databaseErrorConverter } from "@utils/error-helpers";
 import { SearchOrdersRequest } from "@api/api"
 
 /**
@@ -43,28 +43,12 @@ export const pageAllOrders = async (request: Request & {
                 pageMetaTitle: "All Orders",
                 pageMetaLinks: [ "/css/order-list.css" ],
                 orderList: items,
-                meta: meta,
-                search: { page: meta.page, pageSize: meta.pageSize }
+                search: {
+                    ...request.query,
+                    page: meta.page,
+                    pageSize: meta.pageSize
+                },
             })
         )
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
 };
-
-// export const pageAllOrders = async (request: Request, response: Response, next: NextFunction) =>
-//     Orders.getAll([
-//         {
-//             $match: request.session.user?.admin ? {} : {
-//                 userId: request.session.user?._id
-//             }
-//         },
-//     ])
-//         .then((orderList) =>
-//             response.render('orders/list', {
-//                 pageMetaTitle: 'All Orders',
-//                 pageMetaLinks: [
-//                     "/css/order-list.css"
-//                 ],
-//                 orderList
-//             })
-//         )
-//         .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

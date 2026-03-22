@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
 import type { CastError } from "mongoose";
 import { t } from "i18next";
-import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
+import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 import type { ObjectId } from "mongodb";
-import * as ProductService from "../../services/products";
+import { getById } from "@services/products";
 
 /**
  * Url parameters
@@ -23,7 +23,7 @@ export interface IGetTargetProductParameters {
 export const pageTargetProduct = (request: Request & {
     params: IGetTargetProductParameters
 }, response: Response, next: NextFunction) =>
-    ProductService.getById(request.params.productId, request.session.user?.admin)
+    getById(request.params.productId, request.session.user?.admin)
         .then(async (product) => {
             if (!product)
                 return next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));

@@ -1,9 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import type { CastError } from "mongoose";
-import { deleteFile } from "../../utils/filesystem-helpers";
-import { ExtendedError } from "../../utils/error-helpers";
+import { deleteFile } from "@utils/filesystem-helpers";
+import { ExtendedError } from "@utils/error-helpers";
 import type { UpdateProductRequestBody } from "@api/api";
-import * as ProductService from "../../services/products";
+import { validateData, create, update } from "@services/products";
 
 /**
  * Create or update a product.
@@ -35,7 +35,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
     /**
      * Data validation
      */
-    const issues = ProductService.validateData({
+    const issues = validateData({
         title,
         imageUrl,
         price,
@@ -61,7 +61,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      * NO ID = new product
      */
     if (!id || id === '')
-        ProductService.create({
+        create({
             title,
             imageUrl,
             price,
@@ -74,11 +74,12 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
                     await deleteFile(imageUrlRaw);
                 return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
             });
+
     /**
      * ID = edit product
      */
     else
-        ProductService.update(id, {
+        update(id, {
             title,
             price,
             description,

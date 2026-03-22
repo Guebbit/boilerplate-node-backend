@@ -4,8 +4,63 @@
 <body>
 <%- include("../_layouts/default-header.ejs"); %>
 <%- include("../_layouts/default-aside.ejs"); %>
+
 <main>
     <h2 class="centered"><%= pageMetaTitle || "All Products" %></h2>
+
+    <section class="products-search centered" style="margin: 20px 0;">
+        <form style="max-width: 900px; margin: 0 auto;">
+            <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center; align-items:flex-end;">
+                <label>
+                    Text
+                    <input
+                            type="text"
+                            name="text"
+                            value="<%= (search && search.text) ? search.text : '' %>"
+                            placeholder="title or description"
+                    />
+                </label>
+
+                <label>
+                    Product ID
+                    <input
+                            type="text"
+                            name="productId"
+                            value="<%= (search && search.productId) ? search.productId : '' %>"
+                            placeholder="optional"
+                    />
+                </label>
+
+                <label>
+                    Min Price
+                    <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            name="minPrice"
+                            value="<%= (search && (search.minPrice !== undefined && search.minPrice !== null)) ? search.minPrice : '' %>"
+                    />
+                </label>
+
+                <label>
+                    Max Price
+                    <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            name="maxPrice"
+                            value="<%= (search && (search.maxPrice !== undefined && search.maxPrice !== null)) ? search.maxPrice : '' %>"
+                    />
+                </label>
+
+                <button class="btn" type="submit">Search</button>
+                <a class="btn" href="/products">Reset</a>
+
+                <!-- csrfToken not needed in a GET request -->
+            </div>
+        </form>
+    </section>
+
     <div class="grid">
         <% productList.forEach(function(product) { %>
             <article class="card product-item">
@@ -32,21 +87,21 @@
                     <% } %>
                 </div>
                 <div class="card__actions">
-                    <a href="/products/details/<%= product.id %>" class="btn">Details</a>
+                    <a href="/products/details/<%= product._id %>" class="btn">Details</a>
                     <% if (isAdmin) { %>
-                        <a href="/products/edit/<%= product.id %>" class="btn">Edit</a>
+                        <a href="/products/edit/<%= product._id %>" class="btn">Edit</a>
                         <form action="/products/delete" method="post">
                             <% if (product.deletedAt) { %>
                                 <button class="btn" type="submit">Un-delete</button>
                             <% } else { %>
                                 <button class="btn" type="submit">Delete</button>
                             <% } %>
-                            <input type="hidden" name="id" value="<%= product.id %>">
+                            <input type="hidden" name="id" value="<%= product._id %>">
                             <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                         </form>
                         <form action="/products/delete" method="post">
                             <button class="btn" type="submit">HARD Delete</button>
-                            <input type="hidden" name="id" value="<%= product.id %>">
+                            <input type="hidden" name="id" value="<%= product._id %>">
                             <input type="hidden" name="hardDelete" value="true">
                             <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                         </form>
@@ -56,19 +111,24 @@
                             <form action="/cart" method="post">
                                 <button class="btn" type="submit">Set quantity on Cart</button>
                                 <input type="text" value="1" name="quantity">
-                                <input type="hidden" name="id" value="<%= product.id %>">
+                                <input type="hidden" name="id" value="<%= product._id %>">
                                 <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                             </form>
                         <% } %>
-                    <p>Quantity in the cart: <%= product.quantity %></p>
+                        <p>Quantity in the cart: <%= product.quantity %></p>
                     <% } %>
                 </div>
             </article>
         <% }); %>
     </div>
+
     <hr />
+
+    <!-- keep your existing pagination component -->
     <%- include("../_components/pagination.ejs", { productsTotal, pageCurrent, pageTotal }); %>
+
     <hr />
+
     <div class="centered">
         <% if (isAdmin) { %>
             <a href="/products/add" class="btn" style="width: 200px">Add new</a>

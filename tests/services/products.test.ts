@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
-import * as ProductService from '../../src/services/products';
+import ProductService from '@services/products';
 
 /**
  * Product Service unit tests.

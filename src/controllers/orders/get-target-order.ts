@@ -5,8 +5,8 @@ import {
     type PipelineStage
 } from "mongoose";
 import { t } from "i18next";
-import Orders from "../../models/orders";
-import { databaseErrorConverter, ExtendedError } from "../../utils/error-helpers";
+import Orders from "@models/orders";
+import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 
 /**
  * Url parameters

@@ -22,6 +22,7 @@
 - Separate controllers & services
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
 - Add products in cart to products list
+- global.d.ts from types/ to root
 
 # AI TODO
  - Create/complete tests

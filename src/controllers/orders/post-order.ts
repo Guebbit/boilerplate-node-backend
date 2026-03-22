@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import { nodemailer } from "../../utils/nodemailer";
-import { ExtendedError } from "../../utils/error-helpers";
+import { nodemailer } from "@utils/nodemailer";
+import { ExtendedError } from "@utils/error-helpers";
 
 /**
  * Create a new order

@@ -1,6 +1,6 @@
 import express from 'express';
 import { isAuth, isAdmin } from "../middlewares/authorizations";
-import multer from "../utils/multer";
+import multer from "@utils/multer";
 import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
 import { pageAllProducts } from "../controllers/products/page-all-products";

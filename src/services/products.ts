@@ -2,17 +2,17 @@ import { Types } from 'mongoose';
 import { t } from 'i18next';
 import type { QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, ProductsResponse, Product } from '@api/api';
-import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '../utils/response';
-import { deleteFile } from '../utils/filesystem-helpers';
-import Users from '../models/users';
-import { zodProductSchema } from '../models/products';
-import type { IProductDocument } from '../models/products';
-import * as ProductRepository from '../repositories/products';
+import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
+import { deleteFile } from '@utils/filesystem-helpers';
+import Users from '@models/users';
+import { zodProductSchema } from '@models/products';
+import type { IProductDocument } from '@models/products';
+import ProductRepository from '@repositories/products';
 
 /**
  * Product Service
  * Handles all business logic for the Product entity.
- * Delegates raw database access to ProductRepository.
+ * Delegates raw database access to Product Repository.
  */
 
 /**
@@ -197,3 +197,6 @@ export const remove = async (
     return Users.productRemoveFromCarts((product._id as Types.ObjectId).toString())
         .then(async () => generateSuccess(await ProductRepository.save(product), 200, t('ecommerce.product-soft-deleted')));
 };
+
+
+export default { validateData, search, getById, create, update, remove };

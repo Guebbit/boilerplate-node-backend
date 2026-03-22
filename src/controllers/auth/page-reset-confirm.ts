@@ -1,8 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import Users from "../../models/users";
+import Users from "@models/users";
 import type { CastError } from "mongoose";
-import { databaseErrorConverter } from "../../utils/error-helpers";
+import { databaseErrorConverter } from "@utils/error-helpers";
 
 /**
  * This token is provided in the url within the email that has been sent to the user

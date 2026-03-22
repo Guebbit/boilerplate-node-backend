@@ -4,24 +4,116 @@
 <body>
 <%- include("../_layouts/default-header.ejs"); %>
 <%- include("../_layouts/default-aside.ejs"); %>
+
 <main>
-    <ul class="orders">
-        <% orderList.forEach(function(order) { %>
-            <li class="orders__item">
-                <b>Order - #<%= order.id %></b>
-                <% if(isAdmin){ %>
-                    <small>(UserId - #<%= order.userId %>)</small>
+    <section class="orders-search">
+        <h1><%= pageMetaTitle || "Orders" %></h1>
+
+        <form class="orders-search__form">
+            <div class="orders-search__row">
+                <label>
+                    Order ID
+                    <input type="text" name="id" value="<%= (search && search.id) ? search.id : '' %>" />
+                </label>
+
+                <label>
+                    Email
+                    <input type="text" name="email" value="<%= (search && search.email) ? search.email : '' %>" />
+                </label>
+
+                <label>
+                    Product ID
+                    <input type="text" name="productId" value="<%= (search && search.productId) ? search.productId : '' %>" />
+                </label>
+
+                <% if (isAdmin) { %>
+                    <label>
+                        User ID
+                        <input type="text" name="userId" value="<%= (search && search.userId) ? search.userId : '' %>" />
+                    </label>
                 <% } %>
-                <span><b>Email</b>: <%= order.email %></span>
-                <span><b>Total Items</b>: <%= order.totalItems %></span>
-                <span><b>Total Quantity</b>: <%= order.totalQuantity %></span>
-                <span><b>Total Price</b>: <%= order.totalPrice %></span>
-                <a class="btn" href="/orders/details/<%= order.id %>">Invoice</a>
-                <a class="btn" href="/orders/invoice/<%= order.id %>">Download Invoice</a>
+            </div>
+
+            <!-- csrfToken not needed in a GET request -->
+        </form>
+    </section>
+
+    <ul class="orders">
+        <% (orders || orderList || []).forEach(function(order) { %>
+            <li class="orders__item">
+                <% const o = order.dataValues || order; %>
+
+                <b>Order - #<%= o.id %></b>
+
+                <% if (isAdmin && (o.UserId || o.userId)) { %>
+                    <small>(UserId - #<%= o.UserId || o.userId %>)</small>
+                <% } %>
+
+                <span><b>Email</b>: <%= o.email %></span>
+
+                <% if (typeof order.totalItems !== "undefined") { %>
+                    <span><b>Total Items</b>: <%= order.totalItems %></span>
+                <% } %>
+
+                <% if (typeof order.totalQuantity !== "undefined") { %>
+                    <span><b>Total Quantity</b>: <%= order.totalQuantity %></span>
+                <% } %>
+
+                <% if (typeof order.totalPrice !== "undefined") { %>
+                    <span><b>Total Price</b>: <%= order.totalPrice %></span>
+                <% } %>
+
+                <a class="btn" href="/orders/details/<%= o.id %>">Invoice</a>
+                <a class="btn" href="/orders/invoice/<%= o.id %>">Download Invoice</a>
             </li>
         <% }); %>
     </ul>
+
+    <% if ((orders || orderList) && (orders || orderList).length === 0) { %>
+        <p>No orders found.</p>
+    <% } %>
+
+    <% if (meta && meta.totalPages && meta.totalPages > 1) { %>
+        <nav class="pagination">
+            <% const currentPage = meta.page || 1; %>
+            <% const totalPages = meta.totalPages || 1; %>
+            <% const pageSize = meta.pageSize || (search && search.pageSize) || 10; %>
+
+            <% if (currentPage > 1) { %>
+                <form method="POST" action="/orders/search" style="display:inline;">
+                    <input type="hidden" name="id" value="<%= (search && search.id) ? search.id : '' %>"/>
+                    <input type="hidden" name="email" value="<%= (search && search.email) ? search.email : '' %>"/>
+                    <input type="hidden" name="productId" value="<%= (search && search.productId) ? search.productId : '' %>"/>
+                    <% if (isAdmin) { %>
+                        <input type="hidden" name="userId" value="<%= (search && search.userId) ? search.userId : '' %>"/>
+                    <% } %>
+                    <input type="hidden" name="page" value="<%= currentPage - 1 %>"/>
+                    <input type="hidden" name="pageSize" value="<%= pageSize %>"/>
+                    <button class="btn" type="submit">Prev</button>
+                </form>
+            <% } %>
+
+            <span style="margin:0 10px;">
+                <b><%= currentPage %></b> / <%= totalPages %>
+            </span>
+
+            <% if (currentPage < totalPages) { %>
+                <form method="POST" action="/orders/search" style="display:inline;">
+                    <input type="hidden" name="id" value="<%= (search && search.id) ? search.id : '' %>"/>
+                    <input type="hidden" name="email" value="<%= (search && search.email) ? search.email : '' %>"/>
+                    <input type="hidden" name="productId" value="<%= (search && search.productId) ? search.productId : '' %>"/>
+                    <% if (isAdmin) { %>
+                        <input type="hidden" name="userId" value="<%= (search && search.userId) ? search.userId : '' %>"/>
+                    <% } %>
+                    <input type="hidden" name="page" value="<%= currentPage + 1 %>"/>
+                    <input type="hidden" name="pageSize" value="<%= pageSize %>"/>
+                    <button class="btn" type="submit">Next</button>
+                </form>
+            <% } %>
+        </nav>
+    <% } %>
 </main>
+
 <%- include("../_layouts/default-footer.ejs"); %>
 </body>
 </html>

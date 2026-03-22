@@ -35,13 +35,13 @@
             <input type="checkbox" <% if (product.active) { %>checked<% } %> id="active" name="active">
         </div>
 
-        <% if (product.id) { %>
+        <% if (product._id) { %>
             <button class="btn" type="submit">Edit Product</button>
         <% } else { %>
             <button class="btn" type="submit">Add Product</button>
         <% } %>
 
-        <input type="hidden" name="id" value="<%= product.id %>">
+        <input type="hidden" name="id" value="<%= product._id %>">
         <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
     </form>
 </main>
