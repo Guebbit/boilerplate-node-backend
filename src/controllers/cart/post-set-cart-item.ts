@@ -1,9 +1,10 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import Products from "@models/products";
+import ProductRepository from "@repositories/products";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { UpsertCartItemRequest } from "@api/api";
+import UserService from "@services/users";
 
 /**
  * Add a product (with its quantity) to cart, check availability, etc
@@ -14,7 +15,7 @@ import type { UpsertCartItemRequest } from "@api/api";
  * @param next
  */
 export const postSetCartItem = (request: Request<unknown, unknown, UpsertCartItemRequest>, response: Response, next: NextFunction) =>
-    Products.findOne({ _id: request.body.productId, active: true, deletedAt: undefined })
+    ProductRepository.findOne({ _id: request.body.productId, active: true, deletedAt: undefined })
         .then((product) => {
             // not found, something happened
             if (!product) {
@@ -23,7 +24,7 @@ export const postSetCartItem = (request: Request<unknown, unknown, UpsertCartIte
             }
             request.flash('success', [ t("ecommerce.product-added-to-cart") ]);
             // check done before entering the route
-            return request.user!.cartItemSet(product, request.body.quantity);
+            return UserService.cartItemSet(request.user!, product, request.body.quantity);
         })
         .then(() => response.redirect('/cart'))
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

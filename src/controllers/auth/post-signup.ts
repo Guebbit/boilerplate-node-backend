@@ -1,10 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
-import Users from "@models/users";
 import { nodemailer } from "@utils/nodemailer";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { SignupRequest } from "@api/api";
+import UserService from "@services/users";
 
 /**
  * Register new user
@@ -29,7 +29,7 @@ export const postSignup = async (request: Request<unknown, unknown, SignupReques
     /**
      * Login
      */
-    return Users.signup(
+    return UserService.signup(
             email,
             username,
             password,

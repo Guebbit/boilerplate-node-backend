@@ -9,7 +9,7 @@ import connectFlash from "connect-flash";
 import connectMongoDBSession from 'connect-mongodb-session';
 import type { Request, Response, NextFunction } from "express";
 import { generateToken } from "./csrf";
-import Users from "@models/users";
+import UserRepository from "@repositories/users";
 
 /**
  * MongoDB connection
@@ -70,7 +70,7 @@ export const userConnect = (request: Request, response: Response, next: NextFunc
         next();
         return;
     }
-    Users.findById(request.session.user._id)
+    UserRepository.findById(request.session.user._id.toString())
         .then((user) => {
             if(!user)
                 return request.session.destroy(() => response.redirect('/'));

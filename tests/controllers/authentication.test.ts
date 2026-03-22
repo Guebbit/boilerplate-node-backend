@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import mongoose from "mongoose";
-import Users, { IUser } from "@models/users";
+import type { IUser } from "@models/users";
+import UserService from "@services/users";
+import UserRepository from "@repositories/users";
 
 /**
  * test user factory
@@ -31,7 +33,7 @@ describe('Auth Controller', () => {
              * Register the test user
              * (will be created only for this test)
              */
-            .then(() => Users.signup(
+            .then(() => UserService.signup(
                 testUser.email,
                 testUser.username,
                 testUser.password,
@@ -59,7 +61,7 @@ describe('Auth Controller', () => {
      * I still haven't logged with the test user
      */
     it('Login and test that we are are an active user', async () => {
-        return Users.login(testUser.email, testUser.password)
+        return UserService.login(testUser.email, testUser.password)
             .then((user) => expect(user).toBeTruthy());
         // TODO mock middleware: isAuth YES & isAdmin NOT
     });
@@ -79,8 +81,8 @@ describe('Auth Controller', () => {
         /**
          * Remove the user that has been created only for this test
          */
-        return Users.findById(testUser.id)
-            .then(user => user?.deleteOne())
+        return UserRepository.findById(testUser.id)
+            .then(user => user ? UserRepository.deleteOne(user) : undefined)
 
             .finally(() => mongoose.disconnect())
     });
