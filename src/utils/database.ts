@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import { Sequelize } from "sequelize";
 import logger from "./winston";
 
 const MAX_RETRIES = 10;
@@ -7,14 +7,29 @@ const BASE_DELAY_MS = 1000;
 const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Connect to MongoDB with exponential-backoff retry.
+ * Sequelize instance.
+ * Uses SQLite in-memory when NODE_ENV=test, MySQL otherwise.
+ */
+export const sequelize =
+    process.env.NODE_ENV === 'test'
+        ? new Sequelize({ dialect: 'sqlite', storage: ':memory:', logging: false })
+        : new Sequelize(process.env.NODE_DB_URI ?? '', {
+              dialect: 'mysql',
+              logging: false,
+          });
+
+/**
+ * Connect to MySQL with exponential-backoff retry.
  * Each failed attempt doubles the delay, capped at 30 seconds.
+ * Syncs models after a successful connection.
  * Throws if all attempts are exhausted.
  */
 export const start = async (): Promise<void> => {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-            await mongoose.connect(process.env.NODE_DB_URI ?? "");
+            await sequelize.authenticate();
+            // Create tables if they don't exist yet (non-destructive)
+            await sequelize.sync({ alter: false });
             return;
         } catch {
             if (attempt >= MAX_RETRIES - 1)
@@ -26,8 +41,4 @@ export const start = async (): Promise<void> => {
     }
 };
 
-/**
- * The active Mongoose connection.
- * Available after `start()` resolves.
- */
-export default mongoose.connection;
+export default sequelize;

@@ -6,18 +6,19 @@
  */
 import expressSession from "express-session";
 import connectFlash from "connect-flash";
-import connectMongoDBSession from 'connect-mongodb-session';
+import connectSessionSequelize from 'connect-session-sequelize';
 import type { Request, Response, NextFunction } from "express";
 import { generateToken } from "./csrf";
 import UserRepository from "@repositories/users";
+import sequelize from "@utils/database";
 
 /**
- * MongoDB connection
+ * MySQL session store backed by Sequelize.
+ * The SequelizeStore creates a "Sessions" table automatically on sync.
  */
-const mongoDBStore = connectMongoDBSession(expressSession);
-export const store = new mongoDBStore({
-    uri: process.env.NODE_DB_URI ?? "",
-    collection: "sessions",
+const SequelizeStore = connectSessionSequelize(expressSession.Store);
+export const store = new SequelizeStore({
+    db: sequelize,
 });
 
 /**
@@ -34,7 +35,7 @@ export const session = expressSession({
      */
     proxy: true,
     cookie: {
-        // In mongodb, session expiration is tied with the cookie expiration
+        // In the session store, session expiration is tied with the cookie expiration
         maxAge: process.env.NODE_SESSION_MAXAGE ? Number.parseInt(process.env.NODE_SESSION_MAXAGE) : 86_400_000,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -70,7 +71,7 @@ export const userConnect = (request: Request, response: Response, next: NextFunc
         next();
         return;
     }
-    UserRepository.findById(request.session.user._id.toString())
+    UserRepository.findById(request.session.user.id)
         .then((user) => {
             if(!user)
                 return request.session.destroy(() => response.redirect('/'));

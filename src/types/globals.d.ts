@@ -1,10 +1,9 @@
 import type { IUser, IUserDocument } from "@models/users";
-import {Require_id} from "mongoose";
 
 declare module "express-session" {
      
     interface SessionData  {
-        user?: Require_id<IUser>
+        user?: IUser
     }
 }
 

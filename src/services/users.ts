@@ -1,12 +1,11 @@
-import { Types } from 'mongoose';
+import { Op } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
-import type { CastError, QueryFilter } from 'mongoose';
 import { generateSuccess, generateReject, type IResponseSuccess, type IResponseReject } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/error-helpers';
-import type { IOrderDocument, IOrderProduct } from '@models/orders';
+import type { IOrderProduct } from '@models/orders';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem, IUser } from '@models/users';
 import type { IProductDocument } from '@models/products';
@@ -22,15 +21,11 @@ import OrderRepository from '@repositories/orders';
 
 /**
  * Get user cart populated with product details.
- * `populate` is called directly on the user document (a Mongoose Document method)
- * rather than going through the repository, since it operates on an already-fetched
- * document and follows a reference join — not a new collection query.
  *
  * @param user
  */
 export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
-    user.populate('cart.items.product')
-        .then(({ cart: { items = [] } }) => items);
+    UserRepository.findCartItems(user.id) as Promise<ICartItem[]>;
 
 /**
  * Set quantity of target product in cart
@@ -39,30 +34,9 @@ export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
  * @param id
  * @param quantity
  */
-export const cartItemSetById = async (user: IUserDocument, id: string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> => {
-    /**
-     * Check if already present
-     */
-    const cartProductIndex = user.cart.items
-        .findIndex(item => item.product.equals(id));
-
-    /**
-     * if present: directly update the quantity
-     * if not: add
-     */
-    if (cartProductIndex === -1)
-        user.cart.items.push({
-            product: new Types.ObjectId(id),
-            quantity,
-        });
-    else
-        user.cart.items[cartProductIndex].quantity = quantity;
-
-    /**
-     * Save
-     */
-    user.cart.updatedAt = new Date();
-    return generateSuccess(await UserRepository.save(user));
+export const cartItemSetById = async (user: IUserDocument, id: number | string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> => {
+    await UserRepository.upsertCartItem(user.id, Number(id), quantity);
+    return generateSuccess(user);
 };
 
 /**
@@ -73,7 +47,7 @@ export const cartItemSetById = async (user: IUserDocument, id: string, quantity 
  * @param quantity
  */
 export const cartItemSet = (user: IUserDocument, product: IProductDocument, quantity = 1): Promise<IResponseSuccess<IUserDocument>> =>
-    cartItemSetById(user, (product._id as Types.ObjectId).toString(), quantity);
+    cartItemSetById(user, product.id, quantity);
 
 /**
  * Add quantity of target product to quantity in cart
@@ -82,30 +56,11 @@ export const cartItemSet = (user: IUserDocument, product: IProductDocument, quan
  * @param id
  * @param quantity
  */
-export const cartItemAddById = async (user: IUserDocument, id: string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> => {
-    /**
-     * Check if already present
-     */
-    const cartProductIndex = user.cart.items
-        .findIndex(item => item.product.equals(id));
-
-    /**
-     * if present: directly update the quantity
-     * if not: add
-     */
-    if (cartProductIndex === -1)
-        user.cart.items.push({
-            product: new Types.ObjectId(id),
-            quantity,
-        });
-    else
-        user.cart.items[cartProductIndex].quantity = user.cart.items[cartProductIndex].quantity + quantity;
-
-    /**
-     * Save
-     */
-    user.cart.updatedAt = new Date();
-    return generateSuccess(await UserRepository.save(user));
+export const cartItemAddById = async (user: IUserDocument, id: number | string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> => {
+    const existing = await UserRepository.findCartItem(user.id, Number(id));
+    const newQty = existing ? existing.quantity + quantity : quantity;
+    await UserRepository.upsertCartItem(user.id, Number(id), newQty);
+    return generateSuccess(user);
 };
 
 /**
@@ -116,7 +71,7 @@ export const cartItemAddById = async (user: IUserDocument, id: string, quantity 
  * @param quantity
  */
 export const cartItemAdd = (user: IUserDocument, product: IProductDocument, quantity = 1): Promise<IResponseSuccess<IUserDocument>> =>
-    cartItemAddById(user, (product._id as Types.ObjectId).toString(), quantity);
+    cartItemAddById(user, product.id, quantity);
 
 /**
  * Remove target product from cart
@@ -124,11 +79,9 @@ export const cartItemAdd = (user: IUserDocument, product: IProductDocument, quan
  * @param user
  * @param id
  */
-export const cartItemRemoveById = async (user: IUserDocument, id: string): Promise<IResponseSuccess<IUserDocument>> => {
-    user.cart.items = user.cart.items
-        .filter(({ product }: ICartItem) => !product.equals(id));
-    user.cart.updatedAt = new Date();
-    return generateSuccess(await UserRepository.save(user));
+export const cartItemRemoveById = async (user: IUserDocument, id: number | string): Promise<IResponseSuccess<IUserDocument>> => {
+    await UserRepository.deleteCartItem(user.id, Number(id));
+    return generateSuccess(user);
 };
 
 /**
@@ -138,7 +91,7 @@ export const cartItemRemoveById = async (user: IUserDocument, id: string): Promi
  * @param product
  */
 export const cartItemRemove = (user: IUserDocument, product: IProductDocument): Promise<IResponseSuccess<IUserDocument>> =>
-    cartItemRemoveById(user, (product._id as Types.ObjectId).toString());
+    cartItemRemoveById(user, product.id);
 
 /**
  * Remove all products from cart
@@ -146,11 +99,8 @@ export const cartItemRemove = (user: IUserDocument, product: IProductDocument): 
  * @param user
  */
 export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
-    user.cart = {
-        items: [],
-        updatedAt: new Date(),
-    };
-    return generateSuccess(await UserRepository.save(user));
+    await UserRepository.clearCart(user.id);
+    return generateSuccess(user);
 };
 
 /**
@@ -160,23 +110,42 @@ export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<
  */
 export const orderConfirm = async (user: IUserDocument): Promise<IResponseSuccess<Order> | IResponseReject> => {
     try {
-        const products = await cartGet(user);
-        if (products.length === 0)
+        const cartItems = await cartGet(user);
+        if (cartItems.length === 0)
             return generateReject(
                 409,
                 'empty cart',
                 [t('generic.error-missing-data')],
             );
-        const order = await OrderRepository.create({
-            userId: user._id as Types.ObjectId,
-            email: user.email,
-            // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
-            products: products as unknown as IOrderProduct[],
-        } as Partial<IOrderDocument>);
+        // Build IOrderProduct[] from cart items (product snapshot)
+        const products: IOrderProduct[] = cartItems.map((item: ICartItem) => ({
+            product: item.product
+                ? {
+                    id: item.product.id,
+                    title: item.product.title,
+                    price: item.product.price,
+                    imageUrl: item.product.imageUrl,
+                    description: item.product.description ?? '',
+                    active: item.product.active ?? false,
+                }
+                : {
+                    id: null,
+                    title: '',
+                    price: 0,
+                    imageUrl: '',
+                    description: '',
+                    active: false,
+                },
+            quantity: item.quantity,
+        }));
+        const order = await OrderRepository.create(
+            { userId: user.id, email: user.email },
+            products,
+        );
         await cartRemove(user);
         return generateSuccess<Order>(order as unknown as Order);
     } catch (error) {
-        return generateReject(...databaseErrorInterpreter(error as CastError | Error));
+        return generateReject(...databaseErrorInterpreter(error as Error));
     }
 };
 
@@ -193,14 +162,12 @@ export const orderConfirm = async (user: IUserDocument): Promise<IResponseSucces
  */
 export const tokenAdd = async (user: IUserDocument, type: string, expirationTime?: number): Promise<string> => {
     const token = randomBytes(16).toString('hex');
-    user.tokens.push({
+    await UserRepository.createToken(user.id, {
         type,
         token,
-        expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined,
+        expiration: expirationTime ? new Date(Date.now() + expirationTime) : null,
     });
-    // no need to wait
-    return UserRepository.save(user)
-        .then(() => token);
+    return token;
 };
 
 /**
@@ -247,12 +214,12 @@ export const passwordChange = async (user: IUserDocument, password = '', passwor
 
     /**
      * Everything is ok, change password with the requested one.
-     * Encryption will be done automatically by the pre-save hook
+     * Encryption will be done automatically by the beforeSave hook
      */
     user.password = password;
     return UserRepository.save(user)
         .then((savedUser) => generateSuccess<IUserDocument>(savedUser))
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
 /**
@@ -318,7 +285,7 @@ export const signup = async (
                 );
             /**
              * Everything is ok, proceed to create a new user.
-             * Encryption will be done automatically by the pre-save hook
+             * Encryption will be done automatically by the beforeSave hook
              */
             return generateSuccess<IUserDocument>(
                 await UserRepository.create({
@@ -329,7 +296,7 @@ export const signup = async (
                 }),
             );
         })
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
 /**
@@ -366,7 +333,7 @@ export const login = async (email?: string, password?: string): Promise<IRespons
     /**
      * Everything is ok, login the user
      */
-    return UserRepository.findOne({ email, deletedAt: undefined })
+    return UserRepository.findOne({ email, deletedAt: null })
         .then(user => {
             // user not found
             if (!user)
@@ -388,7 +355,7 @@ export const login = async (email?: string, password?: string): Promise<IRespons
                     return generateSuccess<IUserDocument>(user);
                 });
         })
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
 /**
@@ -396,38 +363,19 @@ export const login = async (email?: string, password?: string): Promise<IRespons
  *
  * @param id
  */
-export const productRemoveFromCartsById = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> =>
-    UserRepository.updateMany(
-        {
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            'cart.items.product': id,
-        },
-        {
-            // Remove the product from their cart
-            $pull: {
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                'cart.items': {
-                    product: id,
-                },
-            },
-            // Update the cart's updatedAt timestamp
-            $set: {
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                'cart.updatedAt': new Date(),
-            },
-        },
-    )
-        .then((result) =>
+export const productRemoveFromCartsById = (id: number | string): Promise<IResponseSuccess<undefined> | IResponseReject> =>
+    UserRepository.removeProductFromAllCarts(Number(id))
+        .then((count) =>
             generateSuccess(
                 undefined,
                 200,
                 t('ecommerce.product-was-deleted-from-all-carts', {
                     product: id,
-                    count: result.modifiedCount,
+                    count,
                 }),
             ),
         )
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 
 // ---------------------------------------------------------------------------
 // Admin-facing methods (mirror the pattern of src/services/products.ts)
@@ -475,38 +423,36 @@ export const search = async (
     const skip = (page - 1) * pageSize;
 
     // Query builder
-    const where: QueryFilter<IUserDocument> = {};
+    const where: Record<string, unknown> = {};
 
     // Filter by ID
     if (filters.id && String(filters.id).trim() !== '')
-        where._id = new Types.ObjectId(String(filters.id));
+        where['id'] = Number(filters.id);
 
     // Filter by text (search in email and username)
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
-        where.$or = [
-            { email: { $regex: text, $options: 'i' } },
-            { username: { $regex: text, $options: 'i' } },
+        where[Op.or as unknown as string] = [
+            { email: { [Op.like]: `%${text}%` } },
+            { username: { [Op.like]: `%${text}%` } },
         ];
     }
 
-    // Filter by exact email (overrides text $or if both provided)
+    // Filter by exact email (case-insensitive via LIKE)
     if (filters.email && String(filters.email).trim() !== '')
-        where.email = { $regex: String(filters.email).trim(), $options: 'i' };
+        where['email'] = { [Op.like]: `%${String(filters.email).trim()}%` };
 
-    // Filter by exact username (overrides text $or if both provided)
+    // Filter by exact username (case-insensitive via LIKE)
     if (filters.username && String(filters.username).trim() !== '')
-        where.username = { $regex: String(filters.username).trim(), $options: 'i' };
+        where['username'] = { [Op.like]: `%${String(filters.username).trim()}%` };
 
     // Filter by active status (true = not deleted, false = deleted)
     if (filters.active !== undefined && filters.active !== null)
-        where.deletedAt = filters.active
-            ? { $exists: false }
-            : { $exists: true, $type: 'date' };
+        where['deletedAt'] = filters.active ? null : { [Op.not]: null };
 
     const totalItems = await UserRepository.count(where);
     const items = await UserRepository.findAll(where, {
-        sort: { createdAt: -1 },
+        sort: [['createdAt', 'DESC']],
         skip,
         limit: pageSize,
     });
@@ -523,24 +469,24 @@ export const search = async (
 };
 
 /**
- * Get a single user by ID as a lean (plain JS) object.
- * Returns undefined if the id is falsy; null if no matching document is found.
+ * Get a single user by ID as a plain object.
+ * Returns undefined if the id is falsy; null if no matching record is found.
  *
  * @param id
  */
-export const getById = async (id?: string) => {
+export const getById = async (id?: number | string) => {
     // Return early without triggering a DB call when no id is provided
     if (!id)
         return;
     const user = await UserRepository.findById(id);
     if (!user)
         return;
-    return user.toObject();
+    return user.toJSON() as IUser;
 };
 
 /**
- * Create a new user document in the database (admin version — no email confirmation).
- * Password hashing is handled automatically by the pre-save hook on the User schema.
+ * Create a new user record in the database (admin version — no email confirmation).
+ * Password hashing is handled automatically by the beforeSave hook on the User model.
  *
  * @param data
  */
@@ -552,13 +498,13 @@ export const adminCreate = (
 /**
  * Update an existing user by ID (admin version).
  * If password is provided and non-empty it will be changed;
- * the pre-save hook handles hashing automatically.
+ * the beforeSave hook handles hashing automatically.
  *
  * @param id
  * @param data
  */
 export const adminUpdate = async (
-    id: string,
+    id: number | string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
 ): Promise<IUserDocument> => {
     const user = await UserRepository.findById(id);
@@ -580,13 +526,13 @@ export const adminUpdate = async (
 /**
  * Remove a user by ID (soft or hard delete).
  * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
- * Hard delete permanently removes the document from the database.
+ * Hard delete permanently removes the record from the database.
  *
  * @param id
  * @param hardDelete
  */
 export const remove = async (
-    id: string,
+    id: number | string,
     hardDelete = false,
 ): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
     const user = await UserRepository.findById(id);
@@ -601,7 +547,7 @@ export const remove = async (
             .then(() => generateSuccess(undefined, 200, t('admin.user-hard-deleted')));
 
     // If deletedAt already present: it's soft-deleted → RESTORE
-    user.deletedAt = user.deletedAt ? undefined : new Date();
+    user.deletedAt = user.deletedAt ? null : new Date();
 
     // SOFT delete (or restore)
     return generateSuccess(await UserRepository.save(user), 200, t('admin.user-soft-deleted'));
@@ -630,3 +576,4 @@ export default {
     adminUpdate,
     remove,
 };
+

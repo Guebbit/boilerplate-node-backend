@@ -1,6 +1,5 @@
-import { Types } from 'mongoose';
+import { Op } from 'sequelize';
 import { t } from 'i18next';
-import type { QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, ProductsResponse, Product } from '@api/api';
 import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
 import { deleteFile } from '@utils/filesystem-helpers';
@@ -47,35 +46,35 @@ export const search = async (
     const skip = (page - 1) * pageSize;
 
     // Query builder
-    const where: QueryFilter<IProductDocument> = {};
+    const where: Record<string, unknown> = {};
 
     // Filter by ID
     if (filters.id && String(filters.id).trim() !== '')
-        where._id = new Types.ObjectId(String(filters.id));
+        where['id'] = Number(filters.id);
 
     // Filter by text (search in title and description)
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
         // Simple, effective search across title/description (case-insensitive)
-        where.$or = [
-            { title: { $regex: text, $options: 'i' } },
-            { description: { $regex: text, $options: 'i' } },
+        where[Op.or as unknown as string] = [
+            { title: { [Op.like]: `%${text}%` } },
+            { description: { [Op.like]: `%${text}%` } },
         ];
     }
 
     // Filter by price range
-    const priceConditions: Record<string, number> = {};
+    const priceConditions: Record<symbol, number> = {};
     if (filters.minPrice !== undefined && filters.minPrice !== null && !Number.isNaN(Number(filters.minPrice)))
-        priceConditions.$gte = Number(filters.minPrice);
+        priceConditions[Op.gte] = Number(filters.minPrice);
     if (filters.maxPrice !== undefined && filters.maxPrice !== null && !Number.isNaN(Number(filters.maxPrice)))
-        priceConditions.$lte = Number(filters.maxPrice);
-    if (Object.keys(priceConditions).length > 0)
-        where.price = priceConditions;
+        priceConditions[Op.lte] = Number(filters.maxPrice);
+    if (Object.getOwnPropertySymbols(priceConditions).length > 0)
+        where['price'] = priceConditions;
 
     // If not admin, filter out inactive and (soft) deleted products
     if (!admin) {
-        where.active = true;
-        where.deletedAt = undefined;
+        where['active'] = true;
+        where['deletedAt'] = null;
     }
 
     // First count the total number of products matching the query
@@ -83,7 +82,7 @@ export const search = async (
 
     // Then paginate the results
     const items = await ProductRepository.findAll(where, {
-        sort: { createdAt: -1 },
+        sort: [['createdAt', 'DESC']],
         skip,
         limit: pageSize,
     });
@@ -100,24 +99,24 @@ export const search = async (
 };
 
 /**
- * Get a single product by ID as a lean (plain JS) object.
+ * Get a single product by ID as a plain object.
  * Admin can see inactive or soft-deleted products; non-admin cannot.
- * Returns undefined if the id is falsy; null if no matching document is found.
+ * Returns undefined if the id is falsy; null if no matching record is found.
  *
  * @param id
  * @param admin
  */
-export const getById = async (id: string | undefined, admin = false) => {
+export const getById = async (id: number | string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id)
         return;
     if (admin)
-        return ProductRepository.findById(id).lean();
-    return ProductRepository.findOne({ _id: id, active: true, deletedAt: undefined }).lean();
+        return ProductRepository.findById(id);
+    return ProductRepository.findOne({ id: Number(id), active: true, deletedAt: null });
 };
 
 /**
- * Create a new product document in the database.
+ * Create a new product record in the database.
  *
  * @param data
  */
@@ -134,7 +133,7 @@ export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
  * @param newImageUrl - new image URL relative to the public directory (empty string means no change)
  */
 export const update = async (
-    id: string,
+    id: number | string,
     data: Partial<Omit<Product, 'id'>>,
     newImageUrl = '',
 ): Promise<IProductDocument> => {
@@ -154,7 +153,7 @@ export const update = async (
     if (newImageUrl && oldImageUrl !== newImageUrl)
         product.imageUrl = newImageUrl;
 
-    // Persist the updated document
+    // Persist the updated record
     const updatedProduct = await ProductRepository.save(product);
 
     // After saving the new image path, delete the old image file
@@ -174,7 +173,7 @@ export const update = async (
  * @param hardDelete
  */
 export const remove = async (
-    id: string,
+    id: number | string,
     hardDelete = false,
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
     const product = await ProductRepository.findById(id);
@@ -185,16 +184,16 @@ export const remove = async (
 
     // HARD delete
     if (hardDelete)
-        return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+        return UserService.productRemoveFromCartsById(product.id)
             .then(() => ProductRepository.deleteOne(product))
             .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
 
     // If deletedAt already present: it's soft-deleted → RESTORE
-    product.deletedAt = product.deletedAt ? undefined : new Date();
+    product.deletedAt = product.deletedAt ? null : new Date();
 
     // SOFT delete (or restore)
-    return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+    return UserService.productRemoveFromCartsById(product.id)
         .then(async () => generateSuccess(await ProductRepository.save(product), 200, t('ecommerce.product-soft-deleted')));
 };
 
