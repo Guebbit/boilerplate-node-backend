@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import ProductRepository from "@repositories/products";
-import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { UpsertCartItemRequest } from "@api/api";
 import UserService from "@services/users";
@@ -15,7 +14,7 @@ import UserService from "@services/users";
  * @param next
  */
 export const postSetCartItem = (request: Request<unknown, unknown, UpsertCartItemRequest>, response: Response, next: NextFunction) =>
-    ProductRepository.findOne({ _id: request.body.productId, active: true, deletedAt: undefined })
+    ProductRepository.findOne({ id: Number(request.body.productId), active: true, deletedAt: null })
         .then((product) => {
             // not found, something happened
             if (!product) {
@@ -27,4 +26,4 @@ export const postSetCartItem = (request: Request<unknown, unknown, UpsertCartIte
             return UserService.cartItemSet(request.user!, product, request.body.quantity);
         })
         .then(() => response.redirect('/cart'))
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error) => next(databaseErrorConverter(error)))

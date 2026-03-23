@@ -2,11 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Request, Response, NextFunction } from "express";
 import ejs from "ejs";
-import {
-    Types,
-    type CastError,
-    type PipelineStage
-} from "mongoose";
 import { t } from "i18next";
 import OrderService from "@services/orders";
 import { createPDF } from "@utils/pdf-helpers";
@@ -30,38 +25,34 @@ export interface IGetTargetInvoiceParameters {
 export const getTargetInvoice = (request: Request & {
     params: IGetTargetInvoiceParameters
 }, response: Response, next: NextFunction) => {
-    // if it's not valid it could throw an error
-    if (!Types.ObjectId.isValid(request.params.orderId))
+    const id = Number(request.params.orderId);
+    if (!id || Number.isNaN(id))
         return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
 
-    /**
-     * Where build (same as get-target-order.ts
-     */
-    const match: PipelineStage.Match = {
-        $match: {}
-    };
-    if (!request.session.user?.admin)
-        match.$match.userId = request.session.user?._id;
-    match.$match._id = new Types.ObjectId(request.params.orderId);
+    // Build search filters
+    const filters = { id: request.params.orderId };
+    // If user is NOT admin, scope to their own orders only
+    const scope = !request.session.user?.admin && request.session.user?.id
+        ? { userId: request.session.user.id }
+        : {};
 
-    OrderService.getAll([ match ])
-        .then(async (orders) => {
-            if (orders.length === 0)
+    OrderService.search(filters, scope)
+        .then(async (result) => {
+            if (result.items.length === 0)
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
-            const order = orders[0];
+            const order = result.items[0];
             /**
              * Create PDF file
              * Create PDF using get-target-order template OR pure HTML content
              * WARNING: Images and other link-related info will NOT work. Need to convert the images in base64 to embed them correctly in a PDF
              */
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-            const invoiceName = order._id + '.pdf'; // filename
+            const invoiceName = order.id + '.pdf'; // filename
             // save path
             const invoicePath = path.join('src', 'data', 'invoices', invoiceName);
             // // Direct HTML content (alternative)
             // const htmlContent = `
             //   <html>
-            //   <head><title>${order._id}</title></head>
+            //   <head><title>${order.id}</title></head>
             //   <body>
             //     <ul>
             //         <li><b>Email</b>: ${order.email}</li>
@@ -87,8 +78,7 @@ export const getTargetInvoice = (request: Request & {
                         order,
                     },
                 );
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                await createPDF(htmlContent, order._id + '.pdf', 'src/data/invoices');
+                await createPDF(htmlContent, order.id + '.pdf', 'src/data/invoices');
                 /**
                  * Download file
                  */
@@ -107,8 +97,8 @@ export const getTargetInvoice = (request: Request & {
                 return next(new ExtendedError((error as Error).message, 500));
             }
         })
-        .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
+        .catch((error: Error) => {
+            if (error.message == "404")
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             return next(databaseErrorConverter(error));
         })

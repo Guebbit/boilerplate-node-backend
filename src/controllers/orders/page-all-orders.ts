@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { SearchOrdersRequest } from "@api/api"
 import OrderService from "@services/orders";
@@ -30,10 +29,10 @@ export const pageAllOrders = async (
             page,
             pageSize,
         },
-        // Only admin can see non-active and (soft) deleted products
+        // Only admin can see all orders; regular users only see their own
         request.session.user?.admin
             ? {}
-            : { active: true, deletedAt: undefined }
+            : { userId: request.session.user?.id }
     )
         .then(({ items, meta }) =>
             response.render("orders/search", {
@@ -47,5 +46,5 @@ export const pageAllOrders = async (
                 },
             })
         )
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
+        .catch((error: Error) => next(databaseErrorConverter(error)));
 };

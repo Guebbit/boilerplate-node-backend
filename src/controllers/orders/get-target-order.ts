@@ -1,9 +1,4 @@
 import type { Request, Response, NextFunction } from "express";
-import {
-    Types,
-    type CastError,
-    type PipelineStage
-} from "mongoose";
 import { t } from "i18next";
 import OrderService from "@services/orders";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
@@ -25,40 +20,31 @@ export interface IGetTargetOrderParameters {
 export const getTargetOrder = (request: Request & {
     params: IGetTargetOrderParameters
 }, response: Response, next: NextFunction) => {
-    // if it's not valid it could throw an error
-    if (!Types.ObjectId.isValid(request.params.orderId))
+    const id = Number(request.params.orderId);
+    if (!id || Number.isNaN(id))
         return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
 
-    /**
-     * Where build
-     */
-        // empty match
-    const match: PipelineStage.Match = {
-            $match: {}
-        };
-    // If user is NOT admin, it's limited to his own orders
-    if (!request.session.user?.admin)
-        match.$match.userId = request.session.user?._id;
-    // single out the order
-    match.$match._id = new Types.ObjectId(request.params.orderId);
+    // Build search filters
+    const filters = { id: request.params.orderId };
+    // If user is NOT admin, scope to their own orders only
+    const scope = !request.session.user?.admin && request.session.user?.id
+        ? { userId: request.session.user.id }
+        : {};
 
-    /**
-     * Get info from database
-     */
-    OrderService.getAll([ match ])
-        .then((orders) => {
-            if (orders.length === 0)
+    OrderService.search(filters, scope)
+        .then(({ items }) => {
+            if (items.length === 0)
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             return response.render('orders/details', {
                 pageMetaTitle: 'Order',
                 pageMetaLinks: [
                     "/css/order-details.css",
                 ],
-                order: orders[0]
+                order: items[0]
             })
         })
-        .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
+        .catch((error: Error) => {
+            if (error.message == "404")
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             return next(databaseErrorConverter(error));
         })

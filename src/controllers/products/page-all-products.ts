@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { SearchProductsRequest } from "@api/api";
 import ProductService from "@services/products";
@@ -44,4 +43,4 @@ export const pageAllProducts = async (
                 search: request.query,
             })
         )
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
+        .catch((error: Error) => next(databaseErrorConverter(error)));

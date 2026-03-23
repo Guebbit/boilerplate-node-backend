@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import { nodemailer } from "@utils/nodemailer";
-import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { PasswordResetConfirmRequest } from "@api/api";
 import UserRepository from "@repositories/users";
@@ -46,10 +45,7 @@ export const postResetConfirm = async (request: Request<unknown, unknown, Passwo
                         return response.redirect('/account/reset');
                     }
                     // consume the token
-                    user.tokens = user.tokens
-                        .filter(({ token: t }) => token !== t);
-                    // save and send email
-                    await UserRepository.save(user)
+                    await UserRepository.deleteToken(token)
                         .then(() => {
                             // send confirmation email (no need to wait)
 
@@ -70,5 +66,5 @@ export const postResetConfirm = async (request: Request<unknown, unknown, Passwo
                     return response.redirect("/account/login");
                 })
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error) => next(databaseErrorConverter(error)))
 }

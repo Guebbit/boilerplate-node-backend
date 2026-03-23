@@ -1,8 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
 import { t } from "i18next";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
-import type { ObjectId } from "mongodb";
 import ProductService from "@services/products";
 import UserService from "@services/users";
 import type { ICartItem } from "@models/users";
@@ -31,7 +29,7 @@ export const pageTargetProduct = (request: Request & {
                 return next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));
             // add quantity of product in cart to product details page
             const productsInCart = request.user ? await UserService.cartGet(request.user) : [];
-            const { quantity = 0 } = productsInCart.find((cartProduct: ICartItem) => cartProduct.product._id.equals(product._id as ObjectId)) ?? {};
+            const { quantity = 0 } = productsInCart.find((cartProduct: ICartItem) => cartProduct.productId === product.id) ?? {};
             response.render('products/details', {
                 pageMetaTitle: product.title,
                 pageMetaLinks: [
@@ -43,8 +41,8 @@ export const pageTargetProduct = (request: Request & {
                 },
             });
         })
-        .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
+        .catch((error: Error) => {
+            if (error.message == "404")
                 return next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));
             return next(databaseErrorConverter(error));
         })

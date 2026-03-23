@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import UserService from "@services/users";
 
@@ -22,4 +21,4 @@ export const pageCart = (request: Request, response: Response, next: NextFunctio
                 productList,
             })
         )
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error) => next(databaseErrorConverter(error)))

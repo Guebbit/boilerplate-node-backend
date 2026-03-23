@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from "express";
-import { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import UserService from "@services/users";
 
@@ -25,4 +24,4 @@ export const postDeleteCartItem = (request: Request<unknown, unknown, IPostDelet
                 throw new Error("cartItemRemoveById error");
             return response.redirect('/cart');
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error) => next(databaseErrorConverter(error)))

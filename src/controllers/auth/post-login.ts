@@ -2,7 +2,6 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import type { IUser } from "@models/users";
 import { ExtendedError } from "@utils/error-helpers";
-import type { CastError } from "mongoose";
 import type { LoginRequest } from "@api/api";
 import UserService from "@services/users";
 
@@ -36,7 +35,7 @@ export const postLogin = (request: Request<unknown, unknown, LoginRequest>, resp
             }
             // User found and login is correct: Update and regenerate session
             request.session.regenerate(() => {
-                request.session.user = data.toObject<IUser>();
+                request.session.user = data.toJSON() as IUser;
                 request.session
                     .save(() => {
                         request.flash('success', [t('login.success')]);
@@ -44,5 +43,5 @@ export const postLogin = (request: Request<unknown, unknown, LoginRequest>, resp
                     });
             });
         })
-        .catch((error: CastError) => next(new ExtendedError(error.kind, Number.parseInt(error.message))));
+        .catch((error: Error) => next(new ExtendedError(error.message, 500)));
 };

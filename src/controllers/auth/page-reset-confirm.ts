@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import UserRepository from "@repositories/users";
 
@@ -42,4 +41,4 @@ export const pageResetConfirm = (request: Request & {
                 token: request.params.token
             });
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error) => next(databaseErrorConverter(error)))
