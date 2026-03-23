@@ -90,6 +90,7 @@ components:
             schema:
                 $ref: '#/components/schemas/Id'
             description: Resource identifier
+            example: '000000000000000000000000'
         ProductIdPathParam:
             name: productId
             in: path
@@ -97,6 +98,7 @@ components:
             schema:
                 $ref: '#/components/schemas/Id'
             description: Product identifier
+            example: '000000000000000000000000'
 
     responses:
         Success:
