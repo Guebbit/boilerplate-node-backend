@@ -10,7 +10,7 @@ import { getBrowserConfig } from "./puppeteer.config";
  * @param options - puppeteer options
  * @return string | Error
  */
-export async function createPDF (
+export async function createPDF(
     htmlContent: string,
     filename = 'output.pdf',
     outputPath = 'src/data/files',
@@ -18,31 +18,20 @@ export async function createPDF (
     options: PDFOptions = {
         format: 'A4',
         printBackground: true
-    }) {
-    return puppeteer.launch()
-        .then(browser =>
-            browser.newPage()
-                .then(page =>
-                    page.setContent(htmlContent, {
-                            // Wait until there are no more than 0 network connections for at least 500 milliseconds:
-                            // The page is considered fully loaded when there has been a half-second period with no new network requests
-                            waitUntil: 'networkidle0'
-                        })
-                        .then(() =>
-                            page.pdf({
-                                    ...options,
-                                    path: outputPath + '/' + filename,
-                                })
-                                .then(async () => {
-                                    await browser.close();
-                                    return outputPath + '/' + filename;
-                                })
-                        )
-                )
-                .catch((error) =>
-                    browser.close().finally(() => {
-                        throw error
-                    })
-                )
-        )
+    }
+): Promise<string> {
+    const browser = await puppeteer.launch(getBrowserConfig());
+    try {
+        const page = await browser.newPage();
+        // Wait until there are no more than 0 network connections for at least 500 milliseconds:
+        // The page is considered fully loaded when there has been a half-second period with no new network requests
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        await page.pdf({
+            ...options,
+            path: outputPath + '/' + filename,
+        });
+        return outputPath + '/' + filename;
+    } finally {
+        await browser.close();
+    }
 }

@@ -45,7 +45,7 @@ export const getTargetInvoice = (request: Request & {
     match.$match._id = new Types.ObjectId(request.params.orderId);
 
     OrderService.getAll([ match ])
-        .then((orders) => {
+        .then(async (orders) => {
             if (orders.length === 0)
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             const order = orders[0];
@@ -73,44 +73,39 @@ export const getTargetInvoice = (request: Request & {
             //   </html>
             // `;
             // Use an ejs template
-            return ejs.renderFile(
-                // Retrieve the template
-                path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
-                // Populate the template
-                {
-                    ...response.locals,
-                    pageMetaTitle: 'Order',
-                    pageMetaLinks: [
-                        "/css/order-details.css",
-                    ],
-                    order,
-                },
-                // callback
-                async (error: Error | null, htmlContent: string) => {
-                    if (error)
-                        return next(new ExtendedError(error.message, 500));
-                    // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                    return createPDF(htmlContent, order._id + '.pdf', 'src/data/invoices')
-                        .then(() => {
-                            /**
-                             * Download file
-                             */
-                            // PRELOADING data
-                            fs.readFile(invoicePath, (error_, data) => {
-                                if (error_)
-                                    return next(new ExtendedError(error_.message, 500));
-                                response.setHeader('Content-Type', 'application/pdf');
-                                response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
-                                // send data (with custom headers)
-                                response.send(data);
-                            });
-                            // STREAMING data (alternative)
-                            // const file = fs.createReadStream(invoicePath);
-                            // response.setHeader('Content-Type', 'application/pdf');
-                            // response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
-                            // file.pipe(response);
-                        })
-                })
+            try {
+                const htmlContent = await ejs.renderFile(
+                    // Retrieve the template
+                    path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
+                    // Populate the template
+                    {
+                        ...response.locals,
+                        pageMetaTitle: 'Order',
+                        pageMetaLinks: [
+                            "/css/order-details.css",
+                        ],
+                        order,
+                    },
+                );
+                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                await createPDF(htmlContent, order._id + '.pdf', 'src/data/invoices');
+                /**
+                 * Download file
+                 */
+                // PRELOADING data
+                const data = await fs.promises.readFile(invoicePath);
+                response.setHeader('Content-Type', 'application/pdf');
+                response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
+                // send data (with custom headers)
+                response.send(data);
+                // STREAMING data (alternative)
+                // const file = fs.createReadStream(invoicePath);
+                // response.setHeader('Content-Type', 'application/pdf');
+                // response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
+                // file.pipe(response);
+            } catch (error) {
+                return next(new ExtendedError((error as Error).message, 500));
+            }
         })
         .catch((error: CastError) => {
             if (error.message == "404" || error.kind === "ObjectId")
