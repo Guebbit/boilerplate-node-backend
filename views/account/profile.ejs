@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../_layouts/main-head.ejs"); %>
+<body>
+<%- include("../_layouts/default-header.ejs"); %>
+<%- include("../_layouts/default-aside.ejs"); %>
+<main class="centered">
+    <h1>My Account</h1>
+    <hr/>
+    <% if (user) { %>
+        <div class="image">
+            <img src="<%= user.imageUrl %>" alt="avatar">
+        </div>
+        <h2><%= user.username %></h2>
+        <p><b>Email:</b> <%= user.email %></p>
+        <% if (user.admin) { %>
+            <p><b>Role:</b> Administrator</p>
+        <% } else { %>
+            <p><b>Role:</b> User</p>
+        <% } %>
+    <% } else { %>
+        <p>No user data available.</p>
+    <% } %>
+    <hr/>
+    <a class="btn" href="/account/logout">Logout</a>
+</main>
+<%- include("../_layouts/default-footer.ejs"); %>
+</body>
+</html>

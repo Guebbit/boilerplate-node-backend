@@ -51,11 +51,9 @@ export const orderSchema = new Schema<IOrderDocument>({
             required: true
         }
     }],
-    // only createdAt, without updatedAt
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    }
+}, {
+    // Automatically manages createdAt and updatedAt timestamps
+    timestamps: true
 });
 
 export default model<IOrderDocument, IOrderModel>('Order', orderSchema);

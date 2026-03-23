@@ -2,6 +2,7 @@ import express from 'express';
 import { isGuest, isAuth } from "../middlewares/authorizations";
 import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
+import { pageAccount } from "../controllers/auth/page-account";
 import { pageLogin } from "../controllers/auth/page-login";
 import { postLogin } from "../controllers/auth/post-login";
 import { pageSignup } from "../controllers/auth/page-signup";
@@ -13,6 +14,9 @@ import { postResetConfirm } from "../controllers/auth/post-reset-confirm";
 import { getLogout } from "../controllers/auth/page-logout";
 
 const router = express.Router();
+
+// GET /account — current user's profile page
+router.get('/', isAuth, pageAccount);
 
 router.get('/login', isGuest, pageLogin);
 
