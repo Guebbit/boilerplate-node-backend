@@ -35,6 +35,8 @@ export const fileStorage = multer.diskStorage({
             callback(null, (process.env.NODE_PUBLIC_PATH ?? "public") + '/images/');
         // if (file.fieldname === "pdfUpload")
         //     callback(null, 'src/uploads/');
+        else
+            callback(new Error(`Unsupported upload field: ${file.fieldname}`), '');
     },
 
     /**

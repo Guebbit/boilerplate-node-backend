@@ -10,7 +10,7 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import { MulterError } from "multer";
 import { ExtendedError } from "./utils/error-helpers";
-import { start, database } from "./utils/database";
+import { start } from "./utils/database";
 import logger from "./utils/winston";
 import { getDirname } from "./utils/get-file-url";
 import { session, flash, userConnect } from "./middlewares/session";

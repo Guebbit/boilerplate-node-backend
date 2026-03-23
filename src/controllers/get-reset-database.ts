@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import mongoose, { Types } from "mongoose";
-import database from "@utils/database";
 import UserRepository from "@repositories/users";
 import ProductRepository from "@repositories/products";
 import OrderRepository from "@repositories/orders";
@@ -15,8 +14,8 @@ import type { IOrderDocument } from "@models/orders";
  * @param response
  */
 export const getResetDatabase = (request: Request, response: Response) =>
-    database
-        .then(() => mongoose.connection.db?.dropDatabase())
+    // By the time this handler runs, mongoose is already connected (start() resolved before the server began listening)
+    mongoose.connection.db?.dropDatabase()
         .then(() =>
             Promise.all([
                 // users

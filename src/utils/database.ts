@@ -1,32 +1,35 @@
 import mongoose from "mongoose";
+import logger from "./winston";
 
-export const database = mongoose.connect(process.env.NODE_DB_URI ?? "");
+const MAX_RETRIES = 10;
+const BASE_DELAY_MS = 1_000;
 
+const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
- * Connection retry
+ * Connect to MongoDB with exponential-backoff retry.
+ * Each failed attempt doubles the delay, capped at 30 seconds.
+ * Throws if all attempts are exhausted.
  */
-export const start = () => {
-    let retries = 10;
-
-    // eslint-disable-next-line unicorn/consistent-function-scoping
-    const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-    return (async () => {
-        while (retries) {
-            try {
-                await database;
-                return;
-            } catch {
-                // eslint-disable-next-line no-console
-                console.log("------------- DB NOT READY, RETRYING -------------", retries);
-                retries--;
-                await wait(2000);
-            }
+export const start = async (): Promise<void> => {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+            await mongoose.connect(process.env.NODE_DB_URI ?? "");
+            return;
+        } catch {
+            if (attempt >= MAX_RETRIES - 1)
+                throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`);
+            const delayMs = Math.min(BASE_DELAY_MS * 2 ** attempt, 30_000);
+            logger.warn(`DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+            await wait(delayMs);
         }
-
-        throw new Error("DB connection failed"); // ❌ rejects
-    })();
+    }
 };
 
-export default database;
+/**
+ * The active Mongoose connection.
+ * Available after `start()` resolves.
+ */
+export const database = mongoose.connection;
+
+export default mongoose.connection;
