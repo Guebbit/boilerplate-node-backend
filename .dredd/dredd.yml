@@ -1,0 +1,26 @@
+dry-run: null
+hookfiles: null
+language: nodejs
+sandbox: false
+server: npm run dev
+server-wait: 3
+init: false
+custom: {}
+names: false
+only: []
+reporter: []
+output: []
+header: []
+sorted: false
+user: null
+inline-errors: false
+details: false
+method: []
+color: true
+level: info
+timestamp: false
+silent: false
+path:
+  - ./api/openapi.yaml
+blueprint: ./api/openapi.yaml
+endpoint: 'http://localhost:3000'
