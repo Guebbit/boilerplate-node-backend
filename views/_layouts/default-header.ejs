@@ -6,6 +6,9 @@
             <% if (isAuthenticated) { %>
                 <li class="main-header__item"><a href="/cart">Cart</a></li>
                 <li class="main-header__item"><a href="/orders">Orders</a></li>
+                <% if (isAdmin) { %>
+                    <li class="main-header__item"><a href="/users">Users</a></li>
+                <% } %>
                 <li class="main-header__item"><a href="/account/logout">Logout</a></li>
             <% } else { %>
                 <li class="main-header__item"><a href="/account/login">Login</a></li>

@@ -3,14 +3,14 @@ import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
-import type { CastError } from 'mongoose';
+import type { CastError, QueryFilter } from 'mongoose';
 import { generateSuccess, generateReject, type IResponseSuccess, type IResponseReject } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/error-helpers';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { zodUserSchema } from '@models/users';
-import type { IUserDocument, ICartItem } from '@models/users';
+import type { IUserDocument, ICartItem, IUser } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import type { Order } from '@api/api';
+import type { Order, SearchUsersRequest, UsersResponse } from '@api/api';
 import UserRepository from '@repositories/users';
 import OrderRepository from '@repositories/orders';
 
@@ -429,6 +429,183 @@ export const productRemoveFromCartsById = (id: string): Promise<IResponseSuccess
         )
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 
+// ---------------------------------------------------------------------------
+// Admin-facing methods (mirror the pattern of src/services/products.ts)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate user data for admin create/edit forms.
+ * Returns an array of UI-friendly error messages (empty array means valid).
+ *
+ * @param userData
+ * @param requirePassword - true when creating a new user (password is mandatory)
+ */
+export const validateData = (
+    userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
+    { requirePassword = true }: { requirePassword?: boolean } = {},
+): string[] => {
+    const schema = requirePassword
+        ? zodUserSchema.pick({ email: true, username: true, password: true })
+        : zodUserSchema
+            .pick({ email: true, username: true, password: true })
+            .partial({ password: true });
+
+    const parseResult = schema.safeParse(userData);
+    if (!parseResult.success)
+        return parseResult.error.issues.map(({ message }) => message);
+    return [];
+};
+
+/**
+ * Search users (DTO-friendly) — admin panel, mirrors ProductService.search.
+ *
+ * Filters: id, text (email/username), email, username
+ * Pagination: page (1-based), pageSize
+ *
+ * Admin always sees all users (including soft-deleted).
+ *
+ * @param filters
+ */
+export const search = async (
+    filters: SearchUsersRequest = {},
+): Promise<UsersResponse> => {
+    // Pagination
+    const page = Math.max(1, Number(filters.page ?? 1) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
+    const skip = (page - 1) * pageSize;
+
+    // Query builder
+    const where: QueryFilter<IUserDocument> = {};
+
+    // Filter by ID
+    if (filters.id && String(filters.id).trim() !== '')
+        where._id = new Types.ObjectId(String(filters.id));
+
+    // Filter by text (search in email and username)
+    if (filters.text && String(filters.text).trim() !== '') {
+        const text = String(filters.text).trim();
+        where.$or = [
+            { email: { $regex: text, $options: 'i' } },
+            { username: { $regex: text, $options: 'i' } },
+        ];
+    }
+
+    // Filter by exact email (overrides text $or if both provided)
+    if (filters.email && String(filters.email).trim() !== '')
+        where.email = { $regex: String(filters.email).trim(), $options: 'i' };
+
+    // Filter by exact username (overrides text $or if both provided)
+    if (filters.username && String(filters.username).trim() !== '')
+        where.username = { $regex: String(filters.username).trim(), $options: 'i' };
+
+    // Filter by active status (true = not deleted, false = deleted)
+    if (filters.active !== undefined && filters.active !== null)
+        where.deletedAt = filters.active
+            ? { $exists: false }
+            : { $exists: true, $type: 'date' };
+
+    const totalItems = await UserRepository.count(where);
+    const items = await UserRepository.findAll(where, {
+        sort: { createdAt: -1 },
+        skip,
+        limit: pageSize,
+    });
+
+    return {
+        items: items as unknown as UsersResponse['items'],
+        meta: {
+            page,
+            pageSize,
+            totalItems,
+            totalPages: Math.ceil(totalItems / pageSize),
+        },
+    };
+};
+
+/**
+ * Get a single user by ID as a lean (plain JS) object.
+ * Returns undefined if the id is falsy; null if no matching document is found.
+ *
+ * @param id
+ */
+export const getById = async (id?: string) => {
+    // Return early without triggering a DB call when no id is provided
+    if (!id)
+        return;
+    const user = await UserRepository.findById(id);
+    if (!user)
+        return;
+    return user.toObject();
+};
+
+/**
+ * Create a new user document in the database (admin version — no email confirmation).
+ * Password hashing is handled automatically by the pre-save hook on the User schema.
+ *
+ * @param data
+ */
+export const adminCreate = (
+    data: Pick<IUser, 'email' | 'username' | 'password'> & Partial<Pick<IUser, 'admin' | 'imageUrl'>>,
+): Promise<IUserDocument> =>
+    UserRepository.create(data);
+
+/**
+ * Update an existing user by ID (admin version).
+ * If password is provided and non-empty it will be changed;
+ * the pre-save hook handles hashing automatically.
+ *
+ * @param id
+ * @param data
+ */
+export const adminUpdate = async (
+    id: string,
+    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
+): Promise<IUserDocument> => {
+    const user = await UserRepository.findById(id);
+
+    if (!user)
+        throw new Error('404');
+
+    // Apply incoming field changes
+    if (data.email !== undefined) user.email = data.email;
+    if (data.username !== undefined) user.username = data.username;
+    if (data.admin !== undefined) user.admin = data.admin;
+    if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
+    // Only update password when a non-empty value is passed
+    if (data.password && data.password.trim().length > 0) user.password = data.password;
+
+    return UserRepository.save(user);
+};
+
+/**
+ * Remove a user by ID (soft or hard delete).
+ * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
+ * Hard delete permanently removes the document from the database.
+ *
+ * @param id
+ * @param hardDelete
+ */
+export const remove = async (
+    id: string,
+    hardDelete = false,
+): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+    const user = await UserRepository.findById(id);
+
+    // not found, something happened
+    if (!user)
+        return generateReject(404, '404', [t('admin.user-not-found')]);
+
+    // HARD delete
+    if (hardDelete)
+        return UserRepository.deleteOne(user)
+            .then(() => generateSuccess(undefined, 200, t('admin.user-hard-deleted')));
+
+    // If deletedAt already present: it's soft-deleted → RESTORE
+    user.deletedAt = user.deletedAt ? undefined : new Date();
+
+    // SOFT delete (or restore)
+    return generateSuccess(await UserRepository.save(user), 200, t('admin.user-soft-deleted'));
+};
 
 
 export default {
@@ -446,4 +623,10 @@ export default {
     signup,
     login,
     productRemoveFromCartsById,
+    validateData,
+    search,
+    getById,
+    adminCreate,
+    adminUpdate,
+    remove,
 };

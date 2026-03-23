@@ -40,5 +40,10 @@
     "error-unknown": "Something went wrong with the request.",
     "error-invalid-data": "Error: invalid data provided.",
     "error-missing-data": "Error: missing data."
+  },
+  "admin": {
+    "user-not-found": "The requested user was not found.",
+    "user-hard-deleted": "User was permanently deleted.",
+    "user-soft-deleted": "User was soft deleted (deactivated)."
   }
 }
