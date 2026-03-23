@@ -1,5 +1,7 @@
-import 'dotenv/config';
-import mongoose, { Types } from 'mongoose';
+// Set test environment BEFORE any imports so the in-memory SQLite DB is used
+process.env.NODE_ENV = 'test';
+
+import { sequelize } from '@utils/database';
 import OrderService from '@services/orders';
 import OrderRepository from '@repositories/orders';
 import ProductRepository from '@repositories/products';
@@ -10,10 +12,8 @@ import type { IUserDocument } from '@models/users';
 
 /**
  * Order Service unit tests.
- * Validates the business-logic layer (getAll, search) against a live MongoDB
- * instance, using real fixture data so that aggregation pipelines are exercised end-to-end.
- *
- * Requires a running MongoDB instance (NODE_DB_URI env var).
+ * Validates the business-logic layer (search) against an in-memory SQLite database,
+ * using real fixture data so that SQL queries are exercised end-to-end.
  */
 describe('Order Service', () => {
     /**
@@ -24,11 +24,11 @@ describe('Order Service', () => {
     let testOrder:   IOrderDocument;
 
     /**
-     * Connect to the database and seed the minimal fixtures required
+     * Sync the database and seed the minimal fixtures required
      * to exercise the service search / filter logic.
      */
     beforeAll(async () => {
-        await mongoose.connect(process.env.NODE_DB_URI ?? '');
+        await sequelize.sync({ force: true });
 
         testProduct = await ProductRepository.create({
             title:    'Service Order Test Product',
@@ -45,11 +45,17 @@ describe('Order Service', () => {
         });
 
         testOrder = await OrderRepository.create({
-            userId: testUser._id as Types.ObjectId,
+            userId: testUser.id,
             email:  testUser.email,
             products: [
                 {
-                    product:  testProduct.toObject(),
+                    product: {
+                        id:       testProduct.id,
+                        title:    testProduct.title,
+                        price:    testProduct.price,
+                        imageUrl: testProduct.imageUrl,
+                        active:   testProduct.active,
+                    },
                     quantity: 3,
                 },
             ],
@@ -57,45 +63,7 @@ describe('Order Service', () => {
     });
 
     // ---------------------------------------------------------------------------
-    // getAll
-    // ---------------------------------------------------------------------------
-
-    it('getAll returns an array of order documents', async () => {
-        const results = await OrderService.getAll();
-        expect(Array.isArray(results)).toBe(true);
-    });
-
-    it('getAll adds computed fields (totalItems, totalQuantity, totalPrice)', async () => {
-        const userId  = testUser._id as Types.ObjectId;
-        const results = await OrderService.getAll([
-            { $match: { userId } },
-        ]);
-        expect(results.length).toBeGreaterThan(0);
-
-        // Computed fields are added by the shared addComputedFields $addFields stage
-        const order = results[0] as IOrderDocument & {
-            totalItems:    number;
-            totalQuantity: number;
-            totalPrice:    number;
-        };
-        expect(typeof order.totalItems).toBe('number');
-        expect(typeof order.totalQuantity).toBe('number');
-        expect(typeof order.totalPrice).toBe('number');
-        // Our fixture has 1 product line and quantity 3 at price 29.99
-        expect(order.totalItems).toBe(1);
-        expect(order.totalQuantity).toBe(3);
-        expect(order.totalPrice).toBeCloseTo(3 * 29.99, 1);
-    });
-
-    it('getAll with a $match stage filters results', async () => {
-        const results = await OrderService.getAll([
-            { $match: { userId: new Types.ObjectId('000000000000000000000000') } },
-        ]);
-        expect(results).toHaveLength(0);
-    });
-
-    // ---------------------------------------------------------------------------
-    // search – pagination
+    // search – basics
     // ---------------------------------------------------------------------------
 
     it('search returns a paginated result object with meta', async () => {
@@ -119,15 +87,25 @@ describe('Order Service', () => {
         expect(result.meta.page).toBe(1);
     });
 
+    it('search results include computed totals (totalItems, totalQuantity, totalPrice)', async () => {
+        const result = await OrderService.search({ id: String(testOrder.id) });
+        expect(result.items.length).toBeGreaterThan(0);
+        const order = result.items[0];
+        expect(typeof order.totalItems).toBe('number');
+        expect(typeof order.totalQuantity).toBe('number');
+        expect(typeof order.totalPrice).toBe('number');
+        expect(order.totalItems).toBe(1);
+        expect(order.totalQuantity).toBe(3);
+        expect(order.totalPrice).toBeCloseTo(3 * 29.99, 1);
+    });
+
     // ---------------------------------------------------------------------------
     // search – filter by email
     // ---------------------------------------------------------------------------
 
     it('search with email filter finds the seeded order', async () => {
         const result = await OrderService.search({ email: 'service-order-test@example.com' });
-        const found  = result.items.some(
-            (o) => String(o.id) === (testOrder._id as Types.ObjectId).toString(),
-        );
+        const found  = result.items.some(o => o.id === testOrder.id);
         expect(found).toBe(true);
     });
 
@@ -142,11 +120,8 @@ describe('Order Service', () => {
     // ---------------------------------------------------------------------------
 
     it('search with userId filter finds the seeded order', async () => {
-        const userId = (testUser._id as Types.ObjectId).toString();
-        const result = await OrderService.search({ userId });
-        const found  = result.items.some(
-            (o) => String(o.id) === (testOrder._id as Types.ObjectId).toString(),
-        );
+        const result = await OrderService.search({ userId: String(testUser.id) });
+        const found  = result.items.some(o => o.id === testOrder.id);
         expect(found).toBe(true);
     });
 
@@ -155,14 +130,13 @@ describe('Order Service', () => {
     // ---------------------------------------------------------------------------
 
     it('search with id filter finds the specific order', async () => {
-        const id     = (testOrder._id as Types.ObjectId).toString();
-        const result = await OrderService.search({ id });
+        const result = await OrderService.search({ id: String(testOrder.id) });
         expect(result.meta.totalItems).toBe(1);
-        expect(String(result.items[0].id)).toBe(id);
+        expect(result.items[0].id).toBe(testOrder.id);
     });
 
     it('search with id filter returns empty for a non-existent order id', async () => {
-        const result = await OrderService.search({ id: '000000000000000000000000' });
+        const result = await OrderService.search({ id: '999999' });
         expect(result.items).toHaveLength(0);
     });
 
@@ -171,11 +145,8 @@ describe('Order Service', () => {
     // ---------------------------------------------------------------------------
 
     it('search with productId filter finds orders containing that product', async () => {
-        const productId = (testProduct._id as Types.ObjectId).toString();
-        const result    = await OrderService.search({ productId });
-        const found     = result.items.some(
-            (o) => String(o.id) === (testOrder._id as Types.ObjectId).toString(),
-        );
+        const result = await OrderService.search({ productId: String(testProduct.id) });
+        const found  = result.items.some(o => o.id === testOrder.id);
         expect(found).toBe(true);
     });
 
@@ -184,16 +155,12 @@ describe('Order Service', () => {
     // ---------------------------------------------------------------------------
 
     it('search with a scope filter restricts results to the given userId', async () => {
-        const userId = testUser._id as Types.ObjectId;
-        const result = await OrderService.search({}, { userId });
-        expect(result.items.every((o) => String(o.userId) === userId.toString())).toBe(true);
+        const result = await OrderService.search({}, { userId: testUser.id });
+        expect(result.items.every(o => o.userId === testUser.id)).toBe(true);
     });
 
     it('search with a scope filter that matches nothing returns empty results', async () => {
-        const result = await OrderService.search(
-            {},
-            { userId: new Types.ObjectId('000000000000000000000000') },
-        );
+        const result = await OrderService.search({}, { userId: 999999 });
         expect(result.items).toHaveLength(0);
     });
 
@@ -202,17 +169,13 @@ describe('Order Service', () => {
     // ---------------------------------------------------------------------------
 
     /**
-     * Remove all fixtures created during the test run and disconnect.
+     * Remove all fixtures created during the test run and close the connection.
      */
     afterAll(async () => {
-        if (testOrder)
-            await mongoose.connection.collection('orders').deleteOne({
-                _id: testOrder._id as Types.ObjectId,
-            });
         if (testProduct)
             await ProductRepository.deleteOne(testProduct);
         if (testUser)
             await UserRepository.deleteOne(testUser);
-        return mongoose.disconnect();
+        await sequelize.close();
     });
 });

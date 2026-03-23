@@ -1,14 +1,14 @@
-import 'dotenv/config';
-import mongoose, { Types } from 'mongoose';
+// Set test environment BEFORE any imports so the in-memory SQLite DB is used
+process.env.NODE_ENV = 'test';
+
+import { sequelize } from '@utils/database';
 import UserRepository from '@repositories/users';
 import type { IUserDocument } from '@models/users';
 
 /**
  * User Repository unit tests.
- * Validates every raw CRUD / query method directly against a live MongoDB instance,
+ * Validates every raw CRUD / query method against an in-memory SQLite database,
  * without going through the service layer.
- *
- * Requires a running MongoDB instance (NODE_DB_URI env var).
  */
 describe('User Repository', () => {
     /**
@@ -18,10 +18,10 @@ describe('User Repository', () => {
     let testUser: IUserDocument;
 
     /**
-     * Connect to the database before running tests.
+     * Sync the database schema before running tests.
      */
     beforeAll(async () => {
-        return mongoose.connect(process.env.NODE_DB_URI ?? '');
+        await sequelize.sync({ force: true });
     });
 
     // ---------------------------------------------------------------------------
@@ -40,21 +40,21 @@ describe('User Repository', () => {
         expect(testUser).toBeDefined();
         expect(testUser.email).toBe('repo-user-test@example.com');
         expect(testUser.username).toBe('RepoUserTest');
-        expect((testUser._id as Types.ObjectId).toString()).toHaveLength(24);
+        expect(typeof testUser.id).toBe('number');
+        expect(testUser.id).toBeGreaterThan(0);
     });
 
     // ---------------------------------------------------------------------------
     // findById
     // ---------------------------------------------------------------------------
 
-    it('findById returns null for a non-existent ObjectId', async () => {
-        const result = await UserRepository.findById('000000000000000000000000');
+    it('findById returns null for a non-existent id', async () => {
+        const result = await UserRepository.findById(999999);
         expect(result).toBeNull();
     });
 
     it('findById returns the user document for a valid id', async () => {
-        const id     = (testUser._id as Types.ObjectId).toString();
-        const result = await UserRepository.findById(id);
+        const result = await UserRepository.findById(testUser.id);
         expect(result).not.toBeNull();
         expect(result!.email).toBe('repo-user-test@example.com');
     });
@@ -78,7 +78,7 @@ describe('User Repository', () => {
     // findAll
     // ---------------------------------------------------------------------------
 
-    it('findAll returns an array of lean documents', async () => {
+    it('findAll returns an array of documents', async () => {
         const results = await UserRepository.findAll();
         expect(Array.isArray(results)).toBe(true);
     });
@@ -89,8 +89,8 @@ describe('User Repository', () => {
     });
 
     it('findAll respects the skip option', async () => {
-        const all    = await UserRepository.findAll({ email: 'repo-user-test@example.com' });
-        const paged  = await UserRepository.findAll({ email: 'repo-user-test@example.com' }, { skip: all.length });
+        const all   = await UserRepository.findAll({ email: 'repo-user-test@example.com' });
+        const paged = await UserRepository.findAll({ email: 'repo-user-test@example.com' }, { skip: all.length });
         expect(paged.length).toBe(0);
     });
 
@@ -124,8 +124,7 @@ describe('User Repository', () => {
         expect(saved.username).toBe('RepoUserUpdated');
 
         // Confirm the change is reflected in a subsequent database read
-        const id      = (testUser._id as Types.ObjectId).toString();
-        const fetched = await UserRepository.findById(id);
+        const fetched = await UserRepository.findById(testUser.id);
         expect(fetched!.username).toBe('RepoUserUpdated');
     });
 
@@ -135,13 +134,13 @@ describe('User Repository', () => {
 
     it('updateMany applies the update to all matching documents', async () => {
         const filter = { email: 'repo-user-test@example.com' };
-        await UserRepository.updateMany(filter, { $set: { admin: true } });
+        await UserRepository.updateMany(filter, { admin: true });
 
         const result = await UserRepository.findOne(filter);
         expect(result!.admin).toBe(true);
 
         // Restore original value
-        await UserRepository.updateMany(filter, { $set: { admin: false } });
+        await UserRepository.updateMany(filter, { admin: false });
     });
 
     // ---------------------------------------------------------------------------
@@ -149,7 +148,7 @@ describe('User Repository', () => {
     // ---------------------------------------------------------------------------
 
     it('deleteOne removes the document from the database', async () => {
-        const id = (testUser._id as Types.ObjectId).toString();
+        const id = testUser.id;
         await UserRepository.deleteOne(testUser);
 
         const result = await UserRepository.findById(id);
@@ -161,12 +160,12 @@ describe('User Repository', () => {
     // ---------------------------------------------------------------------------
 
     /**
-     * Ensure no leftover test document remains, then disconnect.
+     * Ensure no leftover test document remains, then close the connection.
      * (The deleteOne test already removes it; this is a safety net.)
      */
     afterAll(async () => {
         await UserRepository.findOne({ email: 'repo-user-test@example.com' })
             .then(user => (user ? UserRepository.deleteOne(user) : undefined));
-        return mongoose.disconnect();
+        await sequelize.close();
     });
 });

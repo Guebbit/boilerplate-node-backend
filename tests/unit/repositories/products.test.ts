@@ -1,14 +1,14 @@
-import 'dotenv/config';
-import mongoose, { Types } from 'mongoose';
+// Set test environment BEFORE any imports so the in-memory SQLite DB is used
+process.env.NODE_ENV = 'test';
+
+import { sequelize } from '@utils/database';
 import ProductRepository from '@repositories/products';
 import type { IProductDocument } from '@models/products';
 
 /**
  * Product Repository unit tests.
- * Validates every raw CRUD / query method directly against a live MongoDB instance,
+ * Validates every raw CRUD / query method against an in-memory SQLite database,
  * without going through the service layer.
- *
- * Requires a running MongoDB instance (NODE_DB_URI env var).
  */
 describe('Product Repository', () => {
     /**
@@ -18,10 +18,10 @@ describe('Product Repository', () => {
     let testProduct: IProductDocument;
 
     /**
-     * Connect to the database before running tests.
+     * Sync the database schema before running tests.
      */
     beforeAll(async () => {
-        return mongoose.connect(process.env.NODE_DB_URI ?? '');
+        await sequelize.sync({ force: true });
     });
 
     // ---------------------------------------------------------------------------
@@ -38,21 +38,21 @@ describe('Product Repository', () => {
         expect(testProduct).toBeDefined();
         expect(testProduct.title).toBe('Repo Test Product');
         expect(testProduct.price).toBe(9.99);
-        expect((testProduct._id as Types.ObjectId).toString()).toHaveLength(24);
+        expect(typeof testProduct.id).toBe('number');
+        expect(testProduct.id).toBeGreaterThan(0);
     });
 
     // ---------------------------------------------------------------------------
     // findById
     // ---------------------------------------------------------------------------
 
-    it('findById returns null for a non-existent ObjectId', async () => {
-        const result = await ProductRepository.findById('000000000000000000000000');
+    it('findById returns null for a non-existent id', async () => {
+        const result = await ProductRepository.findById(999999);
         expect(result).toBeNull();
     });
 
     it('findById returns the product document for a valid id', async () => {
-        const id     = (testProduct._id as Types.ObjectId).toString();
-        const result = await ProductRepository.findById(id);
+        const result = await ProductRepository.findById(testProduct.id);
         expect(result).not.toBeNull();
         expect(result!.title).toBe('Repo Test Product');
     });
@@ -85,7 +85,7 @@ describe('Product Repository', () => {
     // findAll
     // ---------------------------------------------------------------------------
 
-    it('findAll returns an array of lean documents', async () => {
+    it('findAll returns an array of documents', async () => {
         const results = await ProductRepository.findAll();
         expect(Array.isArray(results)).toBe(true);
     });
@@ -131,8 +131,7 @@ describe('Product Repository', () => {
         expect(saved.title).toBe('Repo Test Product Updated');
 
         // Confirm the change is reflected in a subsequent database read
-        const id      = (testProduct._id as Types.ObjectId).toString();
-        const fetched = await ProductRepository.findById(id);
+        const fetched = await ProductRepository.findById(testProduct.id);
         expect(fetched!.title).toBe('Repo Test Product Updated');
     });
 
@@ -141,7 +140,7 @@ describe('Product Repository', () => {
     // ---------------------------------------------------------------------------
 
     it('deleteOne removes the document from the database', async () => {
-        const id = (testProduct._id as Types.ObjectId).toString();
+        const id = testProduct.id;
         await ProductRepository.deleteOne(testProduct);
 
         const result = await ProductRepository.findById(id);
@@ -153,12 +152,12 @@ describe('Product Repository', () => {
     // ---------------------------------------------------------------------------
 
     /**
-     * Ensure no leftover test document remains, then disconnect.
+     * Ensure no leftover test document remains, then close the connection.
      * (The deleteOne test already removes it; this is a safety net.)
      */
     afterAll(async () => {
         await ProductRepository.findOne({ title: 'Repo Test Product Updated' })
             .then(product => (product ? ProductRepository.deleteOne(product) : undefined));
-        return mongoose.disconnect();
+        await sequelize.close();
     });
 });

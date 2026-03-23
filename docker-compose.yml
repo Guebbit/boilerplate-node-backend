@@ -27,7 +27,11 @@ services:
     # Enviroment variables that get injected into the container at runtime
     # If the .env variable change: a rebuild is necessary to apply the change.
     environment:
-      MONGODB_URI: "mongodb://database:27017/${DB_NAME:-boilerplate_mongodb}" # Mongodb connection string. "database" is the service name of the database service.
+      NODE_DB_HOST: "database"       # MySQL host (service name)
+      NODE_DB_PORT: "3306"            # MySQL port
+      NODE_DB_NAME: "${DB_NAME:-boilerplate_mysql}" # MySQL database name
+      NODE_DB_USER: "root"            # MySQL user
+      NODE_DB_PASS: "${DB_ROOT_PASSWORD:-rootpassword}" # MySQL password
       NODE_ENV: "development" # Node environment (production or development)
 
     # Persist data.
@@ -68,35 +72,33 @@ services:
       start_period: 10s
 
 
-  # Another container
+  # MySQL database container
   database:
-    # Same
-    # container_name: boilerplate-mongodb
+    # container_name: boilerplate-mysql
 
-    # Official mongo image, downloaded from the web as is
-    # from docker hub (if not already present locally)
-    image: mongo:8
+    # Official MySQL 8 image
+    image: mysql:8
 
     # Same
     restart: unless-stopped
 
     # Same
     environment:
-      # Name of the database to create
-      MONGO_INITDB_DATABASE: ${DB_NAME:-boilerplate_mongodb}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-boilerplate_mysql}
 
     # Same
     volumes:
-      # NAMED volume. Store mongodb data on the host machine
-      - boilerplate_mongodb_volume:/data/db
+      # NAMED volume. Store MySQL data on the host machine
+      - boilerplate_mysql_volume:/var/lib/mysql
 
     # Same
     ports:
-      - "27017:27017"
+      - "3306:3306"
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:
-  boilerplate_mongodb_volume:
+  boilerplate_mysql_volume:
 
 # Commands:
 # podman ps: list running containers (-a for all)

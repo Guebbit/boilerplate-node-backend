@@ -1,5 +1,7 @@
-import 'dotenv/config';
-import mongoose, { Types } from 'mongoose';
+// Set test environment BEFORE any imports so the in-memory SQLite DB is used
+process.env.NODE_ENV = 'test';
+
+import { sequelize } from '@utils/database';
 import OrderRepository from '@repositories/orders';
 import ProductRepository from '@repositories/products';
 import UserRepository from '@repositories/users';
@@ -9,10 +11,8 @@ import type { IUserDocument } from '@models/users';
 
 /**
  * Order Repository unit tests.
- * Validates the aggregate and create methods directly against a live MongoDB instance,
+ * Validates the findAll and create methods against an in-memory SQLite database,
  * without going through the service layer.
- *
- * Requires a running MongoDB instance (NODE_DB_URI env var).
  */
 describe('Order Repository', () => {
     /**
@@ -23,11 +23,11 @@ describe('Order Repository', () => {
     let testOrder:   IOrderDocument;
 
     /**
-     * Connect to the database and create minimal supporting fixtures
+     * Sync the database and create minimal supporting fixtures
      * (a product and a user) required to compose a valid order.
      */
     beforeAll(async () => {
-        await mongoose.connect(process.env.NODE_DB_URI ?? '');
+        await sequelize.sync({ force: true });
 
         testProduct = await ProductRepository.create({
             title:    'Order Repo Test Product',
@@ -50,11 +50,17 @@ describe('Order Repository', () => {
 
     it('create inserts a new order document and returns it', async () => {
         testOrder = await OrderRepository.create({
-            userId: testUser._id as Types.ObjectId,
+            userId: testUser.id,
             email:  testUser.email,
             products: [
                 {
-                    product:  testProduct.toObject(),
+                    product: {
+                        id:       testProduct.id,
+                        title:    testProduct.title,
+                        price:    testProduct.price,
+                        imageUrl: testProduct.imageUrl,
+                        active:   testProduct.active,
+                    },
                     quantity: 2,
                 },
             ],
@@ -63,59 +69,41 @@ describe('Order Repository', () => {
         expect(testOrder.email).toBe('order-repo-test@example.com');
         expect(testOrder.products.length).toBe(1);
         expect(testOrder.products[0].quantity).toBe(2);
-        expect((testOrder._id as Types.ObjectId).toString()).toHaveLength(24);
+        expect(typeof testOrder.id).toBe('number');
+        expect(testOrder.id).toBeGreaterThan(0);
     });
 
     // ---------------------------------------------------------------------------
-    // aggregate
+    // findAll
     // ---------------------------------------------------------------------------
 
-    it('aggregate with an empty pipeline returns all orders', async () => {
-        const results = await OrderRepository.aggregate([]);
+    it('findAll with no filter returns all orders', async () => {
+        const results = await OrderRepository.findAll();
         expect(Array.isArray(results)).toBe(true);
         expect(results.length).toBeGreaterThan(0);
     });
 
-    it('aggregate with a $match stage filters by userId', async () => {
-        const userId  = testUser._id as Types.ObjectId;
-        const results = await OrderRepository.aggregate([
-            { $match: { userId } },
-        ]);
+    it('findAll with a where filter scopes results by userId', async () => {
+        const results = await OrderRepository.findAll({ where: { userId: testUser.id } });
         expect(results.length).toBeGreaterThan(0);
-        expect(results.every(o => o.userId.toString() === userId.toString())).toBe(true);
+        expect(results.every(o => o.userId === testUser.id)).toBe(true);
     });
 
-    it('aggregate with a $match stage returns empty array for non-matching filter', async () => {
-        const results = await OrderRepository.aggregate([
-            { $match: { userId: new Types.ObjectId('000000000000000000000000') } },
-        ]);
+    it('findAll with a non-matching filter returns an empty array', async () => {
+        const results = await OrderRepository.findAll({ where: { userId: 999999 } });
         expect(results).toHaveLength(0);
     });
 
-    it('aggregate with $addFields adds computed fields to each document', async () => {
-        const userId  = testUser._id as Types.ObjectId;
-        const results = await OrderRepository.aggregate([
-            { $match: { userId } },
-            {
-                $addFields: {
-                    totalItems:    { $size: '$products' },
-                    totalQuantity: { $sum: '$products.quantity' },
-                },
-            },
-        ]);
+    it('findAll includes computed totals (totalItems, totalQuantity, totalPrice)', async () => {
+        const results = await OrderRepository.findAll({ where: { userId: testUser.id } });
         expect(results.length).toBeGreaterThan(0);
-        const order = results[0] as IOrderDocument & { totalItems: number; totalQuantity: number };
+        const order = results[0];
+        expect(typeof order.totalItems).toBe('number');
+        expect(typeof order.totalQuantity).toBe('number');
+        expect(typeof order.totalPrice).toBe('number');
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(2);
-    });
-
-    it('aggregate with $count returns the document count', async () => {
-        const [countResult] = await OrderRepository.aggregate<{ total: number }>([
-            { $count: 'total' },
-        ]);
-        expect(countResult).toBeDefined();
-        expect(typeof countResult.total).toBe('number');
-        expect(countResult.total).toBeGreaterThan(0);
+        expect(order.totalPrice).toBeCloseTo(2 * 19.99, 1);
     });
 
     // ---------------------------------------------------------------------------
@@ -123,17 +111,15 @@ describe('Order Repository', () => {
     // ---------------------------------------------------------------------------
 
     /**
-     * Remove all fixtures created during the test run and disconnect.
+     * Remove all fixtures created during the test run and close the connection.
      */
     afterAll(async () => {
-        if (testOrder)
-            await mongoose.connection.collection('orders').deleteOne({
-                _id: testOrder._id as Types.ObjectId,
-            });
+        // Tables are dropped/recreated by force:true in the next test run;
+        // explicit cleanup is a courtesy safety net.
         if (testProduct)
             await ProductRepository.deleteOne(testProduct);
         if (testUser)
             await UserRepository.deleteOne(testUser);
-        return mongoose.disconnect();
+        await sequelize.close();
     });
 });

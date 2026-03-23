@@ -1,24 +1,24 @@
-import 'dotenv/config';
-import mongoose from 'mongoose';
+// Set test environment BEFORE any imports so the in-memory SQLite DB is used
+process.env.NODE_ENV = 'test';
+
+import { sequelize } from '@utils/database';
 import ProductService from '@services/products';
 
 /**
  * Product Service unit tests.
  * Validates the service layer (search, getById, validateData, create/update/remove).
- *
- * Requires a running MongoDB instance (NODE_DB_URI env var).
  */
 describe('Product Service', () => {
     /**
      * Tracks the id of any product created during the test run so we can clean up.
      */
-    let testProductId = '';
+    let testProductId: number | undefined;
 
     /**
-     * Connect to the database before running tests
+     * Sync the database before running tests
      */
     beforeAll(async () => {
-        return mongoose.connect(process.env.NODE_DB_URI ?? '');
+        await sequelize.sync({ force: true });
     });
 
     // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ describe('Product Service', () => {
             imageUrl: '/images/inactive.jpg',
             active: false,
         });
-        testProductId = inactive.id as string;
+        testProductId = inactive.id as number;
 
         const { items } = await ProductService.search(
             { text: 'Inactive Test Product' },
@@ -102,7 +102,7 @@ describe('Product Service', () => {
     // ---------------------------------------------------------------------------
 
     it('getById returns null for a non-existent id', async () => {
-        const product = await ProductService.getById('000000000000000000000000', true);
+        const product = await ProductService.getById(999999, true);
         expect(product).toBeNull();
     });
 
@@ -126,12 +126,9 @@ describe('Product Service', () => {
     // Cleanup
     // ---------------------------------------------------------------------------
 
-    /**
-     * Remove the test product and disconnect from the database
-     */
     afterAll(async () => {
         if (testProductId)
-            await ProductService.remove(testProductId, true);
-        return mongoose.disconnect();
+            await ProductService.remove(String(testProductId), true);
+        await sequelize.close();
     });
 });

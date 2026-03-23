@@ -1,6 +1,4 @@
 import type { NextFunction, Request, Response } from "express";
-import type { CastError } from "mongoose";
-import { Types } from "mongoose";
 import { ExtendedError } from "@utils/error-helpers";
 import UserService from "@services/users";
 
@@ -69,8 +67,8 @@ export const postEditUser = async (request: Request<unknown, unknown, IPostEditU
             imageUrl: imageUrl || undefined,
         })
             .then(() => response.redirect('/users/'))
-            .catch(async (error: CastError) =>
-                next(new ExtendedError(error.kind, 500, false, [ error.message ]))
+            .catch(async (error: Error) =>
+                next(new ExtendedError(error.message, 500, false, [ error.message ]))
             );
 
     /**
@@ -84,8 +82,8 @@ export const postEditUser = async (request: Request<unknown, unknown, IPostEditU
         admin,
         imageUrl: imageUrl || undefined,
     })
-        .then((updatedUser) => response.redirect('/users/details/' + (updatedUser._id as Types.ObjectId).toString()))
-        .catch(async (error: CastError) =>
-            next(new ExtendedError(error.kind, 500, false, [ error.message ]))
+        .then((updatedUser) => response.redirect('/users/details/' + String(updatedUser.id)))
+        .catch(async (error: Error) =>
+            next(new ExtendedError(error.message, 500, false, [ error.message ]))
         );
 };

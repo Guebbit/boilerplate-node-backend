@@ -1,14 +1,15 @@
-import 'dotenv/config';
-import mongoose from "mongoose";
-import type { IUser } from "@models/users";
-import UserService from "@services/users";
-import UserRepository from "@repositories/users";
+// Set test environment BEFORE any imports so the in-memory SQLite DB is used
+process.env.NODE_ENV = 'test';
+
+import { sequelize } from '@utils/database';
+import UserService from '@services/users';
+import UserRepository from '@repositories/users';
 
 /**
  * test user factory
  */
 const testUser = {
-    id: '',
+    id: 0,
     email: 'test@test.com',
     username: 'Test',
     password: 'tester@password',
@@ -24,33 +25,23 @@ describe('Auth Controller', () => {
      * Start of all tests
      */
     beforeAll(async () => {
+        await sequelize.sync({ force: true });
         /**
-         * Connect to database
+         * Register the test user
+         * (will be created only for this test)
          */
-        return mongoose
-            .connect(process.env.NODE_DB_URI ?? "")
-            /**
-             * Register the test user
-             * (will be created only for this test)
-             */
-            .then(() => UserService.signup(
-                testUser.email,
-                testUser.username,
-                testUser.password,
-                testUser.passwordConfirm
-            ))
-            /**
-             * Remember the id (that is random)
-             * so I can delete this user at the end
-             */
-            .then(({ success, data }) => {
-                if (success && data)
-                    testUser.id = data.toObject<IUser>()._id.toString()
-            });
+        const { success, data } = await UserService.signup(
+            testUser.email,
+            testUser.username,
+            testUser.password,
+            testUser.passwordConfirm
+        );
+        if (success && data)
+            testUser.id = data.id;
     });
 
     /**
-     * I still haven't logged with the test user
+     * Guest check (not yet logged in)
      */
     it('Test that we are a guest', () => {
         // TODO isGuest YES
@@ -58,11 +49,11 @@ describe('Auth Controller', () => {
     });
 
     /**
-     * I still haven't logged with the test user
+     * Login and verify it works
      */
-    it('Login and test that we are are an active user', async () => {
+    it('Login and test that we are an active user', async () => {
         return UserService.login(testUser.email, testUser.password)
-            .then((user) => expect(user).toBeTruthy());
+            .then((result) => expect(result).toBeTruthy());
         // TODO mock middleware: isAuth YES & isAdmin NOT
     });
 
@@ -81,9 +72,11 @@ describe('Auth Controller', () => {
         /**
          * Remove the user that has been created only for this test
          */
-        return UserRepository.findById(testUser.id)
-            .then(user => user ? UserRepository.deleteOne(user) : undefined)
-
-            .finally(() => mongoose.disconnect())
+        if (testUser.id) {
+            const user = await UserRepository.findById(testUser.id);
+            if (user)
+                await UserRepository.deleteOne(user);
+        }
+        await sequelize.close();
     });
 });
