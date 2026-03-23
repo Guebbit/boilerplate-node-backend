@@ -22,6 +22,7 @@ import productRoutes from "./routes/products";
 import authRoutes from "./routes/auth";
 import orderRoutes from "./routes/orders";
 import cartRoutes from "./routes/cart";
+import userRoutes from "./routes/users";
 import systemRoutes from "./routes";
 import errorRoutes from "./routes/errors";
 
@@ -152,6 +153,7 @@ app.use((request, response, next) => {
 app.use('/products', productRoutes);
 app.use('/account', authRoutes);
 app.use('/orders', orderRoutes);
+app.use('/users', userRoutes);
 app.use('/', cartRoutes);
 app.use('/', systemRoutes);
 app.use('/error', errorRoutes);
