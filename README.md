@@ -26,13 +26,19 @@
 # AI TODO
  - Create/complete tests
  - Create documentation
- - From import type { Request, Response, NextFunction } from "express"; to import type { RequestHandler } from "express";
 - Create routes:
    - Create /auth/get-accounts (use /account from openapi
    - Create /cart/get-cart (use page-cart but json only)
    - Create /cart/get-checkout (use page-checkout but json only)
    - TODO
 
+
+
+Replacing the console.log debug middleware in app.ts with logger.debug
+src/utils/pdf-helpers.ts — async/await refactor + passing getBrowserConfig() to puppeteer.launch()
+src/utils/nodemailer.ts — using promisified sendMail
+src/controllers/orders/get-target-invoice.ts — using fs.promises.readFile
+src/models/orders.ts — adding timestamps: true
 
 ### TODO IMPORTANT ###
  - post-reset-confirm.ts => POST /account/reset/{token}

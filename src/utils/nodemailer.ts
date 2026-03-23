@@ -2,6 +2,7 @@ import path from "node:path";
 import ejs, { type Data } from "ejs";
 import { createTransport, type SendMailOptions, type SentMessageInfo } from "nodemailer";
 import { getDirname } from "./get-file-url";
+import logger from "@utils/winston";
 
 
 
@@ -55,7 +56,7 @@ export const nodemailer = (request: SendMailOptions, templateName: string, data:
                     html,
                     ...request
                 }, (error, info) => {
-                    // console.log('Message sent: %s', info.messageId);
+                    logger.info('Message sent: %s', info.messageId);
                     // error happened
                     if (error)
                         return reject(error);

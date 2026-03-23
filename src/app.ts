@@ -9,10 +9,10 @@ import helmet from "helmet";
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import { MulterError } from "multer";
-import { ExtendedError } from "./utils/error-helpers";
-import { start } from "./utils/database";
-import logger from "./utils/winston";
-import { getDirname } from "./utils/get-file-url";
+import { ExtendedError } from "@utils/error-helpers";
+import { start } from "@utils/database";
+import logger from "@utils/winston";
+import { getDirname } from "@utils/get-file-url";
 import { session, flash, userConnect } from "./middlewares/session";
 import { rateLimiter } from "./middlewares/security";
 // languages
@@ -53,11 +53,10 @@ start()
         }
     }))
     .then(() => {
-        // console.log("------------- SERVER START -------------");
+        logger.info("------------- SERVER START -------------");
         app.listen(process.env.NODE_PORT ?? 3000);
     })
-    // eslint-disable-next-line no-console
-    .catch(error => console.log("------------- SERVER ERROR -------------", error));
+    .catch(error => logger.info("------------- SERVER ERROR -------------", error));
 
 /**
  * The files in /public folder will be served as static
@@ -101,10 +100,10 @@ app.use(bodyParser.urlencoded({
 }));
 // app.use((req, response, next) => {
 //     req.on("data", (chunk) => {
-//         console.log("------------- REQUEST CHUNK DATA -------------", chunk)
+//         logger.info("------------- REQUEST CHUNK DATA -------------", chunk)
 //     });
 //     req.on("end", () => {
-//         console.log("------------- REQUEST END -------------")
+//         logger.info("------------- REQUEST END -------------")
 //         // response.statusCode = 200;
 //         // response.setHeader("Location", "/");
 //         // response.end();
@@ -146,8 +145,7 @@ app.use(userConnect);
  * otherwise response will be sent and connection with client closed
  */
 app.use((request, response, next) => {
-    // eslint-disable-next-line no-console
-    console.log(`Entering URL: ${ request.protocol }://${ request.get('host') }${ request.originalUrl }`);
+    logger.info(`Entering URL: ${ request.protocol }://${ request.get('host') }${ request.originalUrl }`);
     next();
 });
 

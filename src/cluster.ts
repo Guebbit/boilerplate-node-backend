@@ -4,6 +4,7 @@
  */
 import os from "node:os";
 import cluster from "node:cluster";
+import logger from "@utils/winston";
 
 /**
  * Cluster management
@@ -13,23 +14,22 @@ if (cluster.isPrimary && process.env.NODE_ENABLE_CLUSTERING === '1') {
 
     /**
      * Master monitor and manage workers
+     *
+     * Windows OS only settings (to guarantee standard round robin approach):
+     * cluster.schedulingPolicy = cluster.SCHED_RR;
+     * Get number of CPU
      */
-    // // Windows OS only settings (to guarantee standard round robin approach):
-    // cluster.schedulingPolicy = cluster.SCHED_RR;
-    // Get number of CPU
     const cpuCount = os.cpus().length;
-    // eslint-disable-next-line no-console
-    console.log(`The total number of CPUs is ${cpuCount}. Primary pid=${process.pid}`);
+    logger.info(`The total number of CPUs is ${ cpuCount }. Primary pid=${ process.pid }`);
     // Use all possible cores
     for (let i = 0; i < cpuCount; i++)
         cluster.fork();
     // When a cluster exit\is closed, create a new one to replace it
     cluster.on("exit", (worker, code, signal) => {
-        // eslint-disable-next-line no-console
-        console.log(`worker ${worker.process.pid} has been killed. Starting another worker.`, { code, signal });
+        logger.info(`worker ${ worker.process.pid } has been killed. Starting another worker.`, { code, signal });
         cluster.fork();
     });
-}else{
+} else {
 
     /**
      * Workers execute the app module

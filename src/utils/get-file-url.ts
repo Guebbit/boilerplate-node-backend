@@ -5,30 +5,22 @@ import path from 'node:path';
  *
  * @param metaUrl
  */
-export function getFileUrl(metaUrl: string) {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    const __filename = fileURLToPath(metaUrl);
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    const __dirname = path.dirname(__filename);
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    return { __filename, __dirname };
+export const getFileUrl = (metaUrl: string)=> {
+    const filename = fileURLToPath(metaUrl); // __filename
+    const dirname = path.dirname(__filename); // __dirname
+    return { filename, dirname };
 }
 
 /**
  *
  * @param metaUrl
  */
-export function getFilename(metaUrl: string) {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    const { __filename } = getFileUrl(metaUrl);
-    return __filename;
-}
+export const getFilename = (metaUrl: string)=>
+    getFileUrl(metaUrl).filename
+
 /**
  *
  * @param metaUrl
  */
-export function getDirname(metaUrl: string) {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    const { __dirname } = getFileUrl(metaUrl);
-    return __dirname;
-}
+export const getDirname = (metaUrl: string)=>
+    getFileUrl(metaUrl).dirname
