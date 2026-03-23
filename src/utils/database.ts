@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import logger from "./winston";
 
 const MAX_RETRIES = 10;
-const BASE_DELAY_MS = 1_000;
+const BASE_DELAY_MS = 1000;
 
 const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -30,6 +30,4 @@ export const start = async (): Promise<void> => {
  * The active Mongoose connection.
  * Available after `start()` resolves.
  */
-export const database = mongoose.connection;
-
 export default mongoose.connection;
