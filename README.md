@@ -19,7 +19,6 @@
 # TODO
 - Test PUPPETEER (new createPDF)
 - Check Dredd for automated contract tests (Spec conformance tests, Consumer-driven contract tests)
-- Separate controllers & services
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
 - Add products in cart to products list
 - global.d.ts from types/ to root
@@ -36,7 +35,6 @@
 
 
 ### TODO IMPORTANT ###
- - Update ZOD
  - post-reset-confirm.ts => POST /account/reset/{token}
  - get-reset-database is there a better way?
  - [Added page size to item]() lists (users, products and orders)

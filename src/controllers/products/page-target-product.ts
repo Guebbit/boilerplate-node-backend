@@ -3,7 +3,7 @@ import type { CastError } from "mongoose";
 import { t } from "i18next";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 import type { ObjectId } from "mongodb";
-import { getById } from "@services/products";
+import ProductService from "@services/products";
 import UserService from "@services/users";
 import type { ICartItem } from "@models/users";
 
@@ -25,7 +25,7 @@ export interface IGetTargetProductParameters {
 export const pageTargetProduct = (request: Request & {
     params: IGetTargetProductParameters
 }, response: Response, next: NextFunction) =>
-    getById(request.params.productId, request.session.user?.admin)
+    ProductService.getById(request.params.productId, request.session.user?.admin)
         .then(async (product) => {
             if (!product)
                 return next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));

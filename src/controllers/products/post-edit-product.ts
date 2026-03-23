@@ -3,7 +3,7 @@ import type { CastError } from "mongoose";
 import { deleteFile } from "@utils/filesystem-helpers";
 import { ExtendedError } from "@utils/error-helpers";
 import type { UpdateProductRequestBody } from "@api/api";
-import { validateData, create, update } from "@services/products";
+import ProductService from "@services/products";
 
 /**
  * Create or update a product.
@@ -35,7 +35,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
     /**
      * Data validation
      */
-    const issues = validateData({
+    const issues = ProductService.validateData({
         title,
         imageUrl,
         price,
@@ -61,7 +61,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      * NO ID = new product
      */
     if (!id || id === '')
-        create({
+        ProductService.create({
             title,
             imageUrl,
             price,
@@ -79,7 +79,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      * ID = edit product
      */
     else
-        update(id, {
+        ProductService.update(id, {
             title,
             price,
             description,
