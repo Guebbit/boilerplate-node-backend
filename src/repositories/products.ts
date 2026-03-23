@@ -17,7 +17,10 @@ export const productRepository = {
 
   async findAll(filters: SearchProductInput): Promise<FindAllProductsResult> {
     const { page, limit, name, minPrice, maxPrice, inStock } = filters;
-    const offset = (page - 1) * limit;
+    // Defensive clamp: Zod schemas enforce min(1), but guard against misuse
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.max(1, limit);
+    const offset = (safePage - 1) * safeLimit;
 
     const where: WhereOptions = {};
     if (name) where['name'] = { [Op.like]: `%${name}%` };
@@ -33,7 +36,7 @@ export const productRepository = {
 
     const { rows, count } = await Product.findAndCountAll({
       where,
-      limit,
+      limit: safeLimit,
       offset,
       order: [['createdAt', 'DESC']],
     });
@@ -42,9 +45,9 @@ export const productRepository = {
       rows,
       meta: {
         total: count,
-        page,
-        limit,
-        totalPages: Math.ceil(count / limit),
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.ceil(count / safeLimit),
       },
     };
   },

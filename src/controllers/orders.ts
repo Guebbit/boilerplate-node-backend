@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { createOrderSchema, updateOrderSchema, searchOrderSchema } from '../models/orders';
 import { orderService } from '../services/orders';
-import type { AuthRequest, ApiResponse } from '../types/index';
+import { UserRole, type AuthRequest, type ApiResponse } from '../types/index';
 
 // ─── Order Controller ─────────────────────────────────────────────────────────
 
@@ -9,7 +9,7 @@ export const getAllOrders = async (req: AuthRequest, res: Response, next: NextFu
   try {
     const filters = searchOrderSchema.parse(req.query);
 
-    if (req.user?.role !== 'admin') {
+    if (req.user?.role !== UserRole.ADMIN) {
       filters.userId = req.user?.userId;
     }
 
@@ -30,7 +30,7 @@ export const getOrderById = async (req: AuthRequest, res: Response, next: NextFu
   try {
     const order = await orderService.getById(req.params['id'] as string);
 
-    if (req.user?.role !== 'admin' && order.userId !== req.user?.userId) {
+    if (req.user?.role !== UserRole.ADMIN && order.userId !== req.user?.userId) {
       res.status(403).json({ success: false, message: 'Access denied' });
       return;
     }
@@ -82,7 +82,7 @@ export const deleteOrder = async (req: AuthRequest, res: Response, next: NextFun
   try {
     const orderId = req.params['id'] as string;
 
-    if (req.user?.role === 'admin') {
+    if (req.user?.role === UserRole.ADMIN) {
       await orderService.remove(orderId);
     } else {
       await orderService.cancel(orderId);

@@ -21,7 +21,10 @@ export const userRepository = {
 
   async findAll(filters: SearchUserInput): Promise<FindAllUsersResult> {
     const { page, limit, email, username, role } = filters;
-    const offset = (page - 1) * limit;
+    // Defensive clamp: Zod schemas enforce min(1), but guard against misuse
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.max(1, limit);
+    const offset = (safePage - 1) * safeLimit;
 
     const where: WhereOptions = {};
     if (email) where['email'] = { [Op.like]: `%${email}%` };
@@ -30,7 +33,7 @@ export const userRepository = {
 
     const { rows, count } = await User.findAndCountAll({
       where,
-      limit,
+      limit: safeLimit,
       offset,
       order: [['createdAt', 'DESC']],
     });
@@ -39,9 +42,9 @@ export const userRepository = {
       rows,
       meta: {
         total: count,
-        page,
-        limit,
-        totalPages: Math.ceil(count / limit),
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.ceil(count / safeLimit),
       },
     };
   },

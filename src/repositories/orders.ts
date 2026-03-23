@@ -20,7 +20,10 @@ export const orderRepository = {
 
   async findAll(filters: SearchOrderInput): Promise<FindAllOrdersResult> {
     const { page, limit, userId, status } = filters;
-    const offset = (page - 1) * limit;
+    // Defensive clamp: Zod schemas enforce min(1), but guard against misuse
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.max(1, limit);
+    const offset = (safePage - 1) * safeLimit;
 
     const where: WhereOptions = {};
     if (userId) where['userId'] = userId;
@@ -28,7 +31,7 @@ export const orderRepository = {
 
     const { rows, count } = await Order.findAndCountAll({
       where,
-      limit,
+      limit: safeLimit,
       offset,
       order: [['createdAt', 'DESC']],
       include: [{ model: User, as: 'user', attributes: ['id', 'email', 'username'] }],
@@ -38,9 +41,9 @@ export const orderRepository = {
       rows,
       meta: {
         total: count,
-        page,
-        limit,
-        totalPages: Math.ceil(count / limit),
+        page: safePage,
+        limit: safeLimit,
+        totalPages: Math.ceil(count / safeLimit),
       },
     };
   },
