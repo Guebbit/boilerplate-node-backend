@@ -1,6 +1,7 @@
 import { Types } from 'mongoose';
 import type { QueryFilter, PipelineStage } from 'mongoose';
 import type { SearchOrdersRequest, OrdersResponse, Order } from '@api/api';
+import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
 import type { IOrderDocument } from '@models/orders';
 import OrderRepository from '@repositories/orders';
 
@@ -117,5 +118,61 @@ export const search = async (
     };
 };
 
+/**
+ * Get a single order by ID, with computed fields added.
+ * Returns undefined if the id is falsy; undefined if no document found.
+ *
+ * @param id
+ */
+export const getById = async (id?: string): Promise<IOrderDocument | undefined> => {
+    if (!id)
+        return;
+    const [order] = await OrderRepository.aggregate([
+        { $match: { _id: new Types.ObjectId(id) } },
+        addComputedFields,
+    ]);
+    return order;
+};
 
-export default { getAll, search };
+/**
+ * Update an existing order by ID (admin version).
+ * Only the fields present in data are applied.
+ *
+ * @param id
+ * @param data
+ */
+export const update = async (
+    id: string,
+    data: Partial<Pick<IOrderDocument, 'status' | 'email' | 'userId'>>,
+): Promise<IOrderDocument> => {
+    const order = await OrderRepository.findById(id);
+
+    if (!order)
+        throw new Error('404');
+
+    if (data.status !== undefined) order.status = data.status;
+    if (data.email !== undefined) order.email = data.email;
+    if (data.userId !== undefined) order.userId = data.userId;
+
+    return OrderRepository.save(order);
+};
+
+/**
+ * Hard-delete an order by ID.
+ *
+ * @param id
+ */
+export const remove = async (
+    id: string,
+): Promise<IResponseSuccess<undefined> | IResponseReject> => {
+    const order = await OrderRepository.findById(id);
+
+    if (!order)
+        return generateReject(404, '404', ['Order not found']);
+
+    await OrderRepository.deleteOne(order);
+    return generateSuccess(undefined, 200, 'Order deleted');
+};
+
+
+export default { getAll, search, getById, update, remove };

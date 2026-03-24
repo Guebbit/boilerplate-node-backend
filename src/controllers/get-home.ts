@@ -1,13 +1,15 @@
 import type { Request, Response } from "express";
+import { successResponse } from "@utils/response";
 
 /**
- * Homepage
+ * Health check endpoint
+ * GET /health
  *
  * @param request
  * @param response
  */
-export const getHome = (request: Request, response: Response) =>
-    response.render('home', {
-        pageMetaTitle: 'Home',
-        pageMetaLinks: [],
-    })
+export const getHome = (_request: Request, response: Response) =>
+    successResponse(response, {
+        status: 'ok',
+        version: process.env.npm_package_version ?? '1.0.0',
+    }, 200, 'Service is running');

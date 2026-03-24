@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import mongoose, { Types } from "mongoose";
+import { successResponse } from "@utils/response";
 import UserRepository from "@repositories/users";
 import ProductRepository from "@repositories/products";
 import OrderRepository from "@repositories/orders";
@@ -144,4 +145,4 @@ export const getResetDatabase = (request: Request, response: Response) =>
                 } as unknown as Partial<IOrderDocument>),
             ])
         )
-        .then(() => response.redirect('/'));
+        .then(() => successResponse(response, undefined, 200, 'Database reset successfully'));

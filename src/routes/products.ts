@@ -1,30 +1,36 @@
 import express from 'express';
 import { isAuth, isAdmin } from "../middlewares/authorizations";
-import multer from "@utils/multer";
-import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
 import { pageAllProducts } from "../controllers/products/page-all-products";
 import { pageTargetProduct } from "../controllers/products/page-target-product";
-import { pageEditProduct } from "../controllers/products/page-edit-product";
-import { postEditProduct } from "../controllers/products/post-edit-product";
-import { postDeleteProduct } from "../controllers/products/post-delete-product";
+import { postCreateProduct, putEditProduct, putEditProductById } from "../controllers/products/post-edit-product";
+import { postDeleteProduct, deleteProductById } from "../controllers/products/post-delete-product";
+import { postSearchProducts } from "../controllers/products/post-search-products";
 
 const router = express.Router();
 
-router.get('/details/:productId', pageTargetProduct);
+// POST /products/search — search products with body filters (must be before /:id)
+router.post('/search', postSearchProducts);
 
-router.get('/add', isAuth, isAdmin, pageEditProduct);
-
-router.post('/add', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditProduct);
-
-router.get('/edit/:productId', isAuth, isAdmin, pageEditProduct);
-
-router.post('/edit/:productId', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditProduct);
-
-router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteProduct);
-
-router.get('/:page', pageAllProducts);
-
+// GET /products — list products (paginated, query params)
 router.get('/', pageAllProducts);
+
+// POST /products — create a new product (admin only)
+router.post('/', isAuth, isAdmin, postCreateProduct);
+
+// PUT /products — update product with id in body (admin only)
+router.put('/', isAuth, isAdmin, putEditProduct);
+
+// DELETE /products — delete product with id in body (admin only)
+router.delete('/', isAuth, isAdmin, postDeleteProduct);
+
+// GET /products/:id — get a single product
+router.get('/:id', pageTargetProduct);
+
+// PUT /products/:id — update a specific product (admin only)
+router.put('/:id', isAuth, isAdmin, putEditProductById);
+
+// DELETE /products/:id — delete a specific product (admin only)
+router.delete('/:id', isAuth, isAdmin, deleteProductById);
 
 export default router;

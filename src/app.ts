@@ -1,19 +1,14 @@
 #!/usr/bin/env node
 
 import 'dotenv/config';
-import path from 'node:path';
 import express from 'express';
 import type { ErrorRequestHandler, Request, Response, NextFunction } from "express";
 import i18next from 'i18next';
 import helmet from "helmet";
 import bodyParser from 'body-parser';
-import cookieParser from 'cookie-parser';
-import { MulterError } from "multer";
 import { ExtendedError } from "@utils/error-helpers";
 import { start } from "@utils/database";
 import logger from "@utils/winston";
-import { getDirname } from "@utils/get-file-url";
-import { session, flash, userConnect } from "./middlewares/session";
 import { rateLimiter } from "./middlewares/security";
 // languages
 import enTranslation from './locales/en.json';
@@ -24,19 +19,12 @@ import orderRoutes from "./routes/orders";
 import cartRoutes from "./routes/cart";
 import userRoutes from "./routes/users";
 import systemRoutes from "./routes";
-import errorRoutes from "./routes/errors";
 
 
 /**
  * Server start
  */
 const app = express();
-
-/**
- * Templating engine
- */
-app.set('view engine', 'ejs');
-app.set('views', './views');
 
 /**
  * Sync database then start server
@@ -60,84 +48,21 @@ start()
     .catch(error => logger.info("------------- SERVER ERROR -------------", error));
 
 /**
- * The files in /public folder will be served as static
- */
-app.use(
-    express.static(
-        path.join(getDirname(import.meta.url), '../../' + (process.env.NODE_PUBLIC_PATH ?? "public")),
-        {
-            maxAge: process.env.NODE_ENV === 'production' ? (process.env.NODE_STATIC_MAXAGE ?? 0) : 0, // (expressed in seconds)
-            // setHeaders: (response) => {
-            //     response.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            // }
-        }
-    )
-);
-
-/**
  * Secure headers
  */
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: [
-                "'self'"
-            ],
-            imgSrc: [
-                "'self'",
-                // allow external src on images
-                "https://placekitten.com",
-                "https://placedog.net",
-            ],
-        }
-    }
-}));
+app.use(helmet());
 
 /**
- * https://www.udemy.com/course/nodejs-the-complete-guide/learn/lecture/11561900#overview
+ * Parse JSON request bodies
  */
-app.use(bodyParser.urlencoded({
-    extended: true
-}));
-// app.use((req, response, next) => {
-//     req.on("data", (chunk) => {
-//         logger.info("------------- REQUEST CHUNK DATA -------------", chunk)
-//     });
-//     req.on("end", () => {
-//         logger.info("------------- REQUEST END -------------")
-//         // response.statusCode = 200;
-//         // response.setHeader("Location", "/");
-//         // response.end();
-//         next();
-//     });
-// });
-
-/**
- * Parse and secure cookies
- */
-app.use(cookieParser());
-
-/**
- * Session
- */
-app.use(session);
-
-/**
- * Flash
- */
-app.use(flash);
+app.use(bodyParser.json());
 
 /**
  * Security
  * Limit user to access multiple times and overload the server.
- * Placed before userConnect so the rate limiter fires before any DB access.
+ * Placed before route handlers so the rate limiter fires before any DB access.
  */
 app.use(rateLimiter);
-
-/**
- * Connect user (optimize data retrieve)
- */
-app.use(userConnect);
 
 /**
  * Generic middleware
@@ -154,45 +79,31 @@ app.use('/products', productRoutes);
 app.use('/account', authRoutes);
 app.use('/orders', orderRoutes);
 app.use('/users', userRoutes);
-app.use('/', cartRoutes);
+app.use('/cart', cartRoutes);
 app.use('/', systemRoutes);
-app.use('/error', errorRoutes);
 
 /**
  * Error handler.
- * Distinguish operational error from critical programmer error
- * Operational error: User redirected to error page explaining the problem
- * Critical errors: Error documented for later study, then current worker is suppressed so a new one is born (from cluster management)
+ * Distinguish operational error from critical programmer error.
+ * All responses are JSON for a REST API.
+ * Operational error: return JSON error response with appropriate HTTP code.
+ * Critical errors: Error documented for later study, then current worker is suppressed so a new one is born (from cluster management).
  */
-app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Request, response: Response, next: NextFunction) => {
+app.use((error: ErrorRequestHandler | ExtendedError, request: Request, response: Response, next: NextFunction) => {
     // If headers already has been sent (shouldn't happen) delegate to the default Express error handler
     if (response.headersSent) {
         next(error);
         return;
     }
 
-    // An error (like a database one) could occur during session, so before flash got initialized. Just ignore and go to Home
-
-    if (!request.flash) {
-        response.status(200).redirect("/");
-        return;
-    }
-
-    // File upload error
-    if (error instanceof MulterError) {
-        logger.info(error);
-        request.flash('error-title', [ error.code ]);
-        request.flash('error-description', [ error.name + ": " + error.message + " on " + (error.field ?? "") ]);
-        response.status(400).redirect("/error/");
-        return;
-    }
-
     // Check if the error is operational
     if (error instanceof ExtendedError && error.isOperational) {
         logger.info(error);
-        request.flash('error-title', [ error.name ]);
-        request.flash('error-description', error.errors);
-        response.status(error.httpCode).redirect("/error/");
+        response.status(error.httpCode).json({
+            success: false,
+            error: error.name,
+            errors: error.errors,
+        });
         return;
     }
 
@@ -201,19 +112,25 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Requ
         ...error,
         stack: error instanceof ExtendedError ? error.stack : "handled",
     });
-    request.flash('error-title', [ 'UNKNOWN ERROR' ]);
-    request.flash('error-description', [ 'Something happened. Please contact support' ]);
-    response.status(500).redirect("/error/");
+    response.status(500).json({
+        success: false,
+        error: 'UNKNOWN ERROR',
+        errors: ['Something happened. Please contact support'],
+    });
     // Terminate the current process signaling that it has exited with an error.
     process.exit(1);
 });
 
 
 /**
- * Catch all routes
+ * Catch all routes — 404
  */
 app.use('/', (request, response) => {
-    response.redirect("/error/page-not-found");
+    response.status(404).json({
+        success: false,
+        error: 'NOT_FOUND',
+        errors: [`Route ${ request.method } ${ request.originalUrl } not found`],
+    });
 });
 
 /**

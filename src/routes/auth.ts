@@ -1,39 +1,31 @@
 import express from 'express';
-import { isGuest, isAuth } from "../middlewares/authorizations";
-import { csrfSynchronisedProtection } from "../middlewares/csrf";
+import { isAuth } from "../middlewares/authorizations";
 
 import { pageAccount } from "../controllers/auth/page-account";
-import { pageLogin } from "../controllers/auth/page-login";
 import { postLogin } from "../controllers/auth/post-login";
-import { pageSignup } from "../controllers/auth/page-signup";
 import { postSignup } from "../controllers/auth/post-signup";
-import { pageReset } from "../controllers/auth/page-reset";
 import { postResetRequest } from "../controllers/auth/post-reset-request";
-import { pageResetConfirm } from "../controllers/auth/page-reset-confirm";
 import { postResetConfirm } from "../controllers/auth/post-reset-confirm";
 import { getLogout } from "../controllers/auth/page-logout";
 
 const router = express.Router();
 
-// GET /account — current user's profile page
+// GET /account — current user profile (requires JWT)
 router.get('/', isAuth, pageAccount);
 
-router.get('/login', isGuest, pageLogin);
+// POST /account/login — returns JWT
+router.post('/login', postLogin);
 
-router.post('/login', isGuest, csrfSynchronisedProtection, postLogin);
+// POST /account/signup — register new user
+router.post('/signup', postSignup);
 
-router.get('/signup', isGuest, pageSignup);
+// POST /account/reset — request password reset email
+router.post('/reset', postResetRequest);
 
-router.post('/signup', isGuest, csrfSynchronisedProtection, postSignup);
+// POST /account/reset-confirm — confirm password reset with token
+router.post('/reset-confirm', postResetConfirm);
 
-router.get('/reset', isGuest, pageReset);
-
-router.post('/reset', isGuest, csrfSynchronisedProtection, postResetRequest);
-
-router.get('/reset/:token', isGuest, pageResetConfirm);
-
-router.post('/reset/:token', isGuest, csrfSynchronisedProtection, postResetConfirm);
-
+// GET /account/logout — for compatibility; actual logout is client-side (discard JWT)
 router.get('/logout', isAuth, getLogout);
 
 export default router;

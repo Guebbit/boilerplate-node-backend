@@ -2,90 +2,105 @@ import type { NextFunction, Request, Response } from "express";
 import type { CastError } from "mongoose";
 import { Types } from "mongoose";
 import { ExtendedError } from "@utils/error-helpers";
+import { rejectResponse, successResponse } from "@utils/response";
+import type { CreateUserRequest, UpdateUserRequest, UpdateUserByIdRequest } from "@api/api";
 import UserService from "@services/users";
 
 /**
- * Body shape for the user create/edit form
+ * Path parameters for user-by-id endpoints
  */
-export interface IPostEditUserBody {
-    id?: string;
-    email: string;
-    username: string;
-    password?: string;
-    admin?: string;       // checkbox: "on" or undefined
-    imageUrl?: string;
+export interface IUserIdParams {
+    userId: string;
 }
 
 /**
- * Create or update a user (admin only).
- * Handles data validation and redirects.
+ * Create a new user (admin only).
+ * POST /users
  *
  * @param request
  * @param response
  * @param next
  */
-export const postEditUser = async (request: Request<unknown, unknown, IPostEditUserBody>, response: Response, next: NextFunction) => {
+export const postCreateUser = async (request: Request<unknown, unknown, CreateUserRequest>, response: Response, next: NextFunction) => {
     const {
-        id,
         email,
         username,
+        password,
+        admin = false,
         imageUrl = "",
     } = request.body;
-
-    // Checkbox values arrive as "on" (checked) or undefined (unchecked)
-    const admin = request.body.admin === 'on';
-    // Password is optional when editing; required when creating
-    const password = request.body.password ?? "";
-    const isNew = !id || id === '';
 
     /**
      * Data validation
      */
     const issues = UserService.validateData(
-        { email, username, password: password || undefined, admin, imageUrl },
-        { requirePassword: isNew },
+        { email, username, password, admin },
+        { requirePassword: true },
     );
 
-    /**
-     * Validation error
-     */
-    if (issues.length > 0) {
-        request.flash('error', issues);
-        request.flash('filled', [ email, username, String(admin), imageUrl ]);
-        if (isNew)
-            return response.redirect('/users/add');
-        return response.redirect('/users/edit/' + id);
-    }
+    if (issues.length > 0)
+        return rejectResponse(response, 422, 'user - validation error', issues);
 
-    /**
-     * NO ID = new user
-     */
-    if (isNew)
-        return UserService.adminCreate({
-            email,
-            username,
-            password,
-            admin,
-            imageUrl: imageUrl || undefined,
-        })
-            .then(() => response.redirect('/users/'))
-            .catch(async (error: CastError) =>
-                next(new ExtendedError(error.kind, 500, false, [ error.message ]))
-            );
-
-    /**
-     * ID = edit user
-     */
-    return UserService.adminUpdate(id, {
+    return UserService.adminCreate({
         email,
         username,
-        // Only send password if the field was filled
-        password: password.trim().length > 0 ? password : undefined,
+        password,
         admin,
         imageUrl: imageUrl || undefined,
     })
-        .then((updatedUser) => response.redirect('/users/details/' + (updatedUser._id as Types.ObjectId).toString()))
-        .catch(async (error: CastError) =>
+        .then((user) => successResponse(response, user.toObject(), 201))
+        .catch((error: CastError) =>
             next(new ExtendedError(error.kind, 500, false, [ error.message ]))
         );
+};
+
+/**
+ * Update an existing user (admin only) — ID provided in request body.
+ * PUT /users
+ *
+ * @param request
+ * @param response
+ * @param next
+ */
+export const putEditUser = async (request: Request<unknown, unknown, UpdateUserRequest>, response: Response, next: NextFunction) => {
+    const { id } = request.body;
+
+    if (!id || id === '')
+        return rejectResponse(response, 422, 'user - missing id', ['User id is required']);
+
+    return _updateUser(id, request.body, response, next);
+};
+
+/**
+ * Update an existing user (admin only) — ID provided as path parameter.
+ * PUT /users/:userId
+ *
+ * @param request
+ * @param response
+ * @param next
+ */
+export const putEditUserById = async (request: Request<IUserIdParams, unknown, UpdateUserByIdRequest>, response: Response, next: NextFunction) =>
+    _updateUser(request.params.userId, request.body, response, next);
+
+/**
+ * Shared user update logic
+ */
+const _updateUser = async (
+    id: string,
+    data: Partial<UpdateUserRequest>,
+    response: Response,
+    next: NextFunction,
+) => {
+    const { email, password } = data;
+
+    return UserService.adminUpdate(id, {
+        ...(email !== undefined && { email }),
+        ...(password !== undefined && password.trim().length > 0 && { password }),
+    })
+        .then((updatedUser) => successResponse(response, updatedUser.toObject()))
+        .catch((error: CastError) => {
+            if (error.message === '404')
+                return rejectResponse(response, 404, 'user - not found', ['User not found']);
+            return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
+        });
 };

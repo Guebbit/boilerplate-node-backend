@@ -1,14 +1,15 @@
 import type { Request, Response, NextFunction } from 'express';
-import { t } from "i18next";
 import { nodemailer } from "@utils/nodemailer";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
+import { rejectResponse, successResponse } from "@utils/response";
 import type { PasswordResetConfirmRequest } from "@api/api";
 import UserRepository from "@repositories/users";
 import UserService from "@services/users";
 
 /**
- * Ask to guest if they want to reset the password
+ * Confirm password reset with token
+ * POST /account/reset-confirm
  *
  * @param request
  * @param response
@@ -33,42 +34,34 @@ export const postResetConfirm = async (request: Request<unknown, unknown, Passwo
         })
         .then(user => {
             // wrong token
-            if (!user) {
-                request.flash('error', [t("reset.token-not-found")]);
-                response.redirect('/account/reset')
-                return;
-            }
+            if (!user)
+                return rejectResponse(response, 422, 'reset-confirm - invalid token', ['Invalid or expired reset token']);
             // change password
             return UserService.passwordChange(user, password, passwordConfirm)
                 .then(async ({ success, errors = [] }) => {
-                    if (!success) {
-                        request.flash('error', errors);
-                        return response.redirect('/account/reset');
-                    }
+                    if (!success)
+                        return rejectResponse(response, 422, 'reset-confirm - validation error', errors);
                     // consume the token
                     user.tokens = user.tokens
                         .filter(({ token: t }) => token !== t);
-                    // save and send email
+                    // save and send confirmation email
                     await UserRepository.save(user)
                         .then(() => {
                             // send confirmation email (no need to wait)
-
                             nodemailer({
                                     to: user.email,
                                     subject: 'Password change confirmed',
                                 },
                                 "email-reset-confirm.ejs",
                                 {
-                                    ...response.locals,
                                     pageMetaTitle: 'Password change confirmed',
                                     pageMetaLinks: [],
                                     name: user.username,
-                                });
-                            // success message
-                            request.flash('success', [t("reset.success")]);
-                        })
-                    return response.redirect("/account/login");
-                })
+                                })
+                                .catch(() => { /* email failure is non-fatal */ });
+                        });
+                    return successResponse(response, undefined, 200, 'Password changed successfully');
+                });
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
-}
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
+};

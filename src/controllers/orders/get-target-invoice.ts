@@ -14,7 +14,7 @@ import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 import { getDirname } from "@utils/get-file-url";
 
 /**
- *
+ * Path parameters for order invoice endpoint
  */
 export interface IGetTargetInvoiceParameters {
     orderId: string
@@ -22,6 +22,7 @@ export interface IGetTargetInvoiceParameters {
 
 /**
  * Get target invoice file and download it
+ * GET /orders/:orderId/invoice
  *
  * @param request
  * @param response
@@ -35,13 +36,13 @@ export const getTargetInvoice = (request: Request & {
         return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
 
     /**
-     * Where build (same as get-target-order.ts
+     * Where build (same as get-target-order.ts)
      */
     const match: PipelineStage.Match = {
         $match: {}
     };
-    if (!request.session.user?.admin)
-        match.$match.userId = request.session.user?._id;
+    if (!request.user?.admin)
+        match.$match.userId = request.user?._id;
     match.$match._id = new Types.ObjectId(request.params.orderId);
 
     OrderService.getAll([ match ])
@@ -51,27 +52,13 @@ export const getTargetInvoice = (request: Request & {
             const order = orders[0];
             /**
              * Create PDF file
-             * Create PDF using get-target-order template OR pure HTML content
+             * Create PDF using the invoice template OR pure HTML content
              * WARNING: Images and other link-related info will NOT work. Need to convert the images in base64 to embed them correctly in a PDF
              */
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
             const invoiceName = order._id + '.pdf'; // filename
             // save path
             const invoicePath = path.join('src', 'data', 'invoices', invoiceName);
-            // // Direct HTML content (alternative)
-            // const htmlContent = `
-            //   <html>
-            //   <head><title>${order._id}</title></head>
-            //   <body>
-            //     <ul>
-            //         <li><b>Email</b>: ${order.email}</li>
-            //         <li><b>Total Items</b>: ${order.totalItems}</li>
-            //         <li><b>Total Quantity</b>: ${order.totalQuantity}</li>
-            //         <li><b>Total Price</b>: ${order.totalPrice}/li>
-            //     </ul>
-            //   </body>
-            //   </html>
-            // `;
             // Use an ejs template
             try {
                 const htmlContent = await ejs.renderFile(
@@ -79,11 +66,8 @@ export const getTargetInvoice = (request: Request & {
                     path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
                     // Populate the template
                     {
-                        ...response.locals,
                         pageMetaTitle: 'Order',
-                        pageMetaLinks: [
-                            "/css/order-details.css",
-                        ],
+                        pageMetaLinks: [],
                         order,
                     },
                 );
@@ -111,5 +95,5 @@ export const getTargetInvoice = (request: Request & {
             if (error.message == "404" || error.kind === "ObjectId")
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
             return next(databaseErrorConverter(error));
-        })
+        });
 };

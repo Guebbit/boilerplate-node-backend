@@ -51,6 +51,11 @@ export const orderSchema = new Schema<IOrderDocument>({
             required: true
         }
     }],
+    status: {
+        type: String,
+        enum: ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'],
+        default: 'pending',
+    },
 }, {
     // Automatically manages createdAt and updatedAt timestamps
     timestamps: true

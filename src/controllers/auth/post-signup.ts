@@ -1,13 +1,14 @@
 import type { Request, Response, NextFunction } from 'express';
-import { t } from "i18next";
 import { nodemailer } from "@utils/nodemailer";
 import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
+import { rejectResponse, successResponse } from "@utils/response";
 import type { SignupRequest } from "@api/api";
 import UserService from "@services/users";
 
 /**
  * Register new user
+ * POST /account/signup
  *
  * @param request
  * @param response
@@ -27,7 +28,7 @@ export const postSignup = async (request: Request<unknown, unknown, SignupReques
     } = request.body;
 
     /**
-     * Login
+     * Signup
      */
     return UserService.signup(
             email,
@@ -37,35 +38,24 @@ export const postSignup = async (request: Request<unknown, unknown, SignupReques
             imageUrl
         )
         .then(({ success, data, errors = [] }) => {
-            if (!success) {
-                // So the user doesn't need to fill the form again
-                request.flash('filled', [
-                    email,
-                    username,
-                ]);
-                request.flash('error', [
-                    t('login.invalid-data'),
-                    ...errors
-                ]);
-                response.redirect('/account/signup');
-            }
-            // Registration confirmation (no need to wait)
+            if (!success || !data)
+                return rejectResponse(response, 422, 'signup - validation error', errors);
 
+            // Registration confirmation (no need to wait)
             nodemailer({
-                    to: data!.email,
+                    to: data.email,
                     subject: 'Signup succeeded!',
                 },
                 "email-registration-confirm.ejs",
                 {
-                    ...response.locals,
                     pageMetaTitle: 'Signup succeeded!',
                     pageMetaLinks: [],
-                    name: data!.username,
+                    name: data.username,
                 })
-            // Registration successful,
-            // send to the login and
-            request.flash('success', [t('signup.registration-successful')]);
-            return response.redirect('/account/login');
+                .catch(() => { /* email failure is non-fatal */ });
+
+            // Registration successful — return created user
+            return successResponse(response, data.toObject(), 201);
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
 };

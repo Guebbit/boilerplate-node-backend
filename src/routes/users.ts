@@ -1,30 +1,38 @@
 import express from 'express';
 import { isAuth, isAdmin } from "../middlewares/authorizations";
-import { csrfSynchronisedProtection } from "../middlewares/csrf";
 
 import { pageAllUsers } from "../controllers/users/page-all-users";
 import { pageTargetUser } from "../controllers/users/page-target-user";
-import { pageEditUser } from "../controllers/users/page-edit-user";
-import { postEditUser } from "../controllers/users/post-edit-user";
-import { postDeleteUser } from "../controllers/users/post-delete-user";
+import { postCreateUser, putEditUser, putEditUserById } from "../controllers/users/post-edit-user";
+import { postDeleteUser, deleteUserById } from "../controllers/users/post-delete-user";
+import { postSearchUsers } from "../controllers/users/post-search-users";
 
 const router = express.Router();
 
 // All users routes are admin-only
-router.get('/details/:userId', isAuth, isAdmin, pageTargetUser);
 
-router.get('/add', isAuth, isAdmin, pageEditUser);
+// POST /users/search — search users with body filters (must be before /:userId)
+router.post('/search', isAuth, isAdmin, postSearchUsers);
 
-router.post('/add', isAuth, isAdmin, csrfSynchronisedProtection, postEditUser);
-
-router.get('/edit/:userId', isAuth, isAdmin, pageEditUser);
-
-router.post('/edit/:userId', isAuth, isAdmin, csrfSynchronisedProtection, postEditUser);
-
-router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteUser);
-
-router.get('/:page', isAuth, isAdmin, pageAllUsers);
-
+// GET /users — list users (paginated)
 router.get('/', isAuth, isAdmin, pageAllUsers);
+
+// POST /users — create a new user
+router.post('/', isAuth, isAdmin, postCreateUser);
+
+// PUT /users — update user with id in body
+router.put('/', isAuth, isAdmin, putEditUser);
+
+// DELETE /users — delete user with id in body
+router.delete('/', isAuth, isAdmin, postDeleteUser);
+
+// GET /users/:userId — get a single user
+router.get('/:userId', isAuth, isAdmin, pageTargetUser);
+
+// PUT /users/:userId — update a specific user
+router.put('/:userId', isAuth, isAdmin, putEditUserById);
+
+// DELETE /users/:userId — delete a specific user
+router.delete('/:userId', isAuth, isAdmin, deleteUserById);
 
 export default router;

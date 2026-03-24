@@ -1,36 +1,33 @@
 import type { NextFunction, Request, Response } from "express";
 import type { CastError } from "mongoose";
-import { deleteFile } from "@utils/filesystem-helpers";
 import { ExtendedError } from "@utils/error-helpers";
-import type { UpdateProductRequestBody } from "@api/api";
+import { rejectResponse, successResponse } from "@utils/response";
+import type { CreateProductRequest, UpdateProductRequest, UpdateProductByIdRequest } from "@api/api";
 import ProductService from "@services/products";
 
 /**
- * Create or update a product.
- * Handles image upload, data validation, and redirects.
+ * Path parameters for product-by-id endpoints
+ */
+export interface IProductIdParams {
+    id: string;
+}
+
+/**
+ * Create a new product (admin only).
+ * POST /products
  *
  * @param request
  * @param response
  * @param next
  */
-export const postEditProduct = async (request: Request<unknown, unknown, UpdateProductRequestBody>, response: Response, next: NextFunction) => {
+export const postCreateProduct = async (request: Request<unknown, unknown, CreateProductRequest>, response: Response, next: NextFunction) => {
     const {
-        id,
         title,
         description = "",
-        active
+        active = false,
     } = request.body;
-    const price = Number.parseInt(request.body.price);
-
-    /**
-     * Get URL of updated image it's on req.file,
-     * but it's good to know that it could be within an array
-     * If no image was uploaded: it's empty
-     * If image was uploaded: delete the old one (if any) on save
-     */
-    const imageUrlRaw = (request.file ? request.file.path : (request.files ? (request.files as Express.Multer.File[])[0].path : ""));
-    // remove "public" at root ("/" remain as root)
-    const imageUrl = imageUrlRaw.replace((process.env.NODE_PUBLIC_PATH ?? "public"), "");
+    const price = Number(request.body.price);
+    const imageUrl = (request.body as unknown as { imageUrl?: string }).imageUrl ?? "";
 
     /**
      * Data validation
@@ -40,54 +37,78 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
         imageUrl,
         price,
         description,
-        active: !!active
+        active,
     });
 
-    /**
-     * Validation error
-     */
-    if (issues.length > 0) {
-        // Record was not created, so revert server changes by removing the uploaded file
-        if (imageUrlRaw.length > 0)
-            await deleteFile(imageUrlRaw);
-        request.flash('error', issues);
-        request.flash('filled', Object.values(request.body));
-        if (!id || id === '')
-            return response.redirect('/products/add');
-        return response.redirect('/products/edit/' + id);
-    }
+    if (issues.length > 0)
+        return rejectResponse(response, 422, 'product - validation error', issues);
 
-    /**
-     * NO ID = new product
-     */
-    if (!id || id === '')
-        return ProductService.create({
-            title,
-            imageUrl,
-            price,
-            description,
-            active: !!active,
-        })
-            .then(() => response.redirect('/products/'))
-            .catch(async (error: CastError) => {
-                if (imageUrlRaw.length > 0)
-                    await deleteFile(imageUrlRaw);
-                return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
-            });
-
-    /**
-     * ID = edit product
-     */
-    return ProductService.update(id, {
+    return ProductService.create({
         title,
+        imageUrl,
         price,
         description,
-        active: !!active,
+        active,
+    })
+        .then((product) => successResponse(response, product.toObject(), 201))
+        .catch((error: CastError) => next(new ExtendedError(error.kind, 500, false, [ error.message ])));
+};
+
+/**
+ * Update an existing product (admin only) — ID provided in request body.
+ * PUT /products
+ *
+ * @param request
+ * @param response
+ * @param next
+ */
+export const putEditProduct = async (request: Request<unknown, unknown, UpdateProductRequest>, response: Response, next: NextFunction) => {
+    const { id } = request.body;
+
+    if (!id || id === '')
+        return rejectResponse(response, 422, 'product - missing id', ['Product id is required']);
+
+    return _updateProduct(id, request.body, response, next);
+};
+
+/**
+ * Update an existing product (admin only) — ID provided as path parameter.
+ * PUT /products/:id
+ *
+ * @param request
+ * @param response
+ * @param next
+ */
+export const putEditProductById = async (request: Request<IProductIdParams, unknown, UpdateProductByIdRequest>, response: Response, next: NextFunction) =>
+    _updateProduct(request.params.id, request.body, response, next);
+
+/**
+ * Shared product update logic
+ */
+const _updateProduct = async (
+    id: string,
+    data: Partial<UpdateProductRequest>,
+    response: Response,
+    next: NextFunction,
+) => {
+    const {
+        title,
+        description,
+        active,
+        imageUrl = "",
+    } = data;
+    const price = data.price !== undefined ? Number(data.price) : undefined;
+
+    return ProductService.update(id, {
+        ...(title !== undefined && { title }),
+        ...(price !== undefined && { price }),
+        ...(description !== undefined && { description }),
+        ...(active !== undefined && { active }),
     }, imageUrl)
-        .then((updatedProduct) => response.redirect('/products/details/' + (updatedProduct.id as string)))
-        .catch(async (error: CastError) => {
-            if (imageUrlRaw.length > 0)
-                await deleteFile(imageUrlRaw);
+        .then((updatedProduct) => successResponse(response, updatedProduct.toObject()))
+        .catch((error: CastError) => {
+            if (error.message === '404')
+                return rejectResponse(response, 404, 'product - not found', ['Product not found']);
             return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
         });
 };

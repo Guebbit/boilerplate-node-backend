@@ -1,14 +1,16 @@
 import type { Request, Response, NextFunction } from 'express';
-import { t } from "i18next";
 import type { IUser } from "@models/users";
-import { ExtendedError } from "@utils/error-helpers";
-import type { CastError } from "mongoose";
+import { databaseErrorConverter } from "@utils/error-helpers";
+import { successResponse, rejectResponse } from "@utils/response";
+import { generateToken } from "@utils/jwt";
 import type { LoginRequest } from "@api/api";
 import UserService from "@services/users";
+import type { CastError } from "mongoose";
 
 
 /**
  * Authenticate user
+ * POST /account/login
  *
  * @param request
  * @param response
@@ -29,20 +31,15 @@ export const postLogin = (request: Request<unknown, unknown, LoginRequest>, resp
      */
     return UserService.login(email, password)
         .then(({ success, data, errors }) => {
-            if(!success || !data){
-                request.flash('error', errors);
-                response.redirect('/account/login');
-                return;
-            }
-            // User found and login is correct: Update and regenerate session
-            request.session.regenerate(() => {
-                request.session.user = data.toObject<IUser>();
-                request.session
-                    .save(() => {
-                        request.flash('success', [t('login.success')]);
-                        response.redirect('/')
-                    });
+            if (!success || !data)
+                return rejectResponse(response, 401, 'login - wrong credentials', errors);
+            // User found and login is correct: generate and return a JWT
+            const user = data.toObject<IUser>();
+            const token = generateToken(user);
+            return successResponse(response, {
+                token,
+                expiresIn: Number(process.env.NODE_JWT_EXPIRES_IN ?? 86_400),
             });
         })
-        .catch((error: CastError) => next(new ExtendedError(error.kind, Number.parseInt(error.message))));
+        .catch((error: CastError) => next(databaseErrorConverter(error)));
 };
