@@ -64,7 +64,7 @@ start()
  */
 app.use(
     express.static(
-        path.join(getDirname(import.meta.url), '../' + (process.env.NODE_PUBLIC_PATH ?? "public")),
+        path.join(getDirname(import.meta.url), '../../' + (process.env.NODE_PUBLIC_PATH ?? "public")),
         {
             maxAge: process.env.NODE_ENV === 'production' ? (process.env.NODE_STATIC_MAXAGE ?? 0) : 0, // (expressed in seconds)
             // setHeaders: (response) => {
@@ -199,7 +199,7 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Requ
     // Dangerous error, must be documented fully
     logger.error({
         ...error,
-        stack: error instanceof ExtendedError ? error.stack : "",
+        stack: error instanceof ExtendedError ? error.stack : "handled",
     });
     request.flash('error-title', [ 'UNKNOWN ERROR' ]);
     request.flash('error-description', [ 'Something happened. Please contact support' ]);
@@ -238,7 +238,9 @@ process
         if (process.env.NODE_ENV !== 'production')
             return;
         logger.error({
-            error,
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
             origin
         });
         process.exit(1);

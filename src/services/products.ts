@@ -41,6 +41,8 @@ export const search = async (
     filters: SearchProductsRequest = {},
     admin = false,
 ): Promise<ProductsResponse> => {
+    console.log("AAAAAAAAAAAA", {...filters})
+    console.log("BBBBBBBBBBBBBBBBB",Math.max(1, Number(filters.page ?? 1) || 1))
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));

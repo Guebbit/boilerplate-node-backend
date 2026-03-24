@@ -17,7 +17,11 @@ export function deleteFile(filePath: string) {
             if ((error as Error & { code?: string } | undefined)?.code === 'ENOENT')
                 return false;
             // Other error occurred: log error
-            logger.error(error);
+            logger.error({
+                message: error.message,
+                stack: error.stack,
+                name: error.name,
+            });
             return false;
         });
 }

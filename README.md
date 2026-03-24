@@ -34,12 +34,6 @@
 
 
 
-Replacing the console.log debug middleware in app.ts with logger.debug
-src/utils/pdf-helpers.ts — async/await refactor + passing getBrowserConfig() to puppeteer.launch()
-src/utils/nodemailer.ts — using promisified sendMail
-src/controllers/orders/get-target-invoice.ts — using fs.promises.readFile
-src/models/orders.ts — adding timestamps: true
-
 ### TODO IMPORTANT ###
  - post-reset-confirm.ts => POST /account/reset/{token}
  - get-reset-database is there a better way?

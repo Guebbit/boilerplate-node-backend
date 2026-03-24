@@ -40,7 +40,13 @@ export class ExtendedError extends Error {
         // Error.captureStackTrace(this);
         // Dangerous, better log it
         if(!isOperational)
-            logger.error(this);
+            logger.error({
+                message: this.message,
+                stack: this.stack,
+                name: this.name,
+                errors: this.errors,
+                httpCode: this.httpCode,
+            });
     }
 }
 

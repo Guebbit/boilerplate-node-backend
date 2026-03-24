@@ -11,6 +11,7 @@ export type IGetAllProductsQuery = Partial<Record<keyof SearchProductsRequest, s
 
 /**
  * Get all products
+ * TODO page is not in the query but in the parameter!
  *
  * @param request
  * @param response

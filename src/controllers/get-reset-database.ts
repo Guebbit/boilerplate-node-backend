@@ -21,6 +21,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                 // users
                 UserRepository.create({
                     _id: new Types.ObjectId("65dd2bdb923652b7800fe180"),
+                    username: "root",
                     email: "root@root.it",
                     password: "rootroot",
                     imageUrl: String.raw`\images\9726c4217f5998511f372afab4800ac8.jpg`,
@@ -42,6 +43,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                 }),
                 UserRepository.create({
                     _id: new Types.ObjectId("65de646a44f861fd83c13f13"),
+                    username: "ginopinoshow",
                     email: "gino@pino.it",
                     password: "$2b$12$HwOdA7il/qvuU.psvWDOyuSMJ7ji/qMeFS3ma7DB8W6A/tGfCYEX.",
                     imageUrl: String.raw`\images\96346b77daf138a279677cb75c400ee9.jpg`,
