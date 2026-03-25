@@ -2,8 +2,12 @@ import { existsSync } from 'node:fs';
 import i18next from 'i18next';
 import enTranslation from '../../src/locales/en.json';
 
-// Use a pre-installed mongod binary when available (set by `npm run test:ci:setup`).
-// If the binary is absent, mongodb-memory-server will download it automatically.
+//
+//
+/**
+ * Use a pre-installed mongod binary when available (set by `npm run test:ci:setup`).
+ * If the binary is absent, mongodb-memory-server will download it automatically.
+ */
 const systemBinary = process.env['MONGOMS_SYSTEM_BINARY'] ?? '/tmp/mongod';
 if (existsSync(systemBinary)) {
     process.env['MONGOMS_SYSTEM_BINARY'] = systemBinary;
@@ -11,9 +15,10 @@ if (existsSync(systemBinary)) {
     process.env['MONGOMS_MD5_CHECK'] = 'false';
 }
 
-// Initialise i18next synchronously so `t()` is ready before any model is imported.
-i18next.init({
-    initImmediate: false,
+/**
+ * WARNING: it's async
+ */
+void i18next.init({
     lng: 'en',
     fallbackLng: 'en',
     resources: {

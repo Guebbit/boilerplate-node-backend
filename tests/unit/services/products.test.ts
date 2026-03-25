@@ -183,6 +183,7 @@ describe('ProductService.getById', () => {
     });
 
     it('returns undefined when no id is provided', async () => {
+        // eslint-disable-next-line unicorn/no-useless-undefined
         expect(await ProductService.getById(undefined)).toBeUndefined();
     });
 });
@@ -270,12 +271,13 @@ describe('ProductService.remove', () => {
     });
 
     it('hard-deletes the product and removes it from all user carts', async () => {
-        const product = await createProduct({ active: true });
-        const pid     = (product._id as Types.ObjectId).toString();
+        const product  = await createProduct({ active: true });
+        const pid = (product._id as Types.ObjectId).toString();
 
         // A user adds the product to their cart
-        const user      = await createUser();
-        const userId    = (user._id as Types.ObjectId).toString();
+        const user  = await createUser();
+        const userId = (user._id as Types.ObjectId).toString();
+        // eslint-disable-next-line unicorn/no-await-expression-member
         const addResult = await (await import('@services/users')).cartItemSetById(user, pid, 1);
 
         // Confirm the cart item was added

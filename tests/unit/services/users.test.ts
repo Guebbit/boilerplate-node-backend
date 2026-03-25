@@ -459,6 +459,7 @@ describe('UserService.getById', () => {
     });
 
     it('returns undefined when no id is provided', async () => {
+        // eslint-disable-next-line unicorn/no-useless-undefined
         expect(await UserService.getById(undefined)).toBeUndefined();
     });
 });
