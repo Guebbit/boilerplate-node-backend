@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-<%- include("../_layouts/main-head.ejs"); %>
+<%- include("../layouts/main-head.ejs"); %>
 <body>
-<%- include("../_layouts/default-header.ejs"); %>
-<%- include("../_layouts/default-aside.ejs"); %>
+<%- include("../layouts/default-header.ejs"); %>
+<%- include("../layouts/default-aside.ejs"); %>
 <main>
     <form class="login-form" method="POST">
         <% if (token && token.length > 0) { %>
@@ -40,6 +40,6 @@
     </form>
 </main>
 
-<%- include("../_layouts/default-footer.ejs"); %>
+<%- include("../layouts/default-footer.ejs"); %>
 </body>
 </html>

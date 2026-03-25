@@ -14,7 +14,7 @@ export const pageCart = (request: Request, response: Response, next: NextFunctio
     // check done before entering the route
     UserService.cartGet(request.user!)
         .then((productList) =>
-            response.render('cart', {
+            response.render('misc/cart', {
                 pageMetaTitle: 'Your Cart',
                 pageMetaLinks: [
                     "/css/cart.css",

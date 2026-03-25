@@ -7,7 +7,7 @@ import type { Request, Response } from "express";
  * @param response
  */
 export const getHome = (request: Request, response: Response) =>
-    response.render('home', {
+    response.render('misc/home', {
         pageMetaTitle: 'Home',
         pageMetaLinks: [],
     })
