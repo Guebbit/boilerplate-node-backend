@@ -5,8 +5,9 @@ import enTranslation from '../../src/locales/en.json';
 //
 //
 /**
- * Use a pre-installed mongod binary when available (set by `npm run test:ci:setup`).
- * If the binary is absent, mongodb-memory-server will download it automatically.
+ * Use a pre-installed mongod binary when available (set by `npm run setup:mongod`).
+ * If the binary is absent, mongodb-memory-server will download it automatically at runtime.
+ * So first run may be slow (download is 100mb)
  */
 const systemBinary = process.env['MONGOMS_SYSTEM_BINARY'] ?? '/tmp/mongod';
 if (existsSync(systemBinary)) {
