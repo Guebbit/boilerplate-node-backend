@@ -89,7 +89,7 @@ export const getTargetInvoice = (request: Request & {
                     },
                 );
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                await createPDF(htmlContent, order._id + '.pdf', 'src/data/invoices');
+                await createPDF(htmlContent, order._id + '.pdf', 'src/storage/invoices');
                 /**
                  * Download file
                  */

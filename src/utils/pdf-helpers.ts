@@ -13,7 +13,7 @@ import { getBrowserConfig } from "./puppeteer.config";
 export async function createPDF(
     htmlContent: string,
     filename = 'output.pdf',
-    outputPath = 'src/data/files',
+    outputPath = 'src/storage/files',
     // eslint-disable-next-line unicorn/no-object-as-default-parameter
     options: PDFOptions = {
         format: 'A4',

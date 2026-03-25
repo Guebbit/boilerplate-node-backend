@@ -1,6 +1,6 @@
 import productModel from '@models/products';
 import type { IProductDocument } from '@models/products';
-import type { QueryFilter } from 'mongoose';
+import type { FilterQuery as QueryFilter } from 'mongoose';
 
 /**
  * Product Repository

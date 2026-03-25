@@ -1,6 +1,6 @@
 import userModel from '@models/users';
 import type { IUserDocument } from '@models/users';
-import type { QueryFilter, UpdateQuery } from 'mongoose';
+import type { FilterQuery as QueryFilter, UpdateQuery } from 'mongoose';
 
 /**
  * User Repository

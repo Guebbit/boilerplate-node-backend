@@ -17,29 +17,9 @@
 
 
 # TODO
-- Test PUPPETEER (new createPDF)
-- Check Dredd for automated contract tests (Spec conformance tests, Consumer-driven contract tests)
-- Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
-- Add products in cart to products list
-- global.d.ts from types/ to root
-
-# AI TODO
- - Create/complete tests
- - Create documentation
-- Create routes:
-   - Create /auth/get-accounts (use /account from openapi
-   - Create /cart/get-cart (use page-cart but json only)
-   - Create /cart/get-checkout (use page-checkout but json only)
-   - TODO
-
+- Since connect-mongodb-session is lagging behind, I'm staying on 9< mongoose. When I'll upgrade, "FilterQuery as QueryFilter" must be replaced everywhere with "QueryFilter".
+- Complete .dev enviroment (Bruno, Mockoon, Insomnia (update)))
 
 
 ### TODO IMPORTANT ###
  - post-reset-confirm.ts => POST /account/reset/{token}
- - get-reset-database is there a better way?
- - [Added page size to item]() lists (users, products and orders)
- - pagination changed in item lists
- - ALL "path" parameters are now "query", also now I added JSON only responses
- - orders list filter ProductParams
- - Check all controller routes, the openapi update created new routes (+ add JSON restapi only routes)
- - update insomnia for new openapi.yaml + create a test server? I don't remember the software name for reverse insomnia

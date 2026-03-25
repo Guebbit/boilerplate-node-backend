@@ -37,7 +37,7 @@ export const postSignup = async (request: Request<unknown, unknown, SignupReques
             imageUrl
         )
         .then(({ success, data, errors = [] }) => {
-            if (!success) {
+            if (!success || !data) {
                 // So the user doesn't need to fill the form again
                 request.flash('filled', [
                     email,
@@ -47,12 +47,12 @@ export const postSignup = async (request: Request<unknown, unknown, SignupReques
                     t('login.invalid-data'),
                     ...errors
                 ]);
-                response.redirect('/account/signup');
+                return response.redirect('/account/signup');
             }
             // Registration confirmation (no need to wait)
 
             nodemailer({
-                    to: data!.email,
+                    to: data.email,
                     subject: 'Signup succeeded!',
                 },
                 "email-registration-confirm.ejs",
@@ -60,7 +60,7 @@ export const postSignup = async (request: Request<unknown, unknown, SignupReques
                     ...response.locals,
                     pageMetaTitle: 'Signup succeeded!',
                     pageMetaLinks: [],
-                    name: data!.username,
+                    name: data.username,
                 })
             // Registration successful,
             // send to the login and

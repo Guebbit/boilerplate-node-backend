@@ -7,7 +7,7 @@ import type { Product } from "@api/api"
 /**
  * Product Document interface
  */
-export interface IProductDocument extends Product, Document {}
+export interface IProductDocument extends Omit<Product, 'id'>, Document {}
 
 /**
  * Product Document instance methods

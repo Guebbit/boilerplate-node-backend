@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import { t } from 'i18next';
-import type { QueryFilter } from 'mongoose';
+import type { FilterQuery as QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, ProductsResponse, Product } from '@api/api';
 import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
 import { deleteFile } from '@utils/filesystem-helpers';
@@ -41,8 +41,6 @@ export const search = async (
     filters: SearchProductsRequest = {},
     admin = false,
 ): Promise<ProductsResponse> => {
-    console.log("AAAAAAAAAAAA", {...filters})
-    console.log("BBBBBBBBBBBBBBBBB",Math.max(1, Number(filters.page ?? 1) || 1))
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
