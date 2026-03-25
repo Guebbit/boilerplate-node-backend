@@ -78,7 +78,7 @@ export const userConnect = (request: Request, response: Response, next: NextFunc
             response.locals.currentUser = request.session.user;
             response.locals.isAuthenticated = true;
             response.locals.isAdmin = request.session.user?.admin;
-            // user model
+            // user model in the request to
             request.user = user;
             return user;
         })

@@ -86,7 +86,7 @@ export const search = async (
         sort: { createdAt: -1 },
         skip,
         limit: pageSize,
-    });
+    }) as Product[];
 
     return {
         items,
