@@ -12,6 +12,7 @@ import OrderService from '@services/orders';
 import UserRepository from '@repositories/users';
 import { createPDF } from '@utils/pdf-helpers';
 import { getDirname } from '@utils/get-file-url';
+import type { IUserDocument } from '@models/users';
 import type { IProductDocument } from '@models/products';
 
 const router = express.Router();
@@ -22,6 +23,13 @@ const router = express.Router();
 // ---------------------------------------------------------------------------
 const qs = (val: unknown): string | undefined =>
     typeof val === 'string' ? val : undefined;
+
+// ---------------------------------------------------------------------------
+// Helper: safely cast a route param (string | string[]) to string
+// (Express types request.params as ParamsDictionary which allows string[])
+// ---------------------------------------------------------------------------
+const pid = (val: string | string[]): string =>
+    Array.isArray(val) ? val[0] ?? '' : val;
 
 // ---------------------------------------------------------------------------
 // Helper: consistent JSON error response (matches openapi.yaml ErrorResponse)
@@ -381,9 +389,9 @@ router.post('/users/search', isApiAuth, isApiAdmin, csrfSynchronisedProtection, 
  */
 router.get('/users/:id', isApiAuth, isApiAdmin, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'User not found');
-        const user = await UserService.getById(request.params.id);
+        const user = await UserService.getById(pid(request.params.id));
         if (!user)
             return apiError(response, 404, 'NOT_FOUND', 'User not found');
         return response.status(200).json(formatUser(user as unknown as Record<string, unknown>));
@@ -398,10 +406,10 @@ router.get('/users/:id', isApiAuth, isApiAdmin, async (request: Request, respons
  */
 router.put('/users/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'User not found');
         const { email, password } = request.body as { email?: string; password?: string };
-        const user = await UserService.adminUpdate(request.params.id, { email, password });
+        const user = await UserService.adminUpdate(pid(request.params.id), { email, password });
         return response.status(200).json(formatUser(user as unknown as Record<string, unknown>));
     } catch (error) {
         if (error instanceof Error && error.message === '404')
@@ -416,10 +424,10 @@ router.put('/users/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, asyn
  */
 router.delete('/users/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'User not found');
         const hardDelete = request.query.hardDelete === 'true';
-        const result = await UserService.remove(request.params.id, hardDelete);
+        const result = await UserService.remove(pid(request.params.id), hardDelete);
         if (!result.success)
             return response.status((result as { status: number }).status ?? 500).json({
                 success: false,
@@ -566,10 +574,10 @@ router.post('/products/search', csrfSynchronisedProtection, async (request: Requ
  */
 router.get('/products/:id', async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'Product not found');
         const admin = Boolean(request.session.user?.admin);
-        const product = await ProductService.getById(request.params.id, admin);
+        const product = await ProductService.getById(pid(request.params.id), admin);
         if (!product)
             return apiError(response, 404, 'NOT_FOUND', 'Product not found');
         return response.status(200).json(formatProduct(product as unknown as Record<string, unknown>));
@@ -584,12 +592,12 @@ router.get('/products/:id', async (request: Request, response: Response, next: N
  */
 router.put('/products/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'Product not found');
         const { title, price, description, active, imageUrl } =
             request.body as { title?: string; price?: number; description?: string; active?: boolean; imageUrl?: string };
         const product = await ProductService.update(
-            request.params.id,
+            pid(request.params.id),
             { title, price: price !== undefined ? Number(price) : undefined, description, active },
             imageUrl,
         );
@@ -607,10 +615,10 @@ router.put('/products/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, a
  */
 router.delete('/products/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'Product not found');
         const hardDelete = request.query.hardDelete === 'true';
-        const result = await ProductService.remove(request.params.id, hardDelete);
+        const result = await ProductService.remove(pid(request.params.id), hardDelete);
         if (!result.success)
             return response.status((result as { status: number }).status ?? 500).json({
                 success: false,
@@ -721,7 +729,7 @@ router.put('/cart/:productId', isApiAuth, csrfSynchronisedProtection, async (req
                 success: false,
                 error: { code: 'VALIDATION_ERROR', message: 'quantity is required' },
             });
-        await UserService.cartItemSetById(request.user!, request.params.productId, Number(quantity));
+        await UserService.cartItemSetById(request.user!, pid(request.params.productId), Number(quantity));
         const cartItems = await UserService.cartGet(request.user!);
         return response.status(200).json(
             buildCartResponse(cartItems as unknown as Array<{ product: Record<string, unknown>; quantity: number }>),
@@ -737,7 +745,7 @@ router.put('/cart/:productId', isApiAuth, csrfSynchronisedProtection, async (req
  */
 router.delete('/cart/:productId', isApiAuth, csrfSynchronisedProtection, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        await UserService.cartItemRemoveById(request.user!, request.params.productId);
+        await UserService.cartItemRemoveById(request.user!, pid(request.params.productId));
         const cartItems = await UserService.cartGet(request.user!);
         return response.status(200).json(
             buildCartResponse(cartItems as unknown as Array<{ product: Record<string, unknown>; quantity: number }>),
@@ -899,12 +907,12 @@ router.post('/orders/search', isApiAuth, csrfSynchronisedProtection, async (requ
  */
 router.get('/orders/:id/invoice', isApiAuth, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'Order not found');
         const scope = request.session.user?.admin
             ? {}
             : { userId: new Types.ObjectId(request.session.user!._id.toString()) };
-        const result = await OrderService.search({ id: request.params.id }, scope);
+        const result = await OrderService.search({ id: pid(request.params.id) }, scope);
         if (!result.items.length)
             return apiError(response, 404, 'NOT_FOUND', 'Order not found');
 
@@ -938,12 +946,12 @@ router.get('/orders/:id/invoice', isApiAuth, async (request: Request, response: 
  */
 router.get('/orders/:id', isApiAuth, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'Order not found');
         const scope = request.session.user?.admin
             ? {}
             : { userId: new Types.ObjectId(request.session.user!._id.toString()) };
-        const result = await OrderService.search({ id: request.params.id }, scope);
+        const result = await OrderService.search({ id: pid(request.params.id) }, scope);
         if (!result.items.length)
             return apiError(response, 404, 'NOT_FOUND', 'Order not found');
         return response.status(200).json(formatOrder(result.items[0] as unknown as Record<string, unknown>));
@@ -958,7 +966,7 @@ router.get('/orders/:id', isApiAuth, async (request: Request, response: Response
  */
 router.put('/orders/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'Order not found');
         const { status, userId, email, items, notes } =
             request.body as {
@@ -968,7 +976,7 @@ router.put('/orders/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, asy
                 items?: Array<{ productId: string; quantity: number }>;
                 notes?: string;
             };
-        const order = await OrderService.adminUpdate(request.params.id, { status, userId, email, items, notes });
+        const order = await OrderService.adminUpdate(pid(request.params.id), { status, userId, email, items, notes });
         return response.status(200).json(formatOrder(order as unknown as Record<string, unknown>));
     } catch (error) {
         if (error instanceof Error && error.message === '404')
@@ -983,9 +991,9 @@ router.put('/orders/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, asy
  */
 router.delete('/orders/:id', isApiAuth, isApiAdmin, csrfSynchronisedProtection, async (request: Request, response: Response, next: NextFunction) => {
     try {
-        if (!Types.ObjectId.isValid(request.params.id))
+        if (!Types.ObjectId.isValid(pid(request.params.id)))
             return apiError(response, 404, 'NOT_FOUND', 'Order not found');
-        const result = await OrderService.remove(request.params.id);
+        const result = await OrderService.remove(pid(request.params.id));
         if (!result.success)
             return response.status((result as { status: number }).status ?? 500).json({
                 success: false,
