@@ -5,6 +5,10 @@
   "testEnvironment": "node",
   "testMatch": ["**/tests/**/*.test.ts"],
 
+  "setupFiles": ["<rootDir>/tests/helpers/setup.ts"],
+
+  "testTimeout": 30000,
+
   "moduleNameMapper": {
     "^@api/(.*)$": "<rootDir>/src/api/$1",
     "^@controllers/(.*)$": "<rootDir>/src/controllers/$1",
