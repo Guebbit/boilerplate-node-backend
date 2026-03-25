@@ -24,7 +24,7 @@ import * as ProductService from '@services/products';
 import * as ProductRepository from '@repositories/products';
 import * as UserRepository from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@utils/response';
-import type { IProductDocument } from '@models/products';
+import type { IUserDocument } from '@models/users';
 
 // Mock the filesystem helper so tests never touch the real disk.
 // The mock is hoisted before imports by Jest's module system.
@@ -314,14 +314,13 @@ describe('ProductService.remove', () => {
         const product = await createProduct({ active: true });
         const pid     = (product._id as Types.ObjectId).toString();
 
-        // A user has the product in their cart
-        const user = await createUser();
-        await UserRepository.findById((user._id as Types.ObjectId).toString()).then(async (u) => {
-            if (u) await ProductService.update(pid, {}); // just ensuring product exists
-        });
-
+        // A user adds the product to their cart
+        const user      = await createUser();
+        const userId    = (user._id as Types.ObjectId).toString();
         const addResult = await (await import('@services/users')).cartItemSetById(user, pid, 1);
-        const userId = (asSuccess<IProductDocument>(addResult as unknown as IResponseSuccess<IProductDocument> | IResponseReject).data!._id as Types.ObjectId).toString();
+
+        // Confirm the cart item was added
+        expect(asSuccess<IUserDocument>(addResult).data!.cart.items).toHaveLength(1);
 
         const result = await ProductService.remove(pid, true);
 
