@@ -1,17 +1,3 @@
-/**
- * OrderRepository – Integration tests
- *
- * The Order repository exposes two operations:
- *   • create    – insert a new order document
- *   • aggregate – run an arbitrary aggregation pipeline
- *
- * Because orders embed the full product snapshot (not just an ObjectId), the
- * create tests also validate that the embedded document is stored correctly.
- *
- * The aggregate tests cover a basic pass-through pipeline and a $match / $count
- * stage to show that real MongoDB aggregation logic works as expected.
- */
-
 import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
@@ -19,17 +5,11 @@ import { createProduct } from '../../helpers/factories/products';
 import { createOrder, makeOrder, toOrderProduct } from '../../helpers/factories/orders';
 import * as OrderRepository from '@repositories/orders';
 
-// ─── Lifecycle ───────────────────────────────────────────────────────────────
-
 beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
-
 describe('OrderRepository', () => {
-
-    // ── create ────────────────────────────────────────────────────────────────
 
     describe('create', () => {
         it('inserts an order and returns the Mongoose document', async () => {
@@ -76,8 +56,6 @@ describe('OrderRepository', () => {
             expect(order.products).toHaveLength(2);
         });
     });
-
-    // ── aggregate ─────────────────────────────────────────────────────────────
 
     describe('aggregate', () => {
         it('returns all orders when given a match-all pipeline', async () => {

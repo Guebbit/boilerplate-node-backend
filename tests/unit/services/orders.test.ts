@@ -1,26 +1,3 @@
-/**
- * OrderService – Integration tests
- *
- * What is verified here?
- * ----------------------
- * 1. getAll   – runs the aggregation pipeline that adds computed fields
- *               (totalItems, totalQuantity, totalPrice) to every order.
- * 2. search   – filters orders by id / userId / email / productId with
- *               pagination; also verifies the computed fields are present.
- *
- * Computed field correctness
- * --------------------------
- * The service embeds a MongoDB $addFields stage that computes totals from
- * the embedded `products` array.  By asserting on the values we confirm
- * that the aggregation expression is correct for the data we inserted.
- *
- * Setup pattern
- * -------------
- * Each test inserts exactly the documents it needs via the factories, so
- * results are deterministic: we know the expected price/quantity because
- * we control the seed data entirely.
- */
-
 import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
@@ -29,26 +6,15 @@ import { createOrder, toOrderProduct } from '../../helpers/factories/orders';
 import * as OrderService from '@services/orders';
 import type { IOrderDocument } from '@models/orders';
 
-// ─── Lifecycle ───────────────────────────────────────────────────────────────
-
 beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * The aggregation pipeline adds totalItems, totalQuantity and totalPrice to
- * every order document.  Cast the result so TypeScript knows about those extra
- * fields without modifying the core IOrderDocument interface.
- */
 type OrderWithTotals = IOrderDocument & {
     totalItems: number;
     totalQuantity: number;
     totalPrice: number;
 };
-
-// ─── getAll ───────────────────────────────────────────────────────────────────
 
 describe('OrderService.getAll', () => {
     it('returns all orders when no extra pipeline stages are provided', async () => {
@@ -138,8 +104,6 @@ describe('OrderService.getAll', () => {
         expect(orders).toHaveLength(0);
     });
 });
-
-// ─── search ───────────────────────────────────────────────────────────────────
 
 describe('OrderService.search', () => {
     it('returns all orders with default pagination', async () => {
