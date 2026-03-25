@@ -3,4 +3,4 @@ node_modules
 .idea
 dist
 *.log
-src/data/invoices
+src/data/invoices/*

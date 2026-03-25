@@ -18,12 +18,13 @@ export type IGetAllOrdersQuery = Partial<Record<keyof SearchOrdersRequest, strin
  * @param next
  */
 export const pageAllOrders = async (
-    request: Request<unknown, unknown, unknown, IGetAllOrdersQuery>,
+    // Page can be param or query
+    request: Request<{ page?: string }, unknown, unknown, IGetAllOrdersQuery>,
     response: Response,
     next: NextFunction,
 ) => {
     const pageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? "10");
-    const page = Number.parseInt(request.query.page ?? "1");
+    const page = Number.parseInt(request.params.page ?? request.query.page ?? "1");
     return OrderService.search(
         {
             ...request.query,
@@ -36,15 +37,14 @@ export const pageAllOrders = async (
             : { active: true, deletedAt: undefined }
     )
         .then(({ items, meta }) =>
-            response.render("orders/search", {
+            response.render("orders/list", {
                 pageMetaTitle: "All Orders",
                 pageMetaLinks: [ "/css/order-list.css" ],
                 orderList: items,
-                search: {
-                    ...request.query,
-                    page: meta.page,
-                    pageSize: meta.pageSize
-                },
+                itemsTotal: meta.totalItems,
+                pageCurrent: meta.page,
+                pageTotal: meta.totalPages,
+                search: request.query,
             })
         )
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));

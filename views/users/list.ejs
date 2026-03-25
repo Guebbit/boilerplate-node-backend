@@ -127,10 +127,11 @@
             <a href="/users/<%= pageTotal %>">Last</a>
         <% } %>
     </div>
-    <ul style="list-style:none; text-align:center;">
-        <li>Total users: <%= usersTotal %></li>
-        <li>Total Pages: <%= pageTotal %></li>
-    </ul>
+
+    <hr />
+
+    <!-- keep your existing pagination component -->
+    <%- include("../_components/pagination.ejs", { itemsTotal, pageCurrent, pageTotal }); %>
 
     <hr />
 

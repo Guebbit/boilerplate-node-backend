@@ -5,6 +5,16 @@ FROM node:25-alpine
 # Sets the working directory inside the image to /app in the container
 WORKDIR /app
 
+# Install Chromium + deps (Alpine)
+# This is needed ONLY for puppetteer, it's not needed for the app itself. May be removed in the future
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
 # Copies package.json and package-lock.json from the host folder into the /app in the image
 COPY package*.json ./
 

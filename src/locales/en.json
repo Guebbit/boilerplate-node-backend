@@ -34,7 +34,10 @@
     "product-was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts.",
     "order-not-found": "The requested order was not found",
     "order-creation-success": "Order created with success.",
-    "order-creation-failure": "Order creation failed."
+    "order-creation-failure": "Order creation failed.",
+    "order-invoice-missing": "No invoice file was found",
+    "cart-product-removed": "Product removed from cart.",
+    "cart-emptied": "All products removed from cart."
   },
   "generic": {
     "error-unknown": "Something went wrong with the request.",

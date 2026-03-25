@@ -18,7 +18,8 @@ export type IGetAllProductsQuery = Partial<Record<keyof SearchProductsRequest, s
  * @param next
  */
 export const pageAllProducts = async (
-    request: Request<unknown, unknown, unknown, IGetAllProductsQuery>,  // fourth generic = query
+    // Page can be param or query
+    request: Request<{ page?: string }, unknown, unknown, IGetAllProductsQuery>,  // fourth generic = query
     response: Response,
     next: NextFunction
 ) =>
@@ -27,7 +28,7 @@ export const pageAllProducts = async (
             ...request.query,
             minPrice: request.query?.minPrice ? Number.parseInt(request.query.minPrice) : undefined,
             maxPrice: request.query?.maxPrice ? Number.parseInt(request.query.maxPrice) : undefined,
-            page: Number.parseInt(request.query.page ?? "1"),
+            page: Number.parseInt(request.params.page ?? request.query.page ?? "1"),
             pageSize: Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? "10"),
         },
         request.session.user?.admin
@@ -39,7 +40,7 @@ export const pageAllProducts = async (
                     "/css/product.css"
                 ],
                 productList: items,
-                productsTotal: meta.totalItems,
+                itemsTotal: meta.totalItems,
                 pageCurrent: meta.page,
                 pageTotal: meta.totalPages,
                 search: request.query,

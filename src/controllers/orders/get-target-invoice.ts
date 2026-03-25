@@ -58,6 +58,7 @@ export const getTargetInvoice = (request: Request & {
             const invoiceName = order._id + '.pdf'; // filename
             // save path
             const invoicePath = path.join('src', 'data', 'invoices', invoiceName);
+
             // // Direct HTML content (alternative)
             // const htmlContent = `
             //   <html>
@@ -76,7 +77,7 @@ export const getTargetInvoice = (request: Request & {
             try {
                 const htmlContent = await ejs.renderFile(
                     // Retrieve the template
-                    path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
+                    path.resolve(getDirname(import.meta.url), '../../views/templates', 'invoice-order-file.ejs'),
                     // Populate the template
                     {
                         ...response.locals,

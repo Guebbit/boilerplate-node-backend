@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
 import UserService from "@services/users";
+import { t } from "i18next";
 
 /**
  * Page POST data
@@ -23,6 +24,7 @@ export const postDeleteCartItem = (request: Request<unknown, unknown, IPostDelet
         .then(({ success }) => {
             if (!success)
                 throw new Error("cartItemRemoveById error");
+            request.flash('success', [ t("ecommerce.cart-product-removed") ]);
             return response.redirect('/cart');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)))

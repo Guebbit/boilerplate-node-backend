@@ -115,7 +115,6 @@
                                 <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
                             </form>
                         <% } %>
-                        <p>Quantity in the cart: <%= product.quantity %></p>
                     <% } %>
                 </div>
             </article>
@@ -125,7 +124,7 @@
     <hr />
 
     <!-- keep your existing pagination component -->
-    <%- include("../_components/pagination.ejs", { productsTotal, pageCurrent, pageTotal }); %>
+    <%- include("../_components/pagination.ejs", { itemsTotal, pageCurrent, pageTotal }); %>
 
     <hr />
 

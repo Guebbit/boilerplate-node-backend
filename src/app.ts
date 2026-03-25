@@ -180,7 +180,11 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Requ
 
     // File upload error
     if (error instanceof MulterError) {
-        logger.info(error);
+        logger.error({
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+        });
         request.flash('error-title', [ error.code ]);
         request.flash('error-description', [ error.name + ": " + error.message + " on " + (error.field ?? "") ]);
         response.status(400).redirect("/error/");
@@ -189,7 +193,11 @@ app.use((error: ErrorRequestHandler | ExtendedError | MulterError, request: Requ
 
     // Check if the error is operational
     if (error instanceof ExtendedError && error.isOperational) {
-        logger.info(error);
+        logger.error({
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+        });
         request.flash('error-title', [ error.name ]);
         request.flash('error-description', error.errors);
         response.status(error.httpCode).redirect("/error/");

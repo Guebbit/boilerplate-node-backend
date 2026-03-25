@@ -17,14 +17,15 @@ export type IGetAllUsersQuery = Partial<Record<keyof SearchUsersRequest, string>
  * @param next
  */
 export const pageAllUsers = async (
-    request: Request<unknown, unknown, unknown, IGetAllUsersQuery>,  // fourth generic = query
+    // Page can be param or query
+    request: Request<{ page?: string }, unknown, unknown, IGetAllUsersQuery>,
     response: Response,
     next: NextFunction
 ) =>
     UserService.search(
         {
             ...request.query,
-            page: Number.parseInt(request.query.page ?? "1"),
+            page: Number.parseInt(request.params.page ?? request.query.page ?? "1"),
             pageSize: Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? "10"),
             // convert string "true"/"false" to boolean for the active filter
             active: request.query.active === undefined
@@ -37,7 +38,7 @@ export const pageAllUsers = async (
                 pageMetaTitle: 'All Users',
                 pageMetaLinks: [],
                 userList: items,
-                usersTotal: meta.totalItems,
+                itemsTotal: meta.totalItems,
                 pageCurrent: meta.page,
                 pageTotal: meta.totalPages,
                 search: request.query,
