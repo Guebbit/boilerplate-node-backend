@@ -1,43 +1,14 @@
-/**
- * UserRepository – Integration tests
- *
- * What is tested here?
- * --------------------
- * Every method exported from src/repositories/users.ts is exercised against a
- * real (in-memory) MongoDB instance.  No mocks are used for the database layer;
- * the repository code runs exactly as it would in production, so a bug in a
- * Mongoose query will surface here rather than slipping through a mock.
- *
- * Test isolation
- * --------------
- * `beforeEach(clearAll)` deletes every document from every collection before
- * each test.  Each test therefore builds the exact state it needs from scratch
- * and is completely independent of every other test in this file.
- *
- * Factory usage
- * -------------
- * `createUser()` inserts a document via UserRepository.create() so the Mongoose
- * pre-save hook (password hashing) fires.  `makeUser()` returns a plain object
- * for callers that want to call the repository directly.
- */
-
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeUser, createUser } from '../../helpers/factories/users';
 import * as UserRepository from '@repositories/users';
 import type { IUserDocument } from '@models/users';
 import { Types } from 'mongoose';
 
-// ─── Lifecycle ───────────────────────────────────────────────────────────────
-
-beforeAll(connect);    // start in-memory MongoDB once for this file
-afterAll(disconnect);  // tear it down when the suite finishes
-beforeEach(clearAll);  // empty every collection before each test
-
-// ─── Tests ───────────────────────────────────────────────────────────────────
+beforeAll(connect);
+afterAll(disconnect);
+beforeEach(clearAll);
 
 describe('UserRepository', () => {
-
-    // ── create ────────────────────────────────────────────────────────────────
 
     describe('create', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
@@ -56,8 +27,6 @@ describe('UserRepository', () => {
             expect(user.admin).toBe(false);
         });
     });
-
-    // ── findById ──────────────────────────────────────────────────────────────
 
     describe('findById', () => {
         it('returns the user document when the id exists', async () => {
@@ -78,8 +47,6 @@ describe('UserRepository', () => {
         });
     });
 
-    // ── findOne ───────────────────────────────────────────────────────────────
-
     describe('findOne', () => {
         it('returns a user that matches the query filter', async () => {
             await createUser({ email: 'unique@example.com' });
@@ -96,8 +63,6 @@ describe('UserRepository', () => {
             expect(found).toBeNull();
         });
     });
-
-    // ── findAll ───────────────────────────────────────────────────────────────
 
     describe('findAll', () => {
         it('returns all users when no filter is provided', async () => {
@@ -150,8 +115,6 @@ describe('UserRepository', () => {
         });
     });
 
-    // ── count ─────────────────────────────────────────────────────────────────
-
     describe('count', () => {
         it('returns the total number of documents when no filter is given', async () => {
             await createUser({ email: 'a@example.com', username: 'a' });
@@ -173,8 +136,6 @@ describe('UserRepository', () => {
         });
     });
 
-    // ── save ──────────────────────────────────────────────────────────────────
-
     describe('save', () => {
         it('persists in-memory mutations to the database', async () => {
             const user = await createUser();
@@ -190,8 +151,6 @@ describe('UserRepository', () => {
         });
     });
 
-    // ── deleteOne ─────────────────────────────────────────────────────────────
-
     describe('deleteOne', () => {
         it('removes the document permanently from the database', async () => {
             const user = await createUser();
@@ -202,8 +161,6 @@ describe('UserRepository', () => {
             expect(await UserRepository.findById(id)).toBeNull();
         });
     });
-
-    // ── updateMany ────────────────────────────────────────────────────────────
 
     describe('updateMany', () => {
         it('applies the update to every document matching the filter', async () => {

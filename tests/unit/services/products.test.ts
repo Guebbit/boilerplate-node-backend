@@ -1,21 +1,3 @@
-/**
- * ProductService – Integration tests
- *
- * Why deleteFile is mocked
- * ------------------------
- * ProductService.update() and ProductService.remove() delete image files from
- * the filesystem when a new image is provided or when a product is hard-deleted.
- * In tests we do not have real image files on disk, so we mock deleteFile to:
- *   1. Prevent spurious filesystem errors from cluttering test output.
- *   2. Verify that the service *calls* delete at the right moment (if needed).
- *
- * All other dependencies (repositories, user service) use the real in-memory
- * MongoDB — no other mocks are applied.
- *
- * jest.mock() calls are automatically hoisted to the top of the file by Jest,
- * so they take effect before any module is imported.
- */
-
 import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
@@ -27,27 +9,14 @@ import type { IResponseSuccess, IResponseReject } from '@utils/response';
 import type { IUserDocument } from '@models/users';
 
 // Mock the filesystem helper so tests never touch the real disk.
-// The mock is hoisted before imports by Jest's module system.
 jest.mock('@utils/filesystem-helpers', () => ({
     deleteFile: jest.fn().mockResolvedValue(true),
     fileToBase64: jest.fn().mockResolvedValue(''),
 }));
 
-// ─── Lifecycle ───────────────────────────────────────────────────────────────
-
 beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const asSuccess = <T>(r: IResponseSuccess<T> | IResponseReject) =>
-    r as IResponseSuccess<T>;
-
-const asReject = (r: IResponseSuccess<unknown> | IResponseReject) =>
-    r as IResponseReject;
-
-// ─── validateData ─────────────────────────────────────────────────────────────
 
 describe('ProductService.validateData', () => {
     it('returns an empty array for valid product data', () => {
@@ -99,8 +68,6 @@ describe('ProductService.validateData', () => {
         expect(errors.length).toBeGreaterThan(0);
     });
 });
-
-// ─── search ───────────────────────────────────────────────────────────────────
 
 describe('ProductService.search', () => {
     it('returns only active products for non-admin callers', async () => {
@@ -184,8 +151,6 @@ describe('ProductService.search', () => {
     });
 });
 
-// ─── getById ──────────────────────────────────────────────────────────────────
-
 describe('ProductService.getById', () => {
     it('returns a lean product object for an active product (non-admin)', async () => {
         const product = await createProduct({ active: true });
@@ -222,8 +187,6 @@ describe('ProductService.getById', () => {
     });
 });
 
-// ─── create ───────────────────────────────────────────────────────────────────
-
 describe('ProductService.create', () => {
     it('inserts a product and returns the Mongoose document', async () => {
         const product = await ProductService.create({
@@ -239,8 +202,6 @@ describe('ProductService.create', () => {
         expect(await ProductRepository.count()).toBe(1);
     });
 });
-
-// ─── update ───────────────────────────────────────────────────────────────────
 
 describe('ProductService.update', () => {
     it('updates title, price and description of an existing product', async () => {
@@ -286,8 +247,6 @@ describe('ProductService.update', () => {
     });
 });
 
-// ─── remove ───────────────────────────────────────────────────────────────────
-
 describe('ProductService.remove', () => {
     it('soft-deletes a product by setting deletedAt', async () => {
         const product = await createProduct({ active: true });
@@ -320,7 +279,7 @@ describe('ProductService.remove', () => {
         const addResult = await (await import('@services/users')).cartItemSetById(user, pid, 1);
 
         // Confirm the cart item was added
-        expect(asSuccess<IUserDocument>(addResult).data!.cart.items).toHaveLength(1);
+        expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
 
         const result = await ProductService.remove(pid, true);
 
@@ -340,6 +299,6 @@ describe('ProductService.remove', () => {
         const result = await ProductService.remove('000000000000000000000000', false);
 
         expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(404);
+        expect((result as IResponseReject).status).toBe(404);
     });
 });

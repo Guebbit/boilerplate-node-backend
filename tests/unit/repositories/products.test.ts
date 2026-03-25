@@ -1,29 +1,13 @@
-/**
- * ProductRepository – Integration tests
- *
- * Exercises every method of src/repositories/products.ts against an in-memory
- * MongoDB instance.  Each test starts with an empty collection; no shared state
- * leaks between tests.
- *
- * See tests/helpers/database.ts for details on the lifecycle helpers.
- */
-
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeProduct, createProduct } from '../../helpers/factories/products';
 import * as ProductRepository from '@repositories/products';
 import { Types } from 'mongoose';
 
-// ─── Lifecycle ───────────────────────────────────────────────────────────────
-
 beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
-
 describe('ProductRepository', () => {
-
-    // ── create ────────────────────────────────────────────────────────────────
 
     describe('create', () => {
         it('inserts a new product and returns the Mongoose document', async () => {
@@ -45,8 +29,6 @@ describe('ProductRepository', () => {
         });
     });
 
-    // ── findById ──────────────────────────────────────────────────────────────
-
     describe('findById', () => {
         it('returns the product when the id exists', async () => {
             const created = await createProduct({ title: 'Widget' });
@@ -64,8 +46,6 @@ describe('ProductRepository', () => {
             expect(found).toBeNull();
         });
     });
-
-    // ── findOne ───────────────────────────────────────────────────────────────
 
     describe('findOne', () => {
         it('returns a product matching the query', async () => {
@@ -94,8 +74,6 @@ describe('ProductRepository', () => {
             expect(found).not.toBeNull();
         });
     });
-
-    // ── findAll ───────────────────────────────────────────────────────────────
 
     describe('findAll', () => {
         it('returns all products when no filter is provided', async () => {
@@ -147,8 +125,6 @@ describe('ProductRepository', () => {
         });
     });
 
-    // ── count ─────────────────────────────────────────────────────────────────
-
     describe('count', () => {
         it('returns the total number of documents', async () => {
             await createProduct({ title: 'A' });
@@ -169,8 +145,6 @@ describe('ProductRepository', () => {
         });
     });
 
-    // ── save ──────────────────────────────────────────────────────────────────
-
     describe('save', () => {
         it('persists mutations to an existing document', async () => {
             const product = await createProduct();
@@ -185,8 +159,6 @@ describe('ProductRepository', () => {
             expect(refreshed!.price).toBe(99.99);
         });
     });
-
-    // ── deleteOne ─────────────────────────────────────────────────────────────
 
     describe('deleteOne', () => {
         it('removes the document permanently from the collection', async () => {
