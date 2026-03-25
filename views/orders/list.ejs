@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-<%- include("../_layouts/main-head.ejs"); %>
+<%- include("../layouts/main-head.ejs"); %>
 <body>
-<%- include("../_layouts/default-header.ejs"); %>
-<%- include("../_layouts/default-aside.ejs"); %>
+<%- include("../layouts/default-header.ejs"); %>
+<%- include("../layouts/default-aside.ejs"); %>
 
 <main>
     <section class="orders-search">
@@ -74,9 +74,9 @@
     <hr />
 
     <!-- keep your existing pagination component -->
-    <%- include("../_components/pagination.ejs", { itemsTotal, pageCurrent, pageTotal }); %>
+    <%- include("../partials/pagination.ejs", { itemsTotal, pageCurrent, pageTotal }); %>
 </main>
 
-<%- include("../_layouts/default-footer.ejs"); %>
+<%- include("../layouts/default-footer.ejs"); %>
 </body>
 </html>
