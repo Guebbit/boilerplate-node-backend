@@ -57,7 +57,7 @@ export const getTargetInvoice = (request: Request & {
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
             const invoiceName = order._id + '.pdf'; // filename
             // save path
-            const invoicePath = path.join('src', 'data', 'invoices', invoiceName);
+            const invoicePath = path.join('src', 'storage', 'invoices', invoiceName);
 
             // // Direct HTML content (alternative)
             // const htmlContent = `
