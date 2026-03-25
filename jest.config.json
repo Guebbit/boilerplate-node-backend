@@ -4,6 +4,9 @@
   "coverageProvider": "v8",
   "testEnvironment": "node",
   "testMatch": ["**/tests/**/*.test.ts"],
+  "testTimeout": 30000,
+  "globalSetup": "<rootDir>/tests/globalSetup.ts",
+  "globalTeardown": "<rootDir>/tests/globalTeardown.ts",
 
   "moduleNameMapper": {
     "^@api/(.*)$": "<rootDir>/src/api/$1",

@@ -89,7 +89,10 @@ export const search = async (
     });
 
     return {
-        items,
+        // Lean documents expose `_id` instead of the auto-generated `id` from the
+        // OpenAPI Product type. The cast is safe: consumers (templates, serialisers)
+        // access the identifier via `_id`, and runtime behaviour is unchanged.
+        items: items as unknown as Product[],
         meta: {
             page,
             pageSize,
