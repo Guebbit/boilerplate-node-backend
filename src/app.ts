@@ -25,6 +25,7 @@ import cartRoutes from "./routes/cart";
 import userRoutes from "./routes/users";
 import systemRoutes from "./routes";
 import errorRoutes from "./routes/errors";
+import apiRoutes from "./routes/api";
 
 
 /**
@@ -99,6 +100,12 @@ app.use(helmet({
 app.use(bodyParser.urlencoded({
     extended: true
 }));
+/**
+ * Parse JSON request bodies (needed for the JSON REST API at /api/v1/).
+ * Must be placed BEFORE session/userConnect so that body data is available
+ * to CSRF middleware and API controllers.
+ */
+app.use(express.json());
 // app.use((req, response, next) => {
 //     req.on("data", (chunk) => {
 //         logger.info("------------- REQUEST CHUNK DATA -------------", chunk)
@@ -149,6 +156,13 @@ app.use((request, response, next) => {
     logger.info(`Entering URL: ${ request.protocol }://${ request.get('host') }${ request.originalUrl }`);
     next();
 });
+
+/**
+ * JSON REST API — all endpoints documented in openapi.yaml are served here.
+ * Mounted before the HTML MVC routes so API paths take precedence.
+ * Uses session-based authentication (same cookie as the HTML interface).
+ */
+app.use('/api/v1', apiRoutes);
 
 app.use('/products', productRoutes);
 app.use('/account', authRoutes);

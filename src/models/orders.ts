@@ -15,13 +15,16 @@ export interface IOrderProduct {
 
 /**
  * Order Document interface.
- * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string)
- * and 'items' (renamed to 'products' in the Mongoose schema) so that the Mongoose
- * schema definition and the TypeScript types stay in sync.
+ * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string),
+ * 'items' (renamed to 'products' in the Mongoose schema) and 'status' (plain string for
+ * Mongoose schema compatibility) so that the Mongoose schema definition and the TypeScript
+ * types stay in sync.
  */
-export interface IOrderDocument extends Omit<Order, 'id' | 'userId' | 'items'>, Document {
+export interface IOrderDocument extends Omit<Order, 'id' | 'userId' | 'items' | 'status'>, Document {
     userId: Types.ObjectId;
     products: IOrderProduct[];
+    /** Order lifecycle status — plain string for schema compatibility with StatusEnum values. */
+    status: string;
 }
 
 /**
@@ -51,6 +54,14 @@ export const orderSchema = new Schema<IOrderDocument>({
             required: true
         }
     }],
+    status: {
+        type: String,
+        enum: ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'],
+        default: 'pending',
+    },
+    notes: {
+        type: String,
+    },
 }, {
     // Automatically manages createdAt and updatedAt timestamps
     timestamps: true
