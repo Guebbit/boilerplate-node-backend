@@ -6,18 +6,17 @@
  */
 import expressSession from "express-session";
 import connectFlash from "connect-flash";
-import connectMongoDBSession from 'connect-mongodb-session';
+import MongoStore from 'connect-mongo';
 import type { Request, Response, NextFunction } from "express";
 import { generateToken } from "./csrf";
 import UserRepository from "@repositories/users";
 
 /**
- * MongoDB connection
+ * MongoDB session store
  */
-const mongoDBStore = connectMongoDBSession(expressSession);
-export const store = new mongoDBStore({
-    uri: process.env.NODE_DB_URI ?? "",
-    collection: "sessions",
+export const store = MongoStore.create({
+    mongoUrl: process.env.NODE_DB_URI ?? "",
+    collectionName: "sessions",
 });
 
 /**
