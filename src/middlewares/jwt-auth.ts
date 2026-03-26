@@ -1,108 +1,250 @@
-import type { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import type { IUserDocument } from '@models/users';
-import UserRepository from '@repositories/users';
+import type {Response} from 'express';
+import {sign, verify, decode} from "jsonwebtoken";
+import Users, {ETokenType, IToken, type IUserDocument} from "../models/users";
+import type {CastError} from "mongoose";
 
 /**
- * JWT payload structure
+ *
+ * On login you receive an Access Token and a Refresh Token (as cookie).
+ *
+ * The Access Token ("Authorization" header)
+ *  - Is short lived (minutes)
+ *  - Is required to do authorize the user
+ *  - Is STATELESS. Once issued remain valid but expires naturally
+ * The Refresh Token (jwt cookie)
+ *  - Is long lived (days)
+ *  - Is required to generate a new Access Token
+ *  - It can be revoked by removing it from the database
+ *
  */
-export interface IJwtPayload {
-    userId: string;
-    admin: boolean;
-    iat?: number;
-    exp?: number;
+
+/**
+ * Token data composition
+ * Id is my custom data and it's the only I need for now
+ *
+ * exp: expiration time
+ * nbf: not before
+ * iat: issued at
+ */
+export interface ITokenData {
+    id: IUserDocument['_id']
 }
 
 /**
- * Get JWT secret from environment or use a default (for development only)
+ * Remember me with different expiry times
  */
-const getJwtSecret = (): string => {
-    const secret = process.env.NODE_JWT_SECRET || process.env.NODE_SESSION_SECRET;
-    if (!secret) {
-        throw new Error('JWT_SECRET or SESSION_SECRET must be defined in environment variables');
-    }
-    return secret;
-};
+export enum ERefreshTokenExpiryTime {
+    SHORT = "short",
+    MEDIUM = "medium",
+    LONG = "long"
+}
 
 /**
- * Generate a JWT token for a user
+ * Get expiry time for the token
  *
- * @param userId - User's database ID
- * @param admin - Whether user is admin
- * @param expiresIn - Token expiration (default: 24h)
- * @returns JWT token string
+ * @param remember
  */
-export const generateToken = (userId: string, admin: boolean, expiresIn: string | number = '24h'): string => {
-    const payload: IJwtPayload = {
-        userId,
-        admin,
-    };
-
-    // Type cast to satisfy TypeScript's strict StringValue type checking
-    return jwt.sign(payload, getJwtSecret(), { expiresIn });
-};
+const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
+    switch (remember){
+        // eslint-disable-next-line unicorn/switch-case-braces
+        case ERefreshTokenExpiryTime.SHORT:
+            return process.env.NODE_REFRESH_TOKEN_SECRET_TIME_SHORT ? Number.parseInt(process.env.NODE_REFRESH_TOKEN_SECRET_TIME_SHORT) : 0;
+        // eslint-disable-next-line unicorn/switch-case-braces
+        case ERefreshTokenExpiryTime.MEDIUM:
+            return process.env.NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM ? Number.parseInt(process.env.NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM) : 0;
+        // eslint-disable-next-line unicorn/switch-case-braces
+        case ERefreshTokenExpiryTime.LONG:
+            return process.env.NODE_REFRESH_TOKEN_SECRET_TIME_LONG ? Number.parseInt(process.env.NODE_REFRESH_TOKEN_SECRET_TIME_LONG) : 0;
+    }
+    // if undefined or none of the above: access time
+    return process.env.NODE_ACCESS_TOKEN_SECRET_TIME ? Number.parseInt(process.env.NODE_ACCESS_TOKEN_SECRET_TIME) : 0;
+}
 
 /**
- * Verify and decode a JWT token
+ * Get user info from token
+ * NOT an authorization check
  *
- * @param token - JWT token string
- * @returns Decoded JWT payload or null if invalid
+ * @param token
  */
-export const verifyToken = (token: string): IJwtPayload | null => {
-    try {
-        return jwt.verify(token, getJwtSecret()) as IJwtPayload;
-    } catch {
-        return undefined;
-    }
-};
+export const getTokenData = (token: string) =>
+    decode(token)
 
 /**
- * Middleware to extract and verify JWT token from Authorization header
- * Populates request.user with the full user document if token is valid
+ * Verify access token
+ * Will be used to authenticate the user and create a new refresh token
  *
- * This is optional - the route can still proceed without authentication
- * Use isAuth or isAdmin middleware to enforce authentication
+ * @param token
  */
-export const jwtAuth = async (
-    request: Request,
-    response: Response,
-    next: NextFunction
-): Promise<void> => {
-    try {
-        // Extract token from Authorization header (Bearer <token>)
-        const authHeader = request.headers.authorization;
+export const verifyAccessToken = (token: string): Promise<ITokenData> =>
+    new Promise((resolve, reject) => {
+        verify(
+            token,
+            process.env.NODE_ACCESS_TOKEN_SECRET ?? "",
+            (error, data) => {
+                if (error)
+                    return reject(error);
+                resolve(data as ITokenData);
+            }
+        )
+    })
 
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            // No token provided - continue without user context
-            next();
-            return;
-        }
+/**
+ * Verify refresh token
+ *
+ * @param token
+ */
+export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
+    new Promise((resolve, reject) => {
+        verify(
+            token,
+            process.env.NODE_REFRESH_TOKEN_SECRET ?? "",
+            (error, data) => {
+                // check if token is not invalid by itself
+                if (error) {
+                    reject(error);
+                    return;
+                }
+                // Check if token is still valid database-wise
+                Users.findOne({
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'tokens.token': token
+                })
+                    .then(user => {
+                        // No need to check if the id in data.id is the same,
+                        // it has to be if I found here the token
 
-        const token = authHeader.slice(7); // Remove 'Bearer ' prefix
-        const payload = verifyToken(token);
+                        // Check if user has this token or it was removed
+                        if (!user){
+                            reject(new Error("Forbidden"));
+                            return;
+                        }
+                        resolve(data as ITokenData);
+                    })
+                    .catch((error: Error | CastError) => reject(error))
+            }
+        )
+    })
 
-        if (!payload) {
-            // Invalid token - continue without user context
-            next();
-            return;
-        }
 
-        // Load full user document from database
-        const user = await UserRepository.findById(payload.userId);
+/**
+ * Create a Refresh Token
+ *
+ * Long-lived token that is used to create Access Tokens.
+ * Securely stored in the server.
+ * User is not required to login again (unless the token is expired).
+ *
+ * @param id
+ * @param remember
+ */
+export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTime) =>
+    Users.findById(id)
+        .select("+tokens")
+        .then(user => {
+            if (!user)
+                throw new Error("User not found");
+            const token = sign(
+                {
+                    id
+                } as ITokenData,
+                process.env.NODE_REFRESH_TOKEN_SECRET ?? "",
+                {
+                    /**
+                     * TODO opzione scelta nel login
+                     * Short: 604_800 = 7 days
+                     * Medium: 2_592_000 = 30 days
+                     * Long: 31_536_000 = 1 year
+                     */
+                    expiresIn: getExpiryTime(remember),
+                    algorithm: 'HS256',
+                }
+            ) as IToken['token']
+            return user.tokenAdd(
+                ETokenType.REFRESH,
+                getExpiryTime(remember) * 1000,
+                token
+            );
+        })
 
-        if (!user) {
-            // User no longer exists - continue without user context
-            next();
-            return;
-        }
+/**
+ * Secure cookie token that store the refresh token
+ *
+ * @param res
+ * @param token
+ * @param remember
+ */
+export const createRefreshCookie = (res: Response, token: string, remember?: ERefreshTokenExpiryTime)=> {
+    res.cookie('jwt', token, {
+        // Prevent access to the cookie via JavaScript
+        httpOnly: true,
+        // Only sends cookie over HTTPS.
+        secure: process.env.NODE_ENV === 'production',
+        // maxAge is the expiration date from now in milliseconds, meanwhile "expires" is the exact date of expiration
+        maxAge: getExpiryTime(remember),
+        path: "/"
+    });
+}
 
-        // Attach user to request
-        request.user = user as IUserDocument;
+/**
+ * Destroy the refresh token cookie
+ *
+ * @param res
+ */
+export const destroyRefreshCookie = (res: Response)=> {
+    res.clearCookie("jwt", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        path: "/"
+    });
+}
 
-        next();
-    } catch {
-        // On any error, just continue without user context
-        // Don't fail the request
-        next();
-    }
-};
+
+/**
+ * NON-SECURE cookie just for UI purposes.
+ * It just tells us if there is a refresh token and the user should be logged in automatically
+ * (since javascript can't access secure tokens and we don't want to make useless calls)
+ *
+ * @param res
+ * @param remember
+ */
+export const createLoggedCookie = (res: Response, remember?: ERefreshTokenExpiryTime) => {
+    res.cookie('isAuth', 'true', {
+        maxAge: getExpiryTime(remember),
+        path: "/"
+    });
+}
+
+/**
+ * Destroy the logged cookie
+ *
+ * @param res
+ */
+export const destroyLoggedCookie = (res: Response) => {
+    res.clearCookie("isAuth", {
+        path: "/"
+    });
+}
+
+/**
+ * Create an Access Token
+ *
+ * Short-lived token that authorize users.
+ * Stored in client's cookies or storages.
+ * Need to be added in the Authorization header for requests.
+ *
+ * @param refreshToken
+ */
+export const createAccessToken = (refreshToken: string) =>
+    verifyRefreshToken(refreshToken)
+        .then(({id}) =>
+            sign(
+                {
+                    id
+                } as ITokenData,
+                process.env.NODE_ACCESS_TOKEN_SECRET ?? "",
+                {
+                    // 600 = 10 minutes
+                    expiresIn: process.env.NODE_ACCESS_TOKEN_SECRET_TIME ? Number.parseInt(process.env.NODE_ACCESS_TOKEN_SECRET_TIME) : 0,
+                    algorithm: 'HS256',
+                }
+            )
+        )

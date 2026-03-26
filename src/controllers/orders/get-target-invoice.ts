@@ -77,7 +77,7 @@ export const getTargetInvoice = (request: Request & {
             try {
                 const htmlContent = await ejs.renderFile(
                     // Retrieve the template
-                    path.resolve(getDirname(import.meta.url), '../../views/template-emails', 'invoice-order-file.ejs'),
+                    path.resolve(getDirname(import.meta.url), '../../views/templates-files', 'invoice-order-file.ejs'),
                     // Populate the template
                     {
                         ...response.locals,
