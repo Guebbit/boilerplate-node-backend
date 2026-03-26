@@ -39,7 +39,7 @@ export const generateToken = (userId: string, admin: boolean, expiresIn: string 
     };
 
     // Type cast to satisfy TypeScript's strict StringValue type checking
-    return jwt.sign(payload, getJwtSecret(), { expiresIn: expiresIn as any });
+    return jwt.sign(payload, getJwtSecret(), { expiresIn });
 };
 
 /**
@@ -51,8 +51,8 @@ export const generateToken = (userId: string, admin: boolean, expiresIn: string 
 export const verifyToken = (token: string): IJwtPayload | null => {
     try {
         return jwt.verify(token, getJwtSecret()) as IJwtPayload;
-    } catch (error) {
-        return null;
+    } catch {
+        return undefined;
     }
 };
 
@@ -78,7 +78,7 @@ export const jwtAuth = async (
             return;
         }
 
-        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+        const token = authHeader.slice(7); // Remove 'Bearer ' prefix
         const payload = verifyToken(token);
 
         if (!payload) {
@@ -100,7 +100,7 @@ export const jwtAuth = async (
         request.user = user as IUserDocument;
 
         next();
-    } catch (error) {
+    } catch {
         // On any error, just continue without user context
         // Don't fail the request
         next();

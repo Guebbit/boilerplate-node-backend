@@ -20,14 +20,14 @@ export const listProducts = async (
             active
         } = request.query;
 
-        const pageNum = Number.parseInt(page as string, 10);
-        const pageSizeNum = Number.parseInt(pageSize as string, 10);
+        const pageNumber = Number.parseInt(page as string, 10);
+        const pageSizeNumber = Number.parseInt(pageSize as string, 10);
         const isAdmin = request.user?.admin || false;
 
         const result = await ProductService.search(
             text as string,
-            pageNum,
-            pageSizeNum,
+            pageNumber,
+            pageSizeNumber,
             id as string,
             active === 'true' ? true : active === 'false' ? false : undefined,
             isAdmin

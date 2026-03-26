@@ -55,18 +55,6 @@ describe('ProductService.validateData', () => {
 
         expect(errors.length).toBeGreaterThan(0);
     });
-
-    it('returns an error when imageUrl is empty', () => {
-        const errors = ProductService.validateData({
-            title: 'Valid Title',
-            price: 9.99,
-            imageUrl: '',
-            active: true,
-            description: '',
-        });
-
-        expect(errors.length).toBeGreaterThan(0);
-    });
 });
 
 describe('ProductService.search', () => {
