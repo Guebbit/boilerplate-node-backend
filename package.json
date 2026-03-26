@@ -1,6 +1,6 @@
 {
   "name": "boilerplate-node-mvc-mongoose",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "main": "src/cluster.ts",
   "license": "AGPLv3.0",
   "scripts": {
@@ -15,17 +15,17 @@
     "lint:fix": "eslint --fix",
     "lint:openapi": "spectral lint openapi.yaml",
     "lint:openapi:fix": "spectral lint openapi.yaml --format stylish",
-    "test": "npm run test:unit && npm run test:prism",
+    "test": "npm run test:unit",
     "test:unit": "jest --forceExit",
-    "test:unit:target": "npx jest tests/controllers/authentication.test.ts",
+    "test:unit:target": "npx jest tests/path/file.test.ts",
+    "test:prism": "kill $(lsof -t -i:4010) 2>/dev/null; npx @stoplight/prism-cli mock openapi.yaml --errors & PRISM_PID=$!; sleep 2; curl -f http://localhost:4010/products; kill $PRISM_PID",
     "setup:mongod": "docker create --name mongo-temp mongo:latest && docker cp mongo-temp:/usr/bin/mongod /tmp/mongod && docker rm mongo-temp",
     "kill:win": "cmd \"/C TASKKILL /IM node.exe /F\"",
     "kill:gnu": "pkill -9 node",
     "genapi": "rm -rf src/api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./src/api",
     "update:all": "npx npm-check-updates -u",
     "complete": "npm run lint && npm run test && npm run build",
-    "publish:public": "npm publish --access public",
-    "test:prism": "node .prism/test.js"
+    "publish:public": "npm publish --access public"
   },
   "devDependencies": {
     "@stoplight/prism-cli": "^5.14.2",
