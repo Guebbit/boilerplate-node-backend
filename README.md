@@ -17,5 +17,4 @@
 
 
 # TODO
-- Since connect-mongodb-session is lagging behind, I'm staying on 9< mongoose. When I'll upgrade, "FilterQuery as QueryFilter" must be replaced everywhere with "QueryFilter".
-- Complete .dev enviroment (Bruno, Mockoon, Insomnia (update)))
+- Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))

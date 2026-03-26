@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
-import type { CastError, FilterQuery as QueryFilter } from 'mongoose';
+import type { CastError, QueryFilter } from 'mongoose';
 import { generateSuccess, generateReject, type IResponseSuccess, type IResponseReject } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/error-helpers';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
