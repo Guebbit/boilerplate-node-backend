@@ -1,14 +1,12 @@
 import express from 'express';
-import { getHome } from "@controllers/get-home";
-import { getHeavyLoad } from "@controllers/get-heavy-load";
-import { getResetDatabase } from "@controllers/get-reset-database";
+import { successResponse } from '@utils/response';
 
 const router = express.Router();
 
-router.get('/', getHome);
-
-router.get('/reset-database', getResetDatabase);
-
-router.get('/heavy', getHeavyLoad);
+// GET / — health check / API welcome
+router.get('/', (request, response) => {
+    successResponse(response, { message: 'Ecommerce API is running' });
+});
 
 export default router;
+

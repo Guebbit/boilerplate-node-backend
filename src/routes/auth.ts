@@ -1,39 +1,34 @@
 import express from 'express';
-import { isGuest, isAuth } from "@middlewares/authorizations";
-import { csrfSynchronisedProtection } from "@middlewares/csrf";
+import { getAuth, isAuth, isGuest } from '@middlewares/authorizations';
 
-import { pageAccount } from "@controllers/auth/page-account";
-import { pageLogin } from "@controllers/auth/page-login";
-import { postLogin } from "@controllers/auth/post-login";
-import { pageSignup } from "@controllers/auth/page-signup";
-import { postSignup } from "@controllers/auth/post-signup";
-import { pageReset } from "@controllers/auth/page-reset";
-import { postResetRequest } from "@controllers/auth/post-reset-request";
-import { pageResetConfirm } from "@controllers/auth/page-reset-confirm";
-import { postResetConfirm } from "@controllers/auth/post-reset-confirm";
-import { getLogout } from "@controllers/auth/page-logout";
+import { login, signup, refresh, logout, requestPasswordReset, confirmPasswordReset } from '@controllers/api/auth';
+import { getAccount } from '@controllers/api/account';
 
 const router = express.Router();
 
-// GET /account — current user's profile page
-router.get('/', isAuth, pageAccount);
+// Populate req.user from JWT token on all auth routes
+router.use(getAuth);
 
-router.get('/login', isGuest, pageLogin);
+// POST /account/login
+router.post('/login', isGuest, login);
 
-router.post('/login', isGuest, csrfSynchronisedProtection, postLogin);
+// POST /account/signup
+router.post('/signup', isGuest, signup);
 
-router.get('/signup', isGuest, pageSignup);
+// POST /account/refresh — issue new access token using refresh cookie
+router.post('/refresh', refresh);
 
-router.post('/signup', isGuest, csrfSynchronisedProtection, postSignup);
+// GET /account/logout — revoke refresh token and clear cookies
+router.get('/logout', isAuth, logout);
 
-router.get('/reset', isGuest, pageReset);
+// POST /account/reset — request a password reset email
+router.post('/reset', requestPasswordReset);
 
-router.post('/reset', isGuest, csrfSynchronisedProtection, postResetRequest);
+// POST /account/reset-confirm — confirm password reset with token
+router.post('/reset-confirm', confirmPasswordReset);
 
-router.get('/reset/:token', isGuest, pageResetConfirm);
-
-router.post('/reset/:token', isGuest, csrfSynchronisedProtection, postResetConfirm);
-
-router.get('/logout', isAuth, getLogout);
+// GET /account — get the currently authenticated user
+router.get('/', isAuth, getAccount);
 
 export default router;
+

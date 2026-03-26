@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
+import type { SearchProductsRequest } from '@api/api';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
  * GET /products
- * List all products with pagination
+ * List all products with optional filters and pagination.
  */
 export const listProducts = async (
     request: Request,
@@ -13,35 +14,28 @@ export const listProducts = async (
 ): Promise<void> => {
     try {
         const {
-            page = 1,
-            pageSize = 10,
-            text = '',
+            page,
+            pageSize,
+            text,
             id,
-            active
+            minPrice,
+            maxPrice,
         } = request.query;
 
-        const pageNumber = Number.parseInt(page as string, 10);
-        const pageSizeNumber = Number.parseInt(pageSize as string, 10);
-        const isAdmin = request.user?.admin || false;
+        const isAdmin = request.user?.admin ?? false;
 
-        const result = await ProductService.search(
-            text as string,
-            pageNumber,
-            pageSizeNumber,
-            id as string,
-            active === 'true' ? true : active === 'false' ? false : undefined,
-            isAdmin
-        );
+        const filters: SearchProductsRequest = {
+            page: page ? Number(page) : undefined,
+            pageSize: pageSize ? Number(pageSize) : undefined,
+            text: text as string | undefined,
+            id: id as string | undefined,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+        };
 
-        if (!result.success) {
-            rejectResponse(response, 400, 'Failed to fetch products', result.errors);
-            return;
-        }
+        const result = await ProductService.search(filters, isAdmin);
 
-        successResponse(response, {
-            data: result.data,
-            meta: result.meta
-        });
+        successResponse(response, result);
     } catch (error) {
         next(error);
     }
@@ -49,7 +43,7 @@ export const listProducts = async (
 
 /**
  * GET /products/:id
- * Get a single product by ID
+ * Get a single product by ID.
  */
 export const getProduct = async (
     request: Request,
@@ -58,16 +52,16 @@ export const getProduct = async (
 ): Promise<void> => {
     try {
         const { id } = request.params;
-        const isAdmin = request.user?.admin || false;
+        const isAdmin = request.user?.admin ?? false;
 
-        const result = await ProductService.getById(id, isAdmin);
+        const product = await ProductService.getById(id as string, isAdmin);
 
-        if (!result.success || !result.data) {
-            rejectResponse(response, 404, 'Product not found', result.errors);
+        if (!product) {
+            rejectResponse(response, 404, 'Product not found');
             return;
         }
 
-        successResponse(response, result.data);
+        successResponse(response, product);
     } catch (error) {
         next(error);
     }
@@ -75,7 +69,7 @@ export const getProduct = async (
 
 /**
  * POST /products
- * Create a new product (admin only)
+ * Create a new product (admin only).
  */
 export const createProduct = async (
     request: Request,
@@ -83,14 +77,8 @@ export const createProduct = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        if (!request.user?.admin) {
-            rejectResponse(response, 403, 'Admin access required');
-            return;
-        }
-
         const productData = request.body;
 
-        // Validate data
         const errors = ProductService.validateData(productData);
         if (errors.length > 0) {
             rejectResponse(response, 422, 'Validation failed', errors);
@@ -107,7 +95,7 @@ export const createProduct = async (
 
 /**
  * PUT /products/:id
- * Update an existing product (admin only)
+ * Update an existing product (admin only).
  */
 export const updateProduct = async (
     request: Request,
@@ -115,37 +103,30 @@ export const updateProduct = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        if (!request.user?.admin) {
-            rejectResponse(response, 403, 'Admin access required');
-            return;
-        }
-
         const { id } = request.params;
         const updateData = request.body;
 
-        // Validate data
         const errors = ProductService.validateData(updateData);
         if (errors.length > 0) {
             rejectResponse(response, 422, 'Validation failed', errors);
             return;
         }
 
-        const result = await ProductService.update(id, updateData);
+        const product = await ProductService.update(id as string, updateData);
 
-        if (!result.success || !result.data) {
-            rejectResponse(response, 404, 'Product not found', result.errors);
+        successResponse(response, product);
+    } catch (error) {
+        if (error instanceof Error && error.message === '404') {
+            rejectResponse(response, 404, 'Product not found');
             return;
         }
-
-        successResponse(response, result.data);
-    } catch (error) {
         next(error);
     }
 };
 
 /**
  * DELETE /products/:id
- * Delete a product (admin only, soft delete by default)
+ * Delete a product (admin only, soft delete by default).
  */
 export const deleteProduct = async (
     request: Request,
@@ -153,15 +134,10 @@ export const deleteProduct = async (
     next: NextFunction
 ): Promise<void> => {
     try {
-        if (!request.user?.admin) {
-            rejectResponse(response, 403, 'Admin access required');
-            return;
-        }
-
         const { id } = request.params;
-        const { hardDelete = false } = request.body;
+        const { hardDelete = false } = request.body as { hardDelete?: boolean };
 
-        const result = await ProductService.remove(id, hardDelete as boolean);
+        const result = await ProductService.remove(id as string, hardDelete);
 
         if (!result.success) {
             rejectResponse(response, 404, 'Product not found', result.errors);
@@ -173,3 +149,4 @@ export const deleteProduct = async (
         next(error);
     }
 };
+

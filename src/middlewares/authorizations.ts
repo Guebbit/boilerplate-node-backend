@@ -6,19 +6,19 @@ import {Types} from "mongoose";
 
 /**
  * Get token (and strip it from "Bearer" prefix)
- * @param req
+ * @param request
  */
-export const getTokenBearer = (req: Request) => req.header('Authorization')?.split(" ")[1] as IToken['token'] | undefined;
+export const getTokenBearer = (request: Request) => request.header('Authorization')?.split(" ")[1] as IToken['token'] | undefined;
 
 /**
  * Get user data (if authenticated, otherwise go on)
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export const getAuth = async (req: Request, res: Response, next: NextFunction) => {
-    const token = getTokenBearer(req);
+export const getAuth = async (request: Request, response: Response, next: NextFunction) => {
+    const token = getTokenBearer(request);
 
     if (!token) {
         next()
@@ -28,7 +28,7 @@ export const getAuth = async (req: Request, res: Response, next: NextFunction) =
     await Users.findById((getTokenData(token) as { id: string }).id)
         .then(user => {
             if (user)
-                req.user = user;
+                request.user = user;
         })
         .finally(next)
 }
@@ -36,15 +36,15 @@ export const getAuth = async (req: Request, res: Response, next: NextFunction) =
 /**
  * Unauthorized: Don't know who you are
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export const isAuth = (req: Request, res: Response, next: NextFunction) => {
-    const token = getTokenBearer(req);
+export const isAuth = (request: Request, response: Response, next: NextFunction) => {
+    const token = getTokenBearer(request);
 
-    if (!req.user || !token) {
-        rejectResponse(res, 401, "Unauthorized");
+    if (!request.user || !token) {
+        rejectResponse(response, 401, "Unauthorized");
         return;
     }
 
@@ -59,17 +59,17 @@ export const isAuth = (req: Request, res: Response, next: NextFunction) => {
 export const isRole = (role: EUserRoles) =>
     /**
      *
-     * @param req
-     * @param res
+     * @param request
+     * @param response
      * @param next
      */
-    (req: Request, res: Response, next: NextFunction) => {
-        if (!req.user) {
-            rejectResponse(res, 403, "Forbidden: Access denied.");
+    (request: Request, response: Response, next: NextFunction) => {
+        if (!request.user) {
+            rejectResponse(response, 403, "Forbidden: Access denied.");
             return;
         }
-        if (!req.user.roles.includes(role)) {
-            rejectResponse(res, 403, "Forbidden: You don't have permission.");
+        if (!request.user.roles.includes(role)) {
+            rejectResponse(response, 403, "Forbidden: You don't have permission.");
             return;
         }
         next();
@@ -80,8 +80,8 @@ export const isRole = (role: EUserRoles) =>
 /**
  * Always AFTER isAuth
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
 export const isAdmin = isRole(EUserRoles.ADMIN);
@@ -89,14 +89,14 @@ export const isAdmin = isRole(EUserRoles.ADMIN);
 /**
  * Already logged, you shouldn't be here
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export const isGuest = (req: Request, res: Response, next: NextFunction) => {
-    const token = getTokenBearer(req);
+export const isGuest = (request: Request, response: Response, next: NextFunction) => {
+    const token = getTokenBearer(request);
     if (token) {
-        rejectResponse(res, 400, "You are already logged in.");
+        rejectResponse(response, 400, "You are already logged in.");
         return;
     }
     next();
@@ -109,12 +109,12 @@ export const isGuest = (req: Request, res: Response, next: NextFunction) => {
  *
  * Useful to just convert /me to /:id (for example)
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  * @param next
  */
-export const isUser = (req: Request, res: Response, next: NextFunction) => {
-    if (req.user?.id)
-        req.params.id = (req.user._id as Types.ObjectId).toString();
+export const isUser = (request: Request, response: Response, next: NextFunction) => {
+    if (request.user?.id)
+        request.params.id = (request.user._id as Types.ObjectId).toString();
     next();
 }
