@@ -1,12 +1,12 @@
 import express from 'express';
-import { isAuth, isAdmin } from "../middlewares/authorizations";
-import { csrfSynchronisedProtection } from "../middlewares/csrf";
+import { isAuth, isAdmin } from "@middlewares/authorizations";
+import { csrfSynchronisedProtection } from "@middlewares/csrf";
 
-import { pageAllUsers } from "../controllers/users/page-all-users";
-import { pageTargetUser } from "../controllers/users/page-target-user";
-import { pageEditUser } from "../controllers/users/page-edit-user";
-import { postEditUser } from "../controllers/users/post-edit-user";
-import { postDeleteUser } from "../controllers/users/post-delete-user";
+import { pageAllUsers } from "@controllers/users/page-all-users";
+import { pageTargetUser } from "@controllers/users/page-target-user";
+import { pageEditUser } from "@controllers/users/page-edit-user";
+import { postEditUser } from "@controllers/users/post-edit-user";
+import { postDeleteUser } from "@controllers/users/post-delete-user";
 
 const router = express.Router();
 

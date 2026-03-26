@@ -40,9 +40,7 @@ export const zodProductSchema = z.object({
             error: t('ecommerce.product-invalid-price-required'),
         }),
 
-    imageUrl: z
-        .string()
-        .min(1, { error: t('ecommerce.product-invalid-image-required') }),
+    imageUrl: z.string(),
 
     active: z.boolean().nullable().optional(),
     createdAt: z.date().nullable().optional(),

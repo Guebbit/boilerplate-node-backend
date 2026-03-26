@@ -86,9 +86,10 @@ export const search = async (
         sort: { createdAt: -1 },
         skip,
         limit: pageSize,
-    }) as Product[];
+    });
 
     return {
+        // @ts-expect-error missing id because we have _id
         items,
         meta: {
             page,

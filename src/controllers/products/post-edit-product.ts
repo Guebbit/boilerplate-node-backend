@@ -84,7 +84,7 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
         description,
         active: !!active,
     }, imageUrl)
-        .then((updatedProduct) => response.redirect('/products/details/' + (updatedProduct.id as string)))
+        .then((updatedProduct) => response.redirect('/products/details/' + updatedProduct._id.toString()))
         .catch(async (error: CastError) => {
             if (imageUrlRaw.length > 0)
                 await deleteFile(imageUrlRaw);

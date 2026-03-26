@@ -13,11 +13,10 @@ import { ExtendedError } from "@utils/error-helpers";
 import { start } from "@utils/database";
 import logger from "@utils/winston";
 import { getDirname } from "@utils/get-file-url";
-import { session, flash, userConnect } from "./middlewares/session";
-import { rateLimiter } from "./middlewares/security";
-// languages
+import { session, flash, userConnect } from "@middlewares/session";
+import { rateLimiter } from "@middlewares/security";
 import enTranslation from './locales/en.json';
-// routes
+
 import productRoutes from "./routes/products";
 import authRoutes from "./routes/auth";
 import orderRoutes from "./routes/orders";
