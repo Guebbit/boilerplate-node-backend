@@ -12,14 +12,12 @@ import { generateToken } from "./csrf";
 import UserRepository from "@repositories/users";
 import sequelize from "@utils/database";
 
-const MySQLStoreConstructor = MySQLStore(expressSession);
-
 /**
  * MySQL session store
  */
-export const store = new MySQLStoreConstructor({
+export const store = new MySQLStore(expressSession)({
     clearExpired: true,
-    checkExpirationInterval: 900000, // 15 minutes
+    checkExpirationInterval: 900_000, // 15 minutes
     expiration: process.env.NODE_SESSION_MAXAGE ? Number.parseInt(process.env.NODE_SESSION_MAXAGE) : 86_400_000,
 }, sequelize.connectionManager.getConnection() as any);
 

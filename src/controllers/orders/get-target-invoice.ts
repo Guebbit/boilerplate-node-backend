@@ -54,7 +54,7 @@ export const getTargetInvoice = (request: Request & {
              * Create PDF using get-target-order template OR pure HTML content
              * WARNING: Images and other link-related info will NOT work. Need to convert the images in base64 to embed them correctly in a PDF
              */
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                 
             const invoiceName = order._id + '.pdf'; // filename
             // save path
             const invoicePath = path.join('src', 'storage', 'invoices', invoiceName);
@@ -88,7 +88,7 @@ export const getTargetInvoice = (request: Request & {
                         order,
                     },
                 );
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                 
                 await createPDF(htmlContent, order._id + '.pdf', 'src/storage/invoices');
                 /**
                  * Download file

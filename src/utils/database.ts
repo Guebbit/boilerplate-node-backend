@@ -1,7 +1,7 @@
 import { Sequelize } from "sequelize-typescript";
 import { Dialect } from "sequelize";
 import logger from "./winston";
-import path from "path";
+import path from "node:path";
 
 const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
@@ -23,13 +23,13 @@ export const sequelize = new Sequelize({
     database: process.env.NODE_DB_NAME ?? "boilerplate_db",
     username: process.env.NODE_DB_USER ?? "root",
     password: process.env.NODE_DB_PASSWORD ?? "",
-    logging: process.env.NODE_ENV === "development" ? (msg) => logger.debug(msg) : false,
+    logging: process.env.NODE_ENV === "development" ? (message) => logger.debug(message) : false,
     models: [path.join(__dirname, "..", "models")],
     pool: {
         max: 10,
         min: 0,
-        acquire: 30000,
-        idle: 10000,
+        acquire: 30_000,
+        idle: 10_000,
     },
 });
 
