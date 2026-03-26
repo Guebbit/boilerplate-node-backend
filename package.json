@@ -61,6 +61,7 @@
   },
   "dependencies": {
     "@openapitools/openapi-generator-cli": "^2.31.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",
     "connect-flash": "^0.1.1",
     "connect-mongo": "^6.0.0",
@@ -73,6 +74,7 @@
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
     "i18next": "^25.10.9",
+    "jsonwebtoken": "^9.0.3",
     "mime-types": "^3.0.2",
     "mongodb": "^7.1.1",
     "mongoose": "^9.3.3",
