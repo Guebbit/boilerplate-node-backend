@@ -1,26 +1,14 @@
-import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import { Table, Column, Model, DataType, CreatedAt, UpdatedAt, DeletedAt } from 'sequelize-typescript';
 import { z } from "zod";
 import { t } from "i18next";
 import type { Product } from "@api/api"
 
 /**
- * Product Document interface
+ * Product interface (plain data object)
  */
-export interface IProductDocument extends Omit<Product, 'id'>, Document {}
-
-/**
- * Product Document instance methods
- */
-export type IProductMethods = unknown;
-
-/**
- * Product Document model type.
- * Business logic (search, remove, validate) is now handled by the
- * service layer (src/services/products.ts) and repository layer
- * (src/repositories/products.ts).
- */
-export type IProductModel = Model<IProductDocument, unknown, IProductMethods>;
+export interface IProduct extends Omit<Product, 'id'> {
+    id?: number;
+}
 
 /**
  * Zod Schema for product data validation.
@@ -31,16 +19,17 @@ export const zodProductSchema = z.object({
 
     title: z
         .string()
-        .min(1, { error: t('ecommerce.product-invalid-title-required') })
-        .min(5, { error: t('ecommerce.product-invalid-title-min') }),
+        .min(1, { message: t('ecommerce.product-invalid-title-required') as string })
+        .min(5, { message: t('ecommerce.product-invalid-title-min') as string }),
 
     price: z
-        .number({ error: t('ecommerce.product-invalid-price-invalid') })
+        .number({ message: t('ecommerce.product-invalid-price-invalid') as string })
         .refine((v) => v !== undefined && v !== null, {
-            error: t('ecommerce.product-invalid-price-required'),
+            message: t('ecommerce.product-invalid-price-required') as string,
         }),
 
-    imageUrl: z.string(),
+    description: z.string().optional(),
+    imageUrl: z.string().optional(),
 
     active: z.boolean().nullable().optional(),
     createdAt: z.date().nullable().optional(),
@@ -49,36 +38,59 @@ export const zodProductSchema = z.object({
 });
 
 /**
- * Mongoose Schema for the Product model
+ * Sequelize Model for the Product
  */
-export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>({
-    title: {
-        type: String,
-        required: true,
-    },
-    price: {
-        type: Number,
-        required: true
-    },
-    description: {
-        type: String,
-        default: ""
-    },
-    imageUrl: {
-        type: String,
-        default: "https://placekitten.com/400/400"
-    },
-    active: {
-        type: Boolean,
-        default: false
-    },
-    deletedAt: {
-        type: Date
-    },
-}, {
-    timestamps: true
-});
+@Table({
+    tableName: 'products',
+    timestamps: true,
+    paranoid: true, // enables soft deletes (deletedAt)
+})
+export class ProductModel extends Model<IProduct> {
+    @Column({
+        type: DataType.INTEGER.UNSIGNED,
+        autoIncrement: true,
+        primaryKey: true,
+    })
+    declare id: number;
 
-export const productModel = model<IProductDocument, IProductModel>('Product', productSchema);
+    @Column({
+        type: DataType.STRING(255),
+        allowNull: false,
+    })
+    declare title: string;
 
-export default productModel;
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: false,
+    })
+    declare price: number;
+
+    @Column({
+        type: DataType.TEXT,
+        defaultValue: "",
+    })
+    declare description: string;
+
+    @Column({
+        type: DataType.STRING(500),
+        defaultValue: "https://placekitten.com/400/400",
+    })
+    declare imageUrl: string;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        defaultValue: false,
+    })
+    declare active: boolean;
+
+    @CreatedAt
+    declare createdAt: Date;
+
+    @UpdatedAt
+    declare updatedAt: Date;
+
+    @DeletedAt
+    declare deletedAt?: Date;
+}
+
+export default ProductModel;

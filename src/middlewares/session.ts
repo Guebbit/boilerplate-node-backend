@@ -6,18 +6,22 @@
  */
 import expressSession from "express-session";
 import connectFlash from "connect-flash";
-import MongoStore from 'connect-mongo';
+import MySQLStore from "express-mysql-session";
 import type { Request, Response, NextFunction } from "express";
 import { generateToken } from "./csrf";
 import UserRepository from "@repositories/users";
+import sequelize from "@utils/database";
+
+const MySQLStoreConstructor = MySQLStore(expressSession);
 
 /**
- * MongoDB session store
+ * MySQL session store
  */
-export const store = MongoStore.create({
-    mongoUrl: process.env.NODE_DB_URI ?? "",
-    collectionName: "sessions",
-});
+export const store = new MySQLStoreConstructor({
+    clearExpired: true,
+    checkExpirationInterval: 900000, // 15 minutes
+    expiration: process.env.NODE_SESSION_MAXAGE ? Number.parseInt(process.env.NODE_SESSION_MAXAGE) : 86_400_000,
+}, sequelize.connectionManager.getConnection() as any);
 
 /**
  * Session storage and cookies
@@ -33,7 +37,6 @@ export const session = expressSession({
      */
     proxy: true,
     cookie: {
-        // In mongodb, session expiration is tied with the cookie expiration
         maxAge: process.env.NODE_SESSION_MAXAGE ? Number.parseInt(process.env.NODE_SESSION_MAXAGE) : 86_400_000,
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -69,7 +72,7 @@ export const userConnect = (request: Request, response: Response, next: NextFunc
         next();
         return;
     }
-    UserRepository.findById(request.session.user._id.toString())
+    UserRepository.findById(request.session.user.id.toString())
         .then((user) => {
             if(!user)
                 return request.session.destroy(() => response.redirect('/'));

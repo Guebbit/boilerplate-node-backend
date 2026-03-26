@@ -1,5 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import { Table, Column, Model, DataType, CreatedAt, UpdatedAt, DeletedAt, HasMany, BeforeSave } from 'sequelize-typescript';
 import { z } from "zod"
 import { t } from "i18next";
 import bcrypt from "bcrypt";
@@ -9,9 +8,12 @@ import bcrypt from "bcrypt";
  * Reference to product and quantity
  */
 export interface ICartItem {
-    // IProductDocument only after populate()
-    product: Types.ObjectId;
+    id?: number;
+    userId: number;
+    productId: number;
     quantity: number;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 /**
@@ -19,15 +21,20 @@ export interface ICartItem {
  * Token is like an ID, but not really an ID
  */
 export interface IToken {
+    id?: number;
+    userId: number;
     token: string;
     type: string;
     expiration?: Date;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 /**
  * User interface
  */
 export interface IUser {
+    id?: number;
     /**
      * User attributes
      */
@@ -38,106 +45,9 @@ export interface IUser {
     admin: boolean;
     // soft delete
     deletedAt?: Date;
-
-    /**
-     * Cart management through items
-     */
-    cart: {
-        items: ICartItem[];
-        updatedAt: Date;
-    };
-
-    /**
-     * Tokens
-     * - reset password
-     * - 2fa
-     * - etc
-     */
-    tokens: IToken[];
+    createdAt?: Date;
+    updatedAt?: Date;
 }
-
-/**
- * User Document interface
- */
-export interface IUserDocument extends IUser, Document {
-}
-
-/**
- * User Document instance methods.
- * Business logic (cart, auth, orders) is now handled by the
- * service layer (src/services/users.ts) and repository layer
- * (src/repositories/users.ts).
- */
-export type IUserMethods = unknown;
-
-/**
- * User Document model type.
- * Business logic is now handled by the service and repository layers.
- */
-export type IUserModel = Model<IUserDocument, unknown, IUserMethods>;
-
-
-/**
- * User Schema
- */
-export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
-    email: {
-        type: String,
-        required: true,
-        match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
-    },
-    username: {
-        type: String,
-        required: true,
-    },
-    password: {
-        type: String,
-        required: true
-    },
-    imageUrl: {
-        type: String,
-        default: "https://placekitten.com/600/600"
-    },
-    admin: {
-        type: Boolean,
-        default: false,
-    },
-    cart: {
-        // sub documents always have _id
-        items: [ {
-            product: {
-                type: Schema.Types.ObjectId,
-                ref: 'Product',
-                required: true
-            },
-            quantity: {
-                type: Number, required: true
-            }
-        } ],
-        deletedAt: Date
-    },
-    // sub documents always have _id
-    tokens: [ {
-        type: {
-            type: String,
-            required: true
-        },
-        token: {
-            type: String,
-            required: true
-        },
-        expiration: {
-            type: Date,
-            required: false
-        }
-    } ],
-    deletedAt: {
-        type: Date
-    },
-}, {
-    timestamps: true
-});
-
 
 /**
  * Zod validation schema
@@ -171,19 +81,166 @@ export const zodUserSchema = z.object({
 });
 
 /**
- * Hook to make edits pre saving
- *
- * Hash all passwords (if they have been changed)
+ * CartItem Model
  */
-userSchema.pre('save', async function () {
-    if (!this.isModified('password')) return;
+@Table({
+    tableName: 'cart_items',
+    timestamps: true,
+})
+export class CartItemModel extends Model<ICartItem> {
+    @Column({
+        type: DataType.INTEGER.UNSIGNED,
+        autoIncrement: true,
+        primaryKey: true,
+    })
+    declare id: number;
 
-    this.password = await bcrypt.hash(this.password, 12);
-});
+    @Column({
+        type: DataType.INTEGER.UNSIGNED,
+        allowNull: false,
+    })
+    declare userId: number;
+
+    @Column({
+        type: DataType.INTEGER.UNSIGNED,
+        allowNull: false,
+    })
+    declare productId: number;
+
+    @Column({
+        type: DataType.INTEGER,
+        allowNull: false,
+    })
+    declare quantity: number;
+
+    @CreatedAt
+    declare createdAt: Date;
+
+    @UpdatedAt
+    declare updatedAt: Date;
+}
 
 /**
- * Model
+ * Token Model
  */
-export const userModel = model<IUserDocument, IUserModel>('User', userSchema);
+@Table({
+    tableName: 'tokens',
+    timestamps: true,
+})
+export class TokenModel extends Model<IToken> {
+    @Column({
+        type: DataType.INTEGER.UNSIGNED,
+        autoIncrement: true,
+        primaryKey: true,
+    })
+    declare id: number;
 
-export default userModel;
+    @Column({
+        type: DataType.INTEGER.UNSIGNED,
+        allowNull: false,
+    })
+    declare userId: number;
+
+    @Column({
+        type: DataType.STRING(255),
+        allowNull: false,
+    })
+    declare type: string;
+
+    @Column({
+        type: DataType.STRING(500),
+        allowNull: false,
+    })
+    declare token: string;
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+    declare expiration?: Date;
+
+    @CreatedAt
+    declare createdAt: Date;
+
+    @UpdatedAt
+    declare updatedAt: Date;
+}
+
+/**
+ * User Model
+ */
+@Table({
+    tableName: 'users',
+    timestamps: true,
+    paranoid: true, // enables soft deletes (deletedAt)
+})
+export class UserModel extends Model<IUser> {
+    @Column({
+        type: DataType.INTEGER.UNSIGNED,
+        autoIncrement: true,
+        primaryKey: true,
+    })
+    declare id: number;
+
+    @Column({
+        type: DataType.STRING(255),
+        allowNull: false,
+        unique: true,
+        validate: {
+            isEmail: true,
+        },
+    })
+    declare email: string;
+
+    @Column({
+        type: DataType.STRING(255),
+        allowNull: false,
+    })
+    declare username: string;
+
+    @Column({
+        type: DataType.STRING(255),
+        allowNull: false,
+    })
+    declare password: string;
+
+    @Column({
+        type: DataType.STRING(500),
+        defaultValue: "https://placekitten.com/600/600",
+    })
+    declare imageUrl: string;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        defaultValue: false,
+    })
+    declare admin: boolean;
+
+    @CreatedAt
+    declare createdAt: Date;
+
+    @UpdatedAt
+    declare updatedAt: Date;
+
+    @DeletedAt
+    declare deletedAt?: Date;
+
+    @HasMany(() => CartItemModel, 'userId')
+    declare cartItems?: CartItemModel[];
+
+    @HasMany(() => TokenModel, 'userId')
+    declare tokens?: TokenModel[];
+
+    /**
+     * Hook to hash password before saving
+     */
+    @BeforeSave
+    static async hashPassword(instance: UserModel) {
+        if (instance.changed('password')) {
+            instance.password = await bcrypt.hash(instance.password, 12);
+        }
+    }
+}
+
+export default UserModel;
+export { CartItemModel, TokenModel };
