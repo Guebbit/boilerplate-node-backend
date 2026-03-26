@@ -32,13 +32,14 @@ const getJwtSecret = (): string => {
  * @param expiresIn - Token expiration (default: 24h)
  * @returns JWT token string
  */
-export const generateToken = (userId: string, admin: boolean, expiresIn = '24h'): string => {
+export const generateToken = (userId: string, admin: boolean, expiresIn: string | number = '24h'): string => {
     const payload: IJwtPayload = {
         userId,
         admin,
     };
 
-    return jwt.sign(payload, getJwtSecret(), { expiresIn });
+    // Type cast to satisfy TypeScript's strict StringValue type checking
+    return jwt.sign(payload, getJwtSecret(), { expiresIn: expiresIn as any });
 };
 
 /**
