@@ -1,30 +1,23 @@
 import express from 'express';
-import { isAuth, isAdmin } from "@middlewares/authorizations";
-import { csrfSynchronisedProtection } from "@middlewares/csrf";
+import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 
-import { pageAllUsers } from "@controllers/users/page-all-users";
-import { pageTargetUser } from "@controllers/users/page-target-user";
-import { pageEditUser } from "@controllers/users/page-edit-user";
-import { postEditUser } from "@controllers/users/post-edit-user";
-import { postDeleteUser } from "@controllers/users/post-delete-user";
+import { listUsers, getUser, createUser, updateUser, deleteUser } from '@controllers/api/users';
 
 const router = express.Router();
 
+// Populate req.user from JWT token
+router.use(getAuth);
+
 // All users routes are admin-only
-router.get('/details/:userId', isAuth, isAdmin, pageTargetUser);
+router.get('/', isAuth, isAdmin, listUsers);
 
-router.get('/add', isAuth, isAdmin, pageEditUser);
+router.get('/:id', isAuth, isAdmin, getUser);
 
-router.post('/add', isAuth, isAdmin, csrfSynchronisedProtection, postEditUser);
+router.post('/', isAuth, isAdmin, createUser);
 
-router.get('/edit/:userId', isAuth, isAdmin, pageEditUser);
+router.put('/:id', isAuth, isAdmin, updateUser);
 
-router.post('/edit/:userId', isAuth, isAdmin, csrfSynchronisedProtection, postEditUser);
-
-router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteUser);
-
-router.get('/:page', isAuth, isAdmin, pageAllUsers);
-
-router.get('/', isAuth, isAdmin, pageAllUsers);
+router.delete('/:id', isAuth, isAdmin, deleteUser);
 
 export default router;
+

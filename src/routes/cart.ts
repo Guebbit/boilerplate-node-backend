@@ -1,23 +1,23 @@
 import express from 'express';
-import { isAuth } from "@middlewares/authorizations";
-import { csrfSynchronisedProtection } from "@middlewares/csrf";
+import { getAuth, isAuth } from '@middlewares/authorizations';
 
-import { pageCart } from "@controllers/cart/page-cart";
-import { pageCheckout } from "@controllers/cart/page-checkout";
-import { postSetCartItem } from "@controllers/cart/post-set-cart-item";
-import { postDeleteCartItem } from "@controllers/cart/post-delete-cart-item";
-import { postDeleteCart } from "@controllers/cart/post-delete-cart";
+import { getCart, setCartItem, removeCartItem, clearCart } from '@controllers/api/cart';
 
 const router = express.Router();
 
-router.get('/cart/', isAuth, pageCart);
+// Populate req.user from JWT token
+router.use(getAuth);
 
-router.post('/cart/', isAuth, csrfSynchronisedProtection, postSetCartItem);
+// GET /cart — get the current user's cart
+router.get('/', isAuth, getCart);
 
-router.post('/cart/delete', isAuth, csrfSynchronisedProtection, postDeleteCartItem);
+// POST /cart — set a product quantity in the cart
+router.post('/', isAuth, setCartItem);
 
-router.post('/cart/delete-all', isAuth, csrfSynchronisedProtection, postDeleteCart);
+// DELETE /cart/:productId — remove a specific product from the cart
+router.delete('/:productId', isAuth, removeCartItem);
 
-router.get('/checkout', isAuth, pageCheckout);
+// DELETE /cart — clear all items from the cart
+router.delete('/', isAuth, clearCart);
 
 export default router;

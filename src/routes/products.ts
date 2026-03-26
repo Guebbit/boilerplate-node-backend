@@ -1,30 +1,27 @@
 import express from 'express';
-import { isAuth, isAdmin } from "@middlewares/authorizations";
-import multer from "@utils/multer";
-import { csrfSynchronisedProtection } from "@middlewares/csrf";
+import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 
-import { pageAllProducts } from "@controllers/products/page-all-products";
-import { pageTargetProduct } from "@controllers/products/page-target-product";
-import { pageEditProduct } from "@controllers/products/page-edit-product";
-import { postEditProduct } from "@controllers/products/post-edit-product";
-import { postDeleteProduct } from "@controllers/products/post-delete-product";
+import { listProducts, getProduct, createProduct, updateProduct, deleteProduct } from '@controllers/api/products';
 
 const router = express.Router();
 
-router.get('/details/:productId', pageTargetProduct);
+// Populate req.user from JWT token (optional auth — public can browse products)
+router.use(getAuth);
 
-router.get('/add', isAuth, isAdmin, pageEditProduct);
+// GET /products — list products (public; admin sees all including inactive)
+router.get('/', listProducts);
 
-router.post('/add', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditProduct);
+// GET /products/:id — get a single product
+router.get('/:id', getProduct);
 
-router.get('/edit/:productId', isAuth, isAdmin, pageEditProduct);
+// POST /products — create a new product (admin only)
+router.post('/', isAuth, isAdmin, createProduct);
 
-router.post('/edit/:productId', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditProduct);
+// PUT /products/:id — update a product (admin only)
+router.put('/:id', isAuth, isAdmin, updateProduct);
 
-router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteProduct);
-
-router.get('/:page', pageAllProducts);
-
-router.get('/', pageAllProducts);
+// DELETE /products/:id — delete a product (admin only)
+router.delete('/:id', isAuth, isAdmin, deleteProduct);
 
 export default router;
+

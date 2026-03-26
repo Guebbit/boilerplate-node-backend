@@ -1,20 +1,21 @@
 import express from 'express';
-import { isAuth } from "@middlewares/authorizations";
-import { csrfSynchronisedProtection } from "@middlewares/csrf";
+import { getAuth, isAuth } from '@middlewares/authorizations';
 
-import { pageAllOrders } from "@controllers/orders/page-all-orders";
-import { getTargetOrder } from "@controllers/orders/get-target-order";
-import { getTargetInvoice } from "@controllers/orders/get-target-invoice";
-import { postOrder } from "@controllers/orders/post-order";
+import { listOrders, getOrder, createOrder } from '@controllers/api/orders';
 
 const router = express.Router();
 
-router.get('/', isAuth, pageAllOrders);
+// Populate req.user from JWT token
+router.use(getAuth);
 
-router.get('/details/:orderId', isAuth, getTargetOrder);
+// GET /orders — list orders (own orders; admin sees all)
+router.get('/', isAuth, listOrders);
 
-router.get('/invoice/:orderId', isAuth, getTargetInvoice);
+// GET /orders/:id — get a specific order
+router.get('/:id', isAuth, getOrder);
 
-router.post('/new', isAuth, csrfSynchronisedProtection, postOrder);
+// POST /orders — create an order from current cart
+router.post('/', isAuth, createOrder);
 
 export default router;
+

@@ -5,6 +5,22 @@ import { t } from "i18next";
 import bcrypt from "bcrypt";
 
 /**
+ * Token types used in jwt-auth
+ */
+export enum ETokenType {
+    REFRESH = "refresh",
+    PASSWORD_RESET = "password",
+}
+
+/**
+ * User roles for authorization
+ */
+export enum EUserRoles {
+    ADMIN = "admin",
+    USER = "user",
+}
+
+/**
  * Cart Item interface
  * Reference to product and quantity
  */
@@ -36,6 +52,7 @@ export interface IUser {
     password: string;
     imageUrl?: string;
     admin: boolean;
+    roles: EUserRoles[];
     // soft delete
     deletedAt?: Date;
 
@@ -59,16 +76,17 @@ export interface IUser {
 /**
  * User Document interface
  */
-export interface IUserDocument extends IUser, Document {
+export interface IUserDocument extends IUser, IUserMethods, Document {
+    /** String version of _id — provided by Mongoose's Document getter */
+    id: string;
 }
 
 /**
  * User Document instance methods.
- * Business logic (cart, auth, orders) is now handled by the
- * service layer (src/services/users.ts) and repository layer
- * (src/repositories/users.ts).
  */
-export type IUserMethods = unknown;
+export type IUserMethods = {
+    tokenAdd: (type: ETokenType, expirationMs: number, token: string) => Promise<string>;
+};
 
 /**
  * User Document model type.
@@ -101,6 +119,11 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
     admin: {
         type: Boolean,
         default: false,
+    },
+    roles: {
+        type: [String],
+        enum: Object.values(EUserRoles),
+        default: [EUserRoles.USER],
     },
     cart: {
         // sub documents always have _id
@@ -173,13 +196,41 @@ export const zodUserSchema = z.object({
 /**
  * Hook to make edits pre saving
  *
- * Hash all passwords (if they have been changed)
+ * Hash all passwords (if they have been changed) and sync roles with admin flag.
  */
 userSchema.pre('save', async function () {
+    // Sync roles with the admin boolean flag
+    if (this.isModified('admin') || this.isNew) {
+        if (this.admin) {
+            if (!this.roles.includes(EUserRoles.ADMIN))
+                this.roles.push(EUserRoles.ADMIN);
+        } else {
+            this.roles = this.roles.filter(r => r !== EUserRoles.ADMIN);
+        }
+    }
+
     if (!this.isModified('password')) return;
 
     this.password = await bcrypt.hash(this.password, 12);
 });
+
+/**
+ * Add a token to this user document and persist it.
+ * Returns the token string so callers can use it directly.
+ */
+userSchema.methods.tokenAdd = async function (
+    type: ETokenType,
+    expirationMs: number,
+    token: string,
+): Promise<string> {
+    this.tokens.push({
+        type,
+        token,
+        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined,
+    });
+    await this.save();
+    return token;
+};
 
 /**
  * Model

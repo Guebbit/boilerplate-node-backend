@@ -27,7 +27,7 @@ import type {CastError} from "mongoose";
  * iat: issued at
  */
 export interface ITokenData {
-    id: IUserDocument['_id']
+    id: string
 }
 
 /**
@@ -168,12 +168,12 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
 /**
  * Secure cookie token that store the refresh token
  *
- * @param res
+ * @param response
  * @param token
  * @param remember
  */
-export const createRefreshCookie = (res: Response, token: string, remember?: ERefreshTokenExpiryTime)=> {
-    res.cookie('jwt', token, {
+export const createRefreshCookie = (response: Response, token: string, remember?: ERefreshTokenExpiryTime)=> {
+    response.cookie('jwt', token, {
         // Prevent access to the cookie via JavaScript
         httpOnly: true,
         // Only sends cookie over HTTPS.
@@ -187,10 +187,10 @@ export const createRefreshCookie = (res: Response, token: string, remember?: ERe
 /**
  * Destroy the refresh token cookie
  *
- * @param res
+ * @param response
  */
-export const destroyRefreshCookie = (res: Response)=> {
-    res.clearCookie("jwt", {
+export const destroyRefreshCookie = (response: Response)=> {
+    response.clearCookie("jwt", {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         path: "/"
@@ -203,11 +203,11 @@ export const destroyRefreshCookie = (res: Response)=> {
  * It just tells us if there is a refresh token and the user should be logged in automatically
  * (since javascript can't access secure tokens and we don't want to make useless calls)
  *
- * @param res
+ * @param response
  * @param remember
  */
-export const createLoggedCookie = (res: Response, remember?: ERefreshTokenExpiryTime) => {
-    res.cookie('isAuth', 'true', {
+export const createLoggedCookie = (response: Response, remember?: ERefreshTokenExpiryTime) => {
+    response.cookie('isAuth', 'true', {
         maxAge: getExpiryTime(remember),
         path: "/"
     });
@@ -216,10 +216,10 @@ export const createLoggedCookie = (res: Response, remember?: ERefreshTokenExpiry
 /**
  * Destroy the logged cookie
  *
- * @param res
+ * @param response
  */
-export const destroyLoggedCookie = (res: Response) => {
-    res.clearCookie("isAuth", {
+export const destroyLoggedCookie = (response: Response) => {
+    response.clearCookie("isAuth", {
         path: "/"
     });
 }
