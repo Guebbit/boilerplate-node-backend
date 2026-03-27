@@ -2,6 +2,8 @@
   "compilerOptions": {
     "target": "ES6",
     "module": "es2020",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
       "@api/*": ["src/api/*"],
@@ -10,7 +12,10 @@
       "@repositories/*": ["src/repositories/*"],
       "@models/*": ["src/models/*"],
       "@middlewares/*": ["src/middlewares/*"],
-      "@utils/*": ["src/utils/*"]
+      "@utils/*": ["src/utils/*"],
+      "@guards/*": ["src/guards/*"],
+      "@filters/*": ["src/filters/*"],
+      "@modules/*": ["src/modules/*"]
     },
     "strict": true,
     "composite": true,
