@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
-import type { CastError } from "mongoose";
 import { databaseErrorConverter } from "@utils/error-helpers";
+import TokenRepository from "@repositories/tokens";
 import UserRepository from "@repositories/users";
 
 /**
@@ -21,18 +21,19 @@ export interface IGetResetConfirmParameters {
 export const pageResetConfirm = (request: Request & {
     params: IGetResetConfirmParameters
 }, response: Response, next: NextFunction) =>
-    UserRepository.findOne({
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            'tokens.token': request.params.token
-        })
-        .then((user) => {
-            // not valid
-            if (!user) {
+    TokenRepository.findOne({ token: request.params.token })
+        .then(async (tokenRow) => {
+            if (!tokenRow) {
                 request.flash('error', [t("reset.token-not-found")]);
-                response.redirect('/account/reset')
+                response.redirect('/account/reset');
                 return;
             }
-            // valid, next step: change password
+            const user = await UserRepository.findById(tokenRow.userId);
+            if (!user) {
+                request.flash('error', [t("reset.token-not-found")]);
+                response.redirect('/account/reset');
+                return;
+            }
             return response.render('account/reset', {
                 pageMetaTitle: "Reset Password",
                 pageMetaLinks: [
@@ -42,4 +43,4 @@ export const pageResetConfirm = (request: Request & {
                 token: request.params.token
             });
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error) => next(databaseErrorConverter(error)));

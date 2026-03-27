@@ -1,12 +1,12 @@
-import { Types } from 'mongoose';
 import { t } from 'i18next';
-import type { QueryFilter } from 'mongoose';
+import { Op } from 'sequelize';
 import type { SearchProductsRequest, ProductsResponse, Product } from '@api/api';
 import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
 import { deleteFile } from '@utils/filesystem-helpers';
 import UserService from '@services/users';
 import { zodProductSchema } from '@models/products';
-import type { IProductDocument } from '@models/products';
+import type { IProduct } from '@models/products';
+import type ProductModel from '@models/products';
 import ProductRepository from '@repositories/products';
 
 /**
@@ -41,55 +41,41 @@ export const search = async (
     filters: SearchProductsRequest = {},
     admin = false,
 ): Promise<ProductsResponse> => {
-    // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
     const skip = (page - 1) * pageSize;
 
-    // Query builder
-    const where: QueryFilter<IProductDocument> = {};
+    const where: Record<string, unknown> = {};
 
-    // Filter by ID
     if (filters.id && String(filters.id).trim() !== '')
-        where._id = new Types.ObjectId(String(filters.id));
+        where['id'] = Number(filters.id);
 
-    // Filter by text (search in title and description)
     if (filters.text && String(filters.text).trim() !== '') {
-        const text = String(filters.text).trim();
-        // Simple, effective search across title/description (case-insensitive)
-        where.$or = [
-            { title: { $regex: text, $options: 'i' } },
-            { description: { $regex: text, $options: 'i' } },
+        const text = `%${String(filters.text).trim()}%`;
+        where[Op.or as unknown as string] = [
+            { title: { [Op.like]: text } },
+            { description: { [Op.like]: text } },
         ];
     }
 
-    // Filter by price range
-    const priceConditions: Record<string, number> = {};
+    const priceConditions: Record<symbol, number> = {};
     if (filters.minPrice !== undefined && filters.minPrice !== null && !Number.isNaN(Number(filters.minPrice)))
-        priceConditions.$gte = Number(filters.minPrice);
+        priceConditions[Op.gte] = Number(filters.minPrice);
     if (filters.maxPrice !== undefined && filters.maxPrice !== null && !Number.isNaN(Number(filters.maxPrice)))
-        priceConditions.$lte = Number(filters.maxPrice);
-    if (Object.keys(priceConditions).length > 0)
-        where.price = priceConditions;
+        priceConditions[Op.lte] = Number(filters.maxPrice);
+    if (Object.getOwnPropertySymbols(priceConditions).length > 0)
+        where["price"] = priceConditions as Record<string, unknown>;
 
-    // If not admin, filter out inactive and (soft) deleted products
     if (!admin) {
-        where.active = true;
-        where.deletedAt = undefined;
+        where['active'] = true;
+        where['deletedAt'] = undefined;
     }
 
-    // First count the total number of products matching the query
     const totalItems = await ProductRepository.count(where);
-
-    // Then paginate the results
-    const items = await ProductRepository.findAll(where, {
-        sort: { createdAt: -1 },
-        skip,
-        limit: pageSize,
-    });
+    const items = await ProductRepository.findAll(where, { skip, limit: pageSize });
 
     return {
-        // @ts-expect-error missing id because we have _id
+        // @ts-expect-error Sequelize returns id not _id; cast for API compatibility
         items,
         meta: {
             page,
@@ -101,64 +87,56 @@ export const search = async (
 };
 
 /**
- * Get a single product by ID as a lean (plain JS) object.
+ * Get a single product by ID as a plain JS object.
  * Admin can see inactive or soft-deleted products; non-admin cannot.
  * Returns undefined if the id is falsy; null if no matching document is found.
  *
  * @param id
  * @param admin
  */
-export const getById = async (id: string | undefined, admin = false) => {
-    // Return early without triggering a DB call when no id is provided
-    if (!id)
-        return;
-    if (admin)
-        return ProductRepository.findById(id).lean();
-    return ProductRepository.findOne({ _id: id, active: true, deletedAt: undefined }).lean();
+export const getById = async (id: string | number | undefined, admin = false): Promise<IProduct | null | undefined> => {
+    if (!id) return;
+    const product = admin
+        ? await ProductRepository.findById(id)
+        : await ProductRepository.findOne({ id: Number(id), active: true, deletedAt: undefined });
+    if (!product) return null;
+    return product.toJSON() as IProduct;
 };
 
 /**
- * Create a new product document in the database.
+ * Create a new product in the database.
  *
  * @param data
  */
-export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
+export const create = (data: Omit<Product, 'id'>): Promise<ProductModel> =>
     ProductRepository.create(data);
 
 /**
  * Update an existing product by ID.
- * If a new image URL is provided and differs from the old one,
- * the old image file is deleted after the save succeeds.
  *
  * @param id
  * @param data
- * @param newImageUrl - new image URL relative to the public directory (empty string means no change)
+ * @param newImageUrl
  */
 export const update = async (
-    id: string,
+    id: string | number,
     data: Partial<Omit<Product, 'id'>>,
     newImageUrl = '',
-): Promise<IProductDocument> => {
+): Promise<ProductModel> => {
     const product = await ProductRepository.findById(id);
+    if (!product) throw new Error('404');
 
-    if (!product)
-        throw new Error('404');
-
-    // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
     if (data.price !== undefined) product.price = data.price;
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
 
-    // If a new image was uploaded, update the URL on the document
     const oldImageUrl = product.imageUrl;
     if (newImageUrl && oldImageUrl !== newImageUrl)
         product.imageUrl = newImageUrl;
 
-    // Persist the updated document
     const updatedProduct = await ProductRepository.save(product);
 
-    // After saving the new image path, delete the old image file
     if (newImageUrl && oldImageUrl !== newImageUrl)
         await deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl);
 
@@ -167,35 +145,28 @@ export const update = async (
 
 /**
  * Remove a product by ID (soft or hard delete).
- * Always removes the product from all user carts.
- * Hard delete additionally removes the image file from disk.
- * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
  *
  * @param id
  * @param hardDelete
  */
 export const remove = async (
-    id: string,
+    id: string | number,
     hardDelete = false,
-): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+): Promise<IResponseSuccess<ProductModel> | IResponseSuccess<undefined> | IResponseReject> => {
     const product = await ProductRepository.findById(id);
 
-    // not found, something happened
     if (!product)
         return generateReject(404, '404', [t('ecommerce.product-not-found')]);
 
-    // HARD delete
     if (hardDelete)
-        return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+        return UserService.productRemoveFromCartsById(String(product.id))
             .then(() => ProductRepository.deleteOne(product))
             .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
 
-    // If deletedAt already present: it's soft-deleted → RESTORE
     product.deletedAt = product.deletedAt ? undefined : new Date();
 
-    // SOFT delete (or restore)
-    return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+    return UserService.productRemoveFromCartsById(String(product.id))
         .then(async () => generateSuccess(await ProductRepository.save(product), 200, t('ecommerce.product-soft-deleted')));
 };
 

@@ -1,7 +1,6 @@
-import { Types } from 'mongoose';
-import type { PipelineStage, QueryFilter } from 'mongoose';
 import type { SearchOrdersRequest, OrdersResponse, Order } from '@api/api';
-import type { IOrderDocument } from '@models/orders';
+import type { IOrder } from '@models/orders';
+import type OrderModel from '@models/orders';
 import OrderRepository from '@repositories/orders';
 
 /**
@@ -11,103 +10,92 @@ import OrderRepository from '@repositories/orders';
  */
 
 /**
- * Computed fields pipeline stage — shared between getAll and search.
- * Adds totalItems, totalQuantity and totalPrice to every order document.
+ * Transform a Sequelize OrderModel with orderItems into the API-compatible
+ * shape the views and controllers expect:
+ *   order.id, order.email, order.products[], order.totalItems, order.totalQuantity, order.totalPrice
  */
-const addComputedFields: PipelineStage.AddFields = {
-    $addFields: {
-        // Count all OrderItems
-        totalItems: {
-            $size: '$products',
+const toOrderResponse = (order: OrderModel): Record<string, unknown> => {
+    const items = order.orderItems ?? [];
+    const products = items.map((item) => ({
+        quantity: item.quantity,
+        product: {
+            id: item.productId,
+            title: item.title,
+            price: item.price,
+            description: item.description,
+            imageUrl: item.imageUrl,
         },
-        // Sum quantities from all OrderItems
-        totalQuantity: {
-            $sum: '$products.quantity',
-        },
-        // Sum of all prices multiplied for quantity
-        totalPrice: {
-            $sum: {
-                $map: {
-                    input: '$products',
-                    as: 'product',
-                    in: {
-                        $multiply: ['$$product.product.price', '$$product.quantity'],
-                    },
-                },
-            },
-        },
-    },
+    }));
+    const totalItems = items.length;
+    const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    return {
+        ...order.toJSON(),
+        products,
+        totalItems,
+        totalQuantity,
+        totalPrice,
+    };
 };
 
 /**
- * Get all orders with optional aggregation pipeline stages.
- * Adds computed fields: totalItems, totalQuantity, totalPrice.
+ * Get all orders, each with computed fields.
+ * Accepts optional where filter (scoping by userId etc.).
  *
- * @param pipeline - Optional stages to apply BEFORE the computed fields stage
+ * @param where
  */
-export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]> =>
-    OrderRepository.aggregate([...pipeline, addComputedFields]);
+export const getAll = async (where: Partial<IOrder> = {}): Promise<Record<string, unknown>[]> => {
+    const orders = await OrderRepository.findAll(where);
+    return orders.map((order) => toOrderResponse(order));
+};
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI.
  *
- * Filters: id, userId, productId, email
- * Pagination: page (1-based), pageSize
- *
- * Note on productId:
- * In this schema product data is embedded: products[].product.
- * We filter by products.product._id (or products.product.id if your productSchema uses that).
- *
  * @param search
- * @param scope - Additional query filters merged into the $match stage
+ * @param scope - Additional filters merged into the where clause
  */
 export const search = async (
     search: SearchOrdersRequest = {},
-    scope?: QueryFilter<IOrderDocument>,
+    scope: Partial<IOrder> = {},
 ): Promise<OrdersResponse> => {
     const page = Math.max(1, Number(search.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));
     const skip = (page - 1) * pageSize;
 
-    const match: Record<string, unknown> = { ...scope };
+    const where: Record<string, unknown> = { ...scope };
 
     if (search.id && String(search.id).trim() !== '')
-        match._id = new Types.ObjectId(String(search.id));
+        where['id'] = Number(search.id);
 
     if (search.userId && String(search.userId).trim() !== '')
-        match.userId = new Types.ObjectId(String(search.userId));
+        where['userId'] = Number(search.userId);
 
     if (search.email && String(search.email).trim() !== '')
-        match.email = String(search.email).trim();
+        where['email'] = String(search.email).trim();
 
-    if (search.productId && String(search.productId).trim() !== '')
-        // Assumes productSchema uses default _id. If you store product.id instead, change to "products.product.id".
-        match['products.product._id'] = new Types.ObjectId(String(search.productId));
-
-    const basePipeline: PipelineStage[] = [
-        { $match: match },
-        { $sort: { createdAt: -1 } },
-        addComputedFields,
-    ];
-
-    const [countAgg] = await OrderRepository.aggregate<{ totalItems?: number }>([
-        ...basePipeline,
-        { $count: 'totalItems' },
-    ]);
-
-    const totalItems = countAgg?.totalItems ?? 0;
+    // Count total matching orders
+    const allOrders = await OrderRepository.findAll(where);
+    const totalItems = allOrders.length;
     const totalPages = Math.ceil(totalItems / pageSize);
 
-    const items = await OrderRepository.aggregate([
-        ...basePipeline,
-        { $skip: skip },
-        { $limit: pageSize },
-    ]);
+    // Paginate
+    const paginatedOrders = allOrders.slice(skip, skip + pageSize);
+    const items = paginatedOrders.map((order) => toOrderResponse(order));
+
+    // Filter by productId in memory if provided (orderItems are already loaded)
+    let filteredItems = items;
+    if (search.productId && String(search.productId).trim() !== '') {
+        const pid = Number(search.productId);
+        filteredItems = items.filter((order) => {
+            const products = order['products'] as Array<{ product: { id: number } }>;
+            return products.some((p) => p.product.id === pid);
+        });
+    }
 
     return {
-        // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
-        // (products vs items, userId ObjectId vs string) but the runtime data is compatible
-        items: items as unknown as Order[],
+        items: filteredItems as unknown as Order[],
         meta: {
             page,
             pageSize,

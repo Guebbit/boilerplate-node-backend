@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import { nodemailer } from "@utils/nodemailer";
-import type {CastError} from "mongoose";
+
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { PasswordResetRequest } from "@api/api";
 import UserRepository from "@repositories/users";
@@ -45,5 +45,5 @@ export const postResetRequest = (request: Request<unknown, unknown, PasswordRese
                     response.redirect('/account/reset');
                 })
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error) => next(databaseErrorConverter(error)))
 

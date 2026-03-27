@@ -1,4 +1,5 @@
-import { Table, Column, Model, DataType, CreatedAt, UpdatedAt, DeletedAt, HasMany, BeforeSave } from 'sequelize-typescript';
+import { Table, Column, Model, DataType, CreatedAt, UpdatedAt, DeletedAt, HasMany, BeforeSave, BelongsTo, ForeignKey } from 'sequelize-typescript';
+import { ProductModel } from './products';
 import { z } from "zod"
 import { t } from "i18next";
 import bcrypt from "bcrypt";
@@ -101,11 +102,15 @@ export class CartItemModel extends Model<ICartItem> {
     })
     declare userId: number;
 
+    @ForeignKey(() => ProductModel)
     @Column({
         type: DataType.INTEGER.UNSIGNED,
         allowNull: false,
     })
     declare productId: number;
+
+    @BelongsTo(() => ProductModel, 'productId')
+    declare product?: ProductModel;
 
     @Column({
         type: DataType.INTEGER,

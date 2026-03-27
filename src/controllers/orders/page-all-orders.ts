@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
+
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { SearchOrdersRequest } from "@api/api"
+import type { IOrder } from "@models/orders";
 import OrderService from "@services/orders";
 
 /**
@@ -25,16 +26,17 @@ export const pageAllOrders = async (
 ) => {
     const pageSize = Number.parseInt(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? "10");
     const page = Number.parseInt(request.params.page ?? request.query.page ?? "1");
+    // Non-admin users can only see their own orders
+    const scope: Partial<IOrder> = request.session.user?.admin
+        ? {}
+        : { userId: request.session.user?.id };
     return OrderService.search(
         {
             ...request.query,
             page,
             pageSize,
         },
-        // Only admin can see non-active and (soft) deleted products
-        request.session.user?.admin
-            ? {}
-            : { active: true, deletedAt: undefined }
+        scope,
     )
         .then(({ items, meta }) =>
             response.render("orders/list", {
@@ -47,5 +49,5 @@ export const pageAllOrders = async (
                 search: request.query,
             })
         )
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
+        .catch((error: Error) => next(databaseErrorConverter(error)));
 };

@@ -1,6 +1,5 @@
 import express from 'express';
 import { isGuest, isAuth } from "@middlewares/authorizations";
-import { csrfSynchronisedProtection } from "@middlewares/csrf";
 
 import { pageAccount } from "@controllers/auth/page-account";
 import { pageLogin } from "@controllers/auth/page-login";
@@ -20,19 +19,19 @@ router.get('/', isAuth, pageAccount);
 
 router.get('/login', isGuest, pageLogin);
 
-router.post('/login', isGuest, csrfSynchronisedProtection, postLogin);
+router.post('/login', isGuest, postLogin);
 
 router.get('/signup', isGuest, pageSignup);
 
-router.post('/signup', isGuest, csrfSynchronisedProtection, postSignup);
+router.post('/signup', isGuest, postSignup);
 
 router.get('/reset', isGuest, pageReset);
 
-router.post('/reset', isGuest, csrfSynchronisedProtection, postResetRequest);
+router.post('/reset', isGuest, postResetRequest);
 
 router.get('/reset/:token', isGuest, pageResetConfirm);
 
-router.post('/reset/:token', isGuest, csrfSynchronisedProtection, postResetConfirm);
+router.post('/reset/:token', isGuest, postResetConfirm);
 
 router.get('/logout', isAuth, getLogout);
 

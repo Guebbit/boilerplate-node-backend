@@ -107,10 +107,10 @@ export const getOrderStats = async (userId: number): Promise<{
  *
  * @param where
  */
-export const getOrdersWithTotals = async (where: WhereOptions<IOrder> = {}): Promise<any[]> => {
-    const whereClause = where.userId ? `WHERE o.userId = ${where.userId}` : '';
+export const getOrdersWithTotals = async (where: WhereOptions<IOrder> = {}): Promise<Record<string, unknown>[]> => {
+    const whereClause = where.userId ? `WHERE o.userId = ${String(where.userId)}` : '';
 
-    const results = await sequelize.query(
+    const results = await sequelize.query<Record<string, unknown>>(
         `
         SELECT
             o.id,
@@ -146,16 +146,5 @@ export const getOrdersWithTotals = async (where: WhereOptions<IOrder> = {}): Pro
     return results;
 };
 
-/**
- * OrderItem operations
- */
-export const OrderItem = {
-    findByOrderId: (orderId: number): Promise<OrderItemModel[]> =>
-        OrderItemModel.findAll({ where: { orderId } }),
 
-    create: (data: Partial<IOrderItem>): Promise<OrderItemModel> =>
-        OrderItemModel.create(data as IOrderItem),
-};
-
-
-export default { findById, findAll, create, getOrderStats, getOrdersWithTotals, OrderItem };
+export default { findById, findAll, create, getOrderStats, getOrdersWithTotals };

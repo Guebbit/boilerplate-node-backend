@@ -1,5 +1,4 @@
 import logger from "./winston";
-import type { CastError } from "mongoose";
 
 /**
  * Extension of Error class with some customization
@@ -36,8 +35,6 @@ export class ExtendedError extends Error {
         this.httpCode = httpCode;
         this.isOperational = isOperational;
         this.errors = errors;
-        // Capture stack trace for debugging if NOT extending Error
-        // Error.captureStackTrace(this);
         // Dangerous, better log it
         if(!isOperational)
             logger.error({
@@ -51,21 +48,17 @@ export class ExtendedError extends Error {
 }
 
 /**
- * Interpret mongoose operation error
+ * Interpret a database/application error into [httpCode, message]
  * @param error
  */
-export function databaseErrorInterpreter(error: CastError | Error): [number, string] {
-    if(Object.prototype.hasOwnProperty.call(error, 'kind'))
-        return [Number.parseInt((error as CastError).message), (error as CastError).kind];
+export function databaseErrorInterpreter(error: Error): [number, string] {
     return [500, error.message || "Unknown error"];
 }
 
 /**
- * Interpret and convert mongoose operation error
+ * Convert an error into an ExtendedError
  * @param error
  */
-export function databaseErrorConverter(error: CastError | Error){
-    return Object.prototype.hasOwnProperty.call(error, 'kind') ?
-        new ExtendedError((error as CastError).kind, Number.parseInt(error.message)) :
-        new ExtendedError((error as Error).message, 500)
+export function databaseErrorConverter(error: Error){
+    return new ExtendedError(error.message, 500);
 }

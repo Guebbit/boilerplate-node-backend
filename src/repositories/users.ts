@@ -1,5 +1,5 @@
 import UserModel, { CartItemModel, TokenModel } from '@models/users';
-import type { IUser, ICartItem, IToken } from '@models/users';
+import type { IUser } from '@models/users';
 import type { WhereOptions, Order, UpdateOptions } from 'sequelize';
 
 /**
@@ -108,45 +108,5 @@ export const updateMany = (
 ): Promise<[affectedCount: number]> =>
     UserModel.update(update, { where: filter } as UpdateOptions);
 
-/**
- * Cart Item operations
- */
-export const CartItem = {
-    findByUserId: (userId: number): Promise<CartItemModel[]> =>
-        CartItemModel.findAll({ where: { userId } }),
 
-    findOne: (where: WhereOptions<ICartItem>): Promise<CartItemModel | null> =>
-        CartItemModel.findOne({ where }),
-
-    create: (data: Partial<ICartItem>): Promise<CartItemModel> =>
-        CartItemModel.create(data as ICartItem),
-
-    deleteByUserId: (userId: number): Promise<number> =>
-        CartItemModel.destroy({ where: { userId } }),
-
-    deleteOne: (item: CartItemModel): Promise<void> =>
-        item.destroy().then(() => {}),
-};
-
-/**
- * Token operations
- */
-export const Token = {
-    findByUserId: (userId: number): Promise<TokenModel[]> =>
-        TokenModel.findAll({ where: { userId } }),
-
-    findOne: (where: WhereOptions<IToken>): Promise<TokenModel | null> =>
-        TokenModel.findOne({ where }),
-
-    create: (data: Partial<IToken>): Promise<TokenModel> =>
-        TokenModel.create(data as IToken),
-
-    deleteByUserId: (userId: number): Promise<number> =>
-        TokenModel.destroy({ where: { userId } }),
-
-    deleteOne: (token: TokenModel): Promise<void> =>
-        token.destroy().then(() => {}),
-};
-
-
-export default { findById, findOne, findAll, count, create, save, deleteOne, updateMany, CartItem, Token };
+export default { findById, findOne, findAll, count, create, save, deleteOne, updateMany };

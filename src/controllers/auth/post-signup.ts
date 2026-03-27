@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import { nodemailer } from "@utils/nodemailer";
-import type { CastError } from "mongoose";
+
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { SignupRequest } from "@api/api";
 import UserService from "@services/users";
@@ -67,5 +67,5 @@ export const postSignup = async (request: Request<unknown, unknown, SignupReques
             request.flash('success', [t('signup.registration-successful')]);
             return response.redirect('/account/login');
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
+        .catch((error: Error) => next(databaseErrorConverter(error)));
 };

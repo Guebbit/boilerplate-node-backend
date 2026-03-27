@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { CastError } from "mongoose";
+
 import { deleteFile } from "@utils/filesystem-helpers";
 import { ExtendedError } from "@utils/error-helpers";
 import type { UpdateProductRequestBody } from "@api/api";
@@ -69,10 +69,10 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
             active: !!active,
         })
             .then(() => response.redirect('/products/'))
-            .catch(async (error: CastError) => {
+            .catch(async (error: Error) => {
                 if (imageUrlRaw.length > 0)
                     await deleteFile(imageUrlRaw);
-                return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
+                return next(new ExtendedError(error.message, 500, false));
             });
 
     /**
@@ -84,10 +84,10 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
         description,
         active: !!active,
     }, imageUrl)
-        .then((updatedProduct) => response.redirect('/products/details/' + updatedProduct._id.toString()))
-        .catch(async (error: CastError) => {
+        .then((updatedProduct) => response.redirect('/products/details/' + String(updatedProduct.id)))
+        .catch(async (error: Error) => {
             if (imageUrlRaw.length > 0)
                 await deleteFile(imageUrlRaw);
-            return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
+            return next(new ExtendedError(error.message, 500, false));
         });
 };

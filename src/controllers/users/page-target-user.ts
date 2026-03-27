@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
+
 import { t } from "i18next";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 import UserService from "@services/users";
@@ -31,8 +31,8 @@ export const pageTargetUser = (request: Request & {
                 user,
             });
         })
-        .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
+        .catch((error: Error) => {
+            if (error.message == "404")
                 return next(new ExtendedError("404", 404, false, [ t("admin.user-not-found") ]));
             return next(databaseErrorConverter(error));
         })

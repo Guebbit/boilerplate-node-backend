@@ -1,10 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import {
-    Types,
-    type CastError,
-    type PipelineStage
-} from "mongoose";
 import { t } from "i18next";
+import type { IOrder } from "@models/orders";
 import OrderService from "@services/orders";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
 
@@ -25,27 +21,15 @@ export interface IGetTargetOrderParameters {
 export const getTargetOrder = (request: Request & {
     params: IGetTargetOrderParameters
 }, response: Response, next: NextFunction) => {
-    // if it's not valid it could throw an error
-    if (!Types.ObjectId.isValid(request.params.orderId))
+    const orderId = Number(request.params.orderId);
+    if (!orderId || Number.isNaN(orderId))
         return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
 
-    /**
-     * Where build
-     */
-        // empty match
-    const match: PipelineStage.Match = {
-            $match: {}
-        };
-    // If user is NOT admin, it's limited to his own orders
-    if (!request.session.user?.admin)
-        match.$match.userId = request.session.user?._id;
-    // single out the order
-    match.$match._id = new Types.ObjectId(request.params.orderId);
+    const where: Partial<IOrder> = { id: orderId };
+    if (!request.session.user?.admin && request.session.user?.id)
+        where.userId = request.session.user.id;
 
-    /**
-     * Get info from database
-     */
-    OrderService.getAll([ match ])
+    OrderService.getAll(where)
         .then((orders) => {
             if (orders.length === 0)
                 return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
@@ -57,9 +41,5 @@ export const getTargetOrder = (request: Request & {
                 order: orders[0]
             })
         })
-        .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
-            return next(databaseErrorConverter(error));
-        })
+        .catch((error: Error) => next(databaseErrorConverter(error)));
 };

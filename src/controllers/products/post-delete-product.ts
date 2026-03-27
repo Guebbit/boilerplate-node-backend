@@ -1,4 +1,4 @@
-import type { CastError } from "mongoose";
+
 import type { Request, Response, NextFunction } from "express";
 import { t } from "i18next";
 import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
@@ -19,8 +19,8 @@ export const postDeleteProduct = (request: Request<unknown, unknown, DeleteProdu
                 request.flash('success', [ message ]);
             response.redirect('/products/')
         })
-        .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
+        .catch((error: Error) => {
+            if (error.message == "404")
                 return next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));
             return next(databaseErrorConverter(error));
         })

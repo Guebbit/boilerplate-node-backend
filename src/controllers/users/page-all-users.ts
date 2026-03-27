@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
+
 import { databaseErrorConverter } from "@utils/error-helpers";
 import type { SearchUsersRequest } from "@api/api";
 import UserService from "@services/users";
@@ -44,4 +44,4 @@ export const pageAllUsers = async (
                 search: request.query,
             })
         )
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
+        .catch((error: Error) => next(databaseErrorConverter(error)));

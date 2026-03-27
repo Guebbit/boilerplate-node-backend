@@ -28,12 +28,10 @@
             <button class="btn" type="submit">Delete</button>
         <% } %>
         <input type="hidden" name="id" value="<%= user._id %>">
-        <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
     </form>
     <form action="/users/delete" method="post" style="display:inline;">
         <button class="btn" type="submit">HARD Delete</button>
         <input type="hidden" name="id" value="<%= user._id %>">
-        <input type="hidden" name="CSRFToken" value="<%= csrfToken %>">
         <input type="hidden" name="hardDelete" value="true">
     </form>
     <a href="/users" class="btn">Back to list</a>

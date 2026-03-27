@@ -8,7 +8,6 @@ import expressSession from "express-session";
 import connectFlash from "connect-flash";
 import MySQLStore from "express-mysql-session";
 import type { Request, Response, NextFunction } from "express";
-import { generateToken } from "./csrf";
 import UserRepository from "@repositories/users";
 import sequelize from "@utils/database";
 
@@ -19,7 +18,7 @@ export const store = new MySQLStore(expressSession)({
     clearExpired: true,
     checkExpirationInterval: 900_000, // 15 minutes
     expiration: process.env.NODE_SESSION_MAXAGE ? Number.parseInt(process.env.NODE_SESSION_MAXAGE) : 86_400_000,
-}, sequelize.connectionManager.getConnection() as any);
+}, sequelize.connectionManager.getConnection() as unknown as Promise<object>);
 
 /**
  * Session storage and cookies
@@ -57,8 +56,6 @@ export const flash = connectFlash();
  * @param next
  */
 export const userConnect = (request: Request, response: Response, next: NextFunction) => {
-    // it will be requested only on certain POST requests, but it is not a problem to put it here
-    response.locals.csrfToken = generateToken(request)
     // flash messages
     response.locals.errorMessages = request.flash('error');
     response.locals.successMessages = request.flash('success');
