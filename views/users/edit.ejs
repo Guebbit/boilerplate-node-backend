@@ -19,7 +19,7 @@
         <div class="form-control">
             <label for="password">
                 Password
-                <% if (user._id) { %>
+                <% if (user.id) { %>
                     <small>(leave blank to keep current)</small>
                 <% } %>
             </label>
@@ -36,13 +36,13 @@
             <input type="checkbox" <% if (user.admin) { %>checked<% } %> id="admin" name="admin">
         </div>
 
-        <% if (user._id) { %>
+        <% if (user.id) { %>
             <button class="btn" type="submit">Edit User</button>
         <% } else { %>
             <button class="btn" type="submit">Add User</button>
         <% } %>
 
-        <input type="hidden" name="id" value="<%= user._id || '' %>">
+        <input type="hidden" name="id" value="<%= user.id || '' %>">
     </form>
 </main>
 <%- include("../layouts/default-footer.ejs"); %>

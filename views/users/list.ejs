@@ -88,19 +88,19 @@
                     <% } %>
                 </div>
                 <div class="card__actions">
-                    <a href="/users/details/<%= user._id %>" class="btn">Details</a>
-                    <a href="/users/edit/<%= user._id %>" class="btn">Edit</a>
+                    <a href="/users/details/<%= user.id %>" class="btn">Details</a>
+                    <a href="/users/edit/<%= user.id %>" class="btn">Edit</a>
                     <form action="/users/delete" method="post">
                         <% if (user.deletedAt) { %>
                             <button class="btn" type="submit">Un-delete</button>
                         <% } else { %>
                             <button class="btn" type="submit">Delete</button>
                         <% } %>
-                        <input type="hidden" name="id" value="<%= user._id %>">
+                        <input type="hidden" name="id" value="<%= user.id %>">
                     </form>
                     <form action="/users/delete" method="post">
                         <button class="btn" type="submit">HARD Delete</button>
-                        <input type="hidden" name="id" value="<%= user._id %>">
+                        <input type="hidden" name="id" value="<%= user.id %>">
                         <input type="hidden" name="hardDelete" value="true">
                     </form>
                 </div>

@@ -16,12 +16,12 @@
                     <div>
                         <form method="POST">
                             <input type="text" value="<%= item.quantity %>" name="quantity">
-                            <input type="hidden" name="productId" value="<%= item.product._id %>">
+                            <input type="hidden" name="productId" value="<%= item.product.id %>">
                             <button class="btn" type="submit">Change quantity</button>
                         </form>
                         <br/>
                         <form action="/cart/delete" method="POST">
-                            <input type="hidden" name="productId" value="<%= item.product._id %>">
+                            <input type="hidden" name="productId" value="<%= item.product.id %>">
                             <button class="btn danger" type="submit">Remove all</button>
                         </form>
                     </div>

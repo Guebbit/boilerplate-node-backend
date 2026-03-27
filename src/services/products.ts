@@ -99,7 +99,7 @@ export const getById = async (id: string | number | undefined, admin = false): P
     const product = admin
         ? await ProductRepository.findById(id)
         : await ProductRepository.findOne({ id: Number(id), active: true, deletedAt: undefined });
-    if (!product) return null;
+    if (!product) return undefined;
     return product.toJSON() as IProduct;
 };
 

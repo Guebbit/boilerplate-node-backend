@@ -20,18 +20,18 @@
         <h3><b>SOFT DELETED</b> on <%= new Date(user.deletedAt).toLocaleString() %></h3>
     <% } %>
     <hr/>
-    <a href="/users/edit/<%= user._id %>" class="btn">Edit</a>
+    <a href="/users/edit/<%= user.id %>" class="btn">Edit</a>
     <form action="/users/delete" method="post" style="display:inline;">
         <% if (user.deletedAt) { %>
             <button class="btn" type="submit">Un-delete</button>
         <% } else { %>
             <button class="btn" type="submit">Delete</button>
         <% } %>
-        <input type="hidden" name="id" value="<%= user._id %>">
+        <input type="hidden" name="id" value="<%= user.id %>">
     </form>
     <form action="/users/delete" method="post" style="display:inline;">
         <button class="btn" type="submit">HARD Delete</button>
-        <input type="hidden" name="id" value="<%= user._id %>">
+        <input type="hidden" name="id" value="<%= user.id %>">
         <input type="hidden" name="hardDelete" value="true">
     </form>
     <a href="/users" class="btn">Back to list</a>

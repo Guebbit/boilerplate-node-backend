@@ -72,7 +72,8 @@ export const getResetDatabase = async (request: Request, response: Response) => 
             description: "Produttori di rumori molesti a tutte le ore. Inactive product.",
         }),
     ]);
-    const [p1, , , p4] = products;
+    const p1 = products[0];
+    const p4 = products[3];
 
     // Create orders
     await Promise.all([
