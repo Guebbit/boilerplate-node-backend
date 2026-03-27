@@ -80,12 +80,12 @@ app.use((request, _response, next) => {
 /**
  * REST API routes
  */
-// app.use('/account', authRoutes);
-// app.use('/products', productRoutes);
-// app.use('/orders', orderRoutes);
-// app.use('/cart', cartRoutes);
-// app.use('/users', userRoutes);
-// app.use('/', systemRoutes);
+app.use('/account', authRoutes);
+app.use('/products', productRoutes);
+app.use('/orders', orderRoutes);
+app.use('/cart', cartRoutes);
+app.use('/users', userRoutes);
+app.use('/', systemRoutes);
 
 /**
  * 404 handler — catch all unmatched routes

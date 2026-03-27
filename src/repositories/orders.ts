@@ -19,6 +19,14 @@ export const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promis
     orderModel.aggregate<T>(pipeline);
 
 /**
+ * Find an order by its MongoDB ObjectId
+ *
+ * @param id
+ */
+export const findById = (id: string) =>
+    orderModel.findById(id);
+
+/**
  * Create a new order document
  *
  * @param data
@@ -26,5 +34,23 @@ export const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promis
 export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =>
     orderModel.create(data);
 
+/**
+ * Persist changes to an existing order document
+ *
+ * @param order
+ */
+export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
+    order.save();
 
-export default { aggregate, create };
+/**
+ * Hard-delete an order document from the database
+ *
+ * @param order
+ */
+export const deleteOne = (order: IOrderDocument): Promise<void> =>
+    order.deleteOne().then(() => {
+        // explicit void return to satisfy TypeScript's Promise<void> type
+    });
+
+
+export default { aggregate, findById, create, save, deleteOne };

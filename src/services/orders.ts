@@ -1,7 +1,11 @@
 import { Types } from 'mongoose';
-import type { PipelineStage, QueryFilter } from 'mongoose';
-import type { SearchOrdersRequest, OrdersResponse, Order } from '@api/api';
-import type { IOrderDocument } from '@models/orders';
+import type { PipelineStage } from 'mongoose';
+import { t } from 'i18next';
+import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@api/api';
+import type { IOrderDocument, IOrderProduct } from '@models/orders';
+import { EOrderStatus } from '@models/orders';
+import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
+import ProductRepository from '@repositories/products';
 import OrderRepository from '@repositories/orders';
 
 /**
@@ -63,7 +67,7 @@ export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]
  */
 export const search = async (
     search: SearchOrdersRequest = {},
-    scope?: QueryFilter<IOrderDocument>,
+    scope?: Record<string, unknown>,
 ): Promise<OrdersResponse> => {
     const page = Math.max(1, Number(search.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));
@@ -117,5 +121,125 @@ export const search = async (
     };
 };
 
+/**
+ * Get a single order by ID.
+ * Returns undefined if id is falsy, or null if not found.
+ *
+ * @param id
+ * @param scope - Optional extra filter (e.g. restrict to a specific userId)
+ */
+export const getById = async (
+    id: string | undefined,
+    scope?: Record<string, unknown>,
+): Promise<IOrderDocument | null | undefined> => {
+    if (!id)
+        return;
+    if (scope) {
+        // Use aggregate so we can apply both _id and scope filters
+        const [result] = await OrderRepository.aggregate([
+            { $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown> },
+            { $limit: 1 },
+            addComputedFields,
+        ]);
+        return result ?? undefined;
+    }
+    return OrderRepository.findById(id);
+};
 
-export default { getAll, search };
+/**
+ * Create a new order from a list of { productId, quantity } items.
+ * Looks up each product and stores a full snapshot in the order document.
+ *
+ * @param userId
+ * @param email
+ * @param items - Array of { productId, quantity }
+ */
+export const create = async (
+    userId: string,
+    email: string,
+    items: CartItem[],
+): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
+    if (!items || items.length === 0)
+        return generateReject(422, 'create order - empty items', [t('generic.error-missing-data')]);
+
+    const products: IOrderProduct[] = [];
+
+    for (const item of items) {
+        const product = await ProductRepository.findById(item.productId).lean();
+        if (!product)
+            return generateReject(404, 'create order - product not found', [t('ecommerce.product-not-found')]);
+        products.push({
+            product,
+            quantity: item.quantity,
+        } as unknown as IOrderProduct);
+    }
+
+    const order = await OrderRepository.create({
+        userId: new Types.ObjectId(userId),
+        email,
+        products,
+    } as Partial<IOrderDocument>);
+
+    return generateSuccess(order, 201, t('ecommerce.order-creation-success'));
+};
+
+/**
+ * Update an existing order by ID (admin).
+ * Only updates the fields provided.
+ *
+ * @param id
+ * @param data
+ */
+export const update = async (
+    id: string,
+    data: {
+        status?: string;
+        email?: string;
+        userId?: string;
+        items?: CartItem[];
+    },
+): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
+    const order = await OrderRepository.findById(id);
+    if (!order)
+        return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+
+    if (data.status !== undefined)
+        order.status = data.status as EOrderStatus;
+    if (data.email !== undefined)
+        order.email = data.email;
+    if (data.userId !== undefined)
+        order.userId = new Types.ObjectId(data.userId);
+
+    if (data.items && data.items.length > 0) {
+        const products: IOrderProduct[] = [];
+        for (const item of data.items) {
+            const product = await ProductRepository.findById(item.productId).lean();
+            if (!product)
+                return generateReject(404, 'update order - product not found', [t('ecommerce.product-not-found')]);
+            products.push({ product, quantity: item.quantity } as unknown as IOrderProduct);
+        }
+        order.products = products;
+    }
+
+    const saved = await OrderRepository.save(order);
+    return generateSuccess(saved);
+};
+
+/**
+ * Delete an order by ID (hard delete).
+ *
+ * @param id
+ */
+export const remove = async (
+    id: string,
+): Promise<IResponseSuccess<undefined> | IResponseReject> => {
+    const order = await OrderRepository.findById(id);
+    if (!order)
+        return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+
+    await OrderRepository.deleteOne(order);
+    return generateSuccess(undefined, 200, t('ecommerce.order-deleted'));
+};
+
+
+export default { getAll, search, getById, create, update, remove };
