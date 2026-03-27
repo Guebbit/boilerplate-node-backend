@@ -238,7 +238,7 @@ export const remove = async (
         return generateReject(404, '404', [t('ecommerce.order-not-found')]);
 
     await OrderRepository.deleteOne(order);
-    return generateSuccess(undefined, 200, t('ecommerce.order-not-found'));
+    return generateSuccess(undefined, 200, t('ecommerce.order-deleted'));
 };
 
 

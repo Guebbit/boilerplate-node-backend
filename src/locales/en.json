@@ -33,6 +33,7 @@
     "product-soft-deleted": "Product was soft deleted (users only).",
     "product-was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts.",
     "order-not-found": "The requested order was not found",
+    "order-deleted": "Order was permanently deleted.",
     "order-creation-success": "Order created with success.",
     "order-creation-failure": "Order creation failed.",
     "order-invoice-missing": "No invoice file was found",
