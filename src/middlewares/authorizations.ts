@@ -1,6 +1,6 @@
 import type {Request, Response, NextFunction} from 'express';
 import Users, {EUserRoles, IToken} from "../models/users";
-import {getTokenData} from "../utils/jwt";
+import {getTokenData} from "../middlewares/jwt-auth";
 import {rejectResponse} from "../utils/response";
 import {Types} from "mongoose";
 
