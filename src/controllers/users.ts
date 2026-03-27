@@ -56,11 +56,11 @@ export const updateUser = async (request: Request, response: Response): Promise<
         const user = await UserService.adminUpdate(body.id, body);
         successResponse(response, user.toObject());
     } catch (error) {
-        const msg = (error as Error).message;
-        if (msg === '404')
+        const message = (error as Error).message;
+        if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
         else
-            rejectResponse(response, 500, 'Internal Server Error', [msg]);
+            rejectResponse(response, 500, 'Internal Server Error', [message]);
     }
 };
 
@@ -79,7 +79,7 @@ export const deleteUser = async (request: Request, response: Response): Promise<
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
-    successResponse(response, null, 200, result.message);
+    successResponse(response, undefined, 200, result.message);
 };
 
 /**
@@ -105,11 +105,11 @@ export const updateUserById = async (request: Request, response: Response): Prom
         const user = await UserService.adminUpdate(String(request.params.id), body);
         successResponse(response, user.toObject());
     } catch (error) {
-        const msg = (error as Error).message;
-        if (msg === '404')
+        const message = (error as Error).message;
+        if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
         else
-            rejectResponse(response, 500, 'Internal Server Error', [msg]);
+            rejectResponse(response, 500, 'Internal Server Error', [message]);
     }
 };
 
@@ -124,7 +124,7 @@ export const deleteUserById = async (request: Request, response: Response): Prom
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
-    successResponse(response, null, 200, result.message);
+    successResponse(response, undefined, 200, result.message);
 };
 
 /**

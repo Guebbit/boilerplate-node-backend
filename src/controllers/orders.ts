@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { Types } from 'mongoose';
@@ -89,7 +90,7 @@ export const deleteOrder = async (request: Request, response: Response): Promise
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
-    successResponse(response, null, 200, result.message);
+    successResponse(response, undefined, 200, result.message);
 };
 
 /**
@@ -141,7 +142,7 @@ export const deleteOrderById = async (request: Request, response: Response): Pro
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
-    successResponse(response, null, 200, result.message);
+    successResponse(response, undefined, 200, result.message);
 };
 
 /**
@@ -156,7 +157,6 @@ export const getOrderInvoice = async (request: Request, response: Response): Pro
     }
 
     try {
-        const path = await import('node:path');
         const ejs = await import('ejs');
         const puppeteer = await import('puppeteer-core');
 

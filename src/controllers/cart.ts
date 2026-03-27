@@ -11,13 +11,17 @@ import type { UpsertCartItemRequest, UpdateCartItemByIdRequest } from '@api/api'
  */
 const buildCartResponse = async (user: import('@models/users').IUserDocument) => {
     const items = await UserService.cartGet(user);
+    let totalQuantity = 0;
+    let total = 0;
+    for (const item of items) {
+        totalQuantity += item.quantity;
+        const product = item.product as unknown as { price?: number };
+        total += (product?.price ?? 0) * item.quantity;
+    }
     const summary = {
         itemsCount: items.length,
-        totalQuantity: items.reduce((sum, i) => sum + i.quantity, 0),
-        total: items.reduce((sum, i) => {
-            const product = i.product as unknown as { price?: number };
-            return sum + (product?.price ?? 0) * i.quantity;
-        }, 0),
+        totalQuantity,
+        total,
     };
     return { items, summary };
 };
@@ -75,7 +79,7 @@ export const upsertCartItem = async (request: Request, response: Response): Prom
 export const updateCartItemById = async (request: Request, response: Response): Promise<void> => {
     const user = request.user!;
     const { productId } = request.params;
-    const productIdStr = String(productId);
+    const productIdString = String(productId);
     const { quantity } = request.body as UpdateCartItemByIdRequest;
 
     if (!quantity || quantity < 1) {
@@ -83,13 +87,13 @@ export const updateCartItemById = async (request: Request, response: Response): 
         return;
     }
 
-    const existing = user.cart.items.find(i => i.product.equals(productIdStr));
+    const existing = user.cart.items.find(i => i.product.equals(productIdString));
     if (!existing) {
         rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
         return;
     }
 
-    await UserService.cartItemSetById(user, productIdStr, quantity);
+    await UserService.cartItemSetById(user, productIdString, quantity);
     await user.populate('cart.items.product');
     const cart = await buildCartResponse(user);
     successResponse(response, cart);
@@ -103,10 +107,7 @@ export const clearCart = async (request: Request, response: Response): Promise<v
     const user = request.user!;
     const { productId } = (request.body ?? {}) as { productId?: string };
 
-    if (productId)
-        await UserService.cartItemRemoveById(user, productId);
-    else
-        await UserService.cartRemove(user);
+    await (productId ? UserService.cartItemRemoveById(user, productId) : UserService.cartRemove(user));
 
     await user.populate('cart.items.product');
     const cart = await buildCartResponse(user);
@@ -120,15 +121,15 @@ export const clearCart = async (request: Request, response: Response): Promise<v
 export const removeCartItem = async (request: Request, response: Response): Promise<void> => {
     const user = request.user!;
     const { productId } = request.params;
-    const productIdStr = String(productId);
+    const productIdString = String(productId);
 
-    const existing = user.cart.items.find(i => i.product.equals(productIdStr));
+    const existing = user.cart.items.find(i => i.product.equals(productIdString));
     if (!existing) {
         rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
         return;
     }
 
-    await UserService.cartItemRemoveById(user, productIdStr);
+    await UserService.cartItemRemoveById(user, productIdString);
     await user.populate('cart.items.product');
     const cart = await buildCartResponse(user);
     successResponse(response, cart);

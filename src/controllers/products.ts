@@ -62,11 +62,11 @@ export const updateProduct = async (request: Request, response: Response): Promi
         const product = await ProductService.update(body.id, body as never);
         successResponse(response, product.toObject());
     } catch (error) {
-        const msg = (error as Error).message;
-        if (msg === '404')
+        const message = (error as Error).message;
+        if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
         else
-            rejectResponse(response, 500, 'Internal Server Error', [msg]);
+            rejectResponse(response, 500, 'Internal Server Error', [message]);
     }
 };
 
@@ -85,7 +85,7 @@ export const deleteProduct = async (request: Request, response: Response): Promi
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
-    successResponse(response, null, 200, result.message);
+    successResponse(response, undefined, 200, result.message);
 };
 
 /**
@@ -123,11 +123,11 @@ export const updateProductById = async (request: Request, response: Response): P
         const product = await ProductService.update(String(request.params.id), body as never);
         successResponse(response, product.toObject());
     } catch (error) {
-        const msg = (error as Error).message;
-        if (msg === '404')
+        const message = (error as Error).message;
+        if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
         else
-            rejectResponse(response, 500, 'Internal Server Error', [msg]);
+            rejectResponse(response, 500, 'Internal Server Error', [message]);
     }
 };
 
@@ -142,5 +142,5 @@ export const deleteProductById = async (request: Request, response: Response): P
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
-    successResponse(response, null, 200, result.message);
+    successResponse(response, undefined, 200, result.message);
 };

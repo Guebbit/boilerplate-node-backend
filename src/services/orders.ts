@@ -141,7 +141,7 @@ export const getById = async (
             { $limit: 1 },
             addComputedFields,
         ]);
-        return result ?? null;
+        return result ?? undefined;
     }
     return OrderRepository.findById(id);
 };

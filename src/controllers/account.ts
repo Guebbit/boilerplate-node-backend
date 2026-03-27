@@ -81,7 +81,7 @@ export const requestPasswordReset = async (_request: Request, response: Response
     } catch {
         // silent — do not reveal whether the email exists
     }
-    successResponse(response, null, 200, t('reset.email-sent'));
+    successResponse(response, undefined, 200, t('reset.email-sent'));
 };
 
 /**
@@ -127,7 +127,7 @@ export const confirmPasswordReset = async (request: Request, response: Response)
 
         destroyRefreshCookie(response);
         destroyLoggedCookie(response);
-        successResponse(response, null, 200, t('reset.success'));
+        successResponse(response, undefined, 200, t('reset.success'));
     } catch {
         rejectResponse(response, 500, 'Internal Server Error');
     }
