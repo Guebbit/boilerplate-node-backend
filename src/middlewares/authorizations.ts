@@ -1,6 +1,6 @@
 import type {Request, Response, NextFunction} from 'express';
 import Users, {EUserRoles, IToken} from "../models/users";
-import {getTokenData} from "../middlewares/jwt-auth";
+import {verifyAccessToken} from "../middlewares/jwt-auth";
 import {rejectResponse} from "../utils/response";
 import {Types} from "mongoose";
 
@@ -25,10 +25,14 @@ export const getAuth = async (request: Request, response: Response, next: NextFu
         return;
     }
 
-    await Users.findById((getTokenData(token) as { id: string }).id)
+    await verifyAccessToken(token)
+        .then(({ id }) => Users.findById(id))
         .then(user => {
             if (user)
                 request.user = user;
+        })
+        .catch(() => {
+            // Invalid or expired token — proceed without authenticated user
         })
         .finally(next)
 }

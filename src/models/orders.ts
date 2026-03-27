@@ -31,7 +31,7 @@ export interface IOrderProduct {
  * and 'items' (renamed to 'products' in the Mongoose schema) so that the Mongoose
  * schema definition and the TypeScript types stay in sync.
  */
-export interface IOrderDocument extends Omit<Order, 'id' | 'userId' | 'items'>, Document {
+export interface IOrderDocument extends Omit<Order, 'id' | 'userId' | 'items' | 'status' | 'total'>, Document {
     userId: Types.ObjectId;
     products: IOrderProduct[];
     status: EOrderStatus;
