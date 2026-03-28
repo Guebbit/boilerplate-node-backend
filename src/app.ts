@@ -18,6 +18,7 @@ import orderRoutes from "./routes/orders";
 import cartRoutes from "./routes/cart";
 import userRoutes from "./routes/users";
 import systemRoutes from "./routes";
+import { yoga } from "./graphql";
 
 /**
  * Server start
@@ -86,6 +87,14 @@ app.use('/orders', orderRoutes);
 app.use('/cart', cartRoutes);
 app.use('/users', userRoutes);
 app.use('/', systemRoutes);
+
+/**
+ * GraphQL endpoint (graphql-yoga)
+ * Available at /graphql — includes GraphiQL IDE in non-production environments.
+ */
+// graphql-yoga's server adapter is callable as Express middleware at runtime;
+// the cast resolves the structural type mismatch with the Express overload.
+app.use(yoga.graphqlEndpoint, yoga as unknown as Parameters<typeof app.use>[1]);
 
 /**
  * 404 handler — catch all unmatched routes
