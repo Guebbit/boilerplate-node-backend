@@ -6,10 +6,12 @@ import type { Request, Response, NextFunction } from "express";
 import i18next from 'i18next';
 import helmet from "helmet";
 import cookieParser from 'cookie-parser';
+import { MulterError } from "multer";
 import { start } from "@utils/database";
 import logger from "@utils/winston";
 import { rateLimiter } from "@middlewares/security";
 import { rejectResponse } from "@utils/response";
+import { ExtendedError } from "@utils/error-helpers";
 import enTranslation from './locales/en.json';
 
 import productRoutes from "./routes/products";
@@ -23,6 +25,12 @@ import systemRoutes from "./routes";
  * Server start
  */
 const app = express();
+
+/**
+ * Templating engine (for emails and PDF files)
+ */
+app.set('view engine', 'ejs');
+app.set('views', './views');
 
 /**
  * Sync database then start server
@@ -100,6 +108,20 @@ app.use((_request: Request, response: Response) => {
 app.use((error: Error, _request: Request, response: Response, _next: NextFunction) => {
     if (response.headersSent)
         return;
+
+    // Multer file-upload errors → 400 Bad Request
+    if (error instanceof MulterError) {
+        logger.error({
+            message: error.message,
+            code: error.code,
+            field: error.field,
+        });
+        return rejectResponse(response, 400, error.message, [error.code]);
+    }
+
+    // Operational errors with a known HTTP status code
+    if (error instanceof ExtendedError)
+        return rejectResponse(response, error.httpCode, error.name, error.errors);
 
     logger.error({
         message: error.message,
