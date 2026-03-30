@@ -1,27 +1,26 @@
-import type {Request, Response} from 'express';
-import type {CastError} from "mongoose";
-import {rejectResponse, successResponse} from "@utils/response";
-import {databaseErrorInterpreter} from "@utils/helpers-errors";
-import Users from "@models/users";
+import type { Request, Response } from 'express';
+import type { CastError } from 'mongoose';
+import { rejectResponse, successResponse } from '@utils/response';
+import { databaseErrorInterpreter } from '@utils/helpers-errors';
+import Users from '@models/users';
 
 
 /**
- * Refresh access token
- * Given the refreshToken from the URL or, if not, from the user cookies:
- * create a new short-lived access token for the following requests
+ * DELETE /account/tokens/expired
+ * Remove expired tokens from the DB (admin only).
  */
-export default async (req: Request, res: Response) => {
-    /**
-     * Create new access token using refresh token stored in the server
-     */
+const deleteExpiredTokens = async (request: Request, response: Response) => {
     await Users.tokenRemoveExpired()
-        .then(({status, success}) => {
-                if (!success)
-                    return rejectResponse(res, status);
-            return successResponse(res, undefined, status)
+        .then(({ status, success }) => {
+            if (!success)
+                return rejectResponse(response, status);
+            return successResponse(response, undefined, status);
         })
         .catch((error: CastError | Error) => {
             const [status, message] = databaseErrorInterpreter(error);
-            return rejectResponse(res, status, message);
-        })
+            return rejectResponse(response, status, message);
+        });
 };
+
+export default deleteExpiredTokens;
+

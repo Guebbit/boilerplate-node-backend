@@ -1,14 +1,12 @@
 import { Router } from 'express';
 import { getAuth, isAuth } from '@middlewares/authorizations';
-import {
-    getCart,
-    getCartSummary,
-    upsertCartItem,
-    updateCartItemById,
-    clearCart,
-    removeCartItem,
-    checkout,
-} from '@controllers/cart';
+import getCart from '@controllers/cart/get-cart';
+import getCartSummary from '@controllers/cart/get-cart-summary';
+import postCart from '@controllers/cart/post-cart';
+import putCartById from '@controllers/cart/put-cart-by-id';
+import deleteCart from '@controllers/cart/delete-cart';
+import deleteCartById from '@controllers/cart/delete-cart-by-id';
+import postCheckout from '@controllers/cart/post-checkout';
 
 const router = Router();
 
@@ -20,21 +18,21 @@ router.use(getAuth, isAuth);
 router.get('/summary', getCartSummary);
 
 // POST /cart/checkout
-router.post('/checkout', checkout);
+router.post('/checkout', postCheckout);
 
 // GET /cart
 router.get('/', getCart);
 
 // POST /cart — add/set item
-router.post('/', upsertCartItem);
+router.post('/', postCart);
 
 // DELETE /cart — clear cart or remove item via body { productId }
-router.delete('/', clearCart);
+router.delete('/', deleteCart);
 
 // PUT /cart/:productId — set quantity
-router.put('/:productId', updateCartItemById);
+router.put('/:productId', putCartById);
 
 // DELETE /cart/:productId — remove item
-router.delete('/:productId', removeCartItem);
+router.delete('/:productId', deleteCartById);
 
 export default router;

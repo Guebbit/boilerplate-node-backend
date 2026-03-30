@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import {
-    getAccount,
-    login,
-    signup,
-    requestPasswordReset,
-    confirmPasswordReset,
-} from '@controllers/account';
+import getAccount from '@controllers/account/get-account';
+import postLogin from '@controllers/account/post-login';
+import postSignup from '@controllers/account/post-signup';
+import postReset from '@controllers/account/post-reset';
+import postResetConfirm from '@controllers/account/post-reset-confirm';
 import getRefreshToken from '@controllers/get-refresh-token';
 import postLogoutEverywhere from '@controllers/post-logout-everywhere';
 import deleteExpiredTokens from '@controllers/delete-expired-tokens';
@@ -20,16 +18,16 @@ router.use(getAuth);
 router.get('/', isAuth, getAccount);
 
 // POST /account/login — authenticate and get tokens
-router.post('/login', login);
+router.post('/login', postLogin);
 
 // POST /account/signup — register new user
-router.post('/signup', signup);
+router.post('/signup', postSignup);
 
 // POST /account/reset — request password reset email
-router.post('/reset', requestPasswordReset);
+router.post('/reset', postReset);
 
 // POST /account/reset-confirm — complete password reset with token
-router.post('/reset-confirm', confirmPasswordReset);
+router.post('/reset-confirm', postResetConfirm);
 
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);

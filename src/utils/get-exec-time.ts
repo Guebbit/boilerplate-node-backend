@@ -1,11 +1,11 @@
 /**
  * Get execution time of any function
- * @param fn
+ * @param function_ - the function to time
  */
-export default async function getExecTime<T>(fn: () => T) {
+export default async function getExecTime<T>(function_: () => T) {
     // execute function between two timestamps
     const start = process.hrtime.bigint();
-    const result = await fn();
+    const result = await function_();
     const end = process.hrtime.bigint();
 
     return {

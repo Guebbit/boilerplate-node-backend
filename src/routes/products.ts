@@ -1,15 +1,13 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import {
-    listProducts,
-    createProduct,
-    updateProduct,
-    deleteProduct,
-    searchProducts,
-    getProductById,
-    updateProductById,
-    deleteProductById,
-} from '@controllers/products';
+import getProducts from '@controllers/products/get-products';
+import postProducts from '@controllers/products/post-products';
+import putProducts from '@controllers/products/put-products';
+import deleteProducts from '@controllers/products/delete-products';
+import postProductsSearch from '@controllers/products/post-products-search';
+import getProductById from '@controllers/products/get-product-by-id';
+import putProductById from '@controllers/products/put-product-by-id';
+import deleteProductById from '@controllers/products/delete-product-by-id';
 
 const router = Router();
 
@@ -17,25 +15,25 @@ const router = Router();
 router.use(getAuth);
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', searchProducts);
+router.post('/search', postProductsSearch);
 
 // GET /products — public
-router.get('/', listProducts);
+router.get('/', getProducts);
 
 // POST /products — admin only
-router.post('/', isAuth, isAdmin, createProduct);
+router.post('/', isAuth, isAdmin, postProducts);
 
 // PUT /products — admin only, id in body
-router.put('/', isAuth, isAdmin, updateProduct);
+router.put('/', isAuth, isAdmin, putProducts);
 
 // DELETE /products — admin only, id in body
-router.delete('/', isAuth, isAdmin, deleteProduct);
+router.delete('/', isAuth, isAdmin, deleteProducts);
 
 // GET /products/:id — public
 router.get('/:id', getProductById);
 
 // PUT /products/:id — admin only
-router.put('/:id', isAuth, isAdmin, updateProductById);
+router.put('/:id', isAuth, isAdmin, putProductById);
 
 // DELETE /products/:id — admin only
 router.delete('/:id', isAuth, isAdmin, deleteProductById);
