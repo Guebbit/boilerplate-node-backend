@@ -11,7 +11,7 @@ import { MulterError } from "multer";
 import { ExtendedError } from "@utils/helpers-errors";
 import { start } from "@utils/database";
 import logger from "@utils/winston";
-import { getDirname } from "@utils/get-file-url";
+import { getDirname } from "@utils/helpers-filesystem";
 import { session, flash, userConnect } from "@middlewares/session";
 import { rateLimiter } from "@middlewares/security";
 import enTranslation from './locales/en.json';

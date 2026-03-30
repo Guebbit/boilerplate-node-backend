@@ -18,3 +18,8 @@
 
 # TODO
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
+
+# TODO NOW
+ - api-mongoose-mongodb-2 - Check multer routes (add them)
+ - 
+ - ALL: check the controllers (FIRST), then the services, repositories and models to be similar

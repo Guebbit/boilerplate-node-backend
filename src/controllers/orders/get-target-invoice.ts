@@ -11,7 +11,7 @@ import { t } from "i18next";
 import OrderService from "@services/orders";
 import { createPDF } from "@utils/helpers-pdf";
 import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
-import { getDirname } from "@utils/get-file-url";
+import { getDirname } from "@utils/helpers-filesystem";
 
 /**
  *
