@@ -23,6 +23,7 @@ export * from './passwordResetConfirmRequest';
 export * from './passwordResetRequest';
 export * from './product';
 export * from './productsResponse';
+export * from './refreshTokenResponse';
 export * from './removeCartItemRequest';
 export * from './searchOrdersRequest';
 export * from './searchProductsRequest';
@@ -78,6 +79,7 @@ import { PasswordResetConfirmRequest } from './passwordResetConfirmRequest';
 import { PasswordResetRequest } from './passwordResetRequest';
 import { Product } from './product';
 import { ProductsResponse } from './productsResponse';
+import { RefreshTokenResponse } from './refreshTokenResponse';
 import { RemoveCartItemRequest } from './removeCartItemRequest';
 import { SearchOrdersRequest } from './searchOrdersRequest';
 import { SearchProductsRequest } from './searchProductsRequest';
@@ -139,6 +141,7 @@ let typeMap: {[index: string]: any} = {
     "PasswordResetRequest": PasswordResetRequest,
     "Product": Product,
     "ProductsResponse": ProductsResponse,
+    "RefreshTokenResponse": RefreshTokenResponse,
     "RemoveCartItemRequest": RemoveCartItemRequest,
     "SearchOrdersRequest": SearchOrdersRequest,
     "SearchProductsRequest": SearchProductsRequest,

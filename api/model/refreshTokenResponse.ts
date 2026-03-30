@@ -12,44 +12,41 @@
 
 import { RequestFile } from './models';
 
-export class SignupRequest {
-    'email': string;
-    'username': string;
-    'imageUrl'?: string;
-    'password': string;
-    'passwordConfirm': string;
+export class RefreshTokenResponse {
+    /**
+    * New access JWT
+    */
+    'token': string;
+    /**
+    * New refresh token if returned by backend
+    */
+    'refreshToken'?: string;
+    /**
+    * New access token expiry in seconds
+    */
+    'expiresIn'?: number;
 
     static discriminator: string | undefined = undefined;
 
     static attributeTypeMap: Array<{name: string, baseName: string, type: string}> = [
         {
-            "name": "email",
-            "baseName": "email",
+            "name": "token",
+            "baseName": "token",
             "type": "string"
         },
         {
-            "name": "username",
-            "baseName": "username",
+            "name": "refreshToken",
+            "baseName": "refreshToken",
             "type": "string"
         },
         {
-            "name": "imageUrl",
-            "baseName": "imageUrl",
-            "type": "string"
-        },
-        {
-            "name": "password",
-            "baseName": "password",
-            "type": "string"
-        },
-        {
-            "name": "passwordConfirm",
-            "baseName": "passwordConfirm",
-            "type": "string"
+            "name": "expiresIn",
+            "baseName": "expiresIn",
+            "type": "number"
         }    ];
 
     static getAttributeTypeMap() {
-        return SignupRequest.attributeTypeMap;
+        return RefreshTokenResponse.attributeTypeMap;
     }
 }
 

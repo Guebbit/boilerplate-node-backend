@@ -1,7 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema } from "./products";
-import type { Order, Product } from "@api/api"
+import type { Order, Product } from "../../api/api"
 
 /**
  * Valid order status values (mirrors the OpenAPI enum).

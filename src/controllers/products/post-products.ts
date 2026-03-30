@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { CreateProductRequest } from '@api/api';
+import type { CreateProductRequest } from '../../../api/api';
 
 /**
  * POST /products

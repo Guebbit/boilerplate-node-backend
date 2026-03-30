@@ -33,6 +33,7 @@ model/passwordResetConfirmRequest.ts
 model/passwordResetRequest.ts
 model/product.ts
 model/productsResponse.ts
+model/refreshTokenResponse.ts
 model/removeCartItemRequest.ts
 model/searchOrdersRequest.ts
 model/searchProductsRequest.ts

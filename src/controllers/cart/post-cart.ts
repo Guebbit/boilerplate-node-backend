@@ -3,7 +3,7 @@ import { t } from 'i18next';
 import UserService from '@services/users';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { UpsertCartItemRequest } from '@api/api';
+import type { UpsertCartItemRequest } from '../../../api/api';
 import { buildCartResponse } from './helpers';
 
 /**

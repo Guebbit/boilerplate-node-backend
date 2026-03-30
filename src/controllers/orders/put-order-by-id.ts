@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import OrderService from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { UpdateOrderByIdRequest } from '@api/api';
+import type { UpdateOrderByIdRequest } from '../../../api/api';
 
 /**
  * PUT /orders/:id

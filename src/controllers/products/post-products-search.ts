@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import ProductService from '@services/products';
 import { successResponse } from '@utils/response';
-import type { SearchProductsRequest } from '@api/api';
+import type { SearchProductsRequest } from '../../../api/api';
 
 /**
  * POST /products/search

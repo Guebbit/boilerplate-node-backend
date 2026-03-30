@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import OrderService from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { CreateOrderRequest } from '@api/api';
+import type { CreateOrderRequest } from '../../../api/api';
 
 /**
  * POST /orders

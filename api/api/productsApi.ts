@@ -15,15 +15,12 @@ import localVarRequest from 'request';
 import http from 'http';
 
 /* tslint:disable:no-unused-locals */
-import { CreateProductRequest } from '../model/createProductRequest';
 import { DeleteProductRequest } from '../model/deleteProductRequest';
 import { ErrorResponse } from '../model/errorResponse';
 import { MessageResponse } from '../model/messageResponse';
 import { Product } from '../model/product';
 import { ProductsResponse } from '../model/productsResponse';
 import { SearchProductsRequest } from '../model/searchProductsRequest';
-import { UpdateProductByIdRequest } from '../model/updateProductByIdRequest';
-import { UpdateProductRequest } from '../model/updateProductRequest';
 import { ValidationErrorResponse } from '../model/validationErrorResponse';
 
 import { ObjectSerializer, Authentication, VoidAuth, Interceptor } from '../model/models';
@@ -102,11 +99,15 @@ export class ProductsApi {
     }
 
     /**
-     * Creates a new product
+     * Creates a new product with optional image upload
      * @summary Create product
-     * @param createProductRequest 
+     * @param title 
+     * @param price 
+     * @param description 
+     * @param active 
+     * @param imageUpload Optional product image
      */
-    public async createProduct (createProductRequest: CreateProductRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
+    public async createProduct (title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
         const localVarPath = this.basePath + '/products';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -119,14 +120,40 @@ export class ProductsApi {
         }
         let localVarFormParams: any = {};
 
-        // verify required parameter 'createProductRequest' is not null or undefined
-        if (createProductRequest === null || createProductRequest === undefined) {
-            throw new Error('Required parameter createProductRequest was null or undefined when calling createProduct.');
+        // verify required parameter 'title' is not null or undefined
+        if (title === null || title === undefined) {
+            throw new Error('Required parameter title was null or undefined when calling createProduct.');
+        }
+
+        // verify required parameter 'price' is not null or undefined
+        if (price === null || price === undefined) {
+            throw new Error('Required parameter price was null or undefined when calling createProduct.');
         }
 
         (<any>Object).assign(localVarHeaderParams, options.headers);
 
         let localVarUseFormData = false;
+
+        if (title !== undefined) {
+            localVarFormParams['title'] = ObjectSerializer.serialize(title, "string");
+        }
+
+        if (price !== undefined) {
+            localVarFormParams['price'] = ObjectSerializer.serialize(price, "number");
+        }
+
+        if (description !== undefined) {
+            localVarFormParams['description'] = ObjectSerializer.serialize(description, "string");
+        }
+
+        if (active !== undefined) {
+            localVarFormParams['active'] = ObjectSerializer.serialize(active, "boolean");
+        }
+
+        if (imageUpload !== undefined) {
+            localVarFormParams['imageUpload'] = imageUpload;
+        }
+        localVarUseFormData = true;
 
         let localVarRequestOptions: localVarRequest.Options = {
             method: 'POST',
@@ -135,7 +162,6 @@ export class ProductsApi {
             uri: localVarPath,
             useQuerystring: this._useQuerystring,
             json: true,
-            body: ObjectSerializer.serialize(createProductRequest, "CreateProductRequest")
         };
 
         let authenticationPromise = Promise.resolve();
@@ -553,11 +579,16 @@ export class ProductsApi {
         });
     }
     /**
-     * Updates an existing product
+     * Updates an existing product with optional image upload
      * @summary Edit product
-     * @param updateProductRequest 
+     * @param id Resource identifier
+     * @param title 
+     * @param price 
+     * @param description 
+     * @param active 
+     * @param imageUpload Optional product image
      */
-    public async updateProduct (updateProductRequest: UpdateProductRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
+    public async updateProduct (id: string, title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
         const localVarPath = this.basePath + '/products';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -570,14 +601,49 @@ export class ProductsApi {
         }
         let localVarFormParams: any = {};
 
-        // verify required parameter 'updateProductRequest' is not null or undefined
-        if (updateProductRequest === null || updateProductRequest === undefined) {
-            throw new Error('Required parameter updateProductRequest was null or undefined when calling updateProduct.');
+        // verify required parameter 'id' is not null or undefined
+        if (id === null || id === undefined) {
+            throw new Error('Required parameter id was null or undefined when calling updateProduct.');
+        }
+
+        // verify required parameter 'title' is not null or undefined
+        if (title === null || title === undefined) {
+            throw new Error('Required parameter title was null or undefined when calling updateProduct.');
+        }
+
+        // verify required parameter 'price' is not null or undefined
+        if (price === null || price === undefined) {
+            throw new Error('Required parameter price was null or undefined when calling updateProduct.');
         }
 
         (<any>Object).assign(localVarHeaderParams, options.headers);
 
         let localVarUseFormData = false;
+
+        if (id !== undefined) {
+            localVarFormParams['id'] = ObjectSerializer.serialize(id, "string");
+        }
+
+        if (title !== undefined) {
+            localVarFormParams['title'] = ObjectSerializer.serialize(title, "string");
+        }
+
+        if (description !== undefined) {
+            localVarFormParams['description'] = ObjectSerializer.serialize(description, "string");
+        }
+
+        if (price !== undefined) {
+            localVarFormParams['price'] = ObjectSerializer.serialize(price, "number");
+        }
+
+        if (active !== undefined) {
+            localVarFormParams['active'] = ObjectSerializer.serialize(active, "boolean");
+        }
+
+        if (imageUpload !== undefined) {
+            localVarFormParams['imageUpload'] = imageUpload;
+        }
+        localVarUseFormData = true;
 
         let localVarRequestOptions: localVarRequest.Options = {
             method: 'PUT',
@@ -586,7 +652,6 @@ export class ProductsApi {
             uri: localVarPath,
             useQuerystring: this._useQuerystring,
             json: true,
-            body: ObjectSerializer.serialize(updateProductRequest, "UpdateProductRequest")
         };
 
         let authenticationPromise = Promise.resolve();
@@ -625,12 +690,16 @@ export class ProductsApi {
         });
     }
     /**
-     * Updates the product identified by `{id}` in the path. Functionally equivalent to `PUT /products` with the id in the body.
+     * Updates the product identified by `{id}` in the path with optional image upload. Functionally equivalent to `PUT /products` with the id in the body.
      * @summary Edit product
      * @param id Resource identifier
-     * @param updateProductByIdRequest 
+     * @param title 
+     * @param price 
+     * @param description 
+     * @param active 
+     * @param imageUpload Optional product image
      */
-    public async updateProductById (id: string, updateProductByIdRequest: UpdateProductByIdRequest, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
+    public async updateProductById (id: string, title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
         const localVarPath = this.basePath + '/products/{id}'
             .replace('{' + 'id' + '}', encodeURIComponent(String(id)));
         let localVarQueryParameters: any = {};
@@ -649,14 +718,40 @@ export class ProductsApi {
             throw new Error('Required parameter id was null or undefined when calling updateProductById.');
         }
 
-        // verify required parameter 'updateProductByIdRequest' is not null or undefined
-        if (updateProductByIdRequest === null || updateProductByIdRequest === undefined) {
-            throw new Error('Required parameter updateProductByIdRequest was null or undefined when calling updateProductById.');
+        // verify required parameter 'title' is not null or undefined
+        if (title === null || title === undefined) {
+            throw new Error('Required parameter title was null or undefined when calling updateProductById.');
+        }
+
+        // verify required parameter 'price' is not null or undefined
+        if (price === null || price === undefined) {
+            throw new Error('Required parameter price was null or undefined when calling updateProductById.');
         }
 
         (<any>Object).assign(localVarHeaderParams, options.headers);
 
         let localVarUseFormData = false;
+
+        if (title !== undefined) {
+            localVarFormParams['title'] = ObjectSerializer.serialize(title, "string");
+        }
+
+        if (description !== undefined) {
+            localVarFormParams['description'] = ObjectSerializer.serialize(description, "string");
+        }
+
+        if (price !== undefined) {
+            localVarFormParams['price'] = ObjectSerializer.serialize(price, "number");
+        }
+
+        if (active !== undefined) {
+            localVarFormParams['active'] = ObjectSerializer.serialize(active, "boolean");
+        }
+
+        if (imageUpload !== undefined) {
+            localVarFormParams['imageUpload'] = imageUpload;
+        }
+        localVarUseFormData = true;
 
         let localVarRequestOptions: localVarRequest.Options = {
             method: 'PUT',
@@ -665,7 +760,6 @@ export class ProductsApi {
             uri: localVarPath,
             useQuerystring: this._useQuerystring,
             json: true,
-            body: ObjectSerializer.serialize(updateProductByIdRequest, "UpdateProductByIdRequest")
         };
 
         let authenticationPromise = Promise.resolve();

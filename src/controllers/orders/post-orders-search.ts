@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import OrderService from '@services/orders';
 import { successResponse } from '@utils/response';
-import type { SearchOrdersRequest } from '@api/api';
+import type { SearchOrdersRequest } from '../../../api/api';
 import { userScope } from './helpers';
 
 /**

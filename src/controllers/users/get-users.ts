@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import UserService from '@services/users';
 import { successResponse } from '@utils/response';
-import type { SearchUsersRequest } from '@api/api';
+import type { SearchUsersRequest } from '../../../api/api';
 
 /**
  * GET /users

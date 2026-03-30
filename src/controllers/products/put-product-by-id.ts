@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { UpdateProductByIdRequest } from '@api/api';
+import type { UpdateProductByIdRequest } from '../../../api/api';
 
 /**
  * PUT /products/:id
