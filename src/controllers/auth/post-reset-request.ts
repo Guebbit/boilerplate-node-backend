@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import { nodemailer } from "@utils/nodemailer";
 import type {CastError} from "mongoose";
-import { databaseErrorConverter } from "@utils/error-helpers";
+import { databaseErrorConverter } from "@utils/helpers-errors";
 import type { PasswordResetRequest } from "@api/api";
 import UserRepository from "@repositories/users";
 import UserService from "@services/users";

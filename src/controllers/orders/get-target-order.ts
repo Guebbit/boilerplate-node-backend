@@ -6,7 +6,7 @@ import {
 } from "mongoose";
 import { t } from "i18next";
 import OrderService from "@services/orders";
-import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
+import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
 
 /**
  * Url parameters

@@ -5,7 +5,7 @@ import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import type { CastError, QueryFilter } from 'mongoose';
 import { generateSuccess, generateReject, type IResponseSuccess, type IResponseReject } from '@utils/response';
-import { databaseErrorInterpreter } from '@utils/error-helpers';
+import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem, IUser } from '@models/users';

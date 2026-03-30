@@ -41,7 +41,7 @@ export const nodemailer = async (request: SendMailOptions, templateName: string,
     // Render the EJS template
     const html = await ejs.renderFile(
         // Retrieve the template
-        path.resolve(getDirname(import.meta.url), '../../views/template-emails', templateName),
+        path.resolve(getDirname(import.meta.url), '../../views/templates-emails', templateName),
         // Populate the template
         data,
     );

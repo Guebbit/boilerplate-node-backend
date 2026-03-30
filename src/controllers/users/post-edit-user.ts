@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { CastError } from "mongoose";
 import { Types } from "mongoose";
-import { ExtendedError } from "@utils/error-helpers";
+import { ExtendedError } from "@utils/helpers-errors";
 import UserService from "@services/users";
 
 /**

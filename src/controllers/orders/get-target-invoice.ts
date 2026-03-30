@@ -9,8 +9,8 @@ import {
 } from "mongoose";
 import { t } from "i18next";
 import OrderService from "@services/orders";
-import { createPDF } from "@utils/pdf-helpers";
-import { databaseErrorConverter, ExtendedError } from "@utils/error-helpers";
+import { createPDF } from "@utils/helpers-pdf";
+import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
 import { getDirname } from "@utils/get-file-url";
 
 /**
@@ -77,7 +77,7 @@ export const getTargetInvoice = (request: Request & {
             try {
                 const htmlContent = await ejs.renderFile(
                     // Retrieve the template
-                    path.resolve(getDirname(import.meta.url), '../../views/template-emails', 'invoice-order-file.ejs'),
+                    path.resolve(getDirname(import.meta.url), '../../views/templates-files', 'invoice-order-file.ejs'),
                     // Populate the template
                     {
                         ...response.locals,

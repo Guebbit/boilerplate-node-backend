@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from "i18next";
 import type { IUser } from "@models/users";
-import { ExtendedError } from "@utils/error-helpers";
+import { ExtendedError } from "@utils/helpers-errors";
 import type { CastError } from "mongoose";
 import type { LoginRequest } from "@api/api";
 import UserService from "@services/users";

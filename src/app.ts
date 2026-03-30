@@ -6,10 +6,9 @@ import express from 'express';
 import type { ErrorRequestHandler, Request, Response, NextFunction } from "express";
 import i18next from 'i18next';
 import helmet from "helmet";
-import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import { MulterError } from "multer";
-import { ExtendedError } from "@utils/error-helpers";
+import { ExtendedError } from "@utils/helpers-errors";
 import { start } from "@utils/database";
 import logger from "@utils/winston";
 import { getDirname } from "@utils/get-file-url";
@@ -79,12 +78,14 @@ app.use(
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
+            // Only allows loading resources (scripts, styles, etc...) from the same origin.
             defaultSrc: [
                 "'self'"
             ],
             imgSrc: [
+                // Load images only from the same origin...
                 "'self'",
-                // allow external src on images
+                // ...but allow external src on images only from these websites
                 "https://placekitten.com",
                 "https://placedog.net",
             ],
@@ -93,11 +94,20 @@ app.use(helmet({
 }));
 
 /**
- * https://www.udemy.com/course/nodejs-the-complete-guide/learn/lecture/11561900#overview
+ * Parses URL-encoded data (from HTML forms)
+ * Extended: true allows nested objects using the qs library
  */
-app.use(bodyParser.urlencoded({
-    extended: true
-}));
+app.use(
+    express.urlencoded({
+        extended: true
+    })
+);
+
+
+/**
+ * Triggered every time a piece of the request body arrives:
+ * logs incoming data pieces
+ */
 // app.use((req, response, next) => {
 //     req.on("data", (chunk) => {
 //         logger.info("------------- REQUEST CHUNK DATA -------------", chunk)

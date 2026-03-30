@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { CastError } from "mongoose";
-import { deleteFile } from "@utils/filesystem-helpers";
-import { ExtendedError } from "@utils/error-helpers";
+import { deleteFile } from "@utils/helpers-filesystem";
+import { ExtendedError } from "@utils/helpers-errors";
 import type { UpdateProductRequestBody } from "@api/api";
 import ProductService from "@services/products";
 
