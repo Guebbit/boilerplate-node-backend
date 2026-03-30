@@ -5,12 +5,22 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateProductByIdRequest } from '../../../api/api';
 
 /**
+ * URL parameters
+ */
+export interface IEditProductParameters {
+    id: string,
+}
+
+/**
  * PUT /products/:id
  * Update a product by path id (admin).
  */
 const putProductById = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as UpdateProductByIdRequest;
     try {
+        /**
+         * Update the product with the new data
+         */
         const product = await ProductService.update(String(request.params.id), body as never);
         successResponse(response, product.toObject());
     } catch (error) {

@@ -32,9 +32,11 @@
     ]
   },
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "src/controllersOld"
   ],
   "include": [
+    "api/**/*.ts",
     "src/*.ts",
     "src/**/*.ts",
     "src/**/*.json",

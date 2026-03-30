@@ -6,27 +6,56 @@ import {
     createRefreshCookie,
     createLoggedCookie,
     createAccessToken,
+    ERefreshTokenExpiryTime,
 } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
+ * POST body data
+ */
+export interface IPostLoginPostData {
+    email: string,
+    password: string,
+    remember?: ERefreshTokenExpiryTime
+}
+
+/**
  * POST /account/login
- * Authenticates a user and returns JWT access token + sets refresh cookie.
+ * Authenticate user.
+ * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
 const postLogin = async (request: Request, response: Response): Promise<void> => {
-    const { email, password } = request.body as { email?: string; password?: string };
+    /**
+     * Get POST data
+     */
+    const { email, password, remember } = request.body as IPostLoginPostData;
+
+    /**
+     * Login
+     */
     const result = await UserService.login(email, password);
     if (!result.success) {
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
+
+    /**
+     * Authentication successful.
+     * Create refresh token...
+     */
     const user = result.data!;
     const userId = (user._id as Types.ObjectId).toString();
-    const refreshToken = await createRefreshToken(userId);
-    createRefreshCookie(response, refreshToken);
-    createLoggedCookie(response);
+    const refreshToken = await createRefreshToken(userId, remember);
+    // ...and add it to the client cookies
+    createRefreshCookie(response, refreshToken, remember);
+    createLoggedCookie(response, remember);
+
+    /**
+     * Send the newly created access token to the client through the response.
+     * It will be used for the following requests.
+     */
     const accessToken = await createAccessToken(refreshToken);
-    successResponse(response, { token: accessToken });
+    successResponse(response, { token: accessToken }, 200, 'Authentication successful');
 };
 
 export default postLogin;

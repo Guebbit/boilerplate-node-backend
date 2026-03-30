@@ -5,12 +5,15 @@ import { buildCartResponse } from './helpers';
 
 /**
  * DELETE /cart
- * Clears the entire cart, or removes a specific product if productId is in the body.
+ * Remove ALL items in the user cart.
+ * If a productId is provided in the body, only that item is removed instead.
  */
 const deleteCart = async (request: Request, response: Response): Promise<void> => {
+    // Authentication check is done before entering the route
     const user = request.user!;
     const { productId } = (request.body ?? {}) as { productId?: string };
 
+    // Remove specific item or entire cart
     await (productId ? UserService.cartItemRemoveById(user, productId) : UserService.cartRemove(user));
 
     await user.populate('cart.items.product');

@@ -9,12 +9,28 @@ import {
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
+ * GET params (token passed in the URL)
+ */
+export interface IGetResetConfirmParameters {
+    token?: string,
+}
+
+/**
+ * POST body data
+ */
+export interface IPostResetConfirmPostData {
+    password?: string,
+    passwordConfirm?: string,
+}
+
+/**
  * POST /account/reset-confirm
- * Validates a one-time token and sets the new password.
+ * Validate a one-time reset token and set the new password.
  */
 const postResetConfirm = async (request: Request, response: Response): Promise<void> => {
     const { token, password, passwordConfirm } = request.body as Record<string, string | undefined>;
 
+    // Wrong token
     if (!token) {
         rejectResponse(response, 422, 'reset-confirm - missing token', [t('generic.error-missing-data')]);
         return;
@@ -28,6 +44,7 @@ const postResetConfirm = async (request: Request, response: Response): Promise<v
             'tokens.type': 'password',
         });
 
+        // Wrong token
         if (!user) {
             rejectResponse(response, 422, 'reset-confirm - invalid token', [t('reset.token-not-found')]);
             return;
@@ -39,13 +56,18 @@ const postResetConfirm = async (request: Request, response: Response): Promise<v
             return;
         }
 
+        /**
+         * Change password
+         */
         const result = await UserService.passwordChange(user, password ?? '', passwordConfirm ?? '');
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
         }
 
-        // Consume the token
+        /**
+         * Consume the token and save the user
+         */
         user.tokens = user.tokens.filter(tk => tk.token !== token);
         await UserRepository.save(user);
 

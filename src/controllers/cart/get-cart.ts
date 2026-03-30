@@ -4,7 +4,8 @@ import { buildCartResponse } from './helpers';
 
 /**
  * GET /cart
- * Returns all items in the authenticated user's cart along with a summary.
+ * Get the cart of the current user.
+ * Authentication check is done before entering the route.
  */
 const getCart = async (request: Request, response: Response): Promise<void> => {
     const user = request.user!;

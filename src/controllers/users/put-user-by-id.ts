@@ -5,12 +5,22 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateUserByIdRequest } from '../../../api/api';
 
 /**
+ * URL parameters
+ */
+export interface IEditUserParameters {
+    id: string,
+}
+
+/**
  * PUT /users/:id
  * Update a user by path id (admin).
  */
 const putUserById = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as UpdateUserByIdRequest;
     try {
+        /**
+         * Update user with the new data
+         */
         const user = await UserService.adminUpdate(String(request.params.id), body);
         successResponse(response, user.toObject());
     } catch (error) {

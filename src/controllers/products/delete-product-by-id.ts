@@ -3,10 +3,26 @@ import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
+ * URL parameters
+ */
+export interface IDeleteProductParameters {
+    id?: string
+}
+
+/**
+ * Query string
+ */
+export interface IDeleteProductQuery {
+    hardDelete?: string
+}
+
+/**
  * DELETE /products/:id
  * Delete a product by path id (admin).
+ * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
 const deleteProductById = async (request: Request, response: Response): Promise<void> => {
+    // true = hard-delete; false (default) = soft-delete (sets deletedAt)
     const hardDelete = request.query.hardDelete === 'true';
     const result = await ProductService.remove(String(request.params.id), hardDelete);
     if (!result.success) {

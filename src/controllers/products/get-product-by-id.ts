@@ -4,10 +4,19 @@ import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
+ * URL parameters
+ */
+export interface IGetTargetProductParameters {
+    id: string,
+}
+
+/**
  * GET /products/:id
- * Get a single product by path id (public; admin sees inactive/deleted).
+ * Get a single product by path id.
+ * Only admin can see non-active (inactive/deleted) products.
  */
 const getProductById = async (request: Request, response: Response): Promise<void> => {
+    // Admin can search inactive or deleted products; non-admin sees only active ones
     const admin = request.user?.admin === true;
     const product = await ProductService.getById(String(request.params.id), admin);
     if (!product) {
