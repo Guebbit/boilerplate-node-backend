@@ -21,5 +21,6 @@
 
 # TODO NOW
  - api-mongoose-mongodb-2 - Check multer routes (add them)
- - 
  - ALL: check the controllers (FIRST), then the services, repositories and models to be similar
+ - MVC: Try on first person
+ - API: try through tests and dev enviroment
