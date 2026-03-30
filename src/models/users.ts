@@ -86,13 +86,16 @@ export interface IUserDocument extends IUser, IUserMethods, Document {
  */
 export type IUserMethods = {
     tokenAdd: (type: ETokenType, expirationMs: number, token: string) => Promise<string>;
+    tokenRemoveAll: (type: ETokenType) => Promise<void>;
 };
 
 /**
  * User Document model type.
  * Business logic is now handled by the service and repository layers.
  */
-export type IUserModel = Model<IUserDocument, unknown, IUserMethods>;
+export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
+    tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
+};
 
 
 /**
@@ -231,6 +234,30 @@ userSchema.methods.tokenAdd = async function (
     await this.save();
     return token;
 };
+
+/**
+ * Remove all tokens of the given type from this user document and persist it.
+ */
+userSchema.methods.tokenRemoveAll = async function (type: ETokenType): Promise<void> {
+    this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
+    await this.save();
+};
+
+/**
+ * Remove all expired tokens from every user document in the collection.
+ * Returns a simple status/success envelope consumed by the controller layer.
+ */
+userSchema.static('tokenRemoveExpired', async function (): Promise<{ status: number; success: boolean }> {
+    try {
+        await this.updateMany(
+            { 'tokens.expiration': { $lt: new Date() } },
+            { $pull: { tokens: { expiration: { $lt: new Date() } } } }
+        );
+        return { status: 200, success: true };
+    } catch {
+        return { status: 500, success: false };
+    }
+});
 
 /**
  * Model
