@@ -10,7 +10,7 @@ import {
     destroyRefreshCookie,
     destroyLoggedCookie,
     createAccessToken,
-} from '@middlewares/jwt-auth';
+} from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**

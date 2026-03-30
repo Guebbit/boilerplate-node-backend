@@ -99,6 +99,14 @@ components:
                 $ref: '#/components/schemas/Id'
             description: Product identifier
 
+        TokenPathParam:
+            name: token
+            in: path
+            required: true
+            schema:
+                type: string
+            description: Refresh token
+
     responses:
         Success:
             description: Success
@@ -256,6 +264,20 @@ components:
                     type: integer
                     description: Access token expiry in seconds
 
+        RefreshTokenResponse:
+            type: object
+            required: [ token ]
+            properties:
+                token:
+                    type: string
+                    description: New access JWT
+                refreshToken:
+                    type: string
+                    description: New refresh token if returned by backend
+                expiresIn:
+                    type: integer
+                    description: New access token expiry in seconds
+
         User:
             type: object
             required: [ id, email, username ]
@@ -371,13 +393,29 @@ components:
                 username:
                     type: string
                     minLength: 3
-                imageUrl:
-                    type: string
-                    format: uri
                 password:
                     $ref: '#/components/schemas/Password'
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
+
+        SignupRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [ email, username, password, passwordConfirm ]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                password:
+                    $ref: '#/components/schemas/Password'
+                passwordConfirm:
+                    $ref: '#/components/schemas/Password'
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
 
         PasswordResetRequest:
             type: object
@@ -436,6 +474,26 @@ components:
                 active:
                     type: boolean
 
+        CreateUserRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [ email, username, password ]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
         UpdateUserRequest:
             type: object
             additionalProperties: false
@@ -448,6 +506,22 @@ components:
                 password:
                     $ref: '#/components/schemas/Password'
 
+        UpdateUserRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [ id ]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                password:
+                    $ref: '#/components/schemas/Password'
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
         UpdateUserByIdRequest:
             type: object
             additionalProperties: false
@@ -456,6 +530,19 @@ components:
                     $ref: '#/components/schemas/Email'
                 password:
                     $ref: '#/components/schemas/Password'
+
+        UpdateUserByIdRequestMultipart:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                password:
+                    $ref: '#/components/schemas/Password'
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
 
         DeleteUserRequest:
             type: object
@@ -506,6 +593,26 @@ components:
                 active:
                     type: boolean
 
+        CreateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [ title, price ]
+            properties:
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional product image
+
         UpdateProductRequest:
             type: object
             additionalProperties: false
@@ -526,6 +633,28 @@ components:
                     format: uri
                 active:
                     type: boolean
+
+        UpdateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [ id, title, price ]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional product image
 
         # To be used in GET /products:
         UpdateProductRequestBody:
@@ -565,6 +694,26 @@ components:
                     format: uri
                 active:
                     type: boolean
+
+        UpdateProductByIdRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [ title, price ]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional product image
 
         DeleteProductRequest:
             type: object
@@ -820,15 +969,15 @@ paths:
         post:
             tags: [ Auth ]
             summary: Signup
-            description: Registers a new user account. Returns the newly created user profile on success.
+            description: Registers a new user account with optional image upload. Returns the newly created user profile on success.
             operationId: signup
             security: [ ]
             requestBody:
                 required: true
                 content:
-                    application/json:
+                    multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/SignupRequest'
+                            $ref: '#/components/schemas/SignupRequestMultipart'
             responses:
                 '201':
                     description: Created
@@ -873,6 +1022,55 @@ paths:
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
+    /account/refresh:
+        get:
+            tags: [ Auth ]
+            summary: Refresh access token
+            description: Creates a new short-lived access token using a refresh token. The refresh token can be provided as a query parameter, path parameter, or retrieved from the `jwt` cookie.
+            operationId: refreshToken
+            security: [ ]
+            responses:
+                '200':
+                    description: New access token
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefreshTokenResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/refresh/{token}:
+        get:
+            tags: [ Auth ]
+            summary: Refresh access token with token in path
+            description: Creates a new short-lived access token using a refresh token provided in the URL path.
+            operationId: refreshTokenWithPath
+            security: [ ]
+            parameters:
+                -   $ref: '#/components/parameters/TokenPathParam'
+            responses:
+                '200':
+                    description: New access token
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefreshTokenResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/logout-all:
+        post:
+            tags: [ Auth ]
+            summary: Logout from all devices
+            description: Logs out the authenticated user from ALL devices by removing all refresh tokens from the database and clearing authentication cookies.
+            operationId: logoutAll
+            security:
+                -   bearerAuth: [ ]
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
     # --------- Users ---------
     /users:
         get:
@@ -912,16 +1110,16 @@ paths:
         post:
             tags: [ Users ]
             summary: Create user
-            description: Creates a new user account with the supplied email, username, and password.
+            description: Creates a new user account with the supplied email, username, and password. Optional image can be uploaded.
             operationId: createUser
             security:
                 -   bearerAuth: [ ]
             requestBody:
                 required: true
                 content:
-                    application/json:
+                    multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/CreateUserRequest'
+                            $ref: '#/components/schemas/CreateUserRequestMultipart'
             responses:
                 '201':
                     description: Created user
@@ -936,16 +1134,16 @@ paths:
         put:
             tags: [ Users ]
             summary: Edit user
-            description: Updates an existing user's email or password.
+            description: Updates an existing user's email or password. Optional image can be uploaded.
             operationId: updateUser
             security:
                 -   bearerAuth: [ ]
             requestBody:
                 required: true
                 content:
-                    application/json:
+                    multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/UpdateUserRequest'
+                            $ref: '#/components/schemas/UpdateUserRequestMultipart'
             responses:
                 '200':
                     description: Updated user
@@ -1002,7 +1200,7 @@ paths:
         put:
             tags: [ Users ]
             summary: Edit user
-            description: Updates the email or password of the user identified by `{id}` in the path.
+            description: Updates the email or password of the user identified by `{id}` in the path. Optional image can be uploaded.
             operationId: updateUserById
             security:
                 -   bearerAuth: [ ]
@@ -1011,9 +1209,9 @@ paths:
             requestBody:
                 required: true
                 content:
-                    application/json:
+                    multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/UpdateUserByIdRequest'
+                            $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
             responses:
                 '200':
                     description: Updated user
@@ -1082,7 +1280,6 @@ paths:
             summary: List products (paginated)
             description: Returns a paginated list of products.
             operationId: listProducts
-            # Use UpdateProductRequestBody
             parameters:
                 -   $ref: '#/components/parameters/ProductIdParam'
                 -   $ref: '#/components/parameters/PageParam'
@@ -1113,16 +1310,16 @@ paths:
         post:
             tags: [ Products ]
             summary: Create product
-            description: Creates a new product
+            description: Creates a new product with optional image upload
             operationId: createProduct
             security:
                 -   bearerAuth: [ ]
             requestBody:
                 required: true
                 content:
-                    application/json:
+                    multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/CreateProductRequest'
+                            $ref: '#/components/schemas/CreateProductRequestMultipart'
             responses:
                 '201':
                     description: Created product
@@ -1137,16 +1334,16 @@ paths:
         put:
             tags: [ Products ]
             summary: Edit product
-            description: Updates an existing product
+            description: Updates an existing product with optional image upload
             operationId: updateProduct
             security:
                 -   bearerAuth: [ ]
             requestBody:
                 required: true
                 content:
-                    application/json:
+                    multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/UpdateProductRequest'
+                            $ref: '#/components/schemas/UpdateProductRequestMultipart'
             responses:
                 '200':
                     description: Updated product
@@ -1202,7 +1399,7 @@ paths:
         put:
             tags: [ Products ]
             summary: Edit product
-            description: Updates the product identified by `{id}` in the path. Functionally equivalent to `PUT /products` with the id in the body.
+            description: Updates the product identified by `{id}` in the path with optional image upload. Functionally equivalent to `PUT /products` with the id in the body.
             operationId: updateProductById
             security:
                 -   bearerAuth: [ ]
@@ -1211,9 +1408,9 @@ paths:
             requestBody:
                 required: true
                 content:
-                    application/json:
+                    multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/UpdateProductByIdRequest'
+                            $ref: '#/components/schemas/UpdateProductByIdRequestMultipart'
             responses:
                 '200':
                     description: Updated product

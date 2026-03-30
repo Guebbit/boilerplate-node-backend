@@ -1,6 +1,33 @@
 import { promises as fs } from "node:fs";
+import { fileURLToPath } from 'node:url';
 import { lookup } from 'mime-types';
+import path from 'node:path';
 import logger from "./winston";
+
+/**
+ *
+ * @param metaUrl
+ */
+export const getFileUrl = (metaUrl: string)=> {
+    const filename = fileURLToPath(metaUrl); // __filename
+    const dirname = path.dirname(__filename); // __dirname
+    return { filename, dirname };
+}
+
+/**
+ *
+ * @param metaUrl
+ */
+export const getFilename = (metaUrl: string)=>
+    getFileUrl(metaUrl).filename
+
+/**
+ *
+ * @param metaUrl
+ */
+export const getDirname = (metaUrl: string)=>
+    getFileUrl(metaUrl).dirname
+
 
 /**
  * Delete target file in the filesystem
