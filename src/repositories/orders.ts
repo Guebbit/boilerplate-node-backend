@@ -6,6 +6,7 @@ import type { WhereOptions } from 'sequelize';
 import { sequelize } from '@utils/database';
 import { QueryTypes } from 'sequelize';
 import orderItemsRepository from './order-items';
+export { default as OrderItem } from './order-items';
 
 /**
  * Order Repository
@@ -164,4 +165,4 @@ export const getOrdersWithTotals = async (where: WhereOptions<IOrder> = {}): Pro
 export const orderItems = orderItemsRepository;
 
 
-export default { findById, findAll, create, getOrderStats, getOrdersWithTotals, orderItems };
+export default { findById, findAll, create, getOrderStats, getOrdersWithTotals, orderItems, OrderItem: orderItems };

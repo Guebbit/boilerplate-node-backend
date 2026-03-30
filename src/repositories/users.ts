@@ -5,6 +5,8 @@ import type { IUser } from '@models/users';
 import type { WhereOptions, Order, UpdateOptions } from 'sequelize';
 import cartItemsRepository from './cart-items';
 import tokensRepository from './tokens';
+export { default as CartItem } from './cart-items';
+export { default as Token } from './tokens';
 
 /**
  * User Repository
@@ -115,4 +117,17 @@ export const updateMany = (
 export const cartItems = cartItemsRepository;
 export const tokens = tokensRepository;
 
-export default { findById, findOne, findAll, count, create, save, deleteOne, updateMany, cartItems, tokens };
+export default {
+    findById,
+    findOne,
+    findAll,
+    count,
+    create,
+    save,
+    deleteOne,
+    updateMany,
+    cartItems,
+    tokens,
+    CartItem: cartItems,
+    Token: tokens,
+};
