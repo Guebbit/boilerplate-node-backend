@@ -9,7 +9,7 @@ import type { IResponseSuccess, IResponseReject } from '@utils/response';
 import type { IUserDocument } from '@models/users';
 
 // Mock the filesystem helper so tests never touch the real disk.
-jest.mock('@utils/filesystem-helpers', () => ({
+jest.mock('@utils/helpers-filesystem', () => ({
     deleteFile: jest.fn().mockResolvedValue(true),
     fileToBase64: jest.fn().mockResolvedValue(''),
 }));
@@ -218,7 +218,7 @@ describe('ProductService.update', () => {
     });
 
     it('updates the imageUrl and triggers deleteFile for the old image', async () => {
-        const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>('@utils/filesystem-helpers');
+        const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>('@utils/helpers-filesystem');
 
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id      = (product._id as Types.ObjectId).toString();

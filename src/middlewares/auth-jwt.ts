@@ -1,7 +1,7 @@
-import type {Response} from 'express';
-import {sign, verify, decode} from "jsonwebtoken";
-import Users, {ETokenType, IToken, type IUserDocument} from "../models/users";
-import type {CastError} from "mongoose";
+import type { Response } from 'express';
+import { sign, verify, decode } from "jsonwebtoken";
+import Users, { ETokenType, IToken } from "../models/users";
+import type { CastError } from "mongoose";
 
 /**
  *
@@ -45,7 +45,7 @@ export enum ERefreshTokenExpiryTime {
  * @param remember
  */
 const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
-    switch (remember){
+    switch (remember) {
         // eslint-disable-next-line unicorn/switch-case-braces
         case ERefreshTokenExpiryTime.SHORT:
             return process.env.NODE_REFRESH_TOKEN_SECRET_TIME_SHORT ? Number.parseInt(process.env.NODE_REFRESH_TOKEN_SECRET_TIME_SHORT) : 0;
@@ -114,7 +114,7 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
                         // it has to be if I found here the token
 
                         // Check if user has this token or it was removed
-                        if (!user){
+                        if (!user) {
                             reject(new Error("Forbidden"));
                             return;
                         }
@@ -172,7 +172,7 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
  * @param token
  * @param remember
  */
-export const createRefreshCookie = (response: Response, token: string, remember?: ERefreshTokenExpiryTime)=> {
+export const createRefreshCookie = (response: Response, token: string, remember?: ERefreshTokenExpiryTime) => {
     response.cookie('jwt', token, {
         // Prevent access to the cookie via JavaScript
         httpOnly: true,
@@ -189,7 +189,7 @@ export const createRefreshCookie = (response: Response, token: string, remember?
  *
  * @param response
  */
-export const destroyRefreshCookie = (response: Response)=> {
+export const destroyRefreshCookie = (response: Response) => {
     response.clearCookie("jwt", {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
@@ -235,7 +235,7 @@ export const destroyLoggedCookie = (response: Response) => {
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken)
-        .then(({id}) =>
+        .then(({ id }) =>
             sign(
                 {
                     id

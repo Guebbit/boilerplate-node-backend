@@ -1,7 +1,7 @@
 import path from "node:path";
 import ejs, { type Data } from "ejs";
 import { createTransport, type SendMailOptions, type SentMessageInfo } from "nodemailer";
-import { getDirname } from "./get-file-url";
+import { getDirname } from "./helpers-filesystem";
 import logger from "@utils/winston";
 
 

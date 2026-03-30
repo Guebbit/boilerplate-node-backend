@@ -3,7 +3,7 @@ import { t } from 'i18next';
 import type { QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, ProductsResponse, Product } from '@api/api';
 import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
-import { deleteFile } from '@utils/filesystem-helpers';
+import { deleteFile } from '@utils/helpers-filesystem';
 import UserService from '@services/users';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';

@@ -20,6 +20,8 @@ import orderRoutes from "./routes/orders";
 import cartRoutes from "./routes/cart";
 import userRoutes from "./routes/users";
 import systemRoutes from "./routes";
+import { MulterError } from "multer";
+import { ExtendedError } from "@utils/helpers-errors";
 
 /**
  * Server start
@@ -58,14 +60,37 @@ start()
 app.use(helmet());
 
 /**
- * Parse JSON request bodies
+ * Parses URL-encoded data (from HTML forms)
+ * Extended: true allows nested objects using the qs library
+ */
+app.use(
+    express.urlencoded({
+        extended: true
+    })
+);
+
+/**
+ * Parses JSON request bodies
  */
 app.use(express.json());
 
 /**
- * Parse URL-encoded form bodies (for compatibility)
+ * Triggered every time a piece of the request body arrives:
+ * logs incoming data pieces
  */
-app.use(express.urlencoded({ extended: true }));
+// app.use((req, res, next) => {
+//     req.on("data", (chunk) => {
+//         console.log("------------- REQUEST CHUNK DATA -------------", chunk)
+//     });
+//     req.on("end", () => {
+//         console.log("------------- REQUEST END -------------")
+//         // res.statusCode = 200;
+//         // res.setHeader("Location", "/");
+//         // res.end();
+//         next();
+//     });
+// });
+
 
 /**
  * Parse cookies (needed for the JWT refresh token cookie)
