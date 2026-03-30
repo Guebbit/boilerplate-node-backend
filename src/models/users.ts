@@ -114,7 +114,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
                 type: Number, required: true
             }
         } ],
-        deletedAt: Date
+        updatedAt: Date
     },
     // sub documents always have _id
     tokens: [ {

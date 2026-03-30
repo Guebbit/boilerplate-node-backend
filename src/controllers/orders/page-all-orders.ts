@@ -34,7 +34,7 @@ export const pageAllOrders = async (
         // Only admin can see non-active and (soft) deleted products
         request.session.user?.admin
             ? {}
-            : { active: true, deletedAt: undefined }
+            : { userId: request.session.user?._id }
     )
         .then(({ items, meta }) =>
             response.render("orders/list", {
