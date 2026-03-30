@@ -1,36 +1,37 @@
-import type { Request, Response, NextFunction } from "express";
-import { t } from "i18next";
-import { nodemailer } from "@utils/nodemailer";
-import { ExtendedError } from "@utils/helpers-errors";
-import UserService from "@services/users";
+import type {Request, Response} from "express";
+import {t} from "i18next";
+import nodemailer from "../../utils/nodemailer";
+import {databaseErrorInterpreter} from "../../utils/helpers-errors";
+import type {CastError} from "mongoose";
+import {rejectResponse, successResponse} from "../../utils/response";
 
 /**
  * Create a new order
  * using the current user cart,
  * then empty the cart
  *
- * @param request
- * @param response
- * @param next
+ * @param req
+ * @param res
  */
-export const postOrder = (request: Request, response: Response, next: NextFunction) =>
-    UserService.orderConfirm(request.user!)
-        .then(({ success }) => {
+export default async (req: Request, res: Response) => {
+    await req.user!.orderConfirm()
+        .then(({success, data, message, status}) => {
             if (!success)
-                return next(new ExtendedError("500", 500, false, [ t('ecommerce.order-creation-failure') ]))
-            request.flash('success', [ t('ecommerce.order-creation-success') ]);
-
-            nodemailer({
-                    to: request.user!.email,
-                    subject: 'Order confirmed',
-                },
-                "email-order-confirm.ejs",
-                {
-                    ...response.locals,
-                    pageMetaTitle: 'Order confirmed',
-                    pageMetaLinks: [],
-                    name: request.user!.username
-                });
+                return rejectResponse(res, status, message);
+            if (process.env.NODE_ENV !== "test")
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises
+                nodemailer({
+                        to: req.user!.email,
+                        subject: 'Order confirmed',
+                    },
+                    "email-order-confirm.ejs",
+                    {
+                        ...res.locals,
+                        pageMetaTitle: 'Order confirmed',
+                        pageMetaLinks: [],
+                        name: req.user!.username
+                    });
+            return successResponse(res, data, 200, t("ecommerce.order-creation-success"));
         })
-        .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [ message ])))
-        .finally(() => response.redirect('/orders'))
+        .catch((error: Error | CastError) => rejectResponse(res, ...databaseErrorInterpreter(error)))
+}

@@ -1,65 +1,59 @@
-import type { Request, Response, NextFunction } from "express";
+import type {Request, Response} from "express";
 import {
     Types,
     type CastError,
     type PipelineStage
 } from "mongoose";
-import { t } from "i18next";
-import OrderService from "@services/orders";
-import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
+import {t} from "i18next";
+import Orders from "../../models/orders";
+import {databaseErrorInterpreter} from "../../utils/helpers-errors";
+import {rejectResponse, successResponse} from "../../utils/response";
+import {EUserRoles} from "../../models/users";
 
 /**
  * Url parameters
  */
 export interface IGetTargetOrderParameters {
-    orderId: string,
+    id?: string,
 }
 
 /**
  * Get target order info
  *
- * @param request
- * @param response
- * @param next
+ * @param req
+ * @param res
  */
-export const getTargetOrder = (request: Request & {
-    params: IGetTargetOrderParameters
-}, response: Response, next: NextFunction) => {
+export default async (req: Request & { params: IGetTargetOrderParameters }, res: Response) => {
     // if it's not valid it could throw an error
-    if (!Types.ObjectId.isValid(request.params.orderId))
-        return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
+    if (!req.params.id || !Types.ObjectId.isValid(req.params.id)){
+        rejectResponse(res, 404, t("ecommerce.order-not-found"))
+        return
+    }
 
     /**
      * Where build
      */
-        // empty match
     const match: PipelineStage.Match = {
-            $match: {}
-        };
+        $match: {}
+    };
     // If user is NOT admin, it's limited to his own orders
-    if (!request.session.user?.admin)
-        match.$match.userId = request.session.user?._id;
+    if (!req.user?.roles.includes(EUserRoles.ADMIN))
+        match.$match.userId = req.user?._id;
     // single out the order
-    match.$match._id = new Types.ObjectId(request.params.orderId);
+    match.$match._id = new Types.ObjectId(req.params.id);
 
     /**
      * Get info from database
      */
-    OrderService.getAll([ match ])
+    await Orders.getAll([match])
         .then((orders) => {
             if (orders.length === 0)
-                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
-            return response.render('orders/details', {
-                pageMetaTitle: 'Order',
-                pageMetaLinks: [
-                    "/css/order-details.css",
-                ],
-                order: orders[0]
-            })
+                return rejectResponse(res, 404, t("ecommerce.order-not-found"))
+            return successResponse(res, orders[0]);
         })
         .catch((error: CastError) => {
             if (error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
-            return next(databaseErrorConverter(error));
+                return rejectResponse(res, 404, t("ecommerce.order-not-found"))
+            return rejectResponse(res, ...databaseErrorInterpreter(error))
         })
 };

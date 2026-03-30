@@ -1,48 +1,59 @@
-import type {Request, Response} from "express";
-import mongoose, {Types} from "mongoose";
-import db from "../utils/db";
-import Users from "../models/users";
-import Products from "../models/products";
-import Orders from "../models/orders";
+import type { Request, Response } from "express";
+import mongoose, { Types } from "mongoose";
+import UserRepository from "@repositories/users";
+import ProductRepository from "@repositories/products";
+import OrderRepository from "@repositories/orders";
+import type { IOrderDocument } from "@models/orders";
 
 
 /**
  * Create example database
  * Could add "unzipper" to unzip images backup folder automatically but don't want to add unnecessary dependencies
  *
- * @param req
- * @param res
+ * @param request
+ * @param response
  */
-export default async (req: Request, res: Response) => {
-    await db
-        .then(() => mongoose.connection.db?.dropDatabase())
+export const getResetDatabase = (request: Request, response: Response) =>
+    // By the time this handler runs, mongoose is already connected (start() resolved before the server began listening)
+    mongoose.connection.db?.dropDatabase()
         .then(() =>
             Promise.all([
                 // users
-                Users.create({
+                UserRepository.create({
                     _id: new Types.ObjectId("65dd2bdb923652b7800fe180"),
-                    username: "Root",
+                    username: "root",
                     email: "root@root.it",
-                    password: "RootRoot_123",
-                    roles: ["admin"],
-                    tokens: [],
-                })
-                    .then(async (user) => {
-                        await user.cartItemSetById("65dc8a99604c307b702b5ccc", 2);
-                        await user.cartItemSetById("65dcdec2b18ad5e4bd597f0f", 3);
-                    })
-                ,
-                Users.create({
-                    _id: new Types.ObjectId("65de646a44f861fd83c13f13"),
-                    username: "GinoPinoShow",
-                    email: "gino@pino.it",
-                    password: "$2b$12$HwOdA7il/qvuU.psvWDOyuSMJ7ji/qMeFS3ma7DB8W6A/tGfCYEX.",
-                    roles: ["vip"],
-                    cart: {'items': []},
+                    password: "rootroot",
+                    imageUrl: String.raw`\images\9726c4217f5998511f372afab4800ac8.jpg`,
+                    admin: true,
+                    cart: {
+                        items: [
+                            {
+                                product: new Types.ObjectId("65dc8a99604c307b702b5ccc"),
+                                quantity: 2,
+                            },
+                            {
+                                product: new Types.ObjectId("65dcdec2b18ad5e4bd597f0f"),
+                                quantity: 3,
+                            },
+                        ],
+                        updatedAt: new Date(),
+                    },
                     tokens: [],
                 }),
+                UserRepository.create({
+                    _id: new Types.ObjectId("65de646a44f861fd83c13f13"),
+                    username: "ginopinoshow",
+                    email: "gino@pino.it",
+                    password: "$2b$12$HwOdA7il/qvuU.psvWDOyuSMJ7ji/qMeFS3ma7DB8W6A/tGfCYEX.",
+                    imageUrl: String.raw`\images\96346b77daf138a279677cb75c400ee9.jpg`,
+                    admin: false,
+                    cart: { items: [], updatedAt: new Date() },
+                    tokens: [],
+                }),
+
                 // products
-                Products.create({
+                ProductRepository.create({
                     _id: new Types.ObjectId("65dc8a99604c307b702b5ccc"),
                     title: "Sallyno Panino",
                     price: 100,
@@ -50,7 +61,7 @@ export default async (req: Request, res: Response) => {
                     active: true,
                     description: "Piccolo Sallyno panino. Da mangiare di coccole",
                 }),
-                Products.create({
+                ProductRepository.create({
                     _id: new Types.ObjectId("65dc8ad8604c307b702b5cd4"),
                     title: "Sallyno Carino",
                     price: 50,
@@ -59,7 +70,7 @@ export default async (req: Request, res: Response) => {
                     description: "Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.",
                     deletedAt: new Date('2024-02-26T23:34:44.832Z'),
                 }),
-                Products.create({
+                ProductRepository.create({
                     _id: new Types.ObjectId("65dc9be92f2794d1c16741e1"),
                     title: "Miciona inutile",
                     price: 1,
@@ -67,7 +78,7 @@ export default async (req: Request, res: Response) => {
                     active: true,
                     description: "Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire",
                 }),
-                Products.create({
+                ProductRepository.create({
                     _id: new Types.ObjectId("65dcdec2b18ad5e4bd597f0f"),
                     title: "Micino pufettino",
                     price: 77,
@@ -75,7 +86,7 @@ export default async (req: Request, res: Response) => {
                     active: true,
                     description: "Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.",
                 }),
-                Products.create({
+                ProductRepository.create({
                     _id: new Types.ObjectId("6622c88a5123b1e286f440f8"),
                     title: "Bundle micini",
                     price: 40,
@@ -85,7 +96,7 @@ export default async (req: Request, res: Response) => {
                 }),
 
                 //orders
-                Orders.create({
+                OrderRepository.create({
                     _id: new Types.ObjectId("65de73a69ca05739be2b5e85"),
                     userId: new Types.ObjectId("65dd2bdb923652b7800fe180"),
                     email: "oldpsw@root.it",
@@ -112,8 +123,8 @@ export default async (req: Request, res: Response) => {
                             quantity: 10
                         }
                     ],
-                }),
-                Orders.create({
+                } as unknown as Partial<IOrderDocument>),
+                OrderRepository.create({
                     _id: new Types.ObjectId("661c795a9e22bcbef63a5832"),
                     userId: new Types.ObjectId("65dd2bdb923652b7800fe180"),
                     email: "root@root.it",
@@ -130,28 +141,7 @@ export default async (req: Request, res: Response) => {
                             quantity: 20
                         }
                     ],
-                }),
-                Orders.create({
-                    userId: new Types.ObjectId("65de646a44f861fd83c13f13"),
-                    email: "root@root.it",
-                    products: [
-                        {
-                            product: {
-                                _id: new Types.ObjectId("65dcdec2b18ad5e4bd597f0f"),
-                                title: "Micino pufettino",
-                                price: 77,
-                                imageUrl: String.raw`\images\f12ba2e44fe347010397f1dcba399808.jpg`,
-                                active: true,
-                                description: "Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.",
-                            },
-                            quantity: 333
-                        }
-                    ],
-                }),
+                } as unknown as Partial<IOrderDocument>),
             ])
         )
-        .then(() => res.status(200).json({
-            success: true,
-            message: "Database reset."
-        }));
-}
+        .then(() => response.redirect('/'));

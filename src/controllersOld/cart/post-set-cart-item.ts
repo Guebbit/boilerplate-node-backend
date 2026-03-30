@@ -1,30 +1,48 @@
-import type { Request, Response, NextFunction } from "express";
-import { t } from "i18next";
-import ProductRepository from "@repositories/products";
-import type { CastError } from "mongoose";
-import { databaseErrorConverter } from "@utils/helpers-errors";
-import type { UpsertCartItemRequest } from "../../../api/api";
-import UserService from "@services/users";
+import type {Request, Response} from "express";
+import {t} from "i18next";
+import Products from "../../models/products";
+import type {CastError} from "mongoose";
+import {databaseErrorInterpreter} from "../../utils/helpers-errors";
+import {rejectResponse, successResponse} from "../../utils/response";
+
+/**
+ * Page POST data
+ */
+export interface IPostSetCartItemPostData {
+    id: string,
+    quantity: string,
+    add?: "0" | "1"
+}
 
 /**
  * Add a product (with its quantity) to cart, check availability, etc
  * Create a CartItem row.
  *
- * @param request
- * @param response
- * @param next
+ * @param req
+ * @param res
  */
-export const postSetCartItem = (request: Request<unknown, unknown, UpsertCartItemRequest>, response: Response, next: NextFunction) =>
-    ProductRepository.findOne({ _id: request.body.productId, active: true, deletedAt: undefined })
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export default (req: Request<IPostSetCartItemPostData | {}, unknown, IPostSetCartItemPostData | {}>, res: Response) => {
+    const {
+        id,
+        quantity,
+        add: addRaw
+    } = req.method === "POST" ? req.body as IPostSetCartItemPostData : req.params as IPostSetCartItemPostData;
+    const add = addRaw ? addRaw === "1" : undefined;
+    Products.findOne({
+        _id: id,
+        active: true,
+        deletedAt: undefined
+    })
         .then((product) => {
             // not found, something happened
             if (!product) {
-                request.flash('error', [ t("ecommerce.product-not-found") ]);
-                return;
+                rejectResponse(res, 404, t("ecommerce.product-not-found"));
+                return
             }
-            request.flash('success', [ t("ecommerce.product-added-to-cart") ]);
             // check done before entering the route
-            return UserService.cartItemSet(request.user!, product, request.body.quantity);
+            return req.user!.cartItemSet(product, Number.parseInt(quantity), Boolean(add))
+                .then(({data}) => successResponse(res, data, 200, t("ecommerce.product-added-to-cart")));
         })
-        .then(() => response.redirect('/cart'))
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error | CastError) => rejectResponse(res, ...databaseErrorInterpreter(error)))
+}

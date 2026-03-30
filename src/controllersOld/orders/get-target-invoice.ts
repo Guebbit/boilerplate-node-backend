@@ -1,64 +1,66 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Request, Response, NextFunction } from "express";
+import type {Request, Response} from "express";
 import ejs from "ejs";
 import {
     Types,
     type CastError,
     type PipelineStage
 } from "mongoose";
-import { t } from "i18next";
-import OrderService from "@services/orders";
-import { createPDF } from "@utils/helpers-pdf";
-import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
-import { getDirname } from "@utils/helpers-filesystem";
+import {t} from "i18next";
+import Orders from "../../models/orders";
+import {createPDF} from "../../utils/helpers-pdf";
+import {databaseErrorInterpreter} from "../../utils/helpers-errors";
+import {getDirname} from "../../utils/get-file-url";
+import {rejectResponse} from "../../utils/response";
+import {EUserRoles} from "../../models/users";
 
 /**
  *
  */
 export interface IGetTargetInvoiceParameters {
-    orderId: string
+    id?: string
 }
 
 /**
  * Get target invoice file and download it
  *
- * @param request
- * @param response
- * @param next
+ * @param req
+ * @param res
  */
-export const getTargetInvoice = (request: Request & {
-    params: IGetTargetInvoiceParameters
-}, response: Response, next: NextFunction) => {
+export default async (req: Request & { params: IGetTargetInvoiceParameters }, res: Response) => {
     // if it's not valid it could throw an error
-    if (!Types.ObjectId.isValid(request.params.orderId))
-        return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
+    if (!req.params.id || !Types.ObjectId.isValid(req.params.id)){
+        rejectResponse(res, 404, t("ecommerce.order-not-found"))
+        return
+    }
 
     /**
-     * Where build (same as get-target-order.ts
+     * Where build
      */
     const match: PipelineStage.Match = {
         $match: {}
     };
-    if (!request.session.user?.admin)
-        match.$match.userId = request.session.user?._id;
-    match.$match._id = new Types.ObjectId(request.params.orderId);
+    // If user is NOT admin, it's limited to his own orders
+    if (!req.user?.roles.includes(EUserRoles.ADMIN))
+        match.$match.userId = req.user?._id;
+    // single out the order
+    match.$match._id = new Types.ObjectId(req.params.id);
 
-    OrderService.getAll([ match ])
-        .then(async (orders) => {
+    await Orders.getAll([match])
+        .then((orders) => {
             if (orders.length === 0)
-                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
+                return rejectResponse(res, 404, t("ecommerce.order-not-found"))
             const order = orders[0];
             /**
              * Create PDF file
              * Create PDF using get-target-order template OR pure HTML content
              * WARNING: Images and other link-related info will NOT work. Need to convert the images in base64 to embed them correctly in a PDF
              */
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-            const invoiceName = order._id + '.pdf'; // filename
+                // filename
+            const invoiceName = order._id + '.pdf';
             // save path
             const invoicePath = path.join('src', 'storage', 'invoices', invoiceName);
-
             // // Direct HTML content (alternative)
             // const htmlContent = `
             //   <html>
@@ -73,44 +75,51 @@ export const getTargetInvoice = (request: Request & {
             //   </body>
             //   </html>
             // `;
+            // Don't send emails in test environment (import.meta.url doesn't work anyway)
+            if (process.env.NODE_ENV === "test")
+                return;
             // Use an ejs template
-            try {
-                const htmlContent = await ejs.renderFile(
-                    // Retrieve the template
-                    path.resolve(getDirname(import.meta.url), '../../views/templates-files', 'invoice-order-file.ejs'),
-                    // Populate the template
-                    {
-                        ...response.locals,
-                        pageMetaTitle: 'Order',
-                        pageMetaLinks: [
-                            "/css/order-details.css",
-                        ],
-                        order,
-                    },
-                );
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                await createPDF(htmlContent, order._id + '.pdf', 'src/storage/invoices');
-                /**
-                 * Download file
-                 */
-                // PRELOADING data
-                const data = await fs.promises.readFile(invoicePath);
-                response.setHeader('Content-Type', 'application/pdf');
-                response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
-                // send data (with custom headers)
-                response.send(data);
-                // STREAMING data (alternative)
-                // const file = fs.createReadStream(invoicePath);
-                // response.setHeader('Content-Type', 'application/pdf');
-                // response.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
-                // file.pipe(response);
-            } catch (error) {
-                return next(new ExtendedError((error as Error).message, 500));
-            }
+            return ejs.renderFile(
+                // Retrieve the template
+                path.resolve(getDirname(import.meta.url), '../../../views/templates', 'invoice-order-file.ejs'),
+                // Populate the template
+                {
+                    ...res.locals,
+                    pageMetaTitle: 'Order',
+                    pageMetaLinks: [
+                        "/css/order-details.css",
+                    ],
+                    order,
+                },
+                // callback
+                async (error: Error | null, htmlContent: string) => {
+                    if (error)
+                        return rejectResponse(res, 500, error.message)
+                    return createPDF(htmlContent, order._id + '.pdf', 'src/storage/invoices')
+                        .then(() => {
+                            /**
+                             * Download file
+                             */
+                            // PRELOADING data
+                            fs.readFile(invoicePath, (error, data) => {
+                                if (error)
+                                    return rejectResponse(res, 500, error.message)
+                                res.setHeader('Content-Type', 'application/pdf');
+                                res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
+                                // send data (with custom headers)
+                                res.send(data);
+                            });
+                            // STREAMING data (alternative)
+                            // const file = fs.createReadStream(invoicePath);
+                            // res.setHeader('Content-Type', 'application/pdf');
+                            // res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
+                            // file.pipe(res);
+                        })
+                })
         })
         .catch((error: CastError) => {
             if (error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
-            return next(databaseErrorConverter(error));
+                return rejectResponse(res, 404, t("ecommerce.order-not-found"))
+            return rejectResponse(res, ...databaseErrorInterpreter(error))
         })
 };

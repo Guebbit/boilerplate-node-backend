@@ -1,30 +1,28 @@
-import type { Request, Response, NextFunction } from "express";
-import { CastError } from "mongoose";
-import { databaseErrorConverter } from "@utils/helpers-errors";
-import UserService from "@services/users";
-import { t } from "i18next";
+import type {Request, Response} from "express";
+import {CastError} from "mongoose";
+import {databaseErrorInterpreter} from "../../utils/helpers-errors";
+import {rejectResponse, successResponse} from "../../utils/response";
+import {IPostSetCartItemPostData} from "./post-set-cart-item";
 
 /**
  * Page POST data
  */
 export interface IPostDeleteCartItemPostData {
-    productId: string
+    id: string
 }
+
 
 /**
  * Delete target cart item
  *
- * @param request
- * @param response
- * @param next
+ * @param req
+ * @param res
  */
-export const postDeleteCartItem = (request: Request<unknown, unknown, IPostDeleteCartItemPostData>, response: Response, next: NextFunction) =>
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export default (req: Request<IPostDeleteCartItemPostData | {}, unknown, IPostDeleteCartItemPostData | {}>, res: Response) => {
+    const {id} = req.method === "POST" ? req.body as IPostSetCartItemPostData : req.params as IPostSetCartItemPostData;
     // check done before entering the route
-    UserService.cartItemRemoveById(request.user!, request.body.productId)
-        .then(({ success }) => {
-            if (!success)
-                throw new Error("cartItemRemoveById error");
-            request.flash('success', [ t("ecommerce.cart-product-removed") ]);
-            return response.redirect('/cart');
-        })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+    req.user!.cartItemRemoveById(id)
+        .then(({data, status, message}) => successResponse(res, data, status, message))
+        .catch((error: Error | CastError) => rejectResponse(res, ...databaseErrorInterpreter(error)))
+}

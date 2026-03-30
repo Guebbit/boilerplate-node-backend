@@ -1,13 +1,15 @@
-import type { Request, Response } from "express";
+import type {Request, Response} from "express";
 
 /**
  * Homepage
  *
- * @param request
- * @param response
+ * @param req
+ * @param res
  */
-export const getHome = (request: Request, response: Response) =>
-    response.render('misc/home', {
-        pageMetaTitle: 'Home',
-        pageMetaLinks: [],
-    })
+export default (req: Request, res: Response) => {
+    res.status(200)
+        .json({
+            success: true,
+            message: 'Home sweet home'
+        });
+}

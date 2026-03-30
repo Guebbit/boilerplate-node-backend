@@ -1,26 +1,44 @@
-import type { CastError } from "mongoose";
-import type { Request, Response, NextFunction } from "express";
-import { t } from "i18next";
-import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
-import type { DeleteProductRequest } from "../../../api/api"
-import ProductService from "@services/products";
+import type {CastError} from "mongoose";
+import type {Request, Response} from "express";
+import {t} from "i18next";
+import Products from "../../models/products";
+import {databaseErrorInterpreter} from "../../utils/helpers-errors";
+import {rejectResponse, successResponse} from "../../utils/response";
+
+/**
+ *
+ */
+export interface IGetDeleteProductParameters {
+    id?: string
+}
+
+/**
+ *
+ */
+export interface IGetDeleteProductQuery {
+    hardDelete?: string
+}
 
 /**
  * Delete a product
  *
- * @param request
- * @param response
- * @param next
+ * @param req
+ * @param res
  */
-export const postDeleteProduct = (request: Request<unknown, unknown, DeleteProductRequest>, response: Response, next: NextFunction) =>
-    ProductService.remove(request.body.id, !!request.body.hardDelete)
-        .then(({ success, message }) => {
-            if (success)
-                request.flash('success', [ message ]);
-            response.redirect('/products/')
+export default async (req: Request<IGetDeleteProductParameters, unknown, IGetDeleteProductQuery>, res: Response) => {
+    if(!req.params.id){
+        rejectResponse(res, 404, t("ecommerce.product-not-found"))
+        return;
+    }
+    await Products.productRemoveById(req.params.id, Object.hasOwnProperty.call(req.query, "hardDelete"))
+        .then(({success, status, message}) => {
+            if (!success)
+                return rejectResponse(res, status, message)
+            return successResponse(res, message)
         })
         .catch((error: CastError) => {
             if (error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, false, [ t("ecommerce.product-not-found") ]));
-            return next(databaseErrorConverter(error));
+                return rejectResponse(res, 404, t("ecommerce.product-not-found"))
+            return rejectResponse(res, ...databaseErrorInterpreter(error))
         })
+}
