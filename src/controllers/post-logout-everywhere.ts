@@ -1,22 +1,23 @@
-import type {Request, Response} from 'express';
-import {successResponse} from "@utils/response";
-import {ETokenType} from "@models/users";
-import {destroyLoggedCookie, destroyRefreshCookie} from "@middlewares/auth-jwt";
+import type { Request, Response } from 'express';
+import { successResponse } from '@utils/response';
+import { ETokenType } from '@models/users';
+import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt';
 
 /**
- * User logout from EVERY device
- * Remove jwt cookie and ALL refresh tokens in the DB
- *
- * @param req
- * @param res
+ * POST /account/logout-all
+ * User logout from EVERY device.
+ * Remove jwt cookie and ALL refresh tokens in the DB.
  */
-export default async (req: Request, res: Response) => {
-    //remove refresh token from DB
-    if(req.user)
-        await req.user.tokenRemoveAll(ETokenType.REFRESH);
+const postLogoutEverywhere = async (request: Request, response: Response) => {
+    // remove refresh token from DB
+    if (request.user)
+        await request.user.tokenRemoveAll(ETokenType.REFRESH);
     // and from local
-    destroyRefreshCookie(res);
-    destroyLoggedCookie(res);
+    destroyRefreshCookie(response);
+    destroyLoggedCookie(response);
 
-    successResponse(res, undefined, 200, 'Logged out from all devices');
-}
+    successResponse(response, undefined, 200, 'Logged out from all devices');
+};
+
+export default postLogoutEverywhere;
+
