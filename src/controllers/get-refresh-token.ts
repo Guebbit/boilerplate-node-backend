@@ -1,5 +1,5 @@
 import type {Request, Response} from 'express';
-import {createAccessToken} from "@utils/jwt";
+import {createAccessToken} from "@middlewares/auth-jwt";
 import {rejectResponse, successResponse} from "@utils/response";
 
 /**

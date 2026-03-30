@@ -1,6 +1,6 @@
 import type {Request, Response} from 'express';
 import type {CastError} from "mongoose";
-import {generateReject, rejectResponse, successResponse} from "@utils/response";
+import {rejectResponse, successResponse} from "@utils/response";
 import {databaseErrorInterpreter} from "@utils/helpers-errors";
 import Users from "@models/users";
 
@@ -20,5 +20,8 @@ export default async (req: Request, res: Response) => {
                     return rejectResponse(res, status);
             return successResponse(res, undefined, status)
         })
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
+        .catch((error: CastError | Error) => {
+            const [status, message] = databaseErrorInterpreter(error);
+            return rejectResponse(res, status, message);
+        })
 };

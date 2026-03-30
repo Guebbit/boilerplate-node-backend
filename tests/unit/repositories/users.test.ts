@@ -1,7 +1,7 @@
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeUser, createUser } from '../../helpers/factories/users';
 import * as UserRepository from '@repositories/users';
-import type { IUserDocument } from '@models/users';
+import Users, { ETokenType, type IUserDocument } from '@models/users';
 import { Types } from 'mongoose';
 
 beforeAll(connect);
@@ -184,6 +184,78 @@ describe('UserRepository', () => {
 
             const admin = await UserRepository.findOne({ email: 'admin@example.com' });
             expect(admin!.username).toBe('admin'); // unchanged
+        });
+    });
+
+    describe('token methods', () => {
+        it('tokenRemoveAll removes all tokens of the selected type', async () => {
+            const user = await createUser({
+                tokens: [
+                    {
+                        type: ETokenType.REFRESH,
+                        token: 'refresh-1',
+                        expiration: new Date(Date.now() + 60_000),
+                    },
+                    {
+                        type: ETokenType.REFRESH,
+                        token: 'refresh-2',
+                        expiration: new Date(Date.now() + 120_000),
+                    },
+                    {
+                        type: ETokenType.PASSWORD_RESET,
+                        token: 'password-1',
+                        expiration: new Date(Date.now() + 120_000),
+                    },
+                ],
+            });
+
+            await user.tokenRemoveAll(ETokenType.REFRESH);
+            const refreshed = await UserRepository.findById((user._id as Types.ObjectId).toString());
+
+            expect(refreshed).not.toBeNull();
+            expect(refreshed!.tokens).toHaveLength(1);
+            expect(refreshed!.tokens[0].type).toBe(ETokenType.PASSWORD_RESET);
+        });
+
+        it('tokenRemoveExpired removes expired tokens and keeps valid ones', async () => {
+            const expired = new Date(Date.now() - 60_000);
+            const futureExpiration = new Date(Date.now() + 60_000);
+
+            const user = await createUser({
+                tokens: [
+                    {
+                        type: ETokenType.REFRESH,
+                        token: 'expired-token',
+                        expiration: expired,
+                    },
+                    {
+                        type: ETokenType.REFRESH,
+                        token: 'valid-token',
+                        expiration: futureExpiration,
+                    },
+                ],
+            });
+
+            const result = await Users.tokenRemoveExpired();
+            const refreshed = await UserRepository.findById((user._id as Types.ObjectId).toString());
+
+            expect(result.success).toBe(true);
+            expect(result.status).toBe(200);
+            expect(refreshed).not.toBeNull();
+            expect(refreshed!.tokens).toHaveLength(1);
+            expect(refreshed!.tokens[0].token).toBe('valid-token');
+        });
+
+        it('tokenRemoveExpired returns failure metadata when updateMany throws', async () => {
+            const updateManySpy = jest
+                .spyOn(Users, 'updateMany')
+                .mockRejectedValueOnce(new Error('db failure'));
+
+            const result = await Users.tokenRemoveExpired();
+
+            expect(result.success).toBe(false);
+            expect(result.status).toBe(500);
+            updateManySpy.mockRestore();
         });
     });
 });
