@@ -17,7 +17,7 @@ export const postOrder = (request: Request, response: Response, next: NextFuncti
     UserService.orderConfirm(request.user!)
         .then(({ success }) => {
             if (!success)
-                return next(new ExtendedError("500", 500, false, [ t('ecommerce.order-creation-failure') ]))
+                return next(new ExtendedError("500", 500, false, [ t('ecommerce.order-creation-failure') ]));
             request.flash('success', [ t('ecommerce.order-creation-success') ]);
 
             nodemailer({
@@ -29,8 +29,8 @@ export const postOrder = (request: Request, response: Response, next: NextFuncti
                     ...response.locals,
                     pageMetaTitle: 'Order confirmed',
                     pageMetaLinks: [],
-                    name: request.user!.username
+                    name: request.user!.username,
                 });
+            return response.redirect('/orders');
         })
-        .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [ message ])))
-        .finally(() => response.redirect('/orders'))
+        .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [ message ])));
