@@ -1,8 +1,11 @@
-import OrderModel, { OrderItemModel } from '@models/orders';
-import type { IOrder, IOrderItem } from '@models/orders';
+import OrderModel from '@models/orders';
+import OrderItemModel from '@models/order-items';
+import type { IOrder } from '@models/orders';
+import type { IOrderItem } from '@models/order-items';
 import type { WhereOptions } from 'sequelize';
 import { sequelize } from '@utils/database';
 import { QueryTypes } from 'sequelize';
+import orderItemsRepository from './order-items';
 
 /**
  * Order Repository
@@ -107,10 +110,22 @@ export const getOrderStats = async (userId: number): Promise<{
  *
  * @param where
  */
-export const getOrdersWithTotals = async (where: WhereOptions<IOrder> = {}): Promise<any[]> => {
+export type OrdersWithTotalsRow = {
+    id: number;
+    userId: number;
+    email: string;
+    createdAt: Date;
+    updatedAt: Date;
+    totalItems: number;
+    totalQuantity: number;
+    totalPrice: number;
+    products: string;
+};
+
+export const getOrdersWithTotals = async (where: WhereOptions<IOrder> = {}): Promise<OrdersWithTotalsRow[]> => {
     const whereClause = where.userId ? `WHERE o.userId = ${where.userId}` : '';
 
-    const results = await sequelize.query(
+    const results = await sequelize.query<OrdersWithTotalsRow>(
         `
         SELECT
             o.id,
@@ -146,16 +161,7 @@ export const getOrdersWithTotals = async (where: WhereOptions<IOrder> = {}): Pro
     return results;
 };
 
-/**
- * OrderItem operations
- */
-export const OrderItem = {
-    findByOrderId: (orderId: number): Promise<OrderItemModel[]> =>
-        OrderItemModel.findAll({ where: { orderId } }),
-
-    create: (data: Partial<IOrderItem>): Promise<OrderItemModel> =>
-        OrderItemModel.create(data as IOrderItem),
-};
+export const orderItems = orderItemsRepository;
 
 
-export default { findById, findAll, create, getOrderStats, getOrdersWithTotals, OrderItem };
+export default { findById, findAll, create, getOrderStats, getOrdersWithTotals, orderItems };

@@ -2,33 +2,12 @@ import { Table, Column, Model, DataType, CreatedAt, UpdatedAt, DeletedAt, HasMan
 import { z } from "zod"
 import { t } from "i18next";
 import bcrypt from "bcrypt";
-
-/**
- * Cart Item interface
- * Reference to product and quantity
- */
-export interface ICartItem {
-    id?: number;
-    userId: number;
-    productId: number;
-    quantity: number;
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
-/**
- * User tokens
- * Token is like an ID, but not really an ID
- */
-export interface IToken {
-    id?: number;
-    userId: number;
-    token: string;
-    type: string;
-    expiration?: Date;
-    createdAt?: Date;
-    updatedAt?: Date;
-}
+import CartItemModel from './cart-items';
+import TokenModel from './tokens';
+export type { ICartItem } from './cart-items';
+export type { IToken } from './tokens';
+export { CartItemModel } from './cart-items';
+export { TokenModel } from './tokens';
 
 /**
  * User interface
@@ -79,92 +58,6 @@ export const zodUserSchema = z.object({
     updatedAt: z.date().nullish(),
     deletedAt: z.date().nullish(),
 });
-
-/**
- * CartItem Model
- */
-@Table({
-    tableName: 'cart_items',
-    timestamps: true,
-})
-export class CartItemModel extends Model<ICartItem> {
-    @Column({
-        type: DataType.INTEGER.UNSIGNED,
-        autoIncrement: true,
-        primaryKey: true,
-    })
-    declare id: number;
-
-    @Column({
-        type: DataType.INTEGER.UNSIGNED,
-        allowNull: false,
-    })
-    declare userId: number;
-
-    @Column({
-        type: DataType.INTEGER.UNSIGNED,
-        allowNull: false,
-    })
-    declare productId: number;
-
-    @Column({
-        type: DataType.INTEGER,
-        allowNull: false,
-    })
-    declare quantity: number;
-
-    @CreatedAt
-    declare createdAt: Date;
-
-    @UpdatedAt
-    declare updatedAt: Date;
-}
-
-/**
- * Token Model
- */
-@Table({
-    tableName: 'tokens',
-    timestamps: true,
-})
-export class TokenModel extends Model<IToken> {
-    @Column({
-        type: DataType.INTEGER.UNSIGNED,
-        autoIncrement: true,
-        primaryKey: true,
-    })
-    declare id: number;
-
-    @Column({
-        type: DataType.INTEGER.UNSIGNED,
-        allowNull: false,
-    })
-    declare userId: number;
-
-    @Column({
-        type: DataType.STRING(255),
-        allowNull: false,
-    })
-    declare type: string;
-
-    @Column({
-        type: DataType.STRING(500),
-        allowNull: false,
-    })
-    declare token: string;
-
-    @Column({
-        type: DataType.DATE,
-        allowNull: true,
-    })
-    declare expiration?: Date;
-
-    @CreatedAt
-    declare createdAt: Date;
-
-    @UpdatedAt
-    declare updatedAt: Date;
-}
 
 /**
  * User Model
@@ -243,4 +136,3 @@ export class UserModel extends Model<IUser> {
 }
 
 export default UserModel;
-export { CartItemModel, TokenModel };
