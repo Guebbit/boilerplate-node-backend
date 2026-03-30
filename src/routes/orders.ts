@@ -1,16 +1,14 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import {
-    listOrders,
-    createOrder,
-    updateOrder,
-    deleteOrder,
-    searchOrders,
-    getOrderById,
-    updateOrderById,
-    deleteOrderById,
-    getOrderInvoice,
-} from '@controllers/orders';
+import listOrders from '@controllers/orders/get-list';
+import createOrder from '@controllers/orders/post-create';
+import updateOrder from '@controllers/orders/put-update';
+import deleteOrder from '@controllers/orders/delete';
+import searchOrders from '@controllers/orders/post-search';
+import getOrderById from '@controllers/orders/get-by-id';
+import updateOrderById from '@controllers/orders/put-update-by-id';
+import deleteOrderById from '@controllers/orders/delete-by-id';
+import getOrderInvoice from '@controllers/orders/get-invoice-by-id';
 
 const router = Router();
 

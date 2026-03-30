@@ -1,15 +1,13 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import {
-    getAccount,
-    login,
-    signup,
-    requestPasswordReset,
-    confirmPasswordReset,
-} from '@controllers/account';
-import getRefreshToken from '@controllers/get-refresh-token';
-import postLogoutEverywhere from '@controllers/post-logout-everywhere';
-import deleteExpiredTokens from '@controllers/delete-expired-tokens';
+import getAccount from '@controllers/account/get-account';
+import login from '@controllers/account/post-login';
+import signup from '@controllers/account/post-signup';
+import requestPasswordReset from '@controllers/account/post-reset';
+import confirmPasswordReset from '@controllers/account/post-reset-confirm';
+import getRefreshToken from '@controllers/account/get-refresh-token';
+import postLogoutEverywhere from '@controllers/account/post-logout-everywhere';
+import deleteExpiredTokens from '@controllers/account/delete-expired-tokens';
 
 const router = Router();
 

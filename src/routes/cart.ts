@@ -1,14 +1,12 @@
 import { Router } from 'express';
 import { getAuth, isAuth } from '@middlewares/authorizations';
-import {
-    getCart,
-    getCartSummary,
-    upsertCartItem,
-    updateCartItemById,
-    clearCart,
-    removeCartItem,
-    checkout,
-} from '@controllers/cart';
+import getCart from '@controllers/cart/get';
+import getCartSummary from '@controllers/cart/get-summary';
+import upsertCartItem from '@controllers/cart/post-upsert-item';
+import updateCartItemById from '@controllers/cart/put-update-item-by-id';
+import clearCart from '@controllers/cart/delete';
+import removeCartItem from '@controllers/cart/delete-item-by-id';
+import checkout from '@controllers/cart/post-checkout';
 
 const router = Router();
 

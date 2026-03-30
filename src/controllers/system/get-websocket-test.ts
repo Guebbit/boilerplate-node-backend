@@ -1,13 +1,13 @@
-import type {Request, Response} from "express";
-import {setupWebSocketServer, setupWebSocketClient} from "../utils/helpers-websockets";
+import type { Request, Response } from 'express';
+import { setupWebSocketServer, setupWebSocketClient } from '@utils/helpers-websockets';
 
 /**
  * Homepage
  *
- * @param req
- * @param res
+ * @param _request
+ * @param response
  */
-export default (req: Request, res: Response) => {
+const getWebsocketTest = (_request: Request, response: Response) => {
     const port = 3001;
     const url = `ws://localhost:${port}`;
 
@@ -51,9 +51,11 @@ export default (req: Request, res: Response) => {
     // eslint-disable-next-line no-console
     setTimeout(() => wss.close(() => console.log("SERVER: closed")), 4000);
 
-    res.status(200)
+    response.status(200)
         .json({
             success: true,
             message: 'Websocket test initiated'
         });
 }
+
+export default getWebsocketTest;

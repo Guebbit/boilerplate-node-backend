@@ -1,15 +1,13 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import {
-    listUsers,
-    createUser,
-    updateUser,
-    deleteUser,
-    searchUsers,
-    getUserById,
-    updateUserById,
-    deleteUserById,
-} from '@controllers/users';
+import listUsers from '@controllers/users/get-list';
+import createUser from '@controllers/users/post-create';
+import updateUser from '@controllers/users/put-update';
+import deleteUser from '@controllers/users/delete';
+import searchUsers from '@controllers/users/post-search';
+import getUserById from '@controllers/users/get-by-id';
+import updateUserById from '@controllers/users/put-update-by-id';
+import deleteUserById from '@controllers/users/delete-by-id';
 
 const router = Router();
 

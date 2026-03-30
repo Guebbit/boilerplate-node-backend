@@ -1,15 +1,13 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import {
-    listProducts,
-    createProduct,
-    updateProduct,
-    deleteProduct,
-    searchProducts,
-    getProductById,
-    updateProductById,
-    deleteProductById,
-} from '@controllers/products';
+import listProducts from '@controllers/products/get-list';
+import createProduct from '@controllers/products/post-create';
+import updateProduct from '@controllers/products/put-update';
+import deleteProduct from '@controllers/products/delete';
+import searchProducts from '@controllers/products/post-search';
+import getProductById from '@controllers/products/get-by-id';
+import updateProductById from '@controllers/products/put-update-by-id';
+import deleteProductById from '@controllers/products/delete-by-id';
 
 const router = Router();
 
