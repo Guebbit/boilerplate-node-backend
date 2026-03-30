@@ -250,9 +250,11 @@ userSchema.methods.tokenRemoveAll = async function (type: ETokenType): Promise<v
  */
 userSchema.static('tokenRemoveExpired', async function (): Promise<{ status: number; success: boolean }> {
     try {
+        const now = new Date();
+        const tokenExpirationPath = 'tokens.expiration';
         await this.updateMany(
-            { 'tokens.expiration': { $lt: new Date() } },
-            { $pull: { tokens: { expiration: { $lt: new Date() } } } }
+            { [tokenExpirationPath]: { $lt: now } },
+            { $pull: { tokens: { expiration: { $lt: now } } } }
         );
         return { status: 200, success: true };
     } catch (error) {
