@@ -3,6 +3,7 @@ import type { Document, Model } from 'mongoose';
 import { z } from "zod"
 import { t } from "i18next";
 import bcrypt from "bcrypt";
+import logger from "@utils/winston";
 
 /**
  * Token types used in jwt-auth
@@ -254,7 +255,11 @@ userSchema.static('tokenRemoveExpired', async function (): Promise<{ status: num
             { $pull: { tokens: { expiration: { $lt: new Date() } } } }
         );
         return { status: 200, success: true };
-    } catch {
+    } catch (error) {
+        logger.error({
+            message: 'tokenRemoveExpired failed',
+            error,
+        });
         return { status: 500, success: false };
     }
 });

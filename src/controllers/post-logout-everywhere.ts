@@ -18,5 +18,5 @@ export default async (req: Request, res: Response) => {
     destroyRefreshCookie(res);
     destroyLoggedCookie(res);
 
-    successResponse(res, undefined);
+    successResponse(res, undefined, 200, 'Logged out from all devices');
 }

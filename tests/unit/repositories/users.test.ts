@@ -219,7 +219,7 @@ describe('UserRepository', () => {
 
         it('tokenRemoveExpired removes expired tokens and keeps valid ones', async () => {
             const expired = new Date(Date.now() - 60_000);
-            const future = new Date(Date.now() + 60_000);
+            const futureExpiration = new Date(Date.now() + 60_000);
 
             const user = await createUser({
                 tokens: [
@@ -231,7 +231,7 @@ describe('UserRepository', () => {
                     {
                         type: ETokenType.REFRESH,
                         token: 'valid-token',
-                        expiration: future,
+                        expiration: futureExpiration,
                     },
                 ],
             });
@@ -244,6 +244,18 @@ describe('UserRepository', () => {
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
             expect(refreshed!.tokens[0].token).toBe('valid-token');
+        });
+
+        it('tokenRemoveExpired returns failure metadata when updateMany throws', async () => {
+            const updateManySpy = jest
+                .spyOn(Users, 'updateMany')
+                .mockRejectedValueOnce(new Error('db failure'));
+
+            const result = await Users.tokenRemoveExpired();
+
+            expect(result.success).toBe(false);
+            expect(result.status).toBe(500);
+            updateManySpy.mockRestore();
         });
     });
 });
