@@ -4,6 +4,13 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
+ * URL parameters
+ */
+export interface IGetTargetUserParameters {
+    id: string,
+}
+
+/**
  * GET /users/:id
  * Get a single user by path id (admin).
  */

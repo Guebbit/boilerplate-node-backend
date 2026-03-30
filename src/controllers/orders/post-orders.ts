@@ -10,10 +10,18 @@ import type { CreateOrderRequest } from '../../../api/api';
  */
 const postOrders = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as CreateOrderRequest;
+
+    /**
+     * Data validation
+     */
     if (!body.userId || !body.email || !body.items?.length) {
         rejectResponse(response, 422, 'createOrder - invalid data', [t('generic.error-missing-data')]);
         return;
     }
+
+    /**
+     * Create a new order
+     */
     const result = await OrderService.create(body.userId, body.email, body.items);
     if (!result.success) {
         rejectResponse(response, result.status, result.message, result.errors);

@@ -5,10 +5,18 @@ import { successResponse, rejectResponse } from '@utils/response';
 import { buildCartResponse } from './helpers';
 
 /**
+ * Request params
+ */
+export interface IDeleteCartByIdParameters {
+    productId: string
+}
+
+/**
  * DELETE /cart/:productId
- * Removes a specific product from the cart. Returns the updated cart.
+ * Remove a specific product from the cart. Returns the updated cart.
  */
 const deleteCartById = async (request: Request, response: Response): Promise<void> => {
+    // Authentication check is done before entering the route
     const user = request.user!;
     const { productId } = request.params;
     const productIdString = String(productId);

@@ -7,10 +7,20 @@ import type { UpsertCartItemRequest } from '../../../api/api';
 import { buildCartResponse } from './helpers';
 
 /**
+ * POST body data
+ */
+export interface IPostSetCartItemPostData {
+    productId: string,
+    quantity: number,
+}
+
+/**
  * POST /cart
- * Add or set a product in the cart. Sets the quantity (replaces existing).
+ * Add a product (with its quantity) to the cart.
+ * Checks product availability, then sets (or replaces) the quantity in the cart.
  */
 const postCart = async (request: Request, response: Response): Promise<void> => {
+    // Authentication check is done before entering the route
     const user = request.user!;
     const { productId, quantity } = request.body as UpsertCartItemRequest;
 
@@ -19,6 +29,9 @@ const postCart = async (request: Request, response: Response): Promise<void> => 
         return;
     }
 
+    /**
+     * Find product (active and not soft-deleted)
+     */
     const product = await ProductService.getById(productId);
     if (!product) {
         rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
@@ -29,7 +42,7 @@ const postCart = async (request: Request, response: Response): Promise<void> => 
     // Reload fresh user data after mutation
     await user.populate('cart.items.product');
     const cart = await buildCartResponse(user);
-    successResponse(response, cart);
+    successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
 };
 
 export default postCart;

@@ -3,11 +3,29 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
+ * POST body data
+ */
+export interface IPostSignupPostData {
+    email: string,
+    username: string,
+    password: string,
+    passwordConfirm: string,
+    imageUrl?: string,
+}
+
+/**
  * POST /account/signup
- * Registers a new user account.
+ * Register a new user account.
  */
 const postSignup = async (request: Request, response: Response): Promise<void> => {
-    const { email, username, password, passwordConfirm, imageUrl } = request.body as Record<string, string | undefined>;
+    /**
+     * Get POST data
+     */
+    const { email, username, password, passwordConfirm, imageUrl } = request.body as IPostSignupPostData;
+
+    /**
+     * Register
+     */
     const result = await UserService.signup(
         email ?? '',
         username ?? '',
@@ -19,6 +37,8 @@ const postSignup = async (request: Request, response: Response): Promise<void> =
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
+
+    // Registration successful
     successResponse(response, result.data, 201);
 };
 

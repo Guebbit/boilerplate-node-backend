@@ -7,9 +7,13 @@ import Users from '@models/users';
 
 /**
  * DELETE /account/tokens/expired
- * Remove expired tokens from the DB (admin only).
+ * Remove all expired tokens from the database (admin only).
+ * Useful for periodic cleanup of stale refresh tokens.
  */
 const deleteExpiredTokens = async (request: Request, response: Response) => {
+    /**
+     * Remove all expired tokens stored in the server
+     */
     await Users.tokenRemoveExpired()
         .then(({ status, success }) => {
             if (!success)

@@ -4,11 +4,25 @@ import { successResponse } from '@utils/response';
 import type { SearchProductsRequest } from '../../../api/api';
 
 /**
+ * Query parameters
+ */
+export interface IGetAllProductsQueries {
+    id?: string
+    page?: string
+    pageSize?: string
+    text?: string
+    minPrice?: string
+    maxPrice?: string
+}
+
+/**
  * GET /products
- * List/search products via query parameters (public; admin sees all).
+ * List/search products via query parameters.
+ * Admin sees all products (including inactive/deleted); public sees only active ones.
  */
 const getProducts = async (request: Request, response: Response): Promise<void> => {
-    const { id, page, pageSize, text, minPrice, maxPrice } = request.query as Record<string, string | undefined>;
+    const { id, page, pageSize, text, minPrice, maxPrice } = request.query as IGetAllProductsQueries;
+    // Only admin can see non-active products
     const admin = request.user?.admin === true;
     const filters: SearchProductsRequest = {
         id,
