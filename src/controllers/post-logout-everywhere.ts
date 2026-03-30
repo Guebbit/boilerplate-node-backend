@@ -1,7 +1,7 @@
 import type {Request, Response} from 'express';
 import {successResponse} from "@utils/response";
 import {ETokenType} from "@models/users";
-import {destroyLoggedCookie, destroyRefreshCookie} from "@utils/jwt";
+import {destroyLoggedCookie, destroyRefreshCookie} from "@middlewares/auth-jwt";
 
 /**
  * User logout from EVERY device
@@ -18,5 +18,5 @@ export default async (req: Request, res: Response) => {
     destroyRefreshCookie(res);
     destroyLoggedCookie(res);
 
-    successResponse(res);
+    successResponse(res, undefined);
 }
