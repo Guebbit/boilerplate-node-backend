@@ -267,10 +267,12 @@ export const passwordChange = (
      * Validation error
      */
     if (!parseResult.success)
-        return generateReject(
+        return Promise.resolve(
+            generateReject(
             400,
             'passwordChange - bad request',
             parseResult.error.issues.map(({ message }) => message)
+            )
         );
 
     /**
@@ -326,10 +328,12 @@ export const signup = (
      * Validation error
      */
     if (!parseResult.success)
-        return generateReject(
+        return Promise.resolve(
+            generateReject(
             400,
             'signup - bad request',
             parseResult.error.issues.map(({ message }) => message)
+            )
         );
 
     /**
@@ -337,7 +341,7 @@ export const signup = (
      * If that's the case: return error and stop the creation process
      */
     return UserRepository.findOne({ email })
-        .then((user) => {
+        .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
             // Email already exists
             if (user)
                 return generateReject(409, 'signup - email already used', [
@@ -387,28 +391,32 @@ export const login = (
      * Validation error
      */
     if (!parseResult.success)
-        return generateReject(
+        return Promise.resolve(
+            generateReject(
             400,
             'login - bad request',
             parseResult.error.issues.map(({ message }) => message)
+            )
         );
 
     /**
      * Everything is ok, login the user
      */
     return UserRepository.findOne({ email, deletedAt: undefined })
-        .then((user) => {
+        .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
             // user not found
             if (!user)
                 return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
-            return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
-                // User found but password doesn't match
-                if (!doMatch)
-                    return generateReject(401, 'login - wrong credentials', [
-                        t('login.wrong-data')
-                    ]);
-                return generateSuccess<IUserDocument>(user);
-            });
+            return bcrypt
+                .compare(password ?? '', user.password)
+                .then<IResponseSuccess<IUserDocument> | IResponseReject>((doMatch) => {
+                    // User found but password doesn't match
+                    if (!doMatch)
+                        return generateReject(401, 'login - wrong credentials', [
+                            t('login.wrong-data')
+                        ]);
+                    return generateSuccess<IUserDocument>(user);
+                });
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
@@ -549,11 +557,8 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
  */
 export const getById = (id?: string) => {
     // Return early without triggering a DB call when no id is provided
-    if (!id) return Promise.resolve(undefined);
-    return UserRepository.findById(id).then((user) => {
-        if (!user) return undefined;
-        return user.toObject();
-    });
+    if (!id) return Promise.resolve();
+    return UserRepository.findById(id).then((user) => user?.toObject());
 };
 
 /**

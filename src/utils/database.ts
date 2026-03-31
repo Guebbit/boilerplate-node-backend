@@ -11,16 +11,18 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
  * Each failed attempt doubles the delay, capped at 30 seconds.
  * Throws if all attempts are exhausted.
  */
-const connectWithRetry = (attempt = 0) =>
-    mongoose.connect(process.env.NODE_DB_URI ?? '').catch(() => {
+const connectWithRetry = async (attempt = 0): Promise<void> => {
+    try {
+        await mongoose.connect(process.env.NODE_DB_URI ?? '');
+    } catch {
         if (attempt >= MAX_RETRIES - 1)
             throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`);
         const delayMs = Math.min(BASE_DELAY_MS * 2 ** attempt, 30_000);
-        logger.warn(
-            `DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
-        );
-        return wait(delayMs).then(() => connectWithRetry(attempt + 1));
-    });
+        logger.warn(`DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await wait(delayMs);
+        await connectWithRetry(attempt + 1);
+    }
+};
 
 export const start = (): Promise<void> => connectWithRetry();
 
