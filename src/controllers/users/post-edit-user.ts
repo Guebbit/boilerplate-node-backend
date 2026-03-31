@@ -78,7 +78,7 @@ export const postEditUser = async (
         })
             .then(() => response.redirect('/users/'))
             .catch(async (error: CastError) => {
-                if (imageUrlRaw) await deleteFile(imageUrlRaw);
+                if (imageUrlRaw) void deleteFile(imageUrlRaw);
                 return next(new ExtendedError(error.kind, 500, false, [error.message]));
             });
 
@@ -97,7 +97,7 @@ export const postEditUser = async (
             response.redirect('/users/details/' + (updatedUser._id as Types.ObjectId).toString())
         )
         .catch(async (error: CastError) => {
-            if (imageUrlRaw) await deleteFile(imageUrlRaw);
+            if (imageUrlRaw) void deleteFile(imageUrlRaw);
             return next(new ExtendedError(error.kind, 500, false, [error.message]));
         });
 };

@@ -24,7 +24,6 @@ export const postSignup = async (
      * Get POST data
      */
     const { email, username, password, passwordConfirm } = request.body;
-    const imageUrlBody = request.body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
@@ -34,7 +33,7 @@ export const postSignup = async (
     /**
      * Login
      */
-    return UserService.signup(email, username, password, passwordConfirm, imageUrl ?? imageUrlBody)
+    return UserService.signup(email, username, password, passwordConfirm, imageUrl ?? request.body.imageUrl)
         .then(({ success, data, errors = [] }) => {
             if (!success || !data) {
                 // So the user doesn't need to fill the form again
