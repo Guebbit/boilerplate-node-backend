@@ -3,19 +3,20 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { CreateUserRequest } from '@types';
+import type { CreateUserRequest, CreateUserRequestMultipart } from '@types';
 
 /**
  * POST /users
  * Create a new user (admin).
  */
-const postUsers = async (request: Request, response: Response): Promise<void> => {
+const postUsers = async (request: Request<unknown, unknown, CreateUserRequest | CreateUserRequestMultipart>, response: Response): Promise<void> => {
     const body = request.body as CreateUserRequest;
+    const imageUrlBody = body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request);
+    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     const errors = UserService.validateData(body, { requirePassword: true });
     if (errors.length > 0) {

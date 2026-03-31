@@ -4,19 +4,20 @@ import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { UpdateProductByIdRequest } from '@types';
+import type { UpdateProductByIdRequest, UpdateProductByIdRequestMultipart } from '@types';
 
 /**
  * PUT /products/:id
  * Update a product by path id (admin).
  */
-const putProductById = async (request: Request, response: Response): Promise<void> => {
+const putProductById = async (request: Request<unknown, unknown, UpdateProductByIdRequest | UpdateProductByIdRequestMultipart>, response: Response): Promise<void> => {
     const body = request.body as UpdateProductByIdRequest;
+    const imageUrlBody = body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request, body.imageUrl);
+    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     try {
         /**

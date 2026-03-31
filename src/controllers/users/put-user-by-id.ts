@@ -4,19 +4,20 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { UpdateUserByIdRequest } from '@types';
+import type { UpdateUserByIdRequest, UpdateUserByIdRequestMultipart } from '@types';
 
 /**
  * PUT /users/:id
  * Update a user by path id (admin).
  */
-const putUserById = async (request: Request, response: Response): Promise<void> => {
+const putUserById = async (request: Request<unknown, unknown, UpdateUserByIdRequest | UpdateUserByIdRequestMultipart>, response: Response): Promise<void> => {
     const body = request.body as UpdateUserByIdRequest;
+    const imageUrlBody = body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request);
+    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     try {
         /**
