@@ -3,20 +3,12 @@ import { createAccessToken } from '@middlewares/auth-jwt';
 import { rejectResponse, successResponse } from '@utils/response';
 
 /**
- * Page GET data
- */
-export interface IGetResetConfirmPostData {
-    token?: string,
-}
-
-
-/**
  * GET /account/refresh
  * Refresh access token.
  * Given the refreshToken from the URL or, if not, from the user cookies:
  * create a new short-lived access token for the following requests.
  */
-const getRefreshToken = (request: Request<IGetResetConfirmPostData>, response: Response) => {
+const getRefreshToken = (request: Request<{ token?: string }>, response: Response) => {
 
     /**
      * Get token

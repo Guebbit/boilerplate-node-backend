@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { Request, Response, ParamsDictionary } from 'express';
 import { Types } from 'mongoose';
 import UserService from '@services/users';
 import {
@@ -9,26 +9,18 @@ import {
     ERefreshTokenExpiryTime,
 } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
-
-/**
- * POST body data
- */
-export interface IPostLoginPostData {
-    email: string,
-    password: string,
-    remember?: ERefreshTokenExpiryTime
-}
+import type { LoginRequest } from '../../../api/api';
 
 /**
  * POST /account/login
  * Authenticate user.
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
-const postLogin = async (request: Request, response: Response): Promise<void> => {
+const postLogin = async (request: Request<ParamsDictionary, any, LoginRequest & { remember?: ERefreshTokenExpiryTime }>, response: Response): Promise<void> => {
     /**
      * Get POST data
      */
-    const { email, password, remember } = request.body as IPostLoginPostData;
+    const { email, password, remember } = request.body;
 
     /**
      * Login

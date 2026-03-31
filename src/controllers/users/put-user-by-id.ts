@@ -7,13 +7,6 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import type { UpdateUserByIdRequest } from '../../../api/api';
 
 /**
- * URL parameters
- */
-export interface IEditUserParameters {
-    id: string,
-}
-
-/**
  * PUT /users/:id
  * Update a user by path id (admin).
  */

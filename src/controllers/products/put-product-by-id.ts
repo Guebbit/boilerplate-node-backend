@@ -7,13 +7,6 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import type { UpdateProductByIdRequest } from '../../../api/api';
 
 /**
- * URL parameters
- */
-export interface IEditProductParameters {
-    id: string,
-}
-
-/**
  * PUT /products/:id
  * Update a product by path id (admin).
  */

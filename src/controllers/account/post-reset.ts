@@ -1,23 +1,17 @@
-import type { Request, Response } from 'express';
+import type { Request, Response, ParamsDictionary } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import UserRepository from '@repositories/users';
 import { successResponse } from '@utils/response';
-
-/**
- * POST body data
- */
-export interface IPostResetPostData {
-    email: string,
-}
+import type { PasswordResetRequest } from '../../../api/api';
 
 /**
  * POST /account/reset
  * Initiate password-reset flow: send a one-time token to the given email.
  * Always returns 200 to prevent email enumeration attacks.
  */
-const postReset = async (_request: Request, response: Response): Promise<void> => {
-    const { email } = _request.body as IPostResetPostData;
+const postReset = async (_request: Request<ParamsDictionary, any, PasswordResetRequest>, response: Response): Promise<void> => {
+    const { email } = _request.body;
     try {
         if (email) {
             const user = await UserRepository.findOne({ email });
