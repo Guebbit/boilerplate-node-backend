@@ -9,17 +9,18 @@ import { userScope } from './helpers';
  * Get a single order by path id.
  * Non-admin users can only access their own orders.
  */
-const getOrderById = async (request: Request, response: Response): Promise<void> => {
+const getOrderById = (request: Request, response: Response): Promise<void> => {
     /**
      * User role filters:
      * Only admin can see all orders. Regular users can only see their own.
      */
-    const order = await OrderService.getById(String(request.params.id), userScope(request));
-    if (!order) {
-        rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
-        return;
-    }
-    successResponse(response, order);
+    return OrderService.getById(String(request.params.id), userScope(request)).then((order) => {
+        if (!order) {
+            rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
+            return;
+        }
+        successResponse(response, order);
+    });
 };
 
 export default getOrderById;

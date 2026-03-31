@@ -34,9 +34,9 @@ const postSignup = (
         imageUrl ?? request.body.imageUrl
     ).then((result) => {
         if (!result.success)
-            return (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve()).then(() =>
-                rejectResponse(response, result.status, result.message, result.errors)
-            );
+            return (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve()).then(() => {
+                rejectResponse(response, result.status, result.message, result.errors);
+            });
 
         // Registration successful
         successResponse(response, result.data, 201);

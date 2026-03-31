@@ -8,18 +8,19 @@ import type { DeleteUserRequest } from '@types';
  * DELETE /users
  * Delete a user by id in the request body (admin).
  */
-const deleteUsers = async (request: Request, response: Response): Promise<void> => {
+const deleteUsers = (request: Request, response: Response): Promise<void> => {
     const body = request.body as DeleteUserRequest;
     if (!body.id) {
         rejectResponse(response, 422, 'deleteUser - missing id', [t('generic.error-missing-data')]);
-        return;
+        return Promise.resolve();
     }
-    const result = await UserService.remove(body.id, body.hardDelete ?? false);
-    if (!result.success) {
-        rejectResponse(response, result.status, result.message, result.errors);
-        return;
-    }
-    successResponse(response, undefined, 200, result.message);
+    return UserService.remove(body.id, body.hardDelete ?? false).then((result) => {
+        if (!result.success) {
+            rejectResponse(response, result.status, result.message, result.errors);
+            return;
+        }
+        successResponse(response, undefined, 200, result.message);
+    });
 };
 
 export default deleteUsers;

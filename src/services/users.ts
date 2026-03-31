@@ -232,7 +232,7 @@ export const tokenAdd = (
  * @param password
  * @param passwordConfirm
  */
-export const passwordChange = async (
+export const passwordChange = (
     user: IUserDocument,
     password = '',
     passwordConfirm = ''
@@ -265,10 +265,12 @@ export const passwordChange = async (
      * Validation error
      */
     if (!parseResult.success)
-        return generateReject(
-            400,
-            'passwordChange - bad request',
-            parseResult.error.issues.map(({ message }) => message)
+        return Promise.resolve(
+            generateReject(
+                400,
+                'passwordChange - bad request',
+                parseResult.error.issues.map(({ message }) => message)
+            )
         );
 
     /**
@@ -324,10 +326,12 @@ export const signup = (
      * Validation error
      */
     if (!parseResult.success)
-        return generateReject(
-            400,
-            'signup - bad request',
-            parseResult.error.issues.map(({ message }) => message)
+        return Promise.resolve(
+            generateReject(
+                400,
+                'signup - bad request',
+                parseResult.error.issues.map(({ message }) => message)
+            )
         );
 
     /**
@@ -335,7 +339,7 @@ export const signup = (
      * If that's the case: return error and stop the creation process
      */
     return UserRepository.findOne({ email })
-        .then((user) => {
+        .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
             // Email already exists
             if (user)
                 return generateReject(409, 'signup - email already used', [
@@ -361,7 +365,7 @@ export const signup = (
  * @param email
  * @param password
  */
-export const login = async (
+export const login = (
     email?: string,
     password?: string
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
@@ -385,10 +389,12 @@ export const login = async (
      * Validation error
      */
     if (!parseResult.success)
-        return generateReject(
-            400,
-            'login - bad request',
-            parseResult.error.issues.map(({ message }) => message)
+        return Promise.resolve(
+            generateReject(
+                400,
+                'login - bad request',
+                parseResult.error.issues.map(({ message }) => message)
+            )
         );
 
     /**
@@ -546,7 +552,7 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
  */
 export const getById = (id?: string) => {
     // Return early without triggering a DB call when no id is provided
-    if (!id) return;
+    if (!id) return Promise.resolve();
     return UserRepository.findById(id).then((user) => {
         if (!user) return;
         return user.toObject();

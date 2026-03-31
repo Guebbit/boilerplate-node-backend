@@ -10,13 +10,16 @@ import type { UpdateProductRequest, UpdateProductRequestMultipart } from '@types
  * PUT /products
  * Update a product by id in the request body (admin).
  */
-const putProducts = async (request: Request<unknown, unknown, UpdateProductRequest | UpdateProductRequestMultipart>, response: Response): Promise<void> => {
+const putProducts = (
+    request: Request<unknown, unknown, UpdateProductRequest | UpdateProductRequestMultipart>,
+    response: Response
+): Promise<void> => {
     const body = request.body as UpdateProductRequest;
     if (!body.id) {
         rejectResponse(response, 422, 'updateProduct - missing id', [
             t('generic.error-missing-data')
         ]);
-        return;
+        return Promise.resolve();
     }
 
     /**
@@ -24,19 +27,20 @@ const putProducts = async (request: Request<unknown, unknown, UpdateProductReque
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    try {
-        const product = await ProductService.update(body.id, {
-            ...request.body,
-            imageUrl: imageUrl ?? request.body.imageUrl
-        });
-        successResponse(response, product.toObject());
-    } catch (error) {
-        if (imageUrlRaw) await deleteFile(imageUrlRaw);
-        const message = (error as Error).message;
-        if (message === '404')
-            rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        else rejectResponse(response, 500, 'Internal Server Error', [message]);
-    }
+    return ProductService.update(body.id, {
+        ...request.body,
+        imageUrl: imageUrl ?? request.body.imageUrl
+    })
+        .then((product) => {
+            successResponse(response, product.toObject());
+        })
+        .catch((error: Error) =>
+            (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve()).then(() => {
+                if (error.message === '404')
+                    rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
+                else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+            })
+        );
 };
 
 export default putProducts;

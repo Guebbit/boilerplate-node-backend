@@ -96,8 +96,7 @@ export const search = (
             skip,
             limit: pageSize
         }).then((items) => ({
-            // @ts-expect-error missing id because we have _id
-            items,
+            items: items as unknown as ProductsResponse['items'],
             meta: {
                 page,
                 pageSize,
@@ -116,15 +115,18 @@ export const search = (
  * @param id
  * @param admin
  */
-export const getById = (id: string | undefined, admin = false) => {
+export const getById = (
+    id: string | undefined,
+    admin = false
+)=> {
     // Return early without triggering a DB call when no id is provided
-    if (!id) return;
-    if (admin) return ProductRepository.findById(id).lean();
+    if (!id) return Promise.resolve();
+    if (admin) return ProductRepository.findById(id).lean().exec();
     return ProductRepository.findOne({
         _id: id,
         active: true,
         deletedAt: undefined
-    }).lean();
+    }).lean().exec();
 };
 
 /**

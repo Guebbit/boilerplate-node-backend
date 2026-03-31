@@ -8,7 +8,7 @@ import type { CreateOrderRequest } from '@types';
  * POST /orders
  * Create a new order from a payload (admin).
  */
-const postOrders = async (request: Request, response: Response): Promise<void> => {
+const postOrders = (request: Request, response: Response): Promise<void> => {
     const body = request.body as CreateOrderRequest;
 
     /**
@@ -18,18 +18,19 @@ const postOrders = async (request: Request, response: Response): Promise<void> =
         rejectResponse(response, 422, 'createOrder - invalid data', [
             t('generic.error-missing-data')
         ]);
-        return;
+        return Promise.resolve();
     }
 
     /**
      * Create a new order
      */
-    const result = await OrderService.create(body.userId, body.email, body.items);
-    if (!result.success) {
-        rejectResponse(response, result.status, result.message, result.errors);
-        return;
-    }
-    successResponse(response, result.data, 201);
+    return OrderService.create(body.userId, body.email, body.items).then((result) => {
+        if (!result.success) {
+            rejectResponse(response, result.status, result.message, result.errors);
+            return;
+        }
+        successResponse(response, result.data, 201);
+    });
 };
 
 export default postOrders;

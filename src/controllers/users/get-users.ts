@@ -7,7 +7,7 @@ import type { SearchUsersRequest } from '@types';
  * GET /users
  * List/search users via query parameters (admin only).
  */
-const getUsers = async (request: Request, response: Response): Promise<void> => {
+const getUsers = (request: Request, response: Response): Promise<void> => {
     const { id, page, pageSize, text, email, username, active } = request.query as Record<
         string,
         string | undefined
@@ -21,8 +21,9 @@ const getUsers = async (request: Request, response: Response): Promise<void> => 
         pageSize: pageSize ? Number(pageSize) : undefined,
         active: active === undefined ? undefined : active === 'true'
     };
-    const result = await UserService.search(filters);
-    successResponse(response, result);
+    return UserService.search(filters).then((result) => {
+        successResponse(response, result);
+    });
 };
 
 export default getUsers;

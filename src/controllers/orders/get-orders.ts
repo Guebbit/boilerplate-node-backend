@@ -9,7 +9,7 @@ import { userScope } from './helpers';
  * List/search orders via query parameters.
  * Non-admin users see only their own orders.
  */
-const getOrders = async (request: Request, response: Response): Promise<void> => {
+const getOrders = (request: Request, response: Response): Promise<void> => {
     const { id, page, pageSize, userId, productId, email } = request.query as Record<
         string,
         string | undefined
@@ -26,8 +26,9 @@ const getOrders = async (request: Request, response: Response): Promise<void> =>
      * User role filters:
      * Only admin can see all orders. Regular users can only see their own.
      */
-    const result = await OrderService.search(filters, userScope(request));
-    successResponse(response, result);
+    return OrderService.search(filters, userScope(request)).then((result) => {
+        successResponse(response, result);
+    });
 };
 
 export default getOrders;

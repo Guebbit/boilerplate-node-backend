@@ -7,10 +7,11 @@ import type { SearchUsersRequest } from '@types';
  * POST /users/search
  * Search users via JSON body (admin).
  */
-const postUsersSearch = async (request: Request, response: Response): Promise<void> => {
+const postUsersSearch = (request: Request, response: Response): Promise<void> => {
     const body = request.body as SearchUsersRequest;
-    const result = await UserService.search(body);
-    successResponse(response, result);
+    return UserService.search(body).then((result) => {
+        successResponse(response, result);
+    });
 };
 
 export default postUsersSearch;

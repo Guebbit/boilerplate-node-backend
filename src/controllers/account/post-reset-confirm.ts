@@ -21,7 +21,7 @@ const postResetConfirm = (
         rejectResponse(response, 422, 'reset-confirm - missing token', [
             t('generic.error-missing-data')
         ]);
-        return;
+        return Promise.resolve();
     }
 
     return UserRepository.findOne({

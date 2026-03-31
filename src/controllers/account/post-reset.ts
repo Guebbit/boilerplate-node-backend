@@ -19,10 +19,10 @@ const postReset = (
         ? UserRepository.findOne({ email }).then((user) =>
               user
                   ? // Add a password reset token (1 hour expiry)
-                    UserService.tokenAdd(user, 'password', 3_600_000).then(() => undefined)
-                  : undefined
+                    UserService.tokenAdd(user, 'password', 3_600_000).then(() => {})
+                  : Promise.resolve()
           )
-        : Promise.resolve(undefined)
+        : Promise.resolve()
     )
         .catch(() => {
             // silent — do not reveal whether the email exists

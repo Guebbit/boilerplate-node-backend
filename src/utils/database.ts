@@ -14,7 +14,7 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 export const start = (): Promise<void> => {
     const attemptConnect = (attempt: number): Promise<void> =>
         mongoose.connect(process.env.NODE_DB_URI ?? '').then(
-            () => undefined,
+            () => {},
             () => {
                 if (attempt >= MAX_RETRIES - 1)
                     throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`);
