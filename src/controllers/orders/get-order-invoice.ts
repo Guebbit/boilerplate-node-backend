@@ -6,13 +6,6 @@ import { rejectResponse } from '@utils/response';
 import { userScope } from './helpers';
 
 /**
- * URL parameters
- */
-export interface IGetTargetInvoiceParameters {
-    id?: string,
-}
-
-/**
  * GET /orders/:id/invoice
  * Generate and return a PDF invoice for the order.
  * Non-admin users can only access their own orders.

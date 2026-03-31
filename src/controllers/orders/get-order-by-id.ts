@@ -5,13 +5,6 @@ import { successResponse, rejectResponse } from '@utils/response';
 import { userScope } from './helpers';
 
 /**
- * URL parameters
- */
-export interface IGetTargetOrderParameters {
-    id?: string,
-}
-
-/**
  * GET /orders/:id
  * Get a single order by path id.
  * Non-admin users can only access their own orders.

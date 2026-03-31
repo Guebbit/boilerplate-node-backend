@@ -4,24 +4,11 @@ import { successResponse } from '@utils/response';
 import type { SearchUsersRequest } from '../../../api/api';
 
 /**
- * Query parameters
- */
-export interface IGetAllUsersQueries {
-    id?: string
-    page?: string
-    pageSize?: string
-    text?: string
-    email?: string
-    username?: string
-    active?: string
-}
-
-/**
  * GET /users
  * List/search users via query parameters (admin only).
  */
 const getUsers = async (request: Request, response: Response): Promise<void> => {
-    const { id, page, pageSize, text, email, username, active } = request.query as IGetAllUsersQueries;
+    const { id, page, pageSize, text, email, username, active } = request.query as Record<string, string | undefined>;
     const filters: SearchUsersRequest = {
         id,
         text,
