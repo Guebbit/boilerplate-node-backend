@@ -22,8 +22,8 @@ const putProductById = (request: Request<{ id?: string }, unknown, UpdateProduct
     )
         .then((product) => successResponse(response, product.toObject()))
         .catch((error) => {
-            const deleteP = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
-            return deleteP.then(() => {
+            const cleanupPromise = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
+            return cleanupPromise.then(() => {
                 const message = (error as Error).message;
                 if (message === '404')
                     rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
