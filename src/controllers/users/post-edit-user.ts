@@ -4,19 +4,8 @@ import { Types } from 'mongoose';
 import { deleteFile } from '@utils/helpers-filesystem';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { ExtendedError } from '@utils/helpers-errors';
+import type { CreateUserRequestMultipart, UpdateUserRequestMultipart } from '@types';
 import UserService from '@services/users';
-
-/**
- * Body shape for the user create/edit form
- */
-export interface IPostEditUserBody {
-    id?: string;
-    email: string;
-    username: string;
-    password?: string;
-    admin?: string; // checkbox: "on" or undefined
-    imageUrl?: string;
-}
 
 /**
  * Create or update a user (admin only).
@@ -27,22 +16,32 @@ export interface IPostEditUserBody {
  * @param next
  */
 export const postEditUser = async (
-    request: Request<unknown, unknown, IPostEditUserBody>,
+    request: Request<unknown, unknown, CreateUserRequestMultipart | UpdateUserRequestMultipart>,
     response: Response,
     next: NextFunction
 ) => {
-    const { id, email, username } = request.body;
+    const body = request.body;
 
-    // Checkbox values arrive as "on" (checked) or undefined (unchecked)
-    const admin = request.body.admin === 'on';
+    // 'id' is only present in UpdateUserRequestMultipart (edit path)
+    const id = ('id' in body ? (body as UpdateUserRequestMultipart).id : undefined) as
+        | string
+        | undefined;
+    const { email = '', password = '' } = body;
+    // 'username' is only present in CreateUserRequestMultipart (create path)
+    const username = (
+        'username' in body ? (body as CreateUserRequestMultipart).username : ''
+    ) as string;
+
+    // Checkbox values arrive as "on" (checked) or undefined (unchecked);
+    // 'admin' is only present in CreateUserRequestMultipart
+    const admin = !!(body as { admin?: unknown }).admin;
     // Password is optional when editing; required when creating
-    const password = request.body.password ?? '';
     const isNew = !id || id === '';
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const imageUrlBody = request.body.imageUrl;
+    const imageUrlBody = body.imageUrl;
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? imageUrlBody ?? '';
 
