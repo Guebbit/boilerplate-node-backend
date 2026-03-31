@@ -3,20 +3,6 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
- * URL parameters
- */
-export interface IDeleteUserParameters {
-    id?: string
-}
-
-/**
- * Query string
- */
-export interface IDeleteUserQuery {
-    hardDelete?: string
-}
-
-/**
  * DELETE /users/:id
  * Delete a user by path id (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.

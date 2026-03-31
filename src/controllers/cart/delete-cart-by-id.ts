@@ -5,13 +5,6 @@ import { successResponse, rejectResponse } from '@utils/response';
 import { buildCartResponse } from './helpers';
 
 /**
- * Request params
- */
-export interface IDeleteCartByIdParameters {
-    productId: string
-}
-
-/**
  * DELETE /cart/:productId
  * Remove a specific product from the cart. Returns the updated cart.
  */

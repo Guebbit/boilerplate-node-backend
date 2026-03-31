@@ -1,27 +1,17 @@
-import type { Request, Response } from 'express';
+import type { Request, Response, ParamsDictionary } from 'express';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
-
-/**
- * POST body data
- */
-export interface IPostSignupPostData {
-    email: string,
-    username: string,
-    password: string,
-    passwordConfirm: string,
-    imageUrl?: string,
-}
+import type { SignupRequest } from '../../../api/api';
 
 /**
  * POST /account/signup
  * Register a new user account.
  */
-const postSignup = async (request: Request, response: Response): Promise<void> => {
+const postSignup = async (request: Request<ParamsDictionary, any, SignupRequest & { imageUrl?: string }>, response: Response): Promise<void> => {
     /**
      * Get POST data
      */
-    const { email, username, password, passwordConfirm, imageUrl } = request.body as IPostSignupPostData;
+    const { email, username, password, passwordConfirm, imageUrl } = request.body;
 
     /**
      * Register

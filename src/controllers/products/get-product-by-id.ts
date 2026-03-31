@@ -4,13 +4,6 @@ import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
- * URL parameters
- */
-export interface IGetTargetProductParameters {
-    id: string,
-}
-
-/**
  * GET /products/:id
  * Get a single product by path id.
  * Only admin can see non-active (inactive/deleted) products.
