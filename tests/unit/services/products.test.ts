@@ -237,7 +237,7 @@ describe('ProductService.update', () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id = (product._id as Types.ObjectId).toString();
 
-        await ProductService.update(id, {}, '/images/new.jpg');
+        await ProductService.update(id, { imageUrl: '/images/new.jpg' });
 
         // The service should delete the OLD image after saving the new one
         expect(deleteFile).toHaveBeenCalledWith(expect.stringContaining('old.jpg'));
