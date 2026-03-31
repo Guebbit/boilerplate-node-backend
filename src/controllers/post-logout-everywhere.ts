@@ -10,8 +10,7 @@ import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt
  */
 const postLogoutEverywhere = async (request: Request, response: Response) => {
     // remove refresh token from DB
-    if (request.user)
-        await request.user.tokenRemoveAll(ETokenType.REFRESH);
+    if (request.user) await request.user.tokenRemoveAll(ETokenType.REFRESH);
     // and from local
     destroyRefreshCookie(response);
     destroyLoggedCookie(response);
@@ -20,4 +19,3 @@ const postLogoutEverywhere = async (request: Request, response: Response) => {
 };
 
 export default postLogoutEverywhere;
-

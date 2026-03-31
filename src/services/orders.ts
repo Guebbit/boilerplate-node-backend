@@ -4,7 +4,12 @@ import { t } from 'i18next';
 import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '../../api/api';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { EOrderStatus } from '@models/orders';
-import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
+import {
+    generateReject,
+    generateSuccess,
+    type IResponseReject,
+    type IResponseSuccess
+} from '@utils/response';
 import ProductRepository from '@repositories/products';
 import OrderRepository from '@repositories/orders';
 
@@ -22,11 +27,11 @@ const addComputedFields: PipelineStage.AddFields = {
     $addFields: {
         // Count all OrderItems
         totalItems: {
-            $size: '$products',
+            $size: '$products'
         },
         // Sum quantities from all OrderItems
         totalQuantity: {
-            $sum: '$products.quantity',
+            $sum: '$products.quantity'
         },
         // Sum of all prices multiplied for quantity
         totalPrice: {
@@ -35,12 +40,12 @@ const addComputedFields: PipelineStage.AddFields = {
                     input: '$products',
                     as: 'product',
                     in: {
-                        $multiply: ['$$product.product.price', '$$product.quantity'],
-                    },
-                },
-            },
-        },
-    },
+                        $multiply: ['$$product.product.price', '$$product.quantity']
+                    }
+                }
+            }
+        }
+    }
 };
 
 /**
@@ -67,7 +72,7 @@ export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]
  */
 export const search = async (
     search: SearchOrdersRequest = {},
-    scope?: Record<string, unknown>,
+    scope?: Record<string, unknown>
 ): Promise<OrdersResponse> => {
     const page = Math.max(1, Number(search.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));
@@ -91,12 +96,12 @@ export const search = async (
     const basePipeline: PipelineStage[] = [
         { $match: match },
         { $sort: { createdAt: -1 } },
-        addComputedFields,
+        addComputedFields
     ];
 
     const [countAgg] = await OrderRepository.aggregate<{ totalItems?: number }>([
         ...basePipeline,
-        { $count: 'totalItems' },
+        { $count: 'totalItems' }
     ]);
 
     const totalItems = countAgg?.totalItems ?? 0;
@@ -105,7 +110,7 @@ export const search = async (
     const items = await OrderRepository.aggregate([
         ...basePipeline,
         { $skip: skip },
-        { $limit: pageSize },
+        { $limit: pageSize }
     ]);
 
     return {
@@ -116,8 +121,8 @@ export const search = async (
             page,
             pageSize,
             totalItems,
-            totalPages,
-        },
+            totalPages
+        }
     };
 };
 
@@ -130,16 +135,17 @@ export const search = async (
  */
 export const getById = async (
     id: string | undefined,
-    scope?: Record<string, unknown>,
+    scope?: Record<string, unknown>
 ): Promise<IOrderDocument | null | undefined> => {
-    if (!id)
-        return;
+    if (!id) return;
     if (scope) {
         // Use aggregate so we can apply both _id and scope filters
         const [result] = await OrderRepository.aggregate([
-            { $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown> },
+            {
+                $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown>
+            },
             { $limit: 1 },
-            addComputedFields,
+            addComputedFields
         ]);
         return result ?? undefined;
     }
@@ -157,7 +163,7 @@ export const getById = async (
 export const create = async (
     userId: string,
     email: string,
-    items: CartItem[],
+    items: CartItem[]
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
     if (!items || items.length === 0)
         return generateReject(422, 'create order - empty items', [t('generic.error-missing-data')]);
@@ -167,17 +173,19 @@ export const create = async (
     for (const item of items) {
         const product = await ProductRepository.findById(item.productId).lean();
         if (!product)
-            return generateReject(404, 'create order - product not found', [t('ecommerce.product-not-found')]);
+            return generateReject(404, 'create order - product not found', [
+                t('ecommerce.product-not-found')
+            ]);
         products.push({
             product,
-            quantity: item.quantity,
+            quantity: item.quantity
         } as unknown as IOrderProduct);
     }
 
     const order = await OrderRepository.create({
         userId: new Types.ObjectId(userId),
         email,
-        products,
+        products
     } as Partial<IOrderDocument>);
 
     return generateSuccess(order, 201, t('ecommerce.order-creation-success'));
@@ -197,26 +205,27 @@ export const update = async (
         email?: string;
         userId?: string;
         items?: CartItem[];
-    },
+    }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
     const order = await OrderRepository.findById(id);
-    if (!order)
-        return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+    if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
 
-    if (data.status !== undefined)
-        order.status = data.status as EOrderStatus;
-    if (data.email !== undefined)
-        order.email = data.email;
-    if (data.userId !== undefined)
-        order.userId = new Types.ObjectId(data.userId);
+    if (data.status !== undefined) order.status = data.status as EOrderStatus;
+    if (data.email !== undefined) order.email = data.email;
+    if (data.userId !== undefined) order.userId = new Types.ObjectId(data.userId);
 
     if (data.items && data.items.length > 0) {
         const products: IOrderProduct[] = [];
         for (const item of data.items) {
             const product = await ProductRepository.findById(item.productId).lean();
             if (!product)
-                return generateReject(404, 'update order - product not found', [t('ecommerce.product-not-found')]);
-            products.push({ product, quantity: item.quantity } as unknown as IOrderProduct);
+                return generateReject(404, 'update order - product not found', [
+                    t('ecommerce.product-not-found')
+                ]);
+            products.push({
+                product,
+                quantity: item.quantity
+            } as unknown as IOrderProduct);
         }
         order.products = products;
     }
@@ -231,15 +240,13 @@ export const update = async (
  * @param id
  */
 export const remove = async (
-    id: string,
+    id: string
 ): Promise<IResponseSuccess<undefined> | IResponseReject> => {
     const order = await OrderRepository.findById(id);
-    if (!order)
-        return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+    if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
 
     await OrderRepository.deleteOne(order);
     return generateSuccess(undefined, 200, t('ecommerce.order-deleted'));
 };
-
 
 export default { getAll, search, getById, create, update, remove };

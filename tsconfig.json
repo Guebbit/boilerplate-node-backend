@@ -1,45 +1,34 @@
 {
-  "compilerOptions": {
-    "target": "ES6",
-    "module": "es2020",
-    "baseUrl": ".",
-    "paths": {
-      "@types": ["src/types"],
-      "@api/*": ["api/*"],
-      "@controllers/*": ["src/controllers/*"],
-      "@services/*": ["src/services/*"],
-      "@repositories/*": ["src/repositories/*"],
-      "@models/*": ["src/models/*"],
-      "@middlewares/*": ["src/middlewares/*"],
-      "@utils/*": ["src/utils/*"]
+    "compilerOptions": {
+        "target": "ES6",
+        "module": "es2020",
+        "baseUrl": ".",
+        "paths": {
+            "@types": ["src/types"],
+            "@api/*": ["api/*"],
+            "@controllers/*": ["src/controllers/*"],
+            "@services/*": ["src/services/*"],
+            "@repositories/*": ["src/repositories/*"],
+            "@models/*": ["src/models/*"],
+            "@middlewares/*": ["src/middlewares/*"],
+            "@utils/*": ["src/utils/*"]
+        },
+        "strict": true,
+        "composite": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "sourceMap": true,
+        "forceConsistentCasingInFileNames": true,
+        "noPropertyAccessFromIndexSignature": false,
+        "resolveJsonModule": true,
+        "moduleResolution": "Node",
+        "outDir": "./dist",
+        "importsNotUsedAsValues": "remove",
+        "ignoreDeprecations": "5.0",
+        "types": ["node", "jest"],
+        "typeRoots": ["./src/types", "./node_modules/@types"]
     },
-    "strict": true,
-    "composite": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "sourceMap": true,
-    "forceConsistentCasingInFileNames": true,
-    "noPropertyAccessFromIndexSignature": false,
-    "resolveJsonModule": true,
-    "moduleResolution": "Node",
-    "outDir": "./dist",
-    "importsNotUsedAsValues": "remove",
-    "ignoreDeprecations": "5.0",
-    "types": ["node", "jest"],
-    "typeRoots": [
-      "./src/types",
-      "./node_modules/@types"
-    ]
-  },
-  "exclude": [
-    "node_modules",
-  ],
-  "include": [
-    "api/**/*.ts",
-    "src/*.ts",
-    "src/**/*.ts",
-    "src/**/*.json",
-    "tests/**/*.ts"
-  ]
+    "exclude": ["node_modules"],
+    "include": ["api/**/*.ts", "src/*.ts", "src/**/*.ts", "src/**/*.json", "tests/**/*.ts"]
 }

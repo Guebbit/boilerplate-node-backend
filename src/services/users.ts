@@ -4,7 +4,12 @@ import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import type { CastError, QueryFilter } from 'mongoose';
-import { generateSuccess, generateReject, type IResponseSuccess, type IResponseReject } from '@utils/response';
+import {
+    generateSuccess,
+    generateReject,
+    type IResponseSuccess,
+    type IResponseReject
+} from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { zodUserSchema } from '@models/users';
@@ -29,8 +34,7 @@ import OrderRepository from '@repositories/orders';
  * @param user
  */
 export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
-    user.populate('cart.items.product')
-        .then(({ cart: { items = [] } }) => items);
+    user.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
 
 /**
  * Set quantity of target product in cart
@@ -39,12 +43,15 @@ export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
  * @param id
  * @param quantity
  */
-export const cartItemSetById = async (user: IUserDocument, id: string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> => {
+export const cartItemSetById = async (
+    user: IUserDocument,
+    id: string,
+    quantity = 1
+): Promise<IResponseSuccess<IUserDocument>> => {
     /**
      * Check if already present
      */
-    const cartProductIndex = user.cart.items
-        .findIndex(item => item.product.equals(id));
+    const cartProductIndex = user.cart.items.findIndex((item) => item.product.equals(id));
 
     /**
      * if present: directly update the quantity
@@ -53,10 +60,9 @@ export const cartItemSetById = async (user: IUserDocument, id: string, quantity 
     if (cartProductIndex === -1)
         user.cart.items.push({
             product: new Types.ObjectId(id),
-            quantity,
+            quantity
         });
-    else
-        user.cart.items[cartProductIndex].quantity = quantity;
+    else user.cart.items[cartProductIndex].quantity = quantity;
 
     /**
      * Save
@@ -72,7 +78,11 @@ export const cartItemSetById = async (user: IUserDocument, id: string, quantity 
  * @param product
  * @param quantity
  */
-export const cartItemSet = (user: IUserDocument, product: IProductDocument, quantity = 1): Promise<IResponseSuccess<IUserDocument>> =>
+export const cartItemSet = (
+    user: IUserDocument,
+    product: IProductDocument,
+    quantity = 1
+): Promise<IResponseSuccess<IUserDocument>> =>
     cartItemSetById(user, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
@@ -82,12 +92,15 @@ export const cartItemSet = (user: IUserDocument, product: IProductDocument, quan
  * @param id
  * @param quantity
  */
-export const cartItemAddById = async (user: IUserDocument, id: string, quantity = 1): Promise<IResponseSuccess<IUserDocument>> => {
+export const cartItemAddById = async (
+    user: IUserDocument,
+    id: string,
+    quantity = 1
+): Promise<IResponseSuccess<IUserDocument>> => {
     /**
      * Check if already present
      */
-    const cartProductIndex = user.cart.items
-        .findIndex(item => item.product.equals(id));
+    const cartProductIndex = user.cart.items.findIndex((item) => item.product.equals(id));
 
     /**
      * if present: directly update the quantity
@@ -96,10 +109,11 @@ export const cartItemAddById = async (user: IUserDocument, id: string, quantity 
     if (cartProductIndex === -1)
         user.cart.items.push({
             product: new Types.ObjectId(id),
-            quantity,
+            quantity
         });
     else
-        user.cart.items[cartProductIndex].quantity = user.cart.items[cartProductIndex].quantity + quantity;
+        user.cart.items[cartProductIndex].quantity =
+            user.cart.items[cartProductIndex].quantity + quantity;
 
     /**
      * Save
@@ -115,7 +129,11 @@ export const cartItemAddById = async (user: IUserDocument, id: string, quantity 
  * @param product
  * @param quantity
  */
-export const cartItemAdd = (user: IUserDocument, product: IProductDocument, quantity = 1): Promise<IResponseSuccess<IUserDocument>> =>
+export const cartItemAdd = (
+    user: IUserDocument,
+    product: IProductDocument,
+    quantity = 1
+): Promise<IResponseSuccess<IUserDocument>> =>
     cartItemAddById(user, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
@@ -124,9 +142,11 @@ export const cartItemAdd = (user: IUserDocument, product: IProductDocument, quan
  * @param user
  * @param id
  */
-export const cartItemRemoveById = async (user: IUserDocument, id: string): Promise<IResponseSuccess<IUserDocument>> => {
-    user.cart.items = user.cart.items
-        .filter(({ product }: ICartItem) => !product.equals(id));
+export const cartItemRemoveById = async (
+    user: IUserDocument,
+    id: string
+): Promise<IResponseSuccess<IUserDocument>> => {
+    user.cart.items = user.cart.items.filter(({ product }: ICartItem) => !product.equals(id));
     user.cart.updatedAt = new Date();
     return generateSuccess(await UserRepository.save(user));
 };
@@ -137,7 +157,10 @@ export const cartItemRemoveById = async (user: IUserDocument, id: string): Promi
  * @param user
  * @param product
  */
-export const cartItemRemove = (user: IUserDocument, product: IProductDocument): Promise<IResponseSuccess<IUserDocument>> =>
+export const cartItemRemove = (
+    user: IUserDocument,
+    product: IProductDocument
+): Promise<IResponseSuccess<IUserDocument>> =>
     cartItemRemoveById(user, (product._id as Types.ObjectId).toString());
 
 /**
@@ -148,7 +171,7 @@ export const cartItemRemove = (user: IUserDocument, product: IProductDocument): 
 export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
     user.cart = {
         items: [],
-        updatedAt: new Date(),
+        updatedAt: new Date()
     };
     return generateSuccess(await UserRepository.save(user));
 };
@@ -158,20 +181,18 @@ export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<
  *
  * @param user
  */
-export const orderConfirm = async (user: IUserDocument): Promise<IResponseSuccess<Order> | IResponseReject> => {
+export const orderConfirm = async (
+    user: IUserDocument
+): Promise<IResponseSuccess<Order> | IResponseReject> => {
     try {
         const products = await cartGet(user);
         if (products.length === 0)
-            return generateReject(
-                409,
-                'empty cart',
-                [t('generic.error-missing-data')],
-            );
+            return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
         const order = await OrderRepository.create({
             userId: user._id as Types.ObjectId,
             email: user.email,
             // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
-            products: products as unknown as IOrderProduct[],
+            products: products as unknown as IOrderProduct[]
         } as Partial<IOrderDocument>);
         await cartRemove(user);
         return generateSuccess<Order>(order as unknown as Order);
@@ -191,16 +212,19 @@ export const orderConfirm = async (user: IUserDocument): Promise<IResponseSucces
  * @param type
  * @param expirationTime - undefined = expire only upon use
  */
-export const tokenAdd = async (user: IUserDocument, type: string, expirationTime?: number): Promise<string> => {
+export const tokenAdd = async (
+    user: IUserDocument,
+    type: string,
+    expirationTime?: number
+): Promise<string> => {
     const token = randomBytes(16).toString('hex');
     user.tokens.push({
         type,
         token,
-        expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined,
+        expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined
     });
     // no need to wait
-    return UserRepository.save(user)
-        .then(() => token);
+    return UserRepository.save(user).then(() => token);
 };
 
 /**
@@ -210,29 +234,33 @@ export const tokenAdd = async (user: IUserDocument, type: string, expirationTime
  * @param password
  * @param passwordConfirm
  */
-export const passwordChange = async (user: IUserDocument, password = '', passwordConfirm = ''): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+export const passwordChange = async (
+    user: IUserDocument,
+    password = '',
+    passwordConfirm = ''
+): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
     /**
      * Data validation
      * Check if password and passwordConfirm are equals and compliant
      */
     const parseResult = zodUserSchema
         .pick({
-            password: true,
+            password: true
         })
         .extend({
-            passwordConfirm: z.string(),
+            passwordConfirm: z.string()
         })
         .superRefine(({ passwordConfirm, password }, context) => {
             if (passwordConfirm !== password) {
                 context.addIssue({
                     code: 'custom',
-                    message: t('signup.password-dont-match'),
+                    message: t('signup.password-dont-match')
                 });
             }
         })
         .safeParse({
             password,
-            passwordConfirm,
+            passwordConfirm
         });
 
     /**
@@ -242,7 +270,7 @@ export const passwordChange = async (user: IUserDocument, password = '', passwor
         return generateReject(
             400,
             'passwordChange - bad request',
-            parseResult.error.issues.map(({ message }) => message),
+            parseResult.error.issues.map(({ message }) => message)
         );
 
     /**
@@ -269,7 +297,7 @@ export const signup = async (
     username: string,
     password: string,
     passwordConfirm: string,
-    imageUrl?: string | null,
+    imageUrl?: string | null
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
     /**
      * Data validation
@@ -277,20 +305,21 @@ export const signup = async (
      */
     const parseResult = zodUserSchema
         .extend({
-            passwordConfirm: z.string(),
+            passwordConfirm: z.string()
         })
         .superRefine(({ passwordConfirm, password }, context) => {
             if (passwordConfirm !== password)
                 context.addIssue({
                     code: 'custom',
-                    message: t('signup.password-dont-match'),
+                    message: t('signup.password-dont-match')
                 });
-        }).safeParse({
+        })
+        .safeParse({
             email,
             username,
             imageUrl,
             password,
-            passwordConfirm,
+            passwordConfirm
         });
 
     /**
@@ -300,7 +329,7 @@ export const signup = async (
         return generateReject(
             400,
             'signup - bad request',
-            parseResult.error.issues.map(({ message }) => message),
+            parseResult.error.issues.map(({ message }) => message)
         );
 
     /**
@@ -311,11 +340,9 @@ export const signup = async (
         .then(async (user) => {
             // Email already exists
             if (user)
-                return generateReject(
-                    409,
-                    'signup - email already used',
-                    [t('signup.email-already-used')],
-                );
+                return generateReject(409, 'signup - email already used', [
+                    t('signup.email-already-used')
+                ]);
             /**
              * Everything is ok, proceed to create a new user.
              * Encryption will be done automatically by the pre-save hook
@@ -325,8 +352,8 @@ export const signup = async (
                     username,
                     email,
                     imageUrl: imageUrl ?? '',
-                    password,
-                }),
+                    password
+                })
             );
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
@@ -338,19 +365,24 @@ export const signup = async (
  * @param email
  * @param password
  */
-export const login = async (email?: string, password?: string): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+export const login = async (
+    email?: string,
+    password?: string
+): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
     /**
      * Data validation
      * Check if password and passwordConfirm are equals and compliant
      */
     const parseResult = zodUserSchema
         .pick({
-            email: true,
-        }).extend({
-            password: z.string(),
-        }).safeParse({
+            email: true
+        })
+        .extend({
+            password: z.string()
+        })
+        .safeParse({
             email,
-            password,
+            password
         });
 
     /**
@@ -360,33 +392,25 @@ export const login = async (email?: string, password?: string): Promise<IRespons
         return generateReject(
             400,
             'login - bad request',
-            parseResult.error.issues.map(({ message }) => message),
+            parseResult.error.issues.map(({ message }) => message)
         );
 
     /**
      * Everything is ok, login the user
      */
     return UserRepository.findOne({ email, deletedAt: undefined })
-        .then(user => {
+        .then((user) => {
             // user not found
             if (!user)
-                return generateReject(
-                    401,
-                    'login - wrong credentials',
-                    [t('login.wrong-data')],
-                );
-            return bcrypt
-                .compare(password ?? '', user.password)
-                .then(doMatch => {
-                    // User found but password doesn't match
-                    if (!doMatch)
-                        return generateReject(
-                            401,
-                            'login - wrong credentials',
-                            [t('login.wrong-data')],
-                        );
-                    return generateSuccess<IUserDocument>(user);
-                });
+                return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
+            return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
+                // User found but password doesn't match
+                if (!doMatch)
+                    return generateReject(401, 'login - wrong credentials', [
+                        t('login.wrong-data')
+                    ]);
+                return generateSuccess<IUserDocument>(user);
+            });
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
@@ -396,26 +420,28 @@ export const login = async (email?: string, password?: string): Promise<IRespons
  *
  * @param id
  */
-export const productRemoveFromCartsById = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> =>
+export const productRemoveFromCartsById = (
+    id: string
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     UserRepository.updateMany(
         {
             // eslint-disable-next-line @typescript-eslint/naming-convention
-            'cart.items.product': id,
+            'cart.items.product': id
         },
         {
             // Remove the product from their cart
             $pull: {
                 // eslint-disable-next-line @typescript-eslint/naming-convention
                 'cart.items': {
-                    product: id,
-                },
+                    product: id
+                }
             },
             // Update the cart's updatedAt timestamp
             $set: {
                 // eslint-disable-next-line @typescript-eslint/naming-convention
-                'cart.updatedAt': new Date(),
-            },
-        },
+                'cart.updatedAt': new Date()
+            }
+        }
     )
         .then((result) =>
             generateSuccess(
@@ -423,9 +449,9 @@ export const productRemoveFromCartsById = (id: string): Promise<IResponseSuccess
                 200,
                 t('ecommerce.product-was-deleted-from-all-carts', {
                     product: id,
-                    count: result.modifiedCount,
-                }),
-            ),
+                    count: result.modifiedCount
+                })
+            )
         )
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 
@@ -442,17 +468,16 @@ export const productRemoveFromCartsById = (id: string): Promise<IResponseSuccess
  */
 export const validateData = (
     userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
-    { requirePassword = true }: { requirePassword?: boolean } = {},
+    { requirePassword = true }: { requirePassword?: boolean } = {}
 ): string[] => {
     const schema = requirePassword
         ? zodUserSchema.pick({ email: true, username: true, password: true })
         : zodUserSchema
-            .pick({ email: true, username: true, password: true })
-            .partial({ password: true });
+              .pick({ email: true, username: true, password: true })
+              .partial({ password: true });
 
     const parseResult = schema.safeParse(userData);
-    if (!parseResult.success)
-        return parseResult.error.issues.map(({ message }) => message);
+    if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
     return [];
 };
 
@@ -466,9 +491,7 @@ export const validateData = (
  *
  * @param filters
  */
-export const search = async (
-    filters: SearchUsersRequest = {},
-): Promise<UsersResponse> => {
+export const search = async (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
@@ -486,7 +509,7 @@ export const search = async (
         const text = String(filters.text).trim();
         where.$or = [
             { email: { $regex: text, $options: 'i' } },
-            { username: { $regex: text, $options: 'i' } },
+            { username: { $regex: text, $options: 'i' } }
         ];
     }
 
@@ -500,15 +523,13 @@ export const search = async (
 
     // Filter by active status (true = not deleted, false = deleted)
     if (filters.active !== undefined && filters.active !== null)
-        where.deletedAt = filters.active
-            ? { $exists: false }
-            : { $exists: true, $type: 'date' };
+        where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
 
     const totalItems = await UserRepository.count(where);
     const items = await UserRepository.findAll(where, {
         sort: { createdAt: -1 },
         skip,
-        limit: pageSize,
+        limit: pageSize
     });
 
     return {
@@ -517,8 +538,8 @@ export const search = async (
             page,
             pageSize,
             totalItems,
-            totalPages: Math.ceil(totalItems / pageSize),
-        },
+            totalPages: Math.ceil(totalItems / pageSize)
+        }
     };
 };
 
@@ -530,11 +551,9 @@ export const search = async (
  */
 export const getById = async (id?: string) => {
     // Return early without triggering a DB call when no id is provided
-    if (!id)
-        return;
+    if (!id) return;
     const user = await UserRepository.findById(id);
-    if (!user)
-        return;
+    if (!user) return;
     return user.toObject();
 };
 
@@ -545,9 +564,9 @@ export const getById = async (id?: string) => {
  * @param data
  */
 export const adminCreate = (
-    data: Pick<IUser, 'email' | 'username' | 'password'> & Partial<Pick<IUser, 'admin' | 'imageUrl'>>,
-): Promise<IUserDocument> =>
-    UserRepository.create(data);
+    data: Pick<IUser, 'email' | 'username' | 'password'> &
+        Partial<Pick<IUser, 'admin' | 'imageUrl'>>
+): Promise<IUserDocument> => UserRepository.create(data);
 
 /**
  * Update an existing user by ID (admin version).
@@ -559,12 +578,11 @@ export const adminCreate = (
  */
 export const adminUpdate = async (
     id: string,
-    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
+    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
 ): Promise<IUserDocument> => {
     const user = await UserRepository.findById(id);
 
-    if (!user)
-        throw new Error('404');
+    if (!user) throw new Error('404');
 
     // Apply incoming field changes
     if (data.email !== undefined) user.email = data.email;
@@ -587,18 +605,18 @@ export const adminUpdate = async (
  */
 export const remove = async (
     id: string,
-    hardDelete = false,
+    hardDelete = false
 ): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
     const user = await UserRepository.findById(id);
 
     // not found, something happened
-    if (!user)
-        return generateReject(404, '404', [t('admin.user-not-found')]);
+    if (!user) return generateReject(404, '404', [t('admin.user-not-found')]);
 
     // HARD delete
     if (hardDelete)
-        return UserRepository.deleteOne(user)
-            .then(() => generateSuccess(undefined, 200, t('admin.user-hard-deleted')));
+        return UserRepository.deleteOne(user).then(() =>
+            generateSuccess(undefined, 200, t('admin.user-hard-deleted'))
+        );
 
     // If deletedAt already present: it's soft-deleted → RESTORE
     user.deletedAt = user.deletedAt ? undefined : new Date();
@@ -606,7 +624,6 @@ export const remove = async (
     // SOFT delete (or restore)
     return generateSuccess(await UserRepository.save(user), 200, t('admin.user-soft-deleted'));
 };
-
 
 export default {
     cartGet,
@@ -628,5 +645,5 @@ export default {
     getById,
     adminCreate,
     adminUpdate,
-    remove,
+    remove
 };

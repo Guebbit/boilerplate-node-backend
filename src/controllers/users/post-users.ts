@@ -19,17 +19,18 @@ const postUsers = async (request: Request, response: Response): Promise<void> =>
 
     const errors = UserService.validateData(body, { requirePassword: true });
     if (errors.length > 0) {
-        if (imageUrlRaw)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
         rejectResponse(response, 422, 'createUser - validation failed', errors);
         return;
     }
     try {
-        const user = await UserService.adminCreate({ ...body, ...(imageUrl !== undefined && { imageUrl }) });
+        const user = await UserService.adminCreate({
+            ...body,
+            ...(imageUrl !== undefined && { imageUrl })
+        });
         successResponse(response, user.toObject(), 201);
     } catch (error) {
-        if (imageUrlRaw)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
         rejectResponse(response, 500, 'Internal Server Error', [(error as Error).message]);
     }
 };

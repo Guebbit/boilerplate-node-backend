@@ -1,53 +1,53 @@
 {
-  "login": {
-    "invalid-data": "Inserted data are invalid.",
-    "wrong-data": "Invalid email or password.",
-    "success": "Login successful.",
-    "user-field-email-required": "Email is required",
-    "user-field-email-invalid": "Not a valid email",
-    "user-field-username-required": "Username is required",
-    "user-field-username-min": "Name is too short",
-    "user-field-password-required": "Password is required",
-    "user-field-password-min": "Password is too short"
-  },
-  "signup": {
-    "email-already-used":  "Email was already used.",
-    "registration-successful": "Registration successful, confirm via email to login.",
-    "password-dont-match": "Confirmation password must be the same of password."
-  },
-  "reset": {
-    "email-not-found": "No user associated with the inserted email was found.",
-    "token-not-found": "Invalid or expired token, please try again.",
-    "email-sent": "An email with a link was sent, click to reset password.",
-    "success": "Password changed, login with the new password."
-  },
-  "ecommerce": {
-    "product-not-found": "The requested product was not found.",
-    "product-field-title-required": "Title is required",
-    "product-field-title-min": "Title is too short",
-    "product-field-price-required": "Price is missing",
-    "product-field-price-invalid": "Price is missing or invalid",
-    "product-field-image-required": "Image is required",
-    "product-added-to-cart": "Product successfully added to cart.",
-    "product-hard-deleted": "Product was permanently deleted.",
-    "product-soft-deleted": "Product was soft deleted (users only).",
-    "product-was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts.",
-    "order-not-found": "The requested order was not found",
-    "order-deleted": "Order was permanently deleted.",
-    "order-creation-success": "Order created with success.",
-    "order-creation-failure": "Order creation failed.",
-    "order-invoice-missing": "No invoice file was found",
-    "cart-product-removed": "Product removed from cart.",
-    "cart-emptied": "All products removed from cart."
-  },
-  "generic": {
-    "error-unknown": "Something went wrong with the request.",
-    "error-invalid-data": "Error: invalid data provided.",
-    "error-missing-data": "Error: missing data."
-  },
-  "admin": {
-    "user-not-found": "The requested user was not found.",
-    "user-hard-deleted": "User was permanently deleted.",
-    "user-soft-deleted": "User was soft deleted (deactivated)."
-  }
+    "login": {
+        "invalid-data": "Inserted data are invalid.",
+        "wrong-data": "Invalid email or password.",
+        "success": "Login successful.",
+        "user-field-email-required": "Email is required",
+        "user-field-email-invalid": "Not a valid email",
+        "user-field-username-required": "Username is required",
+        "user-field-username-min": "Name is too short",
+        "user-field-password-required": "Password is required",
+        "user-field-password-min": "Password is too short"
+    },
+    "signup": {
+        "email-already-used": "Email was already used.",
+        "registration-successful": "Registration successful, confirm via email to login.",
+        "password-dont-match": "Confirmation password must be the same of password."
+    },
+    "reset": {
+        "email-not-found": "No user associated with the inserted email was found.",
+        "token-not-found": "Invalid or expired token, please try again.",
+        "email-sent": "An email with a link was sent, click to reset password.",
+        "success": "Password changed, login with the new password."
+    },
+    "ecommerce": {
+        "product-not-found": "The requested product was not found.",
+        "product-field-title-required": "Title is required",
+        "product-field-title-min": "Title is too short",
+        "product-field-price-required": "Price is missing",
+        "product-field-price-invalid": "Price is missing or invalid",
+        "product-field-image-required": "Image is required",
+        "product-added-to-cart": "Product successfully added to cart.",
+        "product-hard-deleted": "Product was permanently deleted.",
+        "product-soft-deleted": "Product was soft deleted (users only).",
+        "product-was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts.",
+        "order-not-found": "The requested order was not found",
+        "order-deleted": "Order was permanently deleted.",
+        "order-creation-success": "Order created with success.",
+        "order-creation-failure": "Order creation failed.",
+        "order-invoice-missing": "No invoice file was found",
+        "cart-product-removed": "Product removed from cart.",
+        "cart-emptied": "All products removed from cart."
+    },
+    "generic": {
+        "error-unknown": "Something went wrong with the request.",
+        "error-invalid-data": "Error: invalid data provided.",
+        "error-missing-data": "Error: missing data."
+    },
+    "admin": {
+        "user-not-found": "The requested user was not found.",
+        "user-hard-deleted": "User was permanently deleted.",
+        "user-soft-deleted": "User was soft deleted (deactivated)."
+    }
 }

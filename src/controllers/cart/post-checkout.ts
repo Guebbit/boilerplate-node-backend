@@ -14,7 +14,11 @@ const postCheckout = async (request: Request, response: Response): Promise<void>
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
-    successResponse(response, { order: result.data, message: t('ecommerce.order-creation-success') }, 201);
+    successResponse(
+        response,
+        { order: result.data, message: t('ecommerce.order-creation-success') },
+        201
+    );
 };
 
 export default postCheckout;

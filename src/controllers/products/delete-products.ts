@@ -11,7 +11,9 @@ import type { DeleteProductRequest } from '@types';
 const deleteProducts = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as DeleteProductRequest;
     if (!body.id) {
-        rejectResponse(response, 422, 'deleteProduct - missing id', [t('generic.error-missing-data')]);
+        rejectResponse(response, 422, 'deleteProduct - missing id', [
+            t('generic.error-missing-data')
+        ]);
         return;
     }
     const result = await ProductService.remove(body.id, body.hardDelete ?? false);

@@ -22,16 +22,18 @@ const putProductById = async (request: Request, response: Response): Promise<voi
         /**
          * Update the product with the new data
          */
-        const product = await ProductService.update(String(request.params.id), body as never, imageUrl);
+        const product = await ProductService.update(
+            String(request.params.id),
+            body as never,
+            imageUrl
+        );
         successResponse(response, product.toObject());
     } catch (error) {
-        if (imageUrlRaw)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
         const message = (error as Error).message;
         if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        else
-            rejectResponse(response, 500, 'Internal Server Error', [message]);
+        else rejectResponse(response, 500, 'Internal Server Error', [message]);
     }
 };
 

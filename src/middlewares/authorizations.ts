@@ -1,14 +1,15 @@
-import type {Request, Response, NextFunction} from 'express';
-import Users, {EUserRoles, IToken} from "../models/users";
-import {verifyAccessToken} from "./auth-jwt";
-import {rejectResponse} from "../utils/response";
-import {Types} from "mongoose";
+import type { Request, Response, NextFunction } from 'express';
+import Users, { EUserRoles, IToken } from '../models/users';
+import { verifyAccessToken } from './auth-jwt';
+import { rejectResponse } from '../utils/response';
+import { Types } from 'mongoose';
 
 /**
  * Get token (and strip it from "Bearer" prefix)
  * @param request
  */
-export const getTokenBearer = (request: Request) => request.header('Authorization')?.split(" ")[1] as IToken['token'] | undefined;
+export const getTokenBearer = (request: Request) =>
+    request.header('Authorization')?.split(' ')[1] as IToken['token'] | undefined;
 
 /**
  * Get user data (if authenticated, otherwise go on)
@@ -21,21 +22,20 @@ export const getAuth = async (request: Request, response: Response, next: NextFu
     const token = getTokenBearer(request);
 
     if (!token) {
-        next()
+        next();
         return;
     }
 
     await verifyAccessToken(token)
         .then(({ id }) => Users.findById(id))
-        .then(user => {
-            if (user)
-                request.user = user;
+        .then((user) => {
+            if (user) request.user = user;
         })
         .catch(() => {
             // Invalid or expired token — proceed without authenticated user
         })
-        .finally(next)
-}
+        .finally(next);
+};
 
 /**
  * Unauthorized: Don't know who you are
@@ -48,19 +48,20 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
     const token = getTokenBearer(request);
 
     if (!request.user || !token) {
-        rejectResponse(response, 401, "Unauthorized");
+        rejectResponse(response, 401, 'Unauthorized');
         return;
     }
 
-    next()
-}
+    next();
+};
 
 /**
  * Always AFTER isAuth
  *
  * @param role
  */
-export const isRole = (role: EUserRoles) =>
+export const isRole =
+    (role: EUserRoles) =>
     /**
      *
      * @param request
@@ -69,7 +70,7 @@ export const isRole = (role: EUserRoles) =>
      */
     (request: Request, response: Response, next: NextFunction) => {
         if (!request.user) {
-            rejectResponse(response, 403, "Forbidden: Access denied.");
+            rejectResponse(response, 403, 'Forbidden: Access denied.');
             return;
         }
         if (!request.user.roles.includes(role)) {
@@ -77,9 +78,7 @@ export const isRole = (role: EUserRoles) =>
             return;
         }
         next();
-    }
-
-
+    };
 
 /**
  * Always AFTER isAuth
@@ -100,12 +99,11 @@ export const isAdmin = isRole(EUserRoles.ADMIN);
 export const isGuest = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
     if (token) {
-        rejectResponse(response, 400, "You are already logged in.");
+        rejectResponse(response, 400, 'You are already logged in.');
         return;
     }
     next();
-}
-
+};
 
 /**
  * Dynamically add the user id to id parameter.
@@ -118,7 +116,6 @@ export const isGuest = (request: Request, response: Response, next: NextFunction
  * @param next
  */
 export const isUser = (request: Request, response: Response, next: NextFunction) => {
-    if (request.user?.id)
-        request.params.id = (request.user._id as Types.ObjectId).toString();
+    if (request.user?.id) request.params.id = (request.user._id as Types.ObjectId).toString();
     next();
-}
+};

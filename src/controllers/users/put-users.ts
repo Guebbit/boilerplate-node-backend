@@ -23,16 +23,17 @@ const putUsers = async (request: Request, response: Response): Promise<void> => 
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request);
 
     try {
-        const user = await UserService.adminUpdate(body.id, { ...body, ...(imageUrl !== undefined && { imageUrl }) });
+        const user = await UserService.adminUpdate(body.id, {
+            ...body,
+            ...(imageUrl !== undefined && { imageUrl })
+        });
         successResponse(response, user.toObject());
     } catch (error) {
-        if (imageUrlRaw)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
         const message = (error as Error).message;
         if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
-        else
-            rejectResponse(response, 500, 'Internal Server Error', [message]);
+        else rejectResponse(response, 500, 'Internal Server Error', [message]);
     }
 };
 

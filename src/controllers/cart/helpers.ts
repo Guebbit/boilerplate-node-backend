@@ -16,7 +16,7 @@ export const buildCartResponse = async (user: import('@models/users').IUserDocum
     const summary = {
         itemsCount: items.length,
         totalQuantity,
-        total,
+        total
     };
     return { items, summary };
 };

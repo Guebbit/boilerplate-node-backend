@@ -9,12 +9,12 @@ import { rejectResponse, successResponse } from '@utils/response';
  * create a new short-lived access token for the following requests.
  */
 const getRefreshToken = (request: Request<{ token?: string }>, response: Response) => {
-
     /**
      * Get token
      * (name of the cookie decided in the post-login.ts controller)
      */
-    const refreshToken = request.params.token ?? (request.cookies as Record<string, string | undefined>).jwt;
+    const refreshToken =
+        request.params.token ?? (request.cookies as Record<string, string | undefined>).jwt;
 
     /**
      * Check if refresh token is missing
@@ -28,9 +28,8 @@ const getRefreshToken = (request: Request<{ token?: string }>, response: Respons
      * Create new access token using refresh token stored in the server
      */
     createAccessToken(refreshToken)
-        .then(token => successResponse(response, { token }))
+        .then((token) => successResponse(response, { token }))
         .catch(() => rejectResponse(response, 401, 'Unauthorized'));
 };
 
 export default getRefreshToken;
-

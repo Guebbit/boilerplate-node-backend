@@ -10,13 +10,12 @@ afterAll(disconnect);
 beforeEach(clearAll);
 
 describe('OrderRepository', () => {
-
     describe('create', () => {
         it('inserts an order and returns the Mongoose document', async () => {
-            const user    = await createUser();
+            const user = await createUser();
             const product = await createProduct({ price: 15 });
             // toOrderProduct converts the product document into the embedded shape
-            const order   = await createOrder(user, [toOrderProduct(product, 2)]);
+            const order = await createOrder(user, [toOrderProduct(product, 2)]);
 
             expect(order._id).toBeDefined();
             expect(order.email).toBe(user.email);
@@ -24,18 +23,21 @@ describe('OrderRepository', () => {
         });
 
         it('stores the correct quantity for each order line', async () => {
-            const user    = await createUser();
+            const user = await createUser();
             const product = await createProduct();
-            const order   = await createOrder(user, [toOrderProduct(product, 5)]);
+            const order = await createOrder(user, [toOrderProduct(product, 5)]);
 
             expect(order.products).toHaveLength(1);
             expect(order.products[0].quantity).toBe(5);
         });
 
         it('stores the full product snapshot (title, price) in the order', async () => {
-            const user    = await createUser();
-            const product = await createProduct({ title: 'Snapshot Test', price: 29.99 });
-            const order   = await createOrder(user, [toOrderProduct(product, 1)]);
+            const user = await createUser();
+            const product = await createProduct({
+                title: 'Snapshot Test',
+                price: 29.99
+            });
+            const order = await createOrder(user, [toOrderProduct(product, 1)]);
 
             // The product object is embedded, not referenced by ObjectId
             expect(order.products[0].product.title).toBe('Snapshot Test');
@@ -46,12 +48,9 @@ describe('OrderRepository', () => {
             const user = await createUser();
             const [p1, p2] = await Promise.all([
                 createProduct({ title: 'Product 1' }),
-                createProduct({ title: 'Product 2' }),
+                createProduct({ title: 'Product 2' })
             ]);
-            const order = await createOrder(user, [
-                toOrderProduct(p1, 1),
-                toOrderProduct(p2, 3),
-            ]);
+            const order = await createOrder(user, [toOrderProduct(p1, 1), toOrderProduct(p2, 3)]);
 
             expect(order.products).toHaveLength(2);
         });
@@ -59,7 +58,7 @@ describe('OrderRepository', () => {
 
     describe('aggregate', () => {
         it('returns all orders when given a match-all pipeline', async () => {
-            const user    = await createUser();
+            const user = await createUser();
             const product = await createProduct();
             await createOrder(user, [toOrderProduct(product, 1)]);
             await createOrder(user, [toOrderProduct(product, 2)]);
@@ -73,34 +72,32 @@ describe('OrderRepository', () => {
         });
 
         it('applies a $match stage to filter results', async () => {
-            const user    = await createUser();
+            const user = await createUser();
             const product = await createProduct();
-            const order   = await createOrder(user, [toOrderProduct(product, 1)]);
+            const order = await createOrder(user, [toOrderProduct(product, 1)]);
 
             // Only orders for this specific user
-            const results = await OrderRepository.aggregate([
-                { $match: { userId: order.userId } },
-            ]);
+            const results = await OrderRepository.aggregate([{ $match: { userId: order.userId } }]);
 
             expect(results).toHaveLength(1);
         });
 
         it('applies a $count stage and returns the document count', async () => {
-            const user    = await createUser();
+            const user = await createUser();
             const product = await createProduct();
             await createOrder(user, [toOrderProduct(product, 1)]);
             await createOrder(user, [toOrderProduct(product, 2)]);
             await createOrder(user, [toOrderProduct(product, 3)]);
 
             const [result] = await OrderRepository.aggregate<{ total: number }>([
-                { $count: 'total' },
+                { $count: 'total' }
             ]);
 
             expect(result.total).toBe(3);
         });
 
         it('adds computed fields with $addFields', async () => {
-            const user    = await createUser();
+            const user = await createUser();
             const product = await createProduct({ price: 10 });
             await createOrder(user, [toOrderProduct(product, 4)]);
 
@@ -117,12 +114,12 @@ describe('OrderRepository', () => {
                                 $map: {
                                     input: '$products',
                                     as: 'p',
-                                    in: { $multiply: ['$$p.product.price', '$$p.quantity'] },
-                                },
-                            },
-                        },
-                    },
-                },
+                                    in: { $multiply: ['$$p.product.price', '$$p.quantity'] }
+                                }
+                            }
+                        }
+                    }
+                }
             ]);
 
             expect(result.totalQuantity).toBe(4);
@@ -130,7 +127,7 @@ describe('OrderRepository', () => {
         });
 
         it('handles the $sort + $skip + $limit pagination pattern', async () => {
-            const user    = await createUser();
+            const user = await createUser();
             const product = await createProduct();
             // Insert 5 orders
             for (let i = 0; i < 5; i++) {
@@ -140,7 +137,7 @@ describe('OrderRepository', () => {
             const page2 = await OrderRepository.aggregate([
                 { $sort: { createdAt: -1 } },
                 { $skip: 3 },
-                { $limit: 10 },
+                { $limit: 10 }
             ]);
 
             // 5 total, skip 3 → 2 remaining

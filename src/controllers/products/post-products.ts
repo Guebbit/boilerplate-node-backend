@@ -17,19 +17,23 @@ const postProducts = async (request: Request, response: Response): Promise<void>
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request);
 
-    const errors = ProductService.validateData({ ...body, ...(imageUrl !== undefined && { imageUrl }) } as never);
+    const errors = ProductService.validateData({
+        ...body,
+        ...(imageUrl !== undefined && { imageUrl })
+    } as never);
     if (errors.length > 0) {
-        if (imageUrlRaw)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
         rejectResponse(response, 422, 'createProduct - validation failed', errors);
         return;
     }
     try {
-        const product = await ProductService.create({ ...body, ...(imageUrl !== undefined && { imageUrl }) } as never);
+        const product = await ProductService.create({
+            ...body,
+            ...(imageUrl !== undefined && { imageUrl })
+        } as never);
         successResponse(response, product.toObject(), 201);
     } catch (error) {
-        if (imageUrlRaw)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
         rejectResponse(response, 500, 'Internal Server Error', [(error as Error).message]);
     }
 };

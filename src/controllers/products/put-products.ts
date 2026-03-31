@@ -13,7 +13,9 @@ import type { UpdateProductRequest } from '@types';
 const putProducts = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as UpdateProductRequest;
     if (!body.id) {
-        rejectResponse(response, 422, 'updateProduct - missing id', [t('generic.error-missing-data')]);
+        rejectResponse(response, 422, 'updateProduct - missing id', [
+            t('generic.error-missing-data')
+        ]);
         return;
     }
 
@@ -26,13 +28,11 @@ const putProducts = async (request: Request, response: Response): Promise<void> 
         const product = await ProductService.update(body.id, body as never, imageUrl);
         successResponse(response, product.toObject());
     } catch (error) {
-        if (imageUrlRaw)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
         const message = (error as Error).message;
         if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        else
-            rejectResponse(response, 500, 'Internal Server Error', [message]);
+        else rejectResponse(response, 500, 'Internal Server Error', [message]);
     }
 };
 

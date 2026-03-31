@@ -34,7 +34,7 @@ const getOrderInvoice = async (request: Request, response: Response): Promise<vo
         const templatePath = path.resolve('views', 'templates-files', 'invoice-order-file.ejs');
         const html = await ejs.renderFile(templatePath, {
             order,
-            pageMetaTitle: `Invoice - Order ${String(order._id)}`,
+            pageMetaTitle: `Invoice - Order ${String(order._id)}`
         });
 
         /**
@@ -42,7 +42,7 @@ const getOrderInvoice = async (request: Request, response: Response): Promise<vo
          */
         const browser = await puppeteer.launch({
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/chromium-browser',
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
         await page.setContent(html, { waitUntil: 'networkidle0' });
@@ -53,7 +53,10 @@ const getOrderInvoice = async (request: Request, response: Response): Promise<vo
         response
             .status(200)
             .setHeader('Content-Type', 'application/pdf')
-            .setHeader('Content-Disposition', `attachment; filename="invoice-${String(order._id)}.pdf"`)
+            .setHeader(
+                'Content-Disposition',
+                `attachment; filename="invoice-${String(order._id)}.pdf"`
+            )
             .send(pdf);
     } catch (error) {
         rejectResponse(response, 500, 'Invoice generation failed', [(error as Error).message]);

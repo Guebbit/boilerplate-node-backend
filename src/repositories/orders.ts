@@ -23,8 +23,7 @@ export const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promis
  *
  * @param id
  */
-export const findById = (id: string) =>
-    orderModel.findById(id);
+export const findById = (id: string) => orderModel.findById(id);
 
 /**
  * Create a new order document
@@ -39,8 +38,7 @@ export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =
  *
  * @param order
  */
-export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
-    order.save();
+export const save = (order: IOrderDocument): Promise<IOrderDocument> => order.save();
 
 /**
  * Hard-delete an order document from the database
@@ -51,6 +49,5 @@ export const deleteOne = (order: IOrderDocument): Promise<void> =>
     order.deleteOne().then(() => {
         // explicit void return to satisfy TypeScript's Promise<void> type
     });
-
 
 export default { aggregate, findById, create, save, deleteOne };

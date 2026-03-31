@@ -1,11 +1,8 @@
-import type { Request, Response, } from 'express';
+import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import UserRepository from '@repositories/users';
-import {
-    destroyRefreshCookie,
-    destroyLoggedCookie,
-} from '@middlewares/auth-jwt';
+import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetConfirmRequest } from '@types';
 
@@ -13,12 +10,17 @@ import type { PasswordResetConfirmRequest } from '@types';
  * POST /account/reset-confirm
  * Validate a one-time reset token and set the new password.
  */
-const postResetConfirm = async (request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>, response: Response): Promise<void> => {
+const postResetConfirm = async (
+    request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>,
+    response: Response
+): Promise<void> => {
     const { token, password, passwordConfirm } = request.body;
 
     // Wrong token
     if (!token) {
-        rejectResponse(response, 422, 'reset-confirm - missing token', [t('generic.error-missing-data')]);
+        rejectResponse(response, 422, 'reset-confirm - missing token', [
+            t('generic.error-missing-data')
+        ]);
         return;
     }
 
@@ -27,25 +29,33 @@ const postResetConfirm = async (request: Request<{ token?: string }, unknown, Pa
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'tokens.token': token,
             // eslint-disable-next-line @typescript-eslint/naming-convention
-            'tokens.type': 'password',
+            'tokens.type': 'password'
         });
 
         // Wrong token
         if (!user) {
-            rejectResponse(response, 422, 'reset-confirm - invalid token', [t('reset.token-not-found')]);
+            rejectResponse(response, 422, 'reset-confirm - invalid token', [
+                t('reset.token-not-found')
+            ]);
             return;
         }
 
-        const tokenEntry = user.tokens.find(tk => tk.token === token && tk.type === 'password');
+        const tokenEntry = user.tokens.find((tk) => tk.token === token && tk.type === 'password');
         if (!tokenEntry || (tokenEntry.expiration && tokenEntry.expiration < new Date())) {
-            rejectResponse(response, 422, 'reset-confirm - expired token', [t('reset.token-not-found')]);
+            rejectResponse(response, 422, 'reset-confirm - expired token', [
+                t('reset.token-not-found')
+            ]);
             return;
         }
 
         /**
          * Change password
          */
-        const result = await UserService.passwordChange(user, password ?? '', passwordConfirm ?? '');
+        const result = await UserService.passwordChange(
+            user,
+            password ?? '',
+            passwordConfirm ?? ''
+        );
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -54,7 +64,7 @@ const postResetConfirm = async (request: Request<{ token?: string }, unknown, Pa
         /**
          * Consume the token and save the user
          */
-        user.tokens = user.tokens.filter(tk => tk.token !== token);
+        user.tokens = user.tokens.filter((tk) => tk.token !== token);
         await UserRepository.save(user);
 
         destroyRefreshCookie(response);
