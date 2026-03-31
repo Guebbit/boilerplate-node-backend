@@ -140,17 +140,15 @@ export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
 
 /**
  * Update an existing product by ID.
- * If a new image URL is provided and differs from the old one,
+ * If a new image URL is provided via data.imageUrl and differs from the old one,
  * the old image file is deleted after the save succeeds.
  *
  * @param id
  * @param data
- * @param newImageUrl - new image URL relative to the public directory (empty string means no change)
  */
 export const update = async (
     id: string,
-    data: Partial<Omit<Product, 'id'>>,
-    newImageUrl = ''
+    data: Partial<Omit<Product, 'id'>>
 ): Promise<IProductDocument> => {
     const product = await ProductRepository.findById(id);
 
@@ -164,6 +162,7 @@ export const update = async (
 
     // If a new image was uploaded, update the URL on the document
     const oldImageUrl = product.imageUrl;
+    const newImageUrl = data.imageUrl ?? '';
     if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
     // Persist the updated document

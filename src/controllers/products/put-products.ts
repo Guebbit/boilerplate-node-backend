@@ -18,7 +18,6 @@ const putProducts = async (request: Request<unknown, unknown, UpdateProductReque
         ]);
         return;
     }
-    const imageUrlBody = body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
@@ -29,7 +28,7 @@ const putProducts = async (request: Request<unknown, unknown, UpdateProductReque
         const product = await ProductService.update(body.id, {
             ...request.body,
             imageUrl: imageUrl ?? request.body.imageUrl
-        }, imageUrl ?? imageUrlBody);
+        });
         successResponse(response, product.toObject());
     } catch (error) {
         if (imageUrlRaw) await deleteFile(imageUrlRaw);
