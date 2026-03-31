@@ -180,10 +180,12 @@ export const zodUserSchema = z.object({
  *
  * Hash all passwords (if they have been changed)
  */
-userSchema.pre('save', async function () {
+userSchema.pre('save', function () {
     if (!this.isModified('password')) return;
 
-    this.password = await bcrypt.hash(this.password, 12);
+    return bcrypt.hash(this.password, 12).then((hash) => {
+        this.password = hash;
+    });
 });
 
 /**

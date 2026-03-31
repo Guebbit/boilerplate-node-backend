@@ -14,7 +14,7 @@ import ProductService from '@services/products';
  * @param response
  * @param next
  */
-export const postEditProduct = async (
+export const postEditProduct = (
     request: Request<unknown, unknown, UpdateProductRequestBody>,
     response: Response,
     next: NextFunction
@@ -46,11 +46,13 @@ export const postEditProduct = async (
      */
     if (issues.length > 0) {
         // Record was not created, so revert server changes by removing the uploaded file
-        if (imageUrlRaw) await deleteFile(imageUrlRaw);
-        request.flash('error', issues);
-        request.flash('filled', Object.values(request.body));
-        if (!id || id === '') return response.redirect('/products/add');
-        return response.redirect('/products/edit/' + id);
+        const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
+        return cleanup.then(() => {
+            request.flash('error', issues);
+            request.flash('filled', Object.values(request.body));
+            if (!id || id === '') return response.redirect('/products/add');
+            return response.redirect('/products/edit/' + id);
+        });
     }
 
     /**
@@ -65,9 +67,11 @@ export const postEditProduct = async (
             active: !!active
         })
             .then(() => response.redirect('/products/'))
-            .catch(async (error: CastError) => {
-                if (imageUrlRaw) await deleteFile(imageUrlRaw);
-                return next(new ExtendedError(error.kind, 500, false, [error.message]));
+            .catch((error: CastError) => {
+                const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
+                return cleanup.then(() =>
+                    next(new ExtendedError(error.kind, 500, false, [error.message]))
+                );
             });
 
     /**
@@ -86,8 +90,10 @@ export const postEditProduct = async (
         .then((updatedProduct) =>
             response.redirect('/products/details/' + updatedProduct._id.toString())
         )
-        .catch(async (error: CastError) => {
-            if (imageUrlRaw) await deleteFile(imageUrlRaw);
-            return next(new ExtendedError(error.kind, 500, false, [error.message]));
+        .catch((error: CastError) => {
+            const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
+            return cleanup.then(() =>
+                next(new ExtendedError(error.kind, 500, false, [error.message]))
+            );
         });
 };

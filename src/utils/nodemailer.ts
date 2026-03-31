@@ -33,26 +33,34 @@ export const transporter = createTransport({
  * @param templateName
  * @param data
  */
-export const nodemailer = async (
+export const nodemailer = (
     request: SendMailOptions,
     templateName: string,
     data: Data
-): Promise<SentMessageInfo> => {
+): Promise<SentMessageInfo> =>
     // Render the EJS template
-    const html = await ejs.renderFile(
-        // Retrieve the template
-        path.resolve(getDirname(import.meta.url), '../../views/templates-emails', templateName),
-        // Populate the template
-        data
-    );
-    /**
-     * Send email (nodemailer returns a Promise when no callback is provided)
-     */
-    const info: SentMessageInfo = await transporter.sendMail({
-        from: process.env.NODE_SMTP_SENDER,
-        html,
-        ...request
-    });
-    logger.info('Message sent: %s', info.messageId);
-    return info;
-};
+    ejs
+        .renderFile(
+            // Retrieve the template
+            path.resolve(
+                getDirname(import.meta.url),
+                '../../views/templates-emails',
+                templateName
+            ),
+            // Populate the template
+            data
+        )
+        .then((html) =>
+            /**
+             * Send email (nodemailer returns a Promise when no callback is provided)
+             */
+            transporter.sendMail({
+                from: process.env.NODE_SMTP_SENDER,
+                html,
+                ...request
+            })
+        )
+        .then((info: SentMessageInfo) => {
+            logger.info('Message sent: %s', info.messageId);
+            return info;
+        });

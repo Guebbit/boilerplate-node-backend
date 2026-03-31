@@ -82,7 +82,7 @@ export function getBrowserConfig() {
  * @param options - puppeteer options
  * @return string | Error
  */
-export async function createPDF(
+export function createPDF(
     htmlContent: string,
     filename = 'output.pdf',
     outputPath = 'src/storage/files',
@@ -92,18 +92,22 @@ export async function createPDF(
         printBackground: true
     }
 ): Promise<string> {
-    const browser = await puppeteer.launch(getBrowserConfig());
-    try {
-        const page = await browser.newPage();
-        // Wait until there are no more than 0 network connections for at least 500 milliseconds:
-        // The page is considered fully loaded when there has been a half-second period with no new network requests
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-        await page.pdf({
-            ...options,
-            path: outputPath + '/' + filename
-        });
-        return outputPath + '/' + filename;
-    } finally {
-        await browser.close();
-    }
+    return puppeteer.launch(getBrowserConfig()).then((browser) =>
+        browser
+            .newPage()
+            .then((page) =>
+                // Wait until there are no more than 0 network connections for at least 500 milliseconds:
+                // The page is considered fully loaded when there has been a half-second period with no new network requests
+                page
+                    .setContent(htmlContent, { waitUntil: 'networkidle0' })
+                    .then(() =>
+                        page.pdf({
+                            ...options,
+                            path: outputPath + '/' + filename
+                        })
+                    )
+                    .then(() => outputPath + '/' + filename)
+            )
+            .finally(() => browser.close())
+    );
 }

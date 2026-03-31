@@ -43,7 +43,7 @@ export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
  * @param id
  * @param quantity
  */
-export const cartItemSetById = async (
+export const cartItemSetById = (
     user: IUserDocument,
     id: string,
     quantity = 1
@@ -68,7 +68,7 @@ export const cartItemSetById = async (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return generateSuccess(await UserRepository.save(user));
+    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -92,7 +92,7 @@ export const cartItemSet = (
  * @param id
  * @param quantity
  */
-export const cartItemAddById = async (
+export const cartItemAddById = (
     user: IUserDocument,
     id: string,
     quantity = 1
@@ -119,7 +119,7 @@ export const cartItemAddById = async (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return generateSuccess(await UserRepository.save(user));
+    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -142,13 +142,13 @@ export const cartItemAdd = (
  * @param user
  * @param id
  */
-export const cartItemRemoveById = async (
+export const cartItemRemoveById = (
     user: IUserDocument,
     id: string
 ): Promise<IResponseSuccess<IUserDocument>> => {
     user.cart.items = user.cart.items.filter(({ product }: ICartItem) => !product.equals(id));
     user.cart.updatedAt = new Date();
-    return generateSuccess(await UserRepository.save(user));
+    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -168,12 +168,12 @@ export const cartItemRemove = (
  *
  * @param user
  */
-export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
+export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
     user.cart = {
         items: [],
         updatedAt: new Date()
     };
-    return generateSuccess(await UserRepository.save(user));
+    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -181,25 +181,25 @@ export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<
  *
  * @param user
  */
-export const orderConfirm = async (
+export const orderConfirm = (
     user: IUserDocument
-): Promise<IResponseSuccess<Order> | IResponseReject> => {
-    try {
-        const products = await cartGet(user);
-        if (products.length === 0)
-            return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
-        const order = await OrderRepository.create({
-            userId: user._id as Types.ObjectId,
-            email: user.email,
-            // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
-            products: products as unknown as IOrderProduct[]
-        } as Partial<IOrderDocument>);
-        await cartRemove(user);
-        return generateSuccess<Order>(order as unknown as Order);
-    } catch (error) {
-        return generateReject(...databaseErrorInterpreter(error as CastError | Error));
-    }
-};
+): Promise<IResponseSuccess<Order> | IResponseReject> =>
+    cartGet(user)
+        .then((products) => {
+            if (products.length === 0)
+                return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
+            return OrderRepository.create({
+                userId: user._id as Types.ObjectId,
+                email: user.email,
+                // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
+                products: products as unknown as IOrderProduct[]
+            } as Partial<IOrderDocument>).then((order) =>
+                cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
+            );
+        })
+        .catch((error: CastError | Error) =>
+            generateReject(...databaseErrorInterpreter(error as CastError | Error))
+        );
 
 /**
  * Add a token to the user
@@ -212,7 +212,7 @@ export const orderConfirm = async (
  * @param type
  * @param expirationTime - undefined = expire only upon use
  */
-export const tokenAdd = async (
+export const tokenAdd = (
     user: IUserDocument,
     type: string,
     expirationTime?: number
@@ -234,7 +234,7 @@ export const tokenAdd = async (
  * @param password
  * @param passwordConfirm
  */
-export const passwordChange = async (
+export const passwordChange = (
     user: IUserDocument,
     password = '',
     passwordConfirm = ''
@@ -292,7 +292,7 @@ export const passwordChange = async (
  * @param passwordConfirm
  * @param imageUrl
  */
-export const signup = async (
+export const signup = (
     email: string,
     username: string,
     password: string,
@@ -337,7 +337,7 @@ export const signup = async (
      * If that's the case: return error and stop the creation process
      */
     return UserRepository.findOne({ email })
-        .then(async (user) => {
+        .then((user) => {
             // Email already exists
             if (user)
                 return generateReject(409, 'signup - email already used', [
@@ -347,14 +347,12 @@ export const signup = async (
              * Everything is ok, proceed to create a new user.
              * Encryption will be done automatically by the pre-save hook
              */
-            return generateSuccess<IUserDocument>(
-                await UserRepository.create({
-                    username,
-                    email,
-                    imageUrl: imageUrl ?? '',
-                    password
-                })
-            );
+            return UserRepository.create({
+                username,
+                email,
+                imageUrl: imageUrl ?? '',
+                password
+            }).then((createdUser) => generateSuccess<IUserDocument>(createdUser));
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
@@ -365,7 +363,7 @@ export const signup = async (
  * @param email
  * @param password
  */
-export const login = async (
+export const login = (
     email?: string,
     password?: string
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
@@ -491,7 +489,7 @@ export const validateData = (
  *
  * @param filters
  */
-export const search = async (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
+export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
@@ -525,14 +523,14 @@ export const search = async (filters: SearchUsersRequest = {}): Promise<UsersRes
     if (filters.active !== undefined && filters.active !== null)
         where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
 
-    const totalItems = await UserRepository.count(where);
-    const items = await UserRepository.findAll(where, {
-        sort: { createdAt: -1 },
-        skip,
-        limit: pageSize
-    });
-
-    return {
+    return Promise.all([
+        UserRepository.count(where),
+        UserRepository.findAll(where, {
+            sort: { createdAt: -1 },
+            skip,
+            limit: pageSize
+        })
+    ]).then(([totalItems, items]) => ({
         items: items as unknown as UsersResponse['items'],
         meta: {
             page,
@@ -540,7 +538,7 @@ export const search = async (filters: SearchUsersRequest = {}): Promise<UsersRes
             totalItems,
             totalPages: Math.ceil(totalItems / pageSize)
         }
-    };
+    }));
 };
 
 /**
@@ -549,12 +547,13 @@ export const search = async (filters: SearchUsersRequest = {}): Promise<UsersRes
  *
  * @param id
  */
-export const getById = async (id?: string) => {
+export const getById = (id?: string) => {
     // Return early without triggering a DB call when no id is provided
-    if (!id) return;
-    const user = await UserRepository.findById(id);
-    if (!user) return;
-    return user.toObject();
+    if (!id) return Promise.resolve(undefined);
+    return UserRepository.findById(id).then((user) => {
+        if (!user) return undefined;
+        return user.toObject();
+    });
 };
 
 /**
@@ -576,24 +575,23 @@ export const adminCreate = (
  * @param id
  * @param data
  */
-export const adminUpdate = async (
+export const adminUpdate = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
-): Promise<IUserDocument> => {
-    const user = await UserRepository.findById(id);
+): Promise<IUserDocument> =>
+    UserRepository.findById(id).then((user) => {
+        if (!user) throw new Error('404');
 
-    if (!user) throw new Error('404');
+        // Apply incoming field changes
+        if (data.email !== undefined) user.email = data.email;
+        if (data.username !== undefined) user.username = data.username;
+        if (data.admin !== undefined) user.admin = data.admin;
+        if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
+        // Only update password when a non-empty value is passed
+        if (data.password && data.password.trim().length > 0) user.password = data.password;
 
-    // Apply incoming field changes
-    if (data.email !== undefined) user.email = data.email;
-    if (data.username !== undefined) user.username = data.username;
-    if (data.admin !== undefined) user.admin = data.admin;
-    if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
-    // Only update password when a non-empty value is passed
-    if (data.password && data.password.trim().length > 0) user.password = data.password;
-
-    return UserRepository.save(user);
-};
+        return UserRepository.save(user);
+    });
 
 /**
  * Remove a user by ID (soft or hard delete).
@@ -603,27 +601,28 @@ export const adminUpdate = async (
  * @param id
  * @param hardDelete
  */
-export const remove = async (
+export const remove = (
     id: string,
     hardDelete = false
-): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
-    const user = await UserRepository.findById(id);
+): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> =>
+    UserRepository.findById(id).then((user) => {
+        // not found, something happened
+        if (!user) return generateReject(404, '404', [t('admin.user-not-found')]);
 
-    // not found, something happened
-    if (!user) return generateReject(404, '404', [t('admin.user-not-found')]);
+        // HARD delete
+        if (hardDelete)
+            return UserRepository.deleteOne(user).then(() =>
+                generateSuccess(undefined, 200, t('admin.user-hard-deleted'))
+            );
 
-    // HARD delete
-    if (hardDelete)
-        return UserRepository.deleteOne(user).then(() =>
-            generateSuccess(undefined, 200, t('admin.user-hard-deleted'))
+        // If deletedAt already present: it's soft-deleted → RESTORE
+        user.deletedAt = user.deletedAt ? undefined : new Date();
+
+        // SOFT delete (or restore)
+        return UserRepository.save(user).then((savedUser) =>
+            generateSuccess(savedUser, 200, t('admin.user-soft-deleted'))
         );
-
-    // If deletedAt already present: it's soft-deleted → RESTORE
-    user.deletedAt = user.deletedAt ? undefined : new Date();
-
-    // SOFT delete (or restore)
-    return generateSuccess(await UserRepository.save(user), 200, t('admin.user-soft-deleted'));
-};
+    });
 
 export default {
     cartGet,

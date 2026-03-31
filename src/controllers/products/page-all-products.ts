@@ -17,7 +17,7 @@ export type IGetAllProductsQuery = Partial<Record<keyof SearchProductsRequest, s
  * @param response
  * @param next
  */
-export const pageAllProducts = async (
+export const pageAllProducts = (
     // Page can be param or query
     request: Request<{ page?: string }, unknown, unknown, IGetAllProductsQuery>, // fourth generic = query
     response: Response,
@@ -33,7 +33,7 @@ export const pageAllProducts = async (
         },
         request.session.user?.admin
     )
-        .then(async ({ items, meta }) =>
+        .then(({ items, meta }) =>
             response.render('products/list', {
                 pageMetaTitle: 'All Products',
                 pageMetaLinks: ['/css/product.css'],
