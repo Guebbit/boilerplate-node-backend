@@ -208,7 +208,7 @@ export const zodUserSchema = z.object({
  *
  * Hash all passwords (if they have been changed) and sync roles with admin flag.
  */
-userSchema.pre('save', async function () {
+userSchema.pre('save', function () {
     // Sync roles with the admin boolean flag
     if (this.isModified('admin') || this.isNew) {
         if (this.admin) {
@@ -220,14 +220,16 @@ userSchema.pre('save', async function () {
 
     if (!this.isModified('password')) return;
 
-    this.password = await bcrypt.hash(this.password, 12);
+    return bcrypt.hash(this.password, 12).then((hashedPassword) => {
+        this.password = hashedPassword;
+    });
 });
 
 /**
  * Add a token to this user document and persist it.
  * Returns the token string so callers can use it directly.
  */
-userSchema.methods.tokenAdd = async function (
+userSchema.methods.tokenAdd = function (
     type: ETokenType,
     expirationMs: number,
     token: string
@@ -237,41 +239,39 @@ userSchema.methods.tokenAdd = async function (
         token,
         expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
     });
-    await this.save();
-    return token;
+    return this.save().then(() => token);
 };
 
 /**
  * Remove all tokens of the given type from this user document and persist it.
  */
-userSchema.methods.tokenRemoveAll = async function (type: ETokenType): Promise<void> {
+userSchema.methods.tokenRemoveAll = function (type: ETokenType): Promise<void> {
     this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
-    await this.save();
+    return this.save().then(() => {});
 };
 
 /**
  * Remove all expired tokens from every user document in the collection.
  * Returns a simple status/success envelope consumed by the controller layer.
  */
-userSchema.static('tokenRemoveExpired', async function (): Promise<{
+userSchema.static('tokenRemoveExpired', function (): Promise<{
     status: number;
     success: boolean;
 }> {
-    try {
-        const now = new Date();
-        const tokenExpirationPath = 'tokens.expiration';
-        await this.updateMany(
-            { [tokenExpirationPath]: { $lt: now } },
-            { $pull: { tokens: { expiration: { $lt: now } } } }
-        );
-        return { status: 200, success: true };
-    } catch (error) {
-        logger.error({
-            message: 'tokenRemoveExpired failed',
-            error
+    const now = new Date();
+    const tokenExpirationPath = 'tokens.expiration';
+    return this.updateMany(
+        { [tokenExpirationPath]: { $lt: now } },
+        { $pull: { tokens: { expiration: { $lt: now } } } }
+    )
+        .then(() => ({ status: 200, success: true }))
+        .catch((error) => {
+            logger.error({
+                message: 'tokenRemoveExpired failed',
+                error
+            });
+            return { status: 500, success: false };
         });
-        return { status: 500, success: false };
-    }
 });
 
 /**

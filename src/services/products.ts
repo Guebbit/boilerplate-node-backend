@@ -41,7 +41,7 @@ export const validateData = (productData: Omit<Product, 'id'>): string[] => {
  * @param filters
  * @param admin - Admin scope: shows inactive and soft-deleted products
  */
-export const search = async (
+export const search = (
     filters: SearchProductsRequest = {},
     admin = false
 ): Promise<ProductsResponse> => {
@@ -90,25 +90,21 @@ export const search = async (
     }
 
     // First count the total number of products matching the query
-    const totalItems = await ProductRepository.count(where);
-
-    // Then paginate the results
-    const items = await ProductRepository.findAll(where, {
-        sort: { createdAt: -1 },
-        skip,
-        limit: pageSize
-    });
-
-    return {
-        // @ts-expect-error missing id because we have _id
-        items,
-        meta: {
-            page,
-            pageSize,
-            totalItems,
-            totalPages: Math.ceil(totalItems / pageSize)
-        }
-    };
+    return ProductRepository.count(where).then((totalItems) =>
+        ProductRepository.findAll(where, {
+            sort: { createdAt: -1 },
+            skip,
+            limit: pageSize
+        }).then((items) => ({
+            items: items as unknown as ProductsResponse['items'],
+            meta: {
+                page,
+                pageSize,
+                totalItems,
+                totalPages: Math.ceil(totalItems / pageSize)
+            }
+        }))
+    );
 };
 
 /**
@@ -119,15 +115,18 @@ export const search = async (
  * @param id
  * @param admin
  */
-export const getById = async (id: string | undefined, admin = false) => {
+export const getById = (
+    id: string | undefined,
+    admin = false
+)=> {
     // Return early without triggering a DB call when no id is provided
-    if (!id) return;
-    if (admin) return ProductRepository.findById(id).lean();
+    if (!id) return Promise.resolve();
+    if (admin) return ProductRepository.findById(id).lean().exec();
     return ProductRepository.findOne({
         _id: id,
         active: true,
         deletedAt: undefined
-    }).lean();
+    }).lean().exec();
 };
 
 /**
@@ -146,33 +145,33 @@ export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
  * @param id
  * @param data
  */
-export const update = async (
+export const update = (
     id: string,
     data: Partial<Omit<Product, 'id'>>
 ): Promise<IProductDocument> => {
-    const product = await ProductRepository.findById(id);
+    return ProductRepository.findById(id).then((product) => {
+        if (!product) throw new Error('404');
 
-    if (!product) throw new Error('404');
+        // Apply incoming field changes
+        if (data.title !== undefined) product.title = data.title;
+        if (data.price !== undefined) product.price = data.price;
+        if (data.description !== undefined) product.description = data.description;
+        if (data.active !== undefined) product.active = data.active;
 
-    // Apply incoming field changes
-    if (data.title !== undefined) product.title = data.title;
-    if (data.price !== undefined) product.price = data.price;
-    if (data.description !== undefined) product.description = data.description;
-    if (data.active !== undefined) product.active = data.active;
+        // If a new image was uploaded, update the URL on the document
+        const oldImageUrl = product.imageUrl;
+        const newImageUrl = data.imageUrl ?? '';
+        if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
-    // If a new image was uploaded, update the URL on the document
-    const oldImageUrl = product.imageUrl;
-    const newImageUrl = data.imageUrl ?? '';
-    if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
-
-    // Persist the updated document
-    const updatedProduct = await ProductRepository.save(product);
-
-    // After saving the new image path, delete the old image file
-    if (newImageUrl && oldImageUrl !== newImageUrl)
-        await deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl);
-
-    return updatedProduct;
+        // Persist the updated document
+        return ProductRepository.save(product).then((updatedProduct) =>
+            // After saving the new image path, delete the old image file
+            (newImageUrl && oldImageUrl !== newImageUrl
+                ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
+                : Promise.resolve()
+            ).then(() => updatedProduct)
+        );
+    });
 };
 
 /**
@@ -184,34 +183,33 @@ export const update = async (
  * @param id
  * @param hardDelete
  */
-export const remove = async (
+export const remove = (
     id: string,
     hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
-    const product = await ProductRepository.findById(id);
+    return ProductRepository.findById(id).then((product) => {
+        // not found, something happened
+        if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
 
-    // not found, something happened
-    if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
+        // HARD delete
+        if (hardDelete)
+            return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+                .then(() => ProductRepository.deleteOne(product))
+                .then(() =>
+                    deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)
+                )
+                .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
 
-    // HARD delete
-    if (hardDelete)
+        // If deletedAt already present: it's soft-deleted → RESTORE
+        product.deletedAt = product.deletedAt ? undefined : new Date();
+
+        // SOFT delete (or restore)
         return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
-            .then(() => ProductRepository.deleteOne(product))
-            .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
-            .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
-
-    // If deletedAt already present: it's soft-deleted → RESTORE
-    product.deletedAt = product.deletedAt ? undefined : new Date();
-
-    // SOFT delete (or restore)
-    return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString()).then(
-        async () =>
-            generateSuccess(
-                await ProductRepository.save(product),
-                200,
-                t('ecommerce.product-soft-deleted')
-            )
-    );
+            .then(() => ProductRepository.save(product))
+            .then((savedProduct) =>
+                generateSuccess(savedProduct, 200, t('ecommerce.product-soft-deleted'))
+            );
+    });
 };
 
 export default { validateData, search, getById, create, update, remove };

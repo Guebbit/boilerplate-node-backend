@@ -9,10 +9,11 @@ import { userScope } from './helpers';
  * Search orders via JSON body.
  * Non-admin users see only their own orders.
  */
-const postOrdersSearch = async (request: Request, response: Response): Promise<void> => {
+const postOrdersSearch = (request: Request, response: Response): Promise<void> => {
     const body = request.body as SearchOrdersRequest;
-    const result = await OrderService.search(body, userScope(request));
-    successResponse(response, result);
+    return OrderService.search(body, userScope(request)).then((result) => {
+        successResponse(response, result);
+    });
 };
 
 export default postOrdersSearch;

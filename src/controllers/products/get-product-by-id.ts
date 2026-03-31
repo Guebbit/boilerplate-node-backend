@@ -8,15 +8,16 @@ import { successResponse, rejectResponse } from '@utils/response';
  * Get a single product by path id.
  * Only admin can see non-active (inactive/deleted) products.
  */
-const getProductById = async (request: Request, response: Response): Promise<void> => {
+const getProductById = (request: Request, response: Response): Promise<void> => {
     // Admin can search inactive or deleted products; non-admin sees only active ones
     const admin = request.user?.admin === true;
-    const product = await ProductService.getById(String(request.params.id), admin);
-    if (!product) {
-        rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        return;
-    }
-    successResponse(response, product);
+    return ProductService.getById(String(request.params.id), admin).then((product) => {
+        if (!product) {
+            rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
+            return;
+        }
+        successResponse(response, product);
+    });
 };
 
 export default getProductById;

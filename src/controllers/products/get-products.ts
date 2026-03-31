@@ -8,7 +8,7 @@ import type { SearchProductsRequest } from '@types';
  * List/search products via query parameters.
  * Admin sees all products (including inactive/deleted); public sees only active ones.
  */
-const getProducts = async (request: Request, response: Response): Promise<void> => {
+const getProducts = (request: Request, response: Response): Promise<void> => {
     const { id, page, pageSize, text, minPrice, maxPrice } = request.query as Record<
         string,
         string | undefined
@@ -23,8 +23,9 @@ const getProducts = async (request: Request, response: Response): Promise<void> 
         minPrice: minPrice ? Number(minPrice) : undefined,
         maxPrice: maxPrice ? Number(maxPrice) : undefined
     };
-    const result = await ProductService.search(filters, admin);
-    successResponse(response, result);
+    return ProductService.search(filters, admin).then((result) => {
+        successResponse(response, result);
+    });
 };
 
 export default getProducts;

@@ -11,8 +11,8 @@ import { buildCartResponse } from './helpers';
  * Add a product (with its quantity) to the cart.
  * Checks product availability, then sets (or replaces) the quantity in the cart.
  */
-const postCart = async (
-    request: Request<ParamsDictionary, unknown, UpsertCartItemRequest>,
+const postCart = (
+    request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
 ): Promise<void> => {
     // Authentication check is done before entering the route
@@ -23,23 +23,25 @@ const postCart = async (
         rejectResponse(response, 422, 'upsertCartItem - invalid data', [
             t('generic.error-invalid-data')
         ]);
-        return;
+        return Promise.resolve();
     }
 
     /**
      * Find product (active and not soft-deleted)
      */
-    const product = await ProductService.getById(productId);
-    if (!product) {
-        rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        return;
-    }
+    return ProductService.getById(productId).then((product) => {
+        if (!product) {
+            rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
+            return;
+        }
 
-    await UserService.cartItemSetById(user, productId, quantity);
-    // Reload fresh user data after mutation
-    await user.populate('cart.items.product');
-    const cart = await buildCartResponse(user);
-    successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
+        return UserService.cartItemSetById(user, productId, quantity)
+            .then(() => user.populate('cart.items.product'))
+            .then(() => buildCartResponse(user))
+            .then((cart) => {
+                successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
+            });
+    });
 };
 
 export default postCart;

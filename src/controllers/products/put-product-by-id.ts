@@ -10,28 +10,26 @@ import type { UpdateProductByIdRequest, UpdateProductByIdRequestMultipart } from
  * PUT /products/:id
  * Update a product by path id (admin).
  */
-const putProductById = async (request: Request<{ id?: string }, unknown, UpdateProductByIdRequest | UpdateProductByIdRequestMultipart>, response: Response): Promise<void> => {
+const putProductById = (
+    request: Request<{ id?: string }, unknown, UpdateProductByIdRequest | UpdateProductByIdRequestMultipart>,
+    response: Response
+): Promise<void> => {
     /**
      * Uploaded file takes priority over body imageUrl
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    try {
-        /**
-         * Update the product with the new data
-         */
-        const product = await ProductService.update(
-            String(request.params.id),
-            { ...request.body, imageUrl }
+    return ProductService.update(String(request.params.id), { ...request.body, imageUrl })
+        .then((product) => {
+            successResponse(response, product.toObject());
+        })
+        .catch((error: Error) =>
+            (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve()).then(() => {
+                if (error.message === '404')
+                    rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
+                else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+            })
         );
-        successResponse(response, product.toObject());
-    } catch (error) {
-        if (imageUrlRaw) await deleteFile(imageUrlRaw);
-        const message = (error as Error).message;
-        if (message === '404')
-            rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        else rejectResponse(response, 500, 'Internal Server Error', [message]);
-    }
 };
 
 export default putProductById;

@@ -17,7 +17,7 @@ import { runTokenCleanup } from '@utils/token-cleanup';
  * Authenticate user.
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
-const postLogin = async (
+const postLogin = (
     request: Request<unknown, unknown, LoginRequest & { remember?: ERefreshTokenExpiryTime }>,
     response: Response
 ): Promise<void> => {
@@ -29,31 +29,32 @@ const postLogin = async (
     /**
      * Login
      */
-    await runTokenCleanup();
+    return UserService.login(email, password).then((result) => {
+        if (!result.success) {
+            rejectResponse(response, result.status, result.message, result.errors);
+            return;
+        }
 
-    const result = await UserService.login(email, password);
-    if (!result.success) {
-        rejectResponse(response, result.status, result.message, result.errors);
-        return;
-    }
+        /**
+         * Authentication successful.
+         * Create refresh token...
+         */
+        const user = result.data!;
+        const userId = (user._id as Types.ObjectId).toString();
+        return createRefreshToken(userId, remember).then((refreshToken) => {
+            // ...and add it to the client cookies
+            createRefreshCookie(response, refreshToken, remember);
+            createLoggedCookie(response, remember);
 
-    /**
-     * Authentication successful.
-     * Create refresh token...
-     */
-    const user = result.data!;
-    const userId = (user._id as Types.ObjectId).toString();
-    const refreshToken = await createRefreshToken(userId, remember);
-    // ...and add it to the client cookies
-    createRefreshCookie(response, refreshToken, remember);
-    createLoggedCookie(response, remember);
-
-    /**
-     * Send the newly created access token to the client through the response.
-     * It will be used for the following requests.
-     */
-    const accessToken = await createAccessToken(refreshToken);
-    successResponse(response, { token: accessToken }, 200, 'Authentication successful');
+            /**
+             * Send the newly created access token to the client through the response.
+             * It will be used for the following requests.
+             */
+            return createAccessToken(refreshToken).then((accessToken) => {
+                successResponse(response, { token: accessToken }, 200, 'Authentication successful');
+            });
+        });
+    }).finally(runTokenCleanup);
 };
 
 export default postLogin;
