@@ -33,7 +33,6 @@
   },
   "exclude": [
     "node_modules",
-    "src/controllersOld"
   ],
   "include": [
     "api/**/*.ts",
