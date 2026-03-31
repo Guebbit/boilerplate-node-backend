@@ -27,9 +27,11 @@ const postLogin = (
     const { email, password, remember } = request.body;
 
     /**
-     * Login
+     * Run token cleanup as a background pre-flight step, then authenticate.
      */
-    return UserService.login(email, password).then((result) => {
+    return runTokenCleanup()
+        .then(() => UserService.login(email, password))
+        .then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -41,8 +43,7 @@ const postLogin = (
          */
         const user = result.data!;
         const userId = (user._id as Types.ObjectId).toString();
-        return runTokenCleanup()
-            .then(() => createRefreshToken(userId, remember))
+        return createRefreshToken(userId, remember)
             .then((refreshToken) => {
                 // ...and add it to the client cookies
                 createRefreshCookie(response, refreshToken, remember);
@@ -56,7 +57,7 @@ const postLogin = (
             })
             .then((accessToken) => {
                 successResponse(response, { token: accessToken }, 200, 'Authentication successful');
-            })
+            });
     });
 };
 

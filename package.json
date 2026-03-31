@@ -26,7 +26,7 @@
         "kill:gnu": "pkill -9 node",
         "genapi": "rm -rf ./api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
         "update:all": "npx npm-check-updates -u",
-        "complete": "npm run build && npm run test && npm run lint && npm run prettier && npm run docs:build",
+        "complete": "npm run build && npm run test && npm run lint && npm run prettier",
         "publish:public": "npm publish --access public"
     },
     "devDependencies": {

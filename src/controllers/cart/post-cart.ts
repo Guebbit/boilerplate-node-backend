@@ -4,7 +4,6 @@ import UserService from '@services/users';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
-import { buildCartResponse } from './helpers';
 
 /**
  * POST /cart
@@ -36,8 +35,7 @@ const postCart = (
         }
 
         return UserService.cartItemSetById(user, productId, quantity)
-            .then(() => user.populate('cart.items.product'))
-            .then(() => buildCartResponse(user))
+            .then(() => UserService.cartGetWithSummary(user))
             .then((cart) => {
                 successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
             });
