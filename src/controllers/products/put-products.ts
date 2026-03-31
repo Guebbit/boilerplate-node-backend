@@ -4,26 +4,27 @@ import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { UpdateProductRequest } from '@types';
+import type { UpdateProductRequest, UpdateProductRequestMultipart } from '@types';
 
 /**
  * PUT /products
  * Update a product by id in the request body (admin).
  */
-const putProducts = async (request: Request, response: Response): Promise<void> => {
+const putProducts = async (request: Request<unknown, unknown, UpdateProductRequest | UpdateProductRequestMultipart>, response: Response): Promise<void> => {
     const body = request.body as UpdateProductRequest;
     if (!body.id) {
         rejectResponse(response, 422, 'updateProduct - missing id', [t('generic.error-missing-data')]);
         return;
     }
+    const imageUrlBody = body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request, body.imageUrl);
+    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     try {
-        const product = await ProductService.update(body.id, body as never, imageUrl);
+        const product = await ProductService.update(body.id, body as never, imageUrl ?? imageUrlBody);
         successResponse(response, product.toObject());
     } catch (error) {
         if (imageUrlRaw)

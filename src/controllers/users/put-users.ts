@@ -4,26 +4,28 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { UpdateUserRequest } from '@types';
+import type { UpdateUserRequest, UpdateUserRequestMultipart } from '@types';
 
 /**
  * PUT /users
  * Update a user by id in the request body (admin).
  */
-const putUsers = async (request: Request, response: Response): Promise<void> => {
+const putUsers = async (request: Request<unknown, unknown, UpdateUserRequest | UpdateUserRequestMultipart>, response: Response): Promise<void> => {
     const body = request.body as UpdateUserRequest;
     if (!body.id) {
         rejectResponse(response, 422, 'updateUser - missing id', [t('generic.error-missing-data')]);
         return;
     }
+    const imageUrlBody = body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request);
+    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     try {
-        const user = await UserService.adminUpdate(body.id, { ...body, ...(imageUrl !== undefined && { imageUrl }) });
+        const resolvedImageUrl = imageUrl ?? imageUrlBody;
+        const user = await UserService.adminUpdate(body.id, { ...body, ...(resolvedImageUrl !== undefined && { imageUrl: resolvedImageUrl }) });
         successResponse(response, user.toObject());
     } catch (error) {
         if (imageUrlRaw)
