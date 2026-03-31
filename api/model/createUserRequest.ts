@@ -18,6 +18,7 @@ export class CreateUserRequest {
     'password': string;
     'admin'?: boolean;
     'active'?: boolean;
+    'imageUrl'?: string;
 
     static discriminator: string | undefined = undefined;
 
@@ -46,6 +47,11 @@ export class CreateUserRequest {
             "name": "active",
             "baseName": "active",
             "type": "boolean"
+        },
+        {
+            "name": "imageUrl",
+            "baseName": "imageUrl",
+            "type": "string"
         }    ];
 
     static getAttributeTypeMap() {

@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { DeleteProductRequest } from '../../../api/api';
+import type { DeleteProductRequest } from '@types';
 
 /**
  * DELETE /products

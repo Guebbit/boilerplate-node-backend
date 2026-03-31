@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { UpdateCartItemByIdRequest } from '../../../api/api';
+import type { UpdateCartItemByIdRequest } from '@types';
 import { buildCartResponse } from './helpers';
 
 /**

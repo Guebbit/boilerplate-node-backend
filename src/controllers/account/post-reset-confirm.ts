@@ -1,4 +1,4 @@
-import type { Request, Response, ParamsDictionary } from 'express';
+import type { Request, Response, } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import UserRepository from '@repositories/users';
@@ -7,13 +7,13 @@ import {
     destroyLoggedCookie,
 } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { PasswordResetConfirmRequest } from '../../../api/api';
+import type { PasswordResetConfirmRequest } from '@types';
 
 /**
  * POST /account/reset-confirm
  * Validate a one-time reset token and set the new password.
  */
-const postResetConfirm = async (request: Request<ParamsDictionary, any, PasswordResetConfirmRequest>, response: Response): Promise<void> => {
+const postResetConfirm = async (request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>, response: Response): Promise<void> => {
     const { token, password, passwordConfirm } = request.body;
 
     // Wrong token

@@ -397,6 +397,9 @@ components:
                     $ref: '#/components/schemas/Password'
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
+                imageUrl:
+                    type: string
+                    format: uri
 
         SignupRequestMultipart:
             type: object
@@ -473,6 +476,9 @@ components:
                     type: boolean
                 active:
                     type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
 
         CreateUserRequestMultipart:
             type: object
@@ -505,6 +511,9 @@ components:
                     $ref: '#/components/schemas/Email'
                 password:
                     $ref: '#/components/schemas/Password'
+                imageUrl:
+                    type: string
+                    format: uri
 
         UpdateUserRequestMultipart:
             type: object
@@ -530,6 +539,9 @@ components:
                     $ref: '#/components/schemas/Email'
                 password:
                     $ref: '#/components/schemas/Password'
+                imageUrl:
+                    type: string
+                    format: uri
 
         UpdateUserByIdRequestMultipart:
             type: object
@@ -592,6 +604,9 @@ components:
                     type: string
                 active:
                     type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
 
         CreateProductRequestMultipart:
             type: object
@@ -628,11 +643,11 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                active:
+                    type: boolean
                 imageUrl:
                     type: string
                     format: uri
-                active:
-                    type: boolean
 
         UpdateProductRequestMultipart:
             type: object
@@ -689,11 +704,11 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                active:
+                    type: boolean
                 imageUrl:
                     type: string
                     format: uri
-                active:
-                    type: boolean
 
         UpdateProductByIdRequestMultipart:
             type: object

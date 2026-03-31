@@ -17,6 +17,7 @@ export class SignupRequest {
     'username': string;
     'password': string;
     'passwordConfirm': string;
+    'imageUrl'?: string;
 
     static discriminator: string | undefined = undefined;
 
@@ -39,6 +40,11 @@ export class SignupRequest {
         {
             "name": "passwordConfirm",
             "baseName": "passwordConfirm",
+            "type": "string"
+        },
+        {
+            "name": "imageUrl",
+            "baseName": "imageUrl",
             "type": "string"
         }    ];
 

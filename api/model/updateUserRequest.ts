@@ -19,6 +19,7 @@ export class UpdateUserRequest {
     'id': string;
     'email'?: string;
     'password'?: string;
+    'imageUrl'?: string;
 
     static discriminator: string | undefined = undefined;
 
@@ -36,6 +37,11 @@ export class UpdateUserRequest {
         {
             "name": "password",
             "baseName": "password",
+            "type": "string"
+        },
+        {
+            "name": "imageUrl",
+            "baseName": "imageUrl",
             "type": "string"
         }    ];
 

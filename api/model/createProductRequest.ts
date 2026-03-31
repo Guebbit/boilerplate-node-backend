@@ -17,6 +17,7 @@ export class CreateProductRequest {
     'price': number;
     'description'?: string;
     'active'?: boolean;
+    'imageUrl'?: string;
 
     static discriminator: string | undefined = undefined;
 
@@ -40,6 +41,11 @@ export class CreateProductRequest {
             "name": "active",
             "baseName": "active",
             "type": "boolean"
+        },
+        {
+            "name": "imageUrl",
+            "baseName": "imageUrl",
+            "type": "string"
         }    ];
 
     static getAttributeTypeMap() {

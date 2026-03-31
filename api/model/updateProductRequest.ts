@@ -20,8 +20,8 @@ export class UpdateProductRequest {
     'title': string;
     'description'?: string;
     'price': number;
-    'imageUrl'?: string;
     'active'?: boolean;
+    'imageUrl'?: string;
 
     static discriminator: string | undefined = undefined;
 
@@ -47,14 +47,14 @@ export class UpdateProductRequest {
             "type": "number"
         },
         {
-            "name": "imageUrl",
-            "baseName": "imageUrl",
-            "type": "string"
-        },
-        {
             "name": "active",
             "baseName": "active",
             "type": "boolean"
+        },
+        {
+            "name": "imageUrl",
+            "baseName": "imageUrl",
+            "type": "string"
         }    ];
 
     static getAttributeTypeMap() {

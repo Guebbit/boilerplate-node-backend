@@ -1,5 +1,6 @@
 import tseslint from 'typescript-eslint'
 import globals from 'globals'
+import configPrettier from "eslint-config-prettier";
 import pluginUnicorn from 'eslint-plugin-unicorn'
 import { globalIgnores } from 'eslint/config'
 import pluginOxlint from 'eslint-plugin-oxlint'
@@ -208,5 +209,10 @@ export default tseslint.config(
                 ...globals.jest
             }
         }
-    }
+    },
+
+    /**
+     * Disable conflicts with prettier
+     */
+    configPrettier
 )

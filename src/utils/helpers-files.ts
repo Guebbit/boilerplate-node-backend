@@ -33,15 +33,12 @@ export function getFormFiles(request: Request): string[] | undefined {
  * Returns the raw full path (for file deletion on error) and the relative URL (for storage).
  *
  * @param request - Express request with optional multer file
- * @param bodyImageUrl - Optional image URL string from the request body
  */
-export function resolveImageUrl(request: Request, bodyImageUrl?: string): {
+export function resolveImageUrl(request: Request): {
     imageUrlRaw: string | undefined,
     imageUrl: string | undefined,
 } {
     const imageUrlRaw = getFormFiles(request)?.[0];
-    const imageUrl = imageUrlRaw
-        ? imageUrlRaw.replace((process.env.NODE_PUBLIC_PATH ?? 'public'), '')
-        : bodyImageUrl;
+    const imageUrl = imageUrlRaw?.replace((process.env.NODE_PUBLIC_PATH ?? 'public'), '');
     return { imageUrlRaw, imageUrl };
 }

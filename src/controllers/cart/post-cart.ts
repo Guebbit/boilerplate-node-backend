@@ -1,9 +1,9 @@
-import type { Request, Response, ParamsDictionary } from 'express';
+import type { Request, Response, } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { UpsertCartItemRequest } from '../../../api/api';
+import type { UpsertCartItemRequest } from '@types';
 import { buildCartResponse } from './helpers';
 
 /**
@@ -11,7 +11,7 @@ import { buildCartResponse } from './helpers';
  * Add a product (with its quantity) to the cart.
  * Checks product availability, then sets (or replaces) the quantity in the cart.
  */
-const postCart = async (request: Request<ParamsDictionary, any, UpsertCartItemRequest>, response: Response): Promise<void> => {
+const postCart = async (request: Request<ParamsDictionary, unknown, UpsertCartItemRequest>, response: Response): Promise<void> => {
     // Authentication check is done before entering the route
     const user = request.user!;
     const { productId, quantity } = request.body;

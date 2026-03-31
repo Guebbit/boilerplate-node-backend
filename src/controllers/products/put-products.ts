@@ -4,7 +4,7 @@ import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { UpdateProductRequest } from '../../../api/api';
+import type { UpdateProductRequest } from '@types';
 
 /**
  * PUT /products

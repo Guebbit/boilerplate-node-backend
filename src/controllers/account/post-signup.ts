@@ -1,19 +1,25 @@
-import type { Request, Response, ParamsDictionary } from 'express';
+import type { Request, Response, } from 'express';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { SignupRequest } from '../../../api/api';
+import type { SignupRequest, SignupRequestMultipart } from '@types';
 
 /**
  * POST /account/signup
  * Register a new user account.
  */
-const postSignup = async (request: Request<ParamsDictionary, any, SignupRequest & { imageUrl?: string }>, response: Response): Promise<void> => {
+const postSignup = async (request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart>, response: Response): Promise<void> => {
     /**
      * Get POST data
      */
-    const { email, username, password, passwordConfirm, imageUrl } = request.body;
+    const { email, username, password, passwordConfirm } = request.body;
+    const imageUrlBody = request.body.imageUrl
+
+    /**
+     * Uploaded file takes priority over body imageUrl
+     */
+    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     /**
      * Register
@@ -23,7 +29,7 @@ const postSignup = async (request: Request<ParamsDictionary, any, SignupRequest 
         username ?? '',
         password ?? '',
         passwordConfirm ?? '',
-        imageUrl,
+        imageUrl ?? imageUrlBody,
     );
     if (!result.success) {
         if (imageUrlRaw)

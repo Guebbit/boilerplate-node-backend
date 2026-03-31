@@ -4,7 +4,7 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { UpdateUserRequest } from '../../../api/api';
+import type { UpdateUserRequest } from '@types';
 
 /**
  * PUT /users

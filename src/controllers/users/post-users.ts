@@ -3,7 +3,7 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { CreateUserRequest } from '../../../api/api';
+import type { CreateUserRequest } from '@types';
 
 /**
  * POST /users

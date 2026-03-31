@@ -4,7 +4,8 @@
     "module": "es2020",
     "baseUrl": ".",
     "paths": {
-      "@api/*": ["src/api/*"],
+      "@types": ["src/types"],
+      "@api/*": ["api/*"],
       "@controllers/*": ["src/controllers/*"],
       "@services/*": ["src/services/*"],
       "@repositories/*": ["src/repositories/*"],

@@ -4,7 +4,7 @@ import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-files';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type { UpdateUserByIdRequest } from '../../../api/api';
+import type { UpdateUserByIdRequest } from '@types';
 
 /**
  * PUT /users/:id
