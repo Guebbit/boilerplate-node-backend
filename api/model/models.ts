@@ -43,17 +43,18 @@ export * from './usersResponse';
 export * from './validationErrorResponse';
 export * from './validationErrorResponseAllOfErrors';
 
-import * as fs from 'node:fs';
+import * as fs from 'fs';
 
 export interface RequestDetailedFile {
     value: Buffer;
     options?: {
         filename?: string;
         contentType?: string;
-    };
+    }
 }
 
 export type RequestFile = string | Buffer | fs.ReadStream | RequestDetailedFile;
+
 
 import { AuthTokens } from './authTokens';
 import { CartItem } from './cartItem';
@@ -99,95 +100,92 @@ import { ValidationErrorResponse } from './validationErrorResponse';
 import { ValidationErrorResponseAllOfErrors } from './validationErrorResponseAllOfErrors';
 
 /* tslint:disable:no-unused-variable */
-const primitives = new Set([
-    'string',
-    'boolean',
-    'double',
-    'integer',
-    'long',
-    'float',
-    'number',
-    'any'
-]);
+let primitives = [
+                    "string",
+                    "boolean",
+                    "double",
+                    "integer",
+                    "long",
+                    "float",
+                    "number",
+                    "any"
+                 ];
 
-const enumsMap: { [index: string]: any } = {
-    'Order.StatusEnum': Order.StatusEnum,
-    'UpdateOrderByIdRequest.StatusEnum': UpdateOrderByIdRequest.StatusEnum,
-    'UpdateOrderRequest.StatusEnum': UpdateOrderRequest.StatusEnum
-};
+let enumsMap: {[index: string]: any} = {
+        "Order.StatusEnum": Order.StatusEnum,
+        "UpdateOrderByIdRequest.StatusEnum": UpdateOrderByIdRequest.StatusEnum,
+        "UpdateOrderRequest.StatusEnum": UpdateOrderRequest.StatusEnum,
+}
 
-const typeMap: { [index: string]: any } = {
-    AuthTokens: AuthTokens,
-    CartItem: CartItem,
-    CartResponse: CartResponse,
-    CartSummaryResponse: CartSummaryResponse,
-    CheckoutRequest: CheckoutRequest,
-    CheckoutResponse: CheckoutResponse,
-    CreateOrderRequest: CreateOrderRequest,
-    CreateProductRequest: CreateProductRequest,
-    CreateUserRequest: CreateUserRequest,
-    DeleteOrderRequest: DeleteOrderRequest,
-    DeleteProductRequest: DeleteProductRequest,
-    DeleteUserRequest: DeleteUserRequest,
-    ErrorDetail: ErrorDetail,
-    ErrorResponse: ErrorResponse,
-    LoginRequest: LoginRequest,
-    MessageResponse: MessageResponse,
-    Order: Order,
-    OrdersResponse: OrdersResponse,
-    PaginationMeta: PaginationMeta,
-    PasswordResetConfirmRequest: PasswordResetConfirmRequest,
-    PasswordResetRequest: PasswordResetRequest,
-    Product: Product,
-    ProductsResponse: ProductsResponse,
-    RefreshTokenResponse: RefreshTokenResponse,
-    RemoveCartItemRequest: RemoveCartItemRequest,
-    SearchOrdersRequest: SearchOrdersRequest,
-    SearchProductsRequest: SearchProductsRequest,
-    SearchUsersRequest: SearchUsersRequest,
-    SignupRequest: SignupRequest,
-    UpdateCartItemByIdRequest: UpdateCartItemByIdRequest,
-    UpdateOrderByIdRequest: UpdateOrderByIdRequest,
-    UpdateOrderRequest: UpdateOrderRequest,
-    UpdateProductByIdRequest: UpdateProductByIdRequest,
-    UpdateProductRequest: UpdateProductRequest,
-    UpdateProductRequestBody: UpdateProductRequestBody,
-    UpdateUserByIdRequest: UpdateUserByIdRequest,
-    UpdateUserRequest: UpdateUserRequest,
-    UpsertCartItemRequest: UpsertCartItemRequest,
-    User: User,
-    UsersResponse: UsersResponse,
-    ValidationErrorResponse: ValidationErrorResponse,
-    ValidationErrorResponseAllOfErrors: ValidationErrorResponseAllOfErrors
-};
+let typeMap: {[index: string]: any} = {
+    "AuthTokens": AuthTokens,
+    "CartItem": CartItem,
+    "CartResponse": CartResponse,
+    "CartSummaryResponse": CartSummaryResponse,
+    "CheckoutRequest": CheckoutRequest,
+    "CheckoutResponse": CheckoutResponse,
+    "CreateOrderRequest": CreateOrderRequest,
+    "CreateProductRequest": CreateProductRequest,
+    "CreateUserRequest": CreateUserRequest,
+    "DeleteOrderRequest": DeleteOrderRequest,
+    "DeleteProductRequest": DeleteProductRequest,
+    "DeleteUserRequest": DeleteUserRequest,
+    "ErrorDetail": ErrorDetail,
+    "ErrorResponse": ErrorResponse,
+    "LoginRequest": LoginRequest,
+    "MessageResponse": MessageResponse,
+    "Order": Order,
+    "OrdersResponse": OrdersResponse,
+    "PaginationMeta": PaginationMeta,
+    "PasswordResetConfirmRequest": PasswordResetConfirmRequest,
+    "PasswordResetRequest": PasswordResetRequest,
+    "Product": Product,
+    "ProductsResponse": ProductsResponse,
+    "RefreshTokenResponse": RefreshTokenResponse,
+    "RemoveCartItemRequest": RemoveCartItemRequest,
+    "SearchOrdersRequest": SearchOrdersRequest,
+    "SearchProductsRequest": SearchProductsRequest,
+    "SearchUsersRequest": SearchUsersRequest,
+    "SignupRequest": SignupRequest,
+    "UpdateCartItemByIdRequest": UpdateCartItemByIdRequest,
+    "UpdateOrderByIdRequest": UpdateOrderByIdRequest,
+    "UpdateOrderRequest": UpdateOrderRequest,
+    "UpdateProductByIdRequest": UpdateProductByIdRequest,
+    "UpdateProductRequest": UpdateProductRequest,
+    "UpdateProductRequestBody": UpdateProductRequestBody,
+    "UpdateUserByIdRequest": UpdateUserByIdRequest,
+    "UpdateUserRequest": UpdateUserRequest,
+    "UpsertCartItemRequest": UpsertCartItemRequest,
+    "User": User,
+    "UsersResponse": UsersResponse,
+    "ValidationErrorResponse": ValidationErrorResponse,
+    "ValidationErrorResponseAllOfErrors": ValidationErrorResponseAllOfErrors,
+}
 
 // Check if a string starts with another string without using es6 features
-function startsWith(string_: string, match: string): boolean {
-    return string_.slice(0, Math.max(0, match.length)) === match;
+function startsWith(str: string, match: string): boolean {
+    return str.substring(0, match.length) === match;
 }
 
 // Check if a string ends with another string without using es6 features
-function endsWith(string_: string, match: string): boolean {
-    return (
-        string_.length >= match.length &&
-        string_.slice(Math.max(0, string_.length - match.length)) === match
-    );
+function endsWith(str: string, match: string): boolean {
+    return str.length >= match.length && str.substring(str.length - match.length) === match;
 }
 
-const nullableSuffix = ' | null';
-const optionalSuffix = ' | undefined';
-const arrayPrefix = 'Array<';
-const arraySuffix = '>';
-const mapPrefix = '{ [key: string]: ';
-const mapSuffix = '; }';
+const nullableSuffix = " | null";
+const optionalSuffix = " | undefined";
+const arrayPrefix = "Array<";
+const arraySuffix = ">";
+const mapPrefix = "{ [key: string]: ";
+const mapSuffix = "; }";
 
 export class ObjectSerializer {
     public static findCorrectType(data: any, expectedType: string) {
         if (data == undefined) {
             return expectedType;
-        } else if (primitives.has(expectedType.toLowerCase())) {
+        } else if (primitives.indexOf(expectedType.toLowerCase()) !== -1) {
             return expectedType;
-        } else if (expectedType === 'Date') {
+        } else if (expectedType === "Date") {
             return expectedType;
         } else {
             if (enumsMap[expectedType]) {
@@ -199,13 +197,13 @@ export class ObjectSerializer {
             }
 
             // Check the discriminator
-            const discriminatorProperty = typeMap[expectedType].discriminator;
-            if (discriminatorProperty == undefined) {
+            let discriminatorProperty = typeMap[expectedType].discriminator;
+            if (discriminatorProperty == null) {
                 return expectedType; // the type does not have a discriminator. use it.
             } else {
                 if (data[discriminatorProperty]) {
-                    const discriminatorType = data[discriminatorProperty];
-                    if (typeMap[discriminatorType]) {
+                    var discriminatorType = data[discriminatorProperty];
+                    if(typeMap[discriminatorType]){
                         return discriminatorType; // use the type given in the discriminator
                     } else {
                         return expectedType; // discriminator did not map to a type
@@ -220,36 +218,39 @@ export class ObjectSerializer {
     public static serialize(data: any, type: string): any {
         if (data == undefined) {
             return data;
-        } else if (primitives.has(type.toLowerCase())) {
+        } else if (primitives.indexOf(type.toLowerCase()) !== -1) {
             return data;
         } else if (endsWith(type, nullableSuffix)) {
-            const subType: string = type.slice(0, -nullableSuffix.length); // Type | null => Type
+            let subType: string = type.slice(0, -nullableSuffix.length); // Type | null => Type
             return ObjectSerializer.serialize(data, subType);
         } else if (endsWith(type, optionalSuffix)) {
-            const subType: string = type.slice(0, -optionalSuffix.length); // Type | undefined => Type
+            let subType: string = type.slice(0, -optionalSuffix.length); // Type | undefined => Type
             return ObjectSerializer.serialize(data, subType);
         } else if (startsWith(type, arrayPrefix)) {
-            const subType: string = type.slice(arrayPrefix.length, -arraySuffix.length); // Array<Type> => Type
-            const transformedData: any[] = [];
-            for (const datum of data) {
+            let subType: string = type.slice(arrayPrefix.length, -arraySuffix.length); // Array<Type> => Type
+            let transformedData: any[] = [];
+            for (let index = 0; index < data.length; index++) {
+                let datum = data[index];
                 transformedData.push(ObjectSerializer.serialize(datum, subType));
             }
             return transformedData;
         } else if (startsWith(type, mapPrefix)) {
-            const subType: string = type.slice(mapPrefix.length, -mapSuffix.length); // { [key: string]: Type; } => Type
-            const transformedData: { [key: string]: any } = {};
-            for (const key in data) {
-                transformedData[key] = ObjectSerializer.serialize(data[key], subType);
+            let subType: string = type.slice(mapPrefix.length, -mapSuffix.length); // { [key: string]: Type; } => Type
+            let transformedData: { [key: string]: any } = {};
+            for (let key in data) {
+                transformedData[key] = ObjectSerializer.serialize(
+                    data[key],
+                    subType,
+                );
             }
             return transformedData;
-        } else if (type === 'Date') {
+        } else if (type === "Date") {
             return data.toISOString();
         } else {
             if (enumsMap[type]) {
                 return data;
             }
-            if (!typeMap[type]) {
-                // in case we dont know the type
+            if (!typeMap[type]) { // in case we dont know the type
                 return data;
             }
 
@@ -257,13 +258,11 @@ export class ObjectSerializer {
             type = this.findCorrectType(data, type);
 
             // get the map for the correct type.
-            const attributeTypes = typeMap[type].getAttributeTypeMap();
-            const instance: { [index: string]: any } = {};
-            for (const attributeType of attributeTypes) {
-                instance[attributeType.baseName] = ObjectSerializer.serialize(
-                    data[attributeType.name],
-                    attributeType.type
-                );
+            let attributeTypes = typeMap[type].getAttributeTypeMap();
+            let instance: {[index: string]: any} = {};
+            for (let index = 0; index < attributeTypes.length; index++) {
+                let attributeType = attributeTypes[index];
+                instance[attributeType.baseName] = ObjectSerializer.serialize(data[attributeType.name], attributeType.type);
             }
             return instance;
         }
@@ -274,47 +273,47 @@ export class ObjectSerializer {
         type = ObjectSerializer.findCorrectType(data, type);
         if (data == undefined) {
             return data;
-        } else if (primitives.has(type.toLowerCase())) {
+        } else if (primitives.indexOf(type.toLowerCase()) !== -1) {
             return data;
         } else if (endsWith(type, nullableSuffix)) {
-            const subType: string = type.slice(0, -nullableSuffix.length); // Type | null => Type
+            let subType: string = type.slice(0, -nullableSuffix.length); // Type | null => Type
             return ObjectSerializer.deserialize(data, subType);
         } else if (endsWith(type, optionalSuffix)) {
-            const subType: string = type.slice(0, -optionalSuffix.length); // Type | undefined => Type
+            let subType: string = type.slice(0, -optionalSuffix.length); // Type | undefined => Type
             return ObjectSerializer.deserialize(data, subType);
         } else if (startsWith(type, arrayPrefix)) {
-            const subType: string = type.slice(arrayPrefix.length, -arraySuffix.length); // Array<Type> => Type
-            const transformedData: any[] = [];
-            for (const datum of data) {
+            let subType: string = type.slice(arrayPrefix.length, -arraySuffix.length); // Array<Type> => Type
+            let transformedData: any[] = [];
+            for (let index = 0; index < data.length; index++) {
+                let datum = data[index];
                 transformedData.push(ObjectSerializer.deserialize(datum, subType));
             }
             return transformedData;
         } else if (startsWith(type, mapPrefix)) {
-            const subType: string = type.slice(mapPrefix.length, -mapSuffix.length); // { [key: string]: Type; } => Type
-            const transformedData: { [key: string]: any } = {};
-            for (const key in data) {
-                transformedData[key] = ObjectSerializer.deserialize(data[key], subType);
+            let subType: string = type.slice(mapPrefix.length, -mapSuffix.length); // { [key: string]: Type; } => Type
+            let transformedData: { [key: string]: any } = {};
+            for (let key in data) {
+                transformedData[key] = ObjectSerializer.deserialize(
+                    data[key],
+                    subType,
+                );
             }
             return transformedData;
-        } else if (type === 'Date') {
+        } else if (type === "Date") {
             return new Date(data);
         } else {
-            if (enumsMap[type]) {
-                // is Enum
+            if (enumsMap[type]) {// is Enum
                 return data;
             }
 
-            if (!typeMap[type]) {
-                // dont know the type
+            if (!typeMap[type]) { // dont know the type
                 return data;
             }
-            const instance = new typeMap[type]();
-            const attributeTypes = typeMap[type].getAttributeTypeMap();
-            for (const attributeType of attributeTypes) {
-                instance[attributeType.name] = ObjectSerializer.deserialize(
-                    data[attributeType.baseName],
-                    attributeType.type
-                );
+            let instance = new typeMap[type]();
+            let attributeTypes = typeMap[type].getAttributeTypeMap();
+            for (let index = 0; index < attributeTypes.length; index++) {
+                let attributeType = attributeTypes[index];
+                instance[attributeType.name] = ObjectSerializer.deserialize(data[attributeType.baseName], attributeType.type);
             }
             return instance;
         }
@@ -323,8 +322,8 @@ export class ObjectSerializer {
 
 export interface Authentication {
     /**
-     * Apply authentication settings to header and query params.
-     */
+    * Apply authentication settings to header and query params.
+    */
     applyToRequest(requestOptions: localVarRequest.Options): Promise<void> | void;
 }
 
@@ -334,9 +333,8 @@ export class HttpBasicAuth implements Authentication {
 
     applyToRequest(requestOptions: localVarRequest.Options): void {
         requestOptions.auth = {
-            username: this.username,
-            password: this.password
-        };
+            username: this.username, password: this.password
+        }
     }
 }
 
@@ -345,9 +343,10 @@ export class HttpBearerAuth implements Authentication {
 
     applyToRequest(requestOptions: localVarRequest.Options): void {
         if (requestOptions && requestOptions.headers) {
-            const accessToken =
-                typeof this.accessToken === 'function' ? this.accessToken() : this.accessToken;
-            requestOptions.headers['Authorization'] = 'Bearer ' + accessToken;
+            const accessToken = typeof this.accessToken === 'function'
+                            ? this.accessToken()
+                            : this.accessToken;
+            requestOptions.headers["Authorization"] = "Bearer " + accessToken;
         }
     }
 }
@@ -355,23 +354,20 @@ export class HttpBearerAuth implements Authentication {
 export class ApiKeyAuth implements Authentication {
     public apiKey: string = '';
 
-    constructor(
-        private location: string,
-        private parameterName: string
-    ) {}
+    constructor(private location: string, private paramName: string) {
+    }
 
     applyToRequest(requestOptions: localVarRequest.Options): void {
-        if (this.location == 'query') {
-            (<any>requestOptions.qs)[this.parameterName] = this.apiKey;
-        } else if (this.location == 'header' && requestOptions && requestOptions.headers) {
-            requestOptions.headers[this.parameterName] = this.apiKey;
+        if (this.location == "query") {
+            (<any>requestOptions.qs)[this.paramName] = this.apiKey;
+        } else if (this.location == "header" && requestOptions && requestOptions.headers) {
+            requestOptions.headers[this.paramName] = this.apiKey;
         } else if (this.location == 'cookie' && requestOptions && requestOptions.headers) {
             if (requestOptions.headers['Cookie']) {
-                requestOptions.headers['Cookie'] +=
-                    '; ' + this.parameterName + '=' + encodeURIComponent(this.apiKey);
-            } else {
-                requestOptions.headers['Cookie'] =
-                    this.parameterName + '=' + encodeURIComponent(this.apiKey);
+                requestOptions.headers['Cookie'] += '; ' + this.paramName + '=' + encodeURIComponent(this.apiKey);
+            }
+            else {
+                requestOptions.headers['Cookie'] = this.paramName + '=' + encodeURIComponent(this.apiKey);
             }
         }
     }
@@ -382,7 +378,7 @@ export class OAuth implements Authentication {
 
     applyToRequest(requestOptions: localVarRequest.Options): void {
         if (requestOptions && requestOptions.headers) {
-            requestOptions.headers['Authorization'] = 'Bearer ' + this.accessToken;
+            requestOptions.headers["Authorization"] = "Bearer " + this.accessToken;
         }
     }
 }
@@ -396,4 +392,4 @@ export class VoidAuth implements Authentication {
     }
 }
 
-export type Interceptor = (requestOptions: localVarRequest.Options) => Promise<void> | void;
+export type Interceptor = (requestOptions: localVarRequest.Options) => (Promise<void> | void);
