@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
+import multer from '@utils/multer';
 import getProducts from '@controllers/products/get-products';
 import postProducts from '@controllers/products/post-products';
 import putProducts from '@controllers/products/put-products';
@@ -21,10 +22,10 @@ router.post('/search', postProductsSearch);
 router.get('/', getProducts);
 
 // POST /products — admin only
-router.post('/', isAuth, isAdmin, postProducts);
+router.post('/', isAuth, isAdmin, multer.single('imageUpload'), postProducts);
 
 // PUT /products — admin only, id in body
-router.put('/', isAuth, isAdmin, putProducts);
+router.put('/', isAuth, isAdmin, multer.single('imageUpload'), putProducts);
 
 // DELETE /products — admin only, id in body
 router.delete('/', isAuth, isAdmin, deleteProducts);
@@ -33,7 +34,7 @@ router.delete('/', isAuth, isAdmin, deleteProducts);
 router.get('/:id', getProductById);
 
 // PUT /products/:id — admin only
-router.put('/:id', isAuth, isAdmin, putProductById);
+router.put('/:id', isAuth, isAdmin, multer.single('imageUpload'), putProductById);
 
 // DELETE /products/:id — admin only
 router.delete('/:id', isAuth, isAdmin, deleteProductById);

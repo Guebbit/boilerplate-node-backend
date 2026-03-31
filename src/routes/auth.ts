@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
+import multer from '@utils/multer';
 import getAccount from '@controllers/account/get-account';
 import postLogin from '@controllers/account/post-login';
 import postSignup from '@controllers/account/post-signup';
@@ -21,7 +22,7 @@ router.get('/', isAuth, getAccount);
 router.post('/login', postLogin);
 
 // POST /account/signup — register new user
-router.post('/signup', postSignup);
+router.post('/signup', multer.single('imageUpload'), postSignup);
 
 // POST /account/reset — request password reset email
 router.post('/reset', postReset);

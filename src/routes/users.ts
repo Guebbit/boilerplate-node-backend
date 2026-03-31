@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
+import multer from '@utils/multer';
 import getUsers from '@controllers/users/get-users';
 import postUsers from '@controllers/users/post-users';
 import putUsers from '@controllers/users/put-users';
@@ -21,10 +22,10 @@ router.post('/search', postUsersSearch);
 router.get('/', getUsers);
 
 // POST /users
-router.post('/', postUsers);
+router.post('/', multer.single('imageUpload'), postUsers);
 
 // PUT /users — id in body
-router.put('/', putUsers);
+router.put('/', multer.single('imageUpload'), putUsers);
 
 // DELETE /users — id in body
 router.delete('/', deleteUsers);
@@ -33,7 +34,7 @@ router.delete('/', deleteUsers);
 router.get('/:id', getUserById);
 
 // PUT /users/:id
-router.put('/:id', putUserById);
+router.put('/:id', multer.single('imageUpload'), putUserById);
 
 // DELETE /users/:id
 router.delete('/:id', deleteUserById);
