@@ -3,7 +3,7 @@ import type { CastError } from 'mongoose';
 import { deleteFile } from '@utils/helpers-filesystem';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { ExtendedError } from '@utils/helpers-errors';
-import type { UpdateProductRequestBody } from '@api/api';
+import type { CreateProductRequestMultipart, UpdateProductRequestMultipart } from '@types';
 import ProductService from '@services/products';
 
 /**
@@ -15,18 +15,22 @@ import ProductService from '@services/products';
  * @param next
  */
 export const postEditProduct = (
-    request: Request<unknown, unknown, UpdateProductRequestBody>,
+    request: Request<unknown, unknown, CreateProductRequestMultipart | UpdateProductRequestMultipart>,
     response: Response,
     next: NextFunction
 ) => {
-    const { id, title, description = '', active } = request.body;
-    const price = Number.parseInt(request.body.price);
+    const body = request.body;
+    const id = ('id' in body ? (body as UpdateProductRequestMultipart).id : undefined) as
+        | string
+        | undefined;
+    const { title, description = '', active } = body;
+    const price = Number.parseInt(String(body.price));
 
     /**
      * Get URL of updated image: uploaded file takes priority over body imageUrl.
      * If no image was provided at all, fall back to an empty string.
      */
-    const imageUrlBody = request.body.imageUrl;
+    const imageUrlBody = body.imageUrl;
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? imageUrlBody ?? '';
 
@@ -49,7 +53,7 @@ export const postEditProduct = (
         const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
         return cleanup.then(() => {
             request.flash('error', issues);
-            request.flash('filled', Object.values(request.body));
+            request.flash('filled', Object.values(body));
             if (!id || id === '') return response.redirect('/products/add');
             return response.redirect('/products/edit/' + id);
         });
