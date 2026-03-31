@@ -18,7 +18,7 @@ const postUsers = async (request: Request<unknown, unknown, CreateUserRequest | 
     const errors = UserService.validateData({
         ...request.body,
         imageUrl: imageUrl ?? request.body.imageUrl
-    }, { requirePassword: true });
+    });
 
     if (errors.length > 0) {
         if (imageUrlRaw) await deleteFile(imageUrlRaw);

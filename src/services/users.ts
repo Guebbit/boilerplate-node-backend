@@ -468,7 +468,7 @@ export const productRemoveFromCartsById = (
  */
 export const validateData = (
     userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
-    { requirePassword = true }: { requirePassword?: boolean } = {}
+    requirePassword = true
 ): string[] => {
     const schema = requirePassword
         ? zodUserSchema.pick({ email: true, username: true, password: true })
