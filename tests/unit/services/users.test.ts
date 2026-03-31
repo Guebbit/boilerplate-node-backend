@@ -351,7 +351,7 @@ describe('UserService.validateData', () => {
     it('does not require password when requirePassword is false', () => {
         const errors = UserService.validateData(
             { email: 'valid@example.com', username: 'validuser' },
-            { requirePassword: false }
+            false
         );
 
         expect(errors).toHaveLength(0);
