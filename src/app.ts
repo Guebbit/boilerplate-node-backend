@@ -10,7 +10,6 @@ import { start } from '@utils/database';
 import logger from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { rejectResponse } from '@utils/response';
-import { startTokenCleanup } from '@utils/token-cleanup';
 import enTranslation from './locales/en.json';
 
 import productRoutes from './routes/products';
@@ -45,7 +44,6 @@ start()
     )
     .then(() => {
         logger.info('------------- SERVER START -------------');
-        startTokenCleanup();
         app.listen(process.env.NODE_PORT ?? 3000);
     })
     .catch((error) => logger.info('------------- SERVER ERROR -------------', error));

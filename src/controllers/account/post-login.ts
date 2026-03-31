@@ -10,6 +10,7 @@ import {
 } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { LoginRequest } from '@types';
+import { runTokenCleanup } from '@utils/token-cleanup';
 
 /**
  * POST /account/login
@@ -28,6 +29,8 @@ const postLogin = async (
     /**
      * Login
      */
+    await runTokenCleanup();
+
     const result = await UserService.login(email, password);
     if (!result.success) {
         rejectResponse(response, result.status, result.message, result.errors);
