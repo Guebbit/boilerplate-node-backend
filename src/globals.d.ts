@@ -3,7 +3,7 @@ import { Require_id } from 'mongoose';
 
 /**
  * I put the whole user main data in the session to easily access it and for session management
- * (It is done in the controllers/auth/post-login.ts)
+ * (It is done in the controllers/account/post-login.ts)
  */
 declare module 'express-session' {
     interface SessionData {
