@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
+import { resolveImageUrl } from '@utils/helpers-files';
+import { deleteFile } from '@utils/helpers-filesystem';
 import type { UpdateProductRequest } from '../../../api/api';
 
 /**
@@ -14,10 +16,18 @@ const putProducts = async (request: Request, response: Response): Promise<void> 
         rejectResponse(response, 422, 'updateProduct - missing id', [t('generic.error-missing-data')]);
         return;
     }
+
+    /**
+     * Uploaded file takes priority over body imageUrl
+     */
+    const { imageUrlRaw, imageUrl } = resolveImageUrl(request, body.imageUrl);
+
     try {
-        const product = await ProductService.update(body.id, body as never);
+        const product = await ProductService.update(body.id, body as never, imageUrl);
         successResponse(response, product.toObject());
     } catch (error) {
+        if (imageUrlRaw)
+            await deleteFile(imageUrlRaw);
         const message = (error as Error).message;
         if (message === '404')
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);

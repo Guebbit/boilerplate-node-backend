@@ -1,6 +1,8 @@
 import type { Request, Response, ParamsDictionary } from 'express';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
+import { resolveImageUrl } from '@utils/helpers-files';
+import { deleteFile } from '@utils/helpers-filesystem';
 import type { SignupRequest } from '../../../api/api';
 
 /**
@@ -24,6 +26,8 @@ const postSignup = async (request: Request<ParamsDictionary, any, SignupRequest 
         imageUrl,
     );
     if (!result.success) {
+        if (imageUrlRaw)
+            await deleteFile(imageUrlRaw);
         rejectResponse(response, result.status, result.message, result.errors);
         return;
     }
