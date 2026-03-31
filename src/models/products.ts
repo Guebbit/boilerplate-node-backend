@@ -1,8 +1,8 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { z } from "zod";
-import { t } from "i18next";
-import type { Product } from "@api/api"
+import { z } from 'zod';
+import { t } from 'i18next';
+import type { Product } from '@api/api';
 
 /**
  * Product Document interface
@@ -37,7 +37,7 @@ export const zodProductSchema = z.object({
     price: z
         .number({ error: t('ecommerce.product-invalid-price-invalid') })
         .refine((v) => v !== undefined && v !== null, {
-            error: t('ecommerce.product-invalid-price-required'),
+            error: t('ecommerce.product-invalid-price-required')
         }),
 
     imageUrl: z.string(),
@@ -45,39 +45,42 @@ export const zodProductSchema = z.object({
     active: z.boolean().nullable().optional(),
     createdAt: z.date().nullable().optional(),
     updatedAt: z.date().nullable().optional(),
-    deletedAt: z.date().nullable().optional(),
+    deletedAt: z.date().nullable().optional()
 });
 
 /**
  * Mongoose Schema for the Product model
  */
-export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>({
-    title: {
-        type: String,
-        required: true,
+export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>(
+    {
+        title: {
+            type: String,
+            required: true
+        },
+        price: {
+            type: Number,
+            required: true
+        },
+        description: {
+            type: String,
+            default: ''
+        },
+        imageUrl: {
+            type: String,
+            default: 'https://placekitten.com/400/400'
+        },
+        active: {
+            type: Boolean,
+            default: false
+        },
+        deletedAt: {
+            type: Date
+        }
     },
-    price: {
-        type: Number,
-        required: true
-    },
-    description: {
-        type: String,
-        default: ""
-    },
-    imageUrl: {
-        type: String,
-        default: "https://placekitten.com/400/400"
-    },
-    active: {
-        type: Boolean,
-        default: false
-    },
-    deletedAt: {
-        type: Date
-    },
-}, {
-    timestamps: true
-});
+    {
+        timestamps: true
+    }
+);
 
 export const productModel = model<IProductDocument, IProductModel>('Product', productSchema);
 

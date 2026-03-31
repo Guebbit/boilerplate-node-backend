@@ -26,5 +26,4 @@ export const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promis
 export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =>
     orderModel.create(data);
 
-
 export default { aggregate, create };

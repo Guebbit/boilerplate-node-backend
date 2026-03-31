@@ -43,7 +43,7 @@ export const toOrderProduct = (product: IProductDocument, quantity = 1): IOrderP
     // toObject() removes Mongoose Document methods and virtuals, leaving a
     // plain JS object that matches the embedded productSchema in the Order model.
     product: product.toObject() as IOrderProduct['product'],
-    quantity,
+    quantity
 });
 
 /**
@@ -54,11 +54,11 @@ export const toOrderProduct = (product: IProductDocument, quantity = 1): IOrderP
  */
 export const makeOrder = (
     user: IUserDocument,
-    products: IOrderProduct[],
+    products: IOrderProduct[]
 ): Partial<IOrderDocument> => ({
     userId: user._id as Types.ObjectId,
     email: user.email,
-    products,
+    products
 });
 
 /**
@@ -69,6 +69,5 @@ export const makeOrder = (
  */
 export const createOrder = (
     user: IUserDocument,
-    products: IOrderProduct[],
-): Promise<IOrderDocument> =>
-    OrderRepository.create(makeOrder(user, products));
+    products: IOrderProduct[]
+): Promise<IOrderDocument> => OrderRepository.create(makeOrder(user, products));

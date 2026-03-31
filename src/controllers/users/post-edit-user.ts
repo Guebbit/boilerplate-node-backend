@@ -1,8 +1,8 @@
-import type { NextFunction, Request, Response } from "express";
-import type { CastError } from "mongoose";
-import { Types } from "mongoose";
-import { ExtendedError } from "@utils/helpers-errors";
-import UserService from "@services/users";
+import type { NextFunction, Request, Response } from 'express';
+import type { CastError } from 'mongoose';
+import { Types } from 'mongoose';
+import { ExtendedError } from '@utils/helpers-errors';
+import UserService from '@services/users';
 
 /**
  * Body shape for the user create/edit form
@@ -12,7 +12,7 @@ export interface IPostEditUserBody {
     email: string;
     username: string;
     password?: string;
-    admin?: string;       // checkbox: "on" or undefined
+    admin?: string; // checkbox: "on" or undefined
     imageUrl?: string;
 }
 
@@ -24,18 +24,17 @@ export interface IPostEditUserBody {
  * @param response
  * @param next
  */
-export const postEditUser = async (request: Request<unknown, unknown, IPostEditUserBody>, response: Response, next: NextFunction) => {
-    const {
-        id,
-        email,
-        username,
-        imageUrl = "",
-    } = request.body;
+export const postEditUser = async (
+    request: Request<unknown, unknown, IPostEditUserBody>,
+    response: Response,
+    next: NextFunction
+) => {
+    const { id, email, username, imageUrl = '' } = request.body;
 
     // Checkbox values arrive as "on" (checked) or undefined (unchecked)
     const admin = request.body.admin === 'on';
     // Password is optional when editing; required when creating
-    const password = request.body.password ?? "";
+    const password = request.body.password ?? '';
     const isNew = !id || id === '';
 
     /**
@@ -43,7 +42,7 @@ export const postEditUser = async (request: Request<unknown, unknown, IPostEditU
      */
     const issues = UserService.validateData(
         { email, username, password: password || undefined, admin, imageUrl },
-        { requirePassword: isNew },
+        { requirePassword: isNew }
     );
 
     /**
@@ -51,9 +50,8 @@ export const postEditUser = async (request: Request<unknown, unknown, IPostEditU
      */
     if (issues.length > 0) {
         request.flash('error', issues);
-        request.flash('filled', [ email, username, String(admin), imageUrl ]);
-        if (isNew)
-            return response.redirect('/users/add');
+        request.flash('filled', [email, username, String(admin), imageUrl]);
+        if (isNew) return response.redirect('/users/add');
         return response.redirect('/users/edit/' + id);
     }
 
@@ -66,11 +64,11 @@ export const postEditUser = async (request: Request<unknown, unknown, IPostEditU
             username,
             password,
             admin,
-            imageUrl: imageUrl || undefined,
+            imageUrl: imageUrl || undefined
         })
             .then(() => response.redirect('/users/'))
             .catch(async (error: CastError) =>
-                next(new ExtendedError(error.kind, 500, false, [ error.message ]))
+                next(new ExtendedError(error.kind, 500, false, [error.message]))
             );
 
     /**
@@ -82,10 +80,12 @@ export const postEditUser = async (request: Request<unknown, unknown, IPostEditU
         // Only send password if the field was filled
         password: password.trim().length > 0 ? password : undefined,
         admin,
-        imageUrl: imageUrl || undefined,
+        imageUrl: imageUrl || undefined
     })
-        .then((updatedUser) => response.redirect('/users/details/' + (updatedUser._id as Types.ObjectId).toString()))
+        .then((updatedUser) =>
+            response.redirect('/users/details/' + (updatedUser._id as Types.ObjectId).toString())
+        )
         .catch(async (error: CastError) =>
-            next(new ExtendedError(error.kind, 500, false, [ error.message ]))
+            next(new ExtendedError(error.kind, 500, false, [error.message]))
         );
 };

@@ -25,8 +25,7 @@ export const {
      * but I have it on the request body.
      * @param request
      */
-    getTokenFromRequest: (request) =>
-        (request.body as {CSRFToken: string}).CSRFToken,
+    getTokenFromRequest: (request) => (request.body as { CSRFToken: string }).CSRFToken
 
     // /**
     //  *

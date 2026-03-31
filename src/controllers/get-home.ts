@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { Request, Response } from 'express';
 
 /**
  * Homepage
@@ -9,5 +9,5 @@ import type { Request, Response } from "express";
 export const getHome = (request: Request, response: Response) =>
     response.render('misc/home', {
         pageMetaTitle: 'Home',
-        pageMetaLinks: [],
-    })
+        pageMetaLinks: []
+    });

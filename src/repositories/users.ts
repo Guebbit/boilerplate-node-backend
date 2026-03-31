@@ -13,8 +13,7 @@ import type { UpdateQuery, QueryFilter } from 'mongoose';
  *
  * @param id
  */
-export const findById = (id: string): Promise<IUserDocument | null> =>
-    userModel.findById(id);
+export const findById = (id: string): Promise<IUserDocument | null> => userModel.findById(id);
 
 /**
  * Find a single user matching the given query
@@ -36,12 +35,12 @@ export const findAll = (
     {
         sort = { createdAt: -1 as const },
         skip = 0,
-        limit = 10,
+        limit = 10
     }: {
         sort?: Record<string, 1 | -1>;
         skip?: number;
         limit?: number;
-    } = {},
+    } = {}
 ) =>
     userModel
         .find({ ...where })
@@ -72,8 +71,7 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
  *
  * @param user
  */
-export const save = (user: IUserDocument): Promise<IUserDocument> =>
-    user.save();
+export const save = (user: IUserDocument): Promise<IUserDocument> => user.save();
 
 /**
  * Hard-delete a user document from the database
@@ -93,9 +91,7 @@ export const deleteOne = (user: IUserDocument): Promise<void> =>
  */
 export const updateMany = (
     filter: QueryFilter<IUserDocument>,
-    update: UpdateQuery<IUserDocument>,
-) =>
-    userModel.updateMany(filter, update);
-
+    update: UpdateQuery<IUserDocument>
+) => userModel.updateMany(filter, update);
 
 export default { findById, findOne, findAll, count, create, save, deleteOne, updateMany };

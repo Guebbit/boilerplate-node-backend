@@ -1,9 +1,9 @@
-import type { NextFunction, Request, Response } from "express";
-import type { CastError } from "mongoose";
-import { deleteFile } from "@utils/helpers-filesystem";
-import { ExtendedError } from "@utils/helpers-errors";
-import type { UpdateProductRequestBody } from "@api/api";
-import ProductService from "@services/products";
+import type { NextFunction, Request, Response } from 'express';
+import type { CastError } from 'mongoose';
+import { deleteFile } from '@utils/helpers-filesystem';
+import { ExtendedError } from '@utils/helpers-errors';
+import type { UpdateProductRequestBody } from '@api/api';
+import ProductService from '@services/products';
 
 /**
  * Create or update a product.
@@ -13,13 +13,12 @@ import ProductService from "@services/products";
  * @param response
  * @param next
  */
-export const postEditProduct = async (request: Request<unknown, unknown, UpdateProductRequestBody>, response: Response, next: NextFunction) => {
-    const {
-        id,
-        title,
-        description = "",
-        active
-    } = request.body;
+export const postEditProduct = async (
+    request: Request<unknown, unknown, UpdateProductRequestBody>,
+    response: Response,
+    next: NextFunction
+) => {
+    const { id, title, description = '', active } = request.body;
     const price = Number.parseInt(request.body.price);
 
     /**
@@ -28,9 +27,13 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      * If no image was uploaded: it's empty
      * If image was uploaded: delete the old one (if any) on save
      */
-    const imageUrlRaw = (request.file ? request.file.path : (request.files ? (request.files as Express.Multer.File[])[0].path : ""));
+    const imageUrlRaw = request.file
+        ? request.file.path
+        : request.files
+          ? (request.files as Express.Multer.File[])[0].path
+          : '';
     // remove "public" at root ("/" remain as root)
-    const imageUrl = imageUrlRaw.replace((process.env.NODE_PUBLIC_PATH ?? "public"), "");
+    const imageUrl = imageUrlRaw.replace(process.env.NODE_PUBLIC_PATH ?? 'public', '');
 
     /**
      * Data validation
@@ -48,12 +51,10 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
      */
     if (issues.length > 0) {
         // Record was not created, so revert server changes by removing the uploaded file
-        if (imageUrlRaw.length > 0)
-            await deleteFile(imageUrlRaw);
+        if (imageUrlRaw.length > 0) await deleteFile(imageUrlRaw);
         request.flash('error', issues);
         request.flash('filled', Object.values(request.body));
-        if (!id || id === '')
-            return response.redirect('/products/add');
+        if (!id || id === '') return response.redirect('/products/add');
         return response.redirect('/products/edit/' + id);
     }
 
@@ -66,28 +67,32 @@ export const postEditProduct = async (request: Request<unknown, unknown, UpdateP
             imageUrl,
             price,
             description,
-            active: !!active,
+            active: !!active
         })
             .then(() => response.redirect('/products/'))
             .catch(async (error: CastError) => {
-                if (imageUrlRaw.length > 0)
-                    await deleteFile(imageUrlRaw);
-                return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
+                if (imageUrlRaw.length > 0) await deleteFile(imageUrlRaw);
+                return next(new ExtendedError(error.kind, 500, false, [error.message]));
             });
 
     /**
      * ID = edit product
      */
-    return ProductService.update(id, {
-        title,
-        price,
-        description,
-        active: !!active,
-    }, imageUrl)
-        .then((updatedProduct) => response.redirect('/products/details/' + updatedProduct._id.toString()))
+    return ProductService.update(
+        id,
+        {
+            title,
+            price,
+            description,
+            active: !!active
+        },
+        imageUrl
+    )
+        .then((updatedProduct) =>
+            response.redirect('/products/details/' + updatedProduct._id.toString())
+        )
         .catch(async (error: CastError) => {
-            if (imageUrlRaw.length > 0)
-                await deleteFile(imageUrlRaw);
-            return next(new ExtendedError(error.kind, 500, false, [ error.message ]));
+            if (imageUrlRaw.length > 0) await deleteFile(imageUrlRaw);
+            return next(new ExtendedError(error.kind, 500, false, [error.message]));
         });
 };

@@ -1,7 +1,7 @@
-import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
-import { databaseErrorConverter } from "@utils/helpers-errors";
-import UserService from "@services/users";
+import type { Request, Response, NextFunction } from 'express';
+import type { CastError } from 'mongoose';
+import { databaseErrorConverter } from '@utils/helpers-errors';
+import UserService from '@services/users';
 
 /**
  * Get cart of current user
@@ -16,10 +16,8 @@ export const pageCart = (request: Request, response: Response, next: NextFunctio
         .then((productList) =>
             response.render('misc/cart', {
                 pageMetaTitle: 'Your Cart',
-                pageMetaLinks: [
-                    "/css/cart.css",
-                ],
-                productList,
+                pageMetaLinks: ['/css/cart.css'],
+                productList
             })
         )
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));

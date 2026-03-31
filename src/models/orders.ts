@@ -1,7 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { productSchema } from "./products";
-import type { Order, Product } from "@api/api"
+import { productSchema } from './products';
+import type { Order, Product } from '@api/api';
 
 /**
  * Same as ICartItem in ./users.ts,
@@ -35,25 +35,30 @@ export type IOrderModel = Model<IOrderDocument, unknown, unknown>;
 /**
  *
  */
-export const orderSchema = new Schema<IOrderDocument>({
-    userId: {
-        type: Schema.Types.ObjectId,
-        required: true,
-    },
-    email: {
-        type: String,
-        required: true
-    },
-    products: [{
-        product: productSchema,
-        quantity: {
-            type: Number,
+export const orderSchema = new Schema<IOrderDocument>(
+    {
+        userId: {
+            type: Schema.Types.ObjectId,
             required: true
-        }
-    }],
-}, {
-    // Automatically manages createdAt and updatedAt timestamps
-    timestamps: true
-});
+        },
+        email: {
+            type: String,
+            required: true
+        },
+        products: [
+            {
+                product: productSchema,
+                quantity: {
+                    type: Number,
+                    required: true
+                }
+            }
+        ]
+    },
+    {
+        // Automatically manages createdAt and updatedAt timestamps
+        timestamps: true
+    }
+);
 
 export default model<IOrderDocument, IOrderModel>('Order', orderSchema);

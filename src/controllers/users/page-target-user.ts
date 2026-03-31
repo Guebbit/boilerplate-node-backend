@@ -1,14 +1,14 @@
-import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
-import { t } from "i18next";
-import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
-import UserService from "@services/users";
+import type { Request, Response, NextFunction } from 'express';
+import type { CastError } from 'mongoose';
+import { t } from 'i18next';
+import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
+import UserService from '@services/users';
 
 /**
  * Url parameters
  */
 export interface IGetTargetUserParameters {
-    userId: string,
+    userId: string;
 }
 
 /**
@@ -18,21 +18,25 @@ export interface IGetTargetUserParameters {
  * @param response
  * @param next
  */
-export const pageTargetUser = (request: Request & {
-    params: IGetTargetUserParameters
-}, response: Response, next: NextFunction) =>
+export const pageTargetUser = (
+    request: Request & {
+        params: IGetTargetUserParameters;
+    },
+    response: Response,
+    next: NextFunction
+) =>
     UserService.getById(request.params.userId)
         .then((user) => {
             if (!user)
-                return next(new ExtendedError("404", 404, false, [ t("admin.user-not-found") ]));
+                return next(new ExtendedError('404', 404, false, [t('admin.user-not-found')]));
             response.render('users/details', {
                 pageMetaTitle: user.username,
                 pageMetaLinks: [],
-                user,
+                user
             });
         })
         .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, false, [ t("admin.user-not-found") ]));
+            if (error.message == '404' || error.kind === 'ObjectId')
+                return next(new ExtendedError('404', 404, false, [t('admin.user-not-found')]));
             return next(databaseErrorConverter(error));
-        })
+        });

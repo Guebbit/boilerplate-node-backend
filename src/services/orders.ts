@@ -18,11 +18,11 @@ const addComputedFields: PipelineStage.AddFields = {
     $addFields: {
         // Count all OrderItems
         totalItems: {
-            $size: '$products',
+            $size: '$products'
         },
         // Sum quantities from all OrderItems
         totalQuantity: {
-            $sum: '$products.quantity',
+            $sum: '$products.quantity'
         },
         // Sum of all prices multiplied for quantity
         totalPrice: {
@@ -31,12 +31,12 @@ const addComputedFields: PipelineStage.AddFields = {
                     input: '$products',
                     as: 'product',
                     in: {
-                        $multiply: ['$$product.product.price', '$$product.quantity'],
-                    },
-                },
-            },
-        },
-    },
+                        $multiply: ['$$product.product.price', '$$product.quantity']
+                    }
+                }
+            }
+        }
+    }
 };
 
 /**
@@ -63,7 +63,7 @@ export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]
  */
 export const search = async (
     search: SearchOrdersRequest = {},
-    scope?: QueryFilter<IOrderDocument>,
+    scope?: QueryFilter<IOrderDocument>
 ): Promise<OrdersResponse> => {
     const page = Math.max(1, Number(search.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));
@@ -87,12 +87,12 @@ export const search = async (
     const basePipeline: PipelineStage[] = [
         { $match: match },
         { $sort: { createdAt: -1 } },
-        addComputedFields,
+        addComputedFields
     ];
 
     const [countAgg] = await OrderRepository.aggregate<{ totalItems?: number }>([
         ...basePipeline,
-        { $count: 'totalItems' },
+        { $count: 'totalItems' }
     ]);
 
     const totalItems = countAgg?.totalItems ?? 0;
@@ -101,7 +101,7 @@ export const search = async (
     const items = await OrderRepository.aggregate([
         ...basePipeline,
         { $skip: skip },
-        { $limit: pageSize },
+        { $limit: pageSize }
     ]);
 
     return {
@@ -112,10 +112,9 @@ export const search = async (
             page,
             pageSize,
             totalItems,
-            totalPages,
-        },
+            totalPages
+        }
     };
 };
-
 
 export default { getAll, search };

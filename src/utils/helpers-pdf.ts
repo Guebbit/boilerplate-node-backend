@@ -10,19 +10,19 @@ export function getChromiumExecutablePath(): string {
         win32: [
             String.raw`C:\Program Files\Google\Chrome\Application\chrome.exe`,
             String.raw`C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`,
-            process.env.LOCALAPPDATA + String.raw`\Google\Chrome\Application\chrome.exe`,
+            process.env.LOCALAPPDATA + String.raw`\Google\Chrome\Application\chrome.exe`
         ],
         linux: [
             '/usr/bin/chromium',
             '/usr/bin/chromium-browser',
             '/usr/bin/google-chrome',
             '/usr/bin/google-chrome-stable',
-            '/snap/bin/chromium',
+            '/snap/bin/chromium'
         ],
         darwin: [
             '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-            '/Applications/Chromium.app/Contents/MacOS/Chromium',
-        ],
+            '/Applications/Chromium.app/Contents/MacOS/Chromium'
+        ]
     };
 
     const platform = process.platform as keyof typeof possiblePaths;
@@ -38,9 +38,12 @@ export function getChromiumExecutablePath(): string {
     // Try to find using 'which' command on Unix-like systems
     if (platform === 'linux' || platform === 'darwin') {
         try {
-            const chromiumPath = execSync('which chromium || which chromium-browser || which google-chrome', {
-                encoding: 'utf8',
-            }).trim();
+            const chromiumPath = execSync(
+                'which chromium || which chromium-browser || which google-chrome',
+                {
+                    encoding: 'utf8'
+                }
+            ).trim();
             if (chromiumPath && existsSync(chromiumPath)) {
                 return chromiumPath;
             }
@@ -65,8 +68,8 @@ export function getBrowserConfig() {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu',
-        ],
+            '--disable-gpu'
+        ]
     };
 }
 
@@ -97,7 +100,7 @@ export async function createPDF(
         await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
         await page.pdf({
             ...options,
-            path: outputPath + '/' + filename,
+            path: outputPath + '/' + filename
         });
         return outputPath + '/' + filename;
     } finally {

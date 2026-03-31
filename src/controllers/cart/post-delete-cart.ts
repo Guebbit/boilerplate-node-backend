@@ -1,8 +1,8 @@
-import type { Request, Response, NextFunction } from "express";
-import type { CastError } from "mongoose";
-import { databaseErrorConverter } from "@utils/helpers-errors";
-import UserService from "@services/users";
-import { t } from "i18next";
+import type { Request, Response, NextFunction } from 'express';
+import type { CastError } from 'mongoose';
+import { databaseErrorConverter } from '@utils/helpers-errors';
+import UserService from '@services/users';
+import { t } from 'i18next';
 
 /**
  * Remove ALL items in the user cart
@@ -15,9 +15,8 @@ export const postDeleteCart = (request: Request, response: Response, next: NextF
     // check done before entering the route
     UserService.cartRemove(request.user!)
         .then(({ success }) => {
-            if (!success)
-                throw new Error("cartRemove error");
-            request.flash('success', [ t("ecommerce.cart-emptied") ]);
+            if (!success) throw new Error('cartRemove error');
+            request.flash('success', [t('ecommerce.cart-emptied')]);
             return response.redirect('/cart');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));

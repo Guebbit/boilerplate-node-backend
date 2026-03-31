@@ -9,7 +9,6 @@ afterAll(disconnect);
 beforeEach(clearAll);
 
 describe('UserRepository', () => {
-
     describe('create', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
             const user = await UserRepository.create(makeUser() as Partial<IUserDocument>);

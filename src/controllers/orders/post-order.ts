@@ -1,8 +1,8 @@
-import type { Request, Response, NextFunction } from "express";
-import { t } from "i18next";
-import { nodemailer } from "@utils/nodemailer";
-import { ExtendedError } from "@utils/helpers-errors";
-import UserService from "@services/users";
+import type { Request, Response, NextFunction } from 'express';
+import { t } from 'i18next';
+import { nodemailer } from '@utils/nodemailer';
+import { ExtendedError } from '@utils/helpers-errors';
+import UserService from '@services/users';
 
 /**
  * Create a new order
@@ -17,20 +17,24 @@ export const postOrder = (request: Request, response: Response, next: NextFuncti
     UserService.orderConfirm(request.user!)
         .then(({ success }) => {
             if (!success)
-                return next(new ExtendedError("500", 500, false, [ t('ecommerce.order-creation-failure') ]));
-            request.flash('success', [ t('ecommerce.order-creation-success') ]);
+                return next(
+                    new ExtendedError('500', 500, false, [t('ecommerce.order-creation-failure')])
+                );
+            request.flash('success', [t('ecommerce.order-creation-success')]);
 
-            nodemailer({
+            nodemailer(
+                {
                     to: request.user!.email,
-                    subject: 'Order confirmed',
+                    subject: 'Order confirmed'
                 },
-                "email-order-confirm.ejs",
+                'email-order-confirm.ejs',
                 {
                     ...response.locals,
                     pageMetaTitle: 'Order confirmed',
                     pageMetaLinks: [],
-                    name: request.user!.username,
-                });
+                    name: request.user!.username
+                }
+            );
             return response.redirect('/orders');
         })
-        .catch(({ message }: Error) => next(new ExtendedError("500", 500, false, [ message ])));
+        .catch(({ message }: Error) => next(new ExtendedError('500', 500, false, [message])));

@@ -24,7 +24,7 @@ void i18next.init({
     fallbackLng: 'en',
     resources: {
         en: {
-            translation: enTranslation as Record<string, unknown>,
-        },
-    },
+            translation: enTranslation as Record<string, unknown>
+        }
+    }
 });

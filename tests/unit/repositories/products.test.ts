@@ -8,7 +8,6 @@ afterAll(disconnect);
 beforeEach(clearAll);
 
 describe('ProductRepository', () => {
-
     describe('create', () => {
         it('inserts a new product and returns the Mongoose document', async () => {
             const product = await ProductRepository.create(makeProduct());
@@ -22,7 +21,7 @@ describe('ProductRepository', () => {
         it('applies the imageUrl default when not provided', async () => {
             // The schema sets a default imageUrl; any non-empty URL satisfies it
             const product = await ProductRepository.create(
-                makeProduct({ imageUrl: 'https://example.com/custom.jpg' }),
+                makeProduct({ imageUrl: 'https://example.com/custom.jpg' })
             );
 
             expect(product.imageUrl).toBe('https://example.com/custom.jpg');

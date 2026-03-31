@@ -1,5 +1,5 @@
-import logger from "./winston";
-import type { CastError } from "mongoose";
+import logger from './winston';
+import type { CastError } from 'mongoose';
 
 /**
  * Extension of Error class with some customization
@@ -21,14 +21,9 @@ export class ExtendedError extends Error {
      * @param isOperational - false means dangerous
      * @param errors
      */
-    constructor(
-        name: string,
-        httpCode: number,
-        isOperational = false,
-        errors: string[] = []
-    ) {
+    constructor(name: string, httpCode: number, isOperational = false, errors: string[] = []) {
         // Call the parent class (Error) constructor with the message
-        super(name + ": " + errors.join(". "));
+        super(name + ': ' + errors.join('. '));
         // Restore prototype chain
         Object.setPrototypeOf(this, new.target.prototype);
         // set the variables
@@ -39,13 +34,13 @@ export class ExtendedError extends Error {
         // Capture stack trace for debugging if NOT extending Error
         // Error.captureStackTrace(this);
         // Dangerous, better log it
-        if(!isOperational)
+        if (!isOperational)
             logger.error({
                 message: this.message,
                 stack: this.stack,
                 name: this.name,
                 errors: this.errors,
-                httpCode: this.httpCode,
+                httpCode: this.httpCode
             });
     }
 }
@@ -55,17 +50,17 @@ export class ExtendedError extends Error {
  * @param error
  */
 export function databaseErrorInterpreter(error: CastError | Error): [number, string] {
-    if(Object.prototype.hasOwnProperty.call(error, 'kind'))
+    if (Object.prototype.hasOwnProperty.call(error, 'kind'))
         return [Number.parseInt((error as CastError).message), (error as CastError).kind];
-    return [500, error.message || "Unknown error"];
+    return [500, error.message || 'Unknown error'];
 }
 
 /**
  * Interpret and convert mongoose operation error
  * @param error
  */
-export function databaseErrorConverter(error: CastError | Error){
-    return Object.prototype.hasOwnProperty.call(error, 'kind') ?
-        new ExtendedError((error as CastError).kind, Number.parseInt(error.message)) :
-        new ExtendedError((error as Error).message, 500)
+export function databaseErrorConverter(error: CastError | Error) {
+    return Object.prototype.hasOwnProperty.call(error, 'kind')
+        ? new ExtendedError((error as CastError).kind, Number.parseInt(error.message))
+        : new ExtendedError((error as Error).message, 500);
 }

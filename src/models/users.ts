@@ -1,8 +1,8 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { z } from "zod"
-import { t } from "i18next";
-import bcrypt from "bcrypt";
+import { z } from 'zod';
+import { t } from 'i18next';
+import bcrypt from 'bcrypt';
 
 /**
  * Cart Item interface
@@ -59,8 +59,7 @@ export interface IUser {
 /**
  * User Document interface
  */
-export interface IUserDocument extends IUser, Document {
-}
+export interface IUserDocument extends IUser, Document {}
 
 /**
  * User Document instance methods.
@@ -76,68 +75,74 @@ export type IUserMethods = unknown;
  */
 export type IUserModel = Model<IUserDocument, unknown, IUserMethods>;
 
-
 /**
  * User Schema
  */
-export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
-    email: {
-        type: String,
-        required: true,
-        match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
-    },
-    username: {
-        type: String,
-        required: true,
-    },
-    password: {
-        type: String,
-        required: true
-    },
-    imageUrl: {
-        type: String,
-        default: "https://placekitten.com/600/600"
-    },
-    admin: {
-        type: Boolean,
-        default: false,
-    },
-    cart: {
+export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
+    {
+        email: {
+            type: String,
+            required: true,
+            match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
+        },
+        username: {
+            type: String,
+            required: true
+        },
+        password: {
+            type: String,
+            required: true
+        },
+        imageUrl: {
+            type: String,
+            default: 'https://placekitten.com/600/600'
+        },
+        admin: {
+            type: Boolean,
+            default: false
+        },
+        cart: {
+            // sub documents always have _id
+            items: [
+                {
+                    product: {
+                        type: Schema.Types.ObjectId,
+                        ref: 'Product',
+                        required: true
+                    },
+                    quantity: {
+                        type: Number,
+                        required: true
+                    }
+                }
+            ],
+            updatedAt: Date
+        },
         // sub documents always have _id
-        items: [ {
-            product: {
-                type: Schema.Types.ObjectId,
-                ref: 'Product',
-                required: true
-            },
-            quantity: {
-                type: Number, required: true
+        tokens: [
+            {
+                type: {
+                    type: String,
+                    required: true
+                },
+                token: {
+                    type: String,
+                    required: true
+                },
+                expiration: {
+                    type: Date,
+                    required: false
+                }
             }
-        } ],
-        updatedAt: Date
-    },
-    // sub documents always have _id
-    tokens: [ {
-        type: {
-            type: String,
-            required: true
-        },
-        token: {
-            type: String,
-            required: true
-        },
-        expiration: {
-            type: Date,
-            required: false
+        ],
+        deletedAt: {
+            type: Date
         }
-    } ],
-    deletedAt: {
-        type: Date
     },
-}, {
-    timestamps: true
-});
-
+    {
+        timestamps: true
+    }
+);
 
 /**
  * Zod validation schema
@@ -167,7 +172,7 @@ export const zodUserSchema = z.object({
 
     createdAt: z.date().nullish(),
     updatedAt: z.date().nullish(),
-    deletedAt: z.date().nullish(),
+    deletedAt: z.date().nullish()
 });
 
 /**

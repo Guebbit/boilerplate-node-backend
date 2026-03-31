@@ -1,10 +1,10 @@
-import tseslint from 'typescript-eslint'
-import globals from 'globals'
-import pluginUnicorn from 'eslint-plugin-unicorn'
-import { globalIgnores } from 'eslint/config'
-import pluginOxlint from 'eslint-plugin-oxlint'
-import path from 'node:path'
-
+import tseslint from 'typescript-eslint';
+import globals from 'globals';
+import configPrettier from 'eslint-config-prettier';
+import pluginUnicorn from 'eslint-plugin-unicorn';
+import { globalIgnores } from 'eslint/config';
+import pluginOxlint from 'eslint-plugin-oxlint';
+import path from 'node:path';
 
 export default tseslint.config(
     {
@@ -21,8 +21,9 @@ export default tseslint.config(
         '**/docs/**',
         '**/node_modules/**',
         '**/eslint.config.ts',
-        'src/api',
-        '.prism/**',
+        'api',
+        '.prism',
+        '.dev'
     ]),
 
     /**
@@ -41,14 +42,14 @@ export default tseslint.config(
      */
     {
         languageOptions: {
-            parserOptions:{
-                project: path.resolve('./tsconfig.json'),
+            parserOptions: {
+                project: path.resolve('./tsconfig.json')
             },
             globals: {
                 ...globals.browser
             },
             ecmaVersion: 'latest',
-            sourceType: 'module',
+            sourceType: 'module'
         },
 
         rules: {
@@ -207,5 +208,10 @@ export default tseslint.config(
                 ...globals.jest
             }
         }
-    }
-)
+    },
+
+    /**
+     * Disable conflicts with prettier
+     */
+    configPrettier
+);

@@ -1,14 +1,14 @@
-import type { Request, Response, NextFunction } from "express";
-import { CastError } from "mongoose";
-import { databaseErrorConverter } from "@utils/helpers-errors";
-import UserService from "@services/users";
-import { t } from "i18next";
+import type { Request, Response, NextFunction } from 'express';
+import { CastError } from 'mongoose';
+import { databaseErrorConverter } from '@utils/helpers-errors';
+import UserService from '@services/users';
+import { t } from 'i18next';
 
 /**
  * Page POST data
  */
 export interface IPostDeleteCartItemPostData {
-    productId: string
+    productId: string;
 }
 
 /**
@@ -18,13 +18,16 @@ export interface IPostDeleteCartItemPostData {
  * @param response
  * @param next
  */
-export const postDeleteCartItem = (request: Request<unknown, unknown, IPostDeleteCartItemPostData>, response: Response, next: NextFunction) =>
+export const postDeleteCartItem = (
+    request: Request<unknown, unknown, IPostDeleteCartItemPostData>,
+    response: Response,
+    next: NextFunction
+) =>
     // check done before entering the route
     UserService.cartItemRemoveById(request.user!, request.body.productId)
         .then(({ success }) => {
-            if (!success)
-                throw new Error("cartItemRemoveById error");
-            request.flash('success', [ t("ecommerce.cart-product-removed") ]);
+            if (!success) throw new Error('cartItemRemoveById error');
+            request.flash('success', [t('ecommerce.cart-product-removed')]);
             return response.redirect('/cart');
         })
-        .catch((error: Error | CastError) => next(databaseErrorConverter(error)))
+        .catch((error: Error | CastError) => next(databaseErrorConverter(error)));

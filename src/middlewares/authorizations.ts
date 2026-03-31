@@ -8,10 +8,9 @@ import type { Request, Response, NextFunction } from 'express';
  * @param next
  */
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
-    if(!request.session.user)
-        return response.status(401).redirect('/account/login');
+    if (!request.session.user) return response.status(401).redirect('/account/login');
     next();
-}
+};
 
 /**
  * Forbidden: Know who you are, but you don't have permission
@@ -21,10 +20,9 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * @param next
  */
 export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
-    if(!request.session.user?.admin)
-        return response.status(403).redirect('/account/login');
+    if (!request.session.user?.admin) return response.status(403).redirect('/account/login');
     next();
-}
+};
 
 /**
  * Already logged, you shouldn't be here
@@ -34,7 +32,6 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
  * @param next
  */
 export const isGuest = (request: Request, response: Response, next: NextFunction) => {
-    if(request.session.user)
-        return response.redirect('/');
+    if (request.session.user) return response.redirect('/');
     next();
-}
+};

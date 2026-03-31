@@ -1,23 +1,19 @@
-import fs from "node:fs";
-import path from "node:path";
-import type { Request, Response, NextFunction } from "express";
-import ejs from "ejs";
-import {
-    Types,
-    type CastError,
-    type PipelineStage
-} from "mongoose";
-import { t } from "i18next";
-import OrderService from "@services/orders";
-import { createPDF } from "@utils/helpers-pdf";
-import { databaseErrorConverter, ExtendedError } from "@utils/helpers-errors";
-import { getDirname } from "@utils/helpers-filesystem";
+import fs from 'node:fs';
+import path from 'node:path';
+import type { Request, Response, NextFunction } from 'express';
+import ejs from 'ejs';
+import { Types, type CastError, type PipelineStage } from 'mongoose';
+import { t } from 'i18next';
+import OrderService from '@services/orders';
+import { createPDF } from '@utils/helpers-pdf';
+import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
+import { getDirname } from '@utils/helpers-filesystem';
 
 /**
  *
  */
 export interface IGetTargetInvoiceParameters {
-    orderId: string
+    orderId: string;
 }
 
 /**
@@ -27,12 +23,16 @@ export interface IGetTargetInvoiceParameters {
  * @param response
  * @param next
  */
-export const getTargetInvoice = (request: Request & {
-    params: IGetTargetInvoiceParameters
-}, response: Response, next: NextFunction) => {
+export const getTargetInvoice = (
+    request: Request & {
+        params: IGetTargetInvoiceParameters;
+    },
+    response: Response,
+    next: NextFunction
+) => {
     // if it's not valid it could throw an error
     if (!Types.ObjectId.isValid(request.params.orderId))
-        return next(new ExtendedError(t("ecommerce.order-not-found"), 404, true));
+        return next(new ExtendedError(t('ecommerce.order-not-found'), 404, true));
 
     /**
      * Where build (same as get-target-order.ts
@@ -40,21 +40,20 @@ export const getTargetInvoice = (request: Request & {
     const match: PipelineStage.Match = {
         $match: {}
     };
-    if (!request.session.user?.admin)
-        match.$match.userId = request.session.user?._id;
+    if (!request.session.user?.admin) match.$match.userId = request.session.user?._id;
     match.$match._id = new Types.ObjectId(request.params.orderId);
 
-    OrderService.getAll([ match ])
+    OrderService.getAll([match])
         .then(async (orders) => {
             if (orders.length === 0)
-                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
+                return next(new ExtendedError('404', 404, true, [t('ecommerce.order-not-found')]));
             const order = orders[0];
             /**
              * Create PDF file
              * Create PDF using get-target-order template OR pure HTML content
              * WARNING: Images and other link-related info will NOT work. Need to convert the images in base64 to embed them correctly in a PDF
              */
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+            // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
             const invoiceName = order._id + '.pdf'; // filename
             // save path
             const invoicePath = path.join('src', 'storage', 'invoices', invoiceName);
@@ -77,16 +76,18 @@ export const getTargetInvoice = (request: Request & {
             try {
                 const htmlContent = await ejs.renderFile(
                     // Retrieve the template
-                    path.resolve(getDirname(import.meta.url), '../../views/templates-files', 'invoice-order-file.ejs'),
+                    path.resolve(
+                        getDirname(import.meta.url),
+                        '../../views/templates-files',
+                        'invoice-order-file.ejs'
+                    ),
                     // Populate the template
                     {
                         ...response.locals,
                         pageMetaTitle: 'Order',
-                        pageMetaLinks: [
-                            "/css/order-details.css",
-                        ],
-                        order,
-                    },
+                        pageMetaLinks: ['/css/order-details.css'],
+                        order
+                    }
                 );
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
                 await createPDF(htmlContent, order._id + '.pdf', 'src/storage/invoices');
@@ -109,8 +110,8 @@ export const getTargetInvoice = (request: Request & {
             }
         })
         .catch((error: CastError) => {
-            if (error.message == "404" || error.kind === "ObjectId")
-                return next(new ExtendedError("404", 404, true, [ t("ecommerce.order-not-found") ]));
+            if (error.message == '404' || error.kind === 'ObjectId')
+                return next(new ExtendedError('404', 404, true, [t('ecommerce.order-not-found')]));
             return next(databaseErrorConverter(error));
-        })
+        });
 };

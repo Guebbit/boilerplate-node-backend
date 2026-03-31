@@ -1,6 +1,5 @@
-import logger from "@utils/winston";
-import type { Request, Response } from "express";
-
+import logger from '@utils/winston';
+import type { Request, Response } from 'express';
 
 /**
  * Heavy load test
@@ -13,7 +12,9 @@ export const getHeavyLoad = (request: Request, response: Response) => {
     let progressLoad = 0;
     for (let i = 0; i < totalLoad; i++) {
         progressLoad++;
-        logger.info(`Worker ${ process.pid } at ${ Math.round((progressLoad / totalLoad) * 100) }% of task`)
+        logger.info(
+            `Worker ${process.pid} at ${Math.round((progressLoad / totalLoad) * 100)}% of task`
+        );
     }
-    response.send(`The result of the CPU intensive task is ${ progressLoad }\n`);
-}
+    response.send(`The result of the CPU intensive task is ${progressLoad}\n`);
+};
