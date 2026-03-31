@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
-import type { SearchUsersRequest } from '@api/api';
+import type { SearchUsersRequest } from '@types';
 import UserService from '@services/users';
 
 /**

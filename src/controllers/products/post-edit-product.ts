@@ -19,20 +19,18 @@ export const postEditProduct = (
     response: Response,
     next: NextFunction
 ) => {
-    const body = request.body;
-    const id = ('id' in body ? (body as UpdateProductRequestMultipart).id : undefined) as
+    const id = ('id' in request.body ? (request.body as UpdateProductRequestMultipart).id : undefined) as
         | string
         | undefined;
-    const { title, description = '', active } = body;
-    const price = Number.parseInt(String(body.price));
+    const { title, description = '', active } = request.body;
+    const price = Number.parseInt(String(request.body.price));
 
     /**
      * Get URL of updated image: uploaded file takes priority over body imageUrl.
      * If no image was provided at all, fall back to an empty string.
      */
-    const imageUrlBody = body.imageUrl;
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
-    const imageUrl = imageUrlFile ?? imageUrlBody ?? '';
+    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
 
     /**
      * Data validation
@@ -53,7 +51,7 @@ export const postEditProduct = (
         const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
         return cleanup.then(() => {
             request.flash('error', issues);
-            request.flash('filled', Object.values(body));
+            request.flash('filled', Object.values(request.body));
             if (!id || id === '') return response.redirect('/products/add');
             return response.redirect('/products/edit/' + id);
         });

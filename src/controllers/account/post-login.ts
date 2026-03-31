@@ -3,7 +3,7 @@ import { t } from 'i18next';
 import type { IUser } from '@models/users';
 import { ExtendedError } from '@utils/helpers-errors';
 import type { CastError } from 'mongoose';
-import type { LoginRequest } from '@api/api';
+import type { LoginRequest } from '@types';
 import UserService from '@services/users';
 
 /**

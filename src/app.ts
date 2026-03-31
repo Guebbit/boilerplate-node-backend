@@ -17,7 +17,7 @@ import { rateLimiter } from '@middlewares/security';
 import enTranslation from './locales/en.json';
 
 import productRoutes from './routes/products';
-import authRoutes from './routes/auth';
+import authRoutes from './routes/account';
 import orderRoutes from './routes/orders';
 import cartRoutes from './routes/cart';
 import userRoutes from './routes/users';

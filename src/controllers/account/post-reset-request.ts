@@ -3,7 +3,7 @@ import { t } from 'i18next';
 import { nodemailer } from '@utils/nodemailer';
 import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
-import type { PasswordResetRequest } from '@api/api';
+import type { PasswordResetRequest } from '@types';
 import UserRepository from '@repositories/users';
 import UserService from '@services/users';
 

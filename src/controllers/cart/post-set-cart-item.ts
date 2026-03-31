@@ -3,7 +3,7 @@ import { t } from 'i18next';
 import ProductRepository from '@repositories/products';
 import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
-import type { UpsertCartItemRequest } from '@api/api';
+import type { UpsertCartItemRequest } from '@types';
 import UserService from '@services/users';
 
 /**

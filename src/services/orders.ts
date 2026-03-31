@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter } from 'mongoose';
-import type { SearchOrdersRequest, OrdersResponse, Order } from '@api/api';
+import type { SearchOrdersRequest, OrdersResponse, Order } from '@types';
 import type { IOrderDocument } from '@models/orders';
 import OrderRepository from '@repositories/orders';
 

@@ -2,7 +2,7 @@ import type { CastError } from 'mongoose';
 import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
-import type { DeleteProductRequest } from '@api/api';
+import type { DeleteProductRequest } from '@types';
 import ProductService from '@services/products';
 
 /**
