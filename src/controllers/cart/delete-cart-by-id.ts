@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
-import { buildCartResponse } from './helpers';
 
 /**
  * DELETE /cart/:productId
@@ -21,8 +20,7 @@ const deleteCartById = (request: Request, response: Response): Promise<void> => 
     }
 
     return UserService.cartItemRemoveById(user, productIdString)
-        .then(() => user.populate('cart.items.product'))
-        .then(() => buildCartResponse(user))
+        .then(() => UserService.cartGetWithSummary(user))
         .then((cart) => {
             successResponse(response, cart);
         });

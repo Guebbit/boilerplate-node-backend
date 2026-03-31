@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
+import UserService from '@services/users';
 import { successResponse } from '@utils/response';
-import { buildCartResponse } from './helpers';
 
 /**
  * GET /cart
@@ -9,7 +9,7 @@ import { buildCartResponse } from './helpers';
  */
 const getCart = (request: Request, response: Response): Promise<void> => {
     const user = request.user!;
-    return buildCartResponse(user).then((cart) => {
+    return UserService.cartGetWithSummary(user).then((cart) => {
         successResponse(response, cart);
     });
 };

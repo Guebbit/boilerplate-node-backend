@@ -3,7 +3,6 @@ import { t } from 'i18next';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
-import { buildCartResponse } from './helpers';
 
 /**
  * PUT /cart/:productId
@@ -28,8 +27,7 @@ const putCartById = (request: Request<{ productId?: string }, unknown, UpdateCar
     }
 
     return UserService.cartItemSetById(user, productId, quantity)
-        .then(() => user.populate('cart.items.product'))
-        .then(() => buildCartResponse(user))
+        .then(() => UserService.cartGetWithSummary(user))
         .then((cart) => {
             successResponse(response, cart);
         });
