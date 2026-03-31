@@ -61,7 +61,7 @@ export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]
  * @param search
  * @param scope - Additional query filters merged into the $match stage
  */
-export const search = async (
+export const search = (
     search: SearchOrdersRequest = {},
     scope?: QueryFilter<IOrderDocument>
 ): Promise<OrdersResponse> => {
@@ -90,31 +90,30 @@ export const search = async (
         addComputedFields
     ];
 
-    const [countAgg] = await OrderRepository.aggregate<{ totalItems?: number }>([
+    return OrderRepository.aggregate<{ totalItems?: number }>([
         ...basePipeline,
         { $count: 'totalItems' }
-    ]);
+    ])
+        .then(([countAgg]) => {
+            const totalItems = countAgg?.totalItems ?? 0;
+            const totalPages = Math.ceil(totalItems / pageSize);
 
-    const totalItems = countAgg?.totalItems ?? 0;
-    const totalPages = Math.ceil(totalItems / pageSize);
-
-    const items = await OrderRepository.aggregate([
-        ...basePipeline,
-        { $skip: skip },
-        { $limit: pageSize }
-    ]);
-
-    return {
-        // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
-        // (products vs items, userId ObjectId vs string) but the runtime data is compatible
-        items: items as unknown as Order[],
-        meta: {
-            page,
-            pageSize,
-            totalItems,
-            totalPages
-        }
-    };
+            return OrderRepository.aggregate([
+                ...basePipeline,
+                { $skip: skip },
+                { $limit: pageSize }
+            ]).then((items) => ({
+                // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
+                // (products vs items, userId ObjectId vs string) but the runtime data is compatible
+                items: items as unknown as Order[],
+                meta: {
+                    page,
+                    pageSize,
+                    totalItems,
+                    totalPages
+                }
+            }));
+        });
 };
 
 export default { getAll, search };
