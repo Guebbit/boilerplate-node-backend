@@ -10,6 +10,7 @@ import {
 } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { LoginRequest } from '@types';
+import { runTokenCleanup } from '@utils/token-cleanup';
 
 /**
  * POST /account/login
@@ -53,7 +54,7 @@ const postLogin = (
                 successResponse(response, { token: accessToken }, 200, 'Authentication successful');
             });
         });
-    });
+    }).finally(runTokenCleanup);
 };
 
 export default postLogin;
