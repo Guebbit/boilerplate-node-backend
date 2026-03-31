@@ -22,8 +22,7 @@ const putProductById = async (request: Request<{ id?: string }, unknown, UpdateP
          */
         const product = await ProductService.update(
             String(request.params.id),
-            request.body,
-            imageUrl
+            { ...request.body, ...(imageUrl ? { imageUrl } : {}) }
         );
         successResponse(response, product.toObject());
     } catch (error) {
