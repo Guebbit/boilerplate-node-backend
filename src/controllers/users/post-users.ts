@@ -9,7 +9,7 @@ import type { CreateUserRequest, CreateUserRequestMultipart } from '@types';
  * POST /users
  * Create a new user (admin).
  */
-const postUsers = async (request: Request<unknown, unknown, CreateUserRequest | CreateUserRequestMultipart>, response: Response): Promise<void> => {
+const postUsers = (request: Request<unknown, unknown, CreateUserRequest | CreateUserRequestMultipart>, response: Response): Promise<void> => {
     /**
      * Uploaded file takes priority over body imageUrl
      */
@@ -21,20 +21,21 @@ const postUsers = async (request: Request<unknown, unknown, CreateUserRequest | 
     });
 
     if (errors.length > 0) {
-        if (imageUrlRaw) await deleteFile(imageUrlRaw);
-        rejectResponse(response, 422, 'createUser - validation failed', errors);
-        return;
+        const deleteP = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
+        return deleteP.then(() => rejectResponse(response, 422, 'createUser - validation failed', errors));
     }
-    try {
-        const user = await UserService.adminCreate({
-            ...request.body,
-            imageUrl: imageUrl ?? request.body.imageUrl
+
+    return UserService.adminCreate({
+        ...request.body,
+        imageUrl: imageUrl ?? request.body.imageUrl
+    })
+        .then((user) => successResponse(response, user.toObject(), 201))
+        .catch((error) => {
+            const deleteP = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
+            return deleteP.then(() =>
+                rejectResponse(response, 500, 'Internal Server Error', [(error as Error).message])
+            );
         });
-        successResponse(response, user.toObject(), 201);
-    } catch (error) {
-        if (imageUrlRaw) await deleteFile(imageUrlRaw);
-        rejectResponse(response, 500, 'Internal Server Error', [(error as Error).message]);
-    }
 };
 
 export default postUsers;

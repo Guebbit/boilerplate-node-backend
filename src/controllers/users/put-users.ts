@@ -10,10 +10,10 @@ import type { UpdateUserRequest, UpdateUserRequestMultipart } from '@types';
  * PUT /users
  * Update a user by id in the request body (admin).
  */
-const putUsers = async (request: Request<unknown, unknown, UpdateUserRequest | UpdateUserRequestMultipart>, response: Response): Promise<void> => {
+const putUsers = (request: Request<unknown, unknown, UpdateUserRequest | UpdateUserRequestMultipart>, response: Response): Promise<void> => {
     if (!request.body.id) {
         rejectResponse(response, 422, 'updateUser - missing id', [t('generic.error-missing-data')]);
-        return;
+        return Promise.resolve();
     }
 
     /**
@@ -21,19 +21,20 @@ const putUsers = async (request: Request<unknown, unknown, UpdateUserRequest | U
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    try {
-        const user = await UserService.adminUpdate(request.body.id, {
-            ...request.body,
-            imageUrl: imageUrl ?? request.body.imageUrl
+    return UserService.adminUpdate(request.body.id, {
+        ...request.body,
+        ...(imageUrl !== undefined && { imageUrl })
+    })
+        .then((user) => successResponse(response, user.toObject()))
+        .catch((error) => {
+            const deleteP = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
+            return deleteP.then(() => {
+                const message = (error as Error).message;
+                if (message === '404')
+                    rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
+                else rejectResponse(response, 500, 'Internal Server Error', [message]);
+            });
         });
-        successResponse(response, user.toObject());
-    } catch (error) {
-        if (imageUrlRaw) await deleteFile(imageUrlRaw);
-        const message = (error as Error).message;
-        if (message === '404')
-            rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
-        else rejectResponse(response, 500, 'Internal Server Error', [message]);
-    }
 };
 
 export default putUsers;
