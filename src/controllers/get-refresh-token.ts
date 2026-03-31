@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { createAccessToken } from '@middlewares/auth-jwt';
 import { rejectResponse, successResponse } from '@utils/response';
+import { runTokenCleanup } from '@utils/token-cleanup';
 
 /**
  * GET /account/refresh
@@ -8,7 +9,7 @@ import { rejectResponse, successResponse } from '@utils/response';
  * Given the refreshToken from the URL or, if not, from the user cookies:
  * create a new short-lived access token for the following requests.
  */
-const getRefreshToken = (request: Request<{ token?: string }>, response: Response) => {
+const getRefreshToken = async (request: Request<{ token?: string }>, response: Response) => {
     /**
      * Get token
      * (name of the cookie decided in the post-login.ts controller)
@@ -27,9 +28,14 @@ const getRefreshToken = (request: Request<{ token?: string }>, response: Respons
     /**
      * Create new access token using refresh token stored in the server
      */
-    createAccessToken(refreshToken)
-        .then((token) => successResponse(response, { token }))
-        .catch(() => rejectResponse(response, 401, 'Unauthorized'));
+    await runTokenCleanup();
+
+    try {
+        const token = await createAccessToken(refreshToken);
+        successResponse(response, { token });
+    } catch {
+        rejectResponse(response, 401, 'Unauthorized');
+    }
 };
 
 export default getRefreshToken;
