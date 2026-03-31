@@ -93,27 +93,26 @@ export const search = (
     return OrderRepository.aggregate<{ totalItems?: number }>([
         ...basePipeline,
         { $count: 'totalItems' }
-    ])
-        .then(([countAgg]) => {
-            const totalItems = countAgg?.totalItems ?? 0;
-            const totalPages = Math.ceil(totalItems / pageSize);
+    ]).then(([countAgg]) => {
+        const totalItems = countAgg?.totalItems ?? 0;
+        const totalPages = Math.ceil(totalItems / pageSize);
 
-            return OrderRepository.aggregate([
-                ...basePipeline,
-                { $skip: skip },
-                { $limit: pageSize }
-            ]).then((items) => ({
-                // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
-                // (products vs items, userId ObjectId vs string) but the runtime data is compatible
-                items: items as unknown as Order[],
-                meta: {
-                    page,
-                    pageSize,
-                    totalItems,
-                    totalPages
-                }
-            }));
-        });
+        return OrderRepository.aggregate([
+            ...basePipeline,
+            { $skip: skip },
+            { $limit: pageSize }
+        ]).then((items) => ({
+            // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
+            // (products vs items, userId ObjectId vs string) but the runtime data is compatible
+            items: items as unknown as Order[],
+            meta: {
+                page,
+                pageSize,
+                totalItems,
+                totalPages
+            }
+        }));
+    });
 };
 
 export default { getAll, search };

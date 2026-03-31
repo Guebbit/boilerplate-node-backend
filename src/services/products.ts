@@ -161,9 +161,9 @@ export const update = (
         return ProductRepository.save(product).then((updatedProduct) => {
             // After saving the new image path, delete the old image file
             if (newImageUrl && oldImageUrl !== newImageUrl)
-                return deleteFile(
-                    (process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl
-                ).then(() => updatedProduct);
+                return deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl).then(
+                    () => updatedProduct
+                );
             return updatedProduct;
         });
     });
@@ -187,7 +187,9 @@ export const remove = (
 
         // HARD delete
         if (hardDelete)
-            return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+            return UserService.productRemoveFromCartsById(
+                (product._id as Types.ObjectId).toString()
+            )
                 .then(() => ProductRepository.deleteOne(product))
                 .then(() =>
                     deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)

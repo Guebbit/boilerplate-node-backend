@@ -15,13 +15,17 @@ import ProductService from '@services/products';
  * @param next
  */
 export const postEditProduct = (
-    request: Request<unknown, unknown, CreateProductRequestMultipart | UpdateProductRequestMultipart>,
+    request: Request<
+        unknown,
+        unknown,
+        CreateProductRequestMultipart | UpdateProductRequestMultipart
+    >,
     response: Response,
     next: NextFunction
 ) => {
-    const id = ('id' in request.body ? (request.body as UpdateProductRequestMultipart).id : undefined) as
-        | string
-        | undefined;
+    const id = (
+        'id' in request.body ? (request.body as UpdateProductRequestMultipart).id : undefined
+    ) as string | undefined;
     const { title, description = '', active } = request.body;
     const price = Number.parseInt(String(request.body.price));
 

@@ -42,11 +42,7 @@ export const nodemailer = (
     ejs
         .renderFile(
             // Retrieve the template
-            path.resolve(
-                getDirname(import.meta.url),
-                '../../views/templates-emails',
-                templateName
-            ),
+            path.resolve(getDirname(import.meta.url), '../../views/templates-emails', templateName),
             // Populate the template
             data
         )

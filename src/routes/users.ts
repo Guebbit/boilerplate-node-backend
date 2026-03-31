@@ -16,11 +16,25 @@ router.get('/details/:userId', isAuth, isAdmin, pageTargetUser);
 
 router.get('/add', isAuth, isAdmin, pageEditUser);
 
-router.post('/add', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditUser);
+router.post(
+    '/add',
+    isAuth,
+    isAdmin,
+    multer.single('imageUpload'),
+    csrfSynchronisedProtection,
+    postEditUser
+);
 
 router.get('/edit/:userId', isAuth, isAdmin, pageEditUser);
 
-router.post('/edit/:userId', isAuth, isAdmin, multer.single('imageUpload'), csrfSynchronisedProtection, postEditUser);
+router.post(
+    '/edit/:userId',
+    isAuth,
+    isAdmin,
+    multer.single('imageUpload'),
+    csrfSynchronisedProtection,
+    postEditUser
+);
 
 router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteUser);
 

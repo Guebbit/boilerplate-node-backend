@@ -25,7 +25,13 @@ router.post('/login', isGuest, csrfSynchronisedProtection, postLogin);
 
 router.get('/signup', isGuest, pageSignup);
 
-router.post('/signup', isGuest, multer.single('imageUpload'), csrfSynchronisedProtection, postSignup);
+router.post(
+    '/signup',
+    isGuest,
+    multer.single('imageUpload'),
+    csrfSynchronisedProtection,
+    postSignup
+);
 
 router.get('/reset', isGuest, pageReset);
 

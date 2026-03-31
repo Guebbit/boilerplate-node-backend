@@ -18,7 +18,9 @@ const connectWithRetry = async (attempt = 0): Promise<void> => {
         if (attempt >= MAX_RETRIES - 1)
             throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`);
         const delayMs = Math.min(BASE_DELAY_MS * 2 ** attempt, 30_000);
-        logger.warn(`DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        logger.warn(
+            `DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
+        );
         await wait(delayMs);
         await connectWithRetry(attempt + 1);
     }

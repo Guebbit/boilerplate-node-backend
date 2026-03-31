@@ -269,9 +269,9 @@ export const passwordChange = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-            400,
-            'passwordChange - bad request',
-            parseResult.error.issues.map(({ message }) => message)
+                400,
+                'passwordChange - bad request',
+                parseResult.error.issues.map(({ message }) => message)
             )
         );
 
@@ -330,9 +330,9 @@ export const signup = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-            400,
-            'signup - bad request',
-            parseResult.error.issues.map(({ message }) => message)
+                400,
+                'signup - bad request',
+                parseResult.error.issues.map(({ message }) => message)
             )
         );
 
@@ -393,9 +393,9 @@ export const login = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-            400,
-            'login - bad request',
-            parseResult.error.issues.map(({ message }) => message)
+                400,
+                'login - bad request',
+                parseResult.error.issues.map(({ message }) => message)
             )
         );
 

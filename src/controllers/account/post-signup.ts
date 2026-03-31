@@ -33,7 +33,13 @@ export const postSignup = async (
     /**
      * Login
      */
-    return UserService.signup(email, username, password, passwordConfirm, imageUrl ?? request.body.imageUrl)
+    return UserService.signup(
+        email,
+        username,
+        password,
+        passwordConfirm,
+        imageUrl ?? request.body.imageUrl
+    )
         .then(({ success, data, errors = [] }) => {
             if (!success || !data) {
                 // So the user doesn't need to fill the form again
