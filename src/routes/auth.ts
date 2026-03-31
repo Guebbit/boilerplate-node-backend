@@ -1,6 +1,7 @@
 import express from 'express';
 import { isGuest, isAuth } from '@middlewares/authorizations';
 import { csrfSynchronisedProtection } from '@middlewares/csrf';
+import multer from '@utils/multer';
 
 import { pageAccount } from '@controllers/auth/page-account';
 import { pageLogin } from '@controllers/auth/page-login';
@@ -24,7 +25,7 @@ router.post('/login', isGuest, csrfSynchronisedProtection, postLogin);
 
 router.get('/signup', isGuest, pageSignup);
 
-router.post('/signup', isGuest, csrfSynchronisedProtection, postSignup);
+router.post('/signup', isGuest, multer.single('imageUpload'), csrfSynchronisedProtection, postSignup);
 
 router.get('/reset', isGuest, pageReset);
 
