@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { Types } from 'mongoose';
+import { deleteFile } from '@utils/helpers-filesystem';
+import { resolveImageUrl } from '@utils/helpers-uploads';
 import { ExtendedError } from '@utils/helpers-errors';
 import UserService from '@services/users';
 
@@ -29,13 +31,20 @@ export const postEditUser = async (
     response: Response,
     next: NextFunction
 ) => {
-    const { id, email, username, imageUrl = '' } = request.body;
+    const { id, email, username } = request.body;
 
     // Checkbox values arrive as "on" (checked) or undefined (unchecked)
     const admin = request.body.admin === 'on';
     // Password is optional when editing; required when creating
     const password = request.body.password ?? '';
     const isNew = !id || id === '';
+
+    /**
+     * Uploaded file takes priority over body imageUrl
+     */
+    const imageUrlBody = request.body.imageUrl;
+    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrl = imageUrlFile ?? imageUrlBody ?? '';
 
     /**
      * Data validation
@@ -51,6 +60,7 @@ export const postEditUser = async (
     if (issues.length > 0) {
         request.flash('error', issues);
         request.flash('filled', [email, username, String(admin), imageUrl]);
+        if (imageUrlRaw) void deleteFile(imageUrlRaw);
         if (isNew) return response.redirect('/users/add');
         return response.redirect('/users/edit/' + id);
     }
@@ -67,9 +77,10 @@ export const postEditUser = async (
             imageUrl: imageUrl || undefined
         })
             .then(() => response.redirect('/users/'))
-            .catch(async (error: CastError) =>
-                next(new ExtendedError(error.kind, 500, false, [error.message]))
-            );
+            .catch(async (error: CastError) => {
+                if (imageUrlRaw) await deleteFile(imageUrlRaw);
+                return next(new ExtendedError(error.kind, 500, false, [error.message]));
+            });
 
     /**
      * ID = edit user
@@ -85,7 +96,8 @@ export const postEditUser = async (
         .then((updatedUser) =>
             response.redirect('/users/details/' + (updatedUser._id as Types.ObjectId).toString())
         )
-        .catch(async (error: CastError) =>
-            next(new ExtendedError(error.kind, 500, false, [error.message]))
-        );
+        .catch(async (error: CastError) => {
+            if (imageUrlRaw) await deleteFile(imageUrlRaw);
+            return next(new ExtendedError(error.kind, 500, false, [error.message]));
+        });
 };
