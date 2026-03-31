@@ -181,25 +181,23 @@ export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<
  *
  * @param user
  */
-export const orderConfirm = async (
+export const orderConfirm = (
     user: IUserDocument
-): Promise<IResponseSuccess<Order> | IResponseReject> => {
-    try {
-        const products = await cartGet(user);
-        if (products.length === 0)
-            return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
-        const order = await OrderRepository.create({
-            userId: user._id as Types.ObjectId,
-            email: user.email,
-            // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
-            products: products as unknown as IOrderProduct[]
-        } as Partial<IOrderDocument>);
-        await cartRemove(user);
-        return generateSuccess<Order>(order as unknown as Order);
-    } catch (error) {
-        return generateReject(...databaseErrorInterpreter(error as CastError | Error));
-    }
-};
+): Promise<IResponseSuccess<Order> | IResponseReject> =>
+    cartGet(user)
+        .then<IResponseSuccess<Order> | IResponseReject>((products) => {
+            if (products.length === 0)
+                return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
+            return OrderRepository.create({
+                userId: user._id as Types.ObjectId,
+                email: user.email,
+                // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
+                products: products as unknown as IOrderProduct[]
+            } as Partial<IOrderDocument>).then((order) =>
+                cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
+            );
+        })
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 
 /**
  * Add a token to the user
@@ -576,24 +574,23 @@ export const adminCreate = (
  * @param id
  * @param data
  */
-export const adminUpdate = async (
+export const adminUpdate = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
-): Promise<IUserDocument> => {
-    const user = await UserRepository.findById(id);
+): Promise<IUserDocument> =>
+    UserRepository.findById(id).then((user) => {
+        if (!user) throw new Error('404');
 
-    if (!user) throw new Error('404');
+        // Apply incoming field changes
+        if (data.email !== undefined) user.email = data.email;
+        if (data.username !== undefined) user.username = data.username;
+        if (data.admin !== undefined) user.admin = data.admin;
+        if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
+        // Only update password when a non-empty value is passed
+        if (data.password && data.password.trim().length > 0) user.password = data.password;
 
-    // Apply incoming field changes
-    if (data.email !== undefined) user.email = data.email;
-    if (data.username !== undefined) user.username = data.username;
-    if (data.admin !== undefined) user.admin = data.admin;
-    if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
-    // Only update password when a non-empty value is passed
-    if (data.password && data.password.trim().length > 0) user.password = data.password;
-
-    return UserRepository.save(user);
-};
+        return UserRepository.save(user);
+    });
 
 /**
  * Remove a user by ID (soft or hard delete).
