@@ -362,16 +362,16 @@ export class ApiKeyAuth implements Authentication {
 
     applyToRequest(requestOptions: localVarRequest.Options): void {
         if (this.location == 'query') {
-            (<any>requestOptions.qs)[this.paramName] = this.apiKey;
+            (<any>requestOptions.qs)[this.parameterName] = this.apiKey;
         } else if (this.location == 'header' && requestOptions && requestOptions.headers) {
-            requestOptions.headers[this.paramName] = this.apiKey;
+            requestOptions.headers[this.parameterName] = this.apiKey;
         } else if (this.location == 'cookie' && requestOptions && requestOptions.headers) {
             if (requestOptions.headers['Cookie']) {
                 requestOptions.headers['Cookie'] +=
-                    '; ' + this.paramName + '=' + encodeURIComponent(this.apiKey);
+                    '; ' + this.parameterName + '=' + encodeURIComponent(this.apiKey);
             } else {
                 requestOptions.headers['Cookie'] =
-                    this.paramName + '=' + encodeURIComponent(this.apiKey);
+                    this.parameterName + '=' + encodeURIComponent(this.apiKey);
             }
         }
     }
