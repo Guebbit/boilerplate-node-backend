@@ -10,26 +10,28 @@ import type { UpdateUserByIdRequest, UpdateUserByIdRequestMultipart } from '@typ
  * PUT /users/:id
  * Update a user by path id (admin).
  */
-const putUserById = (request: Request<{ id?: string }, unknown, UpdateUserByIdRequest | UpdateUserByIdRequestMultipart>, response: Response): Promise<void> => {
+const putUserById = async (request: Request<{ id?: string }, unknown, UpdateUserByIdRequest | UpdateUserByIdRequestMultipart>, response: Response): Promise<void> => {
     /**
      * Uploaded file takes priority over body imageUrl
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    return UserService.adminUpdate(String(request.params.id), {
-        ...request.body,
-        ...(imageUrl !== undefined && { imageUrl })
-    })
-        .then((user) => successResponse(response, user.toObject()))
-        .catch((error) => {
-            const deleteP = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
-            return deleteP.then(() => {
-                const message = (error as Error).message;
-                if (message === '404')
-                    rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
-                else rejectResponse(response, 500, 'Internal Server Error', [message]);
-            });
+    try {
+        /**
+         * Update user with the new data
+         */
+        const user = await UserService.adminUpdate(String(request.params.id), {
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
         });
+        successResponse(response, user.toObject());
+    } catch (error) {
+        if (imageUrlRaw) await deleteFile(imageUrlRaw);
+        const message = (error as Error).message;
+        if (message === '404')
+            rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
+        else rejectResponse(response, 500, 'Internal Server Error', [message]);
+    }
 };
 
 export default putUserById;

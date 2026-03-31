@@ -43,7 +43,7 @@ export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
  * @param id
  * @param quantity
  */
-export const cartItemSetById = (
+export const cartItemSetById = async (
     user: IUserDocument,
     id: string,
     quantity = 1
@@ -68,7 +68,7 @@ export const cartItemSetById = (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return UserRepository.save(user).then((saved) => generateSuccess(saved));
+    return generateSuccess(await UserRepository.save(user));
 };
 
 /**
@@ -92,7 +92,7 @@ export const cartItemSet = (
  * @param id
  * @param quantity
  */
-export const cartItemAddById = (
+export const cartItemAddById = async (
     user: IUserDocument,
     id: string,
     quantity = 1
@@ -119,7 +119,7 @@ export const cartItemAddById = (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return UserRepository.save(user).then((saved) => generateSuccess(saved));
+    return generateSuccess(await UserRepository.save(user));
 };
 
 /**
@@ -142,13 +142,13 @@ export const cartItemAdd = (
  * @param user
  * @param id
  */
-export const cartItemRemoveById = (
+export const cartItemRemoveById = async (
     user: IUserDocument,
     id: string
 ): Promise<IResponseSuccess<IUserDocument>> => {
     user.cart.items = user.cart.items.filter(({ product }: ICartItem) => !product.equals(id));
     user.cart.updatedAt = new Date();
-    return UserRepository.save(user).then((saved) => generateSuccess(saved));
+    return generateSuccess(await UserRepository.save(user));
 };
 
 /**
@@ -168,12 +168,12 @@ export const cartItemRemove = (
  *
  * @param user
  */
-export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
+export const cartRemove = async (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
     user.cart = {
         items: [],
         updatedAt: new Date()
     };
-    return UserRepository.save(user).then((saved) => generateSuccess(saved));
+    return generateSuccess(await UserRepository.save(user));
 };
 
 /**
@@ -181,25 +181,25 @@ export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserD
  *
  * @param user
  */
-export const orderConfirm = (
+export const orderConfirm = async (
     user: IUserDocument
-): Promise<IResponseSuccess<Order> | IResponseReject> =>
-    cartGet(user)
-        .then(
-            (products): IResponseSuccess<Order> | IResponseReject | Promise<IResponseSuccess<Order>> => {
-                if (products.length === 0)
-                    return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
-                return OrderRepository.create({
-                    userId: user._id as Types.ObjectId,
-                    email: user.email,
-                    // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
-                    products: products as unknown as IOrderProduct[]
-                } as Partial<IOrderDocument>).then((order) =>
-                    cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
-                );
-            }
-        )
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+): Promise<IResponseSuccess<Order> | IResponseReject> => {
+    try {
+        const products = await cartGet(user);
+        if (products.length === 0)
+            return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
+        const order = await OrderRepository.create({
+            userId: user._id as Types.ObjectId,
+            email: user.email,
+            // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
+            products: products as unknown as IOrderProduct[]
+        } as Partial<IOrderDocument>);
+        await cartRemove(user);
+        return generateSuccess<Order>(order as unknown as Order);
+    } catch (error) {
+        return generateReject(...databaseErrorInterpreter(error as CastError | Error));
+    }
+};
 
 /**
  * Add a token to the user
@@ -212,7 +212,7 @@ export const orderConfirm = (
  * @param type
  * @param expirationTime - undefined = expire only upon use
  */
-export const tokenAdd = (
+export const tokenAdd = async (
     user: IUserDocument,
     type: string,
     expirationTime?: number
@@ -234,7 +234,7 @@ export const tokenAdd = (
  * @param password
  * @param passwordConfirm
  */
-export const passwordChange = (
+export const passwordChange = async (
     user: IUserDocument,
     password = '',
     passwordConfirm = ''
@@ -267,12 +267,10 @@ export const passwordChange = (
      * Validation error
      */
     if (!parseResult.success)
-        return Promise.resolve(
-            generateReject(
-                400,
-                'passwordChange - bad request',
-                parseResult.error.issues.map(({ message }) => message)
-            )
+        return generateReject(
+            400,
+            'passwordChange - bad request',
+            parseResult.error.issues.map(({ message }) => message)
         );
 
     /**
@@ -294,7 +292,7 @@ export const passwordChange = (
  * @param passwordConfirm
  * @param imageUrl
  */
-export const signup = (
+export const signup = async (
     email: string,
     username: string,
     password: string,
@@ -328,12 +326,10 @@ export const signup = (
      * Validation error
      */
     if (!parseResult.success)
-        return Promise.resolve(
-            generateReject(
-                400,
-                'signup - bad request',
-                parseResult.error.issues.map(({ message }) => message)
-            )
+        return generateReject(
+            400,
+            'signup - bad request',
+            parseResult.error.issues.map(({ message }) => message)
         );
 
     /**
@@ -341,28 +337,25 @@ export const signup = (
      * If that's the case: return error and stop the creation process
      */
     return UserRepository.findOne({ email })
-        .then(
-            (user):
-                | IResponseSuccess<IUserDocument>
-                | IResponseReject
-                | Promise<IResponseSuccess<IUserDocument>> => {
-                // Email already exists
-                if (user)
-                    return generateReject(409, 'signup - email already used', [
-                        t('signup.email-already-used')
-                    ]);
-                /**
-                 * Everything is ok, proceed to create a new user.
-                 * Encryption will be done automatically by the pre-save hook
-                 */
-                return UserRepository.create({
+        .then(async (user) => {
+            // Email already exists
+            if (user)
+                return generateReject(409, 'signup - email already used', [
+                    t('signup.email-already-used')
+                ]);
+            /**
+             * Everything is ok, proceed to create a new user.
+             * Encryption will be done automatically by the pre-save hook
+             */
+            return generateSuccess<IUserDocument>(
+                await UserRepository.create({
                     username,
                     email,
                     imageUrl: imageUrl ?? '',
                     password
-                }).then((created) => generateSuccess<IUserDocument>(created));
-            }
-        )
+                })
+            );
+        })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
@@ -372,7 +365,7 @@ export const signup = (
  * @param email
  * @param password
  */
-export const login = (
+export const login = async (
     email?: string,
     password?: string
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
@@ -396,38 +389,29 @@ export const login = (
      * Validation error
      */
     if (!parseResult.success)
-        return Promise.resolve(
-            generateReject(
-                400,
-                'login - bad request',
-                parseResult.error.issues.map(({ message }) => message)
-            )
+        return generateReject(
+            400,
+            'login - bad request',
+            parseResult.error.issues.map(({ message }) => message)
         );
 
     /**
      * Everything is ok, login the user
      */
     return UserRepository.findOne({ email, deletedAt: undefined })
-        .then(
-            (user):
-                | IResponseSuccess<IUserDocument>
-                | IResponseReject
-                | Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
-                // user not found
-                if (!user)
+        .then((user) => {
+            // user not found
+            if (!user)
+                return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
+            return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
+                // User found but password doesn't match
+                if (!doMatch)
                     return generateReject(401, 'login - wrong credentials', [
                         t('login.wrong-data')
                     ]);
-                return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
-                    // User found but password doesn't match
-                    if (!doMatch)
-                        return generateReject(401, 'login - wrong credentials', [
-                            t('login.wrong-data')
-                        ]);
-                    return generateSuccess<IUserDocument>(user);
-                });
-            }
-        )
+                return generateSuccess<IUserDocument>(user);
+            });
+        })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
@@ -507,7 +491,7 @@ export const validateData = (
  *
  * @param filters
  */
-export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
+export const search = async (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
@@ -541,10 +525,14 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
     if (filters.active !== undefined && filters.active !== null)
         where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
 
-    return Promise.all([
-        UserRepository.count(where),
-        UserRepository.findAll(where, { sort: { createdAt: -1 }, skip, limit: pageSize })
-    ]).then(([totalItems, items]) => ({
+    const totalItems = await UserRepository.count(where);
+    const items = await UserRepository.findAll(where, {
+        sort: { createdAt: -1 },
+        skip,
+        limit: pageSize
+    });
+
+    return {
         items: items as unknown as UsersResponse['items'],
         meta: {
             page,
@@ -552,7 +540,7 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
             totalItems,
             totalPages: Math.ceil(totalItems / pageSize)
         }
-    }));
+    };
 };
 
 /**
@@ -564,7 +552,9 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
 export const getById = async (id?: string) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return;
-    return UserRepository.findById(id).then((user) => user?.toObject());
+    const user = await UserRepository.findById(id);
+    if (!user) return;
+    return user.toObject();
 };
 
 /**
@@ -586,23 +576,24 @@ export const adminCreate = (
  * @param id
  * @param data
  */
-export const adminUpdate = (
+export const adminUpdate = async (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
-): Promise<IUserDocument> =>
-    UserRepository.findById(id).then((user) => {
-        if (!user) throw new Error('404');
+): Promise<IUserDocument> => {
+    const user = await UserRepository.findById(id);
 
-        // Apply incoming field changes
-        if (data.email !== undefined) user.email = data.email;
-        if (data.username !== undefined) user.username = data.username;
-        if (data.admin !== undefined) user.admin = data.admin;
-        if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
-        // Only update password when a non-empty value is passed
-        if (data.password && data.password.trim().length > 0) user.password = data.password;
+    if (!user) throw new Error('404');
 
-        return UserRepository.save(user);
-    });
+    // Apply incoming field changes
+    if (data.email !== undefined) user.email = data.email;
+    if (data.username !== undefined) user.username = data.username;
+    if (data.admin !== undefined) user.admin = data.admin;
+    if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
+    // Only update password when a non-empty value is passed
+    if (data.password && data.password.trim().length > 0) user.password = data.password;
+
+    return UserRepository.save(user);
+};
 
 /**
  * Remove a user by ID (soft or hard delete).
@@ -612,28 +603,27 @@ export const adminUpdate = (
  * @param id
  * @param hardDelete
  */
-export const remove = (
+export const remove = async (
     id: string,
     hardDelete = false
-): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> =>
-    UserRepository.findById(id).then((user) => {
-        // not found, something happened
-        if (!user) return generateReject(404, '404', [t('admin.user-not-found')]);
+): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+    const user = await UserRepository.findById(id);
 
-        // HARD delete
-        if (hardDelete)
-            return UserRepository.deleteOne(user).then(() =>
-                generateSuccess(undefined, 200, t('admin.user-hard-deleted'))
-            );
+    // not found, something happened
+    if (!user) return generateReject(404, '404', [t('admin.user-not-found')]);
 
-        // If deletedAt already present: it's soft-deleted → RESTORE
-        user.deletedAt = user.deletedAt ? undefined : new Date();
-
-        // SOFT delete (or restore)
-        return UserRepository.save(user).then((saved) =>
-            generateSuccess(saved, 200, t('admin.user-soft-deleted'))
+    // HARD delete
+    if (hardDelete)
+        return UserRepository.deleteOne(user).then(() =>
+            generateSuccess(undefined, 200, t('admin.user-hard-deleted'))
         );
-    });
+
+    // If deletedAt already present: it's soft-deleted → RESTORE
+    user.deletedAt = user.deletedAt ? undefined : new Date();
+
+    // SOFT delete (or restore)
+    return generateSuccess(await UserRepository.save(user), 200, t('admin.user-soft-deleted'));
+};
 
 export default {
     cartGet,
