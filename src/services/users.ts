@@ -185,7 +185,7 @@ export const orderConfirm = (
     user: IUserDocument
 ): Promise<IResponseSuccess<Order> | IResponseReject> =>
     cartGet(user)
-        .then((products) => {
+        .then<IResponseSuccess<Order> | IResponseReject>((products) => {
             if (products.length === 0)
                 return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
             return OrderRepository.create({
