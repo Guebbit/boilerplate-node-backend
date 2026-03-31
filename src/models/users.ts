@@ -1,24 +1,24 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { z } from "zod"
-import { t } from "i18next";
-import bcrypt from "bcrypt";
-import logger from "@utils/winston";
+import { z } from 'zod';
+import { t } from 'i18next';
+import bcrypt from 'bcrypt';
+import logger from '@utils/winston';
 
 /**
  * Token types used in jwt-auth
  */
 export enum ETokenType {
-    REFRESH = "refresh",
-    PASSWORD_RESET = "password",
+    REFRESH = 'refresh',
+    PASSWORD_RESET = 'password'
 }
 
 /**
  * User roles for authorization
  */
 export enum EUserRoles {
-    ADMIN = "admin",
-    USER = "user",
+    ADMIN = 'admin',
+    USER = 'user'
 }
 
 /**
@@ -98,73 +98,79 @@ export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
     tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
 };
 
-
 /**
  * User Schema
  */
-export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>({
-    email: {
-        type: String,
-        required: true,
-        match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
-    },
-    username: {
-        type: String,
-        required: true,
-    },
-    password: {
-        type: String,
-        required: true
-    },
-    imageUrl: {
-        type: String,
-        default: "https://placekitten.com/600/600"
-    },
-    admin: {
-        type: Boolean,
-        default: false,
-    },
-    roles: {
-        type: [String],
-        enum: Object.values(EUserRoles),
-        default: [EUserRoles.USER],
-    },
-    cart: {
+export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
+    {
+        email: {
+            type: String,
+            required: true,
+            match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
+        },
+        username: {
+            type: String,
+            required: true
+        },
+        password: {
+            type: String,
+            required: true
+        },
+        imageUrl: {
+            type: String,
+            default: 'https://placekitten.com/600/600'
+        },
+        admin: {
+            type: Boolean,
+            default: false
+        },
+        roles: {
+            type: [String],
+            enum: Object.values(EUserRoles),
+            default: [EUserRoles.USER]
+        },
+        cart: {
+            // sub documents always have _id
+            items: [
+                {
+                    product: {
+                        type: Schema.Types.ObjectId,
+                        ref: 'Product',
+                        required: true
+                    },
+                    quantity: {
+                        type: Number,
+                        required: true
+                    }
+                }
+            ],
+            deletedAt: Date
+        },
         // sub documents always have _id
-        items: [ {
-            product: {
-                type: Schema.Types.ObjectId,
-                ref: 'Product',
-                required: true
-            },
-            quantity: {
-                type: Number, required: true
+        tokens: [
+            {
+                type: {
+                    type: String,
+                    required: true
+                },
+                token: {
+                    type: String,
+                    required: true
+                },
+                expiration: {
+                    type: Date,
+                    required: false
+                }
             }
-        } ],
-        deletedAt: Date
-    },
-    // sub documents always have _id
-    tokens: [ {
-        type: {
-            type: String,
-            required: true
-        },
-        token: {
-            type: String,
-            required: true
-        },
-        expiration: {
-            type: Date,
-            required: false
+        ],
+        deletedAt: {
+            type: Date
         }
-    } ],
-    deletedAt: {
-        type: Date
     },
-}, {
-    timestamps: true
-});
-
+    {
+        timestamps: true
+    }
+);
 
 /**
  * Zod validation schema
@@ -194,7 +200,7 @@ export const zodUserSchema = z.object({
 
     createdAt: z.date().nullish(),
     updatedAt: z.date().nullish(),
-    deletedAt: z.date().nullish(),
+    deletedAt: z.date().nullish()
 });
 
 /**
@@ -206,10 +212,9 @@ userSchema.pre('save', async function () {
     // Sync roles with the admin boolean flag
     if (this.isModified('admin') || this.isNew) {
         if (this.admin) {
-            if (!this.roles.includes(EUserRoles.ADMIN))
-                this.roles.push(EUserRoles.ADMIN);
+            if (!this.roles.includes(EUserRoles.ADMIN)) this.roles.push(EUserRoles.ADMIN);
         } else {
-            this.roles = this.roles.filter(r => r !== EUserRoles.ADMIN);
+            this.roles = this.roles.filter((r) => r !== EUserRoles.ADMIN);
         }
     }
 
@@ -225,12 +230,12 @@ userSchema.pre('save', async function () {
 userSchema.methods.tokenAdd = async function (
     type: ETokenType,
     expirationMs: number,
-    token: string,
+    token: string
 ): Promise<string> {
     this.tokens.push({
         type,
         token,
-        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined,
+        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
     });
     await this.save();
     return token;
@@ -248,7 +253,10 @@ userSchema.methods.tokenRemoveAll = async function (type: ETokenType): Promise<v
  * Remove all expired tokens from every user document in the collection.
  * Returns a simple status/success envelope consumed by the controller layer.
  */
-userSchema.static('tokenRemoveExpired', async function (): Promise<{ status: number; success: boolean }> {
+userSchema.static('tokenRemoveExpired', async function (): Promise<{
+    status: number;
+    success: boolean;
+}> {
     try {
         const now = new Date();
         const tokenExpirationPath = 'tokens.expiration';
@@ -260,7 +268,7 @@ userSchema.static('tokenRemoveExpired', async function (): Promise<{ status: num
     } catch (error) {
         logger.error({
             message: 'tokenRemoveExpired failed',
-            error,
+            error
         });
         return { status: 500, success: false };
     }

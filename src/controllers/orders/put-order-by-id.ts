@@ -9,7 +9,10 @@ import type { UpdateOrderByIdRequest } from '@types';
  */
 const putOrderById = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as UpdateOrderByIdRequest;
-    const result = await OrderService.update(String(request.params.id), { ...body, status: body.status as string | undefined });
+    const result = await OrderService.update(String(request.params.id), {
+        ...body,
+        status: body.status as string | undefined
+    });
     if (!result.success) {
         rejectResponse(response, result.status, result.message, result.errors);
         return;

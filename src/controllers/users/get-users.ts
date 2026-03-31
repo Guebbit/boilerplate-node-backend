@@ -8,7 +8,10 @@ import type { SearchUsersRequest } from '@types';
  * List/search users via query parameters (admin only).
  */
 const getUsers = async (request: Request, response: Response): Promise<void> => {
-    const { id, page, pageSize, text, email, username, active } = request.query as Record<string, string | undefined>;
+    const { id, page, pageSize, text, email, username, active } = request.query as Record<
+        string,
+        string | undefined
+    >;
     const filters: SearchUsersRequest = {
         id,
         text,
@@ -16,7 +19,7 @@ const getUsers = async (request: Request, response: Response): Promise<void> => 
         username,
         page: page ? Number(page) : undefined,
         pageSize: pageSize ? Number(pageSize) : undefined,
-        active: active === undefined ? undefined : active === 'true',
+        active: active === undefined ? undefined : active === 'true'
     };
     const result = await UserService.search(filters);
     successResponse(response, result);

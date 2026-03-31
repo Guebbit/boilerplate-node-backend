@@ -1,20 +1,14 @@
-import {
-    WebSocketServer,
-    WebSocket,
-    type RawData,
-    type MessageEvent,
-    type ErrorEvent
-} from "ws";
+import { WebSocketServer, WebSocket, type RawData, type MessageEvent, type ErrorEvent } from 'ws';
 
 /**
  *
  */
 export interface IWebSocketServerCallbacks {
-    port?: number
-    connectionCallback: (ws: WebSocket) => void,
-    onMessage: (ws: WebSocket, message: RawData) => void,
-    onError: (ws: WebSocket, error: Error) => void,
-    onClose: (ws: WebSocket, code: number, reason: Buffer) => void
+    port?: number;
+    connectionCallback: (ws: WebSocket) => void;
+    onMessage: (ws: WebSocket, message: RawData) => void;
+    onError: (ws: WebSocket, error: Error) => void;
+    onClose: (ws: WebSocket, code: number, reason: Buffer) => void;
 }
 
 /**
@@ -28,12 +22,12 @@ export interface IWebSocketServerCallbacks {
  * @returns {WebSocketServer} The WebSocket client instance.
  */
 export const setupWebSocketServer = ({
-                                         port,
-                                         connectionCallback,
-                                         onMessage,
-                                         onError,
-                                         onClose,
-                                     }: Partial<IWebSocketServerCallbacks> = {}): WebSocketServer => {
+    port,
+    connectionCallback,
+    onMessage,
+    onError,
+    onClose
+}: Partial<IWebSocketServerCallbacks> = {}): WebSocketServer => {
     const wss = new WebSocketServer({
         /**
          * This sets the WebSocket server to listen on a port
@@ -54,7 +48,6 @@ export const setupWebSocketServer = ({
          * Configures various compression options.
          */
         perMessageDeflate: {
-
             /**
              * These options control how deflation (compression) is handled.
              */
@@ -71,7 +64,6 @@ export const setupWebSocketServer = ({
              * These options control how inflation (decompression) is handled.
              */
             zlibInflateOptions: {
-
                 // chunkSize: 16384
             },
 
@@ -113,30 +105,23 @@ export const setupWebSocketServer = ({
     /**
      * Fired when a NEW client connects to the server.
      */
-    wss.on("connection", (ws) => {
-        if (connectionCallback)
-            connectionCallback(ws);
+    wss.on('connection', (ws) => {
+        if (connectionCallback) connectionCallback(ws);
 
         /**
          * Fired when a message is received from a client.
          */
-        ws.on('message', (message) =>
-            onMessage && onMessage(ws, message)
-        );
+        ws.on('message', (message) => onMessage && onMessage(ws, message));
 
         /**
          * Fired when an error occurs.
          */
-        ws.on('error', (error) =>
-            onError && onError(ws, error)
-        )
+        ws.on('error', (error) => onError && onError(ws, error));
 
         /**
          * Fired when the connection is closed.
          */
-        ws.on('close', (code, reason) =>
-            onClose && onClose(ws, code, reason)
-        )
+        ws.on('close', (code, reason) => onClose && onClose(ws, code, reason));
     });
 
     return wss;
@@ -146,10 +131,10 @@ export const setupWebSocketServer = ({
  *
  */
 export interface IWebSocketClientCallbacks {
-    onOpen?: (ws: WebSocket) => void,
-    onMessage?: (ws: WebSocket, message: MessageEvent) => void,
-    onError?: (ws: WebSocket, error: ErrorEvent) => void,
-    onClose?: (ws: WebSocket, code: number, reason: string) => void
+    onOpen?: (ws: WebSocket) => void;
+    onMessage?: (ws: WebSocket, message: MessageEvent) => void;
+    onError?: (ws: WebSocket, error: ErrorEvent) => void;
+    onClose?: (ws: WebSocket, code: number, reason: string) => void;
 }
 
 /**
@@ -164,42 +149,29 @@ export interface IWebSocketClientCallbacks {
  */
 export const setupWebSocketClient = (
     url: string,
-    {
-        onOpen,
-        onMessage,
-        onError,
-        onClose,
-    }: Partial<IWebSocketClientCallbacks> = {}
+    { onOpen, onMessage, onError, onClose }: Partial<IWebSocketClientCallbacks> = {}
 ): WebSocket => {
     const ws = new WebSocket(url);
 
     /**
      * Fired when the connection is successfully established.
      */
-    ws.addEventListener('open', () =>
-        onOpen && onOpen(ws)
-    );
+    ws.addEventListener('open', () => onOpen && onOpen(ws));
 
     /**
      * Fired when a message is received from the server.
      */
-    ws.addEventListener('message', (message) =>
-        onMessage && onMessage(ws, message)
-    );
+    ws.addEventListener('message', (message) => onMessage && onMessage(ws, message));
 
     /**
      * Fired when an error occurs.
      */
-    ws.addEventListener('error', (error) =>
-        onError && onError(ws, error)
-    );
+    ws.addEventListener('error', (error) => onError && onError(ws, error));
 
     /**
      * Fired when the connection is closed.
      */
-    ws.addEventListener('close', (event) =>
-        onClose && onClose(ws, event.code, event.reason)
-    );
+    ws.addEventListener('close', (event) => onClose && onClose(ws, event.code, event.reason));
 
     return ws;
 };

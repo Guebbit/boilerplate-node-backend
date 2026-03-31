@@ -1,4 +1,4 @@
-import type { Request, Response, } from 'express';
+import type { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import UserService from '@services/users';
 import {
@@ -6,7 +6,7 @@ import {
     createRefreshCookie,
     createLoggedCookie,
     createAccessToken,
-    ERefreshTokenExpiryTime,
+    ERefreshTokenExpiryTime
 } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { LoginRequest } from '@types';
@@ -16,7 +16,10 @@ import type { LoginRequest } from '@types';
  * Authenticate user.
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
-const postLogin = async (request: Request<unknown, unknown, LoginRequest & { remember?: ERefreshTokenExpiryTime }>, response: Response): Promise<void> => {
+const postLogin = async (
+    request: Request<unknown, unknown, LoginRequest & { remember?: ERefreshTokenExpiryTime }>,
+    response: Response
+): Promise<void> => {
     /**
      * Get POST data
      */

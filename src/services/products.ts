@@ -2,7 +2,12 @@ import { Types } from 'mongoose';
 import { t } from 'i18next';
 import type { QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, ProductsResponse, Product } from '../../api/api';
-import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
+import {
+    generateReject,
+    generateSuccess,
+    type IResponseReject,
+    type IResponseSuccess
+} from '@utils/response';
 import { deleteFile } from '@utils/helpers-filesystem';
 import UserService from '@services/users';
 import { zodProductSchema } from '@models/products';
@@ -23,8 +28,7 @@ import ProductRepository from '@repositories/products';
  */
 export const validateData = (productData: Omit<Product, 'id'>): string[] => {
     const parseResult = zodProductSchema.safeParse(productData);
-    if (!parseResult.success)
-        return parseResult.error.issues.map(({ message }) => message);
+    if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
     return [];
 };
 
@@ -39,7 +43,7 @@ export const validateData = (productData: Omit<Product, 'id'>): string[] => {
  */
 export const search = async (
     filters: SearchProductsRequest = {},
-    admin = false,
+    admin = false
 ): Promise<ProductsResponse> => {
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
@@ -59,18 +63,25 @@ export const search = async (
         // Simple, effective search across title/description (case-insensitive)
         where.$or = [
             { title: { $regex: text, $options: 'i' } },
-            { description: { $regex: text, $options: 'i' } },
+            { description: { $regex: text, $options: 'i' } }
         ];
     }
 
     // Filter by price range
     const priceConditions: Record<string, number> = {};
-    if (filters.minPrice !== undefined && filters.minPrice !== null && !Number.isNaN(Number(filters.minPrice)))
+    if (
+        filters.minPrice !== undefined &&
+        filters.minPrice !== null &&
+        !Number.isNaN(Number(filters.minPrice))
+    )
         priceConditions.$gte = Number(filters.minPrice);
-    if (filters.maxPrice !== undefined && filters.maxPrice !== null && !Number.isNaN(Number(filters.maxPrice)))
+    if (
+        filters.maxPrice !== undefined &&
+        filters.maxPrice !== null &&
+        !Number.isNaN(Number(filters.maxPrice))
+    )
         priceConditions.$lte = Number(filters.maxPrice);
-    if (Object.keys(priceConditions).length > 0)
-        where.price = priceConditions;
+    if (Object.keys(priceConditions).length > 0) where.price = priceConditions;
 
     // If not admin, filter out inactive and (soft) deleted products
     if (!admin) {
@@ -85,7 +96,7 @@ export const search = async (
     const items = await ProductRepository.findAll(where, {
         sort: { createdAt: -1 },
         skip,
-        limit: pageSize,
+        limit: pageSize
     });
 
     return {
@@ -95,8 +106,8 @@ export const search = async (
             page,
             pageSize,
             totalItems,
-            totalPages: Math.ceil(totalItems / pageSize),
-        },
+            totalPages: Math.ceil(totalItems / pageSize)
+        }
     };
 };
 
@@ -110,11 +121,13 @@ export const search = async (
  */
 export const getById = async (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
-    if (!id)
-        return;
-    if (admin)
-        return ProductRepository.findById(id).lean();
-    return ProductRepository.findOne({ _id: id, active: true, deletedAt: undefined }).lean();
+    if (!id) return;
+    if (admin) return ProductRepository.findById(id).lean();
+    return ProductRepository.findOne({
+        _id: id,
+        active: true,
+        deletedAt: undefined
+    }).lean();
 };
 
 /**
@@ -137,12 +150,11 @@ export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
 export const update = async (
     id: string,
     data: Partial<Omit<Product, 'id'>>,
-    newImageUrl = '',
+    newImageUrl = ''
 ): Promise<IProductDocument> => {
     const product = await ProductRepository.findById(id);
 
-    if (!product)
-        throw new Error('404');
+    if (!product) throw new Error('404');
 
     // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
@@ -152,8 +164,7 @@ export const update = async (
 
     // If a new image was uploaded, update the URL on the document
     const oldImageUrl = product.imageUrl;
-    if (newImageUrl && oldImageUrl !== newImageUrl)
-        product.imageUrl = newImageUrl;
+    if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
     // Persist the updated document
     const updatedProduct = await ProductRepository.save(product);
@@ -176,13 +187,12 @@ export const update = async (
  */
 export const remove = async (
     id: string,
-    hardDelete = false,
+    hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
     const product = await ProductRepository.findById(id);
 
     // not found, something happened
-    if (!product)
-        return generateReject(404, '404', [t('ecommerce.product-not-found')]);
+    if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
 
     // HARD delete
     if (hardDelete)
@@ -195,9 +205,14 @@ export const remove = async (
     product.deletedAt = product.deletedAt ? undefined : new Date();
 
     // SOFT delete (or restore)
-    return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
-        .then(async () => generateSuccess(await ProductRepository.save(product), 200, t('ecommerce.product-soft-deleted')));
+    return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString()).then(
+        async () =>
+            generateSuccess(
+                await ProductRepository.save(product),
+                200,
+                t('ecommerce.product-soft-deleted')
+            )
+    );
 };
-
 
 export default { validateData, search, getById, create, update, remove };

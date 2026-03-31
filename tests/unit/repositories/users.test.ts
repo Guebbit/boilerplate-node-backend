@@ -9,7 +9,6 @@ afterAll(disconnect);
 beforeEach(clearAll);
 
 describe('UserRepository', () => {
-
     describe('create', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
             const user = await UserRepository.create(makeUser() as Partial<IUserDocument>);
@@ -51,14 +50,18 @@ describe('UserRepository', () => {
         it('returns a user that matches the query filter', async () => {
             await createUser({ email: 'unique@example.com' });
 
-            const found = await UserRepository.findOne({ email: 'unique@example.com' });
+            const found = await UserRepository.findOne({
+                email: 'unique@example.com'
+            });
 
             expect(found).not.toBeNull();
             expect(found!.email).toBe('unique@example.com');
         });
 
         it('returns null when no document matches', async () => {
-            const found = await UserRepository.findOne({ email: 'nobody@example.com' });
+            const found = await UserRepository.findOne({
+                email: 'nobody@example.com'
+            });
 
             expect(found).toBeNull();
         });
@@ -96,8 +99,16 @@ describe('UserRepository', () => {
         });
 
         it('filters documents by the supplied query', async () => {
-            await createUser({ email: 'admin@example.com', username: 'admin', admin: true });
-            await createUser({ email: 'user@example.com', username: 'user', admin: false });
+            await createUser({
+                email: 'admin@example.com',
+                username: 'admin',
+                admin: true
+            });
+            await createUser({
+                email: 'user@example.com',
+                username: 'user',
+                admin: false
+            });
 
             const admins = await UserRepository.findAll({ admin: true });
 
@@ -124,8 +135,16 @@ describe('UserRepository', () => {
         });
 
         it('counts only the documents that match the filter', async () => {
-            await createUser({ email: 'admin@example.com', username: 'admin', admin: true });
-            await createUser({ email: 'user@example.com', username: 'user', admin: false });
+            await createUser({
+                email: 'admin@example.com',
+                username: 'admin',
+                admin: true
+            });
+            await createUser({
+                email: 'user@example.com',
+                username: 'user',
+                admin: false
+            });
 
             expect(await UserRepository.count({ admin: true })).toBe(1);
             expect(await UserRepository.count({ admin: false })).toBe(1);
@@ -176,13 +195,23 @@ describe('UserRepository', () => {
         });
 
         it('does not modify documents that do not match the filter', async () => {
-            await createUser({ email: 'admin@example.com', username: 'admin', admin: true });
-            await createUser({ email: 'user@example.com', username: 'user', admin: false });
+            await createUser({
+                email: 'admin@example.com',
+                username: 'admin',
+                admin: true
+            });
+            await createUser({
+                email: 'user@example.com',
+                username: 'user',
+                admin: false
+            });
 
             // Only target the non-admin
             await UserRepository.updateMany({ admin: false }, { $set: { username: 'changed' } });
 
-            const admin = await UserRepository.findOne({ email: 'admin@example.com' });
+            const admin = await UserRepository.findOne({
+                email: 'admin@example.com'
+            });
             expect(admin!.username).toBe('admin'); // unchanged
         });
     });
@@ -194,23 +223,25 @@ describe('UserRepository', () => {
                     {
                         type: ETokenType.REFRESH,
                         token: 'refresh-1',
-                        expiration: new Date(Date.now() + 60_000),
+                        expiration: new Date(Date.now() + 60_000)
                     },
                     {
                         type: ETokenType.REFRESH,
                         token: 'refresh-2',
-                        expiration: new Date(Date.now() + 120_000),
+                        expiration: new Date(Date.now() + 120_000)
                     },
                     {
                         type: ETokenType.PASSWORD_RESET,
                         token: 'password-1',
-                        expiration: new Date(Date.now() + 120_000),
-                    },
-                ],
+                        expiration: new Date(Date.now() + 120_000)
+                    }
+                ]
             });
 
             await user.tokenRemoveAll(ETokenType.REFRESH);
-            const refreshed = await UserRepository.findById((user._id as Types.ObjectId).toString());
+            const refreshed = await UserRepository.findById(
+                (user._id as Types.ObjectId).toString()
+            );
 
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
@@ -226,18 +257,20 @@ describe('UserRepository', () => {
                     {
                         type: ETokenType.REFRESH,
                         token: 'expired-token',
-                        expiration: expired,
+                        expiration: expired
                     },
                     {
                         type: ETokenType.REFRESH,
                         token: 'valid-token',
-                        expiration: futureExpiration,
-                    },
-                ],
+                        expiration: futureExpiration
+                    }
+                ]
             });
 
             const result = await Users.tokenRemoveExpired();
-            const refreshed = await UserRepository.findById((user._id as Types.ObjectId).toString());
+            const refreshed = await UserRepository.findById(
+                (user._id as Types.ObjectId).toString()
+            );
 
             expect(result.success).toBe(true);
             expect(result.status).toBe(200);

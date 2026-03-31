@@ -7,4 +7,6 @@ import { Types } from 'mongoose';
 export const userScope = (request: Request): Record<string, unknown> | undefined =>
     request.user?.admin
         ? undefined
-        : { userId: new Types.ObjectId((request.user?._id as Types.ObjectId).toString()) };
+        : {
+              userId: new Types.ObjectId((request.user?._id as Types.ObjectId).toString())
+          };

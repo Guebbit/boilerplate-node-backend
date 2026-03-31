@@ -11,7 +11,7 @@ import type { IUserDocument } from '@models/users';
 // Mock the filesystem helper so tests never touch the real disk.
 jest.mock('@utils/helpers-filesystem', () => ({
     deleteFile: jest.fn().mockResolvedValue(true),
-    fileToBase64: jest.fn().mockResolvedValue(''),
+    fileToBase64: jest.fn().mockResolvedValue('')
 }));
 
 beforeAll(connect);
@@ -21,11 +21,11 @@ beforeEach(clearAll);
 describe('ProductService.validateData', () => {
     it('returns an empty array for valid product data', () => {
         const errors = ProductService.validateData({
-            title: 'A Valid Product',   // >= 5 chars
+            title: 'A Valid Product', // >= 5 chars
             price: 19.99,
             imageUrl: 'https://example.com/product.jpg',
             active: true,
-            description: 'Some description',
+            description: 'Some description'
         });
 
         expect(errors).toHaveLength(0);
@@ -33,11 +33,11 @@ describe('ProductService.validateData', () => {
 
     it('returns errors when the title is too short', () => {
         const errors = ProductService.validateData({
-            title: 'Abc',   // < 5 chars
+            title: 'Abc', // < 5 chars
             price: 9.99,
             imageUrl: 'https://example.com/img.jpg',
             active: true,
-            description: '',
+            description: ''
         });
 
         expect(errors.length).toBeGreaterThan(0);
@@ -50,7 +50,7 @@ describe('ProductService.validateData', () => {
             price: 9.99,
             imageUrl: 'https://example.com/img.jpg',
             active: true,
-            description: '',
+            description: ''
         });
 
         expect(errors.length).toBeGreaterThan(0);
@@ -78,8 +78,16 @@ describe('ProductService.search', () => {
     });
 
     it('filters by text (searches title and description)', async () => {
-        await createProduct({ title: 'Fancy Widget', description: 'A shiny product', active: true });
-        await createProduct({ title: 'Plain Box', description: 'Nothing special', active: true });
+        await createProduct({
+            title: 'Fancy Widget',
+            description: 'A shiny product',
+            active: true
+        });
+        await createProduct({
+            title: 'Plain Box',
+            description: 'Nothing special',
+            active: true
+        });
 
         const result = await ProductService.search({ text: 'Fancy' }, false);
 
@@ -130,7 +138,11 @@ describe('ProductService.search', () => {
 
     it('excludes soft-deleted products for non-admin callers', async () => {
         await createProduct({ title: 'Visible', active: true });
-        await createProduct({ title: 'Deleted', active: true, deletedAt: new Date() });
+        await createProduct({
+            title: 'Deleted',
+            active: true,
+            deletedAt: new Date()
+        });
 
         const result = await ProductService.search({}, false);
 
@@ -142,7 +154,7 @@ describe('ProductService.search', () => {
 describe('ProductService.getById', () => {
     it('returns a lean product object for an active product (non-admin)', async () => {
         const product = await createProduct({ active: true });
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         const found = await ProductService.getById(id, false);
 
@@ -154,7 +166,7 @@ describe('ProductService.getById', () => {
 
     it('returns null for an inactive product when called as non-admin', async () => {
         const product = await createProduct({ active: false });
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         const found = await ProductService.getById(id, false);
 
@@ -163,7 +175,7 @@ describe('ProductService.getById', () => {
 
     it('returns an inactive product when called as admin', async () => {
         const product = await createProduct({ active: false });
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         const found = await ProductService.getById(id, true);
 
@@ -183,7 +195,7 @@ describe('ProductService.create', () => {
             price: 29.99,
             imageUrl: 'https://example.com/img.jpg',
             active: false,
-            description: 'A brand-new product.',
+            description: 'A brand-new product.'
         });
 
         expect(product._id).toBeDefined();
@@ -195,12 +207,12 @@ describe('ProductService.create', () => {
 describe('ProductService.update', () => {
     it('updates title, price and description of an existing product', async () => {
         const product = await createProduct();
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         const updated = await ProductService.update(id, {
             title: 'Updated Title',
             price: 49.99,
-            description: 'New description',
+            description: 'New description'
         });
 
         expect(updated.title).toBe('Updated Title');
@@ -210,7 +222,7 @@ describe('ProductService.update', () => {
 
     it('changes the active flag', async () => {
         const product = await createProduct({ active: true });
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         const updated = await ProductService.update(id, { active: false });
 
@@ -218,10 +230,12 @@ describe('ProductService.update', () => {
     });
 
     it('updates the imageUrl and triggers deleteFile for the old image', async () => {
-        const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>('@utils/helpers-filesystem');
+        const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
+            '@utils/helpers-filesystem'
+        );
 
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         await ProductService.update(id, {}, '/images/new.jpg');
 
@@ -231,7 +245,7 @@ describe('ProductService.update', () => {
 
     it('throws when the product does not exist', async () => {
         await expect(
-            ProductService.update('000000000000000000000000', { title: 'X' }),
+            ProductService.update('000000000000000000000000', { title: 'X' })
         ).rejects.toThrow();
     });
 });
@@ -239,7 +253,7 @@ describe('ProductService.update', () => {
 describe('ProductService.remove', () => {
     it('soft-deletes a product by setting deletedAt', async () => {
         const product = await createProduct({ active: true });
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         const result = await ProductService.remove(id, false);
 
@@ -250,7 +264,7 @@ describe('ProductService.remove', () => {
 
     it('restores a soft-deleted product when called again (toggle)', async () => {
         const product = await createProduct({ deletedAt: new Date() });
-        const id      = (product._id as Types.ObjectId).toString();
+        const id = (product._id as Types.ObjectId).toString();
 
         await ProductService.remove(id, false);
 
@@ -259,11 +273,11 @@ describe('ProductService.remove', () => {
     });
 
     it('hard-deletes the product and removes it from all user carts', async () => {
-        const product  = await createProduct({ active: true });
+        const product = await createProduct({ active: true });
         const pid = (product._id as Types.ObjectId).toString();
 
         // A user adds the product to their cart
-        const user  = await createUser();
+        const user = await createUser();
         const userId = (user._id as Types.ObjectId).toString();
         // eslint-disable-next-line unicorn/no-await-expression-member
         const addResult = await (await import('@services/users')).cartItemSetById(user, pid, 1);
@@ -279,9 +293,7 @@ describe('ProductService.remove', () => {
         // User's cart must no longer contain the product
         const refreshedUser = await UserRepository.findById(userId);
         if (refreshedUser) {
-            expect(
-                refreshedUser.cart.items.some(i => i.product.toString() === pid),
-            ).toBe(false);
+            expect(refreshedUser.cart.items.some((i) => i.product.toString() === pid)).toBe(false);
         }
     });
 

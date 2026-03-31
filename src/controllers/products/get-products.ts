@@ -9,7 +9,10 @@ import type { SearchProductsRequest } from '@types';
  * Admin sees all products (including inactive/deleted); public sees only active ones.
  */
 const getProducts = async (request: Request, response: Response): Promise<void> => {
-    const { id, page, pageSize, text, minPrice, maxPrice } = request.query as Record<string, string | undefined>;
+    const { id, page, pageSize, text, minPrice, maxPrice } = request.query as Record<
+        string,
+        string | undefined
+    >;
     // Only admin can see non-active products
     const admin = request.user?.admin === true;
     const filters: SearchProductsRequest = {
@@ -18,7 +21,7 @@ const getProducts = async (request: Request, response: Response): Promise<void> 
         page: page ? Number(page) : undefined,
         pageSize: pageSize ? Number(pageSize) : undefined,
         minPrice: minPrice ? Number(minPrice) : undefined,
-        maxPrice: maxPrice ? Number(maxPrice) : undefined,
+        maxPrice: maxPrice ? Number(maxPrice) : undefined
     };
     const result = await ProductService.search(filters, admin);
     successResponse(response, result);

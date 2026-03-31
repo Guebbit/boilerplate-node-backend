@@ -5,12 +5,12 @@ import type {
     UpdateUserByIdRequest,
     CreateProductRequest,
     UpdateProductRequest,
-    UpdateProductByIdRequest,
+    UpdateProductByIdRequest
 } from '@api/api';
 export * from '@api/api';
 
 // Generic helper
-export type WithFileUpload<T, K extends string = "imageUpload"> = T & {
+export type WithFileUpload<T, K extends string = 'imageUpload'> = T & {
     [P in K]?: File | Buffer;
 };
 

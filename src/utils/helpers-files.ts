@@ -9,18 +9,16 @@ import type { Request } from 'express';
  */
 export function getFormFiles(request: Request): string[] | undefined {
     // Single file upload (multer.single())
-    if (request.file)
-        return [request.file.path];
+    if (request.file) return [request.file.path];
 
     // Multiple file upload (multer.array() or multer.fields())
     if (request.files) {
-        if (Array.isArray(request.files))
-            return request.files.map(file => file.path);
+        if (Array.isArray(request.files)) return request.files.map((file) => file.path);
 
         // multer.fields() returns an object keyed by field name
         const paths: string[] = [];
         for (const files of Object.values(request.files))
-            paths.push(...files.map(file => file.path));
+            paths.push(...files.map((file) => file.path));
         return paths.length > 0 ? paths : undefined;
     }
 
@@ -35,10 +33,10 @@ export function getFormFiles(request: Request): string[] | undefined {
  * @param request - Express request with optional multer file
  */
 export function resolveImageUrl(request: Request): {
-    imageUrlRaw: string | undefined,
-    imageUrl: string | undefined,
+    imageUrlRaw: string | undefined;
+    imageUrl: string | undefined;
 } {
     const imageUrlRaw = getFormFiles(request)?.[0];
-    const imageUrl = imageUrlRaw?.replace((process.env.NODE_PUBLIC_PATH ?? 'public'), '');
+    const imageUrl = imageUrlRaw?.replace(process.env.NODE_PUBLIC_PATH ?? 'public', '');
     return { imageUrlRaw, imageUrl };
 }

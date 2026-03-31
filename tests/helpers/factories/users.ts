@@ -36,8 +36,11 @@ import UserRepository from '@repositories/users';
 export const PLAIN_PASSWORD = 'Password1!';
 
 /** The minimal shape accepted by UserRepository.create(). */
-type CreateUserInput = Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'cart' | 'tokens'>
-    & Partial<Pick<IUser, 'imageUrl' | 'deletedAt'>>;
+type CreateUserInput = Pick<
+    IUser,
+    'email' | 'username' | 'password' | 'admin' | 'cart' | 'tokens'
+> &
+    Partial<Pick<IUser, 'imageUrl' | 'deletedAt'>>;
 
 /**
  * Build a valid user payload.
@@ -50,11 +53,11 @@ type CreateUserInput = Pick<IUser, 'email' | 'username' | 'password' | 'admin' |
 export const makeUser = (overrides: Partial<CreateUserInput> = {}): CreateUserInput => ({
     email: 'user@example.com',
     username: 'testuser',
-    password: PLAIN_PASSWORD,  // hashed automatically by the pre-save hook
+    password: PLAIN_PASSWORD, // hashed automatically by the pre-save hook
     admin: false,
     cart: { items: [] as ICartItem[], updatedAt: new Date() },
     tokens: [],
-    ...overrides,
+    ...overrides
 });
 
 /**
@@ -75,5 +78,5 @@ export const createAdminUser = (overrides: Partial<CreateUserInput> = {}): Promi
         admin: true,
         email: 'admin@example.com',
         username: 'adminuser',
-        ...overrides,
+        ...overrides
     });

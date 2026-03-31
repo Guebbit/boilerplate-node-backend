@@ -10,14 +10,17 @@ import { userScope } from './helpers';
  * Non-admin users see only their own orders.
  */
 const getOrders = async (request: Request, response: Response): Promise<void> => {
-    const { id, page, pageSize, userId, productId, email } = request.query as Record<string, string | undefined>;
+    const { id, page, pageSize, userId, productId, email } = request.query as Record<
+        string,
+        string | undefined
+    >;
     const filters: SearchOrdersRequest = {
         id,
         page: page ? Number(page) : undefined,
         pageSize: pageSize ? Number(pageSize) : undefined,
         userId,
         productId,
-        email,
+        email
     };
     /**
      * User role filters:

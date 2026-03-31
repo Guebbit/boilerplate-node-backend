@@ -18,7 +18,7 @@ type OrderWithTotals = IOrderDocument & {
 
 describe('OrderService.getAll', () => {
     it('returns all orders when no extra pipeline stages are provided', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 10 });
 
         await createOrder(user, [toOrderProduct(product, 1)]);
@@ -33,37 +33,37 @@ describe('OrderService.getAll', () => {
         const user = await createUser();
         const [p1, p2] = await Promise.all([
             createProduct({ price: 5 }),
-            createProduct({ price: 10 }),
+            createProduct({ price: 10 })
         ]);
 
         // One order with two product lines
         await createOrder(user, [toOrderProduct(p1, 1), toOrderProduct(p2, 3)]);
 
-        const [order] = await OrderService.getAll() as OrderWithTotals[];
+        const [order] = (await OrderService.getAll()) as OrderWithTotals[];
 
         // 2 distinct product lines → totalItems = 2
         expect(order.totalItems).toBe(2);
     });
 
     it('adds the totalQuantity computed field (sum of all quantities)', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 10 });
 
         // 4 units of the same product
         await createOrder(user, [toOrderProduct(product, 4)]);
 
-        const [order] = await OrderService.getAll() as OrderWithTotals[];
+        const [order] = (await OrderService.getAll()) as OrderWithTotals[];
 
         expect(order.totalQuantity).toBe(4);
     });
 
     it('adds the totalPrice computed field (sum of price × quantity)', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 15 }); // $15 each
 
         await createOrder(user, [toOrderProduct(product, 3)]); // 3 × 15 = $45
 
-        const [order] = await OrderService.getAll() as OrderWithTotals[];
+        const [order] = (await OrderService.getAll()) as OrderWithTotals[];
 
         expect(order.totalPrice).toBe(45);
     });
@@ -71,30 +71,28 @@ describe('OrderService.getAll', () => {
     it('computes totals correctly for a multi-product order', async () => {
         const user = await createUser();
         const [p1, p2] = await Promise.all([
-            createProduct({ price: 10 }),  // 2 × $10 = $20
-            createProduct({ price: 5 }),   // 4 × $5  = $20
+            createProduct({ price: 10 }), // 2 × $10 = $20
+            createProduct({ price: 5 }) // 4 × $5  = $20
         ]);
 
         await createOrder(user, [toOrderProduct(p1, 2), toOrderProduct(p2, 4)]);
 
-        const [order] = await OrderService.getAll() as OrderWithTotals[];
+        const [order] = (await OrderService.getAll()) as OrderWithTotals[];
 
-        expect(order.totalItems).toBe(2);       // 2 product lines
-        expect(order.totalQuantity).toBe(6);    // 2 + 4
-        expect(order.totalPrice).toBe(40);      // 20 + 20
+        expect(order.totalItems).toBe(2); // 2 product lines
+        expect(order.totalQuantity).toBe(6); // 2 + 4
+        expect(order.totalPrice).toBe(40); // 20 + 20
     });
 
     it('accepts additional pipeline stages (e.g. $match)', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 10 });
 
         const target = await createOrder(user, [toOrderProduct(product, 1)]);
         await createOrder(user, [toOrderProduct(product, 2)]);
 
         // Only fetch the specific order
-        const orders = await OrderService.getAll([
-            { $match: { _id: target._id } },
-        ]);
+        const orders = await OrderService.getAll([{ $match: { _id: target._id } }]);
 
         expect(orders).toHaveLength(1);
     });
@@ -107,7 +105,7 @@ describe('OrderService.getAll', () => {
 
 describe('OrderService.search', () => {
     it('returns all orders with default pagination', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 10 });
 
         await createOrder(user, [toOrderProduct(product, 1)]);
@@ -128,15 +126,21 @@ describe('OrderService.search', () => {
         await createOrder(user2, [toOrderProduct(product, 2)]);
 
         const result = await OrderService.search({
-            userId: (user1._id as Types.ObjectId).toString(),
+            userId: (user1._id as Types.ObjectId).toString()
         });
 
         expect(result.items).toHaveLength(1);
     });
 
     it('filters by email (exact match)', async () => {
-        const user1 = await createUser({ email: 'alice@example.com', username: 'alice' });
-        const user2 = await createUser({ email: 'bob@example.com', username: 'bob' });
+        const user1 = await createUser({
+            email: 'alice@example.com',
+            username: 'alice'
+        });
+        const user2 = await createUser({
+            email: 'bob@example.com',
+            username: 'bob'
+        });
         const product = await createProduct({ price: 10 });
 
         await createOrder(user1, [toOrderProduct(product, 1)]);
@@ -148,24 +152,24 @@ describe('OrderService.search', () => {
     });
 
     it('filters by order id', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 10 });
 
         const target = await createOrder(user, [toOrderProduct(product, 1)]);
         await createOrder(user, [toOrderProduct(product, 2)]);
 
         const result = await OrderService.search({
-            id: (target._id as Types.ObjectId).toString(),
+            id: (target._id as Types.ObjectId).toString()
         });
 
         expect(result.items).toHaveLength(1);
     });
 
     it('filters by productId (embedded product)', async () => {
-        const user     = await createUser();
+        const user = await createUser();
         const [p1, p2] = await Promise.all([
             createProduct({ price: 10 }),
-            createProduct({ price: 20 }),
+            createProduct({ price: 20 })
         ]);
 
         // order1 contains p1; order2 contains p2
@@ -173,14 +177,14 @@ describe('OrderService.search', () => {
         await createOrder(user, [toOrderProduct(p2, 1)]);
 
         const result = await OrderService.search({
-            productId: (p1._id as Types.ObjectId).toString(),
+            productId: (p1._id as Types.ObjectId).toString()
         });
 
         expect(result.items).toHaveLength(1);
     });
 
     it('paginates results correctly', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 10 });
 
         for (let i = 0; i < 5; i++) {
@@ -197,7 +201,7 @@ describe('OrderService.search', () => {
     });
 
     it('includes computed fields (totalItems, totalQuantity, totalPrice)', async () => {
-        const user    = await createUser();
+        const user = await createUser();
         const product = await createProduct({ price: 25 });
 
         await createOrder(user, [toOrderProduct(product, 3)]); // 3 × $25 = $75
@@ -219,10 +223,7 @@ describe('OrderService.search', () => {
         await createOrder(user2, [toOrderProduct(product, 2)]);
 
         // The scope parameter is a raw Mongoose filter merged into the $match stage
-        const result = await OrderService.search(
-            {},
-            { userId: user1._id as Types.ObjectId },
-        );
+        const result = await OrderService.search({}, { userId: user1._id as Types.ObjectId });
 
         expect(result.items).toHaveLength(1);
     });

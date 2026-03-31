@@ -1,7 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { productSchema } from "./products";
-import type { Order, Product } from "../../api/api"
+import { productSchema } from './products';
+import type { Order, Product } from '../../api/api';
 
 /**
  * Valid order status values (mirrors the OpenAPI enum).
@@ -12,7 +12,7 @@ export enum EOrderStatus {
     PROCESSING = 'processing',
     SHIPPED = 'shipped',
     DELIVERED = 'delivered',
-    CANCELLED = 'cancelled',
+    CANCELLED = 'cancelled'
 }
 
 /**
@@ -31,7 +31,8 @@ export interface IOrderProduct {
  * and 'items' (renamed to 'products' in the Mongoose schema) so that the Mongoose
  * schema definition and the TypeScript types stay in sync.
  */
-export interface IOrderDocument extends Omit<Order, 'id' | 'userId' | 'items' | 'status' | 'total'>, Document {
+export interface IOrderDocument
+    extends Omit<Order, 'id' | 'userId' | 'items' | 'status' | 'total'>, Document {
     userId: Types.ObjectId;
     products: IOrderProduct[];
     status: EOrderStatus;
@@ -49,33 +50,38 @@ export type IOrderModel = Model<IOrderDocument, unknown, unknown>;
 /**
  *
  */
-export const orderSchema = new Schema<IOrderDocument>({
-    userId: {
-        type: Schema.Types.ObjectId,
-        required: true,
-    },
-    email: {
-        type: String,
-        required: true
-    },
-    products: [{
-        product: productSchema,
-        quantity: {
-            type: Number,
+export const orderSchema = new Schema<IOrderDocument>(
+    {
+        userId: {
+            type: Schema.Types.ObjectId,
             required: true
+        },
+        email: {
+            type: String,
+            required: true
+        },
+        products: [
+            {
+                product: productSchema,
+                quantity: {
+                    type: Number,
+                    required: true
+                }
+            }
+        ],
+        status: {
+            type: String,
+            enum: Object.values(EOrderStatus),
+            default: EOrderStatus.PENDING
+        },
+        notes: {
+            type: String
         }
-    }],
-    status: {
-        type: String,
-        enum: Object.values(EOrderStatus),
-        default: EOrderStatus.PENDING,
     },
-    notes: {
-        type: String,
-    },
-}, {
-    // Automatically manages createdAt and updatedAt timestamps
-    timestamps: true
-});
+    {
+        // Automatically manages createdAt and updatedAt timestamps
+        timestamps: true
+    }
+);
 
 export default model<IOrderDocument, IOrderModel>('Order', orderSchema);

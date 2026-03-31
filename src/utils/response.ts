@@ -1,4 +1,4 @@
-import {Response} from 'express';
+import { Response } from 'express';
 
 export interface IResponseNeutral {
     success: boolean;
@@ -6,13 +6,13 @@ export interface IResponseNeutral {
     message: string;
 }
 
-export interface IResponseSuccess<T> extends IResponseNeutral{
+export interface IResponseSuccess<T> extends IResponseNeutral {
     // message: "ok"
     data?: T;
     errors: never;
 }
 
-export interface IResponseReject extends IResponseNeutral{
+export interface IResponseReject extends IResponseNeutral {
     // message: Technical error name or code
     data: never;
     // UI friendly error message
@@ -25,16 +25,13 @@ export interface IResponseReject extends IResponseNeutral{
  * @param status
  * @param message
  */
-export const generateSuccess = <T>(
-    data: T,
-    status = 200,
-    message = '',
-) => ({
-    success: true,
-    status,
-    message,
-    data,
-} as IResponseSuccess<T>)
+export const generateSuccess = <T>(data: T, status = 200, message = '') =>
+    ({
+        success: true,
+        status,
+        message,
+        data
+    }) as IResponseSuccess<T>;
 
 /**
  * Success Response wrapped and ready to be sent
@@ -43,13 +40,10 @@ export const generateSuccess = <T>(
  * @param status
  * @param message
  */
-export const successResponse = <T>(
-    response: Response,
-    data: T,
-    status = 200,
-    message = '',
-) =>
-    response.status(status).json(generateSuccess(data, status, message)) as Response<IResponseSuccess<T>>
+export const successResponse = <T>(response: Response, data: T, status = 200, message = '') =>
+    response.status(status).json(generateSuccess(data, status, message)) as Response<
+        IResponseSuccess<T>
+    >;
 
 /**
  *
@@ -57,16 +51,13 @@ export const successResponse = <T>(
  * @param message
  * @param errors
  */
-export const generateReject = (
-    status = 400,
-    message = '',
-    errors: string[] = [],
-) => ({
-    success: false,
-    status,
-    message,
-    errors,
-} as IResponseReject)
+export const generateReject = (status = 400, message = '', errors: string[] = []) =>
+    ({
+        success: false,
+        status,
+        message,
+        errors
+    }) as IResponseReject;
 
 /**
  *
@@ -79,6 +70,8 @@ export const rejectResponse = (
     response: Response,
     status = 400,
     message = '',
-    errors: string[] = [],
+    errors: string[] = []
 ) =>
-    response.status(status).json(generateReject(status, message, errors)) as Response<IResponseReject>
+    response
+        .status(status)
+        .json(generateReject(status, message, errors)) as Response<IResponseReject>;

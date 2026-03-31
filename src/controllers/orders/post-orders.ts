@@ -15,7 +15,9 @@ const postOrders = async (request: Request, response: Response): Promise<void> =
      * Data validation
      */
     if (!body.userId || !body.email || !body.items?.length) {
-        rejectResponse(response, 422, 'createOrder - invalid data', [t('generic.error-missing-data')]);
+        rejectResponse(response, 422, 'createOrder - invalid data', [
+            t('generic.error-missing-data')
+        ]);
         return;
     }
 

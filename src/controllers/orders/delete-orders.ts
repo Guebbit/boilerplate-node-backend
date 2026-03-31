@@ -11,7 +11,9 @@ import type { DeleteOrderRequest } from '@types';
 const deleteOrders = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as DeleteOrderRequest;
     if (!body.id) {
-        rejectResponse(response, 422, 'deleteOrder - missing id', [t('generic.error-missing-data')]);
+        rejectResponse(response, 422, 'deleteOrder - missing id', [
+            t('generic.error-missing-data')
+        ]);
         return;
     }
     const result = await OrderService.remove(body.id);

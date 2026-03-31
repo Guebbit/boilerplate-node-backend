@@ -13,16 +13,14 @@ import type { QueryFilter } from 'mongoose';
  *
  * @param id
  */
-export const findById = (id: string) =>
-    productModel.findById(id);
+export const findById = (id: string) => productModel.findById(id);
 
 /**
  * Find a single product matching the given query
  *
  * @param where
  */
-export const findOne = (where: QueryFilter<IProductDocument>) =>
-    productModel.findOne(where);
+export const findOne = (where: QueryFilter<IProductDocument>) => productModel.findOne(where);
 
 /**
  * Find all products matching the given query with optional pagination support.
@@ -36,12 +34,12 @@ export const findAll = (
     {
         sort = { createdAt: -1 as const },
         skip = 0,
-        limit = 10,
+        limit = 10
     }: {
         sort?: Record<string, 1 | -1>;
         skip?: number;
         limit?: number;
-    } = {},
+    } = {}
 ) =>
     productModel
         .find({ ...where })
@@ -72,8 +70,7 @@ export const create = (data: Partial<IProductDocument>): Promise<IProductDocumen
  *
  * @param product
  */
-export const save = (product: IProductDocument): Promise<IProductDocument> =>
-    product.save();
+export const save = (product: IProductDocument): Promise<IProductDocument> => product.save();
 
 /**
  * Hard-delete a product document from the database
@@ -84,6 +81,5 @@ export const deleteOne = (product: IProductDocument): Promise<void> =>
     product.deleteOne().then(() => {
         // explicit void return to satisfy TypeScript's Promise<void> type
     });
-
 
 export default { findById, findOne, findAll, count, create, save, deleteOne };

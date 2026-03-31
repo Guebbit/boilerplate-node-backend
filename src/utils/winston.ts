@@ -1,4 +1,4 @@
-import winston from "winston";
+import winston from 'winston';
 
 export default winston.createLogger({
     format: winston.format.json(),
@@ -15,13 +15,13 @@ export default winston.createLogger({
         // only errors will be put in the error.log
         new winston.transports.File({
             level: 'error',
-            filename: 'error.log',
+            filename: 'error.log'
         }),
         // // all logs in the info.log
         // new winston.transports.File({
         //     filename: 'info.log'
         // }),
         // regular console.log
-        new winston.transports.Console(),
-    ],
+        new winston.transports.Console()
+    ]
 });

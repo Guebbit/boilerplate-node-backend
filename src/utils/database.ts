@@ -1,10 +1,10 @@
-import mongoose from "mongoose";
-import logger from "./winston";
+import mongoose from 'mongoose';
+import logger from './winston';
 
 const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
 
-const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Connect to MongoDB with exponential-backoff retry.
@@ -14,13 +14,15 @@ const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(re
 export const start = async (): Promise<void> => {
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-            await mongoose.connect(process.env.NODE_DB_URI ?? "");
+            await mongoose.connect(process.env.NODE_DB_URI ?? '');
             return;
         } catch {
             if (attempt >= MAX_RETRIES - 1)
                 throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`);
             const delayMs = Math.min(BASE_DELAY_MS * 2 ** attempt, 30_000);
-            logger.warn(`DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+            logger.warn(
+                `DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
+            );
             await wait(delayMs);
         }
     }

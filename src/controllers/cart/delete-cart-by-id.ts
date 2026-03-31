@@ -14,7 +14,7 @@ const deleteCartById = async (request: Request, response: Response): Promise<voi
     const { productId } = request.params;
     const productIdString = String(productId);
 
-    const existing = user.cart.items.find(i => i.product.equals(productIdString));
+    const existing = user.cart.items.find((i) => i.product.equals(productIdString));
     if (!existing) {
         rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
         return;

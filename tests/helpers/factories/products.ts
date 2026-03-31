@@ -24,13 +24,15 @@ import ProductRepository from '@repositories/products';
  *
  * @param overrides - Fields to override the factory defaults.
  */
-export const makeProduct = (overrides: Partial<IProductDocument> = {}): Partial<IProductDocument> => ({
+export const makeProduct = (
+    overrides: Partial<IProductDocument> = {}
+): Partial<IProductDocument> => ({
     title: 'Test Product',
     price: 9.99,
     description: 'A description for the test product.',
     imageUrl: 'https://example.com/product.jpg',
     active: true,
-    ...overrides,
+    ...overrides
 });
 
 /**
@@ -38,5 +40,6 @@ export const makeProduct = (overrides: Partial<IProductDocument> = {}): Partial<
  *
  * @param overrides - Fields to override the factory defaults.
  */
-export const createProduct = (overrides: Partial<IProductDocument> = {}): Promise<IProductDocument> =>
-    ProductRepository.create(makeProduct(overrides));
+export const createProduct = (
+    overrides: Partial<IProductDocument> = {}
+): Promise<IProductDocument> => ProductRepository.create(makeProduct(overrides));

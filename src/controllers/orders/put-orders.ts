@@ -11,10 +11,15 @@ import type { UpdateOrderRequest } from '@types';
 const putOrders = async (request: Request, response: Response): Promise<void> => {
     const body = request.body as UpdateOrderRequest;
     if (!body.id) {
-        rejectResponse(response, 422, 'updateOrder - missing id', [t('generic.error-missing-data')]);
+        rejectResponse(response, 422, 'updateOrder - missing id', [
+            t('generic.error-missing-data')
+        ]);
         return;
     }
-    const result = await OrderService.update(body.id, { ...body, status: body.status as string | undefined });
+    const result = await OrderService.update(body.id, {
+        ...body,
+        status: body.status as string | undefined
+    });
     if (!result.success) {
         rejectResponse(response, result.status, result.message, result.errors);
         return;

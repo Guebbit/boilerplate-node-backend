@@ -1,4 +1,4 @@
-import type { Request, Response, } from 'express';
+import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import ProductService from '@services/products';
@@ -11,13 +11,18 @@ import { buildCartResponse } from './helpers';
  * Add a product (with its quantity) to the cart.
  * Checks product availability, then sets (or replaces) the quantity in the cart.
  */
-const postCart = async (request: Request<ParamsDictionary, unknown, UpsertCartItemRequest>, response: Response): Promise<void> => {
+const postCart = async (
+    request: Request<ParamsDictionary, unknown, UpsertCartItemRequest>,
+    response: Response
+): Promise<void> => {
     // Authentication check is done before entering the route
     const user = request.user!;
     const { productId, quantity } = request.body;
 
     if (!productId || !quantity || quantity < 1) {
-        rejectResponse(response, 422, 'upsertCartItem - invalid data', [t('generic.error-invalid-data')]);
+        rejectResponse(response, 422, 'upsertCartItem - invalid data', [
+            t('generic.error-invalid-data')
+        ]);
         return;
     }
 

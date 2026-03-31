@@ -14,7 +14,9 @@ const deleteCart = async (request: Request, response: Response): Promise<void> =
     const { productId } = (request.body ?? {}) as { productId?: string };
 
     // Remove specific item or entire cart
-    await (productId ? UserService.cartItemRemoveById(user, productId) : UserService.cartRemove(user));
+    await (productId
+        ? UserService.cartItemRemoveById(user, productId)
+        : UserService.cartRemove(user));
 
     await user.populate('cart.items.product');
     const cart = await buildCartResponse(user);
