@@ -162,7 +162,7 @@ export const update = async (
 
     // If a new image was uploaded, update the URL on the document
     const oldImageUrl = product.imageUrl;
-    const newImageUrl = data.imageUrl;
+    const newImageUrl = data.imageUrl ?? '';
     if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
     // Persist the updated document
