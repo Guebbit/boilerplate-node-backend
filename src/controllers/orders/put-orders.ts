@@ -8,17 +8,16 @@ import type { UpdateOrderRequest } from '@types';
  * PUT /orders
  * Update an order by id in the request body (admin).
  */
-const putOrders = (request: Request, response: Response): Promise<void> => {
-    const body = request.body as UpdateOrderRequest;
-    if (!body.id) {
+const putOrders = (request: Request<unknown, unknown, UpdateOrderRequest>, response: Response): Promise<void> => {
+    if (!request.body.id) {
         rejectResponse(response, 422, 'updateOrder - missing id', [
             t('generic.error-missing-data')
         ]);
         return Promise.resolve();
     }
-    return OrderService.update(body.id, {
-        ...body,
-        status: body.status as string | undefined
+    return OrderService.update(request.body.id, {
+        ...request.body,
+        status: request.body.status as string | undefined
     }).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);

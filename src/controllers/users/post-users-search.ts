@@ -7,11 +7,9 @@ import type { SearchUsersRequest } from '@types';
  * POST /users/search
  * Search users via JSON body (admin).
  */
-const postUsersSearch = (request: Request, response: Response): Promise<void> => {
-    const body = request.body as SearchUsersRequest;
-    return UserService.search(body).then((result) => {
+const postUsersSearch = (request: Request<unknown, unknown, SearchUsersRequest>, response: Response): Promise<void> =>
+    UserService.search(request.body).then((result) => {
         successResponse(response, result);
     });
-};
 
 export default postUsersSearch;

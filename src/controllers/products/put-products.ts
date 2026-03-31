@@ -14,8 +14,7 @@ const putProducts = (
     request: Request<unknown, unknown, UpdateProductRequest | UpdateProductRequestMultipart>,
     response: Response
 ): Promise<void> => {
-    const body = request.body as UpdateProductRequest;
-    if (!body.id) {
+    if (!request.body.id) {
         rejectResponse(response, 422, 'updateProduct - missing id', [
             t('generic.error-missing-data')
         ]);
@@ -27,7 +26,7 @@ const putProducts = (
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    return ProductService.update(body.id, {
+    return ProductService.update(request.body.id, {
         ...request.body,
         imageUrl: imageUrl ?? request.body.imageUrl
     })

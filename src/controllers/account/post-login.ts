@@ -41,20 +41,23 @@ const postLogin = (
          */
         const user = result.data!;
         const userId = (user._id as Types.ObjectId).toString();
-        return createRefreshToken(userId, remember).then((refreshToken) => {
-            // ...and add it to the client cookies
-            createRefreshCookie(response, refreshToken, remember);
-            createLoggedCookie(response, remember);
+        return runTokenCleanup()
+            .then(() => createRefreshToken(userId, remember))
+            .then((refreshToken) => {
+                // ...and add it to the client cookies
+                createRefreshCookie(response, refreshToken, remember);
+                createLoggedCookie(response, remember);
 
-            /**
-             * Send the newly created access token to the client through the response.
-             * It will be used for the following requests.
-             */
-            return createAccessToken(refreshToken).then((accessToken) => {
+                /**
+                 * Send the newly created access token to the client through the response.
+                 * It will be used for the following requests.
+                 */
+                return createAccessToken(refreshToken);
+            })
+            .then((accessToken) => {
                 successResponse(response, { token: accessToken }, 200, 'Authentication successful');
-            });
-        });
-    }).finally(runTokenCleanup);
+            })
+    });
 };
 
 export default postLogin;

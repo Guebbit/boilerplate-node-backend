@@ -8,13 +8,11 @@ import type { CreateOrderRequest } from '@types';
  * POST /orders
  * Create a new order from a payload (admin).
  */
-const postOrders = (request: Request, response: Response): Promise<void> => {
-    const body = request.body as CreateOrderRequest;
-
+const postOrders = (request: Request<unknown, unknown, CreateOrderRequest>, response: Response): Promise<void> => {
     /**
      * Data validation
      */
-    if (!body.userId || !body.email || !body.items?.length) {
+    if (!request.body.userId || !request.body.email || !request.body.items?.length) {
         rejectResponse(response, 422, 'createOrder - invalid data', [
             t('generic.error-missing-data')
         ]);
@@ -24,7 +22,7 @@ const postOrders = (request: Request, response: Response): Promise<void> => {
     /**
      * Create a new order
      */
-    return OrderService.create(body.userId, body.email, body.items).then((result) => {
+    return OrderService.create(request.body.userId, request.body.email, request.body.items).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;

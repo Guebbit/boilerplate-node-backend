@@ -8,15 +8,14 @@ import type { DeleteProductRequest } from '@types';
  * DELETE /products
  * Delete a product by id in the request body (admin).
  */
-const deleteProducts = (request: Request, response: Response): Promise<void> => {
-    const body = request.body as DeleteProductRequest;
-    if (!body.id) {
+const deleteProducts = (request: Request<unknown, unknown, DeleteProductRequest>, response: Response): Promise<void> => {
+    if (!request.body.id) {
         rejectResponse(response, 422, 'deleteProduct - missing id', [
             t('generic.error-missing-data')
         ]);
         return Promise.resolve();
     }
-    return ProductService.remove(body.id, body.hardDelete ?? false).then((result) => {
+    return ProductService.remove(request.body.id, request.body.hardDelete ?? false).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;

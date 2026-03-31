@@ -7,12 +7,9 @@ import type { SearchProductsRequest } from '@types';
  * POST /products/search
  * Search products via JSON body (public; admin sees all).
  */
-const postProductsSearch = (request: Request, response: Response): Promise<void> => {
-    const body = request.body as SearchProductsRequest;
-    const admin = request.user?.admin === true;
-    return ProductService.search(body, admin).then((result) => {
+const postProductsSearch = (request: Request<unknown, unknown, SearchProductsRequest>, response: Response): Promise<void> =>
+    ProductService.search(request.body, request.user?.admin === true).then((result) => {
         successResponse(response, result);
-    });
-};
+    })
 
 export default postProductsSearch;

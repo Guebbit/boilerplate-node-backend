@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import OrderService from '@services/orders';
 import { successResponse } from '@utils/response';
 import type { SearchOrdersRequest } from '@types';
-import { userScope } from './helpers';
+import { userScope } from '@utils/helpers-scopes';
 
 /**
  * GET /orders

@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import OrderService from '@services/orders';
 import { rejectResponse } from '@utils/response';
-import { userScope } from './helpers';
+import { userScope } from '@utils/helpers-scopes';
 
 /**
  * GET /orders/:id/invoice
