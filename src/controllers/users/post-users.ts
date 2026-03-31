@@ -10,15 +10,16 @@ import type { CreateUserRequest, CreateUserRequestMultipart } from '@types';
  * Create a new user (admin).
  */
 const postUsers = async (request: Request<unknown, unknown, CreateUserRequest | CreateUserRequestMultipart>, response: Response): Promise<void> => {
-    const body = request.body as CreateUserRequest;
-    const imageUrlBody = body.imageUrl;
-
     /**
      * Uploaded file takes priority over body imageUrl
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    const errors = UserService.validateData(body, { requirePassword: true });
+    const errors = UserService.validateData({
+        ...request.body,
+        imageUrl: imageUrl ?? request.body.imageUrl
+    }, { requirePassword: true });
+
     if (errors.length > 0) {
         if (imageUrlRaw) await deleteFile(imageUrlRaw);
         rejectResponse(response, 422, 'createUser - validation failed', errors);
@@ -26,8 +27,8 @@ const postUsers = async (request: Request<unknown, unknown, CreateUserRequest | 
     }
     try {
         const user = await UserService.adminCreate({
-            ...body,
-            ...(imageUrl !== undefined && { imageUrl })
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
         });
         successResponse(response, user.toObject(), 201);
     } catch (error) {

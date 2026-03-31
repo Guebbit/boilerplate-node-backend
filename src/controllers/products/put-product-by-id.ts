@@ -10,10 +10,7 @@ import type { UpdateProductByIdRequest, UpdateProductByIdRequestMultipart } from
  * PUT /products/:id
  * Update a product by path id (admin).
  */
-const putProductById = async (request: Request<unknown, unknown, UpdateProductByIdRequest | UpdateProductByIdRequestMultipart>, response: Response): Promise<void> => {
-    const body = request.body as UpdateProductByIdRequest;
-    const imageUrlBody = body.imageUrl;
-
+const putProductById = async (request: Request<{ id?: string }, unknown, UpdateProductByIdRequest | UpdateProductByIdRequestMultipart>, response: Response): Promise<void> => {
     /**
      * Uploaded file takes priority over body imageUrl
      */
@@ -25,7 +22,7 @@ const putProductById = async (request: Request<unknown, unknown, UpdateProductBy
          */
         const product = await ProductService.update(
             String(request.params.id),
-            body as never,
+            request.body,
             imageUrl
         );
         successResponse(response, product.toObject());

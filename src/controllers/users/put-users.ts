@@ -11,12 +11,10 @@ import type { UpdateUserRequest, UpdateUserRequestMultipart } from '@types';
  * Update a user by id in the request body (admin).
  */
 const putUsers = async (request: Request<unknown, unknown, UpdateUserRequest | UpdateUserRequestMultipart>, response: Response): Promise<void> => {
-    const body = request.body as UpdateUserRequest;
-    if (!body.id) {
+    if (!request.body.id) {
         rejectResponse(response, 422, 'updateUser - missing id', [t('generic.error-missing-data')]);
         return;
     }
-    const imageUrlBody = body.imageUrl;
 
     /**
      * Uploaded file takes priority over body imageUrl
@@ -24,9 +22,9 @@ const putUsers = async (request: Request<unknown, unknown, UpdateUserRequest | U
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     try {
-        const user = await UserService.adminUpdate(body.id, {
-            ...body,
-            ...(imageUrl !== undefined && { imageUrl })
+        const user = await UserService.adminUpdate(request.body.id, {
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
         });
         successResponse(response, user.toObject());
     } catch (error) {

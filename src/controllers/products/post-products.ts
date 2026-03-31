@@ -10,18 +10,15 @@ import type { CreateProductRequest, CreateProductRequestMultipart } from '@types
  * Create a new product (admin).
  */
 const postProducts = async (request: Request<unknown, unknown, CreateProductRequest | CreateProductRequestMultipart>, response: Response): Promise<void> => {
-    const body = request.body as CreateProductRequest;
-    const imageUrlBody = body.imageUrl;
-
     /**
      * Uploaded file takes priority over body imageUrl
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
     const errors = ProductService.validateData({
-        ...body,
-        ...(imageUrl !== undefined && { imageUrl })
-    } as never);
+        ...request.body,
+        imageUrl: imageUrl ?? request.body.imageUrl
+    });
     if (errors.length > 0) {
         if (imageUrlRaw) await deleteFile(imageUrlRaw);
         rejectResponse(response, 422, 'createProduct - validation failed', errors);
@@ -29,9 +26,9 @@ const postProducts = async (request: Request<unknown, unknown, CreateProductRequ
     }
     try {
         const product = await ProductService.create({
-            ...body,
-            ...(imageUrl !== undefined && { imageUrl })
-        } as never);
+        ...request.body,
+        imageUrl: imageUrl ?? request.body.imageUrl
+        });
         successResponse(response, product.toObject(), 201);
     } catch (error) {
         if (imageUrlRaw) await deleteFile(imageUrlRaw);

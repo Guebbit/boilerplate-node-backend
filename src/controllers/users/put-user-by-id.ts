@@ -10,10 +10,7 @@ import type { UpdateUserByIdRequest, UpdateUserByIdRequestMultipart } from '@typ
  * PUT /users/:id
  * Update a user by path id (admin).
  */
-const putUserById = async (request: Request<unknown, unknown, UpdateUserByIdRequest | UpdateUserByIdRequestMultipart>, response: Response): Promise<void> => {
-    const body = request.body as UpdateUserByIdRequest;
-    const imageUrlBody = body.imageUrl;
-
+const putUserById = async (request: Request<{ id?: string }, unknown, UpdateUserByIdRequest | UpdateUserByIdRequestMultipart>, response: Response): Promise<void> => {
     /**
      * Uploaded file takes priority over body imageUrl
      */
@@ -24,8 +21,8 @@ const putUserById = async (request: Request<unknown, unknown, UpdateUserByIdRequ
          * Update user with the new data
          */
         const user = await UserService.adminUpdate(String(request.params.id), {
-            ...body,
-            ...(imageUrl !== undefined && { imageUrl })
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
         });
         successResponse(response, user.toObject());
     } catch (error) {

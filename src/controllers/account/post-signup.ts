@@ -16,8 +16,7 @@ const postSignup = async (
     /**
      * Get POST data
      */
-    const { email, username, password, passwordConfirm } = request.body;
-    const imageUrlBody = request.body.imageUrl;
+    const { email = "", username = "", password = "", passwordConfirm = "" } = request.body;
 
     /**
      * Uploaded file takes priority over body imageUrl
@@ -28,11 +27,11 @@ const postSignup = async (
      * Register
      */
     const result = await UserService.signup(
-        email ?? '',
-        username ?? '',
-        password ?? '',
-        passwordConfirm ?? '',
-        imageUrl ?? imageUrlBody
+        email,
+        username,
+        password,
+        passwordConfirm,
+        imageUrl ?? request.body.imageUrl
     );
     if (!result.success) {
         if (imageUrlRaw) await deleteFile(imageUrlRaw);
