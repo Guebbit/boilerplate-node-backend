@@ -22,7 +22,7 @@ const getWebsocketTest = (request: Request, response: Response) => {
             );
             ws.send('We received your message!');
         },
-        // eslint-disable-next-line no-console
+         
         onClose: (ws, code, reason) =>
             console.log(
                 `SERVER: connection closed: ${code}`,
@@ -41,7 +41,7 @@ const getWebsocketTest = (request: Request, response: Response) => {
                 console.log('CLIENT: connected to server');
                 ws.send('Hello Server!');
             },
-            // eslint-disable-next-line no-console
+             
             onMessage: (ws, message) =>
                 console.log('CLIENT: Server message received', message.data),
             // eslint-disable-next-line no-console
