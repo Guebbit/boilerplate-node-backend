@@ -5,8 +5,8 @@ import getExecTime from '@utils/get-exec-time';
  * GET /heavy-load
  * Heavy load test endpoint.
  */
-const getHeavyLoad = async (request: Request, response: Response) => {
-    const { time } = await getExecTime(() => {
+const getHeavyLoad = (request: Request, response: Response) =>
+    getExecTime(() => {
         const totalLoad = 20_000;
         let progressLoad = 0;
         for (let i = 0; i < totalLoad; i++) {
@@ -16,12 +16,11 @@ const getHeavyLoad = async (request: Request, response: Response) => {
                 `Worker ${process.pid} at ${Math.round((progressLoad / totalLoad) * 100)}% of task`
             );
         }
+    }).then(({ time }) => {
+        response.status(200).json({
+            success: true,
+            message: `The CPU intensive task required ${time}ms \n`
+        });
     });
-
-    response.status(200).json({
-        success: true,
-        message: `The CPU intensive task required ${time}ms \n`
-    });
-};
 
 export default getHeavyLoad;

@@ -8,14 +8,18 @@ import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt
  * User logout from EVERY device.
  * Remove jwt cookie and ALL refresh tokens in the DB.
  */
-const postLogoutEverywhere = async (request: Request, response: Response) => {
+const postLogoutEverywhere = (request: Request, response: Response) => {
     // remove refresh token from DB
-    if (request.user) await request.user.tokenRemoveAll(ETokenType.REFRESH);
-    // and from local
-    destroyRefreshCookie(response);
-    destroyLoggedCookie(response);
+    return (request.user
+        ? request.user.tokenRemoveAll(ETokenType.REFRESH)
+        : Promise.resolve()
+    ).then(() => {
+        // and from local
+        destroyRefreshCookie(response);
+        destroyLoggedCookie(response);
 
-    successResponse(response, undefined, 200, 'Logged out from all devices');
+        successResponse(response, undefined, 200, 'Logged out from all devices');
+    });
 };
 
 export default postLogoutEverywhere;

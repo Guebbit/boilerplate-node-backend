@@ -18,7 +18,7 @@ export const getTokenBearer = (request: Request) =>
  * @param response
  * @param next
  */
-export const getAuth = async (request: Request, response: Response, next: NextFunction) => {
+export const getAuth = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
 
     if (!token) {
@@ -26,7 +26,7 @@ export const getAuth = async (request: Request, response: Response, next: NextFu
         return;
     }
 
-    await verifyAccessToken(token)
+    verifyAccessToken(token)
         .then(({ id }) => Users.findById(id))
         .then((user) => {
             if (user) request.user = user;

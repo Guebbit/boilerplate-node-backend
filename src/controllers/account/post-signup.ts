@@ -9,14 +9,14 @@ import type { SignupRequest, SignupRequestMultipart } from '@types';
  * POST /account/signup
  * Register a new user account.
  */
-const postSignup = async (
+const postSignup = (
     request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart>,
     response: Response
 ): Promise<void> => {
     /**
      * Get POST data
      */
-    const { email = "", username = "", password = "", passwordConfirm = "" } = request.body;
+    const { email = '', username = '', password = '', passwordConfirm = '' } = request.body;
 
     /**
      * Uploaded file takes priority over body imageUrl
@@ -26,21 +26,21 @@ const postSignup = async (
     /**
      * Register
      */
-    const result = await UserService.signup(
+    return UserService.signup(
         email,
         username,
         password,
         passwordConfirm,
         imageUrl ?? request.body.imageUrl
-    );
-    if (!result.success) {
-        if (imageUrlRaw) await deleteFile(imageUrlRaw);
-        rejectResponse(response, result.status, result.message, result.errors);
-        return;
-    }
+    ).then((result) => {
+        if (!result.success)
+            return (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve()).then(() =>
+                rejectResponse(response, result.status, result.message, result.errors)
+            );
 
-    // Registration successful
-    successResponse(response, result.data, 201);
+        // Registration successful
+        successResponse(response, result.data, 201);
+    });
 };
 
 export default postSignup;
