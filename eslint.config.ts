@@ -23,7 +23,6 @@ export default tseslint.config(
         '**/eslint.config.ts',
         'src/api',
         'api/**',
-        'src/controllersOld/**',
         '.prism/**',
     ]),
 
