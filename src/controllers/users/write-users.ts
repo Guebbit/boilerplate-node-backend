@@ -4,14 +4,16 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
-import type {
+import {
     CreateUserRequest,
     CreateUserRequestMultipart,
     UpdateUserRequest,
     UpdateUserRequestMultipart,
     UpdateUserByIdRequest,
-    UpdateUserByIdRequestMultipart
+    UpdateUserByIdRequestMultipart,
+    User
 } from '@types';
+import type { IUser } from '@models/users';
 
 /**
  * POST /users — create a new user (admin).
@@ -44,6 +46,21 @@ export const writeUsers = (
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
+    /**
+     * Validation errors prevent creation end editing
+     */
+    const errors = userService.validateData({
+        ...request.body,
+        imageUrl: imageUrl ?? request.body.imageUrl
+    });
+    if (errors.length > 0)
+        return deleteUpload().then(() => {
+            rejectResponse(response, 422, 'writeUser - validation failed', errors);
+        });
+
+    /**
+     * NO ID = new user
+     */
     if (!id) {
         // PUT without an id is invalid
         if (request.method === 'PUT') {
@@ -53,18 +70,12 @@ export const writeUsers = (
             return deleteUpload();
         }
 
-        // POST: create
-        const errors = userService.validateData({
-            ...request.body,
-            imageUrl: imageUrl ?? request.body.imageUrl
-        });
-        if (errors.length > 0)
-            return deleteUpload().then(() => {
-                rejectResponse(response, 422, 'createUser - validation failed', errors);
-            });
-
         return userService
-            .adminCreate({ ...request.body, imageUrl })
+            .adminCreate({
+                // After validation it will be compatible for sure
+                ...(request.body as IUser),
+                imageUrl
+            })
             .then((user) => {
                 successResponse(response, user.toObject(), 201);
             })
@@ -75,7 +86,9 @@ export const writeUsers = (
             );
     }
 
-    // PUT or POST with id: update
+    /**
+     * ID = edit user
+     */
     return userService
         .adminUpdate(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
         .then((user) => {

@@ -10,7 +10,7 @@ import { DeleteProductRequest } from '@api/model/deleteProductRequest';
  * Delete a product by path id (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-export const deleteProductItem = (
+export const deleteProducts = (
     request: Request<{ id?: string }, unknown, DeleteProductRequest>,
     response: Response
 ) => {

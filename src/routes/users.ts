@@ -4,7 +4,6 @@ import { upload } from '@utils/multer';
 import { getUsers } from '@controllers/users/get-users';
 import { writeUsers } from '@controllers/users/write-users';
 import { deleteUsers } from '@controllers/users/delete-users';
-import { postUsersSearch } from '@controllers/users/post-users-search';
 import { getUserItem } from '@controllers/users/get-user-item';
 
 export const router = Router();
@@ -13,7 +12,7 @@ export const router = Router();
 router.use(getAuth, isAuth, isAdmin);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', postUsersSearch);
+router.post('/search', getUsers);
 
 // GET /users
 router.get('/', getUsers);

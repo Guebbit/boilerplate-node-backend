@@ -44,6 +44,18 @@ export const writeProducts = (
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
+    /**
+     * Validation errors prevent creation end editing
+     */
+    const errors = productService.validateData({
+        ...request.body,
+        imageUrl,
+        active: !!request.body.active
+    });
+    if (errors.length > 0)
+        return deleteUpload().then(() => {
+            rejectResponse(response, 422, 'writeProduct - validation failed', errors);
+        });
 
     /**
      * NO ID = new product
@@ -57,22 +69,12 @@ export const writeProducts = (
             return deleteUpload();
         }
 
-        const errors = productService.validateData({
-            ...request.body,
-            imageUrl,
-            active: !!request.body.active,
-        });
-        if (errors.length > 0)
-            return deleteUpload().then(() => {
-                rejectResponse(response, 422, 'createProduct - validation failed', errors);
-            });
-
         return productService
             .create({
-            ...request.body,
-            imageUrl,
-            active: !!request.body.active,
-        })
+                ...request.body,
+                imageUrl,
+                active: !!request.body.active
+            })
             .then((product) => {
                 successResponse(response, product.toObject(), 201);
             })
@@ -83,25 +85,14 @@ export const writeProducts = (
             );
     }
 
-
     /**
      * ID = edit product
      */
-    const errors = productService.validateData({
-        ...request.body,
-        imageUrl,
-        active: !!request.body.active,
-    });
-    if (errors.length > 0)
-        return deleteUpload().then(() => {
-            rejectResponse(response, 422, 'updateProduct - validation failed', errors);
-        });
-
     return productService
         .update(id, {
             ...request.body,
             imageUrl,
-            active: !!request.body.active,
+            active: !!request.body.active
         })
         .then((product) => {
             successResponse(response, product.toObject());

@@ -4,8 +4,8 @@ import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
-import type { CastError } from "mongoose";
-import { databaseErrorInterpreter } from "@utils/helpers-errors";
+import type { CastError } from 'mongoose';
+import { databaseErrorInterpreter } from '@utils/helpers-errors';
 
 /**
  * POST /account/signup
@@ -46,5 +46,5 @@ export const postSignup = (
             const [status, message] = databaseErrorInterpreter(error);
             rejectResponse(response, status, message);
             return deleteUpload();
-        })
+        });
 };

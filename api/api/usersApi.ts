@@ -607,10 +607,11 @@ export class UsersApi {
      * @summary Edit user
      * @param id Resource identifier
      * @param email 
+     * @param username 
      * @param password 
      * @param imageUpload Optional user profile image
      */
-    public async updateUser (id: string, email?: string, password?: string, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: User;  }> {
+    public async updateUser (id: string, email?: string, username?: string, password?: string, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: User;  }> {
         const localVarPath = this.basePath + '/users';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -638,6 +639,10 @@ export class UsersApi {
 
         if (email !== undefined) {
             localVarFormParams['email'] = ObjectSerializer.serialize(email, "string");
+        }
+
+        if (username !== undefined) {
+            localVarFormParams['username'] = ObjectSerializer.serialize(username, "string");
         }
 
         if (password !== undefined) {
@@ -699,9 +704,10 @@ export class UsersApi {
      * @param id Resource identifier
      * @param email 
      * @param password 
+     * @param username 
      * @param imageUpload Optional user profile image
      */
-    public async updateUserById (id: string, email?: string, password?: string, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: User;  }> {
+    public async updateUserById (id: string, email?: string, password?: string, username?: string, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: User;  }> {
         const localVarPath = this.basePath + '/users/{id}'
             .replace('{' + 'id' + '}', encodeURIComponent(String(id)));
         let localVarQueryParameters: any = {};
@@ -730,6 +736,10 @@ export class UsersApi {
 
         if (password !== undefined) {
             localVarFormParams['password'] = ObjectSerializer.serialize(password, "string");
+        }
+
+        if (username !== undefined) {
+            localVarFormParams['username'] = ObjectSerializer.serialize(username, "string");
         }
 
         if (imageUpload !== undefined) {

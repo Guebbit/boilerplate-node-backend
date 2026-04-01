@@ -4,7 +4,6 @@ import { getOrders } from '@controllers/orders/get-orders';
 import { postOrders } from '@controllers/orders/post-orders';
 import { putOrders } from '@controllers/orders/put-orders';
 import { deleteOrders } from '@controllers/orders/delete-orders';
-import { postOrdersSearch } from '@controllers/orders/post-orders-search';
 import { getOrderItem } from '@controllers/orders/get-order-item';
 import { getOrderInvoice } from '@controllers/orders/get-order-invoice';
 
@@ -14,7 +13,7 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 // POST /orders/search — must come before /:id
-router.post('/search', postOrdersSearch);
+router.post('/search', getOrders);
 
 // GET /orders — list (non-admin sees own orders only)
 router.get('/', getOrders);

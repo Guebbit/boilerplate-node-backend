@@ -3,8 +3,7 @@ import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 import { upload } from '@utils/multer';
 import { getProducts } from '@controllers/products/get-products';
 import { writeProducts } from '@controllers/products/write-products';
-import { deleteProductItem } from '@controllers/products/delete-products';
-import { postProductsSearch } from '@controllers/products/post-products-search';
+import { deleteProducts } from '@controllers/products/delete-products';
 import { getProductItem } from '@controllers/products/get-product-item';
 
 export const router = Router();
@@ -13,7 +12,7 @@ export const router = Router();
 router.use(getAuth);
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', postProductsSearch);
+router.post('/search', getProducts);
 
 // GET /products — public
 router.get('/', getProducts);
@@ -25,7 +24,7 @@ router.post('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
 router.put('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
 
 // DELETE /products — admin only, id in body
-router.delete('/', isAuth, isAdmin, deleteProductItem);
+router.delete('/', isAuth, isAdmin, deleteProducts);
 
 // GET /products/:id — public
 router.get('/:id', getProductItem);
@@ -34,4 +33,4 @@ router.get('/:id', getProductItem);
 router.put('/:id', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
 
 // DELETE /products/:id — admin only
-router.delete('/:id', isAuth, isAdmin, deleteProductItem);
+router.delete('/:id', isAuth, isAdmin, deleteProducts);

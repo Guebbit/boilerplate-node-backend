@@ -509,6 +509,8 @@ components:
                     $ref: '#/components/schemas/Id'
                 email:
                     $ref: '#/components/schemas/Email'
+                username:
+                    type: string
                 password:
                     $ref: '#/components/schemas/Password'
                 imageUrl:
@@ -524,6 +526,8 @@ components:
                     $ref: '#/components/schemas/Id'
                 email:
                     $ref: '#/components/schemas/Email'
+                username:
+                    type: string
                 password:
                     $ref: '#/components/schemas/Password'
                 imageUpload:
@@ -539,6 +543,8 @@ components:
                     $ref: '#/components/schemas/Email'
                 password:
                     $ref: '#/components/schemas/Password'
+                username:
+                    type: string
                 imageUrl:
                     type: string
                     format: uri
@@ -551,6 +557,8 @@ components:
                     $ref: '#/components/schemas/Email'
                 password:
                     $ref: '#/components/schemas/Password'
+                username:
+                    type: string
                 imageUpload:
                     type: string
                     format: binary
@@ -1112,10 +1120,10 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '#/components/parameters/IdParam'
                 - $ref: '#/components/parameters/PageParam'
                 - $ref: '#/components/parameters/PageSizeParam'
                 - $ref: '#/components/parameters/TextParam'
+                - $ref: '#/components/parameters/IdParam'
                 - name: email
                   in: query
                   schema:
