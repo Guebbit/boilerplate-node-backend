@@ -1,4 +1,4 @@
-import logger from '@utils/winston';
+import { logger } from '@utils/winston';
 import type { Request, Response } from 'express';
 
 /**

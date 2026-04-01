@@ -4,7 +4,7 @@
  */
 import os from 'node:os';
 import cluster from 'node:cluster';
-import logger from '@utils/winston';
+import { logger } from '@utils/winston';
 
 /**
  * Cluster management

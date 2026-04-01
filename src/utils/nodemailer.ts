@@ -2,7 +2,7 @@ import path from 'node:path';
 import ejs, { type Data } from 'ejs';
 import { createTransport, type SendMailOptions, type SentMessageInfo } from 'nodemailer';
 import { getDirname } from './helpers-filesystem';
-import logger from '@utils/winston';
+import { logger } from '@utils/winston';
 
 // Create a transporter object using the default SMTP transport
 export const transporter = createTransport({

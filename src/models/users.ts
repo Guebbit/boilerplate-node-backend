@@ -3,6 +3,16 @@ import type { Document, Model } from 'mongoose';
 import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
+import { logger } from '@utils/winston';
+import { User } from '@types';
+
+/**
+ * Token types used in jwt-auth
+ */
+export enum ETokenType {
+    REFRESH = 'refresh',
+    PASSWORD_RESET = 'password'
+}
 
 /**
  * Cart Item interface
@@ -27,15 +37,11 @@ export interface IToken {
 /**
  * User interface
  */
-export interface IUser {
+export interface IUser extends User {
     /**
      * User attributes
      */
-    email: string;
-    username: string;
     password: string;
-    imageUrl?: string;
-    admin: boolean;
     // soft delete
     deletedAt?: Date;
 
@@ -59,21 +65,26 @@ export interface IUser {
 /**
  * User Document interface
  */
-export interface IUserDocument extends IUser, Document {}
+export interface IUserDocument extends IUser, IUserMethods, Document {
+    /** String version of _id — provided by Mongoose's Document getter */
+    id: string;
+}
 
 /**
  * User Document instance methods.
- * Business logic (cart, auth, orders) is now handled by the
- * service layer (src/services/users.ts) and repository layer
- * (src/repositories/users.ts).
  */
-export type IUserMethods = unknown;
+export type IUserMethods = {
+    tokenAdd: (type: ETokenType, expirationMs: number, token: string) => Promise<string>;
+    tokenRemoveAll: (type: ETokenType) => Promise<void>;
+};
 
 /**
  * User Document model type.
  * Business logic is now handled by the service and repository layers.
  */
-export type IUserModel = Model<IUserDocument, unknown, IUserMethods>;
+export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
+    tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
+};
 
 /**
  * User Schema
@@ -116,7 +127,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
                     }
                 }
             ],
-            updatedAt: Date
+            deletedAt: Date
         },
         // sub documents always have _id
         tokens: [
@@ -178,19 +189,66 @@ export const zodUserSchema = z.object({
 /**
  * Hook to make edits pre saving
  *
- * Hash all passwords (if they have been changed)
+ * Hash all passwords (if they have been changed).
  */
 userSchema.pre('save', function () {
     if (!this.isModified('password')) return;
 
-    return bcrypt.hash(this.password, 12).then((hash) => {
-        this.password = hash;
+    return bcrypt.hash(this.password, 12).then((hashedPassword) => {
+        this.password = hashedPassword;
     });
+});
+
+/**
+ * Add a token to this user document and persist it.
+ * Returns the token string so callers can use it directly.
+ */
+userSchema.methods.tokenAdd = function (
+    type: ETokenType,
+    expirationMs: number,
+    token: string
+): Promise<string> {
+    this.tokens.push({
+        type,
+        token,
+        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
+    });
+    return this.save().then(() => token);
+};
+
+/**
+ * Remove all tokens of the given type from this user document and persist it.
+ */
+userSchema.methods.tokenRemoveAll = function (type: ETokenType) {
+    this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
+    return this.save().then(() => {});
+};
+
+/**
+ * Remove all expired tokens from every user document in the collection.
+ * Returns a simple status/success envelope consumed by the controller layer.
+ */
+userSchema.static('tokenRemoveExpired', function (): Promise<{
+    status: number;
+    success: boolean;
+}> {
+    const now = new Date();
+    const tokenExpirationPath = 'tokens.expiration';
+    return this.updateMany(
+        { [tokenExpirationPath]: { $lt: now } },
+        { $pull: { tokens: { expiration: { $lt: now } } } }
+    )
+        .then(() => ({ status: 200, success: true }))
+        .catch((error) => {
+            logger.error({
+                message: 'tokenRemoveExpired failed',
+                error
+            });
+            return { status: 500, success: false };
+        });
 });
 
 /**
  * Model
  */
 export const userModel = model<IUserDocument, IUserModel>('User', userSchema);
-
-export default userModel;

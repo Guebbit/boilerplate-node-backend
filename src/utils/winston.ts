@@ -1,6 +1,6 @@
 import winston from 'winston';
 
-export default winston.createLogger({
+export const logger = winston.createLogger({
     format: winston.format.json(),
     /**
      * Preloaded data

@@ -16,8 +16,8 @@ import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem, IUser } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import type { Order, SearchUsersRequest, UsersResponse } from '@types';
-import UserRepository from '@repositories/users';
-import OrderRepository from '@repositories/orders';
+import { userRepository } from '@repositories/users';
+import { orderRepository } from '@repositories/orders';
 
 /**
  * User Service
@@ -98,7 +98,7 @@ export const cartItemSetById = (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -149,7 +149,7 @@ export const cartItemAddById = (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -178,7 +178,7 @@ export const cartItemRemoveById = (
 ): Promise<IResponseSuccess<IUserDocument>> => {
     user.cart.items = user.cart.items.filter(({ product }: ICartItem) => !product.equals(id));
     user.cart.updatedAt = new Date();
-    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -203,7 +203,7 @@ export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserD
         items: [],
         updatedAt: new Date()
     };
-    return UserRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
 };
 
 /**
@@ -218,18 +218,18 @@ export const orderConfirm = (
         .then<IResponseSuccess<Order> | IResponseReject>((products) => {
             if (products.length === 0)
                 return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
-            return OrderRepository.create({
-                userId: user._id as Types.ObjectId,
-                email: user.email,
-                // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
-                products: products as unknown as IOrderProduct[]
-            } as Partial<IOrderDocument>).then((order) =>
-                cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
-            );
+            return orderRepository
+                .create({
+                    userId: user._id as Types.ObjectId,
+                    email: user.email,
+                    // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
+                    products: products as unknown as IOrderProduct[]
+                } as Partial<IOrderDocument>)
+                .then((order) =>
+                    cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
+                );
         })
-        .catch((error: CastError | Error) =>
-            generateReject(...databaseErrorInterpreter(error as CastError | Error))
-        );
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 
 /**
  * Add a token to the user
@@ -254,7 +254,7 @@ export const tokenAdd = (
         expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined
     });
     // no need to wait
-    return UserRepository.save(user).then(() => token);
+    return userRepository.save(user).then(() => token);
 };
 
 /**
@@ -310,7 +310,8 @@ export const passwordChange = (
      * Encryption will be done automatically by the pre-save hook
      */
     user.password = password;
-    return UserRepository.save(user)
+    return userRepository
+        .save(user)
         .then((savedUser) => generateSuccess<IUserDocument>(savedUser))
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
@@ -370,7 +371,8 @@ export const signup = (
      * Check if email is already used (user exist already probably)
      * If that's the case: return error and stop the creation process
      */
-    return UserRepository.findOne({ email })
+    return userRepository
+        .findOne({ email })
         .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
             // Email already exists
             if (user)
@@ -381,12 +383,14 @@ export const signup = (
              * Everything is ok, proceed to create a new user.
              * Encryption will be done automatically by the pre-save hook
              */
-            return UserRepository.create({
-                username,
-                email,
-                imageUrl: imageUrl ?? '',
-                password
-            }).then((createdUser) => generateSuccess<IUserDocument>(createdUser));
+            return userRepository
+                .create({
+                    username,
+                    email,
+                    imageUrl: imageUrl ?? '',
+                    password
+                })
+                .then((createdUser) => generateSuccess<IUserDocument>(createdUser));
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
@@ -432,21 +436,20 @@ export const login = (
     /**
      * Everything is ok, login the user
      */
-    return UserRepository.findOne({ email, deletedAt: undefined })
-        .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
+    return userRepository
+        .findOne({ email, deletedAt: undefined })
+        .then((user) => {
             // user not found
             if (!user)
                 return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
-            return bcrypt
-                .compare(password ?? '', user.password)
-                .then<IResponseSuccess<IUserDocument> | IResponseReject>((doMatch) => {
-                    // User found but password doesn't match
-                    if (!doMatch)
-                        return generateReject(401, 'login - wrong credentials', [
-                            t('login.wrong-data')
-                        ]);
-                    return generateSuccess<IUserDocument>(user);
-                });
+            return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
+                // User found but password doesn't match
+                if (!doMatch)
+                    return generateReject(401, 'login - wrong credentials', [
+                        t('login.wrong-data')
+                    ]);
+                return generateSuccess<IUserDocument>(user);
+            });
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
@@ -459,26 +462,27 @@ export const login = (
 export const productRemoveFromCartsById = (
     id: string
 ): Promise<IResponseSuccess<undefined> | IResponseReject> =>
-    UserRepository.updateMany(
-        {
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            'cart.items.product': id
-        },
-        {
-            // Remove the product from their cart
-            $pull: {
+    userRepository
+        .updateMany(
+            {
                 // eslint-disable-next-line @typescript-eslint/naming-convention
-                'cart.items': {
-                    product: id
-                }
+                'cart.items.product': id
             },
-            // Update the cart's updatedAt timestamp
-            $set: {
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                'cart.updatedAt': new Date()
+            {
+                // Remove the product from their cart
+                $pull: {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'cart.items': {
+                        product: id
+                    }
+                },
+                // Update the cart's updatedAt timestamp
+                $set: {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
+                    'cart.updatedAt': new Date()
+                }
             }
-        }
-    )
+        )
         .then((result) =>
             generateSuccess(
                 undefined,
@@ -504,7 +508,7 @@ export const productRemoveFromCartsById = (
  */
 export const validateData = (
     userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
-    { requirePassword = true }: { requirePassword?: boolean } = {}
+    requirePassword = true
 ): string[] => {
     const schema = requirePassword
         ? zodUserSchema.pick({ email: true, username: true, password: true })
@@ -518,7 +522,7 @@ export const validateData = (
 };
 
 /**
- * Search users (DTO-friendly) — admin panel, mirrors ProductService.search.
+ * Search users (DTO-friendly) — admin panel, mirrors productService.search.
  *
  * Filters: id, text (email/username), email, username
  * Pagination: page (1-based), pageSize
@@ -544,18 +548,8 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
         where.$or = [
-            {
-                email: {
-                    $regex: text,
-                    $options: 'i' // case-insensitive (optional)
-                }
-            },
-            {
-                username: {
-                    $regex: text,
-                    $options: 'i' // case-insensitive (optional)
-                }
-            }
+            { email: { $regex: text, $options: 'i' } },
+            { username: { $regex: text, $options: 'i' } }
         ];
     }
 
@@ -571,22 +565,23 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
     if (filters.active !== undefined && filters.active !== null)
         where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
 
-    return Promise.all([
-        UserRepository.count(where),
-        UserRepository.findAll(where, {
-            sort: { createdAt: -1 },
-            skip,
-            limit: pageSize
-        })
-    ]).then(([totalItems, items]) => ({
-        items: items as unknown as UsersResponse['items'],
-        meta: {
-            page,
-            pageSize,
-            totalItems,
-            totalPages: Math.ceil(totalItems / pageSize)
-        }
-    }));
+    return userRepository.count(where).then((totalItems) =>
+        userRepository
+            .findAll(where, {
+                sort: { createdAt: -1 },
+                skip,
+                limit: pageSize
+            })
+            .then((items) => ({
+                items: items as unknown as UsersResponse['items'],
+                meta: {
+                    page,
+                    pageSize,
+                    totalItems,
+                    totalPages: Math.ceil(totalItems / pageSize)
+                }
+            }))
+    );
 };
 
 /**
@@ -598,7 +593,10 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
 export const getById = (id?: string) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
-    return UserRepository.findById(id).then((user) => user?.toObject());
+    return userRepository.findById(id).then((user) => {
+        if (!user) return;
+        return user.toObject();
+    });
 };
 
 /**
@@ -610,7 +608,7 @@ export const getById = (id?: string) => {
 export const adminCreate = (
     data: Pick<IUser, 'email' | 'username' | 'password'> &
         Partial<Pick<IUser, 'admin' | 'imageUrl'>>
-): Promise<IUserDocument> => UserRepository.create(data);
+): Promise<IUserDocument> => userRepository.create(data);
 
 /**
  * Update an existing user by ID (admin version).
@@ -624,7 +622,7 @@ export const adminUpdate = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
 ): Promise<IUserDocument> =>
-    UserRepository.findById(id).then((user) => {
+    userRepository.findById(id).then((user) => {
         if (!user) throw new Error('404');
 
         // Apply incoming field changes
@@ -635,7 +633,7 @@ export const adminUpdate = (
         // Only update password when a non-empty value is passed
         if (data.password && data.password.trim().length > 0) user.password = data.password;
 
-        return UserRepository.save(user);
+        return userRepository.save(user);
     });
 
 /**
@@ -649,27 +647,28 @@ export const adminUpdate = (
 export const remove = (
     id: string,
     hardDelete = false
-): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> =>
-    UserRepository.findById(id).then((user) => {
+): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+    return userRepository.findById(id).then((user) => {
         // not found, something happened
         if (!user) return generateReject(404, '404', [t('admin.user-not-found')]);
 
         // HARD delete
         if (hardDelete)
-            return UserRepository.deleteOne(user).then(() =>
-                generateSuccess(undefined, 200, t('admin.user-hard-deleted'))
-            );
+            return userRepository
+                .deleteOne(user)
+                .then(() => generateSuccess(undefined, 200, t('admin.user-hard-deleted')));
 
         // If deletedAt already present: it's soft-deleted → RESTORE
         user.deletedAt = user.deletedAt ? undefined : new Date();
 
         // SOFT delete (or restore)
-        return UserRepository.save(user).then((savedUser) =>
-            generateSuccess(savedUser, 200, t('admin.user-soft-deleted'))
-        );
+        return userRepository
+            .save(user)
+            .then((savedUser) => generateSuccess(savedUser, 200, t('admin.user-soft-deleted')));
     });
+};
 
-export default {
+export const userService = {
     cartGet,
     cartGetWithSummary,
     cartItemSetById,
