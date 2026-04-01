@@ -1,7 +1,7 @@
 import express from 'express';
 import { isGuest, isAuth } from '@middlewares/authorizations';
 import { csrfSynchronisedProtection } from '@middlewares/csrf';
-import multer from '@utils/multer';
+import { multerMiddleware } from '@utils/multer';
 
 import { pageAccount } from '@controllers/account/page-account';
 import { pageLogin } from '@controllers/account/page-login';
@@ -27,7 +27,7 @@ router.get('/signup', isGuest, pageSignup);
 router.post(
     '/signup',
     isGuest,
-    multer.single('imageUpload'),
+    multerMiddleware.single('imageUpload'),
     csrfSynchronisedProtection,
     postSignup
 );
@@ -42,4 +42,4 @@ router.post('/reset/:token', isGuest, csrfSynchronisedProtection, postResetConfi
 
 router.get('/logout', isAuth, getLogout);
 
-export default router;
+export { router as authRoutes };

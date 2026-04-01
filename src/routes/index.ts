@@ -9,4 +9,4 @@ router.get('/', (request: Request, response: Response) =>
     })
 );
 
-export default router;
+export { router as systemRoutes };

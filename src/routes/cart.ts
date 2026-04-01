@@ -20,4 +20,4 @@ router.post('/cart/delete-all', isAuth, csrfSynchronisedProtection, postDeleteCa
 
 router.get('/checkout', isAuth, pageCheckout);
 
-export default router;
+export { router as cartRoutes };

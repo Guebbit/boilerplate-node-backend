@@ -8,4 +8,4 @@ router.get('/reset-database', getResetDatabase);
 
 router.get('/heavy', getHeavyLoad);
 
-export default router;
+export { router as developmentRoutes };

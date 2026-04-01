@@ -9,4 +9,4 @@ router.get('/page-not-found', getNotFound);
 
 router.get('/', getCustomError);
 
-export default router;
+export { router as errorRoutes };
