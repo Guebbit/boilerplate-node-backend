@@ -87,6 +87,16 @@ export const writeProducts = (
     /**
      * ID = edit product
      */
+    const errors = productService.validateData({
+        ...request.body,
+        imageUrl,
+        active: !!request.body.active,
+    });
+    if (errors.length > 0)
+        return deleteUpload().then(() => {
+            rejectResponse(response, 422, 'updateProduct - validation failed', errors);
+        });
+
     return productService
         .update(id, {
             ...request.body,
