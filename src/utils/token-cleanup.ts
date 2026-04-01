@@ -4,7 +4,7 @@ import logger from '@utils/winston';
 /**
  * Run one cleanup cycle: remove every expired token from every user document.
  */
-export const runTokenCleanup = async (): Promise<void> => {
+export const runTokenCleanup = async () => {
     logger.info('Token cleanup: starting expired-token removal');
     const { status, success } = await Users.tokenRemoveExpired();
     if (success) {

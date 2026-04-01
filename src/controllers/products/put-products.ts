@@ -13,7 +13,7 @@ import type { UpdateProductRequest, UpdateProductRequestMultipart } from '@types
 const putProducts = (
     request: Request<unknown, unknown, UpdateProductRequest | UpdateProductRequestMultipart>,
     response: Response
-): Promise<void> => {
+) => {
     if (!request.body.id) {
         rejectResponse(response, 422, 'updateProduct - missing id', [
             t('generic.error-missing-data')

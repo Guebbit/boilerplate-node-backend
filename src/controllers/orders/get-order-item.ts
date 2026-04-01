@@ -9,7 +9,7 @@ import { userScope } from '@utils/helpers-scopes';
  * Get a single order by path id.
  * Non-admin users can only access their own orders.
  */
-const getOrderItem = (request: Request<{ id?: string }>, response: Response): Promise<void> =>
+const getOrderItem = (request: Request<{ id?: string }>, response: Response) =>
     /**
      * User role filters:
      * Only admin can see all orders. Regular users can only see their own.

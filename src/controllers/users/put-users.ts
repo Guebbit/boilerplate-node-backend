@@ -13,7 +13,7 @@ import type { UpdateUserRequest, UpdateUserRequestMultipart } from '@types';
 const putUsers = (
     request: Request<unknown, unknown, UpdateUserRequest | UpdateUserRequestMultipart>,
     response: Response
-): Promise<void> => {
+) => {
     if (!request.body.id) {
         rejectResponse(response, 422, 'updateUser - missing id', [t('generic.error-missing-data')]);
         return Promise.resolve();

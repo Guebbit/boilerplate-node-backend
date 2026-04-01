@@ -13,11 +13,13 @@ import { rejectResponse } from '@utils/response';
 import enTranslation from './locales/en.json';
 
 import productRoutes from './routes/products';
-import authRoutes from './routes/auth';
+import authRoutes from './routes/account';
 import orderRoutes from './routes/orders';
 import cartRoutes from './routes/cart';
 import userRoutes from './routes/users';
 import systemRoutes from './routes';
+import developmentRoutes from './routes/_development';
+
 import { MulterError } from 'multer';
 import { ExtendedError } from '@utils/helpers-errors';
 
@@ -46,7 +48,7 @@ start()
         logger.info('------------- SERVER START -------------');
         app.listen(process.env.NODE_PORT ?? 3000);
     })
-    .catch((error) => logger.info('------------- SERVER ERROR -------------', error));
+    .catch((error: Error) => logger.info('------------- SERVER ERROR -------------', error));
 
 /**
  * Secure headers
@@ -112,6 +114,7 @@ app.use('/orders', orderRoutes);
 app.use('/cart', cartRoutes);
 app.use('/users', userRoutes);
 app.use('/', systemRoutes);
+app.use('/', developmentRoutes);
 
 /**
  * 404 handler — catch all unmatched routes

@@ -20,7 +20,7 @@ import { runTokenCleanup } from '@utils/token-cleanup';
 const postLogin = (
     request: Request<unknown, unknown, LoginRequest & { remember?: ERefreshTokenExpiryTime }>,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Get POST data
      */

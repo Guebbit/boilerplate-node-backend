@@ -12,7 +12,7 @@ import { nodemailer } from "@utils/nodemailer";
 const postOrders = (
     request: Request<unknown, unknown, CreateOrderRequest>,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Data validation
      */

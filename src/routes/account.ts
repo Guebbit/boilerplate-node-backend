@@ -6,9 +6,9 @@ import postLogin from '@controllers/account/post-login';
 import postSignup from '@controllers/account/post-signup';
 import postResetRequest from '@controllers/account/post-reset-request';
 import postResetConfirm from '@controllers/account/post-reset-confirm';
-import getRefreshToken from '@controllers/get-refresh-token';
-import postLogoutEverywhere from '@controllers/post-logout-everywhere';
-import deleteExpiredTokens from '@controllers/delete-expired-tokens';
+import getRefreshToken from '@controllers/account/get-refresh-token';
+import postLogoutEverywhere from '@controllers/account/post-logout-everywhere';
+import deleteExpiredTokens from '@controllers/account/delete-expired-tokens';
 
 const router = Router();
 

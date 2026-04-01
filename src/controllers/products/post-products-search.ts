@@ -10,7 +10,7 @@ import type { SearchProductsRequest } from '@types';
 const postProductsSearch = (
     request: Request<unknown, unknown, SearchProductsRequest>,
     response: Response
-): Promise<void> =>
+) =>
     ProductService.search(request.body, request.user?.admin === true).then((result) => {
         successResponse(response, result);
     });

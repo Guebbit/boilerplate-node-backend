@@ -17,7 +17,7 @@ const putProductItem = (
         UpdateProductByIdRequest | UpdateProductByIdRequestMultipart
     >,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Uploaded file takes priority over body imageUrl
      */

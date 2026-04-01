@@ -12,7 +12,7 @@ import type { SignupRequest, SignupRequestMultipart } from '@types';
 const postSignup = (
     request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart>,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Get POST data
      */

@@ -8,7 +8,7 @@ import type { RemoveCartItemRequest } from "@api/model/removeCartItemRequest";
  * Remove ALL items in the user cart.
  * If a productId is provided in the body, only that item is removed instead.
  */
-const deleteCart = (request: Request<unknown, unknown, RemoveCartItemRequest>, response: Response): Promise<void> => {
+const deleteCart = (request: Request<unknown, unknown, RemoveCartItemRequest>, response: Response) => {
     // Authentication check is done before entering the route
     const user = request.user!;
     const productId = String(request.body.productId);

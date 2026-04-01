@@ -7,7 +7,7 @@ import type { UpdateOrderByIdRequest } from '@types';
  * PUT /orders/:id
  * Update an order by path id (admin).
  */
-const putOrderItem = (request: Request, response: Response): Promise<void> =>
+const putOrderItem = (request: Request, response: Response) =>
     OrderService.update(String(request.params.id), {
         ...request.body,
         status: request.body.status as string | undefined

@@ -7,7 +7,7 @@ import { successResponse, rejectResponse } from '@utils/response';
  * POST /cart/checkout
  * Converts the cart into an order and clears the cart.
  */
-const postCheckout = (request: Request, response: Response): Promise<void> => {
+const postCheckout = (request: Request, response: Response) => {
     const user = request.user!;
     return UserService.orderConfirm(user).then((result) => {
         if (!result.success) {

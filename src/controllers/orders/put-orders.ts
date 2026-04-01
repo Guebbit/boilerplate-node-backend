@@ -11,7 +11,7 @@ import type { UpdateOrderRequest } from '@types';
 const putOrders = (
     request: Request<unknown, unknown, UpdateOrderRequest>,
     response: Response
-): Promise<void> => {
+) => {
     if (!request.body.id) {
         rejectResponse(response, 422, 'updateOrder - missing id', [
             t('generic.error-missing-data')

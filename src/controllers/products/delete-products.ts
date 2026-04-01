@@ -2,31 +2,36 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { DeleteProductRequest } from '@types';
+import type { CastError } from "mongoose";
+import { DeleteProductRequest } from "@api/model/deleteProductRequest";
 
 /**
- * DELETE /products
- * Delete a product by id in the request body (admin).
+ * DELETE /products/:id
+ * Delete a product by path id (admin).
+ * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-const deleteProducts = (
-    request: Request<unknown, unknown, DeleteProductRequest>,
-    response: Response
-): Promise<void> => {
-    if (!request.body.id) {
+const deleteProductItem = (request: Request<{ id?: string }, unknown, DeleteProductRequest>, response: Response) => {
+    if (!request.params.id && !request.body.id) {
         rejectResponse(response, 422, 'deleteProduct - missing id', [
             t('generic.error-missing-data')
         ]);
         return Promise.resolve();
     }
-    return ProductService.remove(request.body.id, request.body.hardDelete ?? false).then(
-        (result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.message, result.errors);
-                return;
-            }
-            successResponse(response, undefined, 200, result.message);
-        }
-    );
-};
 
-export default deleteProducts;
+    // true = hard-delete; false (default) = soft-delete (sets deletedAt)
+    return ProductService.remove(String(request.params.id ?? request.body.id), !!request.query.hardDelete).then((result) => {
+        if (!result.success) {
+            rejectResponse(response, result.status, result.message, result.errors);
+            return;
+        }
+        successResponse(response, undefined, 200, result.message);
+    })
+        .catch((error: CastError) => {
+            if (error.message == '404' || error.kind === 'ObjectId')
+                rejectResponse(response, 404, 'deleteProduct - not found', [t('ecommerce.product-not-found')]);
+            rejectResponse(response, 500, 'Unknown Error', [error.message]);
+        });
+}
+
+
+export default deleteProductItem;

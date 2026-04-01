@@ -245,7 +245,7 @@ userSchema.methods.tokenAdd = function (
 /**
  * Remove all tokens of the given type from this user document and persist it.
  */
-userSchema.methods.tokenRemoveAll = function (type: ETokenType): Promise<void> {
+userSchema.methods.tokenRemoveAll = function (type: ETokenType) {
     this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
     return this.save().then(() => {});
 };

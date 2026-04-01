@@ -17,7 +17,7 @@ export type IGetOrdersQuery = Partial<Record<keyof SearchOrdersRequest, string>>
 const getOrders = (
     request: Request<{ page?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
-): Promise<void> => {
+) => {
     const page = request.body.page ?? request.query.page ?? '1'
     const pageSize = request.body.pageSize ?? request.query.pageSize ?? process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? '10'
 

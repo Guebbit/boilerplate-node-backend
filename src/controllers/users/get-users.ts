@@ -7,7 +7,7 @@ import type { SearchUsersRequest } from '@types';
  * GET /users
  * List/search users via query parameters (admin only).
  */
-const getUsers = (request: Request, response: Response): Promise<void> => {
+const getUsers = (request: Request, response: Response) => {
     const { id, page, pageSize, text, email, username, active } = request.query as Record<
         string,
         string | undefined

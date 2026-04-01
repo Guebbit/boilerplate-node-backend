@@ -11,7 +11,7 @@ import type { UpdateCartItemByIdRequest } from '@types';
 const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
     response: Response
-): Promise<void> => {
+) => {
     const user = request.user!;
     const productId = String(request.params.productId ?? request.body.productId);
 

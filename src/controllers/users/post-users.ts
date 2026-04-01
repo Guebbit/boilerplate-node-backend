@@ -12,7 +12,7 @@ import type { CreateUserRequest, CreateUserRequestMultipart } from '@types';
 const postUsers = (
     request: Request<unknown, unknown, CreateUserRequest | CreateUserRequestMultipart>,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Uploaded file takes priority over body imageUrl
      */

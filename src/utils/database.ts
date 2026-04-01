@@ -4,15 +4,15 @@ import logger from './winston';
 const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Connect to MongoDB with exponential-backoff retry.
  * Each failed attempt doubles the delay, capped at 30 seconds.
  * Throws if all attempts are exhausted.
  */
-export const start = (): Promise<void> => {
-    const attemptConnect = (attempt: number): Promise<void> =>
+export const start = () => {
+    const attemptConnect = (attempt: number) =>
         mongoose.connect(process.env.NODE_DB_URI ?? '').then(
             () => {},
             () => {

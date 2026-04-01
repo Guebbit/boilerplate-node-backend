@@ -8,7 +8,6 @@ import deleteProducts from '@controllers/products/delete-products';
 import postProductsSearch from '@controllers/products/post-products-search';
 import getProductItem from '@controllers/products/get-product-item';
 import putProductItem from '@controllers/products/put-product-item';
-import deleteProductItem from '@controllers/products/delete-product-item';
 
 const router = Router();
 
@@ -37,6 +36,6 @@ router.get('/:id', getProductItem);
 router.put('/:id', isAuth, isAdmin, multer.single('imageUpload'), putProductItem);
 
 // DELETE /products/:id — admin only
-router.delete('/:id', isAuth, isAdmin, deleteProductItem);
+router.delete('/:id', isAuth, isAdmin, deleteProducts);
 
 export default router;

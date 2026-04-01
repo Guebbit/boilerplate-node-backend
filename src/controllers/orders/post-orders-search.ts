@@ -12,7 +12,7 @@ import { userScope } from '@utils/helpers-scopes';
 const postOrdersSearch = (
     request: Request<unknown, unknown, SearchOrdersRequest>,
     response: Response
-): Promise<void> =>
+) =>
     OrderService.search(request.body, userScope(request as Request)).then((result) => {
         successResponse(response, result);
     })

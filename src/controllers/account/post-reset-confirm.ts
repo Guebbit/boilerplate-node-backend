@@ -15,7 +15,7 @@ const postResetConfirm = (
     // This token is provided in the url within the email that has been sent to the user
     request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Post Data
      */

@@ -15,7 +15,7 @@ import puppeteer from "puppeteer-core";
  * WARNING: Images and other link-related resources will NOT work in the PDF.
  * To embed them, convert images to base64.
  */
-const getOrderInvoice = (request: Request, response: Response): Promise<void> =>
+const getOrderInvoice = (request: Request, response: Response) =>
     /**
      * Get order info from database
      * User role filters: Only admin can see all orders. Regular users can only see their own.

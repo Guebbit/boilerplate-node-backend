@@ -12,7 +12,7 @@ import { Types } from "mongoose";
 const deleteOrders = (
     request: Request<{ id?: string }, unknown, DeleteOrderRequest>,
     response: Response
-): Promise<void> => {
+) => {
     const id = request.params.id ?? request.body.id ?? '';
 
     // missing or not valid

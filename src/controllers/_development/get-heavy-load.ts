@@ -5,7 +5,7 @@ import getExecTime from '@utils/get-exec-time';
  * GET /heavy-load
  * Heavy load test endpoint.
  */
-const getHeavyLoad = (request: Request, response: Response) =>
+export const getHeavyLoad = (request: Request, response: Response) =>
     getExecTime(() => {
         const totalLoad = 20_000;
         let progressLoad = 0;
@@ -22,5 +22,3 @@ const getHeavyLoad = (request: Request, response: Response) =>
             message: `The CPU intensive task required ${time}ms \n`
         });
     });
-
-export default getHeavyLoad;

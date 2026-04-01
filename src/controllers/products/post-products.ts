@@ -12,7 +12,7 @@ import type { CreateProductRequest, CreateProductRequestMultipart } from '@types
 const postProducts = (
     request: Request<unknown, unknown, CreateProductRequest | CreateProductRequestMultipart>,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Uploaded file takes priority over body imageUrl
      */

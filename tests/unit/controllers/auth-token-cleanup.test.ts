@@ -1,5 +1,5 @@
 import postLogin from '@controllers/account/post-login';
-import getRefreshToken from '@controllers/get-refresh-token';
+import getRefreshToken from '@controllers/account/get-refresh-token';
 import UserService from '@services/users';
 import { runTokenCleanup } from '@utils/token-cleanup';
 import { createAccessToken } from '@middlewares/auth-jwt';

@@ -5,8 +5,8 @@
 - Create .env file using the example
 - Create database and link it using .env variables
 - Link to services using .env variables (es: email responders are a different kind of server)
-- Cron job needed to clean expired tokens in the table "tokens" (or in the users data if nosql)
 - Optional: use docker/podman to run the app
+- IMPORTANT: Remove the controllers/_development and routes/q_development
 
 # Mock instructions
 

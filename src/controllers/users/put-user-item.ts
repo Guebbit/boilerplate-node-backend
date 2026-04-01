@@ -10,14 +10,14 @@ import type { UpdateUserByIdRequest, UpdateUserByIdRequestMultipart } from '@typ
  * PUT /users/:id
  * Update a user by path id (admin).
  */
-const putUserById = (
+const putUserItem = (
     request: Request<
         { id?: string },
         unknown,
         UpdateUserByIdRequest | UpdateUserByIdRequestMultipart
     >,
     response: Response
-): Promise<void> => {
+) => {
     /**
      * Uploaded file takes priority over body imageUrl
      */
@@ -39,4 +39,4 @@ const putUserById = (
         );
 };
 
-export default putUserById;
+export default putUserItem;

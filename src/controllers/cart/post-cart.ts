@@ -13,7 +13,7 @@ import type { UpsertCartItemRequest } from '@types';
 const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
-): Promise<void> => {
+) => {
     // Authentication check is done before entering the route
     const user = request.user!;
     const { productId, quantity } = request.body;
