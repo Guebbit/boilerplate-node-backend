@@ -16,7 +16,6 @@ import { getLogout } from '@controllers/account/page-logout';
 
 const router = express.Router();
 
-// GET /account — current user's profile page
 router.get('/', isAuth, pageAccount);
 
 router.get('/login', isGuest, pageLogin);

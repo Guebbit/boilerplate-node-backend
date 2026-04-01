@@ -23,6 +23,7 @@ import cartRoutes from './routes/cart';
 import userRoutes from './routes/users';
 import systemRoutes from './routes';
 import errorRoutes from './routes/errors';
+import developmentRoutes from './routes/_development';
 
 /**
  * Server start
@@ -170,6 +171,8 @@ app.use('/users', userRoutes);
 app.use('/', cartRoutes);
 app.use('/', systemRoutes);
 app.use('/error', errorRoutes);
+app.use('/', developmentRoutes);
+
 
 /**
  * Error handler.

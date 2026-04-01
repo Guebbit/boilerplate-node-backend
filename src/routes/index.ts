@@ -1,14 +1,12 @@
-import express from 'express';
-import { getHome } from '@controllers/get-home';
-import { getHeavyLoad } from '@controllers/get-heavy-load';
-import { getResetDatabase } from '@controllers/get-reset-database';
+import express, { type Request, type Response } from 'express';
 
 const router = express.Router();
 
-router.get('/', getHome);
-
-router.get('/reset-database', getResetDatabase);
-
-router.get('/heavy', getHeavyLoad);
+router.get('/', (request: Request, response: Response) =>
+    response.render('misc/home', {
+        pageMetaTitle: 'Home',
+        pageMetaLinks: []
+    })
+);
 
 export default router;
