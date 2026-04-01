@@ -6,8 +6,8 @@ import type { DeleteOrderRequest } from '@types';
 import { Types } from 'mongoose';
 
 /**
- * DELETE /orders
- * Delete an order by id in the request body (admin).
+ * DELETE /orders — delete an order by id in the request body (admin).
+ * DELETE /orders/:id — delete an order by path id (admin).
  */
 export const deleteOrders = (
     request: Request<{ id?: string }, unknown, DeleteOrderRequest>,

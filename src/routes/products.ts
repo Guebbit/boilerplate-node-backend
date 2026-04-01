@@ -2,12 +2,10 @@ import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 import { upload } from '@utils/multer';
 import { getProducts } from '@controllers/products/get-products';
-import { postProducts } from '@controllers/products/post-products';
-import { putProducts } from '@controllers/products/put-products';
+import { writeProducts } from '@controllers/products/write-products';
 import { deleteProductItem } from '@controllers/products/delete-products';
 import { postProductsSearch } from '@controllers/products/post-products-search';
 import { getProductItem } from '@controllers/products/get-product-item';
-import { putProductItem } from '@controllers/products/put-product-item';
 
 export const router = Router();
 
@@ -20,11 +18,11 @@ router.post('/search', postProductsSearch);
 // GET /products — public
 router.get('/', getProducts);
 
-// POST /products — admin only
-router.post('/', isAuth, isAdmin, upload.single('imageUpload'), postProducts);
+// POST /products — admin only (create)
+router.post('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
 
-// PUT /products — admin only, id in body
-router.put('/', isAuth, isAdmin, upload.single('imageUpload'), putProducts);
+// PUT /products — admin only, id in body (update)
+router.put('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
 
 // DELETE /products — admin only, id in body
 router.delete('/', isAuth, isAdmin, deleteProductItem);
@@ -32,8 +30,8 @@ router.delete('/', isAuth, isAdmin, deleteProductItem);
 // GET /products/:id — public
 router.get('/:id', getProductItem);
 
-// PUT /products/:id — admin only
-router.put('/:id', isAuth, isAdmin, upload.single('imageUpload'), putProductItem);
+// PUT /products/:id — admin only (update)
+router.put('/:id', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
 
 // DELETE /products/:id — admin only
 router.delete('/:id', isAuth, isAdmin, deleteProductItem);

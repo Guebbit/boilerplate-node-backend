@@ -6,8 +6,6 @@ import { putOrders } from '@controllers/orders/put-orders';
 import { deleteOrders } from '@controllers/orders/delete-orders';
 import { postOrdersSearch } from '@controllers/orders/post-orders-search';
 import { getOrderItem } from '@controllers/orders/get-order-item';
-import { putOrderItem } from '@controllers/orders/put-order-item';
-import { deleteOrderItem } from '@controllers/orders/delete-order-item';
 import { getOrderInvoice } from '@controllers/orders/get-order-invoice';
 
 export const router = Router();
@@ -24,7 +22,7 @@ router.get('/', getOrders);
 // POST /orders — admin creates order directly
 router.post('/', isAdmin, postOrders);
 
-// PUT /orders — admin, id in body
+// PUT /orders — admin, id in body (update)
 router.put('/', isAdmin, putOrders);
 
 // DELETE /orders — admin, id in body
@@ -36,8 +34,8 @@ router.get('/:id/invoice', getOrderInvoice);
 // GET /orders/:id
 router.get('/:id', getOrderItem);
 
-// PUT /orders/:id — admin only
-router.put('/:id', isAdmin, putOrderItem);
+// PUT /orders/:id — admin only (update)
+router.put('/:id', isAdmin, putOrders);
 
 // DELETE /orders/:id — admin only
-router.delete('/:id', isAdmin, deleteOrderItem);
+router.delete('/:id', isAdmin, deleteOrders);
