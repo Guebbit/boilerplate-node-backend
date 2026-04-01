@@ -15,7 +15,7 @@ import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem, IUser } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import type { Order, SearchUsersRequest, UsersResponse } from '../../api/api';
+import type { Order, SearchUsersRequest, UsersResponse } from '@types';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
 

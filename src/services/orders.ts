@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
-import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '../../api/api';
+import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { EOrderStatus } from '@models/orders';
 import {

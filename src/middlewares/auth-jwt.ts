@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 import { sign, verify, decode } from 'jsonwebtoken';
-import { userModel as Users, ETokenType, IToken } from '../models/users';
+import { userModel as Users, ETokenType, IToken } from '@models/users';
 import type { CastError } from 'mongoose';
 
 /**

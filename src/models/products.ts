@@ -2,7 +2,7 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { z } from 'zod';
 import { t } from 'i18next';
-import type { Product } from '../../api/api';
+import type { Product } from '@types';
 
 /**
  * Product Document interface
