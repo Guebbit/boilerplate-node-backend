@@ -8,13 +8,17 @@ import type { UpdateOrderRequest } from '@types';
  * PUT /orders
  * Update an order by id in the request body (admin).
  */
-const putOrders = (request: Request<unknown, unknown, UpdateOrderRequest>, response: Response): Promise<void> => {
+const putOrders = (
+    request: Request<unknown, unknown, UpdateOrderRequest>,
+    response: Response
+): Promise<void> => {
     if (!request.body.id) {
         rejectResponse(response, 422, 'updateOrder - missing id', [
             t('generic.error-missing-data')
         ]);
         return Promise.resolve();
     }
+
     return OrderService.update(request.body.id, {
         ...request.body,
         status: request.body.status as string | undefined
@@ -23,6 +27,22 @@ const putOrders = (request: Request<unknown, unknown, UpdateOrderRequest>, respo
             rejectResponse(response, result.status, result.message, result.errors);
             return;
         }
+
+        // This is just an order edit
+        // void nodemailer(
+        //     {
+        //         to: request.user!.email,
+        //         subject: 'Order confirmed'
+        //     },
+        //     'email-order-confirm.ejs',
+        //     {
+        //         ...response.locals,
+        //         pageMetaTitle: 'Order confirmed',
+        //         pageMetaLinks: [],
+        //         name: request.user!.username
+        //     }
+        // );
+
         successResponse(response, result.data);
     });
 };

@@ -8,7 +8,10 @@ import type { DeleteUserRequest } from '@types';
  * DELETE /users
  * Delete a user by id in the request body (admin).
  */
-const deleteUsers = (request: Request<unknown, unknown, DeleteUserRequest>, response: Response): Promise<void> => {
+const deleteUsers = (
+    request: Request<unknown, unknown, DeleteUserRequest>,
+    response: Response
+): Promise<void> => {
     if (!request.body.id) {
         rejectResponse(response, 422, 'deleteUser - missing id', [t('generic.error-missing-data')]);
         return Promise.resolve();

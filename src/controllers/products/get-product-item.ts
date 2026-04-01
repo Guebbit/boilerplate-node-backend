@@ -8,7 +8,7 @@ import { successResponse, rejectResponse } from '@utils/response';
  * Get a single product by path id.
  * Only admin can see non-active (inactive/deleted) products.
  */
-const getProductById = (request: Request, response: Response): Promise<void> => {
+const getProductItem = (request: Request, response: Response): Promise<void> => {
     // Admin can search inactive or deleted products; non-admin sees only active ones
     const admin = request.user?.admin === true;
     return ProductService.getById(String(request.params.id), admin).then((product) => {
@@ -20,4 +20,4 @@ const getProductById = (request: Request, response: Response): Promise<void> => 
     });
 };
 
-export default getProductById;
+export default getProductItem;

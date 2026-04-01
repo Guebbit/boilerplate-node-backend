@@ -44,7 +44,10 @@ export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
  */
 export const cartGetWithSummary = (
     user: IUserDocument
-): Promise<{ items: ICartItem[]; summary: { itemsCount: number; totalQuantity: number; total: number } }> =>
+): Promise<{
+    items: ICartItem[];
+    summary: { itemsCount: number; totalQuantity: number; total: number };
+}> =>
     cartGet(user).then((items) => {
         let totalQuantity = 0;
         let total = 0;
@@ -377,11 +380,11 @@ export const signup = (
              * Encryption will be done automatically by the pre-save hook
              */
             return UserRepository.create({
-                    username,
-                    email,
-                    imageUrl: imageUrl ?? '',
-                    password
-                }).then((createdUser) => generateSuccess<IUserDocument>(createdUser));
+                username,
+                email,
+                imageUrl: imageUrl ?? '',
+                password
+            }).then((createdUser) => generateSuccess<IUserDocument>(createdUser));
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };

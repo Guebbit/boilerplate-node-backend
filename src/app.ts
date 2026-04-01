@@ -116,14 +116,14 @@ app.use('/', systemRoutes);
 /**
  * 404 handler — catch all unmatched routes
  */
-app.use((_request: Request, response: Response) => {
+app.use((request: Request, response: Response) => {
     rejectResponse(response, 404, 'Not Found');
 });
 
 /**
  * Global JSON error handler
  */
-app.use((error: Error, _request: Request, response: Response, _next: NextFunction) => {
+app.use((error: Error, request: Request, response: Response, _next: NextFunction) => {
     if (response.headersSent) return;
 
     // Multer file-upload errors

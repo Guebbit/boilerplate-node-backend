@@ -3,19 +3,27 @@ import { t } from 'i18next';
 import OrderService from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteOrderRequest } from '@types';
+import { Types } from "mongoose";
 
 /**
  * DELETE /orders
  * Delete an order by id in the request body (admin).
  */
-const deleteOrders = (request: Request, response: Response): Promise<void> => {
-    if (!request.body.id) {
+const deleteOrders = (
+    request: Request<{ id?: string }, unknown, DeleteOrderRequest>,
+    response: Response
+): Promise<void> => {
+    const id = request.params.id ?? request.body.id ?? '';
+
+    // missing or not valid
+    if (!id || !Types.ObjectId.isValid(id)) {
         rejectResponse(response, 422, 'deleteOrder - missing id', [
             t('generic.error-missing-data')
         ]);
         return Promise.resolve();
     }
-    return OrderService.remove(request.body.id).then((result) => {
+
+    return OrderService.remove(id).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;

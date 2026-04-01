@@ -7,7 +7,7 @@ const router = Router();
  * GET /
  * Health-check / welcome endpoint.
  */
-router.get('/', (_request, response) => {
+router.get('/', (request, response) => {
     successResponse(response, { status: 'ok' }, 200, 'API is running');
 });
 

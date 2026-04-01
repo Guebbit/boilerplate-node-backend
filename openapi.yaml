@@ -758,6 +758,8 @@ components:
             additionalProperties: false
             required: [quantity]
             properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
                 quantity:
                     type: integer
                     minimum: 1

@@ -3,9 +3,9 @@ import { getAuth, isAuth } from '@middlewares/authorizations';
 import getCart from '@controllers/cart/get-cart';
 import getCartSummary from '@controllers/cart/get-cart-summary';
 import postCart from '@controllers/cart/post-cart';
-import putCartById from '@controllers/cart/put-cart-by-id';
+import putCartItem from '@controllers/cart/put-cart-item';
 import deleteCart from '@controllers/cart/delete-cart';
-import deleteCartById from '@controllers/cart/delete-cart-by-id';
+import deleteCartItem from '@controllers/cart/delete-cart-item';
 import postCheckout from '@controllers/cart/post-checkout';
 
 const router = Router();
@@ -30,9 +30,9 @@ router.post('/', postCart);
 router.delete('/', deleteCart);
 
 // PUT /cart/:productId — set quantity
-router.put('/:productId', putCartById);
+router.put('/:productId', putCartItem);
 
 // DELETE /cart/:productId — remove item
-router.delete('/:productId', deleteCartById);
+router.delete('/:productId', deleteCartItem);
 
 export default router;

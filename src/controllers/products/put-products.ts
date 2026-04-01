@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import ProductService from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import { resolveImageUrl } from '@utils/helpers-files';
+import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
 import type { UpdateProductRequest, UpdateProductRequestMultipart } from '@types';
 

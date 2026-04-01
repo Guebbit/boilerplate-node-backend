@@ -6,9 +6,9 @@ import postProducts from '@controllers/products/post-products';
 import putProducts from '@controllers/products/put-products';
 import deleteProducts from '@controllers/products/delete-products';
 import postProductsSearch from '@controllers/products/post-products-search';
-import getProductById from '@controllers/products/get-product-by-id';
-import putProductById from '@controllers/products/put-product-by-id';
-import deleteProductById from '@controllers/products/delete-product-by-id';
+import getProductItem from '@controllers/products/get-product-item';
+import putProductItem from '@controllers/products/put-product-item';
+import deleteProductItem from '@controllers/products/delete-product-item';
 
 const router = Router();
 
@@ -31,12 +31,12 @@ router.put('/', isAuth, isAdmin, multer.single('imageUpload'), putProducts);
 router.delete('/', isAuth, isAdmin, deleteProducts);
 
 // GET /products/:id — public
-router.get('/:id', getProductById);
+router.get('/:id', getProductItem);
 
 // PUT /products/:id — admin only
-router.put('/:id', isAuth, isAdmin, multer.single('imageUpload'), putProductById);
+router.put('/:id', isAuth, isAdmin, multer.single('imageUpload'), putProductItem);
 
 // DELETE /products/:id — admin only
-router.delete('/:id', isAuth, isAdmin, deleteProductById);
+router.delete('/:id', isAuth, isAdmin, deleteProductItem);
 
 export default router;

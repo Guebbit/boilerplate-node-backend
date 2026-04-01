@@ -258,9 +258,7 @@ export const update = (
  *
  * @param id
  */
-export const remove = (
-    id: string
-): Promise<IResponseSuccess<undefined> | IResponseReject> => {
+export const remove = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> => {
     return OrderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
         return OrderRepository.deleteOne(order).then(() =>

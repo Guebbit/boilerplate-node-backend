@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
-import { resolveImageUrl } from '@utils/helpers-files';
+import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
 import type { CreateUserRequest, CreateUserRequestMultipart } from '@types';
 

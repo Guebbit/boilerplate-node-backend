@@ -6,7 +6,7 @@ import { successResponse, rejectResponse } from '@utils/response';
  * DELETE /orders/:id
  * Delete an order by path id (admin).
  */
-const deleteOrderById = (request: Request, response: Response): Promise<void> => {
+const deleteOrderItem = (request: Request, response: Response): Promise<void> => {
     return OrderService.remove(String(request.params.id)).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
@@ -16,4 +16,4 @@ const deleteOrderById = (request: Request, response: Response): Promise<void> =>
     });
 };
 
-export default deleteOrderById;
+export default deleteOrderItem;

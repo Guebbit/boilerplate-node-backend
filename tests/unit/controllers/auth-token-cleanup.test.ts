@@ -2,9 +2,7 @@ import postLogin from '@controllers/account/post-login';
 import getRefreshToken from '@controllers/get-refresh-token';
 import UserService from '@services/users';
 import { runTokenCleanup } from '@utils/token-cleanup';
-import {
-    createAccessToken
-} from '@middlewares/auth-jwt';
+import { createAccessToken } from '@middlewares/auth-jwt';
 
 jest.mock('@utils/token-cleanup', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention

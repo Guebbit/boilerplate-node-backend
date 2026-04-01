@@ -4,13 +4,12 @@ import OrderService from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import { userScope } from '@utils/helpers-scopes';
 
-
 /**
  * GET /orders/:id
  * Get a single order by path id.
  * Non-admin users can only access their own orders.
  */
-const getOrderById = (request: Request<{ id?: string }>, response: Response): Promise<void> =>
+const getOrderItem = (request: Request<{ id?: string }>, response: Response): Promise<void> =>
     /**
      * User role filters:
      * Only admin can see all orders. Regular users can only see their own.
@@ -23,4 +22,4 @@ const getOrderById = (request: Request<{ id?: string }>, response: Response): Pr
         successResponse(response, order);
     });
 
-export default getOrderById;
+export default getOrderItem;

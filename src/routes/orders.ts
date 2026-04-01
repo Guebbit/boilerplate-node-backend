@@ -5,9 +5,9 @@ import postOrders from '@controllers/orders/post-orders';
 import putOrders from '@controllers/orders/put-orders';
 import deleteOrders from '@controllers/orders/delete-orders';
 import postOrdersSearch from '@controllers/orders/post-orders-search';
-import getOrderById from '@controllers/orders/get-order-by-id';
-import putOrderById from '@controllers/orders/put-order-by-id';
-import deleteOrderById from '@controllers/orders/delete-order-by-id';
+import getOrderItem from '@controllers/orders/get-order-item';
+import putOrderItem from '@controllers/orders/put-order-item';
+import deleteOrderItem from '@controllers/orders/delete-order-item';
 import getOrderInvoice from '@controllers/orders/get-order-invoice';
 
 const router = Router();
@@ -34,12 +34,12 @@ router.delete('/', isAdmin, deleteOrders);
 router.get('/:id/invoice', getOrderInvoice);
 
 // GET /orders/:id
-router.get('/:id', getOrderById);
+router.get('/:id', getOrderItem);
 
 // PUT /orders/:id — admin only
-router.put('/:id', isAdmin, putOrderById);
+router.put('/:id', isAdmin, putOrderItem);
 
 // DELETE /orders/:id — admin only
-router.delete('/:id', isAdmin, deleteOrderById);
+router.delete('/:id', isAdmin, deleteOrderItem);
 
 export default router;

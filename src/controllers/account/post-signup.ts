@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
-import { resolveImageUrl } from '@utils/helpers-files';
+import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 
@@ -16,7 +16,7 @@ const postSignup = (
     /**
      * Get POST data
      */
-    const { email = '', username = '', password = '', passwordConfirm = '' } = request.body;
+    const { email, username, password, passwordConfirm } = request.body;
 
     /**
      * Uploaded file takes priority over body imageUrl

@@ -40,12 +40,17 @@ export const nodemailer = (
 ): Promise<SentMessageInfo> => {
     return (
         // Render the EJS template
-        ejs.renderFile(
-        // Retrieve the template
-        path.resolve(getDirname(import.meta.url), '../../views/templates-emails', templateName),
-        // Populate the template
-        data
-    )
+        ejs
+            .renderFile(
+                // Retrieve the template
+                path.resolve(
+                    getDirname(import.meta.url),
+                    '../../views/templates-emails',
+                    templateName
+                ),
+                // Populate the template
+                data
+            )
             /**
              * Send email (nodemailer returns a Promise when no callback is provided)
              */

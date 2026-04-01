@@ -7,7 +7,7 @@ import { successResponse, rejectResponse } from '@utils/response';
  * Delete a product by path id (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-const deleteProductById = (request: Request, response: Response): Promise<void> => {
+const deleteProductItem = (request: Request, response: Response): Promise<void> => {
     // true = hard-delete; false (default) = soft-delete (sets deletedAt)
     const hardDelete = request.query.hardDelete === 'true';
     return ProductService.remove(String(request.params.id), hardDelete).then((result) => {
@@ -19,4 +19,4 @@ const deleteProductById = (request: Request, response: Response): Promise<void> 
     });
 };
 
-export default deleteProductById;
+export default deleteProductItem;

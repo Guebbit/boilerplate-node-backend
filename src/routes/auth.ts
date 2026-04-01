@@ -4,7 +4,7 @@ import multer from '@utils/multer';
 import getAccount from '@controllers/account/get-account';
 import postLogin from '@controllers/account/post-login';
 import postSignup from '@controllers/account/post-signup';
-import postReset from '@controllers/account/post-reset';
+import postResetRequest from '@controllers/account/post-reset-request';
 import postResetConfirm from '@controllers/account/post-reset-confirm';
 import getRefreshToken from '@controllers/get-refresh-token';
 import postLogoutEverywhere from '@controllers/post-logout-everywhere';
@@ -25,7 +25,7 @@ router.post('/login', postLogin);
 router.post('/signup', multer.single('imageUpload'), postSignup);
 
 // POST /account/reset — request password reset email
-router.post('/reset', postReset);
+router.post('/reset', postResetRequest);
 
 // POST /account/reset-confirm — complete password reset with token
 router.post('/reset-confirm', postResetConfirm);

@@ -115,10 +115,7 @@ export const search = (
  * @param id
  * @param admin
  */
-export const getById = (
-    id: string | undefined,
-    admin = false
-)=> {
+export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
     if (admin) return ProductRepository.findById(id).lean().exec();
@@ -126,7 +123,9 @@ export const getById = (
         _id: id,
         active: true,
         deletedAt: undefined
-    }).lean().exec();
+    })
+        .lean()
+        .exec();
 };
 
 /**
@@ -193,7 +192,9 @@ export const remove = (
 
         // HARD delete
         if (hardDelete)
-            return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+            return UserService.productRemoveFromCartsById(
+                (product._id as Types.ObjectId).toString()
+            )
                 .then(() => ProductRepository.deleteOne(product))
                 .then(() =>
                     deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)

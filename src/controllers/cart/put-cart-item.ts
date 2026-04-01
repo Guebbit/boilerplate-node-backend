@@ -8,29 +8,25 @@ import type { UpdateCartItemByIdRequest } from '@types';
  * PUT /cart/:productId
  * Set the quantity of a specific cart item. Returns the updated cart.
  */
-const putCartById = (request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>, response: Response): Promise<void> => {
+const putCartItem = (
+    request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
+    response: Response
+): Promise<void> => {
     const user = request.user!;
-    const productId = String(request.params);
-    const { quantity } = request.body;
+    const productId = String(request.params.productId ?? request.body.productId);
 
-    if (!quantity || quantity < 1) {
+    if (!request.body.quantity || request.body.quantity < 1) {
         rejectResponse(response, 422, 'updateCartItemById - invalid quantity', [
             t('generic.error-invalid-data')
         ]);
         return Promise.resolve();
     }
 
-    const existing = request.user!.cart.items.find((i) => i.product.equals(productId));
-    if (!existing) {
-        rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        return Promise.resolve();
-    }
-
-    return UserService.cartItemSetById(user, productId, quantity)
+    return UserService.cartItemSetById(user, productId, request.body.quantity)
         .then(() => UserService.cartGetWithSummary(user))
         .then((cart) => {
             successResponse(response, cart);
         });
 };
 
-export default putCartById;
+export default putCartItem;

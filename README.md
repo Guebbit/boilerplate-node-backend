@@ -20,3 +20,7 @@
 # TODO
 
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
+- Create a mysql sequelize version
+- Create a FASTIFY version
+- Create a NESTJS version
+- Add\Try graphql with graphql-yoga

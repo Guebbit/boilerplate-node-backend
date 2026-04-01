@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import UserService from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
-import { resolveImageUrl } from '@utils/helpers-files';
+import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
 import type { UpdateUserByIdRequest, UpdateUserByIdRequestMultipart } from '@types';
 
@@ -11,7 +11,11 @@ import type { UpdateUserByIdRequest, UpdateUserByIdRequestMultipart } from '@typ
  * Update a user by path id (admin).
  */
 const putUserById = (
-    request: Request<{ id?: string }, unknown, UpdateUserByIdRequest | UpdateUserByIdRequestMultipart>,
+    request: Request<
+        { id?: string },
+        unknown,
+        UpdateUserByIdRequest | UpdateUserByIdRequestMultipart
+    >,
     response: Response
 ): Promise<void> => {
     /**
