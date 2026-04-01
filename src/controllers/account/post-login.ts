@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import {
     createRefreshToken,
     createRefreshCookie,
@@ -30,7 +30,7 @@ export const postLogin = (
      * Run token cleanup as a background pre-flight step, then authenticate.
      */
     return runTokenCleanup()
-        .then(() => UserService.login(email, password))
+        .then(() => userService.login(email, password))
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.message, result.errors);
@@ -65,4 +65,3 @@ export const postLogin = (
                 });
         });
 };
-

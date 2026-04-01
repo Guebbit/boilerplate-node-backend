@@ -3,13 +3,13 @@ import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import { createOrder, makeOrder, toOrderProduct } from '../../helpers/factories/orders';
-import * as OrderRepository from '@repositories/orders';
+import * as orderRepository from '@repositories/orders';
 
 beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-describe('OrderRepository', () => {
+describe('orderRepository', () => {
     describe('create', () => {
         it('inserts an order and returns the Mongoose document', async () => {
             const user = await createUser();
@@ -66,7 +66,7 @@ describe('OrderRepository', () => {
             // An empty $match stage matches every document.
             // MongoDB (and Mongoose) require at least one stage; passing an
             // empty array throws MongooseError: Aggregate has empty pipeline.
-            const results = await OrderRepository.aggregate([{ $match: {} }]);
+            const results = await orderRepository.aggregate([{ $match: {} }]);
 
             expect(results).toHaveLength(2);
         });
@@ -77,7 +77,7 @@ describe('OrderRepository', () => {
             const order = await createOrder(user, [toOrderProduct(product, 1)]);
 
             // Only orders for this specific user
-            const results = await OrderRepository.aggregate([{ $match: { userId: order.userId } }]);
+            const results = await orderRepository.aggregate([{ $match: { userId: order.userId } }]);
 
             expect(results).toHaveLength(1);
         });
@@ -89,7 +89,7 @@ describe('OrderRepository', () => {
             await createOrder(user, [toOrderProduct(product, 2)]);
             await createOrder(user, [toOrderProduct(product, 3)]);
 
-            const [result] = await OrderRepository.aggregate<{ total: number }>([
+            const [result] = await orderRepository.aggregate<{ total: number }>([
                 { $count: 'total' }
             ]);
 
@@ -102,7 +102,7 @@ describe('OrderRepository', () => {
             await createOrder(user, [toOrderProduct(product, 4)]);
 
             // Manually compute totalPrice the same way the Order service does
-            const [result] = await OrderRepository.aggregate<{
+            const [result] = await orderRepository.aggregate<{
                 totalQuantity: number;
                 totalPrice: number;
             }>([
@@ -131,10 +131,10 @@ describe('OrderRepository', () => {
             const product = await createProduct();
             // Insert 5 orders
             for (let i = 0; i < 5; i++) {
-                await OrderRepository.create(makeOrder(user, [toOrderProduct(product, i + 1)]));
+                await orderRepository.create(makeOrder(user, [toOrderProduct(product, i + 1)]));
             }
 
-            const page2 = await OrderRepository.aggregate([
+            const page2 = await orderRepository.aggregate([
                 { $sort: { createdAt: -1 } },
                 { $skip: 3 },
                 { $limit: 10 }

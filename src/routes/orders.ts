@@ -41,4 +41,3 @@ router.put('/:id', isAdmin, putOrderItem);
 
 // DELETE /orders/:id — admin only
 router.delete('/:id', isAdmin, deleteOrderItem);
-

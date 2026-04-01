@@ -12,4 +12,3 @@ export const getAccount = (request: Request, response: Response): void => {
     }
     successResponse(response, request.user.toObject());
 };
-

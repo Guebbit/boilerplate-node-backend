@@ -38,4 +38,3 @@ router.put('/:id', upload.single('imageUpload'), putUserItem);
 
 // DELETE /users/:id
 router.delete('/:id', deleteUserItem);
-

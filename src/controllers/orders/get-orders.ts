@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { orderService as OrderService } from '@services/orders';
+import { orderService } from '@services/orders';
 import { successResponse } from '@utils/response';
 import type { SearchOrdersRequest } from '@types';
 import { userScope } from '@utils/helpers-scopes';
@@ -18,24 +18,30 @@ export const getOrders = (
     request: Request<{ page?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
 ) => {
-    const page = request.body.page ?? request.query.page ?? '1'
-    const pageSize = request.body.pageSize ?? request.query.pageSize ?? process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? '10'
+    const page = request.body.page ?? request.query.page ?? '1';
+    const pageSize =
+        request.body.pageSize ??
+        request.query.pageSize ??
+        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ??
+        '10';
 
     /**
      * User role filters:
      * Only admin can see all orders. Regular users can only see their own.
      */
-    return OrderService.search({
-            id: request.body.id ?? request.query.id,
-            page: page ? Number(page) : undefined,
-            pageSize: pageSize ? Number(pageSize) : undefined,
-            userId: request.body.userId ?? request.query.userId,
-            productId: request.body.productId ?? request.query.productId,
-            email: request.body.email ?? request.query.email,
-        },
-        userScope(request)
-    ).then((result) => {
-        successResponse(response, result);
-    });
+    return orderService
+        .search(
+            {
+                id: request.body.id ?? request.query.id,
+                page: page ? Number(page) : undefined,
+                pageSize: pageSize ? Number(pageSize) : undefined,
+                userId: request.body.userId ?? request.query.userId,
+                productId: request.body.productId ?? request.query.productId,
+                email: request.body.email ?? request.query.email
+            },
+            userScope(request)
+        )
+        .then((result) => {
+            successResponse(response, result);
+        });
 };
-

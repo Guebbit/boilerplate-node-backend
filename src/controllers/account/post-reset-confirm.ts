@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
-import { userRepository as UserRepository } from '@repositories/users';
+import { userService } from '@services/users';
+import { userRepository } from '@repositories/users';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetConfirmRequest } from '@types';
-import { nodemailer } from "@utils/nodemailer";
+import { nodemailer } from '@utils/nodemailer';
 
 /**
  * POST /account/reset-confirm
@@ -24,12 +24,13 @@ export const postResetConfirm = (
     /**
      * Search user by token
      */
-    return UserRepository.findOne({
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        'tokens.token': token,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        'tokens.type': 'password'
-    })
+    return userRepository
+        .findOne({
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'tokens.token': token,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'tokens.type': 'password'
+        })
         .then((user) => {
             // Wrong token
             if (!user) {
@@ -52,42 +53,39 @@ export const postResetConfirm = (
             /**
              * Change password
              */
-            return UserService.passwordChange(user, password, passwordConfirm).then(
-                (result) => {
-                    if (!result.success) {
-                        rejectResponse(response, result.status, result.message, result.errors);
-                        return;
-                    }
-
-                    /**
-                     * Consume the token and save the user
-                     */
-                    user.tokens = user.tokens.filter((tk) => tk.token !== token);
-                    return UserRepository.save(user).then(() => {
-                        // send confirmation email (no need to wait)
-                        void nodemailer(
-                            {
-                                to: user.email,
-                                subject: 'Password change confirmed'
-                            },
-                            'email-reset-confirm.ejs',
-                            {
-                                ...response.locals,
-                                pageMetaTitle: 'Password change confirmed',
-                                pageMetaLinks: [],
-                                name: user.username
-                            }
-                        );
-
-                        destroyRefreshCookie(response);
-                        destroyLoggedCookie(response);
-                        successResponse(response, undefined, 200, t('reset.success'));
-                    });
+            return userService.passwordChange(user, password, passwordConfirm).then((result) => {
+                if (!result.success) {
+                    rejectResponse(response, result.status, result.message, result.errors);
+                    return;
                 }
-            );
+
+                /**
+                 * Consume the token and save the user
+                 */
+                user.tokens = user.tokens.filter((tk) => tk.token !== token);
+                return userRepository.save(user).then(() => {
+                    // send confirmation email (no need to wait)
+                    void nodemailer(
+                        {
+                            to: user.email,
+                            subject: 'Password change confirmed'
+                        },
+                        'email-reset-confirm.ejs',
+                        {
+                            ...response.locals,
+                            pageMetaTitle: 'Password change confirmed',
+                            pageMetaLinks: [],
+                            name: user.username
+                        }
+                    );
+
+                    destroyRefreshCookie(response);
+                    destroyLoggedCookie(response);
+                    successResponse(response, undefined, 200, t('reset.success'));
+                });
+            });
         })
         .catch(() => {
             rejectResponse(response, 500, 'Internal Server Error');
         });
 };
-

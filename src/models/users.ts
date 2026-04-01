@@ -278,4 +278,3 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
  * Model
  */
 export const userModel = model<IUserDocument, IUserModel>('User', userSchema);
-

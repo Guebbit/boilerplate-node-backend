@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse } from '@utils/response';
 import type { SearchUsersRequest } from '@types';
 
@@ -11,7 +11,6 @@ export const postUsersSearch = (
     request: Request<unknown, unknown, SearchUsersRequest>,
     response: Response
 ) =>
-    UserService.search(request.body).then((result) => {
+    userService.search(request.body).then((result) => {
         successResponse(response, result);
     });
-

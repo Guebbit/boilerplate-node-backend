@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { productService as ProductService } from '@services/products';
+import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -26,10 +26,11 @@ export const putProducts = (
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    return ProductService.update(request.body.id, {
-        ...request.body,
-        imageUrl: imageUrl ?? request.body.imageUrl
-    })
+    return productService
+        .update(request.body.id, {
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
+        })
         .then((product) => {
             successResponse(response, product.toObject());
         })
@@ -41,4 +42,3 @@ export const putProducts = (
             })
         );
 };
-

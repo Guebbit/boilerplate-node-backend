@@ -25,17 +25,17 @@
  *   import { createUser, PLAIN_PASSWORD } from '../helpers/factories/users';
  *
  *   const user = await createUser({ email: 'alice@example.com' });
- *   const loginResult = await UserService.login(user.email, PLAIN_PASSWORD);
+ *   const loginResult = await userService.login(user.email, PLAIN_PASSWORD);
  */
 
 import type { IUser, IUserDocument, ICartItem } from '@models/users';
-import { userRepository as UserRepository } from '@repositories/users';
+import { userRepository } from '@repositories/users';
 
 /** Plain-text password used by the default factory.  Re-export so tests can
  *  authenticate without duplicating this string everywhere. */
 export const PLAIN_PASSWORD = 'Password1!';
 
-/** The minimal shape accepted by UserRepository.create(). */
+/** The minimal shape accepted by userRepository.create(). */
 type CreateUserInput = Pick<
     IUser,
     'email' | 'username' | 'password' | 'admin' | 'cart' | 'tokens'
@@ -66,7 +66,7 @@ export const makeUser = (overrides: Partial<CreateUserInput> = {}): CreateUserIn
  * @param overrides - Fields to override the factory defaults.
  */
 export const createUser = (overrides: Partial<CreateUserInput> = {}): Promise<IUserDocument> =>
-    UserRepository.create(makeUser(overrides) as Partial<IUserDocument>);
+    userRepository.create(makeUser(overrides) as Partial<IUserDocument>);
 
 /**
  * Insert an admin user (admin: true) into the test database.

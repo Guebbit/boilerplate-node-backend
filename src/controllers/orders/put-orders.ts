@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { orderService as OrderService } from '@services/orders';
+import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateOrderRequest } from '@types';
 
@@ -19,31 +19,32 @@ export const putOrders = (
         return Promise.resolve();
     }
 
-    return OrderService.update(request.body.id, {
-        ...request.body,
-        status: request.body.status as string | undefined
-    }).then((result) => {
-        if (!result.success) {
-            rejectResponse(response, result.status, result.message, result.errors);
-            return;
-        }
+    return orderService
+        .update(request.body.id, {
+            ...request.body,
+            status: request.body.status as string | undefined
+        })
+        .then((result) => {
+            if (!result.success) {
+                rejectResponse(response, result.status, result.message, result.errors);
+                return;
+            }
 
-        // This is just an order edit
-        // void nodemailer(
-        //     {
-        //         to: request.user!.email,
-        //         subject: 'Order confirmed'
-        //     },
-        //     'email-order-confirm.ejs',
-        //     {
-        //         ...response.locals,
-        //         pageMetaTitle: 'Order confirmed',
-        //         pageMetaLinks: [],
-        //         name: request.user!.username
-        //     }
-        // );
+            // This is just an order edit
+            // void nodemailer(
+            //     {
+            //         to: request.user!.email,
+            //         subject: 'Order confirmed'
+            //     },
+            //     'email-order-confirm.ejs',
+            //     {
+            //         ...response.locals,
+            //         pageMetaTitle: 'Order confirmed',
+            //         pageMetaLinks: [],
+            //         name: request.user!.username
+            //     }
+            // );
 
-        successResponse(response, result.data);
-    });
+            successResponse(response, result.data);
+        });
 };
-

@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -18,7 +18,7 @@ export const postUsers = (
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    const errors = UserService.validateData({
+    const errors = userService.validateData({
         ...request.body,
         imageUrl: imageUrl ?? request.body.imageUrl
     });
@@ -28,10 +28,11 @@ export const postUsers = (
             rejectResponse(response, 422, 'createUser - validation failed', errors);
         });
 
-    return UserService.adminCreate({
-        ...request.body,
-        imageUrl: imageUrl ?? request.body.imageUrl
-    })
+    return userService
+        .adminCreate({
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
+        })
         .then((user) => {
             successResponse(response, user.toObject(), 201);
         })
@@ -41,4 +42,3 @@ export const postUsers = (
             })
         );
 };
-

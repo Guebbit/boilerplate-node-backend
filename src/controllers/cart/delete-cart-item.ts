@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 
@@ -22,10 +22,10 @@ export const deleteCartItem = (
         return Promise.resolve();
     }
 
-    return UserService.cartItemRemoveById(user, productId)
-        .then(() => UserService.cartGetWithSummary(user))
+    return userService
+        .cartItemRemoveById(user, productId)
+        .then(() => userService.cartGetWithSummary(user))
         .then((cart) => {
             successResponse(response, cart);
         });
 };
-

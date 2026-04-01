@@ -41,4 +41,3 @@ router.post('/logout-all', isAuth, postLogoutEverywhere);
 
 // DELETE /account/tokens/expired — remove expired tokens from the DB (admin only)
 router.delete('/tokens/expired', isAuth, isAdmin, deleteExpiredTokens);
-

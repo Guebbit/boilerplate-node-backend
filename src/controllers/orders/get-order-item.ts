@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { orderService as OrderService } from '@services/orders';
+import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import { userScope } from '@utils/helpers-scopes';
 
@@ -14,11 +14,10 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
      * User role filters:
      * Only admin can see all orders. Regular users can only see their own.
      */
-    OrderService.getById(String(request.params.id), userScope(request)).then((order) => {
+    orderService.getById(String(request.params.id), userScope(request)).then((order) => {
         if (!order) {
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
             return;
         }
         successResponse(response, order);
     });
-

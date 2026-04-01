@@ -23,4 +23,3 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
             return rejectResponse(response, status, message);
         });
 };
-

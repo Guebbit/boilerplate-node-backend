@@ -28,7 +28,7 @@ export const getWebsocketTest = (request: Request, response: Response) => {
                 reason instanceof Buffer ? reason.toString() : reason
             )
     });
-    
+
     logger.info(`SERVER: running on ${url}`);
 
     // Create a WebSocket client after 1 second (to ensure that server started)
@@ -55,4 +55,3 @@ export const getWebsocketTest = (request: Request, response: Response) => {
         message: 'Websocket test initiated'
     });
 };
-

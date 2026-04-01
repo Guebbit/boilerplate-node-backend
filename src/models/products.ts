@@ -83,4 +83,3 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
 );
 
 export const productModel = model<IProductDocument, IProductModel>('Product', productSchema);
-

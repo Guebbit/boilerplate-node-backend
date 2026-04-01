@@ -1,11 +1,11 @@
 import path from 'node:path';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { orderService as OrderService } from '@services/orders';
+import { orderService } from '@services/orders';
 import { rejectResponse } from '@utils/response';
 import { userScope } from '@utils/helpers-scopes';
-import ejs from "ejs";
-import puppeteer from "puppeteer-core";
+import ejs from 'ejs';
+import puppeteer from 'puppeteer-core';
 
 /**
  * GET /orders/:id/invoice
@@ -20,26 +20,23 @@ export const getOrderInvoice = (request: Request, response: Response) =>
      * Get order info from database
      * User role filters: Only admin can see all orders. Regular users can only see their own.
      */
-    OrderService.getById(String(request.params.id), userScope(request))
+    orderService
+        .getById(String(request.params.id), userScope(request))
         .then((order) => {
             if (!order) {
-                rejectResponse(response, 404, 'Not Found', [ t('ecommerce.order-not-found') ]);
+                rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
                 return;
             }
 
             /**
              * Create PDF file using the invoice EJS template
              */
-            const templatePath = path.resolve(
-                'views',
-                'templates-files',
-                'invoice-order-file.ejs'
-            );
+            const templatePath = path.resolve('views', 'templates-files', 'invoice-order-file.ejs');
 
             return ejs
                 .renderFile(templatePath, {
                     order,
-                    pageMetaTitle: `Invoice - Order ${ String(order._id) }`
+                    pageMetaTitle: `Invoice - Order ${String(order._id)}`
                 })
                 .then((html) =>
                     /**
@@ -50,7 +47,7 @@ export const getOrderInvoice = (request: Request, response: Response) =>
                             executablePath:
                                 process.env.PUPPETEER_EXECUTABLE_PATH ??
                                 '/usr/bin/chromium-browser',
-                            args: [ '--no-sandbox', '--disable-setuid-sandbox' ]
+                            args: ['--no-sandbox', '--disable-setuid-sandbox']
                         })
                         .then((browser) =>
                             browser
@@ -67,7 +64,7 @@ export const getOrderInvoice = (request: Request, response: Response) =>
                                             .setHeader('Content-Type', 'application/pdf')
                                             .setHeader(
                                                 'Content-Disposition',
-                                                `attachment; filename="invoice-${ String(order._id) }.pdf"`
+                                                `attachment; filename="invoice-${String(order._id)}.pdf"`
                                             )
                                             .send(pdf);
                                     })
@@ -76,6 +73,5 @@ export const getOrderInvoice = (request: Request, response: Response) =>
                 );
         })
         .catch((error: Error) => {
-            rejectResponse(response, 500, 'Invoice generation failed', [ error.message ]);
+            rejectResponse(response, 500, 'Invoice generation failed', [error.message]);
         });
-

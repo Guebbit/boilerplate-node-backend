@@ -7,4 +7,3 @@ export const router = express.Router();
 router.get('/reset-database', getResetDatabase);
 
 router.get('/heavy', getHeavyLoad);
-

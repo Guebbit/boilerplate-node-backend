@@ -20,4 +20,3 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
         successResponse(response, undefined, 200, 'Logged out from all devices');
     });
 };
-

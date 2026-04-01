@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
@@ -8,7 +8,7 @@ import { successResponse, rejectResponse } from '@utils/response';
  * Get a single user by path id (admin).
  */
 export const getUserItem = (request: Request, response: Response) => {
-    return UserService.getById(String(request.params.id)).then((user) => {
+    return userService.getById(String(request.params.id)).then((user) => {
         if (!user) {
             rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
             return;
@@ -16,4 +16,3 @@ export const getUserItem = (request: Request, response: Response) => {
         successResponse(response, user);
     });
 };
-

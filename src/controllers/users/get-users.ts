@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse } from '@utils/response';
 import type { SearchUsersRequest } from '@types';
 
@@ -21,8 +21,7 @@ export const getUsers = (request: Request, response: Response) => {
         pageSize: pageSize ? Number(pageSize) : undefined,
         active: active === undefined ? undefined : active === 'true'
     };
-    return UserService.search(filters).then((result) => {
+    return userService.search(filters).then((result) => {
         successResponse(response, result);
     });
 };
-

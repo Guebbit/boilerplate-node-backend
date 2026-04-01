@@ -37,4 +37,3 @@ export const getRefreshToken = async (request: Request<{ token?: string }>, resp
         rejectResponse(response, 401, 'Unauthorized');
     }
 };
-

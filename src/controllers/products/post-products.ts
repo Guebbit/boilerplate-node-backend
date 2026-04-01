@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { productService as ProductService } from '@services/products';
+import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -18,7 +18,7 @@ export const postProducts = (
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    const errors = ProductService.validateData({
+    const errors = productService.validateData({
         ...request.body,
         imageUrl: imageUrl ?? request.body.imageUrl
     });
@@ -27,10 +27,11 @@ export const postProducts = (
             rejectResponse(response, 422, 'createProduct - validation failed', errors);
         });
 
-    return ProductService.create({
-        ...request.body,
-        imageUrl: imageUrl ?? request.body.imageUrl
-    })
+    return productService
+        .create({
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
+        })
         .then((product) => {
             successResponse(response, product.toObject(), 201);
         })
@@ -40,4 +41,3 @@ export const postProducts = (
             })
         );
 };
-

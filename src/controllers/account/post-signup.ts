@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -26,20 +26,15 @@ export const postSignup = (
     /**
      * Register
      */
-    return UserService.signup(
-        email,
-        username,
-        password,
-        passwordConfirm,
-        imageUrl ?? request.body.imageUrl
-    ).then((result) => {
-        if (!result.success)
-            return (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve()).then(() => {
-                rejectResponse(response, result.status, result.message, result.errors);
-            });
+    return userService
+        .signup(email, username, password, passwordConfirm, imageUrl ?? request.body.imageUrl)
+        .then((result) => {
+            if (!result.success)
+                return (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve()).then(() => {
+                    rejectResponse(response, result.status, result.message, result.errors);
+                });
 
-        // Registration successful
-        successResponse(response, result.data, 201);
-    });
+            // Registration successful
+            successResponse(response, result.data, 201);
+        });
 };
-

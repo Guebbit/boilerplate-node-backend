@@ -9,10 +9,10 @@ import {
     type IResponseSuccess
 } from '@utils/response';
 import { deleteFile } from '@utils/helpers-filesystem';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
-import { productRepository as ProductRepository } from '@repositories/products';
+import { productRepository } from '@repositories/products';
 
 /**
  * Product Service
@@ -90,20 +90,22 @@ export const search = (
     }
 
     // First count the total number of products matching the query
-    return ProductRepository.count(where).then((totalItems) =>
-        ProductRepository.findAll(where, {
-            sort: { createdAt: -1 },
-            skip,
-            limit: pageSize
-        }).then((items) => ({
-            items: items as unknown as ProductsResponse['items'],
-            meta: {
-                page,
-                pageSize,
-                totalItems,
-                totalPages: Math.ceil(totalItems / pageSize)
-            }
-        }))
+    return productRepository.count(where).then((totalItems) =>
+        productRepository
+            .findAll(where, {
+                sort: { createdAt: -1 },
+                skip,
+                limit: pageSize
+            })
+            .then((items) => ({
+                items: items as unknown as ProductsResponse['items'],
+                meta: {
+                    page,
+                    pageSize,
+                    totalItems,
+                    totalPages: Math.ceil(totalItems / pageSize)
+                }
+            }))
     );
 };
 
@@ -118,12 +120,13 @@ export const search = (
 export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
-    if (admin) return ProductRepository.findById(id).lean().exec();
-    return ProductRepository.findOne({
-        _id: id,
-        active: true,
-        deletedAt: undefined
-    })
+    if (admin) return productRepository.findById(id).lean().exec();
+    return productRepository
+        .findOne({
+            _id: id,
+            active: true,
+            deletedAt: undefined
+        })
         .lean()
         .exec();
 };
@@ -134,7 +137,7 @@ export const getById = (id: string | undefined, admin = false) => {
  * @param data
  */
 export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
-    ProductRepository.create(data);
+    productRepository.create(data);
 
 /**
  * Update an existing product by ID.
@@ -148,7 +151,7 @@ export const update = (
     id: string,
     data: Partial<Omit<Product, 'id'>>
 ): Promise<IProductDocument> => {
-    return ProductRepository.findById(id).then((product) => {
+    return productRepository.findById(id).then((product) => {
         if (!product) throw new Error('404');
 
         // Apply incoming field changes
@@ -163,7 +166,7 @@ export const update = (
         if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
         // Persist the updated document
-        return ProductRepository.save(product).then((updatedProduct) =>
+        return productRepository.save(product).then((updatedProduct) =>
             // After saving the new image path, delete the old image file
             (newImageUrl && oldImageUrl !== newImageUrl
                 ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
@@ -186,16 +189,15 @@ export const remove = (
     id: string,
     hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
-    return ProductRepository.findById(id).then((product) => {
+    return productRepository.findById(id).then((product) => {
         // not found, something happened
         if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
 
         // HARD delete
         if (hardDelete)
-            return UserService.productRemoveFromCartsById(
-                (product._id as Types.ObjectId).toString()
-            )
-                .then(() => ProductRepository.deleteOne(product))
+            return userService
+                .productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+                .then(() => productRepository.deleteOne(product))
                 .then(() =>
                     deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)
                 )
@@ -205,8 +207,9 @@ export const remove = (
         product.deletedAt = product.deletedAt ? undefined : new Date();
 
         // SOFT delete (or restore)
-        return UserService.productRemoveFromCartsById((product._id as Types.ObjectId).toString())
-            .then(() => ProductRepository.save(product))
+        return userService
+            .productRemoveFromCartsById((product._id as Types.ObjectId).toString())
+            .then(() => productRepository.save(product))
             .then((savedProduct) =>
                 generateSuccess(savedProduct, 200, t('ecommerce.product-soft-deleted'))
             );

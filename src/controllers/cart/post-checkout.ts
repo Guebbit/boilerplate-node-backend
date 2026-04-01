@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
@@ -9,7 +9,7 @@ import { successResponse, rejectResponse } from '@utils/response';
  */
 export const postCheckout = (request: Request, response: Response) => {
     const user = request.user!;
-    return UserService.orderConfirm(user).then((result) => {
+    return userService.orderConfirm(user).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -21,4 +21,3 @@ export const postCheckout = (request: Request, response: Response) => {
         );
     });
 };
-

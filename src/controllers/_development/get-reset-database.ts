@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import mongoose, { Types } from 'mongoose';
-import { userRepository as UserRepository } from '@repositories/users';
-import { productRepository as ProductRepository } from '@repositories/products';
-import { orderRepository as OrderRepository } from '@repositories/orders';
+import { userRepository } from '@repositories/users';
+import { productRepository } from '@repositories/products';
+import { orderRepository } from '@repositories/orders';
 import type { IOrderDocument } from '@models/orders';
 
 /**
@@ -19,7 +19,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
         .then(() =>
             Promise.all([
                 // users
-                UserRepository.create({
+                userRepository.create({
                     _id: new Types.ObjectId('65dd2bdb923652b7800fe180'),
                     username: 'root',
                     email: 'root@root.it',
@@ -41,7 +41,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                     },
                     tokens: []
                 }),
-                UserRepository.create({
+                userRepository.create({
                     _id: new Types.ObjectId('65de646a44f861fd83c13f13'),
                     username: 'ginopinoshow',
                     email: 'gino@pino.it',
@@ -53,7 +53,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                 }),
 
                 // products
-                ProductRepository.create({
+                productRepository.create({
                     _id: new Types.ObjectId('65dc8a99604c307b702b5ccc'),
                     title: 'Sallyno Panino',
                     price: 100,
@@ -61,7 +61,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                     active: true,
                     description: 'Piccolo Sallyno panino. Da mangiare di coccole'
                 }),
-                ProductRepository.create({
+                productRepository.create({
                     _id: new Types.ObjectId('65dc8ad8604c307b702b5cd4'),
                     title: 'Sallyno Carino',
                     price: 50,
@@ -71,7 +71,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                         'Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.',
                     deletedAt: new Date('2024-02-26T23:34:44.832Z')
                 }),
-                ProductRepository.create({
+                productRepository.create({
                     _id: new Types.ObjectId('65dc9be92f2794d1c16741e1'),
                     title: 'Miciona inutile',
                     price: 1,
@@ -80,7 +80,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                     description:
                         'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire'
                 }),
-                ProductRepository.create({
+                productRepository.create({
                     _id: new Types.ObjectId('65dcdec2b18ad5e4bd597f0f'),
                     title: 'Micino pufettino',
                     price: 77,
@@ -88,7 +88,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                     active: true,
                     description: 'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.'
                 }),
-                ProductRepository.create({
+                productRepository.create({
                     _id: new Types.ObjectId('6622c88a5123b1e286f440f8'),
                     title: 'Bundle micini',
                     price: 40,
@@ -98,7 +98,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                 }),
 
                 //orders
-                OrderRepository.create({
+                orderRepository.create({
                     _id: new Types.ObjectId('65de73a69ca05739be2b5e85'),
                     userId: new Types.ObjectId('65dd2bdb923652b7800fe180'),
                     email: 'oldpsw@root.it',
@@ -128,7 +128,7 @@ export const getResetDatabase = (request: Request, response: Response) =>
                         }
                     ]
                 } as unknown as Partial<IOrderDocument>),
-                OrderRepository.create({
+                orderRepository.create({
                     _id: new Types.ObjectId('661c795a9e22bcbef63a5832'),
                     userId: new Types.ObjectId('65dd2bdb923652b7800fe180'),
                     email: 'root@root.it',

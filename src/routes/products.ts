@@ -37,4 +37,3 @@ router.put('/:id', isAuth, isAdmin, upload.single('imageUpload'), putProductItem
 
 // DELETE /products/:id — admin only
 router.delete('/:id', isAuth, isAdmin, deleteProductItem);
-

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -23,10 +23,11 @@ export const putUserItem = (
      */
     const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
 
-    return UserService.adminUpdate(String(request.params.id), {
-        ...request.body,
-        imageUrl: imageUrl ?? request.body.imageUrl
-    })
+    return userService
+        .adminUpdate(String(request.params.id), {
+            ...request.body,
+            imageUrl: imageUrl ?? request.body.imageUrl
+        })
         .then((user) => {
             successResponse(response, user.toObject());
         })
@@ -38,4 +39,3 @@ export const putUserItem = (
             })
         );
 };
-

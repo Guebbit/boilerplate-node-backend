@@ -12,7 +12,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Throws if all attempts are exhausted.
  */
 export const start = () => {
-    const attemptConnect = (attempt: number) =>
+    const attemptConnect = (attempt: number): Promise<void> =>
         mongoose.connect(process.env.NODE_DB_URI ?? '').then(
             () => {},
             () => {

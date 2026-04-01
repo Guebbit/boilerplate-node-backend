@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
-import { nodemailer } from "@utils/nodemailer";
+import { nodemailer } from '@utils/nodemailer';
 
 /**
  * POST /orders
@@ -26,29 +26,26 @@ export const postOrders = (
     /**
      * Create a new order
      */
-    return UserService.orderConfirm(request.user!).then(
-        (result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.message, result.errors);
-                return;
-            }
-
-            void nodemailer(
-                {
-                    to: request.user!.email,
-                    subject: 'Order confirmed'
-                },
-                'email-order-confirm.ejs',
-                {
-                    ...response.locals,
-                    pageMetaTitle: 'Order confirmed',
-                    pageMetaLinks: [],
-                    name: request.user!.username
-                }
-            );
-
-            successResponse(response, result.data, 201);
+    return userService.orderConfirm(request.user!).then((result) => {
+        if (!result.success) {
+            rejectResponse(response, result.status, result.message, result.errors);
+            return;
         }
-    );
-};
 
+        void nodemailer(
+            {
+                to: request.user!.email,
+                subject: 'Order confirmed'
+            },
+            'email-order-confirm.ejs',
+            {
+                ...response.locals,
+                pageMetaTitle: 'Order confirmed',
+                pageMetaLinks: [],
+                name: request.user!.username
+            }
+        );
+
+        successResponse(response, result.data, 201);
+    });
+};

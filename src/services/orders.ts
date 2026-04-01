@@ -10,8 +10,8 @@ import {
     type IResponseReject,
     type IResponseSuccess
 } from '@utils/response';
-import { productRepository as ProductRepository } from '@repositories/products';
-import { orderRepository as OrderRepository } from '@repositories/orders';
+import { productRepository } from '@repositories/products';
+import { orderRepository } from '@repositories/orders';
 
 /**
  * Order Service
@@ -55,7 +55,7 @@ const addComputedFields: PipelineStage.AddFields = {
  * @param pipeline - Optional stages to apply BEFORE the computed fields stage
  */
 export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]> =>
-    OrderRepository.aggregate([...pipeline, addComputedFields]);
+    orderRepository.aggregate([...pipeline, addComputedFields]);
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI.
@@ -99,29 +99,26 @@ export const search = (
         addComputedFields
     ];
 
-    return OrderRepository.aggregate<{ totalItems?: number }>([
-        ...basePipeline,
-        { $count: 'totalItems' }
-    ]).then(([countAgg]) => {
-        const totalItems = countAgg?.totalItems ?? 0;
-        const totalPages = Math.ceil(totalItems / pageSize);
+    return orderRepository
+        .aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }])
+        .then(([countAgg]) => {
+            const totalItems = countAgg?.totalItems ?? 0;
+            const totalPages = Math.ceil(totalItems / pageSize);
 
-        return OrderRepository.aggregate([
-            ...basePipeline,
-            { $skip: skip },
-            { $limit: pageSize }
-        ]).then((items) => ({
-            // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
-            // (products vs items, userId ObjectId vs string) but the runtime data is compatible
-            items: items as unknown as Order[],
-            meta: {
-                page,
-                pageSize,
-                totalItems,
-                totalPages
-            }
-        }));
-    });
+            return orderRepository
+                .aggregate([...basePipeline, { $skip: skip }, { $limit: pageSize }])
+                .then((items) => ({
+                    // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
+                    // (products vs items, userId ObjectId vs string) but the runtime data is compatible
+                    items: items as unknown as Order[],
+                    meta: {
+                        page,
+                        pageSize,
+                        totalItems,
+                        totalPages
+                    }
+                }));
+        });
 };
 
 /**
@@ -138,15 +135,17 @@ export const getById = (
     if (!id) return Promise.resolve();
     if (scope) {
         // Use aggregate so we can apply both _id and scope filters
-        return OrderRepository.aggregate([
-            {
-                $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown>
-            },
-            { $limit: 1 },
-            addComputedFields
-        ]).then(([result]) => result ?? undefined);
+        return orderRepository
+            .aggregate([
+                {
+                    $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown>
+                },
+                { $limit: 1 },
+                addComputedFields
+            ])
+            .then(([result]) => result ?? undefined);
     }
-    return OrderRepository.findById(id);
+    return orderRepository.findById(id);
 };
 
 /**
@@ -169,7 +168,8 @@ export const create = (
 
     return Promise.all(
         items.map((item) =>
-            ProductRepository.findById(item.productId)
+            productRepository
+                .findById(item.productId)
                 .lean()
                 .then((product) => ({ item, product }))
         )
@@ -188,13 +188,13 @@ export const create = (
                 }) as unknown as IOrderProduct
         );
 
-        return OrderRepository.create({
-            userId: new Types.ObjectId(userId),
-            email,
-            products
-        } as Partial<IOrderDocument>).then((order) =>
-            generateSuccess(order, 201, t('ecommerce.order-creation-success'))
-        );
+        return orderRepository
+            .create({
+                userId: new Types.ObjectId(userId),
+                email,
+                products
+            } as Partial<IOrderDocument>)
+            .then((order) => generateSuccess(order, 201, t('ecommerce.order-creation-success')));
     });
 };
 
@@ -214,7 +214,7 @@ export const update = (
         items?: CartItem[];
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
-    return OrderRepository.findById(id).then((order) => {
+    return orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
 
         if (data.status !== undefined) order.status = data.status as EOrderStatus;
@@ -225,7 +225,8 @@ export const update = (
             data.items && data.items.length > 0
                 ? Promise.all(
                       data.items.map((item) =>
-                          ProductRepository.findById(item.productId)
+                          productRepository
+                              .findById(item.productId)
                               .lean()
                               .then((product) => ({ item, product }))
                       )
@@ -248,7 +249,7 @@ export const update = (
 
         return updateProductsPromise.then((earlyResult) => {
             if (earlyResult) return earlyResult;
-            return OrderRepository.save(order).then((saved) => generateSuccess(saved));
+            return orderRepository.save(order).then((saved) => generateSuccess(saved));
         });
     });
 };
@@ -259,11 +260,11 @@ export const update = (
  * @param id
  */
 export const remove = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> => {
-    return OrderRepository.findById(id).then((order) => {
+    return orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
-        return OrderRepository.deleteOne(order).then(() =>
-            generateSuccess(undefined, 200, t('ecommerce.order-deleted'))
-        );
+        return orderRepository
+            .deleteOne(order)
+            .then(() => generateSuccess(undefined, 200, t('ecommerce.order-deleted')));
     });
 };
 

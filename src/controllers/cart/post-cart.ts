@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
-import { productService as ProductService } from '@services/products';
+import { userService } from '@services/users';
+import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
 
@@ -28,17 +28,17 @@ export const postCart = (
     /**
      * Find product (active and not soft-deleted)
      */
-    return ProductService.getById(productId).then((product) => {
+    return productService.getById(productId).then((product) => {
         if (!product) {
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
             return;
         }
 
-        return UserService.cartItemSetById(user, productId, quantity)
-            .then(() => UserService.cartGetWithSummary(user))
+        return userService
+            .cartItemSetById(user, productId, quantity)
+            .then(() => userService.cartGetWithSummary(user))
             .then((cart) => {
                 successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
             });
     });
 };
-

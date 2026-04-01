@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse } from '@utils/response';
 
 /**
@@ -8,7 +8,6 @@ import { successResponse } from '@utils/response';
  * Authentication check is done before entering the route.
  */
 export const getCart = (request: Request, response: Response) =>
-    UserService.cartGetWithSummary(request.user!).then((cart) => {
+    userService.cartGetWithSummary(request.user!).then((cart) => {
         successResponse(response, cart);
     });
-

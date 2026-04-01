@@ -1,6 +1,6 @@
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeUser, createUser } from '../../helpers/factories/users';
-import * as UserRepository from '@repositories/users';
+import * as userRepository from '@repositories/users';
 import { userModel as Users, ETokenType, type IUserDocument } from '@models/users';
 import { Types } from 'mongoose';
 
@@ -8,10 +8,10 @@ beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-describe('UserRepository', () => {
+describe('userRepository', () => {
     describe('create', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
-            const user = await UserRepository.create(makeUser() as Partial<IUserDocument>);
+            const user = await userRepository.create(makeUser() as Partial<IUserDocument>);
 
             expect(user._id).toBeDefined();
             expect(user.email).toBe('user@example.com');
@@ -21,7 +21,7 @@ describe('UserRepository', () => {
         });
 
         it('sets admin to false by default', async () => {
-            const user = await UserRepository.create(makeUser() as Partial<IUserDocument>);
+            const user = await userRepository.create(makeUser() as Partial<IUserDocument>);
 
             expect(user.admin).toBe(false);
         });
@@ -32,7 +32,7 @@ describe('UserRepository', () => {
             const created = await createUser();
             const id = (created._id as Types.ObjectId).toString();
 
-            const found = await UserRepository.findById(id);
+            const found = await userRepository.findById(id);
 
             expect(found).not.toBeNull();
             expect(found!.email).toBe('user@example.com');
@@ -40,7 +40,7 @@ describe('UserRepository', () => {
 
         it('returns null when no document matches the id', async () => {
             // A syntactically valid but non-existent ObjectId
-            const found = await UserRepository.findById('000000000000000000000000');
+            const found = await userRepository.findById('000000000000000000000000');
 
             expect(found).toBeNull();
         });
@@ -50,7 +50,7 @@ describe('UserRepository', () => {
         it('returns a user that matches the query filter', async () => {
             await createUser({ email: 'unique@example.com' });
 
-            const found = await UserRepository.findOne({
+            const found = await userRepository.findOne({
                 email: 'unique@example.com'
             });
 
@@ -59,7 +59,7 @@ describe('UserRepository', () => {
         });
 
         it('returns null when no document matches', async () => {
-            const found = await UserRepository.findOne({
+            const found = await userRepository.findOne({
                 email: 'nobody@example.com'
             });
 
@@ -72,7 +72,7 @@ describe('UserRepository', () => {
             await createUser({ email: 'a@example.com', username: 'a' });
             await createUser({ email: 'b@example.com', username: 'b' });
 
-            const users = await UserRepository.findAll();
+            const users = await userRepository.findAll();
 
             expect(users).toHaveLength(2);
         });
@@ -82,7 +82,7 @@ describe('UserRepository', () => {
                 await createUser({ email: `u${i}@example.com`, username: `u${i}` });
             }
 
-            const users = await UserRepository.findAll({}, { limit: 2 });
+            const users = await userRepository.findAll({}, { limit: 2 });
 
             expect(users).toHaveLength(2);
         });
@@ -93,7 +93,7 @@ describe('UserRepository', () => {
             await createUser({ email: 'b@example.com', username: 'b' });
             await createUser({ email: 'c@example.com', username: 'c' });
 
-            const users = await UserRepository.findAll({}, { skip: 2, limit: 10 });
+            const users = await userRepository.findAll({}, { skip: 2, limit: 10 });
 
             expect(users).toHaveLength(1);
         });
@@ -110,7 +110,7 @@ describe('UserRepository', () => {
                 admin: false
             });
 
-            const admins = await UserRepository.findAll({ admin: true });
+            const admins = await userRepository.findAll({ admin: true });
 
             expect(admins).toHaveLength(1);
             expect(admins[0].email).toBe('admin@example.com');
@@ -119,7 +119,7 @@ describe('UserRepository', () => {
         it('returns lean (plain JS) objects, not Mongoose Documents', async () => {
             await createUser();
 
-            const [user] = await UserRepository.findAll();
+            const [user] = await userRepository.findAll();
 
             // Lean objects have no Mongoose save() method
             expect(typeof (user as unknown as { save?: unknown }).save).toBe('undefined');
@@ -131,7 +131,7 @@ describe('UserRepository', () => {
             await createUser({ email: 'a@example.com', username: 'a' });
             await createUser({ email: 'b@example.com', username: 'b' });
 
-            expect(await UserRepository.count()).toBe(2);
+            expect(await userRepository.count()).toBe(2);
         });
 
         it('counts only the documents that match the filter', async () => {
@@ -146,12 +146,12 @@ describe('UserRepository', () => {
                 admin: false
             });
 
-            expect(await UserRepository.count({ admin: true })).toBe(1);
-            expect(await UserRepository.count({ admin: false })).toBe(1);
+            expect(await userRepository.count({ admin: true })).toBe(1);
+            expect(await userRepository.count({ admin: false })).toBe(1);
         });
 
         it('returns 0 when the collection is empty', async () => {
-            expect(await UserRepository.count()).toBe(0);
+            expect(await userRepository.count()).toBe(0);
         });
     });
 
@@ -163,9 +163,9 @@ describe('UserRepository', () => {
             // Mutate the Mongoose document in memory…
             user.username = 'updated-username';
             // …then flush it to the database
-            await UserRepository.save(user);
+            await userRepository.save(user);
 
-            const refreshed = await UserRepository.findById(id);
+            const refreshed = await userRepository.findById(id);
             expect(refreshed!.username).toBe('updated-username');
         });
     });
@@ -175,9 +175,9 @@ describe('UserRepository', () => {
             const user = await createUser();
             const id = (user._id as Types.ObjectId).toString();
 
-            await UserRepository.deleteOne(user);
+            await userRepository.deleteOne(user);
 
-            expect(await UserRepository.findById(id)).toBeNull();
+            expect(await userRepository.findById(id)).toBeNull();
         });
     });
 
@@ -188,10 +188,10 @@ describe('UserRepository', () => {
             await createUser({ email: 'c@example.com', username: 'c', admin: true });
 
             // Promote all non-admins
-            await UserRepository.updateMany({ admin: false }, { $set: { admin: true } });
+            await userRepository.updateMany({ admin: false }, { $set: { admin: true } });
 
-            expect(await UserRepository.count({ admin: true })).toBe(3);
-            expect(await UserRepository.count({ admin: false })).toBe(0);
+            expect(await userRepository.count({ admin: true })).toBe(3);
+            expect(await userRepository.count({ admin: false })).toBe(0);
         });
 
         it('does not modify documents that do not match the filter', async () => {
@@ -207,9 +207,9 @@ describe('UserRepository', () => {
             });
 
             // Only target the non-admin
-            await UserRepository.updateMany({ admin: false }, { $set: { username: 'changed' } });
+            await userRepository.updateMany({ admin: false }, { $set: { username: 'changed' } });
 
-            const admin = await UserRepository.findOne({
+            const admin = await userRepository.findOne({
                 email: 'admin@example.com'
             });
             expect(admin!.username).toBe('admin'); // unchanged
@@ -239,7 +239,7 @@ describe('UserRepository', () => {
             });
 
             await user.tokenRemoveAll(ETokenType.REFRESH);
-            const refreshed = await UserRepository.findById(
+            const refreshed = await userRepository.findById(
                 (user._id as Types.ObjectId).toString()
             );
 
@@ -268,7 +268,7 @@ describe('UserRepository', () => {
             });
 
             const result = await Users.tokenRemoveExpired();
-            const refreshed = await UserRepository.findById(
+            const refreshed = await userRepository.findById(
                 (user._id as Types.ObjectId).toString()
             );
 

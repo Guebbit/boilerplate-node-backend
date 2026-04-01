@@ -10,4 +10,3 @@ export const router = Router();
 router.get('/', (request, response) => {
     successResponse(response, { status: 'ok' }, 200, 'API is running');
 });
-

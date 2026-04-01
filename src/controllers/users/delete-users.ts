@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService as UserService } from '@services/users';
+import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteUserRequest } from '@types';
 
@@ -16,7 +16,7 @@ export const deleteUsers = (
         rejectResponse(response, 422, 'deleteUser - missing id', [t('generic.error-missing-data')]);
         return Promise.resolve();
     }
-    return UserService.remove(request.body.id, request.body.hardDelete ?? false).then((result) => {
+    return userService.remove(request.body.id, request.body.hardDelete ?? false).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -24,4 +24,3 @@ export const deleteUsers = (
         successResponse(response, undefined, 200, result.message);
     });
 };
-
