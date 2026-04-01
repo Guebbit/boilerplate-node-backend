@@ -75,7 +75,7 @@ export const fileFilter = (
 /**
  * Multer middleware
  */
-export default multer({
+export const upload = multer({
     storage: fileStorage,
     fileFilter
 });

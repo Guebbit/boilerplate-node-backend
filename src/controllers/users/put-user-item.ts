@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -10,7 +10,7 @@ import type { UpdateUserByIdRequest, UpdateUserByIdRequestMultipart } from '@typ
  * PUT /users/:id
  * Update a user by path id (admin).
  */
-const putUserItem = (
+export const putUserItem = (
     request: Request<
         { id?: string },
         unknown,
@@ -39,4 +39,3 @@ const putUserItem = (
         );
 };
 
-export default putUserItem;

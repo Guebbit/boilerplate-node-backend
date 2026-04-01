@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import ProductService from '@services/products';
+import { productService as ProductService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -10,7 +10,7 @@ import type { UpdateProductRequest, UpdateProductRequestMultipart } from '@types
  * PUT /products
  * Update a product by id in the request body (admin).
  */
-const putProducts = (
+export const putProducts = (
     request: Request<unknown, unknown, UpdateProductRequest | UpdateProductRequestMultipart>,
     response: Response
 ) => {
@@ -42,4 +42,3 @@ const putProducts = (
         );
 };
 
-export default putProducts;

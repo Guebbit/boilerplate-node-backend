@@ -1,4 +1,4 @@
-import logger from './winston';
+import { logger } from './winston';
 import type { CastError } from 'mongoose';
 
 /**

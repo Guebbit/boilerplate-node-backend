@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
 import { setupWebSocketServer, setupWebSocketClient } from '@utils/helpers-websockets';
-import logger from '@utils/winston';
+import { logger } from '@utils/winston';
 
 /**
  * GET /websocket-test
  * WebSocket test endpoint.
  */
-const getWebsocketTest = (request: Request, response: Response) => {
+export const getWebsocketTest = (request: Request, response: Response) => {
     const port = 3001;
     const url = `ws://localhost:${port}`;
 
@@ -56,4 +56,3 @@ const getWebsocketTest = (request: Request, response: Response) => {
     });
 };
 
-export default getWebsocketTest;

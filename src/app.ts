@@ -7,18 +7,18 @@ import i18next from 'i18next';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { start } from '@utils/database';
-import logger from '@utils/winston';
+import { logger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { rejectResponse } from '@utils/response';
 import enTranslation from './locales/en.json';
 
-import productRoutes from './routes/products';
-import authRoutes from './routes/account';
-import orderRoutes from './routes/orders';
-import cartRoutes from './routes/cart';
-import userRoutes from './routes/users';
-import systemRoutes from './routes';
-import developmentRoutes from './routes/_development';
+import { router as productRoutes } from './routes/products';
+import { router as authRoutes } from './routes/account';
+import { router as orderRoutes } from './routes/orders';
+import { router as cartRoutes } from './routes/cart';
+import { router as userRoutes } from './routes/users';
+import { router as systemRoutes } from './routes';
+import { router as developmentRoutes } from './routes/_development';
 
 import { MulterError } from 'multer';
 import { ExtendedError } from '@utils/helpers-errors';

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import logger from './winston';
+import { logger } from './winston';
 
 const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
@@ -33,4 +33,4 @@ export const start = () => {
  * The active Mongoose connection.
  * Available after `start()` resolves.
  */
-export default mongoose.connection;
+export const connection = mongoose.connection;

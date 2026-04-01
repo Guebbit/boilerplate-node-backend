@@ -1,5 +1,5 @@
-import Users from '@models/users';
-import logger from '@utils/winston';
+import { userModel as Users } from '@models/users';
+import { logger } from '@utils/winston';
 
 /**
  * Run one cleanup cycle: remove every expired token from every user document.

@@ -9,10 +9,10 @@ import {
     type IResponseSuccess
 } from '@utils/response';
 import { deleteFile } from '@utils/helpers-filesystem';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
-import ProductRepository from '@repositories/products';
+import { productRepository as ProductRepository } from '@repositories/products';
 
 /**
  * Product Service
@@ -213,4 +213,4 @@ export const remove = (
     });
 };
 
-export default { validateData, search, getById, create, update, remove };
+export const productService = { validateData, search, getById, create, update, remove };

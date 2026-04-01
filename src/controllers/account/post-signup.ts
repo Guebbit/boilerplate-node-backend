@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -9,7 +9,7 @@ import type { SignupRequest, SignupRequestMultipart } from '@types';
  * POST /account/signup
  * Register a new user account.
  */
-const postSignup = (
+export const postSignup = (
     request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart>,
     response: Response
 ) => {
@@ -43,4 +43,3 @@ const postSignup = (
     });
 };
 
-export default postSignup;

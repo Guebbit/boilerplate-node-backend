@@ -1,4 +1,4 @@
-import orderModel from '@models/orders';
+import { orderModel } from '@models/orders';
 import type { IOrderDocument } from '@models/orders';
 import type { PipelineStage } from 'mongoose';
 
@@ -50,4 +50,4 @@ export const deleteOne = (order: IOrderDocument): Promise<void> =>
         // explicit void return to satisfy TypeScript's Promise<void> type
     });
 
-export default { aggregate, findById, create, save, deleteOne };
+export const orderRepository = { aggregate, findById, create, save, deleteOne };

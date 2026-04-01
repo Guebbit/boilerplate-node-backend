@@ -10,8 +10,8 @@ import {
     type IResponseReject,
     type IResponseSuccess
 } from '@utils/response';
-import ProductRepository from '@repositories/products';
-import OrderRepository from '@repositories/orders';
+import { productRepository as ProductRepository } from '@repositories/products';
+import { orderRepository as OrderRepository } from '@repositories/orders';
 
 /**
  * Order Service
@@ -267,4 +267,4 @@ export const remove = (id: string): Promise<IResponseSuccess<undefined> | IRespo
     });
 };
 
-export default { getAll, search, getById, create, update, remove };
+export const orderService = { getAll, search, getById, create, update, remove };

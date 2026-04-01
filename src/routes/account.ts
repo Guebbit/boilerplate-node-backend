@@ -1,16 +1,16 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import multer from '@utils/multer';
-import getAccount from '@controllers/account/get-account';
-import postLogin from '@controllers/account/post-login';
-import postSignup from '@controllers/account/post-signup';
-import postResetRequest from '@controllers/account/post-reset-request';
-import postResetConfirm from '@controllers/account/post-reset-confirm';
-import getRefreshToken from '@controllers/account/get-refresh-token';
-import postLogoutEverywhere from '@controllers/account/post-logout-everywhere';
-import deleteExpiredTokens from '@controllers/account/delete-expired-tokens';
+import { upload } from '@utils/multer';
+import { getAccount } from '@controllers/account/get-account';
+import { postLogin } from '@controllers/account/post-login';
+import { postSignup } from '@controllers/account/post-signup';
+import { postResetRequest } from '@controllers/account/post-reset-request';
+import { postResetConfirm } from '@controllers/account/post-reset-confirm';
+import { getRefreshToken } from '@controllers/account/get-refresh-token';
+import { postLogoutEverywhere } from '@controllers/account/post-logout-everywhere';
+import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
 
-const router = Router();
+export const router = Router();
 
 // All routes apply getAuth so request.user is populated when a token is present
 router.use(getAuth);
@@ -22,7 +22,7 @@ router.get('/', isAuth, getAccount);
 router.post('/login', postLogin);
 
 // POST /account/signup — register new user
-router.post('/signup', multer.single('imageUpload'), postSignup);
+router.post('/signup', upload.single('imageUpload'), postSignup);
 
 // POST /account/reset — request password reset email
 router.post('/reset', postResetRequest);
@@ -42,4 +42,3 @@ router.post('/logout-all', isAuth, postLogoutEverywhere);
 // DELETE /account/tokens/expired — remove expired tokens from the DB (admin only)
 router.delete('/tokens/expired', isAuth, isAdmin, deleteExpiredTokens);
 
-export default router;

@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { getAuth, isAuth } from '@middlewares/authorizations';
-import getCart from '@controllers/cart/get-cart';
-import getCartSummary from '@controllers/cart/get-cart-summary';
-import postCart from '@controllers/cart/post-cart';
-import putCartItem from '@controllers/cart/put-cart-item';
-import deleteCart from '@controllers/cart/delete-cart';
-import deleteCartItem from '@controllers/cart/delete-cart-item';
-import postCheckout from '@controllers/cart/post-checkout';
+import { getCart } from '@controllers/cart/get-cart';
+import { getCartSummary } from '@controllers/cart/get-cart-summary';
+import { postCart } from '@controllers/cart/post-cart';
+import { putCartItem } from '@controllers/cart/put-cart-item';
+import { deleteCart } from '@controllers/cart/delete-cart';
+import { deleteCartItem } from '@controllers/cart/delete-cart-item';
+import { postCheckout } from '@controllers/cart/post-checkout';
 
-const router = Router();
+export const router = Router();
 
 // All cart routes require authentication
 router.use(getAuth, isAuth);
@@ -35,4 +35,3 @@ router.put('/:productId', putCartItem);
 // DELETE /cart/:productId — remove item
 router.delete('/:productId', deleteCartItem);
 
-export default router;

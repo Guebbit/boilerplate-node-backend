@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
-import UserRepository from '@repositories/users';
+import { userService as UserService } from '@services/users';
+import { userRepository as UserRepository } from '@repositories/users';
 import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { nodemailer } from '@utils/nodemailer';
 
-const postResetRequest = (
+export const postResetRequest = (
     request: Request<unknown, unknown, PasswordResetRequest>,
     response: Response
 ) => {
@@ -52,4 +52,3 @@ const postResetRequest = (
         });
 };
 
-export default postResetRequest;

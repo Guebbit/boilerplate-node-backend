@@ -30,7 +30,7 @@ import { Types } from 'mongoose';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import type { IUserDocument } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import OrderRepository from '@repositories/orders';
+import { orderRepository as OrderRepository } from '@repositories/orders';
 
 /**
  * Convert a Mongoose product document into an IOrderProduct ready to embed

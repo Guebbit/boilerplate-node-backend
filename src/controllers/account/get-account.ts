@@ -5,7 +5,7 @@ import { rejectResponse, successResponse } from '@utils/response';
  * GET /account
  * Returns the full profile of the authenticated user.
  */
-const getAccount = (request: Request, response: Response): void => {
+export const getAccount = (request: Request, response: Response): void => {
     if (!request.user) {
         rejectResponse(response, 401, 'Unauthorized');
         return;
@@ -13,4 +13,3 @@ const getAccount = (request: Request, response: Response): void => {
     successResponse(response, request.user.toObject());
 };
 
-export default getAccount;

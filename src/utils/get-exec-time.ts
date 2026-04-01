@@ -2,7 +2,7 @@
  * Get execution time of any function
  * @param function_ - the function to time
  */
-export default function getExecTime<T>(function_: () => T | Promise<T>) {
+export function getExecTime<T>(function_: () => T | Promise<T>) {
     // execute function between two timestamps
     const start = process.hrtime.bigint();
     return Promise.resolve(function_()).then((result) => {

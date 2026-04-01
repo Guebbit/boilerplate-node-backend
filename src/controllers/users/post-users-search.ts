@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse } from '@utils/response';
 import type { SearchUsersRequest } from '@types';
 
@@ -7,7 +7,7 @@ import type { SearchUsersRequest } from '@types';
  * POST /users/search
  * Search users via JSON body (admin).
  */
-const postUsersSearch = (
+export const postUsersSearch = (
     request: Request<unknown, unknown, SearchUsersRequest>,
     response: Response
 ) =>
@@ -15,4 +15,3 @@ const postUsersSearch = (
         successResponse(response, result);
     });
 
-export default postUsersSearch;

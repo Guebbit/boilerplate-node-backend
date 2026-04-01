@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteUserRequest } from '@types';
 
@@ -8,7 +8,7 @@ import type { DeleteUserRequest } from '@types';
  * DELETE /users
  * Delete a user by id in the request body (admin).
  */
-const deleteUsers = (
+export const deleteUsers = (
     request: Request<unknown, unknown, DeleteUserRequest>,
     response: Response
 ) => {
@@ -25,4 +25,3 @@ const deleteUsers = (
     });
 };
 
-export default deleteUsers;

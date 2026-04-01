@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import ProductService from '@services/products';
+import { productService as ProductService } from '@services/products';
 import { successResponse } from '@utils/response';
 import type { SearchProductsRequest } from '@types';
 
@@ -14,7 +14,7 @@ export type IGetProductsQuery = Partial<Record<keyof SearchProductsRequest, stri
  * List/search products via query parameters.
  * Admin sees all products (including inactive/deleted); public sees only active ones.
  */
-const getProducts = (
+export const getProducts = (
     request: Request<{ page?: string }, unknown, SearchProductsRequest, IGetProductsQuery>,
     response: Response
 ) => {
@@ -36,4 +36,3 @@ const getProducts = (
     });
 };
 
-export default getProducts;

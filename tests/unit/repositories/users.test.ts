@@ -1,7 +1,7 @@
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeUser, createUser } from '../../helpers/factories/users';
 import * as UserRepository from '@repositories/users';
-import Users, { ETokenType, type IUserDocument } from '@models/users';
+import { userModel as Users, ETokenType, type IUserDocument } from '@models/users';
 import { Types } from 'mongoose';
 
 beforeAll(connect);

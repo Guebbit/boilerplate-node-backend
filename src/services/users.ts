@@ -16,8 +16,8 @@ import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem, IUser } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import type { Order, SearchUsersRequest, UsersResponse } from '../../api/api';
-import UserRepository from '@repositories/users';
-import OrderRepository from '@repositories/orders';
+import { userRepository as UserRepository } from '@repositories/users';
+import { orderRepository as OrderRepository } from '@repositories/orders';
 
 /**
  * User Service
@@ -658,7 +658,7 @@ export const remove = (
     });
 };
 
-export default {
+export const userService = {
     cartGet,
     cartGetWithSummary,
     cartItemSetById,

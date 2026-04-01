@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import OrderService from '@services/orders';
+import { orderService as OrderService } from '@services/orders';
 import { successResponse } from '@utils/response';
 import type { SearchOrdersRequest } from '@types';
 import { userScope } from '@utils/helpers-scopes';
@@ -14,7 +14,7 @@ export type IGetOrdersQuery = Partial<Record<keyof SearchOrdersRequest, string>>
  * List/search orders via query parameters.
  * Non-admin users see only their own orders.
  */
-const getOrders = (
+export const getOrders = (
     request: Request<{ page?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
 ) => {
@@ -39,4 +39,3 @@ const getOrders = (
     });
 };
 
-export default getOrders;

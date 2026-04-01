@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import Users, { EUserRoles, IToken } from '../models/users';
+import { userModel as Users, EUserRoles, IToken } from '../models/users';
 import { verifyAccessToken } from './auth-jwt';
 import { rejectResponse } from '@utils/response';
 import { Types } from 'mongoose';
