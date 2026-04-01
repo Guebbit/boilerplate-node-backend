@@ -148,13 +148,19 @@ export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
  * @param id
  * @param data
  * @param newImageUrl - new image URL relative to the public directory (empty string means no change)
+ *//**
+ * Update an existing product by ID.
+ * If a new image URL is provided via data.imageUrl and differs from the old one,
+ * the old image file is deleted after the save succeeds.
+ *
+ * @param id
+ * @param data
  */
 export const update = (
     id: string,
-    data: Partial<Omit<Product, 'id'>>,
-    newImageUrl = ''
-): Promise<IProductDocument> =>
-    ProductRepository.findById(id).then((product) => {
+    data: Partial<Omit<Product, 'id'>>
+): Promise<IProductDocument> => {
+    return ProductRepository.findById(id).then((product) => {
         if (!product) throw new Error('404');
 
         // Apply incoming field changes
@@ -165,18 +171,19 @@ export const update = (
 
         // If a new image was uploaded, update the URL on the document
         const oldImageUrl = product.imageUrl;
+        const newImageUrl = data.imageUrl ?? '';
         if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
         // Persist the updated document
-        return ProductRepository.save(product).then((updatedProduct) => {
+        return ProductRepository.save(product).then((updatedProduct) =>
             // After saving the new image path, delete the old image file
-            if (newImageUrl && oldImageUrl !== newImageUrl)
-                return deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl).then(
-                    () => updatedProduct
-                );
-            return updatedProduct;
-        });
+            (newImageUrl && oldImageUrl !== newImageUrl
+                ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
+                : Promise.resolve()
+            ).then(() => updatedProduct)
+        );
     });
+};
 
 /**
  * Remove a product by ID (soft or hard delete).

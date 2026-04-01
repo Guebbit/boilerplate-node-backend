@@ -18,6 +18,7 @@ export class UpdateUserRequest {
     */
     'id': string;
     'email'?: string;
+    'username'?: string;
     'password'?: string;
     'imageUrl'?: string;
 
@@ -32,6 +33,11 @@ export class UpdateUserRequest {
         {
             "name": "email",
             "baseName": "email",
+            "type": "string"
+        },
+        {
+            "name": "username",
+            "baseName": "username",
             "type": "string"
         },
         {

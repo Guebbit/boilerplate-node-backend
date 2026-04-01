@@ -23,14 +23,14 @@ export const postCartItem = (
     const productId = String(request.params.productId ?? request.body.productId);
 
     if (!request.body.quantity || request.body.quantity < 1) {
-        request.flash('error', [ t('generic.error-invalid-data') ]);
+        request.flash('error', [t('generic.error-invalid-data')]);
         return Promise.resolve();
     }
 
     UserService.cartItemSetById(user, productId, request.body.quantity)
         .then(() => {
-            request.flash('success', [ t('ecommerce.product-added-to-cart') ]);
+            request.flash('success', [t('ecommerce.product-added-to-cart')]);
             return response.redirect('/cart');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
-}
+};

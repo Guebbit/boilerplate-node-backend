@@ -13,11 +13,20 @@
 import { RequestFile } from './models';
 
 export class UpdateCartItemByIdRequest {
+    /**
+    * Resource identifier
+    */
+    'productId'?: string;
     'quantity': number;
 
     static discriminator: string | undefined = undefined;
 
     static attributeTypeMap: Array<{name: string, baseName: string, type: string}> = [
+        {
+            "name": "productId",
+            "baseName": "productId",
+            "type": "string"
+        },
         {
             "name": "quantity",
             "baseName": "quantity",

@@ -4,7 +4,6 @@ import { t } from 'i18next';
 import OrderService from '@services/orders';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
 
-
 /**
  * Get target order info
  *
@@ -19,7 +18,7 @@ export const getOrderItem = (
 ) => {
     // if it's not valid it could throw an error
     if (!Types.ObjectId.isValid(request.params.id ?? ''))
-        return next(new ExtendedError('404', 404, true, [ t('ecommerce.order-not-found') ]));
+        return next(new ExtendedError('404', 404, true, [t('ecommerce.order-not-found')]));
 
     /**
      * User role filters:
@@ -28,17 +27,17 @@ export const getOrderItem = (
     return OrderService.getById(String(request.params.id), { userId: request.session.user?._id })
         .then((order) => {
             if (!order)
-                return next(new ExtendedError('404', 404, true, [ t('ecommerce.order-not-found') ]));
+                return next(new ExtendedError('404', 404, true, [t('ecommerce.order-not-found')]));
 
             return response.render('orders/details', {
                 pageMetaTitle: 'Order',
-                pageMetaLinks: [ '/css/order-details.css' ],
+                pageMetaLinks: ['/css/order-details.css'],
                 order
             });
         })
         .catch((error: CastError) => {
             if (error.message == '404' || error.kind === 'ObjectId')
-                return next(new ExtendedError('404', 404, true, [ t('ecommerce.order-not-found') ]));
+                return next(new ExtendedError('404', 404, true, [t('ecommerce.order-not-found')]));
             return next(databaseErrorConverter(error));
         });
 };

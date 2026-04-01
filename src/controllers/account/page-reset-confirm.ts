@@ -13,7 +13,7 @@ import UserRepository from '@repositories/users';
  */
 export const pageResetConfirm = (
     // This token is provided in the url within the email that has been sent to the user
-    request: Request<{token?: string;}>,
+    request: Request<{ token?: string }>,
     response: Response,
     next: NextFunction
 ) =>

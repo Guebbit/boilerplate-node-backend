@@ -14,7 +14,7 @@ import ProductService from '@services/products';
  * @param response
  * @param next
  */
-export const postEditProduct = (
+export const postCreateProduct = (
     request: Request<
         unknown,
         unknown,
@@ -23,11 +23,7 @@ export const postEditProduct = (
     response: Response,
     next: NextFunction
 ) => {
-    const id = (
-        'id' in request.body ? (request.body as UpdateProductRequestMultipart).id : undefined
-    ) as string | undefined;
-    const { title, description = '', active } = request.body;
-    const price = Number.parseInt(String(request.body.price));
+    const id = (request.body as { id?: string }).id;
 
     /**
      * Get URL of updated image: uploaded file takes priority over body imageUrl.
@@ -35,16 +31,16 @@ export const postEditProduct = (
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
+    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
     /**
      * Data validation
      */
     const issues = ProductService.validateData({
-        title,
+        ...request.body,
         imageUrl,
-        price,
-        description,
-        active: !!active
+        active: !!request.body.active
     });
 
     /**
@@ -52,8 +48,7 @@ export const postEditProduct = (
      */
     if (issues.length > 0) {
         // Record was not created, so revert server changes by removing the uploaded file
-        const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
-        return cleanup.then(() => {
+        return deleteUpload().then(() => {
             request.flash('error', issues);
             request.flash('filled', Object.values(request.body));
             if (!id || id === '') return response.redirect('/products/add');
@@ -66,16 +61,13 @@ export const postEditProduct = (
      */
     if (!id || id === '')
         return ProductService.create({
-            title,
+            ...request.body,
             imageUrl,
-            price,
-            description,
-            active: !!active
+            active: !!request.body.active
         })
             .then(() => response.redirect('/products/'))
             .catch((error: CastError) => {
-                const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
-                return cleanup.then(() =>
+                return deleteUpload().then(() =>
                     next(new ExtendedError(error.kind, 500, false, [error.message]))
                 );
             });
@@ -83,22 +75,16 @@ export const postEditProduct = (
     /**
      * ID = edit product
      */
-    return ProductService.update(
-        id,
-        {
-            title,
-            price,
-            description,
-            active: !!active
-        },
-        imageUrl
-    )
+    return ProductService.update(id, {
+        ...request.body,
+        imageUrl,
+        active: !!request.body.active
+    })
         .then((updatedProduct) =>
             response.redirect('/products/details/' + updatedProduct._id.toString())
         )
         .catch((error: CastError) => {
-            const cleanup = imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve();
-            return cleanup.then(() =>
+            return deleteUpload().then(() =>
                 next(new ExtendedError(error.kind, 500, false, [error.message]))
             );
         });

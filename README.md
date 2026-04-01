@@ -6,7 +6,7 @@
 - Create database and link it using .env variables
 - Link to services using .env variables (es: email responders are a different kind of server)
 - Optional: use docker/podman to run the app
-- IMPORTANT: Remove the controllers/_development and routes/_development
+- IMPORTANT: Remove the controllers/\_development and routes/\_development
 
 # Mock instructions
 
@@ -18,11 +18,7 @@
     - Top menu -> import/export -> Import Swagger V2
 
 # TODO
+
 - Add products quantity to conrollers/products/page-all-products.ts
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
 - Create a mysql sequelize version
-
-# TODO NOW
-- ALL: check the controllers (FIRST), then the services, repositories and models to be similar 
-  - MVC VS API - Mancano:
-    - AAAAAAAAAAAAAAAAAAA

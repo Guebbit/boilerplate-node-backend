@@ -6,7 +6,7 @@ import { csrfSynchronisedProtection } from '@middlewares/csrf';
 import { pageAllProducts } from '@controllers/products/page-all-products';
 import { pageTargetProduct } from '@controllers/products/page-target-product';
 import { pageEditProduct } from '@controllers/products/page-edit-product';
-import { postEditProduct } from '@controllers/products/post-edit-product';
+import { postCreateProduct } from '@controllers/products/post-create-product';
 import { postDeleteProduct } from '@controllers/products/post-delete-product';
 
 const router = express.Router();
@@ -21,7 +21,7 @@ router.post(
     isAdmin,
     multer.single('imageUpload'),
     csrfSynchronisedProtection,
-    postEditProduct
+    postCreateProduct
 );
 
 router.get('/edit/:productId', isAuth, isAdmin, pageEditProduct);
@@ -32,7 +32,7 @@ router.post(
     isAdmin,
     multer.single('imageUpload'),
     csrfSynchronisedProtection,
-    postEditProduct
+    postCreateProduct
 );
 
 router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteProduct);

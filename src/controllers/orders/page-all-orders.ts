@@ -23,16 +23,21 @@ export const pageAllOrders = async (
     response: Response,
     next: NextFunction
 ) => {
-    const page = request.body.page ?? request.query.page ?? '1'
-    const pageSize = request.body.pageSize ?? request.query.pageSize ?? process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? '10'
+    const page = request.body.page ?? request.query.page ?? '1';
+    const pageSize =
+        request.body.pageSize ??
+        request.query.pageSize ??
+        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ??
+        '10';
 
-    return OrderService.search({
+    return OrderService.search(
+        {
             id: request.body.id ?? request.query.id,
             page: page ? Number(page) : undefined,
             pageSize: pageSize ? Number(pageSize) : undefined,
             userId: request.body.userId ?? request.query.userId,
             productId: request.body.productId ?? request.query.productId,
-            email: request.body.email ?? request.query.email,
+            email: request.body.email ?? request.query.email
         },
         // Only admin can see non-active and (soft) deleted products
         request.session.user?.admin ? {} : { userId: request.session.user?._id }
@@ -40,7 +45,7 @@ export const pageAllOrders = async (
         .then(({ items, meta }) =>
             response.render('orders/list', {
                 pageMetaTitle: 'All Orders',
-                pageMetaLinks: [ '/css/order-list.css' ],
+                pageMetaLinks: ['/css/order-list.css'],
                 orderList: items,
                 itemsTotal: meta.totalItems,
                 pageCurrent: meta.page,
@@ -49,4 +54,4 @@ export const pageAllOrders = async (
             })
         )
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
-}
+};

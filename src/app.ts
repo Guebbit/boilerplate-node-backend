@@ -173,7 +173,6 @@ app.use('/', systemRoutes);
 app.use('/error', errorRoutes);
 app.use('/', developmentRoutes);
 
-
 /**
  * Error handler.
  * Distinguish operational error from critical programmer error

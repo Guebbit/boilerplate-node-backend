@@ -13,11 +13,16 @@ import UserService from '@services/users';
  * @param next
  */
 export const postDeleteUser = (
-    request: Request<unknown, unknown, DeleteUserRequest>,
+    request: Request<{ id?: string; hardDelete?: boolean }, unknown, DeleteUserRequest>,
     response: Response,
     next: NextFunction
-) =>
-    UserService.remove(request.body.id, !!request.body.hardDelete)
+) => {
+    const id = request.params.id ?? request.body.id;
+    const hardDelete = !!(request.params.hardDelete ?? request.body.hardDelete);
+
+    if (!id) return next(new ExtendedError('404', 404, false, [t('admin.user-not-found')]));
+
+    return UserService.remove(id, hardDelete)
         .then(({ success, message }) => {
             if (success) request.flash('success', [message]);
             response.redirect('/users/');
@@ -27,3 +32,4 @@ export const postDeleteUser = (
                 return next(new ExtendedError('404', 404, false, [t('admin.user-not-found')]));
             return next(databaseErrorConverter(error));
         });
+};

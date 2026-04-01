@@ -22,15 +22,14 @@ export const postDeleteCartItem = (
     const productId = String(request.params.productId ?? request.body.productId);
 
     const existing = user.cart.items.find((i) => i.product.equals(productId));
-    if (!existing)
-        throw new Error(t('ecommerce.product-not-found'));
+    if (!existing) throw new Error(t('ecommerce.product-not-found'));
 
     // check done before entering the route
     return UserService.cartItemRemoveById(request.user!, productId)
         .then(({ success }) => {
             if (!success) throw new Error(t('ecommerce.product-not-found'));
-            request.flash('success', [ t('ecommerce.cart-product-removed') ]);
+            request.flash('success', [t('ecommerce.cart-product-removed')]);
             return response.redirect('/cart');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
-}
+};

@@ -3,7 +3,7 @@ import { t } from 'i18next';
 import { nodemailer } from '@utils/nodemailer';
 import { ExtendedError } from '@utils/helpers-errors';
 import UserService from '@services/users';
-import { UpdateOrderRequest } from "@api/model/updateOrderRequest";
+import { UpdateOrderRequest } from '@api/model/updateOrderRequest';
 
 /**
  * Create a new order

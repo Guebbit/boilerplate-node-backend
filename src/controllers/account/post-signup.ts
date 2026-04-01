@@ -26,26 +26,24 @@ export const postSignup = async (
     const { email, username, password, passwordConfirm } = request.body;
 
     /**
-     * Uploaded file takes priority over body imageUrl
+     * Get URL of updated image: uploaded file takes priority over body imageUrl.
+     * If no image was provided at all, fall back to an empty string.
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
+    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
+    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
     /**
      * Login
      */
-    return UserService.signup(
-        email,
-        username,
-        password,
-        passwordConfirm,
-        imageUrl ?? request.body.imageUrl
-    )
+    return UserService.signup(email, username, password, passwordConfirm, imageUrl)
         .then(({ success, data, errors = [] }) => {
             if (!success || !data) {
                 // So the user doesn't need to fill the form again
                 request.flash('filled', [email, username]);
                 request.flash('error', [t('login.invalid-data'), ...errors]);
-                if (imageUrlRaw) void deleteFile(imageUrlRaw);
+                void deleteUpload();
                 return response.redirect('/account/signup');
             }
             // Registration confirmation (no need to wait)
@@ -63,6 +61,7 @@ export const postSignup = async (
                     name: data.username
                 }
             );
+
             // Registration successful,
             // send to the login and
             request.flash('success', [t('signup.registration-successful')]);

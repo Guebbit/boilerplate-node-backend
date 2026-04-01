@@ -15,6 +15,7 @@ import { RequestFile } from './models';
 export class UpdateUserByIdRequest {
     'email'?: string;
     'password'?: string;
+    'username'?: string;
     'imageUrl'?: string;
 
     static discriminator: string | undefined = undefined;
@@ -28,6 +29,11 @@ export class UpdateUserByIdRequest {
         {
             "name": "password",
             "baseName": "password",
+            "type": "string"
+        },
+        {
+            "name": "username",
+            "baseName": "username",
             "type": "string"
         },
         {

@@ -23,18 +23,29 @@ export const pageAllProducts = (
     response: Response,
     next: NextFunction
 ) => {
-    const page = request.body.page ?? request.query.page ?? '1'
-    const pageSize = request.body.pageSize ?? request.query.pageSize ?? process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ?? '10'
-    const minPrice = request.body.minPrice ?? request.query.minPrice ? Number(request.body.minPrice ?? request.query.minPrice) : undefined;
-    const maxPrice = request.body.minPrice ?? request.query.minPrice ? Number(request.body.minPrice ?? request.query.minPrice) : undefined;
+    const page = request.body.page ?? request.query.page ?? '1';
+    const pageSize =
+        request.body.pageSize ??
+        request.query.pageSize ??
+        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ??
+        '10';
+    const minPrice =
+        (request.body.minPrice ?? request.query.minPrice)
+            ? Number(request.body.minPrice ?? request.query.minPrice)
+            : undefined;
+    const maxPrice =
+        (request.body.minPrice ?? request.query.minPrice)
+            ? Number(request.body.minPrice ?? request.query.minPrice)
+            : undefined;
 
-    return ProductService.search({
+    return ProductService.search(
+        {
             id: request.body.id ?? request.query.id,
             page: page ? Number(page) : undefined,
             pageSize: pageSize ? Number(pageSize) : undefined,
             text: request.body.text ?? request.query.text,
             minPrice,
-            maxPrice,
+            maxPrice
             // Only admin can see non-active products
         },
         request.session.user?.admin
@@ -42,7 +53,7 @@ export const pageAllProducts = (
         .then(({ items, meta }) =>
             response.render('products/list', {
                 pageMetaTitle: 'All Products',
-                pageMetaLinks: [ '/css/product.css' ],
+                pageMetaLinks: ['/css/product.css'],
                 productList: items,
                 itemsTotal: meta.totalItems,
                 pageCurrent: meta.page,
@@ -51,4 +62,4 @@ export const pageAllProducts = (
             })
         )
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
-}
+};

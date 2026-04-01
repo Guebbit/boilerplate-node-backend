@@ -15,7 +15,7 @@ import UserService from '@services/users';
  * @param response
  * @param next
  */
-export const postEditUser = async (
+export const postWriteUser = async (
     request: Request<unknown, unknown, CreateUserRequestMultipart | UpdateUserRequestMultipart>,
     response: Response,
     next: NextFunction
@@ -41,9 +41,10 @@ export const postEditUser = async (
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const imageUrlBody = body.imageUrl;
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
-    const imageUrl = imageUrlFile ?? imageUrlBody ?? '';
+    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
+    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
     /**
      * Data validation
@@ -59,7 +60,7 @@ export const postEditUser = async (
     if (issues.length > 0) {
         request.flash('error', issues);
         request.flash('filled', [email, username, String(admin), imageUrl]);
-        if (imageUrlRaw) void deleteFile(imageUrlRaw);
+        void deleteUpload();
         if (isNew) return response.redirect('/users/add');
         return response.redirect('/users/edit/' + id);
     }
@@ -77,7 +78,7 @@ export const postEditUser = async (
         })
             .then(() => response.redirect('/users/'))
             .catch(async (error: CastError) => {
-                if (imageUrlRaw) void deleteFile(imageUrlRaw);
+                void deleteUpload();
                 return next(new ExtendedError(error.kind, 500, false, [error.message]));
             });
 
@@ -96,7 +97,7 @@ export const postEditUser = async (
             response.redirect('/users/details/' + (updatedUser._id as Types.ObjectId).toString())
         )
         .catch(async (error: CastError) => {
-            if (imageUrlRaw) void deleteFile(imageUrlRaw);
+            void deleteUpload();
             return next(new ExtendedError(error.kind, 500, false, [error.message]));
         });
 };

@@ -6,7 +6,7 @@ import multer from '@utils/multer';
 import { pageAllUsers } from '@controllers/users/page-all-users';
 import { pageTargetUser } from '@controllers/users/page-target-user';
 import { pageEditUser } from '@controllers/users/page-edit-user';
-import { postEditUser } from '@controllers/users/post-edit-user';
+import { postWriteUser } from '@controllers/users/post-write-user';
 import { postDeleteUser } from '@controllers/users/post-delete-user';
 
 const router = express.Router();
@@ -22,7 +22,7 @@ router.post(
     isAdmin,
     multer.single('imageUpload'),
     csrfSynchronisedProtection,
-    postEditUser
+    postWriteUser
 );
 
 router.get('/edit/:userId', isAuth, isAdmin, pageEditUser);
@@ -33,7 +33,7 @@ router.post(
     isAdmin,
     multer.single('imageUpload'),
     csrfSynchronisedProtection,
-    postEditUser
+    postWriteUser
 );
 
 router.post('/delete', isAuth, isAdmin, csrfSynchronisedProtection, postDeleteUser);
