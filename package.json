@@ -24,6 +24,8 @@
         "setup:mongod": "docker create --name mongo-temp mongo:latest && docker cp mongo-temp:/usr/bin/mongod /tmp/mongod && docker rm mongo-temp",
         "kill:win": "cmd \"/C TASKKILL /IM node.exe /F\"",
         "kill:gnu": "pkill -9 node",
+        "podman:restart": "podman compose down && podman compose up -d",
+        "podman:rebuid": "podman compose down -v && podman compose build --no-cache && podman compose up -d",
         "genapi": "rm -rf ./api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
         "update:all": "npx npm-check-updates -u",
         "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",

@@ -3,13 +3,7 @@ import { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
 import UserService from '@services/users';
 import { t } from 'i18next';
-
-/**
- * Page POST data
- */
-export interface IPostDeleteCartItemPostData {
-    productId: string;
-}
+import type { RemoveCartItemRequest } from '@types';
 
 /**
  * Delete target cart item
@@ -19,15 +13,24 @@ export interface IPostDeleteCartItemPostData {
  * @param next
  */
 export const postDeleteCartItem = (
-    request: Request<unknown, unknown, IPostDeleteCartItemPostData>,
+    request: Request<{ productId?: string }, unknown, RemoveCartItemRequest>,
     response: Response,
     next: NextFunction
-) =>
+) => {
+    // Authentication check is done before entering the route
+    const user = request.user!;
+    const productId = String(request.params.productId ?? request.body.productId);
+
+    const existing = user.cart.items.find((i) => i.product.equals(productId));
+    if (!existing)
+        throw new Error(t('ecommerce.product-not-found'));
+
     // check done before entering the route
-    UserService.cartItemRemoveById(request.user!, request.body.productId)
+    return UserService.cartItemRemoveById(request.user!, productId)
         .then(({ success }) => {
-            if (!success) throw new Error('cartItemRemoveById error');
-            request.flash('success', [t('ecommerce.cart-product-removed')]);
+            if (!success) throw new Error(t('ecommerce.product-not-found'));
+            request.flash('success', [ t('ecommerce.cart-product-removed') ]);
             return response.redirect('/cart');
         })
         .catch((error: Error | CastError) => next(databaseErrorConverter(error)));
+}

@@ -18,14 +18,11 @@
     - Top menu -> import/export -> Import Swagger V2
 
 # TODO
-
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
+- Create a mysql sequelize version
 
 # TODO NOW
-
-- api-mongoose-mongodb-2 - Check multer routes (add them) => rename in api-mongodb-mongoose (and delete the old)
-- api-mongoose-mongodb-2 - Redo the conversion with mysql and sequelize. Pick controllers, models and dunno from the old.
-- api-mongoose-mongodb-2 - helpers-files => helpers-uploads
-- ALL: check the controllers (FIRST), then the services, repositories and models to be similar
-- MVC: Try on first person
-- API: try through tests and dev enviroment
+- ALL: check the controllers (FIRST), then the services, repositories and models to be similar 
+  - MVC VS API - Mancano:
+    - controllers/misc, controllers/products, controllers/misc
+    - AAAAAAAAAAAAAAAAAAA

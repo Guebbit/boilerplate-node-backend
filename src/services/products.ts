@@ -62,8 +62,18 @@ export const search = (
         const text = String(filters.text).trim();
         // Simple, effective search across title/description (case-insensitive)
         where.$or = [
-            { title: { $regex: text, $options: 'i' } },
-            { description: { $regex: text, $options: 'i' } }
+            {
+                title: {
+                    $regex: text,
+                    $options: 'i' // case-insensitive (optional)
+                }
+            },
+            {
+                description: {
+                    $regex: text,
+                    $options: 'i' // case-insensitive (optional)
+                }
+            }
         ];
     }
 

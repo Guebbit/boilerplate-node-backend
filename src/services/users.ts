@@ -37,6 +37,36 @@ export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
     user.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
 
 /**
+ * Get user cart with computed summary (item count, total quantity, total price).
+ * Combines cartGet with aggregate calculations for use in cart response payloads.
+ *
+ * @param user
+ */
+export const cartGetWithSummary = (
+    user: IUserDocument
+): Promise<{
+    items: ICartItem[];
+    summary: { itemsCount: number; totalQuantity: number; total: number };
+}> =>
+    cartGet(user).then((items) => {
+        let totalQuantity = 0;
+        let total = 0;
+        for (const item of items) {
+            totalQuantity += item.quantity;
+            const product = item.product as unknown as { price?: number };
+            total += (product?.price ?? 0) * item.quantity;
+        }
+        return {
+            items,
+            summary: {
+                itemsCount: items.length,
+                totalQuantity,
+                total
+            }
+        };
+    });
+
+/**
  * Set quantity of target product in cart
  *
  * @param user
@@ -514,8 +544,18 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
         where.$or = [
-            { email: { $regex: text, $options: 'i' } },
-            { username: { $regex: text, $options: 'i' } }
+            {
+                email: {
+                    $regex: text,
+                    $options: 'i' // case-insensitive (optional)
+                }
+            },
+            {
+                username: {
+                    $regex: text,
+                    $options: 'i' // case-insensitive (optional)
+                }
+            }
         ];
     }
 
@@ -631,6 +671,7 @@ export const remove = (
 
 export default {
     cartGet,
+    cartGetWithSummary,
     cartItemSetById,
     cartItemSet,
     cartItemAddById,

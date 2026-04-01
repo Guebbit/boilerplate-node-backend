@@ -45,6 +45,7 @@ export const postResetRequest = (
                         token
                     }
                 );
+
                 // send success message
                 request.flash('success', [t('reset.email-sent')]);
                 response.redirect('/account/reset');

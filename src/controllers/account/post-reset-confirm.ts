@@ -50,8 +50,7 @@ export const postResetConfirm = async (
                     // save and send email
                     await UserRepository.save(user).then(() => {
                         // send confirmation email (no need to wait)
-
-                        nodemailer(
+                        void nodemailer(
                             {
                                 to: user.email,
                                 subject: 'Password change confirmed'

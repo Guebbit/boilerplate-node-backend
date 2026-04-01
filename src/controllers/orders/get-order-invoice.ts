@@ -23,15 +23,15 @@ export interface IGetTargetInvoiceParameters {
  * @param response
  * @param next
  */
-export const getTargetInvoice = (
-    request: Request & {
-        params: IGetTargetInvoiceParameters;
-    },
+export const getOrderInvoice = (
+    request: Request<{ id?: string }, unknown, { id?: string }>,
     response: Response,
     next: NextFunction
 ) => {
-    // if it's not valid it could throw an error
-    if (!Types.ObjectId.isValid(request.params.orderId))
+    const id = request.params.id ?? request.body.id ?? '';
+
+    // missing or not valid
+    if (!id || !Types.ObjectId.isValid(id))
         return next(new ExtendedError(t('ecommerce.order-not-found'), 404, true));
 
     /**
@@ -41,7 +41,7 @@ export const getTargetInvoice = (
         $match: {}
     };
     if (!request.session.user?.admin) match.$match.userId = request.session.user?._id;
-    match.$match._id = new Types.ObjectId(request.params.orderId);
+    match.$match._id = new Types.ObjectId(id);
 
     OrderService.getAll([match])
         .then(async (orders) => {

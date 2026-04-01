@@ -78,7 +78,10 @@ export const search = (
         match.userId = new Types.ObjectId(String(search.userId));
 
     if (search.email && String(search.email).trim() !== '')
-        match.email = String(search.email).trim();
+        match.email = {
+            $regex: String(search.email).trim(),
+            $options: 'i' // case-insensitive (optional)
+        };
 
     if (search.productId && String(search.productId).trim() !== '')
         // Assumes productSchema uses default _id. If you store product.id instead, change to "products.product.id".
@@ -115,4 +118,29 @@ export const search = (
     });
 };
 
-export default { getAll, search };
+/**
+ * Get a single order by ID.
+ * Returns undefined if id is falsy, or null if not found.
+ *
+ * @param id
+ * @param scope - Optional extra filter (e.g. restrict to a specific userId)
+ */
+export const getById = (
+    id: string | undefined,
+    scope?: Record<string, unknown>
+): Promise<IOrderDocument | null | void> => {
+    if (!id) return Promise.resolve();
+    if (scope) {
+        // Use aggregate so we can apply both _id and scope filters
+        return OrderRepository.aggregate([
+            {
+                $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown>
+            },
+            { $limit: 1 },
+            addComputedFields
+        ]).then(([result]) => result ?? undefined);
+    }
+    return OrderRepository.findById(id);
+};
+
+export default { getAll, search, getById };

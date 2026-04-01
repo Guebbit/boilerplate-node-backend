@@ -5,13 +5,6 @@ import { databaseErrorConverter } from '@utils/helpers-errors';
 import UserRepository from '@repositories/users';
 
 /**
- * This token is provided in the url within the email that has been sent to the user
- */
-export interface IGetResetConfirmParameters {
-    token: string;
-}
-
-/**
  * If token was provided (and valid), ask for new password
  *
  * @param request
@@ -19,15 +12,16 @@ export interface IGetResetConfirmParameters {
  * @param next
  */
 export const pageResetConfirm = (
-    request: Request & {
-        params: IGetResetConfirmParameters;
-    },
+    // This token is provided in the url within the email that has been sent to the user
+    request: Request<{token?: string;}>,
     response: Response,
     next: NextFunction
 ) =>
     UserRepository.findOne({
         // eslint-disable-next-line @typescript-eslint/naming-convention
-        'tokens.token': request.params.token
+        'tokens.token': request.params.token,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'tokens.type': 'password'
     })
         .then((user) => {
             // not valid
