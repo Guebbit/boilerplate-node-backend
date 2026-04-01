@@ -12,7 +12,7 @@ import type { DeleteUserRequest } from '@types';
  * delete; otherwise the user is soft-deleted (sets deletedAt).
  */
 export const deleteUsers = (
-    request: Request<{ id?: string }, unknown, DeleteUserRequest>,
+    request: Request<{ id?: string, hardDelete?: boolean }, unknown, DeleteUserRequest>,
     response: Response
 ) => {
     const id = request.params.id ?? request.body.id;
@@ -21,8 +21,7 @@ export const deleteUsers = (
         return Promise.resolve();
     }
     // Accept ?hardDelete=true query param (both routes) or body.hardDelete boolean (DELETE / only)
-    const hardDelete = request.query.hardDelete === 'true' || (request.body.hardDelete ?? false);
-    return userService.remove(id, hardDelete).then((result) => {
+    return userService.remove(id, !!request.query.hardDelete || !!request.body.hardDelete).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;

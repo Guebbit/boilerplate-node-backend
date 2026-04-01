@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { logger } from '@utils/winston';
+import { User } from '@types';
 
 /**
  * Token types used in jwt-auth
@@ -44,15 +45,11 @@ export interface IToken {
 /**
  * User interface
  */
-export interface IUser {
+export interface IUser extends User {
     /**
      * User attributes
      */
-    email: string;
-    username: string;
     password: string;
-    imageUrl?: string;
-    admin: boolean;
     roles: EUserRoles[];
     // soft delete
     deletedAt?: Date;

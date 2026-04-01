@@ -39,8 +39,10 @@ export const writeUsers = (
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
-    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve());
+    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
+    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
     if (!id) {
         // PUT without an id is invalid
@@ -62,7 +64,7 @@ export const writeUsers = (
             });
 
         return userService
-            .adminCreate({ ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
+            .adminCreate({ ...request.body, imageUrl })
             .then((user) => {
                 successResponse(response, user.toObject(), 201);
             })

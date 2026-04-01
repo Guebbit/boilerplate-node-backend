@@ -39,9 +39,15 @@ export const writeProducts = (
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl } = resolveImageUrl(request as Request);
-    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve());
+    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
+    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
+
+    /**
+     * NO ID = new product
+     */
     if (!id) {
         // PUT without an id is invalid
         if (request.method === 'PUT') {
@@ -51,10 +57,10 @@ export const writeProducts = (
             return deleteUpload();
         }
 
-        // POST: create
         const errors = productService.validateData({
             ...request.body,
-            imageUrl: imageUrl ?? request.body.imageUrl
+            imageUrl,
+            active: !!request.body.active,
         });
         if (errors.length > 0)
             return deleteUpload().then(() => {
@@ -62,7 +68,11 @@ export const writeProducts = (
             });
 
         return productService
-            .create({ ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
+            .create({
+            ...request.body,
+            imageUrl,
+            active: !!request.body.active,
+        })
             .then((product) => {
                 successResponse(response, product.toObject(), 201);
             })
@@ -73,9 +83,16 @@ export const writeProducts = (
             );
     }
 
-    // PUT or POST with id: update
+
+    /**
+     * ID = edit product
+     */
     return productService
-        .update(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
+        .update(id, {
+            ...request.body,
+            imageUrl,
+            active: !!request.body.active,
+        })
         .then((product) => {
             successResponse(response, product.toObject());
         })

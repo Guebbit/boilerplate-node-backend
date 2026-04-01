@@ -12,7 +12,8 @@ export const putOrders = (
     request: Request<{ id?: string }, unknown, UpdateOrderRequest | UpdateOrderByIdRequest>,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as { id?: string }).id;
+    const id = request.params.id ?? (request.body as UpdateOrderRequest).id;
+
     if (!id) {
         rejectResponse(response, 422, 'updateOrder - missing id', [
             t('generic.error-missing-data')
@@ -32,5 +33,10 @@ export const putOrders = (
             }
 
             successResponse(response, result.data);
-        });
+        })
+        .catch((error: Error) => {
+            if (error.message === '404')
+                rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
+            else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+        })
 };
