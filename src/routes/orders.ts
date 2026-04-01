@@ -17,4 +17,4 @@ router.get('/invoice/:orderId', isAuth, getOrderInvoice);
 
 router.post('/new', isAuth, csrfSynchronisedProtection, postOrder);
 
-export default router;
+export { router as orderRoutes };

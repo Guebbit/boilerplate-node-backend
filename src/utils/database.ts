@@ -32,4 +32,4 @@ export const start = (): Promise<void> => connectWithRetry();
  * The active Mongoose connection.
  * Available after `start()` resolves.
  */
-export default mongoose.connection;
+export const databaseConnection = mongoose.connection;

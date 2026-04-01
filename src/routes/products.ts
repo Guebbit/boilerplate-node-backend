@@ -1,6 +1,6 @@
 import express from 'express';
 import { isAuth, isAdmin } from '@middlewares/authorizations';
-import multer from '@utils/multer';
+import { multerMiddleware } from '@utils/multer';
 import { csrfSynchronisedProtection } from '@middlewares/csrf';
 
 import { pageAllProducts } from '@controllers/products/page-all-products';
@@ -19,7 +19,7 @@ router.post(
     '/add',
     isAuth,
     isAdmin,
-    multer.single('imageUpload'),
+    multerMiddleware.single('imageUpload'),
     csrfSynchronisedProtection,
     postCreateProduct
 );
@@ -30,7 +30,7 @@ router.post(
     '/edit/:productId',
     isAuth,
     isAdmin,
-    multer.single('imageUpload'),
+    multerMiddleware.single('imageUpload'),
     csrfSynchronisedProtection,
     postCreateProduct
 );
@@ -41,4 +41,4 @@ router.get('/:page', pageAllProducts);
 
 router.get('/', pageAllProducts);
 
-export default router;
+export { router as productRoutes };

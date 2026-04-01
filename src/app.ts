@@ -16,14 +16,14 @@ import { session, flash, userConnect } from '@middlewares/session';
 import { rateLimiter } from '@middlewares/security';
 import enTranslation from './locales/en.json';
 
-import productRoutes from './routes/products';
-import authRoutes from './routes/account';
-import orderRoutes from './routes/orders';
-import cartRoutes from './routes/cart';
-import userRoutes from './routes/users';
-import systemRoutes from './routes';
-import errorRoutes from './routes/errors';
-import developmentRoutes from './routes/_development';
+import { productRoutes } from './routes/products';
+import { authRoutes } from './routes/account';
+import { orderRoutes } from './routes/orders';
+import { cartRoutes } from './routes/cart';
+import { userRoutes } from './routes/users';
+import { systemRoutes } from './routes';
+import { errorRoutes } from './routes/errors';
+import { developmentRoutes } from './routes/_development';
 
 /**
  * Server start

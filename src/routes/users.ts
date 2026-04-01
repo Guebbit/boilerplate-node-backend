@@ -1,7 +1,7 @@
 import express from 'express';
 import { isAuth, isAdmin } from '@middlewares/authorizations';
 import { csrfSynchronisedProtection } from '@middlewares/csrf';
-import multer from '@utils/multer';
+import { multerMiddleware } from '@utils/multer';
 
 import { pageAllUsers } from '@controllers/users/page-all-users';
 import { pageTargetUser } from '@controllers/users/page-target-user';
@@ -20,7 +20,7 @@ router.post(
     '/add',
     isAuth,
     isAdmin,
-    multer.single('imageUpload'),
+    multerMiddleware.single('imageUpload'),
     csrfSynchronisedProtection,
     postWriteUser
 );
@@ -31,7 +31,7 @@ router.post(
     '/edit/:userId',
     isAuth,
     isAdmin,
-    multer.single('imageUpload'),
+    multerMiddleware.single('imageUpload'),
     csrfSynchronisedProtection,
     postWriteUser
 );
@@ -42,4 +42,4 @@ router.get('/:page', isAuth, isAdmin, pageAllUsers);
 
 router.get('/', isAuth, isAdmin, pageAllUsers);
 
-export default router;
+export { router as userRoutes };
