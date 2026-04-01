@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import OrderService from '@services/orders';
+import { orderService as OrderService } from '@services/orders';
 import { successResponse } from '@utils/response';
 import type { SearchOrdersRequest } from '@types';
 import { userScope } from '@utils/helpers-scopes';
@@ -9,7 +9,7 @@ import { userScope } from '@utils/helpers-scopes';
  * Search orders via JSON body.
  * Non-admin users see only their own orders.
  */
-const postOrdersSearch = (
+export const postOrdersSearch = (
     request: Request<unknown, unknown, SearchOrdersRequest>,
     response: Response
 ) =>
@@ -17,4 +17,3 @@ const postOrdersSearch = (
         successResponse(response, result);
     })
 
-export default postOrdersSearch;

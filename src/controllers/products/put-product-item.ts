@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import ProductService from '@services/products';
+import { productService as ProductService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -10,7 +10,7 @@ import type { UpdateProductByIdRequest, UpdateProductByIdRequestMultipart } from
  * PUT /products/:id
  * Update a product by path id (admin).
  */
-const putProductItem = (
+export const putProductItem = (
     request: Request<
         { id?: string },
         unknown,
@@ -36,4 +36,3 @@ const putProductItem = (
         );
 };
 
-export default putProductItem;

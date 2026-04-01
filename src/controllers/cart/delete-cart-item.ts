@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 
@@ -8,7 +8,7 @@ import type { RemoveCartItemRequest } from '@types';
  * DELETE /cart/:productId
  * Remove a specific product from the cart. Returns the updated cart.
  */
-const deleteCartItem = (
+export const deleteCartItem = (
     request: Request<{ productId?: string }, unknown, RemoveCartItemRequest>,
     response: Response
 ) => {
@@ -29,4 +29,3 @@ const deleteCartItem = (
         });
 };
 
-export default deleteCartItem;

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import OrderService from '@services/orders';
+import { orderService as OrderService } from '@services/orders';
 import { rejectResponse } from '@utils/response';
 import { userScope } from '@utils/helpers-scopes';
 import ejs from "ejs";
@@ -15,7 +15,7 @@ import puppeteer from "puppeteer-core";
  * WARNING: Images and other link-related resources will NOT work in the PDF.
  * To embed them, convert images to base64.
  */
-const getOrderInvoice = (request: Request, response: Response) =>
+export const getOrderInvoice = (request: Request, response: Response) =>
     /**
      * Get order info from database
      * User role filters: Only admin can see all orders. Regular users can only see their own.
@@ -79,4 +79,3 @@ const getOrderInvoice = (request: Request, response: Response) =>
             rejectResponse(response, 500, 'Invoice generation failed', [ error.message ]);
         });
 
-export default getOrderInvoice;

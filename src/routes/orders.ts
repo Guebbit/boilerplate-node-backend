@@ -1,16 +1,16 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import getOrders from '@controllers/orders/get-orders';
-import postOrders from '@controllers/orders/post-orders';
-import putOrders from '@controllers/orders/put-orders';
-import deleteOrders from '@controllers/orders/delete-orders';
-import postOrdersSearch from '@controllers/orders/post-orders-search';
-import getOrderItem from '@controllers/orders/get-order-item';
-import putOrderItem from '@controllers/orders/put-order-item';
-import deleteOrderItem from '@controllers/orders/delete-order-item';
-import getOrderInvoice from '@controllers/orders/get-order-invoice';
+import { getOrders } from '@controllers/orders/get-orders';
+import { postOrders } from '@controllers/orders/post-orders';
+import { putOrders } from '@controllers/orders/put-orders';
+import { deleteOrders } from '@controllers/orders/delete-orders';
+import { postOrdersSearch } from '@controllers/orders/post-orders-search';
+import { getOrderItem } from '@controllers/orders/get-order-item';
+import { putOrderItem } from '@controllers/orders/put-order-item';
+import { deleteOrderItem } from '@controllers/orders/delete-order-item';
+import { getOrderInvoice } from '@controllers/orders/get-order-invoice';
 
-const router = Router();
+export const router = Router();
 
 // All order routes require authentication
 router.use(getAuth, isAuth);
@@ -42,4 +42,3 @@ router.put('/:id', isAdmin, putOrderItem);
 // DELETE /orders/:id — admin only
 router.delete('/:id', isAdmin, deleteOrderItem);
 
-export default router;

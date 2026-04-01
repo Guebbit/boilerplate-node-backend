@@ -2,14 +2,14 @@ import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { rejectResponse, successResponse } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
-import Users from '@models/users';
+import { userModel as Users } from '@models/users';
 
 /**
  * DELETE /account/tokens/expired
  * Remove all expired tokens from the database (admin only).
  * Useful for periodic cleanup of stale refresh tokens.
  */
-const deleteExpiredTokens = (request: Request, response: Response) => {
+export const deleteExpiredTokens = (request: Request, response: Response) => {
     /**
      * Remove all expired tokens stored in the server
      */
@@ -24,4 +24,3 @@ const deleteExpiredTokens = (request: Request, response: Response) => {
         });
 };
 
-export default deleteExpiredTokens;

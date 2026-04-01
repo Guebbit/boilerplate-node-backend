@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import OrderService from '@services/orders';
+import { orderService as OrderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteOrderRequest } from '@types';
 import { Types } from "mongoose";
@@ -9,7 +9,7 @@ import { Types } from "mongoose";
  * DELETE /orders
  * Delete an order by id in the request body (admin).
  */
-const deleteOrders = (
+export const deleteOrders = (
     request: Request<{ id?: string }, unknown, DeleteOrderRequest>,
     response: Response
 ) => {
@@ -32,4 +32,3 @@ const deleteOrders = (
     });
 };
 
-export default deleteOrders;

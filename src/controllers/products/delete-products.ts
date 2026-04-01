@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import ProductService from '@services/products';
+import { productService as ProductService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CastError } from "mongoose";
 import { DeleteProductRequest } from "@api/model/deleteProductRequest";
@@ -10,7 +10,7 @@ import { DeleteProductRequest } from "@api/model/deleteProductRequest";
  * Delete a product by path id (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-const deleteProductItem = (request: Request<{ id?: string }, unknown, DeleteProductRequest>, response: Response) => {
+export const deleteProductItem = (request: Request<{ id?: string }, unknown, DeleteProductRequest>, response: Response) => {
     if (!request.params.id && !request.body.id) {
         rejectResponse(response, 422, 'deleteProduct - missing id', [
             t('generic.error-missing-data')
@@ -34,4 +34,3 @@ const deleteProductItem = (request: Request<{ id?: string }, unknown, DeleteProd
 }
 
 
-export default deleteProductItem;

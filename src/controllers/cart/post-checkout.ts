@@ -1,13 +1,13 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /**
  * POST /cart/checkout
  * Converts the cart into an order and clears the cart.
  */
-const postCheckout = (request: Request, response: Response) => {
+export const postCheckout = (request: Request, response: Response) => {
     const user = request.user!;
     return UserService.orderConfirm(user).then((result) => {
         if (!result.success) {
@@ -22,4 +22,3 @@ const postCheckout = (request: Request, response: Response) => {
     });
 };
 
-export default postCheckout;

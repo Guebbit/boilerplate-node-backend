@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
-import ProductService from '@services/products';
+import { userService as UserService } from '@services/users';
+import { productService as ProductService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
 
@@ -10,7 +10,7 @@ import type { UpsertCartItemRequest } from '@types';
  * Add a product (with its quantity) to the cart.
  * Checks product availability, then sets (or replaces) the quantity in the cart.
  */
-const postCart = (
+export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
 ) => {
@@ -42,4 +42,3 @@ const postCart = (
     });
 };
 
-export default postCart;

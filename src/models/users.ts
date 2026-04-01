@@ -3,7 +3,7 @@ import type { Document, Model } from 'mongoose';
 import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
-import logger from '@utils/winston';
+import { logger } from '@utils/winston';
 
 /**
  * Token types used in jwt-auth
@@ -279,4 +279,3 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
  */
 export const userModel = model<IUserDocument, IUserModel>('User', userSchema);
 
-export default userModel;

@@ -9,7 +9,7 @@ import { runTokenCleanup } from '@utils/token-cleanup';
  * Given the refreshToken from the URL or, if not, from the user cookies:
  * create a new short-lived access token for the following requests.
  */
-const getRefreshToken = async (request: Request<{ token?: string }>, response: Response) => {
+export const getRefreshToken = async (request: Request<{ token?: string }>, response: Response) => {
     /**
      * Get token
      * (name of the cookie decided in the post-login.ts controller)
@@ -38,4 +38,3 @@ const getRefreshToken = async (request: Request<{ token?: string }>, response: R
     }
 };
 
-export default getRefreshToken;

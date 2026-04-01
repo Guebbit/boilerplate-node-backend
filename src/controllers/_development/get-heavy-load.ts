@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import getExecTime from '@utils/get-exec-time';
+import { getExecTime } from '@utils/get-exec-time';
 
 /**
  * GET /heavy-load

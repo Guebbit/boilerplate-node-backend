@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import ProductService from '@services/products';
+import { productService as ProductService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -9,7 +9,7 @@ import type { CreateProductRequest, CreateProductRequestMultipart } from '@types
  * POST /products
  * Create a new product (admin).
  */
-const postProducts = (
+export const postProducts = (
     request: Request<unknown, unknown, CreateProductRequest | CreateProductRequestMultipart>,
     response: Response
 ) => {
@@ -41,4 +41,3 @@ const postProducts = (
         );
 };
 
-export default postProducts;

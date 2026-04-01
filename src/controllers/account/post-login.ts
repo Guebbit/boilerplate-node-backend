@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import {
     createRefreshToken,
     createRefreshCookie,
@@ -17,7 +17,7 @@ import { runTokenCleanup } from '@utils/token-cleanup';
  * Authenticate user.
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
-const postLogin = (
+export const postLogin = (
     request: Request<unknown, unknown, LoginRequest & { remember?: ERefreshTokenExpiryTime }>,
     response: Response
 ) => {
@@ -66,4 +66,3 @@ const postLogin = (
         });
 };
 
-export default postLogin;

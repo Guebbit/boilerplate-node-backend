@@ -1,6 +1,6 @@
 import { setupWebSocketServer } from '@utils/helpers-websockets';
 import { WebSocket } from 'ws';
-import logger from '@utils/winston';
+import { logger } from '@utils/winston';
 
 /**
  * Needed to later clear the interval

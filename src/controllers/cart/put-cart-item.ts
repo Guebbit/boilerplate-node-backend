@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
 
@@ -8,7 +8,7 @@ import type { UpdateCartItemByIdRequest } from '@types';
  * PUT /cart/:productId
  * Set the quantity of a specific cart item. Returns the updated cart.
  */
-const putCartItem = (
+export const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
     response: Response
 ) => {
@@ -29,4 +29,3 @@ const putCartItem = (
         });
 };
 
-export default putCartItem;

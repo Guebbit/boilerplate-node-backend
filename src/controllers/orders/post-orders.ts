@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
+import { userService as UserService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { nodemailer } from "@utils/nodemailer";
@@ -9,7 +9,7 @@ import { nodemailer } from "@utils/nodemailer";
  * POST /orders
  * Create a new order from a payload (admin).
  */
-const postOrders = (
+export const postOrders = (
     request: Request<unknown, unknown, CreateOrderRequest>,
     response: Response
 ) => {
@@ -52,4 +52,3 @@ const postOrders = (
     );
 };
 
-export default postOrders;

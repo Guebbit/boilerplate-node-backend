@@ -1,4 +1,4 @@
-import userModel from '@models/users';
+import { userModel } from '@models/users';
 import type { IUserDocument } from '@models/users';
 import type { UpdateQuery, QueryFilter } from 'mongoose';
 
@@ -94,7 +94,7 @@ export const updateMany = (
     update: UpdateQuery<IUserDocument>
 ) => userModel.updateMany(filter, update);
 
-export default {
+export const userRepository = {
     findById,
     findOne,
     findAll,

@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import OrderService from '@services/orders';
+import { orderService as OrderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateOrderByIdRequest } from '@types';
 
@@ -7,7 +7,7 @@ import type { UpdateOrderByIdRequest } from '@types';
  * PUT /orders/:id
  * Update an order by path id (admin).
  */
-const putOrderItem = (request: Request, response: Response) =>
+export const putOrderItem = (request: Request, response: Response) =>
     OrderService.update(String(request.params.id), {
         ...request.body,
         status: request.body.status as string | undefined
@@ -19,4 +19,3 @@ const putOrderItem = (request: Request, response: Response) =>
         successResponse(response, result.data);
     });
 
-export default putOrderItem;

@@ -84,4 +84,4 @@ export const orderSchema = new Schema<IOrderDocument>(
     }
 );
 
-export default model<IOrderDocument, IOrderModel>('Order', orderSchema);
+export const orderModel = model<IOrderDocument, IOrderModel>('Order', orderSchema);

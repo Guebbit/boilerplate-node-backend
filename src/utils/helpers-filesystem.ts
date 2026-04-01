@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { lookup } from 'mime-types';
 import path from 'node:path';
-import logger from './winston';
+import { logger } from './winston';
 
 /**
  *

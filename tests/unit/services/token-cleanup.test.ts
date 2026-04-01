@@ -1,10 +1,10 @@
-import Users from '@models/users';
+import { userModel as Users } from '@models/users';
 import { runTokenCleanup } from '@utils/token-cleanup';
 
 jest.mock('@models/users', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
-    default: {
+    userModel: {
         tokenRemoveExpired: jest.fn()
     }
 }));
@@ -12,7 +12,7 @@ jest.mock('@models/users', () => ({
 jest.mock('@utils/winston', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
-    default: {
+    logger: {
         info: jest.fn(),
         error: jest.fn(),
         warn: jest.fn()

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { successResponse } from '@utils/response';
 
-const router = Router();
+export const router = Router();
 
 /**
  * GET /
@@ -11,4 +11,3 @@ router.get('/', (request, response) => {
     successResponse(response, { status: 'ok' }, 200, 'API is running');
 });
 
-export default router;

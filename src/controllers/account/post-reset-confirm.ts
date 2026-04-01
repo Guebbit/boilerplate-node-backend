@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import UserService from '@services/users';
-import UserRepository from '@repositories/users';
+import { userService as UserService } from '@services/users';
+import { userRepository as UserRepository } from '@repositories/users';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetConfirmRequest } from '@types';
@@ -11,7 +11,7 @@ import { nodemailer } from "@utils/nodemailer";
  * POST /account/reset-confirm
  * Validate a one-time reset token and set the new password.
  */
-const postResetConfirm = (
+export const postResetConfirm = (
     // This token is provided in the url within the email that has been sent to the user
     request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>,
     response: Response
@@ -91,4 +91,3 @@ const postResetConfirm = (
         });
 };
 
-export default postResetConfirm;

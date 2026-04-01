@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import ProductService from '@services/products';
+import { productService as ProductService } from '@services/products';
 import { successResponse } from '@utils/response';
 import type { SearchProductsRequest } from '@types';
 
@@ -7,7 +7,7 @@ import type { SearchProductsRequest } from '@types';
  * POST /products/search
  * Search products via JSON body (public; admin sees all).
  */
-const postProductsSearch = (
+export const postProductsSearch = (
     request: Request<unknown, unknown, SearchProductsRequest>,
     response: Response
 ) =>
@@ -15,4 +15,3 @@ const postProductsSearch = (
         successResponse(response, result);
     });
 
-export default postProductsSearch;

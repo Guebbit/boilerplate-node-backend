@@ -29,7 +29,7 @@
  */
 
 import type { IUser, IUserDocument, ICartItem } from '@models/users';
-import UserRepository from '@repositories/users';
+import { userRepository as UserRepository } from '@repositories/users';
 
 /** Plain-text password used by the default factory.  Re-export so tests can
  *  authenticate without duplicating this string everywhere. */

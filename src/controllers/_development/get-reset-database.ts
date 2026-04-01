@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import mongoose, { Types } from 'mongoose';
-import UserRepository from '@repositories/users';
-import ProductRepository from '@repositories/products';
-import OrderRepository from '@repositories/orders';
+import { userRepository as UserRepository } from '@repositories/users';
+import { productRepository as ProductRepository } from '@repositories/products';
+import { orderRepository as OrderRepository } from '@repositories/orders';
 import type { IOrderDocument } from '@models/orders';
 
 /**
