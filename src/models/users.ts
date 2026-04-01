@@ -15,14 +15,6 @@ export enum ETokenType {
 }
 
 /**
- * User roles for authorization
- */
-export enum EUserRoles {
-    ADMIN = 'admin',
-    USER = 'user'
-}
-
-/**
  * Cart Item interface
  * Reference to product and quantity
  */
@@ -50,7 +42,6 @@ export interface IUser extends User {
      * User attributes
      */
     password: string;
-    roles: EUserRoles[];
     // soft delete
     deletedAt?: Date;
 
@@ -120,11 +111,6 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
         admin: {
             type: Boolean,
             default: false
-        },
-        roles: {
-            type: [String],
-            enum: Object.values(EUserRoles),
-            default: [EUserRoles.USER]
         },
         cart: {
             // sub documents always have _id
@@ -203,18 +189,9 @@ export const zodUserSchema = z.object({
 /**
  * Hook to make edits pre saving
  *
- * Hash all passwords (if they have been changed) and sync roles with admin flag.
+ * Hash all passwords (if they have been changed).
  */
 userSchema.pre('save', function () {
-    // Sync roles with the admin boolean flag
-    if (this.isModified('admin') || this.isNew) {
-        if (this.admin) {
-            if (!this.roles.includes(EUserRoles.ADMIN)) this.roles.push(EUserRoles.ADMIN);
-        } else {
-            this.roles = this.roles.filter((r) => r !== EUserRoles.ADMIN);
-        }
-    }
-
     if (!this.isModified('password')) return;
 
     return bcrypt.hash(this.password, 12).then((hashedPassword) => {

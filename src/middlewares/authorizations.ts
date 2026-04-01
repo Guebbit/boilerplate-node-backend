@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { userModel as Users, EUserRoles, IToken } from '../models/users';
+import { userModel as Users, IToken } from '../models/users';
 import { verifyAccessToken } from './auth-jwt';
 import { rejectResponse } from '@utils/response';
 import { Types } from 'mongoose';
@@ -58,36 +58,21 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
 /**
  * Always AFTER isAuth
  *
- * @param role
- */
-export const isRole =
-    (role: EUserRoles) =>
-    /**
-     *
-     * @param request
-     * @param response
-     * @param next
-     */
-    (request: Request, response: Response, next: NextFunction) => {
-        if (!request.user) {
-            rejectResponse(response, 403, 'Forbidden: Access denied.');
-            return;
-        }
-        if (!request.user.roles.includes(role)) {
-            rejectResponse(response, 403, "Forbidden: You don't have permission.");
-            return;
-        }
-        next();
-    };
-
-/**
- * Always AFTER isAuth
- *
  * @param request
  * @param response
  * @param next
  */
-export const isAdmin = isRole(EUserRoles.ADMIN);
+export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
+    if (!request.user) {
+        rejectResponse(response, 403, 'Forbidden: Access denied.');
+        return;
+    }
+    if (!request.user.admin) {
+        rejectResponse(response, 403, "Forbidden: You don't have permission.");
+        return;
+    }
+    next();
+};
 
 /**
  * Already logged, you shouldn't be here
