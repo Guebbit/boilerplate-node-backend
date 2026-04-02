@@ -1,7 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
-import type { Product } from '@types';
 import { sequelize } from '@utils/database';
 
 export class ProductModel extends Model {
