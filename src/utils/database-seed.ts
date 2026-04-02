@@ -1,5 +1,3 @@
-import { syncSchema } from './database';
+import { sequelize, syncSchema } from './database';
 
-void syncSchema(true).then(() => {
-    process.exit(0);
-});
+void syncSchema(true).finally(() => sequelize.close());

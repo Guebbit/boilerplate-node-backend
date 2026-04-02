@@ -1,4 +1,3 @@
-import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct, makeProduct } from '../../helpers/factories/products';
@@ -154,7 +153,7 @@ describe('productService.search', () => {
 describe('productService.getById', () => {
     it('returns a lean product object for an active product (non-admin)', async () => {
         const product = await createProduct({ active: true });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         const found = await productService.getById(id, false);
 
@@ -166,7 +165,7 @@ describe('productService.getById', () => {
 
     it('returns null for an inactive product when called as non-admin', async () => {
         const product = await createProduct({ active: false });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         const found = await productService.getById(id, false);
 
@@ -175,7 +174,7 @@ describe('productService.getById', () => {
 
     it('returns an inactive product when called as admin', async () => {
         const product = await createProduct({ active: false });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         const found = await productService.getById(id, true);
 
@@ -198,7 +197,7 @@ describe('productService.create', () => {
             description: 'A brand-new product.'
         });
 
-        expect(product._id).toBeDefined();
+        expect(product.id).toBeDefined();
         expect(product.title).toBe('New Product');
         expect(await productRepository.count()).toBe(1);
     });
@@ -207,7 +206,7 @@ describe('productService.create', () => {
 describe('productService.update', () => {
     it('updates title, price and description of an existing product', async () => {
         const product = await createProduct();
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         const updated = await productService.update(id, {
             title: 'Updated Title',
@@ -222,7 +221,7 @@ describe('productService.update', () => {
 
     it('changes the active flag', async () => {
         const product = await createProduct({ active: true });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         const updated = await productService.update(id, { active: false });
 
@@ -235,7 +234,7 @@ describe('productService.update', () => {
         );
 
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         await productService.update(id, { imageUrl: '/images/new.jpg' });
 
@@ -253,7 +252,7 @@ describe('productService.update', () => {
 describe('productService.remove', () => {
     it('soft-deletes a product by setting deletedAt', async () => {
         const product = await createProduct({ active: true });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         const result = await productService.remove(id, false);
 
@@ -264,7 +263,7 @@ describe('productService.remove', () => {
 
     it('restores a soft-deleted product when called again (toggle)', async () => {
         const product = await createProduct({ deletedAt: new Date() });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = (product.id).toString();
 
         await productService.remove(id, false);
 
@@ -274,11 +273,11 @@ describe('productService.remove', () => {
 
     it('hard-deletes the product and removes it from all user carts', async () => {
         const product = await createProduct({ active: true });
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         // A user adds the product to their cart
         const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
+        const userId = (user.id).toString();
         // eslint-disable-next-line unicorn/no-await-expression-member
         const addResult = await (await import('@services/users')).cartItemSetById(user, pid, 1);
 

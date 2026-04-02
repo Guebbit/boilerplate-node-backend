@@ -1,8 +1,18 @@
+/* eslint-disable unicorn/no-null */
+/* eslint-disable unicorn/no-negated-condition */
 import { Op, type WhereOptions } from 'sequelize';
 import { productModel } from '@models/products';
 import type { IProductDocument } from '@models/products';
 
 type ProductWhere = Record<string, unknown>;
+
+const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>) => {
+    if (where.deletedAt === null) {
+        output['deletedAt'] = null;
+        return;
+    }
+    if (where.deletedAt !== undefined) output['deletedAt'] = where.deletedAt;
+};
 
 const toWhere = (where: ProductWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
@@ -13,8 +23,7 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
     if (where.title !== undefined) output['title'] = where.title;
     if (where.active !== undefined) output['active'] = where.active;
 
-    if (where.deletedAt === undefined) output['deletedAt'] = null;
-    else if (where.deletedAt !== null) output['deletedAt'] = where.deletedAt;
+    normalizeDeletedAt(where, output);
 
     const price = where.price as Record<string, unknown> | undefined;
     if (price && (price.$gte !== undefined || price.$lte !== undefined)) {
@@ -26,7 +35,7 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
 
     const conditions = where.$or as Array<Record<string, unknown>> | undefined;
     if (conditions && conditions.length > 0) {
-        output[Op.or] = conditions
+        (output as Record<symbol, unknown>)[Op.or] = conditions
             .map((condition) => {
                 if (condition.title && typeof condition.title === 'object') {
                     const regex = (condition.title as Record<string, unknown>).$regex;
@@ -36,7 +45,7 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
                     const regex = (condition.description as Record<string, unknown>).$regex;
                     return { description: { [Op.like]: `%${String(regex)}%` } };
                 }
-                return undefined;
+                return;
             })
             .filter(Boolean);
     }
@@ -44,9 +53,19 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
     return output;
 };
 
-export const findById = (id: string | number) => productModel.findByPk(Number(id));
+export const findById = (id: string | number) =>
+    productModel.findByPk(Number(id)).then((product) => {
+        if (product && product.deletedAt === null)
+            (product as unknown as { deletedAt?: Date }).deletedAt = undefined;
+        return product;
+    });
 
-export const findOne = (where: ProductWhere) => productModel.findOne({ where: toWhere(where) });
+export const findOne = (where: ProductWhere) =>
+    productModel.findOne({ where: toWhere(where) }).then((product) => {
+        if (product && product.deletedAt === null)
+            (product as unknown as { deletedAt?: Date }).deletedAt = undefined;
+        return product;
+    });
 
 export const findAll = (
     where: ProductWhere = {},

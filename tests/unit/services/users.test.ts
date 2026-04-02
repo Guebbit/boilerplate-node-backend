@@ -1,4 +1,3 @@
-import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser, PLAIN_PASSWORD } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
@@ -105,7 +104,7 @@ describe('userService cart operations', () => {
     it('cartItemSetById adds a new product to an empty cart', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const result = await userService.cartItemSetById(user, pid, 3);
 
@@ -117,7 +116,7 @@ describe('userService cart operations', () => {
     it('cartItemSetById overwrites the quantity when the product is already in the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const firstResult = await userService.cartItemSetById(user, pid, 2);
         const updatedUser = (firstResult as IResponseSuccess<IUserDocument>).data!;
@@ -133,7 +132,7 @@ describe('userService cart operations', () => {
     it('cartItemAddById increases the quantity of an existing cart item', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const setResult = await userService.cartItemSetById(user, pid, 2);
         const userAfterSet = (setResult as IResponseSuccess<IUserDocument>).data!;
@@ -146,7 +145,7 @@ describe('userService cart operations', () => {
     it('cartItemRemoveById removes the specified product from the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const addResult = await userService.cartItemSetById(user, pid, 1);
         const userWithItem = (addResult as IResponseSuccess<IUserDocument>).data!;
@@ -159,7 +158,7 @@ describe('userService cart operations', () => {
     it('cartRemove empties the entire cart', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const addResult = await userService.cartItemSetById(user, pid, 5);
         const userWithCart = (addResult as IResponseSuccess<IUserDocument>).data!;
@@ -172,7 +171,7 @@ describe('userService cart operations', () => {
     it('cartGet returns populated cart items with product details', async () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Visible Product' });
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const addResult = await userService.cartItemSetById(user, pid, 2);
         const userLoaded = (addResult as IResponseSuccess<IUserDocument>).data!;
@@ -196,7 +195,7 @@ describe('userService cart operations', () => {
     it('cartItemAdd (by document) increases quantity', async () => {
         const user = await createUser();
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const setResult = await userService.cartItemSetById(user, pid, 1);
         const userLoaded = (setResult as IResponseSuccess<IUserDocument>).data!;
@@ -225,7 +224,7 @@ describe('userService.orderConfirm', () => {
     it('creates an order from the cart and empties the cart afterwards', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 20 });
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const addResult = await userService.cartItemSetById(user, pid, 2);
         const userWithCart = (addResult as IResponseSuccess<IUserDocument>).data!;
@@ -234,7 +233,7 @@ describe('userService.orderConfirm', () => {
 
         expect(orderResult.success).toBe(true);
 
-        const refreshed = await userRepository.findById((user._id as Types.ObjectId).toString());
+        const refreshed = await userRepository.findById((user.id).toString());
         expect(refreshed!.cart.items).toHaveLength(0);
     });
 
@@ -258,7 +257,7 @@ describe('userService.tokenAdd', () => {
 
     it('persists the token to the database', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
 
         await userService.tokenAdd(user, 'email-verify');
 
@@ -269,7 +268,7 @@ describe('userService.tokenAdd', () => {
 
     it('sets an expiration date when expirationTime is provided', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
         const now = Date.now();
 
         await userService.tokenAdd(user, 'reset', 3_600_000);
@@ -306,7 +305,7 @@ describe('userService.passwordChange', () => {
 
     it('actually changes the password so the new one can be used to log in', async () => {
         const user = await createUser({ email: 'pwdchange@example.com' });
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
 
         await userService.passwordChange(user, 'BrandNew1!', 'BrandNew1!');
 
@@ -445,7 +444,7 @@ describe('userService.search', () => {
 describe('userService.getById', () => {
     it('returns a plain object for an existing user', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
 
         const found = await userService.getById(id);
 
@@ -474,7 +473,7 @@ describe('userService.adminCreate', () => {
             password: PLAIN_PASSWORD
         });
 
-        expect(user._id).toBeDefined();
+        expect(user.id).toBeDefined();
         expect(user.email).toBe('created@example.com');
         // Password should have been hashed by the pre-save hook
         expect(user.password).not.toBe(PLAIN_PASSWORD);
@@ -495,7 +494,7 @@ describe('userService.adminCreate', () => {
 describe('userService.adminUpdate', () => {
     it('updates the username and admin flag of an existing user', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
 
         const updated = await userService.adminUpdate(id, {
             username: 'new-name',
@@ -508,7 +507,7 @@ describe('userService.adminUpdate', () => {
 
     it('changes the password when a non-empty password is supplied', async () => {
         const user = await createUser({ email: 'pwdupdate@example.com' });
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
         const originalHash = user.password;
 
         await userService.adminUpdate(id, { password: 'UpdatedPwd1!' });
@@ -519,7 +518,7 @@ describe('userService.adminUpdate', () => {
 
     it('does not touch the password when an empty string is supplied', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
         const originalHash = user.password;
 
         await userService.adminUpdate(id, { password: '' });
@@ -538,7 +537,7 @@ describe('userService.adminUpdate', () => {
 describe('userService.remove', () => {
     it('soft-deletes a user by setting deletedAt', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
 
         const result = await userService.remove(id);
 
@@ -549,7 +548,7 @@ describe('userService.remove', () => {
 
     it('restores a soft-deleted user when called again (toggle)', async () => {
         const user = await createUser({ deletedAt: new Date() });
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
 
         await userService.remove(id);
 
@@ -559,7 +558,7 @@ describe('userService.remove', () => {
 
     it('hard-deletes a user when hardDelete is true', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = (user.id).toString();
 
         await userService.remove(id, true);
 
@@ -577,7 +576,7 @@ describe('userService.remove', () => {
 describe('userService.productRemoveFromCartsById', () => {
     it('removes a product from every user cart that contains it', async () => {
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
         const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
@@ -585,10 +584,10 @@ describe('userService.productRemoveFromCartsById', () => {
         const addResult1 = await userService.cartItemSetById(user1, pid, 1);
         const addResult2 = await userService.cartItemSetById(user2, pid, 2);
         const id1 = (
-            (addResult1 as IResponseSuccess<IUserDocument>).data!._id as Types.ObjectId
+            (addResult1 as IResponseSuccess<IUserDocument>).data!.id
         ).toString();
         const id2 = (
-            (addResult2 as IResponseSuccess<IUserDocument>).data!._id as Types.ObjectId
+            (addResult2 as IResponseSuccess<IUserDocument>).data!.id
         ).toString();
 
         const result = await userService.productRemoveFromCartsById(pid);
@@ -603,7 +602,7 @@ describe('userService.productRemoveFromCartsById', () => {
 
     it('succeeds even when no user has the product in their cart', async () => {
         const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = (product.id).toString();
 
         const result = await userService.productRemoveFromCartsById(pid);
 

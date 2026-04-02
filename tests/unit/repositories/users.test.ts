@@ -2,7 +2,6 @@ import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeUser, createUser } from '../../helpers/factories/users';
 import * as userRepository from '@repositories/users';
 import { userModel as Users, ETokenType, type IUserDocument } from '@models/users';
-import { Types } from 'mongoose';
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -13,7 +12,7 @@ describe('userRepository', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
             const user = await userRepository.create(makeUser() as Partial<IUserDocument>);
 
-            expect(user._id).toBeDefined();
+            expect(user.id).toBeDefined();
             expect(user.email).toBe('user@example.com');
             expect(user.username).toBe('testuser');
             // The pre-save hook hashes the password; we must NOT store plain text
@@ -30,7 +29,7 @@ describe('userRepository', () => {
     describe('findById', () => {
         it('returns the user document when the id exists', async () => {
             const created = await createUser();
-            const id = (created._id as Types.ObjectId).toString();
+            const id = (created.id).toString();
 
             const found = await userRepository.findById(id);
 
@@ -158,7 +157,7 @@ describe('userRepository', () => {
     describe('save', () => {
         it('persists in-memory mutations to the database', async () => {
             const user = await createUser();
-            const id = (user._id as Types.ObjectId).toString();
+            const id = (user.id).toString();
 
             // Mutate the Mongoose document in memory…
             user.username = 'updated-username';
@@ -173,7 +172,7 @@ describe('userRepository', () => {
     describe('deleteOne', () => {
         it('removes the document permanently from the database', async () => {
             const user = await createUser();
-            const id = (user._id as Types.ObjectId).toString();
+            const id = (user.id).toString();
 
             await userRepository.deleteOne(user);
 
@@ -240,7 +239,7 @@ describe('userRepository', () => {
 
             await user.tokenRemoveAll(ETokenType.REFRESH);
             const refreshed = await userRepository.findById(
-                (user._id as Types.ObjectId).toString()
+                (user.id).toString()
             );
 
             expect(refreshed).not.toBeNull();
@@ -269,7 +268,7 @@ describe('userRepository', () => {
 
             const result = await Users.tokenRemoveExpired();
             const refreshed = await userRepository.findById(
-                (user._id as Types.ObjectId).toString()
+                (user.id).toString()
             );
 
             expect(result.success).toBe(true);
@@ -280,15 +279,16 @@ describe('userRepository', () => {
         });
 
         it('tokenRemoveExpired returns failure metadata when updateMany throws', async () => {
-            const updateManySpy = jest
-                .spyOn(Users, 'updateMany')
+            const { userTokenModel } = await import('@models/user-tokens');
+            const destroySpy = jest
+                .spyOn(userTokenModel, 'destroy')
                 .mockRejectedValueOnce(new Error('db failure'));
 
             const result = await Users.tokenRemoveExpired();
 
             expect(result.success).toBe(false);
             expect(result.status).toBe(500);
-            updateManySpy.mockRestore();
+            destroySpy.mockRestore();
         });
     });
 });

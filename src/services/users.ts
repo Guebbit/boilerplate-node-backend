@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-null */
 import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
@@ -20,9 +21,12 @@ import { cartItemModel } from '@models/cart-items';
 import { productModel } from '@models/products';
 import { userTokenModel } from '@models/user-tokens';
 
+const getUserId = (user: IUserDocument): number =>
+    Number((user as unknown as { id: number }).id);
+
 const hydrateUserCart = async (user: IUserDocument): Promise<IUserDocument> => {
     const rows = await cartItemModel.findAll({
-        where: { userId: Number((user as unknown as { id: number }).id) },
+        where: { userId: getUserId(user) },
         include: [{ model: productModel, as: 'product' }]
     });
 
@@ -31,12 +35,12 @@ const hydrateUserCart = async (user: IUserDocument): Promise<IUserDocument> => {
             product: ((row as unknown as { product?: unknown }).product ??
                 Number((row as unknown as { productId: number }).productId)) as unknown,
             quantity: Number((row as unknown as { quantity: number }).quantity)
-        })),
+        } as never)),
         updatedAt: (user as unknown as { cartUpdatedAt: Date }).cartUpdatedAt
     };
 
     const tokens = await userTokenModel.findAll({
-        where: { userId: Number((user as unknown as { id: number }).id) },
+        where: { userId: getUserId(user) },
         raw: true
     });
     (user as unknown as { tokens: unknown }).tokens = tokens.map((token) => ({
@@ -82,10 +86,10 @@ export const cartItemSetById = (
 ): Promise<IResponseSuccess<IUserDocument>> => {
     return cartItemModel
         .upsert({
-            userId: Number((user as unknown as { id: number }).id),
+            userId: getUserId(user),
             productId: Number(id),
             quantity
-        })
+        } as never)
         .then(() =>
             (user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }).update({
                 cartUpdatedAt: new Date()
@@ -109,17 +113,17 @@ export const cartItemAddById = (
     return cartItemModel
         .findOne({
             where: {
-                userId: Number((user as unknown as { id: number }).id),
+                userId: getUserId(user),
                 productId: Number(id)
             }
         })
         .then((row) => {
             if (!row)
                 return cartItemModel.create({
-                    userId: Number((user as unknown as { id: number }).id),
+                    userId: getUserId(user),
                     productId: Number(id),
                     quantity
-                });
+                } as never);
 
             return row.update({ quantity: Number((row as unknown as { quantity: number }).quantity) + quantity });
         })
@@ -145,7 +149,7 @@ export const cartItemRemoveById = (
     return cartItemModel
         .destroy({
             where: {
-                userId: Number((user as unknown as { id: number }).id),
+                userId: getUserId(user),
                 productId: Number(id)
             }
         })
@@ -165,7 +169,7 @@ export const cartItemRemove = (
 
 export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
     return cartItemModel
-        .destroy({ where: { userId: Number((user as unknown as { id: number }).id) } })
+        .destroy({ where: { userId: getUserId(user) } })
         .then(() =>
             (user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }).update({
                 cartUpdatedAt: new Date()
@@ -209,7 +213,7 @@ export const orderConfirm = (
 
             return orderRepository
                 .create({
-                    userId: Number((user as unknown as { id: number }).id),
+                    userId: getUserId(user),
                     email: user.email,
                     products: mappedProducts
                 } as Partial<IOrderDocument>)
@@ -225,11 +229,11 @@ export const tokenAdd = (
     const token = randomBytes(16).toString('hex');
     return userTokenModel
         .create({
-            userId: Number((user as unknown as { id: number }).id),
+            userId: getUserId(user),
             type,
             token,
-            expiration: expirationTime ? new Date(Date.now() + expirationTime) : null
-        })
+            expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined
+        } as never)
         .then(() => token);
 };
 
@@ -250,7 +254,7 @@ export const passwordChange = (
                 context.addIssue({
                     code: 'custom',
                     message: t('signup.password-dont-match')
-                });
+                } as never);
             }
         })
         .safeParse({
@@ -290,7 +294,7 @@ export const signup = (
                 context.addIssue({
                     code: 'custom',
                     message: t('signup.password-dont-match')
-                });
+                } as never);
         })
         .safeParse({
             email,
@@ -375,15 +379,18 @@ export const productRemoveFromCartsById = (
     userRepository
         .updateMany(
             {
+                // eslint-disable-next-line @typescript-eslint/naming-convention
                 'cart.items.product': Number(id)
             },
             {
                 $pull: {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
                     'cart.items': {
                         product: Number(id)
                     }
                 },
                 $set: {
+                    // eslint-disable-next-line @typescript-eslint/naming-convention
                     'cart.updatedAt': new Date()
                 }
             }
@@ -504,7 +511,7 @@ export const remove = (
                 .deleteOne(user)
                 .then(() => generateSuccess(undefined, 200, t('admin.user-hard-deleted')));
 
-        user.deletedAt = user.deletedAt ? undefined : new Date();
+        user.deletedAt = user.deletedAt ? null : new Date();
 
         return userRepository
             .save(user)

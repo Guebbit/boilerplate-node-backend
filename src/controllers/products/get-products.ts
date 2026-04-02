@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-negated-condition */
 import type { Request, Response } from 'express';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@utils/response';
@@ -15,14 +16,10 @@ export const getProducts = (
         request.query.pageSize ??
         process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ??
         '10';
-    const minPrice =
-        request.body.minPrice ?? request.query.minPrice
-            ? Number(request.body.minPrice ?? request.query.minPrice)
-            : undefined;
-    const maxPrice =
-        request.body.maxPrice ?? request.query.maxPrice
-            ? Number(request.body.maxPrice ?? request.query.maxPrice)
-            : undefined;
+    const minPriceRaw = request.body.minPrice ?? request.query.minPrice;
+    const maxPriceRaw = request.body.maxPrice ?? request.query.maxPrice;
+    const minPrice = minPriceRaw !== undefined ? Number(minPriceRaw) : undefined;
+    const maxPrice = maxPriceRaw !== undefined ? Number(maxPriceRaw) : undefined;
 
     return productService
         .search(

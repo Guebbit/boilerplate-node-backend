@@ -4,6 +4,11 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 
+const getProductIdFromCartItem = (item: { product: unknown }) => {
+    const product = item.product as { id?: number; _id?: number } | number;
+    return typeof product === 'number' ? product : product.id ?? product._id;
+};
+
 /**
  * DELETE /cart/:productId
  * Remove a specific product from the cart. Returns the updated cart.
@@ -18,12 +23,7 @@ export const deleteCartItem = (
     return userService
         .cartGet(user)
         .then((items) => {
-            const existing = items.some((item) => {
-                const product = item.product as unknown as { id?: number; _id?: number } | number;
-                const productValue =
-                    typeof product === 'number' ? product : product.id ?? product._id;
-                return String(productValue) === String(productId);
-            });
+            const existing = items.some((item) => String(getProductIdFromCartItem(item as unknown as { product: unknown })) === String(productId));
 
             if (!existing) {
                 rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);

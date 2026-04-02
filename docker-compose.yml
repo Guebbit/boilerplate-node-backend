@@ -11,8 +11,8 @@ services:
             NODE_DB_HOST: database
             NODE_DB_PORT: 3306
             NODE_DB_NAME: ${NODE_DB_NAME:-boilerplate_mysql}
-            NODE_DB_USER: ${NODE_DB_USER:-root}
-            NODE_DB_PASS: ${NODE_DB_PASS:-root}
+            NODE_DB_USER: ${NODE_DB_USER:-app}
+            NODE_DB_PASS: ${NODE_DB_PASS:-app}
             NODE_ENV: development
         volumes:
             - .:/app:Z
@@ -32,16 +32,16 @@ services:
         image: mysql:8.4
         restart: unless-stopped
         environment:
-            MYSQL_ROOT_PASSWORD: ${NODE_DB_PASS:-root}
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
             MYSQL_DATABASE: ${NODE_DB_NAME:-boilerplate_mysql}
-            MYSQL_USER: ${NODE_DB_USER:-root}
-            MYSQL_PASSWORD: ${NODE_DB_PASS:-root}
+            MYSQL_USER: ${NODE_DB_USER:-app}
+            MYSQL_PASSWORD: ${NODE_DB_PASS:-app}
         volumes:
             - boilerplate_mysql_volume:/var/lib/mysql
         ports:
             - '3306:3306'
         healthcheck:
-            test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-p${NODE_DB_PASS:-root}']
+            test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-p${MYSQL_ROOT_PASSWORD:-root}']
             interval: 10s
             timeout: 5s
             retries: 10

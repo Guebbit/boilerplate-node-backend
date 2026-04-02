@@ -16,6 +16,7 @@
         "^@repositories/(.*)$": "<rootDir>/src/repositories/$1",
         "^@models/(.*)$": "<rootDir>/src/models/$1",
         "^@middlewares/(.*)$": "<rootDir>/src/middlewares/$1",
-        "^@utils/(.*)$": "<rootDir>/src/utils/$1"
+        "^@utils/(.*)$": "<rootDir>/src/utils/$1",
+        "^mongoose$": "<rootDir>/tests/helpers/mongoose"
     }
 }

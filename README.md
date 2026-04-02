@@ -6,7 +6,18 @@
 - Create database and link it using .env variables
 - Link to services using .env variables (es: email responders are a different kind of server)
 - Optional: use docker/podman to run the app
-- IMPORTANT: Remove the controllers/\_development and routes/q_development
+- IMPORTANT: Remove the controllers/_development and routes/q_development
+
+# Database stack
+
+- Primary database: **MySQL**
+- ORM: **Sequelize**
+- Test database: **SQLite in-memory** (configured automatically in test setup)
+
+Useful commands:
+
+- `npm run db:migrate` → initialize/sync schema
+- `npm run db:seed` → reset and sync schema
 
 # Mock instructions
 
@@ -20,7 +31,6 @@
 # TODO
 
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
-- Create a mysql sequelize version
 - Create a FASTIFY version
 - Create a NESTJS version
 - Add\Try graphql with graphql-yoga

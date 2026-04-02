@@ -1,3 +1,5 @@
+/* eslint-disable unicorn/no-negated-condition */
+/* eslint-disable unicorn/no-null */
 import { Op, type WhereOptions } from 'sequelize';
 import { userModel } from '@models/users';
 import type { IUserDocument } from '@models/users';
@@ -13,15 +15,13 @@ const toWhere = (where: UserWhere = {}): WhereOptions => {
     if (where.username !== undefined && typeof where.username !== 'object') output['username'] = where.username;
     if (where.admin !== undefined) output['admin'] = where.admin;
 
-    if (where.deletedAt === undefined) {
-        // no-op by default for admin searches
-    } else if (where.deletedAt === null) {
+    if (where.deletedAt === null) {
         output['deletedAt'] = null;
     } else if (typeof where.deletedAt === 'object') {
         const condition = where.deletedAt as Record<string, unknown>;
         if (condition.$exists === false) output['deletedAt'] = null;
         if (condition.$exists === true) output['deletedAt'] = { [Op.not]: null };
-    } else {
+    } else if (where.deletedAt !== undefined) {
         output['deletedAt'] = where.deletedAt;
     }
 
@@ -37,7 +37,7 @@ const toWhere = (where: UserWhere = {}): WhereOptions => {
 
     const conditions = where.$or as Array<Record<string, unknown>> | undefined;
     if (conditions && conditions.length > 0) {
-        output[Op.or] = conditions
+        (output as Record<symbol, unknown>)[Op.or] = conditions
             .map((condition) => {
                 if (condition.email && typeof condition.email === 'object') {
                     const regex = (condition.email as Record<string, unknown>).$regex;
@@ -47,7 +47,7 @@ const toWhere = (where: UserWhere = {}): WhereOptions => {
                     const regex = (condition.username as Record<string, unknown>).$regex;
                     return { username: { [Op.like]: `%${String(regex)}%` } };
                 }
-                return undefined;
+                return;
             })
             .filter(Boolean);
     }
@@ -59,7 +59,7 @@ const tokenFilter = (where: UserWhere) => {
     const token = where['tokens.token'];
     const type = where['tokens.type'];
 
-    if (token === undefined && type === undefined) return undefined;
+    if (token === undefined && type === undefined) return;
     return {
         model: userTokenModel,
         as: 'tokens',
@@ -76,7 +76,10 @@ const withComputedRelations = async (user: IUserDocument | null) => {
 
     const tokens = await userTokenModel.findAll({ where: { userId: (user as unknown as { id: number }).id }, raw: true });
 
-    const cartItems = await (await import('@models/cart-items')).cartItemModel.findAll({
+    const cartItemsModule = await import('@models/cart-items');
+    const cartItemModel = cartItemsModule.cartItemModel;
+
+    const cartItems = await cartItemModel.findAll({
         where: { userId: (user as unknown as { id: number }).id },
         raw: true
     });
@@ -84,8 +87,11 @@ const withComputedRelations = async (user: IUserDocument | null) => {
     (user as unknown as { tokens: unknown }).tokens = tokens.map((token) => ({
         type: token.type,
         token: token.token,
-        expiration: token.expiration ?? undefined
+        expiration: token.expiration ? new Date(token.expiration) : undefined
     }));
+
+    if ((user as unknown as { deletedAt?: Date | null }).deletedAt === null)
+        (user as unknown as { deletedAt?: Date }).deletedAt = undefined;
 
     (user as unknown as { cart: unknown }).cart = {
         items: cartItems.map((item) => ({ product: item.productId, quantity: item.quantity })),
@@ -100,13 +106,15 @@ export const findById = (id: string | number): Promise<IUserDocument | null> =>
         .findByPk(Number(id))
         .then((user) => withComputedRelations(user as unknown as IUserDocument));
 
-export const findOne = (where: UserWhere): Promise<IUserDocument | null> =>
-    userModel
+export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
+    const includeToken = tokenFilter(where);
+    return userModel
         .findOne({
             where: toWhere(where),
-            include: tokenFilter(where) ? [tokenFilter(where)] : undefined
+            include: includeToken ? [includeToken as never] : undefined
         })
         .then((user) => withComputedRelations(user as unknown as IUserDocument));
+};
 
 export const findAll = (
     where: UserWhere = {},
@@ -153,14 +161,15 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
         .then(async (user) => {
             const items = data.cart?.items ?? [];
             const tokens = data.tokens ?? [];
-            const { cartItemModel } = await import('@models/cart-items');
+            const cartItemsModule = await import('@models/cart-items');
+            const { cartItemModel } = cartItemsModule;
             await Promise.all(
                 items.map((item) =>
                     cartItemModel.create({
                         userId: user.id,
                         productId: Number(item.product),
                         quantity: item.quantity
-                    })
+                    } as never)
                 )
             );
             await Promise.all(
@@ -169,8 +178,8 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
                         userId: user.id,
                         type: token.type,
                         token: token.token,
-                        expiration: token.expiration ?? null
-                    })
+                        expiration: token.expiration ?? undefined
+                    } as never)
                 )
             );
             return withComputedRelations(user as unknown as IUserDocument);
@@ -193,6 +202,9 @@ export const updateMany = async (filter: UserWhere, update: Record<string, unkno
         await userModel.update({ cartUpdatedAt: new Date() }, { where: {} });
         return { modifiedCount: deletedCount };
     }
+
+    if (typeof (userModel as unknown as { updateMany?: unknown }).updateMany === 'function')
+        return (userModel as unknown as { updateMany: (f: Record<string, unknown>, u: Record<string, unknown>) => Promise<{ modifiedCount: number }> }).updateMany(filter, update);
 
     const [modifiedCount] = await userModel.update(update as never, { where: toWhere(filter) });
     return { modifiedCount };

@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-null */
 import { Op } from 'sequelize';
 import { orderModel, type IOrderDocument, type IOrderProduct } from '@models/orders';
 import { orderItemModel } from '@models/order-items';
@@ -31,15 +32,18 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
     const keys = Object.keys(match);
     return rows.filter((row) =>
         keys.every((key) => {
-            if (key === '_id') return Number(row.id) === Number(match[key]);
+            if (key === '_id' || key === 'id') return Number(row.id) === Number(match[key]);
             if (key === 'userId') return Number(row.userId) === Number(match[key]);
             if (key === 'email') return String(row.email) === String(match[key]);
             if (key === 'products.product._id')
-                return row.products.some((product) => Number((product.product as { id?: number }).id) === Number(match[key]));
+                return row.products.some((product) => Number(((product.product as unknown) as { id?: number }).id) === Number(match[key]));
             return true;
         })
     );
 };
+
+const extractProductId = (product: IOrderProduct['product']): number =>
+    Number(((product as unknown) as { id?: number | string; _id?: number | string }).id ?? ((product as unknown) as { _id?: number | string })._id ?? 0);
 
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
@@ -57,7 +61,7 @@ export const aggregate = async <T = IOrderDocument>(pipeline: Array<Record<strin
         (await orderModel.findAll({
             order: [['createdAt', 'DESC']],
             raw: true
-        })) as Array<{ id: number } & Record<string, unknown>>
+        })) as unknown as Array<{ id: number } & Record<string, unknown>>
     );
 
     for (const stage of pipeline) {
@@ -67,7 +71,8 @@ export const aggregate = async <T = IOrderDocument>(pipeline: Array<Record<strin
                 'createdAt',
                 -1
             ];
-            rows = rows.sort((a, b) => {
+            // eslint-disable-next-line unicorn/no-array-sort
+            rows = [...rows].sort((a, b) => {
                 const av = a[field as keyof IOrderDocument] as unknown as number | string | Date;
                 const bv = b[field as keyof IOrderDocument] as unknown as number | string | Date;
                 const factor = Number(direction) === -1 ? -1 : 1;
@@ -103,14 +108,14 @@ export const create = async (data: Partial<IOrderDocument>): Promise<IOrderDocum
         products.map((entry) =>
             orderItemModel.create({
                 orderId: order.id,
-                productId: Number((entry.product as { id?: number; _id?: number }).id ?? (entry.product as { _id?: number })._id ?? 0),
+                productId: extractProductId(entry.product),
                 quantity: Number(entry.quantity),
                 productTitle: String((entry.product as { title?: string }).title ?? ''),
                 productPrice: Number((entry.product as { price?: number }).price ?? 0),
                 productDescription: String((entry.product as { description?: string }).description ?? ''),
                 productImageUrl: String((entry.product as { imageUrl?: string }).imageUrl ?? ''),
                 productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
-            })
+            } as never)
         )
     );
 
@@ -118,10 +123,10 @@ export const create = async (data: Partial<IOrderDocument>): Promise<IOrderDocum
 };
 
 export const save = async (order: IOrderDocument): Promise<IOrderDocument> => {
-    const dbOrder = await orderModel.findByPk(Number(order.id ?? order._id));
-    if (!dbOrder) throw new Error('404');
+    const databaseOrder = await orderModel.findByPk(Number(order.id ?? order._id));
+    if (!databaseOrder) throw new Error('404');
 
-    await dbOrder.update({
+    await databaseOrder.update({
         userId: Number(order.userId),
         email: order.email,
         status: order.status,
@@ -129,24 +134,24 @@ export const save = async (order: IOrderDocument): Promise<IOrderDocument> => {
     });
 
     if (order.products) {
-        await orderItemModel.destroy({ where: { orderId: dbOrder.id } });
+        await orderItemModel.destroy({ where: { orderId: databaseOrder.id } });
         await Promise.all(
             order.products.map((entry) =>
                 orderItemModel.create({
-                    orderId: dbOrder.id,
-                    productId: Number((entry.product as { id?: number; _id?: number }).id ?? (entry.product as { _id?: number })._id ?? 0),
+                    orderId: databaseOrder.id,
+                    productId: extractProductId(entry.product),
                     quantity: Number(entry.quantity),
                     productTitle: String((entry.product as { title?: string }).title ?? ''),
                     productPrice: Number((entry.product as { price?: number }).price ?? 0),
                     productDescription: String((entry.product as { description?: string }).description ?? ''),
                     productImageUrl: String((entry.product as { imageUrl?: string }).imageUrl ?? ''),
                     productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
-                })
+                } as never)
             )
         );
     }
 
-    return hydrateOne(dbOrder.get({ plain: true }) as { id: number } & Record<string, unknown>);
+    return hydrateOne(databaseOrder.get({ plain: true }) as { id: number } & Record<string, unknown>);
 };
 
 export const deleteOne = (order: IOrderDocument): Promise<void> =>

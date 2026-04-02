@@ -21,7 +21,7 @@ export const postResetConfirm = (
     return userTokenModel
         .findOne({ where: { token, type: 'password' } })
         .then((storedToken) => {
-            if (!storedToken) return undefined;
+            if (!storedToken) return;
             return userRepository.findById(String(storedToken.userId));
         })
         .then((user) => {

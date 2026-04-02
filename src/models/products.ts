@@ -1,14 +1,12 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import { DataTypes, Model } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
 import type { Product } from '@types';
 import { sequelize } from '@utils/database';
 
-export class ProductModel extends Model<
-    InferAttributes<ProductModel>,
-    InferCreationAttributes<ProductModel>
-> {
+export class ProductModel extends Model {
     declare id: number;
+    declare _id: number;
     declare title: string;
     declare price: number;
     declare description: string;
@@ -18,10 +16,6 @@ export class ProductModel extends Model<
     declare createdAt: Date;
     declare updatedAt: Date;
 
-    get _id() {
-        return this.id;
-    }
-
     toObject() {
         return this.get({ plain: true });
     }
@@ -30,6 +24,12 @@ export class ProductModel extends Model<
 ProductModel.init(
     {
         id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        _id: {
+            type: DataTypes.VIRTUAL,
+            get() {
+                return (this as ProductModel).id;
+            }
+        },
         title: { type: DataTypes.STRING, allowNull: false },
         price: { type: DataTypes.FLOAT, allowNull: false },
         description: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
@@ -57,7 +57,7 @@ ProductModel.init(
     }
 );
 
-export interface IProductDocument extends ProductModel {}
+export type IProductDocument = ProductModel;
 export type IProductMethods = unknown;
 export type IProductModel = typeof ProductModel;
 

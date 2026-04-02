@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-null */
 import { t } from 'i18next';
 import { Op } from 'sequelize';
 import type { SearchProductsRequest, ProductsResponse, Product } from '@types';

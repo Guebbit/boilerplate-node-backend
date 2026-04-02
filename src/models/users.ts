@@ -1,4 +1,4 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model, Op } from 'sequelize';
+import { DataTypes, Model, Op } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
@@ -25,7 +25,7 @@ export interface IToken {
 
 export interface IUser extends User {
     password: string;
-    deletedAt?: Date;
+    deletedAt?: Date | null;
     cart: {
         items: ICartItem[];
         updatedAt: Date;
@@ -33,8 +33,9 @@ export interface IUser extends User {
     tokens: IToken[];
 }
 
-export class UserModel extends Model<InferAttributes<UserModel>, InferCreationAttributes<UserModel>> {
+export class UserModel extends Model {
     declare id: number;
+    declare _id: number;
     declare email: string;
     declare username: string;
     declare password: string;
@@ -48,14 +49,12 @@ export class UserModel extends Model<InferAttributes<UserModel>, InferCreationAt
     declare cartItems?: Array<{ productId: number; quantity: number; product?: unknown }>;
     declare tokens?: IToken[];
 
-    get _id() {
-        return this.id;
-    }
-
     toObject() {
         const plain = this.get({ plain: true }) as Record<string, unknown>;
-        const cartItems = (plain['cartItems'] as Array<{ productId: number; quantity: number }> | undefined) ??
-            this.cartItems ?? [];
+        const cartItems =
+            (plain['cartItems'] as Array<{ productId: number; quantity: number }> | undefined) ??
+            this.cartItems ??
+            [];
         const tokens = (plain['tokens'] as IToken[] | undefined) ?? this.tokens ?? [];
 
         return {
@@ -70,12 +69,14 @@ export class UserModel extends Model<InferAttributes<UserModel>, InferCreationAt
     }
 
     async tokenAdd(type: ETokenType, expirationMs: number, token: string): Promise<string> {
-        await userTokenModel.create({
-            userId: this.id,
-            type,
-            token,
-            expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : null
-        });
+        await userTokenModel.create(
+            {
+                userId: this.id,
+                type,
+                token,
+                expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
+            } as never
+        );
         return token;
     }
 
@@ -85,6 +86,15 @@ export class UserModel extends Model<InferAttributes<UserModel>, InferCreationAt
 
     async populate(_path: string) {
         return this;
+    }
+
+    static async updateMany(filter: Record<string, unknown>, update: Record<string, unknown>) {
+        const where: Record<string, unknown> = {};
+        if (filter.admin !== undefined) where.admin = filter.admin;
+        if (filter.email !== undefined) where.email = filter.email;
+        const values = update.$set ? (update.$set as Record<string, unknown>) : update;
+        const [modifiedCount] = await this.update(values as never, { where });
+        return { modifiedCount };
     }
 
     static async tokenRemoveExpired(): Promise<{ status: number; success: boolean }> {
@@ -105,6 +115,12 @@ export class UserModel extends Model<InferAttributes<UserModel>, InferCreationAt
 UserModel.init(
     {
         id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        _id: {
+            type: DataTypes.VIRTUAL,
+            get() {
+                return (this as UserModel).id;
+            }
+        },
         email: {
             type: DataTypes.STRING,
             allowNull: false,
@@ -131,7 +147,11 @@ UserModel.init(
         modelName: 'User',
         tableName: 'users',
         timestamps: true,
-        indexes: [{ unique: true, fields: ['email'] }, { fields: ['createdAt'] }, { fields: ['deletedAt'] }],
+        indexes: [
+            { unique: true, fields: ['email'] },
+            { fields: ['createdAt'] },
+            { fields: ['deletedAt'] }
+        ],
         hooks: {
             beforeSave: async (user) => {
                 if (!user.changed('password')) return;
@@ -149,7 +169,7 @@ export interface IUserDocument extends IUserMethods {
     password: string;
     imageUrl: string;
     admin: boolean;
-    deletedAt?: Date;
+    deletedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
     cart: {
@@ -167,6 +187,10 @@ export type IUserMethods = {
 
 export type IUserModel = typeof UserModel & {
     tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
+    updateMany(
+        filter: Record<string, unknown>,
+        update: Record<string, unknown>
+    ): Promise<{ modifiedCount: number }>;
 };
 
 export const zodUserSchema = z.object({

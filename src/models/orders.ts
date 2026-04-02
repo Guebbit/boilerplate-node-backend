@@ -1,5 +1,5 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
-import type { Order, Product } from '@types';
+import { DataTypes, Model } from 'sequelize';
+import type { Order } from '@types';
 import { sequelize } from '@utils/database';
 
 export enum EOrderStatus {
@@ -12,12 +12,22 @@ export enum EOrderStatus {
 }
 
 export interface IOrderProduct {
-    product: Product;
+    product: {
+        id?: string | number;
+        _id?: string | number;
+        title?: string;
+        price?: number;
+        description?: string;
+        imageUrl?: string;
+        active?: boolean;
+        [key: string]: unknown;
+    };
     quantity: number;
 }
 
-export class OrderModel extends Model<InferAttributes<OrderModel>, InferCreationAttributes<OrderModel>> {
+export class OrderModel extends Model {
     declare id: number;
+    declare _id: number;
     declare userId: number;
     declare email: string;
     declare status: EOrderStatus;
@@ -27,10 +37,6 @@ export class OrderModel extends Model<InferAttributes<OrderModel>, InferCreation
 
     declare products?: IOrderProduct[];
 
-    get _id() {
-        return this.id;
-    }
-
     toObject() {
         return this.get({ plain: true });
     }
@@ -39,6 +45,12 @@ export class OrderModel extends Model<InferAttributes<OrderModel>, InferCreation
 OrderModel.init(
     {
         id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        _id: {
+            type: DataTypes.VIRTUAL,
+            get() {
+                return (this as OrderModel).id;
+            }
+        },
         userId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
         email: { type: DataTypes.STRING, allowNull: false },
         status: {

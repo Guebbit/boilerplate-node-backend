@@ -1,5 +1,3 @@
-import { start } from './database';
+import { sequelize, start } from './database';
 
-void start().then(() => {
-    process.exit(0);
-});
+void start().finally(() => sequelize.close());

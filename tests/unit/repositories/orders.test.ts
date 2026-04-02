@@ -1,4 +1,3 @@
-import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
@@ -17,9 +16,9 @@ describe('orderRepository', () => {
             // toOrderProduct converts the product document into the embedded shape
             const order = await createOrder(user, [toOrderProduct(product, 2)]);
 
-            expect(order._id).toBeDefined();
+            expect(order.id).toBeDefined();
             expect(order.email).toBe(user.email);
-            expect(order.userId.toString()).toBe((user._id as Types.ObjectId).toString());
+            expect(order.userId.toString()).toBe((user.id).toString());
         });
 
         it('stores the correct quantity for each order line', async () => {

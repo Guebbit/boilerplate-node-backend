@@ -1,7 +1,6 @@
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeProduct, createProduct } from '../../helpers/factories/products';
 import * as productRepository from '@repositories/products';
-import { Types } from 'mongoose';
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -12,7 +11,7 @@ describe('productRepository', () => {
         it('inserts a new product and returns the Mongoose document', async () => {
             const product = await productRepository.create(makeProduct());
 
-            expect(product._id).toBeDefined();
+            expect(product.id).toBeDefined();
             expect(product.title).toBe('Test Product');
             expect(product.price).toBe(9.99);
             expect(product.active).toBe(true);
@@ -31,7 +30,7 @@ describe('productRepository', () => {
     describe('findById', () => {
         it('returns the product when the id exists', async () => {
             const created = await createProduct({ title: 'Widget' });
-            const id = (created._id as Types.ObjectId).toString();
+            const id = (created.id).toString();
 
             const found = await productRepository.findById(id);
 
@@ -149,7 +148,7 @@ describe('productRepository', () => {
     describe('save', () => {
         it('persists mutations to an existing document', async () => {
             const product = await createProduct();
-            const id = (product._id as Types.ObjectId).toString();
+            const id = (product.id).toString();
 
             product.title = 'Updated Title';
             product.price = 99.99;
@@ -164,7 +163,7 @@ describe('productRepository', () => {
     describe('deleteOne', () => {
         it('removes the document permanently from the collection', async () => {
             const product = await createProduct();
-            const id = (product._id as Types.ObjectId).toString();
+            const id = (product.id).toString();
 
             await productRepository.deleteOne(product);
 

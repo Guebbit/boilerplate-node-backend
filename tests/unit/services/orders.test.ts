@@ -1,4 +1,3 @@
-import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
@@ -92,7 +91,7 @@ describe('orderService.getAll', () => {
         await createOrder(user, [toOrderProduct(product, 2)]);
 
         // Only fetch the specific order
-        const orders = await orderService.getAll([{ $match: { _id: target._id } }]);
+        const orders = await orderService.getAll([{ $match: { id: target.id } }]);
 
         expect(orders).toHaveLength(1);
     });
@@ -126,7 +125,7 @@ describe('orderService.search', () => {
         await createOrder(user2, [toOrderProduct(product, 2)]);
 
         const result = await orderService.search({
-            userId: (user1._id as Types.ObjectId).toString()
+            userId: (user1.id).toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -159,7 +158,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderProduct(product, 2)]);
 
         const result = await orderService.search({
-            id: (target._id as Types.ObjectId).toString()
+            id: (target.id).toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -177,7 +176,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderProduct(p2, 1)]);
 
         const result = await orderService.search({
-            productId: (p1._id as Types.ObjectId).toString()
+            productId: (p1.id).toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -223,7 +222,7 @@ describe('orderService.search', () => {
         await createOrder(user2, [toOrderProduct(product, 2)]);
 
         // The scope parameter is a raw Mongoose filter merged into the $match stage
-        const result = await orderService.search({}, { userId: user1._id as Types.ObjectId });
+        const result = await orderService.search({}, { userId: user1.id });
 
         expect(result.items).toHaveLength(1);
     });

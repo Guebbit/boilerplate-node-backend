@@ -26,11 +26,13 @@
  *   const order   = await createOrder(user, [toOrderProduct(product, 2)]);
  */
 
-import { Types } from 'mongoose';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import type { IUserDocument } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import { orderRepository } from '@repositories/orders';
+
+const getUserId = (user: IUserDocument): number =>
+    Number((user as unknown as { id?: number; _id?: number }).id ?? (user as unknown as { _id?: number })._id);
 
 /**
  * Convert a Mongoose product document into an IOrderProduct ready to embed
@@ -42,7 +44,7 @@ import { orderRepository } from '@repositories/orders';
 export const toOrderProduct = (product: IProductDocument, quantity = 1): IOrderProduct => ({
     // toObject() removes Mongoose Document methods and virtuals, leaving a
     // plain JS object that matches the embedded productSchema in the Order model.
-    product: product.toObject() as IOrderProduct['product'],
+    product: product.toObject() as unknown as IOrderProduct['product'],
     quantity
 });
 
@@ -56,7 +58,7 @@ export const makeOrder = (
     user: IUserDocument,
     products: IOrderProduct[]
 ): Partial<IOrderDocument> => ({
-    userId: user._id as Types.ObjectId,
+    userId: getUserId(user),
     email: user.email,
     products
 });
