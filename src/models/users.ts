@@ -24,6 +24,10 @@ export interface IToken {
 
 export interface IUser {
     id: number;
+    /**
+     * Legacy alias kept for compatibility with older payloads/services.
+     * In Sequelize/MySQL the real persisted key is `id`.
+     */
     _id?: number;
     email: string;
     username: string;
@@ -43,6 +47,9 @@ export interface IUser {
 
 export class UserModel extends Model {
     declare id: number;
+    /**
+     * Legacy compatibility alias for `id` (virtual field, not stored in DB).
+     */
     declare _id: number;
     declare email: string;
     declare username: string;
@@ -54,7 +61,15 @@ export class UserModel extends Model {
     declare createdAt: Date;
     declare updatedAt: Date;
 
+    /**
+     * Populated only when `User.hasMany(CartItem, { as: 'cartItems' })` is included in the query.
+     * Represents the normalized cart table rows linked to this user.
+     */
     declare cartItems?: Array<{ productId: number; quantity: number; product?: unknown }>;
+    /**
+     * Populated only when `User.hasMany(UserToken, { as: 'tokens' })` is included in the query.
+     * Represents token rows associated with this user.
+     */
     declare tokens?: IToken[];
 
     toObject() {
@@ -124,6 +139,7 @@ export class UserModel extends Model {
 UserModel.init(
     {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+        // Legacy alias for compatibility with older code paths expecting `_id`.
         _id: {
             type: DataTypes.VIRTUAL,
             get() {
@@ -172,6 +188,10 @@ UserModel.init(
 
 export interface IUserDocument extends IUserMethods {
     id: number;
+    /**
+     * Legacy alias kept for compatibility with older payloads/services.
+     * In Sequelize/MySQL the real persisted key is `id`.
+     */
     _id?: number;
     email: string;
     username: string;

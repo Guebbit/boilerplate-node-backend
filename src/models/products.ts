@@ -5,6 +5,9 @@ import { sequelize } from '@utils/database';
 
 export class ProductModel extends Model {
     declare id: number;
+    /**
+     * Legacy compatibility alias for `id` (virtual field, not stored in DB).
+     */
     declare _id: number;
     declare title: string;
     declare price: number;
@@ -23,6 +26,7 @@ export class ProductModel extends Model {
 ProductModel.init(
     {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+        // Legacy alias for compatibility with older code paths expecting `_id`.
         _id: {
             type: DataTypes.VIRTUAL,
             get() {

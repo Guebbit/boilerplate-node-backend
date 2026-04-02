@@ -26,6 +26,9 @@ export interface IOrderProduct {
 
 export class OrderModel extends Model {
     declare id: number;
+    /**
+     * Legacy compatibility alias for `id` (virtual field, not stored in DB).
+     */
     declare _id: number;
     declare userId: number;
     declare email: string;
@@ -34,6 +37,10 @@ export class OrderModel extends Model {
     declare createdAt: Date;
     declare updatedAt: Date;
 
+    /**
+     * Convenience property used by repository hydration to emulate legacy shape.
+     * Order items are persisted in `order_items`; this array exists when items are loaded/joined.
+     */
     declare products?: IOrderProduct[];
 
     toObject() {
@@ -44,6 +51,7 @@ export class OrderModel extends Model {
 OrderModel.init(
     {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+        // Legacy alias for compatibility with older code paths expecting `_id`.
         _id: {
             type: DataTypes.VIRTUAL,
             get() {
@@ -72,6 +80,10 @@ OrderModel.init(
 
 export interface IOrderDocument {
     id: number;
+    /**
+     * Legacy alias kept for compatibility with older payloads/services.
+     * In Sequelize/MySQL the real persisted key is `id`.
+     */
     _id?: number;
     userId: number;
     email: string;
