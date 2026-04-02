@@ -14,7 +14,7 @@
  */
 
 import type { IProductDocument } from '@models/products';
-import ProductRepository from '@repositories/products';
+import { productRepository } from '@repositories/products';
 
 /**
  * Build a valid product payload.
@@ -42,4 +42,4 @@ export const makeProduct = (
  */
 export const createProduct = (
     overrides: Partial<IProductDocument> = {}
-): Promise<IProductDocument> => ProductRepository.create(makeProduct(overrides));
+): Promise<IProductDocument> => productRepository.create(makeProduct(overrides));

@@ -9,7 +9,7 @@ import connectFlash from 'connect-flash';
 import MongoStore from 'connect-mongo';
 import type { Request, Response, NextFunction } from 'express';
 import { generateToken } from './csrf';
-import UserRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 
 /**
  * MongoDB session store
@@ -71,7 +71,7 @@ export const userConnect = (request: Request, response: Response, next: NextFunc
         next();
         return;
     }
-    UserRepository.findById(request.session.user._id.toString())
+    userRepository.findById(request.session.user._id.toString())
         .then((user) => {
             if (!user) return request.session.destroy(() => response.redirect('/'));
             // to show user data through the UI

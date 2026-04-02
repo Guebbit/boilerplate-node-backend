@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { Types, type CastError, type PipelineStage } from 'mongoose';
 import { t } from 'i18next';
-import OrderService from '@services/orders';
+import { orderService } from '@services/orders';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
 
 /**
@@ -24,7 +24,7 @@ export const getOrderItem = (
      * User role filters:
      * Only admin can see all orders. Regular users can only see their own.
      */
-    return OrderService.getById(String(request.params.id), { userId: request.session.user?._id })
+    return orderService.getById(String(request.params.id), { userId: request.session.user?._id })
         .then((order) => {
             if (!order)
                 return next(new ExtendedError('404', 404, true, [t('ecommerce.order-not-found')]));

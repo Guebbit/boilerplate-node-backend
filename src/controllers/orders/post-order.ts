@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
 import { nodemailer } from '@utils/nodemailer';
 import { ExtendedError } from '@utils/helpers-errors';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 import { UpdateOrderRequest } from '@api/model/updateOrderRequest';
 
 /**
@@ -19,7 +19,7 @@ export const postOrder = (
     response: Response,
     next: NextFunction
 ) =>
-    UserService.orderConfirm(request.user!)
+    userService.orderConfirm(request.user!)
         .then(({ success }) => {
             if (!success)
                 return next(

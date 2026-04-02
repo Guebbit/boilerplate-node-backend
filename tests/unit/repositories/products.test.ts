@@ -1,16 +1,16 @@
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { makeProduct, createProduct } from '../../helpers/factories/products';
-import * as ProductRepository from '@repositories/products';
+import * as productRepository from '@repositories/products';
 import { Types } from 'mongoose';
 
 beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-describe('ProductRepository', () => {
+describe('productRepository', () => {
     describe('create', () => {
         it('inserts a new product and returns the Mongoose document', async () => {
-            const product = await ProductRepository.create(makeProduct());
+            const product = await productRepository.create(makeProduct());
 
             expect(product._id).toBeDefined();
             expect(product.title).toBe('Test Product');
@@ -20,7 +20,7 @@ describe('ProductRepository', () => {
 
         it('applies the imageUrl default when not provided', async () => {
             // The schema sets a default imageUrl; any non-empty URL satisfies it
-            const product = await ProductRepository.create(
+            const product = await productRepository.create(
                 makeProduct({ imageUrl: 'https://example.com/custom.jpg' })
             );
 
@@ -33,14 +33,14 @@ describe('ProductRepository', () => {
             const created = await createProduct({ title: 'Widget' });
             const id = (created._id as Types.ObjectId).toString();
 
-            const found = await ProductRepository.findById(id);
+            const found = await productRepository.findById(id);
 
             expect(found).not.toBeNull();
             expect(found!.title).toBe('Widget');
         });
 
         it('returns null for a non-existent id', async () => {
-            const found = await ProductRepository.findById('000000000000000000000000');
+            const found = await productRepository.findById('000000000000000000000000');
 
             expect(found).toBeNull();
         });
@@ -50,14 +50,14 @@ describe('ProductRepository', () => {
         it('returns a product matching the query', async () => {
             await createProduct({ title: 'Unique Product', price: 42 });
 
-            const found = await ProductRepository.findOne({ title: 'Unique Product' });
+            const found = await productRepository.findOne({ title: 'Unique Product' });
 
             expect(found).not.toBeNull();
             expect(found!.price).toBe(42);
         });
 
         it('returns null when no product matches', async () => {
-            const found = await ProductRepository.findOne({ title: 'Nonexistent' });
+            const found = await productRepository.findOne({ title: 'Nonexistent' });
 
             expect(found).toBeNull();
         });
@@ -67,7 +67,7 @@ describe('ProductRepository', () => {
             await createProduct({ title: 'Alpha', active: true });
             await createProduct({ title: 'Beta', active: true });
 
-            const found = await ProductRepository.findOne({ active: true });
+            const found = await productRepository.findOne({ active: true });
 
             // At least one was returned (we don't rely on insertion order)
             expect(found).not.toBeNull();
@@ -79,7 +79,7 @@ describe('ProductRepository', () => {
             await createProduct({ title: 'A' });
             await createProduct({ title: 'B' });
 
-            const products = await ProductRepository.findAll();
+            const products = await productRepository.findAll();
 
             expect(products).toHaveLength(2);
         });
@@ -89,7 +89,7 @@ describe('ProductRepository', () => {
                 await createProduct({ title: `Product ${i}` });
             }
 
-            const products = await ProductRepository.findAll({}, { limit: 3 });
+            const products = await productRepository.findAll({}, { limit: 3 });
 
             expect(products).toHaveLength(3);
         });
@@ -100,7 +100,7 @@ describe('ProductRepository', () => {
             await createProduct({ title: 'C' });
 
             // skip 2 of 3 → only 1 remains
-            const products = await ProductRepository.findAll({}, { skip: 2, limit: 10 });
+            const products = await productRepository.findAll({}, { skip: 2, limit: 10 });
 
             expect(products).toHaveLength(1);
         });
@@ -109,7 +109,7 @@ describe('ProductRepository', () => {
             await createProduct({ title: 'Active', active: true });
             await createProduct({ title: 'Inactive', active: false });
 
-            const active = await ProductRepository.findAll({ active: true });
+            const active = await productRepository.findAll({ active: true });
 
             expect(active).toHaveLength(1);
             expect(active[0].title).toBe('Active');
@@ -118,7 +118,7 @@ describe('ProductRepository', () => {
         it('returns lean (plain JS) objects without Mongoose methods', async () => {
             await createProduct();
 
-            const [product] = await ProductRepository.findAll();
+            const [product] = await productRepository.findAll();
 
             expect(typeof (product as unknown as { save?: unknown }).save).toBe('undefined');
         });
@@ -129,18 +129,18 @@ describe('ProductRepository', () => {
             await createProduct({ title: 'A' });
             await createProduct({ title: 'B' });
 
-            expect(await ProductRepository.count()).toBe(2);
+            expect(await productRepository.count()).toBe(2);
         });
 
         it('counts only documents matching the filter', async () => {
             await createProduct({ title: 'Active', active: true });
             await createProduct({ title: 'Inactive', active: false });
 
-            expect(await ProductRepository.count({ active: true })).toBe(1);
+            expect(await productRepository.count({ active: true })).toBe(1);
         });
 
         it('returns 0 for an empty collection', async () => {
-            expect(await ProductRepository.count()).toBe(0);
+            expect(await productRepository.count()).toBe(0);
         });
     });
 
@@ -151,9 +151,9 @@ describe('ProductRepository', () => {
 
             product.title = 'Updated Title';
             product.price = 99.99;
-            await ProductRepository.save(product);
+            await productRepository.save(product);
 
-            const refreshed = await ProductRepository.findById(id);
+            const refreshed = await productRepository.findById(id);
             expect(refreshed!.title).toBe('Updated Title');
             expect(refreshed!.price).toBe(99.99);
         });
@@ -164,19 +164,19 @@ describe('ProductRepository', () => {
             const product = await createProduct();
             const id = (product._id as Types.ObjectId).toString();
 
-            await ProductRepository.deleteOne(product);
+            await productRepository.deleteOne(product);
 
-            expect(await ProductRepository.findById(id)).toBeNull();
+            expect(await productRepository.findById(id)).toBeNull();
         });
 
         it('only removes the targeted document, not others', async () => {
             const toDelete = await createProduct({ title: 'Delete me' });
             await createProduct({ title: 'Keep me' });
 
-            await ProductRepository.deleteOne(toDelete);
+            await productRepository.deleteOne(toDelete);
 
-            expect(await ProductRepository.count()).toBe(1);
-            const remaining = await ProductRepository.findOne({ title: 'Keep me' });
+            expect(await productRepository.count()).toBe(1);
+            const remaining = await productRepository.findOne({ title: 'Keep me' });
             expect(remaining).not.toBeNull();
         });
     });

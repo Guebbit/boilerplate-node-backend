@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
 import type { DeleteUserRequest } from '@types';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 
 /**
  * Delete a user (admin only)
@@ -22,7 +22,7 @@ export const postDeleteUser = (
 
     if (!id) return next(new ExtendedError('404', 404, false, [t('admin.user-not-found')]));
 
-    return UserService.remove(id, hardDelete)
+    return userService.remove(id, hardDelete)
         .then(({ success, message }) => {
             if (success) request.flash('success', [message]);
             response.redirect('/users/');

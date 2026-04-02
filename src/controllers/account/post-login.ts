@@ -4,7 +4,7 @@ import type { IUser } from '@models/users';
 import { ExtendedError } from '@utils/helpers-errors';
 import type { CastError } from 'mongoose';
 import type { LoginRequest } from '@types';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 
 /**
  * Authenticate user
@@ -26,7 +26,7 @@ export const postLogin = (
     /**
      * Login
      */
-    return UserService.login(email, password)
+    return userService.login(email, password)
         .then(({ success, data, errors }) => {
             if (!success || !data) {
                 request.flash('error', errors);

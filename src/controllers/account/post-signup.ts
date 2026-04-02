@@ -5,7 +5,7 @@ import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
 import { deleteFile } from '@utils/helpers-filesystem';
 import { resolveImageUrl } from '@utils/helpers-uploads';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 
 /**
@@ -37,7 +37,7 @@ export const postSignup = async (
     /**
      * Login
      */
-    return UserService.signup(email, username, password, passwordConfirm, imageUrl)
+    return userService.signup(email, username, password, passwordConfirm, imageUrl)
         .then(({ success, data, errors = [] }) => {
             if (!success || !data) {
                 // So the user doesn't need to fill the form again

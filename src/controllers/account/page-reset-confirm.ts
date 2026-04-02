@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
 import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
-import UserRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 
 /**
  * If token was provided (and valid), ask for new password
@@ -17,7 +17,7 @@ export const pageResetConfirm = (
     response: Response,
     next: NextFunction
 ) =>
-    UserRepository.findOne({
+    userRepository.findOne({
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'tokens.token': request.params.token,
         // eslint-disable-next-line @typescript-eslint/naming-convention

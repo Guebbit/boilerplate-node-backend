@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
 import type { DeleteProductRequest } from '@types';
-import ProductService from '@services/products';
+import { productService } from '@services/products';
 
 /**
  * Delete a product
@@ -17,7 +17,7 @@ export const postDeleteProduct = (
     response: Response,
     next: NextFunction
 ) =>
-    ProductService.remove(request.body.id, !!request.body.hardDelete)
+    productService.remove(request.body.id, !!request.body.hardDelete)
         .then(({ success, message }) => {
             if (success) request.flash('success', [message]);
             response.redirect('/products/');

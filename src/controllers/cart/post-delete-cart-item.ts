@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 import { t } from 'i18next';
 import type { RemoveCartItemRequest } from '@types';
 
@@ -25,7 +25,7 @@ export const postDeleteCartItem = (
     if (!existing) throw new Error(t('ecommerce.product-not-found'));
 
     // check done before entering the route
-    return UserService.cartItemRemoveById(request.user!, productId)
+    return userService.cartItemRemoveById(request.user!, productId)
         .then(({ success }) => {
             if (!success) throw new Error(t('ecommerce.product-not-found'));
             request.flash('success', [t('ecommerce.cart-product-removed')]);
