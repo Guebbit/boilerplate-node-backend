@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
 import type { CastError } from 'mongoose';
-import ProductService from '@services/products';
+import { productService } from '@services/products';
 
 /**
  * Url parameters
@@ -27,7 +27,7 @@ export const pageEditProduct = (
     next: NextFunction
 ) => {
     // Admin context: can see any product for editing (including inactive/deleted)
-    ProductService.getById(request.params.productId, true)
+    productService.getById(request.params.productId, true)
         .then((product) => {
             const [title, price, description, active] = request.flash('filled');
             response.render('products/edit', {

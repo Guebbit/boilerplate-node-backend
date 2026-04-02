@@ -2,9 +2,9 @@ import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct, makeProduct } from '../../helpers/factories/products';
-import * as ProductService from '@services/products';
-import * as ProductRepository from '@repositories/products';
-import * as UserRepository from '@repositories/users';
+import * as productService from '@services/products';
+import * as productRepository from '@repositories/products';
+import * as userRepository from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@utils/response';
 import type { IUserDocument } from '@models/users';
 
@@ -18,9 +18,9 @@ beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-describe('ProductService.validateData', () => {
+describe('productService.validateData', () => {
     it('returns an empty array for valid product data', () => {
-        const errors = ProductService.validateData({
+        const errors = productService.validateData({
             title: 'A Valid Product', // >= 5 chars
             price: 19.99,
             imageUrl: 'https://example.com/product.jpg',
@@ -32,7 +32,7 @@ describe('ProductService.validateData', () => {
     });
 
     it('returns errors when the title is too short', () => {
-        const errors = ProductService.validateData({
+        const errors = productService.validateData({
             title: 'Abc', // < 5 chars
             price: 9.99,
             imageUrl: 'https://example.com/img.jpg',
@@ -45,7 +45,7 @@ describe('ProductService.validateData', () => {
 
     it('returns an error when the title is missing', () => {
         // price and imageUrl are valid so the only failure is the title
-        const errors = ProductService.validateData({
+        const errors = productService.validateData({
             title: '',
             price: 9.99,
             imageUrl: 'https://example.com/img.jpg',
@@ -57,12 +57,12 @@ describe('ProductService.validateData', () => {
     });
 });
 
-describe('ProductService.search', () => {
+describe('productService.search', () => {
     it('returns only active products for non-admin callers', async () => {
         await createProduct({ title: 'Active Product', active: true });
         await createProduct({ title: 'Inactive Product', active: false });
 
-        const result = await ProductService.search({}, false);
+        const result = await productService.search({}, false);
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Active Product');
@@ -72,7 +72,7 @@ describe('ProductService.search', () => {
         await createProduct({ title: 'Active', active: true });
         await createProduct({ title: 'Inactive', active: false });
 
-        const result = await ProductService.search({}, true);
+        const result = await productService.search({}, true);
 
         expect(result.items).toHaveLength(2);
     });
@@ -85,7 +85,7 @@ describe('ProductService.search', () => {
         });
         await createProduct({ title: 'Plain Box', description: 'Nothing special', active: true });
 
-        const result = await ProductService.search({ text: 'Fancy' }, false);
+        const result = await productService.search({ text: 'Fancy' }, false);
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Fancy Widget');
@@ -95,7 +95,7 @@ describe('ProductService.search', () => {
         await createProduct({ title: 'Cheap', price: 5, active: true });
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
-        const result = await ProductService.search({ minPrice: 50 }, false);
+        const result = await productService.search({ minPrice: 50 }, false);
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Expensive');
@@ -105,7 +105,7 @@ describe('ProductService.search', () => {
         await createProduct({ title: 'Cheap', price: 5, active: true });
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
-        const result = await ProductService.search({ maxPrice: 10 }, false);
+        const result = await productService.search({ maxPrice: 10 }, false);
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Cheap');
@@ -116,8 +116,8 @@ describe('ProductService.search', () => {
             await createProduct({ title: `Product ${i}`, active: true });
         }
 
-        const page1 = await ProductService.search({ page: 1, pageSize: 3 });
-        const page2 = await ProductService.search({ page: 2, pageSize: 3 });
+        const page1 = await productService.search({ page: 1, pageSize: 3 });
+        const page2 = await productService.search({ page: 2, pageSize: 3 });
 
         expect(page1.items).toHaveLength(3);
         expect(page2.items).toHaveLength(2);
@@ -126,7 +126,7 @@ describe('ProductService.search', () => {
     });
 
     it('returns empty results when the collection is empty', async () => {
-        const result = await ProductService.search({});
+        const result = await productService.search({});
 
         expect(result.items).toHaveLength(0);
         expect(result.meta.totalItems).toBe(0);
@@ -136,19 +136,19 @@ describe('ProductService.search', () => {
         await createProduct({ title: 'Visible', active: true });
         await createProduct({ title: 'Deleted', active: true, deletedAt: new Date() });
 
-        const result = await ProductService.search({}, false);
+        const result = await productService.search({}, false);
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Visible');
     });
 });
 
-describe('ProductService.getById', () => {
+describe('productService.getById', () => {
     it('returns a lean product object for an active product (non-admin)', async () => {
         const product = await createProduct({ active: true });
         const id = (product._id as Types.ObjectId).toString();
 
-        const found = await ProductService.getById(id, false);
+        const found = await productService.getById(id, false);
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
@@ -160,7 +160,7 @@ describe('ProductService.getById', () => {
         const product = await createProduct({ active: false });
         const id = (product._id as Types.ObjectId).toString();
 
-        const found = await ProductService.getById(id, false);
+        const found = await productService.getById(id, false);
 
         expect(found).toBeNull();
     });
@@ -169,20 +169,20 @@ describe('ProductService.getById', () => {
         const product = await createProduct({ active: false });
         const id = (product._id as Types.ObjectId).toString();
 
-        const found = await ProductService.getById(id, true);
+        const found = await productService.getById(id, true);
 
         expect(found).not.toBeNull();
     });
 
     it('returns undefined when no id is provided', async () => {
         // eslint-disable-next-line unicorn/no-useless-undefined
-        expect(await ProductService.getById(undefined)).toBeUndefined();
+        expect(await productService.getById(undefined)).toBeUndefined();
     });
 });
 
-describe('ProductService.create', () => {
+describe('productService.create', () => {
     it('inserts a product and returns the Mongoose document', async () => {
-        const product = await ProductService.create({
+        const product = await productService.create({
             title: 'New Product',
             price: 29.99,
             imageUrl: 'https://example.com/img.jpg',
@@ -192,16 +192,16 @@ describe('ProductService.create', () => {
 
         expect(product._id).toBeDefined();
         expect(product.title).toBe('New Product');
-        expect(await ProductRepository.count()).toBe(1);
+        expect(await productRepository.count()).toBe(1);
     });
 });
 
-describe('ProductService.update', () => {
+describe('productService.update', () => {
     it('updates title, price and description of an existing product', async () => {
         const product = await createProduct();
         const id = (product._id as Types.ObjectId).toString();
 
-        const updated = await ProductService.update(id, {
+        const updated = await productService.update(id, {
             title: 'Updated Title',
             price: 49.99,
             description: 'New description'
@@ -216,7 +216,7 @@ describe('ProductService.update', () => {
         const product = await createProduct({ active: true });
         const id = (product._id as Types.ObjectId).toString();
 
-        const updated = await ProductService.update(id, { active: false });
+        const updated = await productService.update(id, { active: false });
 
         expect(updated.active).toBe(false);
     });
@@ -229,7 +229,7 @@ describe('ProductService.update', () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id = (product._id as Types.ObjectId).toString();
 
-        await ProductService.update(id, {
+        await productService.update(id, {
             imageUrl: '/images/new.jpg'
         });
 
@@ -239,20 +239,20 @@ describe('ProductService.update', () => {
 
     it('throws when the product does not exist', async () => {
         await expect(
-            ProductService.update('000000000000000000000000', { title: 'X' })
+            productService.update('000000000000000000000000', { title: 'X' })
         ).rejects.toThrow();
     });
 });
 
-describe('ProductService.remove', () => {
+describe('productService.remove', () => {
     it('soft-deletes a product by setting deletedAt', async () => {
         const product = await createProduct({ active: true });
         const id = (product._id as Types.ObjectId).toString();
 
-        const result = await ProductService.remove(id, false);
+        const result = await productService.remove(id, false);
 
         expect(result.success).toBe(true);
-        const refreshed = await ProductRepository.findById(id);
+        const refreshed = await productRepository.findById(id);
         expect(refreshed!.deletedAt).toBeDefined();
     });
 
@@ -260,9 +260,9 @@ describe('ProductService.remove', () => {
         const product = await createProduct({ deletedAt: new Date() });
         const id = (product._id as Types.ObjectId).toString();
 
-        await ProductService.remove(id, false);
+        await productService.remove(id, false);
 
-        const restored = await ProductRepository.findById(id);
+        const restored = await productRepository.findById(id);
         expect(restored!.deletedAt).toBeUndefined();
     });
 
@@ -279,20 +279,20 @@ describe('ProductService.remove', () => {
         // Confirm the cart item was added
         expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
 
-        const result = await ProductService.remove(pid, true);
+        const result = await productService.remove(pid, true);
 
         expect(result.success).toBe(true);
         // Product must be gone from DB
-        expect(await ProductRepository.findById(pid)).toBeNull();
+        expect(await productRepository.findById(pid)).toBeNull();
         // User's cart must no longer contain the product
-        const refreshedUser = await UserRepository.findById(userId);
+        const refreshedUser = await userRepository.findById(userId);
         if (refreshedUser) {
             expect(refreshedUser.cart.items.some((i) => i.product.toString() === pid)).toBe(false);
         }
     });
 
     it('returns a 404 rejection when the product does not exist', async () => {
-        const result = await ProductService.remove('000000000000000000000000', false);
+        const result = await productService.remove('000000000000000000000000', false);
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(404);

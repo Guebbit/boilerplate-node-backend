@@ -1,10 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
-import ProductRepository from '@repositories/products';
+import { productRepository } from '@repositories/products';
 import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
 import type { UpsertCartItemRequest } from '@types';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 
 /**
  * Add a product (with its quantity) to cart, check availability, etc
@@ -27,7 +27,7 @@ export const postCartItem = (
         return Promise.resolve();
     }
 
-    UserService.cartItemSetById(user, productId, request.body.quantity)
+    userService.cartItemSetById(user, productId, request.body.quantity)
         .then(() => {
             request.flash('success', [t('ecommerce.product-added-to-cart')]);
             return response.redirect('/cart');

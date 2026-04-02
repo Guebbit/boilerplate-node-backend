@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { t } from 'i18next';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
 import type { CastError } from 'mongoose';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 
 /**
  * Url parameters
@@ -27,7 +27,7 @@ export const pageEditUser = (
     next: NextFunction
 ) => {
     // Admin context: can see any user for editing (including soft-deleted)
-    UserService.getById(request.params.userId)
+    userService.getById(request.params.userId)
         .then((user) => {
             const [email, username, admin, imageUrl] = request.flash('filled');
             response.render('users/edit', {

@@ -4,7 +4,7 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { ExtendedError } from '@utils/helpers-errors';
 import type { CreateProductRequestMultipart, UpdateProductRequestMultipart } from '@types';
-import ProductService from '@services/products';
+import { productService } from '@services/products';
 
 /**
  * Create or update a product.
@@ -37,7 +37,7 @@ export const postCreateProduct = (
     /**
      * Data validation
      */
-    const issues = ProductService.validateData({
+    const issues = productService.validateData({
         ...request.body,
         imageUrl,
         active: !!request.body.active
@@ -60,7 +60,7 @@ export const postCreateProduct = (
      * NO ID = new product
      */
     if (!id || id === '')
-        return ProductService.create({
+        return productService.create({
             ...request.body,
             imageUrl,
             active: !!request.body.active
@@ -75,7 +75,7 @@ export const postCreateProduct = (
     /**
      * ID = edit product
      */
-    return ProductService.update(id, {
+    return productService.update(id, {
         ...request.body,
         imageUrl,
         active: !!request.body.active

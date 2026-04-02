@@ -5,7 +5,7 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { ExtendedError } from '@utils/helpers-errors';
 import type { CreateUserRequestMultipart, UpdateUserRequestMultipart } from '@types';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 
 /**
  * Create or update a user (admin only).
@@ -49,7 +49,7 @@ export const postWriteUser = async (
     /**
      * Data validation
      */
-    const issues = UserService.validateData(
+    const issues = userService.validateData(
         { email, username, password: password || undefined, admin, imageUrl },
         { requirePassword: isNew }
     );
@@ -69,7 +69,7 @@ export const postWriteUser = async (
      * NO ID = new user
      */
     if (isNew)
-        return UserService.adminCreate({
+        return userService.adminCreate({
             email,
             username,
             password,
@@ -85,7 +85,7 @@ export const postWriteUser = async (
     /**
      * ID = edit user
      */
-    return UserService.adminUpdate(id, {
+    return userService.adminUpdate(id, {
         email,
         username,
         // Only send password if the field was filled

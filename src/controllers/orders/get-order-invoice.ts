@@ -4,7 +4,7 @@ import type { Request, Response, NextFunction } from 'express';
 import ejs from 'ejs';
 import { Types, type CastError, type PipelineStage } from 'mongoose';
 import { t } from 'i18next';
-import OrderService from '@services/orders';
+import { orderService } from '@services/orders';
 import { createPDF } from '@utils/helpers-pdf';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
 import { getDirname } from '@utils/helpers-filesystem';
@@ -43,7 +43,7 @@ export const getOrderInvoice = (
     if (!request.session.user?.admin) match.$match.userId = request.session.user?._id;
     match.$match._id = new Types.ObjectId(id);
 
-    OrderService.getAll([match])
+    orderService.getAll([match])
         .then(async (orders) => {
             if (orders.length === 0)
                 return next(new ExtendedError('404', 404, true, [t('ecommerce.order-not-found')]));

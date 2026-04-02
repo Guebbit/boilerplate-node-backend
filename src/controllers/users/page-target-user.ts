@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { CastError } from 'mongoose';
 import { t } from 'i18next';
 import { databaseErrorConverter, ExtendedError } from '@utils/helpers-errors';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 
 /**
  * Url parameters
@@ -25,7 +25,7 @@ export const pageTargetUser = (
     response: Response,
     next: NextFunction
 ) =>
-    UserService.getById(request.params.userId)
+    userService.getById(request.params.userId)
         .then((user) => {
             if (!user)
                 return next(new ExtendedError('404', 404, false, [t('admin.user-not-found')]));

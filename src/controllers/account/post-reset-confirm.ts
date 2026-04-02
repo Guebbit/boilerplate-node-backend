@@ -4,8 +4,8 @@ import { nodemailer } from '@utils/nodemailer';
 import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
 import type { PasswordResetConfirmRequest } from '@types';
-import UserRepository from '@repositories/users';
-import UserService from '@services/users';
+import { userRepository } from '@repositories/users';
+import { userService } from '@services/users';
 
 /**
  * Ask to guest if they want to reset the password
@@ -27,7 +27,7 @@ export const postResetConfirm = async (
     /**
      * Search user by token
      */
-    return UserRepository.findOne({
+    return userRepository.findOne({
         // eslint-disable-next-line @typescript-eslint/naming-convention
         'tokens.token': token
     })
@@ -39,7 +39,7 @@ export const postResetConfirm = async (
                 return;
             }
             // change password
-            return UserService.passwordChange(user, password, passwordConfirm).then(
+            return userService.passwordChange(user, password, passwordConfirm).then(
                 async ({ success, errors = [] }) => {
                     if (!success) {
                         request.flash('error', errors);
@@ -48,7 +48,7 @@ export const postResetConfirm = async (
                     // consume the token
                     user.tokens = user.tokens.filter(({ token: t }) => token !== t);
                     // save and send email
-                    await UserRepository.save(user).then(() => {
+                    await userRepository.save(user).then(() => {
                         // send confirmation email (no need to wait)
                         void nodemailer(
                             {

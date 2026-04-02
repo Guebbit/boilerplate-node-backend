@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { CastError } from 'mongoose';
 import { databaseErrorConverter } from '@utils/helpers-errors';
-import UserService from '@services/users';
+import { userService } from '@services/users';
 import { t } from 'i18next';
 
 /**
@@ -13,7 +13,7 @@ import { t } from 'i18next';
  */
 export const postDeleteCart = (request: Request, response: Response, next: NextFunction) =>
     // check done before entering the route
-    UserService.cartRemove(request.user!)
+    userService.cartRemove(request.user!)
         .then(({ success }) => {
             if (!success) throw new Error('cartRemove error');
             request.flash('success', [t('ecommerce.cart-emptied')]);

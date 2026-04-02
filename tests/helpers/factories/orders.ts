@@ -30,7 +30,7 @@ import { Types } from 'mongoose';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import type { IUserDocument } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import OrderRepository from '@repositories/orders';
+import { orderRepository } from '@repositories/orders';
 
 /**
  * Convert a Mongoose product document into an IOrderProduct ready to embed
@@ -70,4 +70,4 @@ export const makeOrder = (
 export const createOrder = (
     user: IUserDocument,
     products: IOrderProduct[]
-): Promise<IOrderDocument> => OrderRepository.create(makeOrder(user, products));
+): Promise<IOrderDocument> => orderRepository.create(makeOrder(user, products));
