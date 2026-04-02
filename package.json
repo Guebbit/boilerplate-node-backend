@@ -1,5 +1,5 @@
 {
-    "name": "boilerplate-node-api-mongodb-mongoose",
+    "name": "boilerplate-node-api-mysql-sequelize",
     "version": "2.0.0",
     "main": "src/cluster.ts",
     "license": "AGPLv3.0",
@@ -21,7 +21,6 @@
         "test:unit": "jest --forceExit",
         "test:unit:target": "npx jest tests/path/file.test.ts",
         "test:prism": "kill $(lsof -t -i:4010) 2>/dev/null; npx @stoplight/prism-cli mock openapi.yaml --errors & PRISM_PID=$!; sleep 2; curl -f http://localhost:4010/products; kill $PRISM_PID",
-        "setup:mongod": "docker create --name mongo-temp mongo:latest && docker cp mongo-temp:/usr/bin/mongod /tmp/mongod && docker rm mongo-temp",
         "kill:win": "cmd \"/C TASKKILL /IM node.exe /F\"",
         "kill:gnu": "pkill -9 node",
         "podman:restart": "podman compose down && podman compose up -d",
@@ -29,7 +28,9 @@
         "genapi": "rm -rf ./api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
         "update:all": "npx npm-check-updates -u",
         "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",
-        "publish:public": "npm publish --access public"
+        "publish:public": "npm publish --access public",
+        "db:migrate": "tsx src/utils/database-migrate.ts",
+        "db:seed": "tsx src/utils/database-seed.ts"
     },
     "devDependencies": {
         "@stoplight/prism-cli": "^5.14.2",
@@ -58,7 +59,6 @@
         "globals": "^17.4.0",
         "jest": "^30.3.0",
         "jiti": "^2.6.1",
-        "mongodb-memory-server": "^11.0.1",
         "nodemon": "^3.1.14",
         "prettier": "^3.8.1",
         "ts-jest": "^29.4.6",
@@ -72,7 +72,6 @@
         "@types/ws": "^8.18.1",
         "bcrypt": "^6.0.0",
         "connect-flash": "^0.1.1",
-        "connect-mongo": "^6.0.0",
         "cookie-parser": "^1.4.7",
         "csrf-sync": "^4.2.1",
         "dotenv": "^17.3.1",
@@ -84,11 +83,13 @@
         "i18next": "^25.10.9",
         "jsonwebtoken": "^9.0.3",
         "mime-types": "^3.0.2",
-        "mongodb": "^7.1.1",
-        "mongoose": "^9.3.3",
         "multer": "^2.1.1",
+        "mysql2": "^3.20.0",
         "nodemailer": "^8.0.4",
         "puppeteer-core": "^24.40.0",
+        "sequelize": "^6.37.8",
+        "sequelize-cli": "^6.6.5",
+        "sqlite3": "^5.1.7",
         "winston": "^3.19.0",
         "ws": "^8.20.0",
         "zod": "^4.3.6"

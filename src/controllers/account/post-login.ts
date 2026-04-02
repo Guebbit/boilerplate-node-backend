@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import { Types } from 'mongoose';
 import { userService } from '@services/users';
 import {
     createRefreshToken,
@@ -12,23 +11,12 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '@utils/token-cleanup';
 
-/**
- * POST /account/login
- * Authenticate user.
- * Returns a short-lived access token and sets a long-lived refresh cookie.
- */
 export const postLogin = (
     request: Request<unknown, unknown, LoginRequest & { remember?: ERefreshTokenExpiryTime }>,
     response: Response
 ) => {
-    /**
-     * Get POST data
-     */
     const { email, password, remember } = request.body;
 
-    /**
-     * Run token cleanup as a background pre-flight step, then authenticate.
-     */
     return runTokenCleanup()
         .then(() => userService.login(email, password))
         .then((result) => {
@@ -37,22 +25,13 @@ export const postLogin = (
                 return;
             }
 
-            /**
-             * Authentication successful.
-             * Create refresh token...
-             */
             const user = result.data!;
-            const userId = (user._id as Types.ObjectId).toString();
+            const userId = String(user.id);
             return createRefreshToken(userId, remember)
                 .then((refreshToken) => {
-                    // ...and add it to the client cookies
                     createRefreshCookie(response, refreshToken, remember);
                     createLoggedCookie(response, remember);
 
-                    /**
-                     * Send the newly created access token to the client through the response.
-                     * It will be used for the following requests.
-                     */
                     return createAccessToken(refreshToken);
                 })
                 .then((accessToken) => {

@@ -12,20 +12,30 @@ export const deleteCartItem = (
     request: Request<{ productId?: string }, unknown, RemoveCartItemRequest>,
     response: Response
 ) => {
-    // Authentication check is done before entering the route
     const user = request.user!;
     const productId = String(request.params.productId ?? request.body.productId);
 
-    const existing = user.cart.items.find((i) => i.product.equals(productId));
-    if (!existing) {
-        rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-        return Promise.resolve();
-    }
-
     return userService
-        .cartItemRemoveById(user, productId)
-        .then(() => userService.cartGetWithSummary(user))
-        .then((cart) => {
-            successResponse(response, cart);
-        });
+        .cartGet(user)
+        .then((items) => {
+            const existing = items.some((item) => {
+                const product = item.product as unknown as { id?: number; _id?: number } | number;
+                const productValue =
+                    typeof product === 'number' ? product : product.id ?? product._id;
+                return String(productValue) === String(productId);
+            });
+
+            if (!existing) {
+                rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
+                return;
+            }
+
+            return userService
+                .cartItemRemoveById(user, productId)
+                .then(() => userService.cartGetWithSummary(user))
+                .then((cart) => {
+                    successResponse(response, cart);
+                });
+        })
+        .then(() => {});
 };

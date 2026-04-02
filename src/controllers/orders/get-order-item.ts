@@ -3,7 +3,6 @@ import { t } from 'i18next';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import { userScope } from '@utils/helpers-scopes';
-import type { CastError } from 'mongoose';
 
 /**
  * GET /orders/:id
@@ -24,8 +23,8 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
             }
             successResponse(response, order);
         })
-        .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
+        .catch((error: Error) => {
+            if (error.message == '404')
                 rejectResponse(response, 404, 'getOrder - not found', [
                     t('ecommerce.order-not-found')
                 ]);

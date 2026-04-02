@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@utils/response';
 import { ETokenType } from '@models/users';
+import { userTokenModel } from '@models/user-tokens';
 import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt';
 
 /**
@@ -11,7 +12,9 @@ import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt
 export const postLogoutEverywhere = (request: Request, response: Response) => {
     // remove refresh token from DB
     return (
-        request.user ? request.user.tokenRemoveAll(ETokenType.REFRESH) : Promise.resolve()
+        request.user
+            ? userTokenModel.destroy({ where: { userId: Number(request.user.id), type: ETokenType.REFRESH } }).then(() => {})
+            : Promise.resolve()
     ).then(() => {
         // and from local
         destroyRefreshCookie(response);

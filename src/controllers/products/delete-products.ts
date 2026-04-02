@@ -2,14 +2,8 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { CastError } from 'mongoose';
 import { DeleteProductRequest } from '@api/model/deleteProductRequest';
 
-/**
- * DELETE /products/:id
- * Delete a product by path id (admin).
- * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
- */
 export const deleteProducts = (
     request: Request<{ id?: string }, unknown, DeleteProductRequest>,
     response: Response
@@ -21,7 +15,6 @@ export const deleteProducts = (
         return Promise.resolve();
     }
 
-    // true = hard-delete; false (default) = soft-delete (sets deletedAt)
     return productService
         .remove(String(request.params.id ?? request.body.id), !!request.query.hardDelete)
         .then((result) => {
@@ -31,8 +24,8 @@ export const deleteProducts = (
             }
             successResponse(response, undefined, 200, result.message);
         })
-        .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
+        .catch((error: Error) => {
+            if (error.message == '404')
                 rejectResponse(response, 404, 'deleteProduct - not found', [
                     t('ecommerce.product-not-found')
                 ]);

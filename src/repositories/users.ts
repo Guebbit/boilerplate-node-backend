@@ -1,37 +1,115 @@
+import { Op, type WhereOptions } from 'sequelize';
 import { userModel } from '@models/users';
 import type { IUserDocument } from '@models/users';
-import type { UpdateQuery, QueryFilter } from 'mongoose';
+import { userTokenModel } from '@models/user-tokens';
 
-/**
- * User Repository
- * Handles all raw database operations for the User entity.
- * No business logic here — only CRUD operations against Mongoose.
- */
+type UserWhere = Record<string, unknown>;
 
-/**
- * Find a user by its MongoDB ObjectId
- *
- * @param id
- */
-export const findById = (id: string): Promise<IUserDocument | null> => userModel.findById(id);
+const toWhere = (where: UserWhere = {}): WhereOptions => {
+    const output: Record<string, unknown> = {};
 
-/**
- * Find a single user matching the given query
- *
- * @param where
- */
-export const findOne = (where: QueryFilter<IUserDocument>): Promise<IUserDocument | null> =>
-    userModel.findOne(where);
+    if (where._id !== undefined || where.id !== undefined) output['id'] = Number(where._id ?? where.id);
+    if (where.email !== undefined && typeof where.email !== 'object') output['email'] = where.email;
+    if (where.username !== undefined && typeof where.username !== 'object') output['username'] = where.username;
+    if (where.admin !== undefined) output['admin'] = where.admin;
 
-/**
- * Find all users matching the given query with optional pagination support.
- * Returns lean (plain JS) objects for read-only usage.
- *
- * @param where
- * @param options
- */
+    if (where.deletedAt === undefined) {
+        // no-op by default for admin searches
+    } else if (where.deletedAt === null) {
+        output['deletedAt'] = null;
+    } else if (typeof where.deletedAt === 'object') {
+        const condition = where.deletedAt as Record<string, unknown>;
+        if (condition.$exists === false) output['deletedAt'] = null;
+        if (condition.$exists === true) output['deletedAt'] = { [Op.not]: null };
+    } else {
+        output['deletedAt'] = where.deletedAt;
+    }
+
+    if (typeof where.email === 'object') {
+        const regex = (where.email as Record<string, unknown>).$regex;
+        if (regex !== undefined) output['email'] = { [Op.like]: `%${String(regex)}%` };
+    }
+
+    if (typeof where.username === 'object') {
+        const regex = (where.username as Record<string, unknown>).$regex;
+        if (regex !== undefined) output['username'] = { [Op.like]: `%${String(regex)}%` };
+    }
+
+    const conditions = where.$or as Array<Record<string, unknown>> | undefined;
+    if (conditions && conditions.length > 0) {
+        output[Op.or] = conditions
+            .map((condition) => {
+                if (condition.email && typeof condition.email === 'object') {
+                    const regex = (condition.email as Record<string, unknown>).$regex;
+                    return { email: { [Op.like]: `%${String(regex)}%` } };
+                }
+                if (condition.username && typeof condition.username === 'object') {
+                    const regex = (condition.username as Record<string, unknown>).$regex;
+                    return { username: { [Op.like]: `%${String(regex)}%` } };
+                }
+                return undefined;
+            })
+            .filter(Boolean);
+    }
+
+    return output;
+};
+
+const tokenFilter = (where: UserWhere) => {
+    const token = where['tokens.token'];
+    const type = where['tokens.type'];
+
+    if (token === undefined && type === undefined) return undefined;
+    return {
+        model: userTokenModel,
+        as: 'tokens',
+        required: true,
+        where: {
+            ...(token !== undefined ? { token } : {}),
+            ...(type !== undefined ? { type } : {})
+        }
+    };
+};
+
+const withComputedRelations = async (user: IUserDocument | null) => {
+    if (!user) return null;
+
+    const tokens = await userTokenModel.findAll({ where: { userId: (user as unknown as { id: number }).id }, raw: true });
+
+    const cartItems = await (await import('@models/cart-items')).cartItemModel.findAll({
+        where: { userId: (user as unknown as { id: number }).id },
+        raw: true
+    });
+
+    (user as unknown as { tokens: unknown }).tokens = tokens.map((token) => ({
+        type: token.type,
+        token: token.token,
+        expiration: token.expiration ?? undefined
+    }));
+
+    (user as unknown as { cart: unknown }).cart = {
+        items: cartItems.map((item) => ({ product: item.productId, quantity: item.quantity })),
+        updatedAt: (user as unknown as { cartUpdatedAt: Date }).cartUpdatedAt
+    };
+
+    return user;
+};
+
+export const findById = (id: string | number): Promise<IUserDocument | null> =>
+    userModel
+        .findByPk(Number(id))
+        .then((user) => withComputedRelations(user as unknown as IUserDocument));
+
+export const findOne = (where: UserWhere): Promise<IUserDocument | null> =>
+    userModel
+        .findOne({
+            where: toWhere(where),
+            include: tokenFilter(where) ? [tokenFilter(where)] : undefined
+        })
+        .then((user) => withComputedRelations(user as unknown as IUserDocument));
+
 export const findAll = (
-    where: QueryFilter<IUserDocument> = {},
+    where: UserWhere = {},
     {
         sort = { createdAt: -1 as const },
         skip = 0,
@@ -41,58 +119,84 @@ export const findAll = (
         skip?: number;
         limit?: number;
     } = {}
-) =>
-    userModel
-        .find({ ...where })
-        .lean()
-        // eslint-disable-next-line unicorn/no-array-sort
-        .sort(sort)
-        .skip(skip)
-        .limit(limit);
+) => {
+    const [sortField, sortDirection] = Object.entries(sort)[0] ?? ['createdAt', -1];
+    return userModel
+        .findAll({
+            where: toWhere(where),
+            order: [[sortField, sortDirection === -1 ? 'DESC' : 'ASC']],
+            offset: skip,
+            limit,
+            raw: true
+        })
+        .then((rows) =>
+            rows.map((row) => ({
+                ...row,
+                _id: row.id
+            })) as unknown as IUserDocument[]
+        );
+};
 
-/**
- * Count users matching the given query
- *
- * @param where
- */
-export const count = (where: QueryFilter<IUserDocument> = {}): Promise<number> =>
-    userModel.countDocuments(where);
+export const count = (where: UserWhere = {}): Promise<number> => userModel.count({ where: toWhere(where) });
 
-/**
- * Create a new user document
- *
- * @param data
- */
 export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
-    userModel.create(data);
+    userModel
+        .create({
+            email: data.email,
+            username: data.username,
+            password: data.password,
+            imageUrl: data.imageUrl,
+            admin: data.admin,
+            deletedAt: data.deletedAt,
+            cartUpdatedAt: data.cart?.updatedAt ?? new Date()
+        } as never)
+        .then(async (user) => {
+            const items = data.cart?.items ?? [];
+            const tokens = data.tokens ?? [];
+            const { cartItemModel } = await import('@models/cart-items');
+            await Promise.all(
+                items.map((item) =>
+                    cartItemModel.create({
+                        userId: user.id,
+                        productId: Number(item.product),
+                        quantity: item.quantity
+                    })
+                )
+            );
+            await Promise.all(
+                tokens.map((token) =>
+                    userTokenModel.create({
+                        userId: user.id,
+                        type: token.type,
+                        token: token.token,
+                        expiration: token.expiration ?? null
+                    })
+                )
+            );
+            return withComputedRelations(user as unknown as IUserDocument);
+        }) as Promise<IUserDocument>;
 
-/**
- * Persist changes to an existing user document
- *
- * @param user
- */
-export const save = (user: IUserDocument): Promise<IUserDocument> => user.save();
+export const save = (user: IUserDocument): Promise<IUserDocument> =>
+    (user as unknown as { save: () => Promise<IUserDocument> })
+        .save()
+        .then(() => withComputedRelations(user)) as Promise<IUserDocument>;
 
-/**
- * Hard-delete a user document from the database
- *
- * @param user
- */
 export const deleteOne = (user: IUserDocument): Promise<void> =>
-    user.deleteOne().then(() => {
-        // explicit void return to satisfy TypeScript's Promise<void> type
-    });
+    (user as unknown as { destroy: () => Promise<void> }).destroy().then(() => {});
 
-/**
- * Update multiple user documents matching the filter
- *
- * @param filter
- * @param update
- */
-export const updateMany = (
-    filter: QueryFilter<IUserDocument>,
-    update: UpdateQuery<IUserDocument>
-) => userModel.updateMany(filter, update);
+export const updateMany = async (filter: UserWhere, update: Record<string, unknown>) => {
+    const { cartItemModel } = await import('@models/cart-items');
+
+    if (filter['cart.items.product'] && update.$pull) {
+        const productId = Number(filter['cart.items.product']);
+        const deletedCount = await cartItemModel.destroy({ where: { productId } });
+        await userModel.update({ cartUpdatedAt: new Date() }, { where: {} });
+        return { modifiedCount: deletedCount };
+    }
+
+    const [modifiedCount] = await userModel.update(update as never, { where: toWhere(filter) });
+    return { modifiedCount };
+};
 
 export const userRepository = {
     findById,

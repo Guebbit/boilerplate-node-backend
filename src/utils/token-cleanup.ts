@@ -2,7 +2,7 @@ import { userModel as Users } from '@models/users';
 import { logger } from '@utils/winston';
 
 /**
- * Run one cleanup cycle: remove every expired token from every user document.
+ * Run one cleanup cycle: remove every expired token.
  */
 export const runTokenCleanup = async () => {
     logger.info('Token cleanup: starting expired-token removal');

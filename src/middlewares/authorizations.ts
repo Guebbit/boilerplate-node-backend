@@ -2,23 +2,11 @@ import type { Request, Response, NextFunction } from 'express';
 import { userModel as Users, IToken } from '@models/users';
 import { verifyAccessToken } from './auth-jwt';
 import { rejectResponse } from '@utils/response';
-import { Types } from 'mongoose';
 
-/**
- * Get token (and strip it from "Bearer" prefix)
- * @param request
- */
 export const getTokenBearer = (request: Request) =>
     request.header('Authorization')?.split(' ')[1] as IToken['token'] | undefined;
 
-/**
- * Get user data (if authenticated, otherwise go on)
- *
- * @param request
- * @param response
- * @param next
- */
-export const getAuth = (request: Request, response: Response, next: NextFunction) => {
+export const getAuth = (request: Request, _response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
 
     if (!token) {
@@ -27,9 +15,9 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
     }
 
     verifyAccessToken(token)
-        .then(({ id }) => Users.findById(id))
+        .then(({ id }) => Users.findByPk(Number(id)))
         .then((user) => {
-            if (user) request.user = user;
+            if (user) request.user = user as unknown as Request['user'];
         })
         .catch(() => {
             // Invalid or expired token — proceed without authenticated user
@@ -37,13 +25,6 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
         .finally(next);
 };
 
-/**
- * Unauthorized: Don't know who you are
- *
- * @param request
- * @param response
- * @param next
- */
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
 
@@ -55,13 +36,6 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
     next();
 };
 
-/**
- * Always AFTER isAuth
- *
- * @param request
- * @param response
- * @param next
- */
 export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
     if (!request.user) {
         rejectResponse(response, 403, 'Forbidden: Access denied.');
@@ -74,13 +48,6 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
     next();
 };
 
-/**
- * Already logged, you shouldn't be here
- *
- * @param request
- * @param response
- * @param next
- */
 export const isGuest = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
     if (token) {
@@ -90,17 +57,7 @@ export const isGuest = (request: Request, response: Response, next: NextFunction
     next();
 };
 
-/**
- * Dynamically add the user id to id parameter.
- * If the user is not logged in, it will be ignored.
- *
- * Useful to just convert /me to /:id (for example)
- *
- * @param request
- * @param response
- * @param next
- */
-export const isUser = (request: Request, response: Response, next: NextFunction) => {
-    if (request.user?.id) request.params.id = (request.user._id as Types.ObjectId).toString();
+export const isUser = (request: Request, _response: Response, next: NextFunction) => {
+    if (request.user?.id) request.params.id = String(request.user.id);
     next();
 };

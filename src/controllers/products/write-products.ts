@@ -76,7 +76,7 @@ export const writeProducts = (
                 active: !!request.body.active
             })
             .then((product) => {
-                successResponse(response, product.toObject(), 201);
+                successResponse(response, product.toObject ? product.toObject() : product, 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
@@ -95,7 +95,7 @@ export const writeProducts = (
             active: !!request.body.active
         })
         .then((product) => {
-            successResponse(response, product.toObject());
+            successResponse(response, product.toObject ? product.toObject() : product);
         })
         .catch((error: Error) =>
             deleteUpload().then(() => {

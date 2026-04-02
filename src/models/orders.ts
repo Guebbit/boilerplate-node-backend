@@ -1,11 +1,7 @@
-import { model, Schema, Types } from 'mongoose';
-import type { Document, Model } from 'mongoose';
-import { productSchema } from './products';
+import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
 import type { Order, Product } from '@types';
+import { sequelize } from '@utils/database';
 
-/**
- * Valid order status values (mirrors the OpenAPI enum).
- */
 export enum EOrderStatus {
     PENDING = 'pending',
     PAID = 'paid',
@@ -15,73 +11,65 @@ export enum EOrderStatus {
     CANCELLED = 'cancelled'
 }
 
-/**
- * Same as ICartItem in ./users.ts,
- * but instead of only productId I store the entire product data.
- * If the product data change, it must not change for the order.
- */
 export interface IOrderProduct {
     product: Product;
     quantity: number;
 }
 
-/**
- * Order Document interface.
- * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string)
- * and 'items' (renamed to 'products' in the Mongoose schema) so that the Mongoose
- * schema definition and the TypeScript types stay in sync.
- */
-export interface IOrderDocument
-    extends Omit<Order, 'id' | 'userId' | 'items' | 'status' | 'total'>, Document {
-    userId: Types.ObjectId;
-    products: IOrderProduct[];
-    status: EOrderStatus;
-    notes?: string;
+export class OrderModel extends Model<InferAttributes<OrderModel>, InferCreationAttributes<OrderModel>> {
+    declare id: number;
+    declare userId: number;
+    declare email: string;
+    declare status: EOrderStatus;
+    declare notes: string | null;
+    declare createdAt: Date;
+    declare updatedAt: Date;
+
+    declare products?: IOrderProduct[];
+
+    get _id() {
+        return this.id;
+    }
+
+    toObject() {
+        return this.get({ plain: true });
+    }
 }
 
-/**
- * Order Document model type.
- * Business logic (search, getAll) is now handled by the
- * service layer (src/services/orders.ts) and repository layer
- * (src/repositories/orders.ts).
- */
-export type IOrderModel = Model<IOrderDocument, unknown, unknown>;
-
-/**
- *
- */
-export const orderSchema = new Schema<IOrderDocument>(
+OrderModel.init(
     {
-        userId: {
-            type: Schema.Types.ObjectId,
-            required: true
-        },
-        email: {
-            type: String,
-            required: true
-        },
-        products: [
-            {
-                product: productSchema,
-                quantity: {
-                    type: Number,
-                    required: true
-                }
-            }
-        ],
+        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        userId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+        email: { type: DataTypes.STRING, allowNull: false },
         status: {
-            type: String,
-            enum: Object.values(EOrderStatus),
-            default: EOrderStatus.PENDING
+            type: DataTypes.ENUM(...Object.values(EOrderStatus)),
+            allowNull: false,
+            defaultValue: EOrderStatus.PENDING
         },
-        notes: {
-            type: String
-        }
+        notes: { type: DataTypes.TEXT, allowNull: true },
+        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
     },
     {
-        // Automatically manages createdAt and updatedAt timestamps
-        timestamps: true
+        sequelize,
+        modelName: 'Order',
+        tableName: 'orders',
+        timestamps: true,
+        indexes: [{ fields: ['userId'] }, { fields: ['email'] }, { fields: ['createdAt'] }]
     }
 );
 
-export const orderModel = model<IOrderDocument, IOrderModel>('Order', orderSchema);
+export interface IOrderDocument extends Omit<Order, 'id' | 'userId' | 'items' | 'status' | 'total'> {
+    id: number;
+    _id?: number;
+    userId: number;
+    products: IOrderProduct[];
+    status: EOrderStatus;
+    notes?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export type IOrderModel = typeof OrderModel;
+
+export const orderModel = OrderModel;

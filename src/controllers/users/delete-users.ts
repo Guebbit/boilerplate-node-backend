@@ -3,15 +3,7 @@ import { t } from 'i18next';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteUserRequest } from '@types';
-import type { CastError } from 'mongoose';
 
-/**
- * DELETE /users — delete a user by id in the request body (admin).
- * DELETE /users/:id — delete a user by path id (admin).
- *
- * Pass ?hardDelete=true (query) or { hardDelete: true } (body) to permanently
- * delete; otherwise the user is soft-deleted (sets deletedAt).
- */
 export const deleteUsers = (
     request: Request<{ id?: string; hardDelete?: boolean }, unknown, DeleteUserRequest>,
     response: Response
@@ -24,7 +16,6 @@ export const deleteUsers = (
         return Promise.resolve();
     }
 
-    // Accept ?hardDelete=true query param (both routes) or body.hardDelete boolean (DELETE / only)
     return userService
         .remove(id, hardDelete)
         .then((result) => {
@@ -34,8 +25,8 @@ export const deleteUsers = (
             }
             successResponse(response, undefined, 200, result.message);
         })
-        .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
+        .catch((error: Error) => {
+            if (error.message == '404')
                 rejectResponse(response, 404, 'deleteUser - not found', [
                     t('ecommerce.user-not-found')
                 ]);

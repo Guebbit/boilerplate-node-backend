@@ -10,5 +10,5 @@ export const getAccount = (request: Request, response: Response): void => {
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
-    successResponse(response, request.user.toObject());
+    successResponse(response, request.user.toObject ? request.user.toObject() : request.user);
 };

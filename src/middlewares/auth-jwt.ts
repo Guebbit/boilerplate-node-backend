@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 import { sign, verify, decode } from 'jsonwebtoken';
 import { userModel as Users, ETokenType, IToken } from '@models/users';
-import type { CastError } from 'mongoose';
+import { userTokenModel } from '@models/user-tokens';
 
 /**
  *
@@ -104,22 +104,22 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
                 return;
             }
             // Check if token is still valid database-wise
-            Users.findOne({
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                'tokens.token': token
-            })
-                .then((user) => {
+            userTokenModel.findOne({ where: { token } }).then((storedToken) => {
+                if (!storedToken) {
+                    reject(new Error('Forbidden'));
+                    return;
+                }
+                return Users.findByPk(storedToken.userId).then((user) => {
                     // No need to check if the id in data.id is the same,
                     // it has to be if I found here the token
 
-                    // Check if user has this token or it was removed
                     if (!user) {
                         reject(new Error('Forbidden'));
                         return;
                     }
                     resolve(data as ITokenData);
-                })
-                .catch((error: Error | CastError) => reject(error));
+                });
+            }).catch((error: Error) => reject(error));
         });
     });
 
@@ -134,8 +134,7 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
  * @param remember
  */
 export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTime) =>
-    Users.findById(id)
-        .select('+tokens')
+    Users.findByPk(Number(id))
         .then((user) => {
             if (!user) throw new Error('User not found');
             const token = sign(

@@ -3,7 +3,6 @@ import { t } from 'i18next';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteOrderRequest } from '@types';
-import { type CastError, Types } from 'mongoose';
 
 /**
  * DELETE /orders — delete an order by id in the request body (admin).
@@ -16,7 +15,7 @@ export const deleteOrders = (
     const id = request.params.id ?? request.body.id ?? '';
 
     // missing or not valid
-    if (!id || !Types.ObjectId.isValid(id)) {
+    if (!id || Number.isNaN(Number(id))) {
         rejectResponse(response, 422, 'deleteOrder - missing id', [
             t('generic.error-missing-data')
         ]);
@@ -32,8 +31,8 @@ export const deleteOrders = (
             }
             successResponse(response, undefined, 200, result.message);
         })
-        .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
+        .catch((error: Error) => {
+            if (error.message == '404')
                 rejectResponse(response, 404, 'deleteOrders - not found', [
                     t('ecommerce.order-not-found')
                 ]);

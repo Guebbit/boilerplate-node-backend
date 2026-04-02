@@ -77,7 +77,7 @@ export const writeUsers = (
                 imageUrl
             })
             .then((user) => {
-                successResponse(response, user.toObject(), 201);
+                successResponse(response, user.toObject ? user.toObject() : user, 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
@@ -92,7 +92,7 @@ export const writeUsers = (
     return userService
         .adminUpdate(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
         .then((user) => {
-            successResponse(response, user.toObject());
+            successResponse(response, user.toObject ? user.toObject() : user);
         })
         .catch((error: Error) =>
             deleteUpload().then(() => {

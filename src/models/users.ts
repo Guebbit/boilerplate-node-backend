@@ -1,163 +1,174 @@
-import { model, Schema, Types } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import { DataTypes, InferAttributes, InferCreationAttributes, Model, Op } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { logger } from '@utils/winston';
-import { User } from '@types';
+import type { User } from '@types';
+import { sequelize } from '@utils/database';
+import { userTokenModel } from './user-tokens';
 
-/**
- * Token types used in jwt-auth
- */
 export enum ETokenType {
     REFRESH = 'refresh',
     PASSWORD_RESET = 'password'
 }
 
-/**
- * Cart Item interface
- * Reference to product and quantity
- */
 export interface ICartItem {
-    // IProductDocument only after populate()
-    product: Types.ObjectId;
+    product: number;
     quantity: number;
 }
 
-/**
- * User tokens
- * Token is like an ID, but not really an ID
- */
 export interface IToken {
     token: string;
     type: string;
     expiration?: Date;
 }
 
-/**
- * User interface
- */
 export interface IUser extends User {
-    /**
-     * User attributes
-     */
     password: string;
-    // soft delete
     deletedAt?: Date;
-
-    /**
-     * Cart management through items
-     */
     cart: {
         items: ICartItem[];
         updatedAt: Date;
     };
-
-    /**
-     * Tokens
-     * - reset password
-     * - 2fa
-     * - etc
-     */
     tokens: IToken[];
 }
 
-/**
- * User Document interface
- */
-export interface IUserDocument extends IUser, IUserMethods, Document {
-    /** String version of _id — provided by Mongoose's Document getter */
-    id: string;
+export class UserModel extends Model<InferAttributes<UserModel>, InferCreationAttributes<UserModel>> {
+    declare id: number;
+    declare email: string;
+    declare username: string;
+    declare password: string;
+    declare imageUrl: string;
+    declare admin: boolean;
+    declare cartUpdatedAt: Date;
+    declare deletedAt: Date | null;
+    declare createdAt: Date;
+    declare updatedAt: Date;
+
+    declare cartItems?: Array<{ productId: number; quantity: number; product?: unknown }>;
+    declare tokens?: IToken[];
+
+    get _id() {
+        return this.id;
+    }
+
+    toObject() {
+        const plain = this.get({ plain: true }) as Record<string, unknown>;
+        const cartItems = (plain['cartItems'] as Array<{ productId: number; quantity: number }> | undefined) ??
+            this.cartItems ?? [];
+        const tokens = (plain['tokens'] as IToken[] | undefined) ?? this.tokens ?? [];
+
+        return {
+            ...plain,
+            cart: {
+                items: cartItems.map((item) => ({ product: item.productId, quantity: item.quantity })),
+                updatedAt: this.cartUpdatedAt
+            },
+            tokens,
+            _id: this.id
+        };
+    }
+
+    async tokenAdd(type: ETokenType, expirationMs: number, token: string): Promise<string> {
+        await userTokenModel.create({
+            userId: this.id,
+            type,
+            token,
+            expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : null
+        });
+        return token;
+    }
+
+    async tokenRemoveAll(type: ETokenType): Promise<void> {
+        await userTokenModel.destroy({ where: { userId: this.id, type } });
+    }
+
+    async populate(_path: string) {
+        return this;
+    }
+
+    static async tokenRemoveExpired(): Promise<{ status: number; success: boolean }> {
+        const now = new Date();
+        return userTokenModel
+            .destroy({ where: { expiration: { [Op.lt]: now } } })
+            .then(() => ({ status: 200, success: true }))
+            .catch((error: Error) => {
+                logger.error({
+                    message: 'tokenRemoveExpired failed',
+                    error
+                });
+                return { status: 500, success: false };
+            });
+    }
 }
 
-/**
- * User Document instance methods.
- */
+UserModel.init(
+    {
+        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        email: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            unique: true,
+            validate: {
+                is: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
+            }
+        },
+        username: { type: DataTypes.STRING, allowNull: false },
+        password: { type: DataTypes.STRING, allowNull: false },
+        imageUrl: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: 'https://placekitten.com/600/600'
+        },
+        admin: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+        cartUpdatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+        deletedAt: { type: DataTypes.DATE, allowNull: true },
+        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+    },
+    {
+        sequelize,
+        modelName: 'User',
+        tableName: 'users',
+        timestamps: true,
+        indexes: [{ unique: true, fields: ['email'] }, { fields: ['createdAt'] }, { fields: ['deletedAt'] }],
+        hooks: {
+            beforeSave: async (user) => {
+                if (!user.changed('password')) return;
+                user.password = await bcrypt.hash(user.password, 12);
+            }
+        }
+    }
+);
+
+export interface IUserDocument extends IUserMethods {
+    id: number;
+    _id?: number;
+    email: string;
+    username: string;
+    password: string;
+    imageUrl: string;
+    admin: boolean;
+    deletedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    cart: {
+        items: ICartItem[];
+        updatedAt: Date;
+    };
+    tokens: IToken[];
+    toObject: () => IUserDocument;
+}
+
 export type IUserMethods = {
     tokenAdd: (type: ETokenType, expirationMs: number, token: string) => Promise<string>;
     tokenRemoveAll: (type: ETokenType) => Promise<void>;
 };
 
-/**
- * User Document model type.
- * Business logic is now handled by the service and repository layers.
- */
-export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
+export type IUserModel = typeof UserModel & {
     tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
 };
 
-/**
- * User Schema
- */
-export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
-    {
-        email: {
-            type: String,
-            required: true,
-            match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
-        },
-        username: {
-            type: String,
-            required: true
-        },
-        password: {
-            type: String,
-            required: true
-        },
-        imageUrl: {
-            type: String,
-            default: 'https://placekitten.com/600/600'
-        },
-        admin: {
-            type: Boolean,
-            default: false
-        },
-        cart: {
-            // sub documents always have _id
-            items: [
-                {
-                    product: {
-                        type: Schema.Types.ObjectId,
-                        ref: 'Product',
-                        required: true
-                    },
-                    quantity: {
-                        type: Number,
-                        required: true
-                    }
-                }
-            ],
-            deletedAt: Date
-        },
-        // sub documents always have _id
-        tokens: [
-            {
-                type: {
-                    type: String,
-                    required: true
-                },
-                token: {
-                    type: String,
-                    required: true
-                },
-                expiration: {
-                    type: Date,
-                    required: false
-                }
-            }
-        ],
-        deletedAt: {
-            type: Date
-        }
-    },
-    {
-        timestamps: true
-    }
-);
-
-/**
- * Zod validation schema
- */
 export const zodUserSchema = z.object({
     id: z.number().nullish(),
 
@@ -186,69 +197,4 @@ export const zodUserSchema = z.object({
     deletedAt: z.date().nullish()
 });
 
-/**
- * Hook to make edits pre saving
- *
- * Hash all passwords (if they have been changed).
- */
-userSchema.pre('save', function () {
-    if (!this.isModified('password')) return;
-
-    return bcrypt.hash(this.password, 12).then((hashedPassword) => {
-        this.password = hashedPassword;
-    });
-});
-
-/**
- * Add a token to this user document and persist it.
- * Returns the token string so callers can use it directly.
- */
-userSchema.methods.tokenAdd = function (
-    type: ETokenType,
-    expirationMs: number,
-    token: string
-): Promise<string> {
-    this.tokens.push({
-        type,
-        token,
-        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
-    });
-    return this.save().then(() => token);
-};
-
-/**
- * Remove all tokens of the given type from this user document and persist it.
- */
-userSchema.methods.tokenRemoveAll = function (type: ETokenType) {
-    this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
-    return this.save().then(() => {});
-};
-
-/**
- * Remove all expired tokens from every user document in the collection.
- * Returns a simple status/success envelope consumed by the controller layer.
- */
-userSchema.static('tokenRemoveExpired', function (): Promise<{
-    status: number;
-    success: boolean;
-}> {
-    const now = new Date();
-    const tokenExpirationPath = 'tokens.expiration';
-    return this.updateMany(
-        { [tokenExpirationPath]: { $lt: now } },
-        { $pull: { tokens: { expiration: { $lt: now } } } }
-    )
-        .then(() => ({ status: 200, success: true }))
-        .catch((error) => {
-            logger.error({
-                message: 'tokenRemoveExpired failed',
-                error
-            });
-            return { status: 500, success: false };
-        });
-});
-
-/**
- * Model
- */
-export const userModel = model<IUserDocument, IUserModel>('User', userSchema);
+export const userModel = UserModel as IUserModel;

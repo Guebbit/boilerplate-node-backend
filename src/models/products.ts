@@ -1,31 +1,66 @@
-import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
 import type { Product } from '@types';
+import { sequelize } from '@utils/database';
 
-/**
- * Product Document interface
- */
-export interface IProductDocument extends Omit<Product, 'id'>, Document {}
+export class ProductModel extends Model<
+    InferAttributes<ProductModel>,
+    InferCreationAttributes<ProductModel>
+> {
+    declare id: number;
+    declare title: string;
+    declare price: number;
+    declare description: string;
+    declare imageUrl: string;
+    declare active: boolean;
+    declare deletedAt: Date | null;
+    declare createdAt: Date;
+    declare updatedAt: Date;
 
-/**
- * Product Document instance methods
- */
+    get _id() {
+        return this.id;
+    }
+
+    toObject() {
+        return this.get({ plain: true });
+    }
+}
+
+ProductModel.init(
+    {
+        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        title: { type: DataTypes.STRING, allowNull: false },
+        price: { type: DataTypes.FLOAT, allowNull: false },
+        description: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+        imageUrl: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: 'https://placekitten.com/400/400'
+        },
+        active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+        deletedAt: { type: DataTypes.DATE, allowNull: true },
+        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+    },
+    {
+        sequelize,
+        modelName: 'Product',
+        tableName: 'products',
+        timestamps: true,
+        indexes: [
+            { fields: ['active'] },
+            { fields: ['deletedAt'] },
+            { fields: ['createdAt'] },
+            { fields: ['title'] }
+        ]
+    }
+);
+
+export interface IProductDocument extends ProductModel {}
 export type IProductMethods = unknown;
+export type IProductModel = typeof ProductModel;
 
-/**
- * Product Document model type.
- * Business logic (search, remove, validate) is now handled by the
- * service layer (src/services/products.ts) and repository layer
- * (src/repositories/products.ts).
- */
-export type IProductModel = Model<IProductDocument, unknown, IProductMethods>;
-
-/**
- * Zod Schema for product data validation.
- * Used by the service layer to validate incoming product data.
- */
 export const zodProductSchema = z.object({
     id: z.number().nullable().optional(),
 
@@ -45,41 +80,8 @@ export const zodProductSchema = z.object({
     active: z.boolean().nullable().optional(),
     createdAt: z.date().nullable().optional(),
     updatedAt: z.date().nullable().optional(),
-    deletedAt: z.date().nullable().optional()
+    deletedAt: z.date().nullable().optional(),
+    description: z.string().optional()
 });
 
-/**
- * Mongoose Schema for the Product model
- */
-export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>(
-    {
-        title: {
-            type: String,
-            required: true
-        },
-        price: {
-            type: Number,
-            required: true
-        },
-        description: {
-            type: String,
-            default: ''
-        },
-        imageUrl: {
-            type: String,
-            default: 'https://placekitten.com/400/400'
-        },
-        active: {
-            type: Boolean,
-            default: false
-        },
-        deletedAt: {
-            type: Date
-        }
-    },
-    {
-        timestamps: true
-    }
-);
-
-export const productModel = model<IProductDocument, IProductModel>('Product', productSchema);
+export const productModel = ProductModel;

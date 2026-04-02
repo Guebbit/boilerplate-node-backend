@@ -1,0 +1,41 @@
+import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import { sequelize } from '@utils/database';
+
+export class UserTokenModel extends Model<
+    InferAttributes<UserTokenModel>,
+    InferCreationAttributes<UserTokenModel>
+> {
+    declare id: number;
+    declare userId: number;
+    declare type: string;
+    declare token: string;
+    declare expiration: Date | null;
+    declare createdAt: Date;
+    declare updatedAt: Date;
+}
+
+UserTokenModel.init(
+    {
+        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        userId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+        type: { type: DataTypes.STRING, allowNull: false },
+        token: { type: DataTypes.STRING(512), allowNull: false },
+        expiration: { type: DataTypes.DATE, allowNull: true },
+        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+    },
+    {
+        sequelize,
+        tableName: 'user_tokens',
+        modelName: 'UserToken',
+        timestamps: true,
+        indexes: [
+            { fields: ['userId'] },
+            { fields: ['token'] },
+            { fields: ['type'] },
+            { fields: ['expiration'] }
+        ]
+    }
+);
+
+export const userTokenModel = UserTokenModel;
