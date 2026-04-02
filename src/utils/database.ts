@@ -7,9 +7,7 @@ const BASE_DELAY_MS = 1000;
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const dialect = (process.env.NODE_DB_DIALECT ??
-    (process.env.NODE_ENV === 'test' ? 'sqlite' : 'mysql')) as
-    | 'mysql'
-    | 'sqlite';
+    (process.env.NODE_ENV === 'test' ? 'sqlite' : 'mysql')) as 'mysql' | 'sqlite';
 
 export const sequelize =
     dialect === 'sqlite'
@@ -44,7 +42,8 @@ const initializeModels = async () => {
     initialized = true;
 };
 
-export const syncSchema = (force = false) => initializeModels().then(() => sequelize.sync({ force }));
+export const syncSchema = (force = false) =>
+    initializeModels().then(() => sequelize.sync({ force }));
 
 /**
  * Connect to SQL database with exponential-backoff retry.

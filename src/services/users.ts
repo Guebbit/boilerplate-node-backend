@@ -21,8 +21,7 @@ import { cartItemModel } from '@models/cart-items';
 import { productModel } from '@models/products';
 import { userTokenModel } from '@models/user-tokens';
 
-const getUserId = (user: IUserDocument): number =>
-    Number((user as unknown as { id: number }).id);
+const getUserId = (user: IUserDocument): number => Number((user as unknown as { id: number }).id);
 
 const hydrateUserCart = async (user: IUserDocument): Promise<IUserDocument> => {
     const rows = await cartItemModel.findAll({
@@ -31,11 +30,14 @@ const hydrateUserCart = async (user: IUserDocument): Promise<IUserDocument> => {
     });
 
     (user as unknown as { cart: unknown }).cart = {
-        items: rows.map((row) => ({
-            product: ((row as unknown as { product?: unknown }).product ??
-                Number((row as unknown as { productId: number }).productId)) as unknown,
-            quantity: Number((row as unknown as { quantity: number }).quantity)
-        } as never)),
+        items: rows.map(
+            (row) =>
+                ({
+                    product: ((row as unknown as { product?: unknown }).product ??
+                        Number((row as unknown as { productId: number }).productId)) as unknown,
+                    quantity: Number((row as unknown as { quantity: number }).quantity)
+                }) as never
+        ),
         updatedAt: (user as unknown as { cartUpdatedAt: Date }).cartUpdatedAt
     };
 
@@ -91,7 +93,9 @@ export const cartItemSetById = (
             quantity
         } as never)
         .then(() =>
-            (user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }).update({
+            (
+                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
+            ).update({
                 cartUpdatedAt: new Date()
             })
         )
@@ -125,10 +129,14 @@ export const cartItemAddById = (
                     quantity
                 } as never);
 
-            return row.update({ quantity: Number((row as unknown as { quantity: number }).quantity) + quantity });
+            return row.update({
+                quantity: Number((row as unknown as { quantity: number }).quantity) + quantity
+            });
         })
         .then(() =>
-            (user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }).update({
+            (
+                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
+            ).update({
                 cartUpdatedAt: new Date()
             })
         )
@@ -154,7 +162,9 @@ export const cartItemRemoveById = (
             }
         })
         .then(() =>
-            (user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }).update({
+            (
+                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
+            ).update({
                 cartUpdatedAt: new Date()
             })
         )
@@ -171,7 +181,9 @@ export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserD
     return cartItemModel
         .destroy({ where: { userId: getUserId(user) } })
         .then(() =>
-            (user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }).update({
+            (
+                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
+            ).update({
                 cartUpdatedAt: new Date()
             })
         )
@@ -217,7 +229,9 @@ export const orderConfirm = (
                     email: user.email,
                     products: mappedProducts
                 } as Partial<IOrderDocument>)
-                .then((order) => cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order)));
+                .then((order) =>
+                    cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
+                );
         })
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 
@@ -366,7 +380,9 @@ export const login = (
                 return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
             return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
                 if (!doMatch)
-                    return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
+                    return generateReject(401, 'login - wrong credentials', [
+                        t('login.wrong-data')
+                    ]);
                 return generateSuccess<IUserDocument>(user);
             });
         })
@@ -413,7 +429,9 @@ export const validateData = (
 ): string[] => {
     const schema = requirePassword
         ? zodUserSchema.pick({ email: true, username: true, password: true })
-        : zodUserSchema.pick({ email: true, username: true, password: true }).partial({ password: true });
+        : zodUserSchema
+              .pick({ email: true, username: true, password: true })
+              .partial({ password: true });
 
     const parseResult = schema.safeParse(userData);
     if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);

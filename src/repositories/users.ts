@@ -10,9 +10,11 @@ type UserWhere = Record<string, unknown>;
 const toWhere = (where: UserWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
 
-    if (where._id !== undefined || where.id !== undefined) output['id'] = Number(where._id ?? where.id);
+    if (where._id !== undefined || where.id !== undefined)
+        output['id'] = Number(where._id ?? where.id);
     if (where.email !== undefined && typeof where.email !== 'object') output['email'] = where.email;
-    if (where.username !== undefined && typeof where.username !== 'object') output['username'] = where.username;
+    if (where.username !== undefined && typeof where.username !== 'object')
+        output['username'] = where.username;
     if (where.admin !== undefined) output['admin'] = where.admin;
 
     if (where.deletedAt === null) {
@@ -74,7 +76,10 @@ const tokenFilter = (where: UserWhere) => {
 const withComputedRelations = async (user: IUserDocument | null) => {
     if (!user) return null;
 
-    const tokens = await userTokenModel.findAll({ where: { userId: (user as unknown as { id: number }).id }, raw: true });
+    const tokens = await userTokenModel.findAll({
+        where: { userId: (user as unknown as { id: number }).id },
+        raw: true
+    });
 
     const cartItemsModule = await import('@models/cart-items');
     const cartItemModel = cartItemsModule.cartItemModel;
@@ -137,15 +142,17 @@ export const findAll = (
             limit,
             raw: true
         })
-        .then((rows) =>
-            rows.map((row) => ({
-                ...row,
-                _id: row.id
-            })) as unknown as IUserDocument[]
+        .then(
+            (rows) =>
+                rows.map((row) => ({
+                    ...row,
+                    _id: row.id
+                })) as unknown as IUserDocument[]
         );
 };
 
-export const count = (where: UserWhere = {}): Promise<number> => userModel.count({ where: toWhere(where) });
+export const count = (where: UserWhere = {}): Promise<number> =>
+    userModel.count({ where: toWhere(where) });
 
 export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
     userModel
@@ -204,7 +211,14 @@ export const updateMany = async (filter: UserWhere, update: Record<string, unkno
     }
 
     if (typeof (userModel as unknown as { updateMany?: unknown }).updateMany === 'function')
-        return (userModel as unknown as { updateMany: (f: Record<string, unknown>, u: Record<string, unknown>) => Promise<{ modifiedCount: number }> }).updateMany(filter, update);
+        return (
+            userModel as unknown as {
+                updateMany: (
+                    f: Record<string, unknown>,
+                    u: Record<string, unknown>
+                ) => Promise<{ modifiedCount: number }>;
+            }
+        ).updateMany(filter, update);
 
     const [modifiedCount] = await userModel.update(update as never, { where: toWhere(filter) });
     return { modifiedCount };

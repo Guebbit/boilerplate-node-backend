@@ -153,7 +153,7 @@ describe('productService.search', () => {
 describe('productService.getById', () => {
     it('returns a lean product object for an active product (non-admin)', async () => {
         const product = await createProduct({ active: true });
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         const found = await productService.getById(id, false);
 
@@ -165,7 +165,7 @@ describe('productService.getById', () => {
 
     it('returns null for an inactive product when called as non-admin', async () => {
         const product = await createProduct({ active: false });
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         const found = await productService.getById(id, false);
 
@@ -174,7 +174,7 @@ describe('productService.getById', () => {
 
     it('returns an inactive product when called as admin', async () => {
         const product = await createProduct({ active: false });
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         const found = await productService.getById(id, true);
 
@@ -206,7 +206,7 @@ describe('productService.create', () => {
 describe('productService.update', () => {
     it('updates title, price and description of an existing product', async () => {
         const product = await createProduct();
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         const updated = await productService.update(id, {
             title: 'Updated Title',
@@ -221,7 +221,7 @@ describe('productService.update', () => {
 
     it('changes the active flag', async () => {
         const product = await createProduct({ active: true });
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         const updated = await productService.update(id, { active: false });
 
@@ -234,7 +234,7 @@ describe('productService.update', () => {
         );
 
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         await productService.update(id, { imageUrl: '/images/new.jpg' });
 
@@ -252,7 +252,7 @@ describe('productService.update', () => {
 describe('productService.remove', () => {
     it('soft-deletes a product by setting deletedAt', async () => {
         const product = await createProduct({ active: true });
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         const result = await productService.remove(id, false);
 
@@ -263,7 +263,7 @@ describe('productService.remove', () => {
 
     it('restores a soft-deleted product when called again (toggle)', async () => {
         const product = await createProduct({ deletedAt: new Date() });
-        const id = (product.id).toString();
+        const id = product.id.toString();
 
         await productService.remove(id, false);
 
@@ -273,11 +273,11 @@ describe('productService.remove', () => {
 
     it('hard-deletes the product and removes it from all user carts', async () => {
         const product = await createProduct({ active: true });
-        const pid = (product.id).toString();
+        const pid = product.id.toString();
 
         // A user adds the product to their cart
         const user = await createUser();
-        const userId = (user.id).toString();
+        const userId = user.id.toString();
         // eslint-disable-next-line unicorn/no-await-expression-member
         const addResult = await (await import('@services/users')).cartItemSetById(user, pid, 1);
 

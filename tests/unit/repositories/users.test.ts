@@ -29,7 +29,7 @@ describe('userRepository', () => {
     describe('findById', () => {
         it('returns the user document when the id exists', async () => {
             const created = await createUser();
-            const id = (created.id).toString();
+            const id = created.id.toString();
 
             const found = await userRepository.findById(id);
 
@@ -157,7 +157,7 @@ describe('userRepository', () => {
     describe('save', () => {
         it('persists in-memory mutations to the database', async () => {
             const user = await createUser();
-            const id = (user.id).toString();
+            const id = user.id.toString();
 
             // Mutate the Mongoose document in memory…
             user.username = 'updated-username';
@@ -172,7 +172,7 @@ describe('userRepository', () => {
     describe('deleteOne', () => {
         it('removes the document permanently from the database', async () => {
             const user = await createUser();
-            const id = (user.id).toString();
+            const id = user.id.toString();
 
             await userRepository.deleteOne(user);
 
@@ -238,9 +238,7 @@ describe('userRepository', () => {
             });
 
             await user.tokenRemoveAll(ETokenType.REFRESH);
-            const refreshed = await userRepository.findById(
-                (user.id).toString()
-            );
+            const refreshed = await userRepository.findById(user.id.toString());
 
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
@@ -267,9 +265,7 @@ describe('userRepository', () => {
             });
 
             const result = await Users.tokenRemoveExpired();
-            const refreshed = await userRepository.findById(
-                (user.id).toString()
-            );
+            const refreshed = await userRepository.findById(user.id.toString());
 
             expect(result.success).toBe(true);
             expect(result.status).toBe(200);

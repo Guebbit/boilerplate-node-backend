@@ -28,7 +28,8 @@ export const search = (
 
     if (search.userId && String(search.userId).trim() !== '') match.userId = Number(search.userId);
 
-    if (search.email && String(search.email).trim() !== '') match.email = String(search.email).trim();
+    if (search.email && String(search.email).trim() !== '')
+        match.email = String(search.email).trim();
 
     if (search.productId && String(search.productId).trim() !== '')
         match['products.product._id'] = Number(search.productId);
@@ -137,7 +138,9 @@ export const update = (
             data.items && data.items.length > 0
                 ? Promise.all(
                       data.items.map((item) =>
-                          productRepository.findById(item.productId).then((product) => ({ item, product }))
+                          productRepository
+                              .findById(item.productId)
+                              .then((product) => ({ item, product }))
                       )
                   ).then((resolvedItems) => {
                       const missingProduct = resolvedItems.some(({ product }) => !product);

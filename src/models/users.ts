@@ -60,7 +60,10 @@ export class UserModel extends Model {
         return {
             ...plain,
             cart: {
-                items: cartItems.map((item) => ({ product: item.productId, quantity: item.quantity })),
+                items: cartItems.map((item) => ({
+                    product: item.productId,
+                    quantity: item.quantity
+                })),
                 updatedAt: this.cartUpdatedAt
             },
             tokens,
@@ -69,14 +72,12 @@ export class UserModel extends Model {
     }
 
     async tokenAdd(type: ETokenType, expirationMs: number, token: string): Promise<string> {
-        await userTokenModel.create(
-            {
-                userId: this.id,
-                type,
-                token,
-                expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
-            } as never
-        );
+        await userTokenModel.create({
+            userId: this.id,
+            type,
+            token,
+            expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
+        } as never);
         return token;
     }
 
@@ -114,7 +115,7 @@ export class UserModel extends Model {
 
 UserModel.init(
     {
-        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
         _id: {
             type: DataTypes.VIRTUAL,
             get() {

@@ -35,7 +35,10 @@ export const postResetConfirm = (
             return userTokenModel
                 .findOne({ where: { userId: Number(user.id), token, type: 'password' } })
                 .then((tokenEntry) => {
-                    if (!tokenEntry || (tokenEntry.expiration && tokenEntry.expiration < new Date())) {
+                    if (
+                        !tokenEntry ||
+                        (tokenEntry.expiration && tokenEntry.expiration < new Date())
+                    ) {
                         rejectResponse(response, 422, 'reset-confirm - expired token', [
                             t('reset.token-not-found')
                         ]);
@@ -46,7 +49,12 @@ export const postResetConfirm = (
                         .passwordChange(user, password, passwordConfirm)
                         .then((result) => {
                             if (!result.success) {
-                                rejectResponse(response, result.status, result.message, result.errors);
+                                rejectResponse(
+                                    response,
+                                    result.status,
+                                    result.message,
+                                    result.errors
+                                );
                                 return;
                             }
 

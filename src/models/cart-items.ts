@@ -15,10 +15,10 @@ export class CartItemModel extends Model<
 
 CartItemModel.init(
     {
-        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
-        userId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-        productId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-        quantity: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false, defaultValue: 1 },
+        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+        userId: { type: DataTypes.INTEGER, allowNull: false },
+        productId: { type: DataTypes.INTEGER, allowNull: false },
+        quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
         createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
         updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
     },

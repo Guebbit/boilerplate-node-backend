@@ -8,7 +8,11 @@ import { orderItemModel } from './order-items';
 userModel.hasMany(cartItemModel, { foreignKey: 'userId', as: 'cartItems', onDelete: 'CASCADE' });
 cartItemModel.belongsTo(userModel, { foreignKey: 'userId', as: 'user' });
 
-productModel.hasMany(cartItemModel, { foreignKey: 'productId', as: 'cartEntries', onDelete: 'CASCADE' });
+productModel.hasMany(cartItemModel, {
+    foreignKey: 'productId',
+    as: 'cartEntries',
+    onDelete: 'CASCADE'
+});
 cartItemModel.belongsTo(productModel, { foreignKey: 'productId', as: 'product' });
 
 userModel.hasMany(userTokenModel, { foreignKey: 'userId', as: 'tokens', onDelete: 'CASCADE' });

@@ -125,7 +125,7 @@ describe('orderService.search', () => {
         await createOrder(user2, [toOrderProduct(product, 2)]);
 
         const result = await orderService.search({
-            userId: (user1.id).toString()
+            userId: user1.id.toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -158,7 +158,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderProduct(product, 2)]);
 
         const result = await orderService.search({
-            id: (target.id).toString()
+            id: target.id.toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -176,7 +176,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderProduct(p2, 1)]);
 
         const result = await orderService.search({
-            productId: (p1.id).toString()
+            productId: p1.id.toString()
         });
 
         expect(result.items).toHaveLength(1);

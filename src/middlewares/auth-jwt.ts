@@ -104,22 +104,25 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
                 return;
             }
             // Check if token is still valid database-wise
-            userTokenModel.findOne({ where: { token } }).then((storedToken) => {
-                if (!storedToken) {
-                    reject(new Error('Forbidden'));
-                    return;
-                }
-                return Users.findByPk(storedToken.userId).then((user) => {
-                    // No need to check if the id in data.id is the same,
-                    // it has to be if I found here the token
-
-                    if (!user) {
+            userTokenModel
+                .findOne({ where: { token } })
+                .then((storedToken) => {
+                    if (!storedToken) {
                         reject(new Error('Forbidden'));
                         return;
                     }
-                    resolve(data as ITokenData);
-                });
-            }).catch((error: Error) => reject(error));
+                    return Users.findByPk(storedToken.userId).then((user) => {
+                        // No need to check if the id in data.id is the same,
+                        // it has to be if I found here the token
+
+                        if (!user) {
+                            reject(new Error('Forbidden'));
+                            return;
+                        }
+                        resolve(data as ITokenData);
+                    });
+                })
+                .catch((error: Error) => reject(error));
         });
     });
 
@@ -134,27 +137,26 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
  * @param remember
  */
 export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTime) =>
-    Users.findByPk(Number(id))
-        .then((user) => {
-            if (!user) throw new Error('User not found');
-            const token = sign(
-                {
-                    id
-                } as ITokenData,
-                process.env.NODE_REFRESH_TOKEN_SECRET ?? '',
-                {
-                    /**
-                     * TODO opzione scelta nel login
-                     * Short: 604_800 = 7 days
-                     * Medium: 2_592_000 = 30 days
-                     * Long: 31_536_000 = 1 year
-                     */
-                    expiresIn: getExpiryTime(remember),
-                    algorithm: 'HS256'
-                }
-            ) as IToken['token'];
-            return user.tokenAdd(ETokenType.REFRESH, getExpiryTime(remember) * 1000, token);
-        });
+    Users.findByPk(Number(id)).then((user) => {
+        if (!user) throw new Error('User not found');
+        const token = sign(
+            {
+                id
+            } as ITokenData,
+            process.env.NODE_REFRESH_TOKEN_SECRET ?? '',
+            {
+                /**
+                 * TODO opzione scelta nel login
+                 * Short: 604_800 = 7 days
+                 * Medium: 2_592_000 = 30 days
+                 * Long: 31_536_000 = 1 year
+                 */
+                expiresIn: getExpiryTime(remember),
+                algorithm: 'HS256'
+            }
+        ) as IToken['token'];
+        return user.tokenAdd(ETokenType.REFRESH, getExpiryTime(remember) * 1000, token);
+    });
 
 /**
  * Secure cookie token that store the refresh token

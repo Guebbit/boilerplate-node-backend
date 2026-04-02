@@ -20,10 +20,10 @@ export class OrderItemModel extends Model<
 
 OrderItemModel.init(
     {
-        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
-        orderId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
-        productId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: true },
-        quantity: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+        orderId: { type: DataTypes.INTEGER, allowNull: false },
+        productId: { type: DataTypes.INTEGER, allowNull: true },
+        quantity: { type: DataTypes.INTEGER, allowNull: false },
         productTitle: { type: DataTypes.STRING, allowNull: false },
         productPrice: { type: DataTypes.FLOAT, allowNull: false },
         productDescription: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },

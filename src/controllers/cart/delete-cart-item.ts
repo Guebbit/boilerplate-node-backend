@@ -6,7 +6,7 @@ import type { RemoveCartItemRequest } from '@types';
 
 const getProductIdFromCartItem = (item: { product: unknown }) => {
     const product = item.product as { id?: number; _id?: number } | number;
-    return typeof product === 'number' ? product : product.id ?? product._id;
+    return typeof product === 'number' ? product : (product.id ?? product._id);
 };
 
 /**
@@ -23,7 +23,11 @@ export const deleteCartItem = (
     return userService
         .cartGet(user)
         .then((items) => {
-            const existing = items.some((item) => String(getProductIdFromCartItem(item as unknown as { product: unknown })) === String(productId));
+            const existing = items.some(
+                (item) =>
+                    String(getProductIdFromCartItem(item as unknown as { product: unknown })) ===
+                    String(productId)
+            );
 
             if (!existing) {
                 rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);

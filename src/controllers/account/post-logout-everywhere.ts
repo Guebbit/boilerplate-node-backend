@@ -13,7 +13,9 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
     // remove refresh token from DB
     return (
         request.user
-            ? userTokenModel.destroy({ where: { userId: Number(request.user.id), type: ETokenType.REFRESH } }).then(() => {})
+            ? userTokenModel
+                  .destroy({ where: { userId: Number(request.user.id), type: ETokenType.REFRESH } })
+                  .then(() => {})
             : Promise.resolve()
     ).then(() => {
         // and from local

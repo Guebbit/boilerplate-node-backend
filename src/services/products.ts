@@ -91,7 +91,8 @@ export const getById = (id: string | undefined, admin = false) => {
         .then((product) => product?.toObject() ?? null);
 };
 
-export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> => productRepository.create(data);
+export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
+    productRepository.create(data);
 
 export const update = (
     id: string,
@@ -109,12 +110,14 @@ export const update = (
         const newImageUrl = data.imageUrl ?? '';
         if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
-        return productRepository.save(product).then((updatedProduct) =>
-            (newImageUrl && oldImageUrl !== newImageUrl
-                ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
-                : Promise.resolve()
-            ).then(() => updatedProduct)
-        );
+        return productRepository
+            .save(product)
+            .then((updatedProduct) =>
+                (newImageUrl && oldImageUrl !== newImageUrl
+                    ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
+                    : Promise.resolve()
+                ).then(() => updatedProduct)
+            );
     });
 };
 
@@ -129,7 +132,9 @@ export const remove = (
             return userService
                 .productRemoveFromCartsById(String(product.id))
                 .then(() => productRepository.deleteOne(product))
-                .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
+                .then(() =>
+                    deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)
+                )
                 .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
 
         product.deletedAt = product.deletedAt ? null : new Date();

@@ -44,14 +44,14 @@ export class OrderModel extends Model {
 
 OrderModel.init(
     {
-        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
         _id: {
             type: DataTypes.VIRTUAL,
             get() {
                 return (this as OrderModel).id;
             }
         },
-        userId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+        userId: { type: DataTypes.INTEGER, allowNull: false },
         email: { type: DataTypes.STRING, allowNull: false },
         status: {
             type: DataTypes.ENUM(...Object.values(EOrderStatus)),
@@ -71,7 +71,10 @@ OrderModel.init(
     }
 );
 
-export interface IOrderDocument extends Omit<Order, 'id' | 'userId' | 'items' | 'status' | 'total'> {
+export interface IOrderDocument extends Omit<
+    Order,
+    'id' | 'userId' | 'items' | 'status' | 'total'
+> {
     id: number;
     _id?: number;
     userId: number;

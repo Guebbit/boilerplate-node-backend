@@ -32,7 +32,10 @@ import type { IProductDocument } from '@models/products';
 import { orderRepository } from '@repositories/orders';
 
 const getUserId = (user: IUserDocument): number =>
-    Number((user as unknown as { id?: number; _id?: number }).id ?? (user as unknown as { _id?: number })._id);
+    Number(
+        (user as unknown as { id?: number; _id?: number }).id ??
+            (user as unknown as { _id?: number })._id
+    );
 
 /**
  * Convert a Mongoose product document into an IOrderProduct ready to embed

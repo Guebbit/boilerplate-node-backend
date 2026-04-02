@@ -17,7 +17,7 @@ export const getUsers = (
         '10';
 
     const active =
-        request.body.active ?? request.query.active
+        (request.body.active ?? request.query.active)
             ? (request.body.active ?? request.query.active) === 'true'
             : undefined;
 

@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { getExecTime } from '@utils/get-exec-time';
+import { logger } from "@utils/winston"
 
 /**
  * GET /heavy-load
@@ -11,8 +12,7 @@ export const getHeavyLoad = (request: Request, response: Response) =>
         let progressLoad = 0;
         for (let i = 0; i < totalLoad; i++) {
             progressLoad++;
-            // eslint-disable-next-line no-console
-            console.log(
+            logger.info(
                 `Worker ${process.pid} at ${Math.round((progressLoad / totalLoad) * 100)}% of task`
             );
         }

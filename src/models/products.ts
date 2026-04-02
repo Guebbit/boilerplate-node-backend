@@ -23,7 +23,7 @@ export class ProductModel extends Model {
 
 ProductModel.init(
     {
-        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
+        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
         _id: {
             type: DataTypes.VIRTUAL,
             get() {

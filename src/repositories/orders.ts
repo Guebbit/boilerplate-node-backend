@@ -36,14 +36,22 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
             if (key === 'userId') return Number(row.userId) === Number(match[key]);
             if (key === 'email') return String(row.email) === String(match[key]);
             if (key === 'products.product._id')
-                return row.products.some((product) => Number(((product.product as unknown) as { id?: number }).id) === Number(match[key]));
+                return row.products.some(
+                    (product) =>
+                        Number((product.product as unknown as { id?: number }).id) ===
+                        Number(match[key])
+                );
             return true;
         })
     );
 };
 
 const extractProductId = (product: IOrderProduct['product']): number =>
-    Number(((product as unknown) as { id?: number | string; _id?: number | string }).id ?? ((product as unknown) as { _id?: number | string })._id ?? 0);
+    Number(
+        (product as unknown as { id?: number | string; _id?: number | string }).id ??
+            (product as unknown as { _id?: number | string })._id ??
+            0
+    );
 
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
@@ -51,12 +59,15 @@ const addComputedFields = (rows: IOrderDocument[]) =>
         totalItems: row.products.length,
         totalQuantity: row.products.reduce((sum, item) => sum + item.quantity, 0),
         totalPrice: row.products.reduce(
-            (sum, item) => sum + Number((item.product as { price?: number }).price ?? 0) * item.quantity,
+            (sum, item) =>
+                sum + Number((item.product as { price?: number }).price ?? 0) * item.quantity,
             0
         )
     }));
 
-export const aggregate = async <T = IOrderDocument>(pipeline: Array<Record<string, unknown>>): Promise<T[]> => {
+export const aggregate = async <T = IOrderDocument>(
+    pipeline: Array<Record<string, unknown>>
+): Promise<T[]> => {
     let rows = await hydrateAll(
         (await orderModel.findAll({
             order: [['createdAt', 'DESC']],
@@ -67,10 +78,9 @@ export const aggregate = async <T = IOrderDocument>(pipeline: Array<Record<strin
     for (const stage of pipeline) {
         if ('$match' in stage) rows = applyMatch(rows, stage.$match as Record<string, unknown>);
         if ('$sort' in stage) {
-            const [field, direction] = Object.entries(stage.$sort as Record<string, unknown>)[0] ?? [
-                'createdAt',
-                -1
-            ];
+            const [field, direction] = Object.entries(
+                stage.$sort as Record<string, unknown>
+            )[0] ?? ['createdAt', -1];
             // eslint-disable-next-line unicorn/no-array-sort
             rows = [...rows].sort((a, b) => {
                 const av = a[field as keyof IOrderDocument] as unknown as number | string | Date;
@@ -112,7 +122,9 @@ export const create = async (data: Partial<IOrderDocument>): Promise<IOrderDocum
                 quantity: Number(entry.quantity),
                 productTitle: String((entry.product as { title?: string }).title ?? ''),
                 productPrice: Number((entry.product as { price?: number }).price ?? 0),
-                productDescription: String((entry.product as { description?: string }).description ?? ''),
+                productDescription: String(
+                    (entry.product as { description?: string }).description ?? ''
+                ),
                 productImageUrl: String((entry.product as { imageUrl?: string }).imageUrl ?? ''),
                 productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
             } as never)
@@ -143,15 +155,21 @@ export const save = async (order: IOrderDocument): Promise<IOrderDocument> => {
                     quantity: Number(entry.quantity),
                     productTitle: String((entry.product as { title?: string }).title ?? ''),
                     productPrice: Number((entry.product as { price?: number }).price ?? 0),
-                    productDescription: String((entry.product as { description?: string }).description ?? ''),
-                    productImageUrl: String((entry.product as { imageUrl?: string }).imageUrl ?? ''),
+                    productDescription: String(
+                        (entry.product as { description?: string }).description ?? ''
+                    ),
+                    productImageUrl: String(
+                        (entry.product as { imageUrl?: string }).imageUrl ?? ''
+                    ),
                     productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
                 } as never)
             )
         );
     }
 
-    return hydrateOne(databaseOrder.get({ plain: true }) as { id: number } & Record<string, unknown>);
+    return hydrateOne(
+        databaseOrder.get({ plain: true }) as { id: number } & Record<string, unknown>
+    );
 };
 
 export const deleteOne = (order: IOrderDocument): Promise<void> =>

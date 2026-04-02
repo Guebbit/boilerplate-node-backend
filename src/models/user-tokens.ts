@@ -16,8 +16,8 @@ export class UserTokenModel extends Model<
 
 UserTokenModel.init(
     {
-        id: { type: DataTypes.INTEGER.UNSIGNED, autoIncrement: true, primaryKey: true },
-        userId: { type: DataTypes.INTEGER.UNSIGNED, allowNull: false },
+        id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+        userId: { type: DataTypes.INTEGER, allowNull: false },
         type: { type: DataTypes.STRING, allowNull: false },
         token: { type: DataTypes.STRING(512), allowNull: false },
         expiration: { type: DataTypes.DATE, allowNull: true },
