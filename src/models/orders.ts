@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
 import type { CartItem, Order } from '@types';
 
-export const EOrderStatus = {
+export const ORDER_STATUS = {
     PENDING: 'pending',
     PAID: 'paid',
     PROCESSING: 'processing',
@@ -10,8 +10,9 @@ export const EOrderStatus = {
     DELIVERED: 'delivered',
     CANCELLED: 'cancelled'
 } as const;
-export type EOrderStatus = Order.StatusEnum;
+export type EOrderStatus = `${Order.StatusEnum}`;
 
+// OpenAPI `CartItem` stores `productId`; DB-hydrated orders embed product snapshots instead.
 export interface IOrderProduct extends Omit<CartItem, 'productId'> {
     product: {
         id?: string | number;
@@ -51,9 +52,9 @@ OrderModel.init(
         userId: { type: DataTypes.INTEGER, allowNull: false },
         email: { type: DataTypes.STRING, allowNull: false },
         status: {
-            type: DataTypes.ENUM(...Object.values(EOrderStatus)),
+            type: DataTypes.ENUM(...Object.values(ORDER_STATUS)),
             allowNull: false,
-            defaultValue: EOrderStatus.PENDING
+            defaultValue: ORDER_STATUS.PENDING
         },
         notes: { type: DataTypes.TEXT, allowNull: true },
         createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
@@ -69,8 +70,10 @@ OrderModel.init(
 );
 
 export interface IOrderDocument {
-    id: number; // OpenAPI `Order.id` is string, runtime DB uses numeric IDs
-    userId: number; // OpenAPI `Order.userId` is string, runtime DB uses numeric IDs
+    // OpenAPI models transport ids as strings, while Sequelize persists numeric ids;
+    // conversion is handled in services/repositories at the API boundary.
+    id: number;
+    userId: number;
     email: Order['email'];
     products: IOrderProduct[];
     status: EOrderStatus;
