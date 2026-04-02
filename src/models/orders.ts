@@ -1,5 +1,4 @@
 import { DataTypes, Model } from 'sequelize';
-import type { Order } from '@types';
 import { sequelize } from '@utils/database';
 
 export enum EOrderStatus {
@@ -71,13 +70,11 @@ OrderModel.init(
     }
 );
 
-export interface IOrderDocument extends Omit<
-    Order,
-    'id' | 'userId' | 'items' | 'status' | 'total'
-> {
+export interface IOrderDocument {
     id: number;
     _id?: number;
     userId: number;
+    email: string;
     products: IOrderProduct[];
     status: EOrderStatus;
     notes?: string;
