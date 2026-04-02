@@ -9,7 +9,7 @@ beforeEach(clearAll);
 
 describe('userRepository', () => {
     describe('create', () => {
-        it('inserts a new user and returns the Mongoose document', async () => {
+        it('inserts a new user and returns the persisted record', async () => {
             const user = await userRepository.create(makeUser() as Partial<IUserDocument>);
 
             expect(user.id).toBeDefined();
@@ -38,8 +38,7 @@ describe('userRepository', () => {
         });
 
         it('returns null when no document matches the id', async () => {
-            // A syntactically valid but non-existent ObjectId
-            const found = await userRepository.findById('000000000000000000000000');
+            const found = await userRepository.findById('999999');
 
             expect(found).toBeNull();
         });
@@ -115,12 +114,12 @@ describe('userRepository', () => {
             expect(admins[0].email).toBe('admin@example.com');
         });
 
-        it('returns lean (plain JS) objects, not Mongoose Documents', async () => {
+        it('returns lean (plain JS) objects, not model instances', async () => {
             await createUser();
 
             const [user] = await userRepository.findAll();
 
-            // Lean objects have no Mongoose save() method
+            // Lean objects have no instance save() method
             expect(typeof (user as unknown as { save?: unknown }).save).toBe('undefined');
         });
     });
@@ -159,7 +158,7 @@ describe('userRepository', () => {
             const user = await createUser();
             const id = user.id.toString();
 
-            // Mutate the Mongoose document in memory…
+            // Mutate the in-memory record…
             user.username = 'updated-username';
             // …then flush it to the database
             await userRepository.save(user);
@@ -187,7 +186,7 @@ describe('userRepository', () => {
             await createUser({ email: 'c@example.com', username: 'c', admin: true });
 
             // Promote all non-admins
-            await userRepository.updateMany({ admin: false }, { $set: { admin: true } });
+            await userRepository.updateMany({ admin: false }, { admin: true });
 
             expect(await userRepository.count({ admin: true })).toBe(3);
             expect(await userRepository.count({ admin: false })).toBe(0);
@@ -206,7 +205,7 @@ describe('userRepository', () => {
             });
 
             // Only target the non-admin
-            await userRepository.updateMany({ admin: false }, { $set: { username: 'changed' } });
+            await userRepository.updateMany({ admin: false }, { username: 'changed' });
 
             const admin = await userRepository.findOne({
                 email: 'admin@example.com'

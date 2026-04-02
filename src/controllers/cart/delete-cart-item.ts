@@ -5,8 +5,8 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 
 const getProductIdFromCartItem = (item: { product: unknown }) => {
-    const product = item.product as { id?: number; _id?: number } | number;
-    return typeof product === 'number' ? product : (product.id ?? product._id);
+    const product = item.product as { id?: number } | number;
+    return typeof product === 'number' ? product : product.id;
 };
 
 /**

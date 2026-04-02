@@ -8,7 +8,6 @@ const hydrateOne = async (order: { id: number } & Record<string, unknown>) => {
     const products = items.map((item) => ({
         product: {
             id: item.productId ?? undefined,
-            _id: item.productId ?? undefined,
             title: item.productTitle,
             price: item.productPrice,
             description: item.productDescription,
@@ -20,7 +19,6 @@ const hydrateOne = async (order: { id: number } & Record<string, unknown>) => {
 
     return {
         ...order,
-        _id: order.id,
         products
     } as unknown as IOrderDocument;
 };
@@ -32,10 +30,10 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
     const keys = Object.keys(match);
     return rows.filter((row) =>
         keys.every((key) => {
-            if (key === '_id' || key === 'id') return Number(row.id) === Number(match[key]);
+            if (key === 'id') return Number(row.id) === Number(match[key]);
             if (key === 'userId') return Number(row.userId) === Number(match[key]);
             if (key === 'email') return String(row.email) === String(match[key]);
-            if (key === 'products.product._id')
+            if (key === 'products.product.id')
                 return row.products.some(
                     (product) =>
                         Number((product.product as unknown as { id?: number }).id) ===
@@ -47,11 +45,7 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
 };
 
 const extractProductId = (product: IOrderProduct['product']): number =>
-    Number(
-        (product as unknown as { id?: number | string; _id?: number | string }).id ??
-            (product as unknown as { _id?: number | string })._id ??
-            0
-    );
+    Number((product as unknown as { id?: number | string }).id ?? 0);
 
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
@@ -76,10 +70,10 @@ export const aggregate = async <T = IOrderDocument>(
     );
 
     for (const stage of pipeline) {
-        if ('$match' in stage) rows = applyMatch(rows, stage.$match as Record<string, unknown>);
-        if ('$sort' in stage) {
+        if ('match' in stage) rows = applyMatch(rows, stage.match as Record<string, unknown>);
+        if ('sort' in stage) {
             const [field, direction] = Object.entries(
-                stage.$sort as Record<string, unknown>
+                stage.sort as Record<string, unknown>
             )[0] ?? ['createdAt', -1];
             // eslint-disable-next-line unicorn/no-array-sort
             rows = [...rows].sort((a, b) => {
@@ -90,10 +84,10 @@ export const aggregate = async <T = IOrderDocument>(
                 return av > bv ? factor : -factor;
             });
         }
-        if ('$addFields' in stage) rows = addComputedFields(rows) as IOrderDocument[];
-        if ('$skip' in stage) rows = rows.slice(Number(stage.$skip));
-        if ('$limit' in stage) rows = rows.slice(0, Number(stage.$limit));
-        if ('$count' in stage) return [{ [String(stage.$count)]: rows.length } as T];
+        if ('addFields' in stage) rows = addComputedFields(rows) as IOrderDocument[];
+        if ('skip' in stage) rows = rows.slice(Number(stage.skip));
+        if ('limit' in stage) rows = rows.slice(0, Number(stage.limit));
+        if ('count' in stage) return [{ [String(stage.count)]: rows.length } as T];
     }
 
     return rows as T[];
@@ -135,7 +129,7 @@ export const create = async (data: Partial<IOrderDocument>): Promise<IOrderDocum
 };
 
 export const save = async (order: IOrderDocument): Promise<IOrderDocument> => {
-    const databaseOrder = await orderModel.findByPk(Number(order.id ?? order._id));
+    const databaseOrder = await orderModel.findByPk(Number(order.id));
     if (!databaseOrder) throw new Error('404');
 
     await databaseOrder.update({
@@ -173,6 +167,6 @@ export const save = async (order: IOrderDocument): Promise<IOrderDocument> => {
 };
 
 export const deleteOne = (order: IOrderDocument): Promise<void> =>
-    orderModel.destroy({ where: { id: Number(order.id ?? order._id) } }).then(() => {});
+    orderModel.destroy({ where: { id: Number(order.id) } }).then(() => {});
 
 export const orderRepository = { aggregate, findById, create, save, deleteOne };

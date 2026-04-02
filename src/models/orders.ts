@@ -13,7 +13,6 @@ export enum EOrderStatus {
 export interface IOrderProduct {
     product: {
         id?: string | number;
-        _id?: string | number;
         title?: string;
         price?: number;
         description?: string;
@@ -26,10 +25,6 @@ export interface IOrderProduct {
 
 export class OrderModel extends Model {
     declare id: number;
-    /**
-     * Legacy compatibility alias for `id` (virtual field, not stored in DB).
-     */
-    declare _id: number;
     declare userId: number;
     declare email: string;
     declare status: EOrderStatus;
@@ -51,13 +46,6 @@ export class OrderModel extends Model {
 OrderModel.init(
     {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        // Legacy alias for compatibility with older code paths expecting `_id`.
-        _id: {
-            type: DataTypes.VIRTUAL,
-            get() {
-                return (this as OrderModel).id;
-            }
-        },
         userId: { type: DataTypes.INTEGER, allowNull: false },
         email: { type: DataTypes.STRING, allowNull: false },
         status: {
@@ -80,11 +68,6 @@ OrderModel.init(
 
 export interface IOrderDocument {
     id: number;
-    /**
-     * Legacy alias kept for compatibility with older payloads/services.
-     * In Sequelize/MySQL the real persisted key is `id`.
-     */
-    _id?: number;
     userId: number;
     email: string;
     products: IOrderProduct[];

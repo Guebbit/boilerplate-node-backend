@@ -34,9 +34,9 @@ export const search = (
 
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
-        where.$or = [
-            { title: { $regex: text, $options: 'i' } },
-            { description: { $regex: text, $options: 'i' } }
+        where.or = [
+            { title: { contains: text } },
+            { description: { contains: text } }
         ];
     }
 
@@ -45,14 +45,12 @@ export const search = (
         filters.minPrice !== undefined &&
         filters.minPrice !== null &&
         !Number.isNaN(Number(filters.minPrice))
-    )
-        priceConditions.$gte = Number(filters.minPrice);
+    ) priceConditions.min = Number(filters.minPrice);
     if (
         filters.maxPrice !== undefined &&
         filters.maxPrice !== null &&
         !Number.isNaN(Number(filters.maxPrice))
-    )
-        priceConditions.$lte = Number(filters.maxPrice);
+    ) priceConditions.max = Number(filters.maxPrice);
     if (Object.keys(priceConditions).length > 0) where.price = priceConditions;
 
     if (!admin) {

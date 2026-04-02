@@ -36,7 +36,7 @@ export const makeProduct = (
 });
 
 /**
- * Insert a product into the test database and return the Mongoose document.
+ * Insert a product into the test database and return the persisted product record.
  *
  * @param overrides - Fields to override the factory defaults.
  */

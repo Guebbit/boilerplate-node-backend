@@ -202,7 +202,6 @@ export const orderConfirm = (
             const mappedProducts = products.map((entry) => {
                 const product = entry.product as unknown as {
                     id?: number;
-                    _id?: number;
                     title?: string;
                     price?: number;
                     description?: string;
@@ -211,8 +210,7 @@ export const orderConfirm = (
                 };
                 return {
                     product: {
-                        id: product.id ?? product._id,
-                        _id: product.id ?? product._id,
+                        id: product.id,
                         title: product.title,
                         price: product.price,
                         description: product.description,
@@ -399,16 +397,7 @@ export const productRemoveFromCartsById = (
                 'cart.items.product': Number(id)
             },
             {
-                $pull: {
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                    'cart.items': {
-                        product: Number(id)
-                    }
-                },
-                $set: {
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
-                    'cart.updatedAt': new Date()
-                }
+                removeFromCartItems: true
             }
         )
         .then((result) =>
@@ -449,20 +438,20 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
 
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
-        where.$or = [
-            { email: { $regex: text, $options: 'i' } },
-            { username: { $regex: text, $options: 'i' } }
+        where.or = [
+            { email: { contains: text } },
+            { username: { contains: text } }
         ];
     }
 
     if (filters.email && String(filters.email).trim() !== '')
-        where.email = { $regex: String(filters.email).trim(), $options: 'i' };
+        where.email = { contains: String(filters.email).trim() };
 
     if (filters.username && String(filters.username).trim() !== '')
-        where.username = { $regex: String(filters.username).trim(), $options: 'i' };
+        where.username = { contains: String(filters.username).trim() };
 
     if (filters.active !== undefined && filters.active !== null)
-        where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
+        where.deletedAt = filters.active ? { exists: false } : { exists: true };
 
     return userRepository.count(where).then((totalItems) =>
         userRepository

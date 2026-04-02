@@ -8,7 +8,7 @@
  *                            or to keep a test self-contained.
  *
  *   createUser(overrides?) – inserts a user into the test database and returns
- *                            the Mongoose document.  Use it whenever a test
+ *                            the persisted user record.  Use it whenever a test
  *                            needs an already-persisted user.
  *
  *   createAdminUser(…)     – convenience wrapper that sets admin: true.
@@ -61,7 +61,7 @@ export const makeUser = (overrides: Partial<CreateUserInput> = {}): CreateUserIn
 });
 
 /**
- * Insert a user into the test database and return the Mongoose document.
+ * Insert a user into the test database and return the persisted user record.
  *
  * @param overrides - Fields to override the factory defaults.
  */

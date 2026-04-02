@@ -24,11 +24,6 @@ export interface IToken {
 
 export interface IUser {
     id: number;
-    /**
-     * Legacy alias kept for compatibility with older payloads/services.
-     * In Sequelize/MySQL the real persisted key is `id`.
-     */
-    _id?: number;
     email: string;
     username: string;
     password: string;
@@ -47,10 +42,6 @@ export interface IUser {
 
 export class UserModel extends Model {
     declare id: number;
-    /**
-     * Legacy compatibility alias for `id` (virtual field, not stored in DB).
-     */
-    declare _id: number;
     declare email: string;
     declare username: string;
     declare password: string;
@@ -89,8 +80,7 @@ export class UserModel extends Model {
                 })),
                 updatedAt: this.cartUpdatedAt
             },
-            tokens,
-            _id: this.id
+            tokens
         };
     }
 
@@ -116,8 +106,7 @@ export class UserModel extends Model {
         const where: Record<string, unknown> = {};
         if (filter.admin !== undefined) where.admin = filter.admin;
         if (filter.email !== undefined) where.email = filter.email;
-        const values = update.$set ? (update.$set as Record<string, unknown>) : update;
-        const [modifiedCount] = await this.update(values as never, { where });
+        const [modifiedCount] = await this.update(update as never, { where });
         return { modifiedCount };
     }
 
@@ -139,13 +128,6 @@ export class UserModel extends Model {
 UserModel.init(
     {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        // Legacy alias for compatibility with older code paths expecting `_id`.
-        _id: {
-            type: DataTypes.VIRTUAL,
-            get() {
-                return (this as UserModel).id;
-            }
-        },
         email: {
             type: DataTypes.STRING,
             allowNull: false,
@@ -188,11 +170,6 @@ UserModel.init(
 
 export interface IUserDocument extends IUserMethods {
     id: number;
-    /**
-     * Legacy alias kept for compatibility with older payloads/services.
-     * In Sequelize/MySQL the real persisted key is `id`.
-     */
-    _id?: number;
     email: string;
     username: string;
     password: string;
