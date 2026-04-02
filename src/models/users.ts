@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { logger } from '@utils/winston';
-import type { User } from '@types';
 import { sequelize } from '@utils/database';
 import { userTokenModel } from './user-tokens';
 
@@ -23,8 +22,17 @@ export interface IToken {
     expiration?: Date;
 }
 
-export interface IUser extends User {
+export interface IUser {
+    id: number;
+    _id?: number;
+    email: string;
+    username: string;
     password: string;
+    imageUrl?: string;
+    admin?: boolean;
+    active?: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
     deletedAt?: Date | null;
     cart: {
         items: ICartItem[];
