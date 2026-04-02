@@ -1,31 +1,18 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
-import { Order } from '@types';
-import type { OrderProduct, OrderProductSnapshot } from '@types';
+import type { Order, OrderProduct, OrderProductSnapshot } from '@types';
 
-export type EOrderStatus = Order.StatusEnum;
-
-const orderStatusValues: EOrderStatus[] = [
-    Order.StatusEnum.Pending,
-    Order.StatusEnum.Paid,
-    Order.StatusEnum.Processing,
-    Order.StatusEnum.Shipped,
-    Order.StatusEnum.Delivered,
-    Order.StatusEnum.Cancelled
-];
-
-export const EOrderStatus = {
-    PENDING: Order.StatusEnum.Pending,
-    PAID: Order.StatusEnum.Paid,
-    PROCESSING: Order.StatusEnum.Processing,
-    SHIPPED: Order.StatusEnum.Shipped,
-    DELIVERED: Order.StatusEnum.Delivered,
-    CANCELLED: Order.StatusEnum.Cancelled
-} as const;
+export enum EOrderStatus {
+    PENDING = 'pending',
+    PAID = 'paid',
+    PROCESSING = 'processing',
+    SHIPPED = 'shipped',
+    DELIVERED = 'delivered',
+    CANCELLED = 'cancelled'
+}
 
 export type IOrderProductSnapshot = Omit<OrderProductSnapshot, 'id'> & {
     id?: string | number;
-    [key: string]: unknown;
 };
 
 export type IOrderProduct = Omit<OrderProduct, 'product'> & { product: IOrderProductSnapshot };
@@ -56,7 +43,7 @@ OrderModel.init(
         userId: { type: DataTypes.INTEGER, allowNull: false },
         email: { type: DataTypes.STRING, allowNull: false },
         status: {
-            type: DataTypes.ENUM(...orderStatusValues),
+            type: DataTypes.ENUM(...Object.values(EOrderStatus)),
             allowNull: false,
             defaultValue: EOrderStatus.PENDING
         },

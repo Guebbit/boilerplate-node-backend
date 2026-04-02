@@ -11,6 +11,9 @@ import {
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
 
+const isOrderStatus = (status: string): status is EOrderStatus =>
+    Object.values(EOrderStatus).includes(status as EOrderStatus);
+
 export const getAll = (pipeline: Array<Record<string, unknown>> = []): Promise<IOrderDocument[]> =>
     orderRepository.aggregate([...pipeline, { addFields: {} }]);
 
@@ -130,7 +133,7 @@ export const update = (
     return orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
 
-        if (data.status !== undefined) order.status = data.status as EOrderStatus;
+        if (data.status !== undefined && isOrderStatus(data.status)) order.status = data.status;
         if (data.email !== undefined) order.email = data.email;
         if (data.userId !== undefined) order.userId = Number(data.userId);
 
