@@ -1,27 +1,34 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
+import { Order } from '@types';
+import type { OrderProduct, OrderProductSnapshot } from '@types';
 
-export enum EOrderStatus {
-    PENDING = 'pending',
-    PAID = 'paid',
-    PROCESSING = 'processing',
-    SHIPPED = 'shipped',
-    DELIVERED = 'delivered',
-    CANCELLED = 'cancelled'
-}
+export type EOrderStatus = Order.StatusEnum;
 
-export interface IOrderProduct {
-    product: {
-        id?: string | number;
-        title?: string;
-        price?: number;
-        description?: string;
-        imageUrl?: string;
-        active?: boolean;
-        [key: string]: unknown;
-    };
-    quantity: number;
-}
+const orderStatusValues: EOrderStatus[] = [
+    Order.StatusEnum.Pending,
+    Order.StatusEnum.Paid,
+    Order.StatusEnum.Processing,
+    Order.StatusEnum.Shipped,
+    Order.StatusEnum.Delivered,
+    Order.StatusEnum.Cancelled
+];
+
+export const EOrderStatus = {
+    PENDING: Order.StatusEnum.Pending,
+    PAID: Order.StatusEnum.Paid,
+    PROCESSING: Order.StatusEnum.Processing,
+    SHIPPED: Order.StatusEnum.Shipped,
+    DELIVERED: Order.StatusEnum.Delivered,
+    CANCELLED: Order.StatusEnum.Cancelled
+} as const;
+
+export type IOrderProductSnapshot = Omit<OrderProductSnapshot, 'id'> & {
+    id?: string | number;
+    [key: string]: unknown;
+};
+
+export type IOrderProduct = Omit<OrderProduct, 'product'> & { product: IOrderProductSnapshot };
 
 export class OrderModel extends Model {
     declare id: number;
@@ -49,7 +56,7 @@ OrderModel.init(
         userId: { type: DataTypes.INTEGER, allowNull: false },
         email: { type: DataTypes.STRING, allowNull: false },
         status: {
-            type: DataTypes.ENUM(...Object.values(EOrderStatus)),
+            type: DataTypes.ENUM(...orderStatusValues),
             allowNull: false,
             defaultValue: EOrderStatus.PENDING
         },
@@ -66,16 +73,17 @@ OrderModel.init(
     }
 );
 
-export interface IOrderDocument {
+export type IOrderDocument = Omit<
+    Order,
+    'id' | 'userId' | 'products' | 'status' | 'createdAt' | 'updatedAt'
+> & {
     id: number;
     userId: number;
-    email: string;
     products: IOrderProduct[];
     status: EOrderStatus;
-    notes?: string;
     createdAt: Date;
     updatedAt: Date;
-}
+};
 
 export type IOrderModel = typeof OrderModel;
 

@@ -17,6 +17,8 @@ export * from './errorResponse';
 export * from './loginRequest';
 export * from './messageResponse';
 export * from './order';
+export * from './orderProduct';
+export * from './orderProductSnapshot';
 export * from './ordersResponse';
 export * from './paginationMeta';
 export * from './passwordResetConfirmRequest';
@@ -73,6 +75,8 @@ import { ErrorResponse } from './errorResponse';
 import { LoginRequest } from './loginRequest';
 import { MessageResponse } from './messageResponse';
 import { Order } from './order';
+import { OrderProduct } from './orderProduct';
+import { OrderProductSnapshot } from './orderProductSnapshot';
 import { OrdersResponse } from './ordersResponse';
 import { PaginationMeta } from './paginationMeta';
 import { PasswordResetConfirmRequest } from './passwordResetConfirmRequest';
@@ -135,6 +139,8 @@ let typeMap: {[index: string]: any} = {
     "LoginRequest": LoginRequest,
     "MessageResponse": MessageResponse,
     "Order": Order,
+    "OrderProduct": OrderProduct,
+    "OrderProductSnapshot": OrderProductSnapshot,
     "OrdersResponse": OrdersResponse,
     "PaginationMeta": PaginationMeta,
     "PasswordResetConfirmRequest": PasswordResetConfirmRequest,

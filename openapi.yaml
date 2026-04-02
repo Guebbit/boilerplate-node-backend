@@ -341,9 +341,38 @@ components:
                     type: integer
                     minimum: 1
 
+        OrderProductSnapshot:
+            type: object
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                imageUrl:
+                    type: string
+                    format: uri
+                active:
+                    type: boolean
+
+        OrderProduct:
+            type: object
+            required: [product, quantity]
+            properties:
+                product:
+                    $ref: '#/components/schemas/OrderProductSnapshot'
+                quantity:
+                    type: integer
+                    minimum: 1
+
         Order:
             type: object
-            required: [id, userId, email, items, total, status]
+            required: [id, userId, email, products, status]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
@@ -351,20 +380,29 @@ components:
                     $ref: '#/components/schemas/Id'
                 email:
                     $ref: '#/components/schemas/Email'
-                items:
+                products:
                     type: array
                     items:
-                        $ref: '#/components/schemas/CartItem'
-                total:
-                    type: number
-                    format: double
-                    minimum: 0
+                        $ref: '#/components/schemas/OrderProduct'
                 notes:
                     type: string
                     description: Optional order notes
                 status:
                     type: string
                     enum: [pending, paid, processing, shipped, delivered, cancelled]
+                totalItems:
+                    type: integer
+                    minimum: 0
+                    description: Number of distinct product lines in the order
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of all product quantities in the order
+                totalPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of item price times quantity for all order lines
                 createdAt:
                     type: string
                     format: date-time

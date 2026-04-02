@@ -11,7 +11,7 @@
  */
 
 import { RequestFile } from './models';
-import { CartItem } from './cartItem';
+import { OrderProduct } from './orderProduct';
 
 export class Order {
     /**
@@ -23,13 +23,24 @@ export class Order {
     */
     'userId': string;
     'email': string;
-    'items': Array<CartItem>;
-    'total': number;
+    'products': Array<OrderProduct>;
     /**
     * Optional order notes
     */
     'notes'?: string;
     'status': Order.StatusEnum;
+    /**
+    * Number of distinct product lines in the order
+    */
+    'totalItems'?: number;
+    /**
+    * Sum of all product quantities in the order
+    */
+    'totalQuantity'?: number;
+    /**
+    * Sum of item price times quantity for all order lines
+    */
+    'totalPrice'?: number;
     'createdAt'?: Date;
     'updatedAt'?: Date;
 
@@ -52,14 +63,9 @@ export class Order {
             "type": "string"
         },
         {
-            "name": "items",
-            "baseName": "items",
-            "type": "Array<CartItem>"
-        },
-        {
-            "name": "total",
-            "baseName": "total",
-            "type": "number"
+            "name": "products",
+            "baseName": "products",
+            "type": "Array<OrderProduct>"
         },
         {
             "name": "notes",
@@ -70,6 +76,21 @@ export class Order {
             "name": "status",
             "baseName": "status",
             "type": "Order.StatusEnum"
+        },
+        {
+            "name": "totalItems",
+            "baseName": "totalItems",
+            "type": "number"
+        },
+        {
+            "name": "totalQuantity",
+            "baseName": "totalQuantity",
+            "type": "number"
+        },
+        {
+            "name": "totalPrice",
+            "baseName": "totalPrice",
+            "type": "number"
         },
         {
             "name": "createdAt",

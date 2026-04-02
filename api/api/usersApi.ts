@@ -433,15 +433,15 @@ export class UsersApi {
     /**
      * Returns a paginated list of user accounts.
      * @summary List users (paginated)
-     * @param id 
      * @param page 1-based page index
      * @param pageSize 
      * @param text 
+     * @param id 
      * @param email 
      * @param username 
      * @param active 
      */
-    public async listUsers (id?: string, page?: number, pageSize?: number, text?: string, email?: string, username?: string, active?: boolean, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: UsersResponse;  }> {
+    public async listUsers (page?: number, pageSize?: number, text?: string, id?: string, email?: string, username?: string, active?: boolean, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: UsersResponse;  }> {
         const localVarPath = this.basePath + '/users';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -454,10 +454,6 @@ export class UsersApi {
         }
         let localVarFormParams: any = {};
 
-        if (id !== undefined) {
-            localVarQueryParameters['id'] = ObjectSerializer.serialize(id, "string");
-        }
-
         if (page !== undefined) {
             localVarQueryParameters['page'] = ObjectSerializer.serialize(page, "number");
         }
@@ -468,6 +464,10 @@ export class UsersApi {
 
         if (text !== undefined) {
             localVarQueryParameters['text'] = ObjectSerializer.serialize(text, "string");
+        }
+
+        if (id !== undefined) {
+            localVarQueryParameters['id'] = ObjectSerializer.serialize(id, "string");
         }
 
         if (email !== undefined) {
