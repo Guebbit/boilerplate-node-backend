@@ -10,7 +10,7 @@ beforeEach(clearAll);
 
 describe('orderRepository', () => {
     describe('create', () => {
-        it('inserts an order and returns the Mongoose document', async () => {
+        it('inserts an order and returns the persisted record', async () => {
             const user = await createUser();
             const product = await createProduct({ price: 15 });
             // toOrderProduct converts the product document into the embedded shape
@@ -38,7 +38,7 @@ describe('orderRepository', () => {
             });
             const order = await createOrder(user, [toOrderProduct(product, 1)]);
 
-            // The product object is embedded, not referenced by ObjectId
+            // The product object is embedded as a snapshot
             expect(order.products[0].product.title).toBe('Snapshot Test');
             expect(order.products[0].product.price).toBe(29.99);
         });
@@ -56,46 +56,41 @@ describe('orderRepository', () => {
     });
 
     describe('aggregate', () => {
-        it('returns all orders when given a match-all pipeline', async () => {
+        it('returns all orders when given a match-all query stage', async () => {
             const user = await createUser();
             const product = await createProduct();
             await createOrder(user, [toOrderProduct(product, 1)]);
             await createOrder(user, [toOrderProduct(product, 2)]);
 
-            // An empty $match stage matches every document.
-            // MongoDB (and Mongoose) require at least one stage; passing an
-            // empty array throws MongooseError: Aggregate has empty pipeline.
-            const results = await orderRepository.aggregate([{ $match: {} }]);
+            const results = await orderRepository.aggregate([{ match: {} }]);
 
             expect(results).toHaveLength(2);
         });
 
-        it('applies a $match stage to filter results', async () => {
+        it('applies a match stage to filter results', async () => {
             const user = await createUser();
             const product = await createProduct();
             const order = await createOrder(user, [toOrderProduct(product, 1)]);
 
             // Only orders for this specific user
-            const results = await orderRepository.aggregate([{ $match: { userId: order.userId } }]);
+            const results = await orderRepository.aggregate([{ match: { userId: order.userId } }]);
 
             expect(results).toHaveLength(1);
         });
 
-        it('applies a $count stage and returns the document count', async () => {
+        it('applies a count stage and returns the record count', async () => {
             const user = await createUser();
             const product = await createProduct();
             await createOrder(user, [toOrderProduct(product, 1)]);
             await createOrder(user, [toOrderProduct(product, 2)]);
             await createOrder(user, [toOrderProduct(product, 3)]);
 
-            const [result] = await orderRepository.aggregate<{ total: number }>([
-                { $count: 'total' }
-            ]);
+            const [result] = await orderRepository.aggregate<{ total: number }>([{ count: 'total' }]);
 
             expect(result.total).toBe(3);
         });
 
-        it('adds computed fields with $addFields', async () => {
+        it('adds computed fields with addFields', async () => {
             const user = await createUser();
             const product = await createProduct({ price: 10 });
             await createOrder(user, [toOrderProduct(product, 4)]);
@@ -106,7 +101,7 @@ describe('orderRepository', () => {
                 totalPrice: number;
             }>([
                 {
-                    $addFields: {
+                    addFields: {
                         totalQuantity: { $sum: '$products.quantity' },
                         totalPrice: {
                             $sum: {
@@ -125,7 +120,7 @@ describe('orderRepository', () => {
             expect(result.totalPrice).toBe(40); // 10 × 4
         });
 
-        it('handles the $sort + $skip + $limit pagination pattern', async () => {
+        it('handles the sort + skip + limit pagination pattern', async () => {
             const user = await createUser();
             const product = await createProduct();
             // Insert 5 orders
@@ -134,9 +129,9 @@ describe('orderRepository', () => {
             }
 
             const page2 = await orderRepository.aggregate([
-                { $sort: { createdAt: -1 } },
-                { $skip: 3 },
-                { $limit: 10 }
+                { sort: { createdAt: -1 } },
+                { skip: 3 },
+                { limit: 10 }
             ]);
 
             // 5 total, skip 3 → 2 remaining

@@ -450,7 +450,7 @@ describe('userService.getById', () => {
 
         expect(found).toBeDefined();
         expect(found!.email).toBe('user@example.com');
-        // Lean object — no Mongoose Document methods
+        // Lean object — no model instance methods
         expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
     });
 
@@ -466,7 +466,7 @@ describe('userService.getById', () => {
 });
 
 describe('userService.adminCreate', () => {
-    it('creates a user and returns the Mongoose document', async () => {
+    it('creates a user and returns the persisted record', async () => {
         const user = await userService.adminCreate({
             email: 'created@example.com',
             username: 'createduser',

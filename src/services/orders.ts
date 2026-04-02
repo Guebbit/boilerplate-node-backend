@@ -12,7 +12,7 @@ import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
 
 export const getAll = (pipeline: Array<Record<string, unknown>> = []): Promise<IOrderDocument[]> =>
-    orderRepository.aggregate([...pipeline, { $addFields: {} }]);
+    orderRepository.aggregate([...pipeline, { addFields: {} }]);
 
 export const search = (
     search: SearchOrdersRequest = {},
@@ -24,7 +24,7 @@ export const search = (
 
     const match: Record<string, unknown> = { ...scope };
 
-    if (search.id && String(search.id).trim() !== '') match._id = Number(search.id);
+    if (search.id && String(search.id).trim() !== '') match.id = Number(search.id);
 
     if (search.userId && String(search.userId).trim() !== '') match.userId = Number(search.userId);
 
@@ -32,22 +32,22 @@ export const search = (
         match.email = String(search.email).trim();
 
     if (search.productId && String(search.productId).trim() !== '')
-        match['products.product._id'] = Number(search.productId);
+        match['products.product.id'] = Number(search.productId);
 
     const basePipeline: Array<Record<string, unknown>> = [
-        { $match: match },
-        { $sort: { createdAt: -1 } },
-        { $addFields: {} }
+        { match: match },
+        { sort: { createdAt: -1 } },
+        { addFields: {} }
     ];
 
     return orderRepository
-        .aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }])
+        .aggregate<{ totalItems?: number }>([...basePipeline, { count: 'totalItems' }])
         .then(([countAggregation]) => {
             const totalItems = countAggregation?.totalItems ?? 0;
             const totalPages = Math.ceil(totalItems / pageSize);
 
             return orderRepository
-                .aggregate([...basePipeline, { $skip: skip }, { $limit: pageSize }])
+                .aggregate([...basePipeline, { skip: skip }, { limit: pageSize }])
                 .then((items) => ({
                     items: items as unknown as Order[],
                     meta: {
@@ -69,10 +69,10 @@ export const getById = (
         return orderRepository
             .aggregate([
                 {
-                    $match: { _id: Number(id), ...scope } as Record<string, unknown>
+                    match: { id: Number(id), ...scope } as Record<string, unknown>
                 },
-                { $limit: 1 },
-                { $addFields: {} }
+                { limit: 1 },
+                { addFields: {} }
             ])
             .then(([result]) => result ?? undefined);
     }

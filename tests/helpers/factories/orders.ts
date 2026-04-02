@@ -8,13 +8,13 @@
  *
  *   makeOrder(user, products)     – plain-object payload, no DB write.
  *
- *   createOrder(user, products)   – persists an order and returns the document.
+ *   createOrder(user, products)   – persists an order and returns the record.
  *
  * Why toOrderProduct?
  * -------------------
- * The Order schema embeds a full product *snapshot* (not just an ObjectId) so
+ * The Order schema embeds a full product *snapshot* (not just a foreign key) so
  * that order history is unaffected by later product edits.  `toOrderProduct`
- * strips Mongoose internals via `toObject()` and wraps the result in the
+ * converts `toObject()` output into the
  * `{ product, quantity }` shape the schema expects.
  *
  * Usage example
@@ -32,21 +32,17 @@ import type { IProductDocument } from '@models/products';
 import { orderRepository } from '@repositories/orders';
 
 const getUserId = (user: IUserDocument): number =>
-    Number(
-        (user as unknown as { id?: number; _id?: number }).id ??
-            (user as unknown as { _id?: number })._id
-    );
+    Number((user as unknown as { id?: number }).id);
 
 /**
- * Convert a Mongoose product document into an IOrderProduct ready to embed
+ * Convert a product record into an IOrderProduct ready to embed
  * inside an order.
  *
  * @param product  - The persisted product document.
  * @param quantity - How many units were ordered (default: 1).
  */
 export const toOrderProduct = (product: IProductDocument, quantity = 1): IOrderProduct => ({
-    // toObject() removes Mongoose Document methods and virtuals, leaving a
-    // plain JS object that matches the embedded productSchema in the Order model.
+    // toObject() produces a plain JS object that matches the embedded product shape.
     product: product.toObject() as unknown as IOrderProduct['product'],
     quantity
 });
@@ -67,7 +63,7 @@ export const makeOrder = (
 });
 
 /**
- * Insert an order into the test database and return the Mongoose document.
+ * Insert an order into the test database and return the persisted order record.
  *
  * @param user     - The user who placed the order.
  * @param products - Array of { product, quantity } pairs (use toOrderProduct).

@@ -36,7 +36,7 @@ export const getOrderInvoice = (request: Request, response: Response) =>
             return ejs
                 .renderFile(templatePath, {
                     order,
-                    pageMetaTitle: `Invoice - Order ${String(order._id)}`
+                    pageMetaTitle: `Invoice - Order ${String(order.id)}`
                 })
                 .then((html) =>
                     /**
@@ -64,7 +64,7 @@ export const getOrderInvoice = (request: Request, response: Response) =>
                                             .setHeader('Content-Type', 'application/pdf')
                                             .setHeader(
                                                 'Content-Disposition',
-                                                `attachment; filename="invoice-${String(order._id)}.pdf"`
+                                                `attachment; filename="invoice-${String(order.id)}.pdf"`
                                             )
                                             .send(pdf);
                                     })

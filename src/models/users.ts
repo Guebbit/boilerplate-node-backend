@@ -24,7 +24,6 @@ export interface IToken {
 
 export interface IUser {
     id: number;
-    _id?: number;
     email: string;
     username: string;
     password: string;
@@ -43,7 +42,6 @@ export interface IUser {
 
 export class UserModel extends Model {
     declare id: number;
-    declare _id: number;
     declare email: string;
     declare username: string;
     declare password: string;
@@ -54,7 +52,15 @@ export class UserModel extends Model {
     declare createdAt: Date;
     declare updatedAt: Date;
 
+    /**
+     * Populated only when `User.hasMany(CartItem, { as: 'cartItems' })` is included in the query.
+     * Represents the normalized cart table rows linked to this user.
+     */
     declare cartItems?: Array<{ productId: number; quantity: number; product?: unknown }>;
+    /**
+     * Populated only when `User.hasMany(UserToken, { as: 'tokens' })` is included in the query.
+     * Represents token rows associated with this user.
+     */
     declare tokens?: IToken[];
 
     toObject() {
@@ -74,8 +80,7 @@ export class UserModel extends Model {
                 })),
                 updatedAt: this.cartUpdatedAt
             },
-            tokens,
-            _id: this.id
+            tokens
         };
     }
 
@@ -101,8 +106,7 @@ export class UserModel extends Model {
         const where: Record<string, unknown> = {};
         if (filter.admin !== undefined) where.admin = filter.admin;
         if (filter.email !== undefined) where.email = filter.email;
-        const values = update.$set ? (update.$set as Record<string, unknown>) : update;
-        const [modifiedCount] = await this.update(values as never, { where });
+        const [modifiedCount] = await this.update(update as never, { where });
         return { modifiedCount };
     }
 
@@ -124,12 +128,6 @@ export class UserModel extends Model {
 UserModel.init(
     {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        _id: {
-            type: DataTypes.VIRTUAL,
-            get() {
-                return (this as UserModel).id;
-            }
-        },
         email: {
             type: DataTypes.STRING,
             allowNull: false,
@@ -172,7 +170,6 @@ UserModel.init(
 
 export interface IUserDocument extends IUserMethods {
     id: number;
-    _id?: number;
     email: string;
     username: string;
     password: string;

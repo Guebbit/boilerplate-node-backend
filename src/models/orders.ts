@@ -13,7 +13,6 @@ export enum EOrderStatus {
 export interface IOrderProduct {
     product: {
         id?: string | number;
-        _id?: string | number;
         title?: string;
         price?: number;
         description?: string;
@@ -26,7 +25,6 @@ export interface IOrderProduct {
 
 export class OrderModel extends Model {
     declare id: number;
-    declare _id: number;
     declare userId: number;
     declare email: string;
     declare status: EOrderStatus;
@@ -34,6 +32,10 @@ export class OrderModel extends Model {
     declare createdAt: Date;
     declare updatedAt: Date;
 
+    /**
+     * Convenience property used by repository hydration to emulate legacy shape.
+     * Order items are persisted in `order_items`; this array exists when items are loaded/joined.
+     */
     declare products?: IOrderProduct[];
 
     toObject() {
@@ -44,12 +46,6 @@ export class OrderModel extends Model {
 OrderModel.init(
     {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-        _id: {
-            type: DataTypes.VIRTUAL,
-            get() {
-                return (this as OrderModel).id;
-            }
-        },
         userId: { type: DataTypes.INTEGER, allowNull: false },
         email: { type: DataTypes.STRING, allowNull: false },
         status: {
@@ -72,7 +68,6 @@ OrderModel.init(
 
 export interface IOrderDocument {
     id: number;
-    _id?: number;
     userId: number;
     email: string;
     products: IOrderProduct[];

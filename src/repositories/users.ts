@@ -10,8 +10,7 @@ type UserWhere = Record<string, unknown>;
 const toWhere = (where: UserWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
 
-    if (where._id !== undefined || where.id !== undefined)
-        output['id'] = Number(where._id ?? where.id);
+    if (where.id !== undefined) output['id'] = Number(where.id);
     if (where.email !== undefined && typeof where.email !== 'object') output['email'] = where.email;
     if (where.username !== undefined && typeof where.username !== 'object')
         output['username'] = where.username;
@@ -21,33 +20,33 @@ const toWhere = (where: UserWhere = {}): WhereOptions => {
         output['deletedAt'] = null;
     } else if (typeof where.deletedAt === 'object') {
         const condition = where.deletedAt as Record<string, unknown>;
-        if (condition.$exists === false) output['deletedAt'] = null;
-        if (condition.$exists === true) output['deletedAt'] = { [Op.not]: null };
+        if (condition.exists === false) output['deletedAt'] = null;
+        if (condition.exists === true) output['deletedAt'] = { [Op.not]: null };
     } else if (where.deletedAt !== undefined) {
         output['deletedAt'] = where.deletedAt;
     }
 
     if (typeof where.email === 'object') {
-        const regex = (where.email as Record<string, unknown>).$regex;
-        if (regex !== undefined) output['email'] = { [Op.like]: `%${String(regex)}%` };
+        const contains = (where.email as Record<string, unknown>).contains;
+        if (contains !== undefined) output['email'] = { [Op.like]: `%${String(contains)}%` };
     }
 
     if (typeof where.username === 'object') {
-        const regex = (where.username as Record<string, unknown>).$regex;
-        if (regex !== undefined) output['username'] = { [Op.like]: `%${String(regex)}%` };
+        const contains = (where.username as Record<string, unknown>).contains;
+        if (contains !== undefined) output['username'] = { [Op.like]: `%${String(contains)}%` };
     }
 
-    const conditions = where.$or as Array<Record<string, unknown>> | undefined;
+    const conditions = where.or as Array<Record<string, unknown>> | undefined;
     if (conditions && conditions.length > 0) {
         (output as Record<symbol, unknown>)[Op.or] = conditions
             .map((condition) => {
                 if (condition.email && typeof condition.email === 'object') {
-                    const regex = (condition.email as Record<string, unknown>).$regex;
-                    return { email: { [Op.like]: `%${String(regex)}%` } };
+                    const contains = (condition.email as Record<string, unknown>).contains;
+                    return { email: { [Op.like]: `%${String(contains)}%` } };
                 }
                 if (condition.username && typeof condition.username === 'object') {
-                    const regex = (condition.username as Record<string, unknown>).$regex;
-                    return { username: { [Op.like]: `%${String(regex)}%` } };
+                    const contains = (condition.username as Record<string, unknown>).contains;
+                    return { username: { [Op.like]: `%${String(contains)}%` } };
                 }
                 return;
             })
@@ -143,11 +142,7 @@ export const findAll = (
             raw: true
         })
         .then(
-            (rows) =>
-                rows.map((row) => ({
-                    ...row,
-                    _id: row.id
-                })) as unknown as IUserDocument[]
+            (rows) => rows as unknown as IUserDocument[]
         );
 };
 
@@ -203,7 +198,7 @@ export const deleteOne = (user: IUserDocument): Promise<void> =>
 export const updateMany = async (filter: UserWhere, update: Record<string, unknown>) => {
     const { cartItemModel } = await import('@models/cart-items');
 
-    if (filter['cart.items.product'] && update.$pull) {
+    if (filter['cart.items.product'] && update.removeFromCartItems) {
         const productId = Number(filter['cart.items.product']);
         const deletedCount = await cartItemModel.destroy({ where: { productId } });
         await userModel.update({ cartUpdatedAt: new Date() }, { where: {} });

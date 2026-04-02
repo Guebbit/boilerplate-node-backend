@@ -17,8 +17,7 @@ const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>
 const toWhere = (where: ProductWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
 
-    if (where._id !== undefined || where.id !== undefined)
-        output['id'] = Number(where._id ?? where.id);
+    if (where.id !== undefined) output['id'] = Number(where.id);
 
     if (where.title !== undefined) output['title'] = where.title;
     if (where.active !== undefined) output['active'] = where.active;
@@ -26,24 +25,24 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
     normalizeDeletedAt(where, output);
 
     const price = where.price as Record<string, unknown> | undefined;
-    if (price && (price.$gte !== undefined || price.$lte !== undefined)) {
+    if (price && (price.min !== undefined || price.max !== undefined)) {
         output['price'] = {
-            ...(price.$gte !== undefined ? { [Op.gte]: Number(price.$gte) } : {}),
-            ...(price.$lte !== undefined ? { [Op.lte]: Number(price.$lte) } : {})
+            ...(price.min !== undefined ? { [Op.gte]: Number(price.min) } : {}),
+            ...(price.max !== undefined ? { [Op.lte]: Number(price.max) } : {})
         };
     }
 
-    const conditions = where.$or as Array<Record<string, unknown>> | undefined;
+    const conditions = where.or as Array<Record<string, unknown>> | undefined;
     if (conditions && conditions.length > 0) {
         (output as Record<symbol, unknown>)[Op.or] = conditions
             .map((condition) => {
                 if (condition.title && typeof condition.title === 'object') {
-                    const regex = (condition.title as Record<string, unknown>).$regex;
-                    return { title: { [Op.like]: `%${String(regex)}%` } };
+                    const contains = (condition.title as Record<string, unknown>).contains;
+                    return { title: { [Op.like]: `%${String(contains)}%` } };
                 }
                 if (condition.description && typeof condition.description === 'object') {
-                    const regex = (condition.description as Record<string, unknown>).$regex;
-                    return { description: { [Op.like]: `%${String(regex)}%` } };
+                    const contains = (condition.description as Record<string, unknown>).contains;
+                    return { description: { [Op.like]: `%${String(contains)}%` } };
                 }
                 return;
             })

@@ -83,7 +83,7 @@ describe('orderService.getAll', () => {
         expect(order.totalPrice).toBe(40); // 20 + 20
     });
 
-    it('accepts additional pipeline stages (e.g. $match)', async () => {
+    it('accepts additional query stages (e.g. match)', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
 
@@ -91,7 +91,7 @@ describe('orderService.getAll', () => {
         await createOrder(user, [toOrderProduct(product, 2)]);
 
         // Only fetch the specific order
-        const orders = await orderService.getAll([{ $match: { id: target.id } }]);
+        const orders = await orderService.getAll([{ match: { id: target.id } }]);
 
         expect(orders).toHaveLength(1);
     });
@@ -221,7 +221,7 @@ describe('orderService.search', () => {
         await createOrder(user1, [toOrderProduct(product, 1)]);
         await createOrder(user2, [toOrderProduct(product, 2)]);
 
-        // The scope parameter is a raw Mongoose filter merged into the $match stage
+        // The scope parameter is merged into the match stage
         const result = await orderService.search({}, { userId: user1.id });
 
         expect(result.items).toHaveLength(1);

@@ -159,7 +159,7 @@ describe('productService.getById', () => {
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
-        // Lean object — no Mongoose save() method
+        // Lean object — no instance save() method
         expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
     });
 
@@ -188,7 +188,7 @@ describe('productService.getById', () => {
 });
 
 describe('productService.create', () => {
-    it('inserts a product and returns the Mongoose document', async () => {
+    it('inserts a product and returns the persisted record', async () => {
         const product = await productService.create({
             title: 'New Product',
             price: 29.99,
