@@ -1,7 +1,6 @@
 import { t } from 'i18next';
 import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
-import type { IOrderDocument, IOrderProduct } from '@models/orders';
-import { EOrderStatus } from '@models/orders';
+import { ORDER_STATUS, type EOrderStatus, type IOrderDocument, type IOrderProduct } from '@models/orders';
 import {
     generateReject,
     generateSuccess,
@@ -13,6 +12,9 @@ import { orderRepository } from '@repositories/orders';
 
 export const getAll = (pipeline: Array<Record<string, unknown>> = []): Promise<IOrderDocument[]> =>
     orderRepository.aggregate([...pipeline, { addFields: {} }]);
+
+const isOrderStatus = (value: string): value is EOrderStatus =>
+    (Object.values(ORDER_STATUS) as string[]).includes(value);
 
 export const search = (
     search: SearchOrdersRequest = {},
@@ -130,7 +132,13 @@ export const update = (
     return orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
 
-        if (data.status !== undefined) order.status = data.status as EOrderStatus;
+        if (data.status !== undefined) {
+            if (!isOrderStatus(data.status))
+                return generateReject(422, 'update order - invalid status', [
+                    t('generic.error-invalid-data')
+                ]);
+            order.status = data.status;
+        }
         if (data.email !== undefined) order.email = data.email;
         if (data.userId !== undefined) order.userId = Number(data.userId);
 
