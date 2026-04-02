@@ -1,16 +1,18 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
+import type { CartItem, Order } from '@types';
 
-export enum EOrderStatus {
-    PENDING = 'pending',
-    PAID = 'paid',
-    PROCESSING = 'processing',
-    SHIPPED = 'shipped',
-    DELIVERED = 'delivered',
-    CANCELLED = 'cancelled'
-}
+export const EOrderStatus = {
+    PENDING: 'pending',
+    PAID: 'paid',
+    PROCESSING: 'processing',
+    SHIPPED: 'shipped',
+    DELIVERED: 'delivered',
+    CANCELLED: 'cancelled'
+} as const;
+export type EOrderStatus = Order.StatusEnum;
 
-export interface IOrderProduct {
+export interface IOrderProduct extends Omit<CartItem, 'productId'> {
     product: {
         id?: string | number;
         title?: string;
@@ -67,12 +69,12 @@ OrderModel.init(
 );
 
 export interface IOrderDocument {
-    id: number;
-    userId: number;
-    email: string;
+    id: number; // OpenAPI `Order.id` is string, runtime DB uses numeric IDs
+    userId: number; // OpenAPI `Order.userId` is string, runtime DB uses numeric IDs
+    email: Order['email'];
     products: IOrderProduct[];
     status: EOrderStatus;
-    notes?: string;
+    notes?: Order['notes'];
     createdAt: Date;
     updatedAt: Date;
 }
