@@ -1,26 +1,44 @@
-# WARNING: The MVC version is flawed because the true focus is in the restAPI versions
+# Boilerplate Node Backend
 
-# Instructions
+TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first tooling.
 
-- Create .env file using the example
-- Create database and link it using .env variables
-- Link to services using .env variables (es: email responders are a different kind of server)
-- Optional: use docker/podman to run the app
-- IMPORTANT: Remove the controllers/\_development and routes/q_development
+## Quickstart
 
-# Mock instructions
+1. Install dependencies:
+   - `npm install`
+2. Create env file:
+   - `cp .env-example .env`
+3. Set required environment variables in `.env`:
+   - `NODE_DB_URI`
+   - `NODE_ACCESS_TOKEN_SECRET`
+   - `NODE_REFRESH_TOKEN_SECRET`
+4. Start development server:
+   - `npm run dev`
 
-- Use the openapi.yaml on Bruno to create a mock FE that consume the API, this will be useful for testing the API
-    - left sidebar -> + -> import collection
-    - Change enviroments variable "baseUrl" to httop://localhost:3001 (mockoon default)
-    - Top right -> no enviroment to "local"
-- Use the openapi.yaml on Mockooon to create a mock API that return fake data
-    - Top menu -> import/export -> Import Swagger V2
+## Scripts
 
-# TODO
+- `npm run dev` - run API in watch mode
+- `npm run ts-check` - TypeScript type-check
+- `npm run lint` - lint checks
+- `npm run test` - unit tests
+- `npm run build` - type-check + lint
+- `npm run complete` - build + test + auto-fix lint/prettier
+- `npm run complete:check` - build + test + non-mutating lint/prettier checks
 
-- Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
-- Create a mysql sequelize version
-- Create a FASTIFY version
-- Create a NESTJS version
-- Add\Try graphql with graphql-yoga
+## Development routes
+
+Routes in `src/routes/_development.ts` are mounted only when `NODE_ENV !== 'production'`.
+
+## OpenAPI workflow
+
+- Source of truth: `openapi.yaml`
+- Lint OpenAPI spec:
+  - `npm run lint:openapi`
+- Generate typed API client:
+  - `npm run genapi`
+
+Use the generated `api/` output as derived artifacts from `openapi.yaml`.
+
+## Mock/testing helpers
+
+The `.dev/` folder contains Bruno/Mockoon/Insomnia collections for local API exploration.

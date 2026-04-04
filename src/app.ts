@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
+import crypto from 'node:crypto';
 import i18next from 'i18next';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -10,6 +11,7 @@ import { start } from '@utils/database';
 import { logger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { rejectResponse } from '@utils/response';
+import { validateRequiredEnv } from '@utils/env';
 import enTranslation from './locales/en.json';
 
 import { router as productRoutes } from './routes/products';
@@ -32,7 +34,9 @@ const app = express();
  * Sync database then start server
  * AFTER sync we can use the database, since it is initialized
  */
-start()
+Promise.resolve()
+    .then(() => validateRequiredEnv())
+    .then(() => start())
     .then(() =>
         i18next.init({
             lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
@@ -98,10 +102,24 @@ app.use(cookieParser());
 app.use(rateLimiter);
 
 /**
+ * Request id correlation
+ */
+app.use((request, response, next) => {
+    const requestId = request.get('x-request-id') ?? crypto.randomUUID();
+    request.requestId = requestId;
+    response.setHeader('x-request-id', requestId);
+    next();
+});
+
+/**
  * Request logger
  */
 app.use((request, _response, next) => {
-    logger.info(`Entering URL: ${request.protocol}://${request.get('host')}${request.originalUrl}`);
+    logger.info({
+        requestId: request.requestId,
+        method: request.method,
+        url: `${request.protocol}://${request.get('host')}${request.originalUrl}`
+    });
     next();
 });
 
@@ -114,7 +132,7 @@ app.use('/orders', orderRoutes);
 app.use('/cart', cartRoutes);
 app.use('/users', userRoutes);
 app.use('/', systemRoutes);
-app.use('/', developmentRoutes);
+if (process.env.NODE_ENV !== 'production') app.use('/', developmentRoutes);
 
 /**
  * 404 handler — catch all unmatched routes
@@ -132,6 +150,7 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     // Multer file-upload errors
     if (error instanceof MulterError) {
         logger.error({
+            requestId: request.requestId,
             message: error.message,
             code: error.code,
             field: error.field
@@ -144,6 +163,7 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
         return rejectResponse(response, error.httpCode, error.name, error.errors);
 
     logger.error({
+        requestId: request.requestId,
         message: error.message,
         stack: error.stack,
         name: error.name

@@ -1,5 +1,5 @@
 {
-    "name": "boilerplate-node-api-mongodb-mongoose",
+    "name": "boilerplate-node-backend",
     "version": "2.0.0",
     "main": "src/cluster.ts",
     "license": "AGPLv3.0",
@@ -16,6 +16,7 @@
         "lint:openapi": "spectral lint openapi.yaml",
         "lint:openapi:fix": "spectral lint openapi.yaml --format stylish",
         "prettier": "npx prettier .",
+        "prettier:check": "npx prettier . --check",
         "prettier:fix": "npx prettier . --write",
         "test": "npm run test:unit",
         "test:unit": "jest --forceExit",
@@ -29,6 +30,7 @@
         "genapi": "rm -rf ./api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
         "update:all": "npx npm-check-updates -u",
         "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",
+        "complete:check": "npm run build && npm run test && npm run lint && npm run prettier:check",
         "publish:public": "npm publish --access public"
     },
     "devDependencies": {

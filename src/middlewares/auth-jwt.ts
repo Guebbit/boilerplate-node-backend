@@ -68,6 +68,9 @@ const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
         : 0;
 };
 
+const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
+    getExpiryTime(remember) * 1000;
+
 /**
  * Get user info from token
  * NOT an authorization check
@@ -174,8 +177,9 @@ export const createRefreshCookie = (
         httpOnly: true,
         // Only sends cookie over HTTPS.
         secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         // maxAge is the expiration date from now in milliseconds, meanwhile "expires" is the exact date of expiration
-        maxAge: getExpiryTime(remember),
+        maxAge: getExpiryTimeMilliseconds(remember),
         path: '/'
     });
 };
@@ -189,6 +193,7 @@ export const destroyRefreshCookie = (response: Response) => {
     response.clearCookie('jwt', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
         path: '/'
     });
 };
@@ -203,7 +208,8 @@ export const destroyRefreshCookie = (response: Response) => {
  */
 export const createLoggedCookie = (response: Response, remember?: ERefreshTokenExpiryTime) => {
     response.cookie('isAuth', 'true', {
-        maxAge: getExpiryTime(remember),
+        maxAge: getExpiryTimeMilliseconds(remember),
+        sameSite: 'lax',
         path: '/'
     });
 };
