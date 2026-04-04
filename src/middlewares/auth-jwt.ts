@@ -68,6 +68,9 @@ const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
         : 0;
 };
 
+/**
+ * Convert token expiry from seconds (JWT convention) to milliseconds (cookie maxAge convention).
+ */
 const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
 

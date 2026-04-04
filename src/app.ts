@@ -103,6 +103,8 @@ app.use(rateLimiter);
 
 /**
  * Request id correlation
+ * Reuses a client-provided x-request-id when present, otherwise generates one.
+ * The value is attached to request/response so downstream logs and clients can correlate events.
  */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
