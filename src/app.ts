@@ -11,7 +11,7 @@ import { start } from '@utils/database';
 import { logger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { rejectResponse } from '@utils/response';
-import { validateRequiredEnv } from '@utils/env';
+import { validateRequiredEnvironment } from '@utils/environment';
 import enTranslation from './locales/en.json';
 
 import { router as productRoutes } from './routes/products';
@@ -35,7 +35,7 @@ const app = express();
  * AFTER sync we can use the database, since it is initialized
  */
 Promise.resolve()
-    .then(() => validateRequiredEnv())
+    .then(() => validateRequiredEnvironment())
     .then(() => start())
     .then(() =>
         i18next.init({

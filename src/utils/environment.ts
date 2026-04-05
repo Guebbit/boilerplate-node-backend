@@ -4,7 +4,7 @@ const REQUIRED_ENV_KEYS = [
     'NODE_REFRESH_TOKEN_SECRET'
 ] as const;
 
-export const validateRequiredEnv = () => {
+export const validateRequiredEnvironment = () => {
     const missing = REQUIRED_ENV_KEYS.filter((key) => {
         const value = process.env[key];
         return !value || value.trim() === '';
