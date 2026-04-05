@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { getExecTime } from '@utils/get-exec-time';
-import { logger } from "@utils/winston";
+import { logger } from '@utils/winston';
 
 /**
  * GET /heavy-load

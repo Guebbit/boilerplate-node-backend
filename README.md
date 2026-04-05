@@ -5,27 +5,27 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 ## Instructions
 
 - Create `.env` file using the example:
-  - `cp .env-example .env`
+    - `cp .env-example .env`
 - Create a MongoDB database and link it using `.env` variables:
-  - `NODE_DB_URI`
+    - `NODE_DB_URI`
 - Link external services using `.env` variables (for example SMTP/email responders on another server):
-  - `NODE_SMTP_HOST`, `NODE_SMTP_PORT`, `NODE_SMTP_USER`, `NODE_SMTP_PASS`, `NODE_SMTP_SENDER`
+    - `NODE_SMTP_HOST`, `NODE_SMTP_PORT`, `NODE_SMTP_USER`, `NODE_SMTP_PASS`, `NODE_SMTP_SENDER`
 - Optional: use Docker/Podman to run the app and its dependencies.
 - IMPORTANT:
-  - Remove `controllers/_development` and `routes/_development` before production deployments if you do not want development-only endpoints in your build.
+    - Remove `controllers/_development` and `routes/_development` before production deployments if you do not want development-only endpoints in your build.
 
 ## Quickstart
 
 1. Install dependencies:
-   - `npm install`
+    - `npm install`
 2. Create env file:
-   - `cp .env-example .env`
+    - `cp .env-example .env`
 3. Set required environment variables in `.env`:
-   - `NODE_DB_URI`
-   - `NODE_ACCESS_TOKEN_SECRET`
-   - `NODE_REFRESH_TOKEN_SECRET`
+    - `NODE_DB_URI`
+    - `NODE_ACCESS_TOKEN_SECRET`
+    - `NODE_REFRESH_TOKEN_SECRET`
 4. Start development server:
-   - `npm run dev`
+    - `npm run dev`
 
 ## Scripts
 
@@ -45,9 +45,9 @@ Routes in `src/routes/_development.ts` are mounted only when `NODE_ENV !== 'prod
 
 - Source of truth: `openapi.yaml`
 - Lint OpenAPI spec:
-  - `npm run lint:openapi`
+    - `npm run lint:openapi`
 - Generate typed API client:
-  - `npm run genapi`
+    - `npm run genapi`
 
 Use the generated `api/` output as derived artifacts from `openapi.yaml`.
 
@@ -64,7 +64,7 @@ Use `openapi.yaml` with Bruno to quickly create and test requests as if you were
 3. Import from `openapi.yaml`.
 4. Create/select a Bruno environment (for example `local`).
 5. Set environment variable `baseUrl` to:
-   - `http://localhost:3001` (Mockoon default)
+    - `http://localhost:3001` (Mockoon default)
 6. In the top-right environment selector, switch from `No environment` to your `local` environment.
 7. Send requests to verify payload shapes, status codes, and auth flow.
 
@@ -76,7 +76,7 @@ Use `openapi.yaml` with Mockoon to generate a fake backend that returns mock res
 
 1. Open Mockoon desktop app.
 2. In the top menu, select:
-   - `Import/Export` -> `Import OpenAPI/Swagger` (Swagger v2/OpenAPI import)
+    - `Import/Export` -> `Import OpenAPI/Swagger` (Swagger v2/OpenAPI import)
 3. Select `openapi.yaml`.
 4. Review generated routes and sample responses.
 5. Set Mockoon port to `3001` (or adjust Bruno `baseUrl` accordingly).
@@ -84,3 +84,11 @@ Use `openapi.yaml` with Mockoon to generate a fake backend that returns mock res
 7. Call endpoints from Bruno/Postman/frontend to test client integration without using the real database.
 
 Tip: enrich generated routes with realistic status codes (`200`, `400`, `401`, `404`, `500`) to test client error handling.
+
+# TODO
+
+- Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
+- Create a mysql sequelize version
+- Create a FASTIFY version
+- Create a NESTJS version
+- Add\Try graphql with graphql-yoga
