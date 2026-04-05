@@ -102,9 +102,11 @@ app.use(cookieParser());
 app.use(rateLimiter);
 
 /**
- * Request id correlation
- * Reuses a client-provided x-request-id when present, otherwise generates one.
- * The value is attached to request/response so downstream logs and clients can correlate events.
+ * Request ID correlation.
+ * requestId is a per-request unique identifier used to trace one HTTP call across logs,
+ * middleware, controllers, and error handlers.
+ * If a client already sends x-request-id we reuse it, otherwise we generate a new one.
+ * The same ID is returned in the response header so frontend and backend can correlate issues.
  */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
