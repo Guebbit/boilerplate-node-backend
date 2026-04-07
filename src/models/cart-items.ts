@@ -1,4 +1,4 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import { DataTypes, ForeignKey, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
 
 export class CartItemModel extends Model<
@@ -6,8 +6,8 @@ export class CartItemModel extends Model<
     InferCreationAttributes<CartItemModel>
 > {
     declare id: number;
-    declare userId: number;
-    declare productId: number;
+    declare userId: ForeignKey<number>;
+    declare productId: ForeignKey<number>;
     declare quantity: number;
     declare createdAt: Date;
     declare updatedAt: Date;
@@ -18,9 +18,7 @@ CartItemModel.init(
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
         userId: { type: DataTypes.INTEGER, allowNull: false },
         productId: { type: DataTypes.INTEGER, allowNull: false },
-        quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
-        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+        quantity: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 }
     },
     {
         sequelize,
