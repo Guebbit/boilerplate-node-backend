@@ -79,32 +79,35 @@ const toOrderResponse = (order: IOrderDocument): Order => {
  * Rebuilds the user cart and token relations from normalized SQL tables.
  * This keeps response payloads compatible with the legacy user shape.
  */
-const hydrateUserCart = async (user: IUserDocument): Promise<IUserDocument> => {
-    const rows = await cartItemModel.findAll({
-        where: { userId: getUserId(user) },
-        include: [{ model: productModel, as: 'product' }]
-    });
+const hydrateUserCart = (user: IUserDocument): Promise<IUserDocument> =>
+    cartItemModel
+        .findAll({
+            where: { userId: getUserId(user) },
+            include: [{ model: productModel, as: 'product' }]
+        })
+        .then((rows) => {
+            user.cart = {
+                items: rows.map((row) => ({
+                    product: toCartProduct(row.get('product'), Number(row.productId)),
+                    quantity: Number(row.quantity)
+                })),
+                updatedAt: user.cartUpdatedAt
+            };
 
-    user.cart = {
-        items: rows.map((row) => ({
-            product: toCartProduct(row.get('product'), Number(row.productId)),
-            quantity: Number(row.quantity)
-        })),
-        updatedAt: user.cartUpdatedAt
-    };
+            return userTokenModel.findAll({
+                where: { userId: getUserId(user) },
+                raw: true
+            });
+        })
+        .then((tokens) => {
+            user.tokens = tokens.map((token) => ({
+                type: token.type,
+                token: token.token,
+                expiration: token.expiration ?? undefined
+            }));
 
-    const tokens = await userTokenModel.findAll({
-        where: { userId: getUserId(user) },
-        raw: true
-    });
-    user.tokens = tokens.map((token) => ({
-        type: token.type,
-        token: token.token,
-        expiration: token.expiration ?? undefined
-    }));
-
-    return user;
-};
+            return user;
+        });
 
 export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
     hydrateUserCart(user).then((u) => (u.cart?.items ?? []) as ICartItem[]);
@@ -241,7 +244,7 @@ export const orderConfirm = (
                 const product: OrderProductShape = entry.product;
                 return {
                     product: {
-                        id: product.id === undefined || product.id === null ? undefined : Number(product.id),
+                        id: product.id === undefined ? undefined : Number(product.id),
                         title: product.title,
                         price: product.price,
                         description: product.description,

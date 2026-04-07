@@ -27,11 +27,11 @@ const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
 };
 
 type ResolvedProduct = NonNullable<Awaited<ReturnType<typeof productRepository.findById>>>;
+type MaybeResolvedOrderItem = { item: CartItem; product: ResolvedProduct | null };
 type ResolvedOrderItem = { item: CartItem; product: ResolvedProduct };
 
-const hasResolvedProduct = (
-    value: Awaited<ReturnType<typeof Promise.all<{ item: CartItem; product: ResolvedProduct | null }[]>>>[number]
-): value is ResolvedOrderItem => Boolean(value.product);
+const hasResolvedProduct = (value: MaybeResolvedOrderItem): value is ResolvedOrderItem =>
+    value.product !== null;
 
 const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => ({
     product: {
