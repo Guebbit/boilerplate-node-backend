@@ -19,6 +19,21 @@ import { cartService } from '@services/cart';
 
 const getUserId = (user: IUserDocument): number => Number((user as unknown as { id: number }).id);
 
+// Backward-compatible named exports while cart logic lives in @services/cart.
+export const {
+    cartGet,
+    cartGetWithSummary,
+    cartItemSetById,
+    cartItemSet,
+    cartItemAddById,
+    cartItemAdd,
+    cartItemRemoveById,
+    cartItemRemove,
+    cartRemove,
+    orderConfirm,
+    productRemoveFromCartsById
+} = cartService;
+
 export const tokenAdd = (
     user: IUserDocument,
     type: string,

@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-null */
 import { t } from 'i18next';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
