@@ -2,12 +2,12 @@ import { DataTypes, ForeignKey, InferAttributes, InferCreationAttributes, Model 
 import { sequelize } from '@utils/database';
 
 export class OrderItemModel extends Model<
-    InferAttributes<OrderItemModel>,
-    InferCreationAttributes<OrderItemModel>
+    InferAttributes<OrderItemModel, { omit: 'createdAt' | 'updatedAt' }>,
+    InferCreationAttributes<OrderItemModel, { omit: 'createdAt' | 'updatedAt' }>
 > {
     declare id: number;
     declare orderId: ForeignKey<number>;
-    declare productId: ForeignKey<number> | null;
+    declare productId: ForeignKey<number | null>;
     declare quantity: number;
     declare productTitle: string;
     declare productPrice: number;

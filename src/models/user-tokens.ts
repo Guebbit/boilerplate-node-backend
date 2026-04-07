@@ -2,8 +2,8 @@ import { DataTypes, ForeignKey, InferAttributes, InferCreationAttributes, Model 
 import { sequelize } from '@utils/database';
 
 export class UserTokenModel extends Model<
-    InferAttributes<UserTokenModel>,
-    InferCreationAttributes<UserTokenModel>
+    InferAttributes<UserTokenModel, { omit: 'createdAt' | 'updatedAt' }>,
+    InferCreationAttributes<UserTokenModel, { omit: 'createdAt' | 'updatedAt' }>
 > {
     declare id: number;
     declare userId: ForeignKey<number>;
