@@ -51,6 +51,11 @@ Routes in `src/routes/_development.ts` are mounted only when `NODE_ENV !== 'prod
 
 Use the generated `api/` output as derived artifacts from `openapi.yaml`.
 
+## Replication blueprint (PHP / Java / Python)
+
+- Detailed agnostic blueprint + reusable master prompt:
+    - `docs/backend-replication-blueprint.md`
+
 ## Mock/testing helpers
 
 The `.dev/` folder contains Bruno/Mockoon/Insomnia assets for local API exploration and API mocking.
