@@ -26,7 +26,14 @@ const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
     [ORDER_STATUS.CANCELLED]: ApiOrderModel.StatusEnum.Cancelled
 };
 
-const toOrderProduct = ({ item, product }: { item: CartItem; product: NonNullable<Awaited<ReturnType<typeof productRepository.findById>>>; }): IOrderProduct => ({
+type ResolvedProduct = NonNullable<Awaited<ReturnType<typeof productRepository.findById>>>;
+type ResolvedOrderItem = { item: CartItem; product: ResolvedProduct };
+
+const hasResolvedProduct = (
+    value: Awaited<ReturnType<typeof Promise.all<{ item: CartItem; product: ResolvedProduct | null }[]>>>[number]
+): value is ResolvedOrderItem => Boolean(value.product);
+
+const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => ({
     product: {
         id: Number(product.id),
         title: product.title,
@@ -153,14 +160,7 @@ export const create = (
             ]);
 
         const products = resolvedItems
-            .filter(
-                (
-                    value
-                ): value is {
-                    item: CartItem;
-                    product: NonNullable<Awaited<ReturnType<typeof productRepository.findById>>>;
-                } => Boolean(value.product)
-            )
+            .filter((value) => hasResolvedProduct(value))
             .map((value) => toOrderProduct(value));
 
         return orderRepository
@@ -210,19 +210,10 @@ export const update = (
                               t('ecommerce.product-not-found')
                           ]);
 
-                       order.products = resolvedItems
-                           .filter(
-                               (
-                                   value
-                               ): value is {
-                                   item: CartItem;
-                                   product: NonNullable<
-                                       Awaited<ReturnType<typeof productRepository.findById>>
-                                   >;
-                               } => Boolean(value.product)
-                           )
-                           .map((value) => toOrderProduct(value));
-                   })
+                        order.products = resolvedItems
+                            .filter((value) => hasResolvedProduct(value))
+                            .map((value) => toOrderProduct(value));
+                    })
                 : Promise.resolve();
 
         return updateProductsPromise.then((earlyResult) => {

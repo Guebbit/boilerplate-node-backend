@@ -2,7 +2,8 @@
 /* eslint-disable unicorn/no-null */
 import { Op, type WhereOptions } from 'sequelize';
 import { userModel } from '@models/users';
-import type { IUserDocument, UserModel } from '@models/users';
+import type { IUserDocument, IUserListItem, UserModel } from '@models/users';
+import { cartItemModel } from '@models/cart-items';
 import { userTokenModel } from '@models/user-tokens';
 
 type UserWhere = Record<string, unknown>;
@@ -83,9 +84,6 @@ const withComputedRelations = async (
         raw: true
     });
 
-    const cartItemsModule = await import('@models/cart-items');
-    const cartItemModel = cartItemsModule.cartItemModel;
-
     const cartItems = await cartItemModel.findAll({
         where: { userId: hydratedUser.id },
         raw: true
@@ -131,7 +129,7 @@ export const findAll = (
         skip?: number;
         limit?: number;
     } = {}
-) => {
+): Promise<IUserListItem[]> => {
     const [sortField, sortDirection] = Object.entries(sort)[0] ?? ['createdAt', -1];
     return userModel
         .findAll({
@@ -141,8 +139,53 @@ export const findAll = (
             limit
         })
         .then(async (rows) => {
-            const hydrated = await Promise.all(rows.map((row) => withComputedRelations(row)));
-            return hydrated.filter(Boolean) as IUserDocument[];
+            const userRows = rows.map((row) => row.get({ plain: true })) as Array<
+                IUserListItem & { cartUpdatedAt: Date; deletedAt?: Date | null }
+            >;
+            const userIds = userRows.map((row) => Number(row.id));
+
+            if (userIds.length === 0) return [] as IUserListItem[];
+
+            const [tokens, cartItems] = await Promise.all([
+                userTokenModel.findAll({
+                    where: { userId: { [Op.in]: userIds } },
+                    raw: true
+                }),
+                cartItemModel.findAll({
+                    where: { userId: { [Op.in]: userIds } },
+                    raw: true
+                })
+            ]);
+
+            const tokensByUser = new Map<number, IUserListItem['tokens']>();
+            for (const token of tokens) {
+                const key = Number(token.userId);
+                const list = tokensByUser.get(key) ?? [];
+                list.push({
+                    type: token.type,
+                    token: token.token,
+                    expiration: token.expiration ? new Date(token.expiration) : undefined
+                });
+                tokensByUser.set(key, list);
+            }
+
+            const cartItemsByUser = new Map<number, IUserListItem['cart']['items']>();
+            for (const item of cartItems) {
+                const key = Number(item.userId);
+                const list = cartItemsByUser.get(key) ?? [];
+                list.push({ product: item.productId, quantity: item.quantity });
+                cartItemsByUser.set(key, list);
+            }
+
+            return userRows.map((row) => ({
+                ...row,
+                deletedAt: row.deletedAt === null ? undefined : row.deletedAt,
+                cart: {
+                    items: cartItemsByUser.get(Number(row.id)) ?? [],
+                    updatedAt: row.cartUpdatedAt
+                },
+                tokens: tokensByUser.get(Number(row.id)) ?? []
+            }));
         });
 };
 

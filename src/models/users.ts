@@ -194,8 +194,10 @@ export interface IUserDocument extends IUserMethods {
     save: () => Promise<IUserDocument>;
     update: (values: Record<string, unknown>) => Promise<unknown>;
     destroy: () => Promise<void>;
-    toObject: () => Record<string, unknown>;
+    toObject: () => IUserDocument;
 }
+
+export type IUserListItem = Omit<IUserDocument, 'save' | 'update' | 'destroy' | 'toObject'>;
 
 export type IUserMethods = {
     tokenAdd: (type: ETokenType, expirationMs: number, token: string) => Promise<string>;

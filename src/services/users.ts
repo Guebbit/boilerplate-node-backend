@@ -11,14 +11,14 @@ import {
 } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { zodUserSchema } from '@models/users';
-import type { IUserDocument, IUser } from '@models/users';
+import type { IUserDocument, IUser, IUserListItem } from '@models/users';
 import type { SearchUsersRequest, UsersResponse } from '@types';
 import { userRepository } from '@repositories/users';
 import { userTokenModel } from '@models/user-tokens';
 
 const getUserId = (user: IUserDocument): number => Number(user.id);
 
-const toUserResponseItem = (user: IUserDocument): UsersResponse['items'][number] => ({
+const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse['items'][number] => ({
     id: String(user.id),
     email: user.email,
     username: user.username,

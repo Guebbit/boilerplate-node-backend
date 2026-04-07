@@ -39,6 +39,8 @@ const mockLogin = userService.login as jest.MockedFunction<typeof userService.lo
 const mockCreateAccessToken = createAccessToken as jest.MockedFunction<typeof createAccessToken>;
 type PostLoginRequest = Parameters<typeof postLogin>[0];
 type GetRefreshTokenRequest = Parameters<typeof getRefreshToken>[0];
+type LoginRequestMock = Pick<PostLoginRequest, 'body'>;
+type RefreshTokenRequestMock = Pick<GetRefreshTokenRequest, 'params' | 'cookies'>;
 
 describe('Auth controllers token cleanup trigger', () => {
     beforeEach(() => {
@@ -55,7 +57,7 @@ describe('Auth controllers token cleanup trigger', () => {
             data: undefined as never
         });
 
-        const request = {
+        const request: LoginRequestMock = {
             body: {
                 email: 'user@example.com',
                 password: 'Password1!'
@@ -63,7 +65,7 @@ describe('Auth controllers token cleanup trigger', () => {
         };
         const response = {} as Parameters<typeof postLogin>[1];
 
-        await postLogin(request as Partial<PostLoginRequest> as PostLoginRequest, response);
+        await postLogin(request as PostLoginRequest, response);
 
         expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
         expect(mockLogin).toHaveBeenCalledTimes(1);
@@ -75,7 +77,7 @@ describe('Auth controllers token cleanup trigger', () => {
     it('runs cleanup before refresh-token access token creation', async () => {
         mockCreateAccessToken.mockResolvedValue('new-access-token');
 
-        const request = {
+        const request: RefreshTokenRequestMock = {
             params: {},
             cookies: {
                 jwt: 'refresh-token'
@@ -83,10 +85,7 @@ describe('Auth controllers token cleanup trigger', () => {
         };
         const response = {} as Parameters<typeof getRefreshToken>[1];
 
-        await getRefreshToken(
-            request as Partial<GetRefreshTokenRequest> as GetRefreshTokenRequest,
-            response
-        );
+        await getRefreshToken(request as GetRefreshTokenRequest, response);
 
         expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
         expect(mockCreateAccessToken).toHaveBeenCalledWith('refresh-token');
@@ -96,16 +95,13 @@ describe('Auth controllers token cleanup trigger', () => {
     });
 
     it('does not run cleanup in refresh flow when refresh token is missing', async () => {
-        const request = {
+        const request: RefreshTokenRequestMock = {
             params: {},
             cookies: {}
         };
         const response = {} as Parameters<typeof getRefreshToken>[1];
 
-        await getRefreshToken(
-            request as Partial<GetRefreshTokenRequest> as GetRefreshTokenRequest,
-            response
-        );
+        await getRefreshToken(request as GetRefreshTokenRequest, response);
 
         expect(mockRunTokenCleanup).not.toHaveBeenCalled();
         expect(mockCreateAccessToken).not.toHaveBeenCalled();

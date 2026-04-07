@@ -13,13 +13,30 @@ import { productModel } from '@models/products';
 import { userTokenModel } from '@models/user-tokens';
 
 type CartProductSnapshot = NonNullable<ICartItem['product']>;
+type CartProductObject = Exclude<CartProductSnapshot, number>;
+type OrderProductShape = IOrderProduct['product'];
 
 const getUserId = (user: IUserDocument): number => Number(user.id);
 
+const isCartProductObject = (value: unknown): value is CartProductObject => {
+    if (typeof value !== 'object' || value === null) return false;
+
+    const candidate = value as Record<string, unknown>;
+    const numberOrUndefined = (entry: unknown) => entry === undefined || typeof entry === 'number';
+    const stringOrUndefined = (entry: unknown) => entry === undefined || typeof entry === 'string';
+
+    return (
+        numberOrUndefined(candidate.id) &&
+        numberOrUndefined(candidate.price) &&
+        stringOrUndefined(candidate.title) &&
+        stringOrUndefined(candidate.description) &&
+        stringOrUndefined(candidate.imageUrl) &&
+        (candidate.active === undefined || typeof candidate.active === 'boolean')
+    );
+};
+
 const toCartProduct = (value: unknown, fallbackProductId: number): CartProductSnapshot =>
-    typeof value === 'object' && value !== null
-        ? (value as CartProductSnapshot)
-        : fallbackProductId;
+    isCartProductObject(value) ? value : fallbackProductId;
 
 const updateUserCartTimestamp = (user: IUserDocument) =>
     typeof user.update === 'function'
@@ -214,11 +231,17 @@ export const orderConfirm = (
                 return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
 
             const mappedProducts = products.map((entry) => {
-                const product: IOrderProduct['product'] =
-                    typeof entry.product === 'number' ? { id: entry.product } : entry.product;
+                if (typeof entry.product === 'number') {
+                    return {
+                        product: { id: entry.product },
+                        quantity: entry.quantity
+                    };
+                }
+
+                const product: OrderProductShape = entry.product;
                 return {
                     product: {
-                        id: product.id ? Number(product.id) : undefined,
+                        id: product.id === undefined || product.id === null ? undefined : Number(product.id),
                         title: product.title,
                         price: product.price,
                         description: product.description,
