@@ -1,16 +1,23 @@
-import { DataTypes, ForeignKey, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import {
+    DataTypes,
+    ForeignKey,
+    InferAttributes,
+    InferCreationAttributes,
+    Model,
+    NonAttribute
+} from 'sequelize';
 import { sequelize } from '@utils/database';
 
 export class CartItemModel extends Model<
-    InferAttributes<CartItemModel, { omit: 'createdAt' | 'updatedAt' }>,
-    InferCreationAttributes<CartItemModel, { omit: 'createdAt' | 'updatedAt' }>
+    InferAttributes<CartItemModel>,
+    InferCreationAttributes<CartItemModel>
 > {
     declare id: number;
     declare userId: ForeignKey<number>;
     declare productId: ForeignKey<number>;
     declare quantity: number;
-    declare createdAt: Date;
-    declare updatedAt: Date;
+    declare createdAt: NonAttribute<Date>;
+    declare updatedAt: NonAttribute<Date>;
 }
 
 CartItemModel.init(

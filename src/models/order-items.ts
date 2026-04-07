@@ -1,21 +1,28 @@
-import { DataTypes, ForeignKey, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import {
+    DataTypes,
+    ForeignKey,
+    InferAttributes,
+    InferCreationAttributes,
+    Model,
+    NonAttribute
+} from 'sequelize';
 import { sequelize } from '@utils/database';
 
 export class OrderItemModel extends Model<
-    InferAttributes<OrderItemModel, { omit: 'createdAt' | 'updatedAt' }>,
-    InferCreationAttributes<OrderItemModel, { omit: 'createdAt' | 'updatedAt' }>
+    InferAttributes<OrderItemModel>,
+    InferCreationAttributes<OrderItemModel>
 > {
     declare id: number;
     declare orderId: ForeignKey<number>;
-    declare productId: ForeignKey<number | null>;
+    declare productId: ForeignKey<number> | null;
     declare quantity: number;
     declare productTitle: string;
     declare productPrice: number;
     declare productDescription: string;
     declare productImageUrl: string;
     declare productActive: boolean;
-    declare createdAt: Date;
-    declare updatedAt: Date;
+    declare createdAt: NonAttribute<Date>;
+    declare updatedAt: NonAttribute<Date>;
 }
 
 OrderItemModel.init(

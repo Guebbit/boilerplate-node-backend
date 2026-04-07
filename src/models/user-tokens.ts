@@ -1,17 +1,24 @@
-import { DataTypes, ForeignKey, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import {
+    DataTypes,
+    ForeignKey,
+    InferAttributes,
+    InferCreationAttributes,
+    Model,
+    NonAttribute
+} from 'sequelize';
 import { sequelize } from '@utils/database';
 
 export class UserTokenModel extends Model<
-    InferAttributes<UserTokenModel, { omit: 'createdAt' | 'updatedAt' }>,
-    InferCreationAttributes<UserTokenModel, { omit: 'createdAt' | 'updatedAt' }>
+    InferAttributes<UserTokenModel>,
+    InferCreationAttributes<UserTokenModel>
 > {
     declare id: number;
     declare userId: ForeignKey<number>;
     declare type: string;
     declare token: string;
     declare expiration: Date | null;
-    declare createdAt: Date;
-    declare updatedAt: Date;
+    declare createdAt: NonAttribute<Date>;
+    declare updatedAt: NonAttribute<Date>;
 }
 
 UserTokenModel.init(
