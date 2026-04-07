@@ -120,7 +120,7 @@ describe('userRepository', () => {
             const [user] = await userRepository.findAll();
 
             // Lean objects have no instance save() method
-            expect(typeof (user as unknown as { save?: unknown }).save).toBe('undefined');
+            expect(Object.prototype.hasOwnProperty.call(user, 'save')).toBe(false);
         });
     });
 

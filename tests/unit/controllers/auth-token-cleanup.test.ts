@@ -37,6 +37,8 @@ jest.mock('@utils/response', () => ({
 const mockRunTokenCleanup = runTokenCleanup as jest.MockedFunction<typeof runTokenCleanup>;
 const mockLogin = userService.login as jest.MockedFunction<typeof userService.login>;
 const mockCreateAccessToken = createAccessToken as jest.MockedFunction<typeof createAccessToken>;
+type PostLoginRequest = Parameters<typeof postLogin>[0];
+type GetRefreshTokenRequest = Parameters<typeof getRefreshToken>[0];
 
 describe('Auth controllers token cleanup trigger', () => {
     beforeEach(() => {
@@ -61,7 +63,7 @@ describe('Auth controllers token cleanup trigger', () => {
         };
         const response = {} as Parameters<typeof postLogin>[1];
 
-        await postLogin(request as unknown as Parameters<typeof postLogin>[0], response);
+        await postLogin(request as Partial<PostLoginRequest> as PostLoginRequest, response);
 
         expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
         expect(mockLogin).toHaveBeenCalledTimes(1);
@@ -82,7 +84,7 @@ describe('Auth controllers token cleanup trigger', () => {
         const response = {} as Parameters<typeof getRefreshToken>[1];
 
         await getRefreshToken(
-            request as unknown as Parameters<typeof getRefreshToken>[0],
+            request as Partial<GetRefreshTokenRequest> as GetRefreshTokenRequest,
             response
         );
 
@@ -101,7 +103,7 @@ describe('Auth controllers token cleanup trigger', () => {
         const response = {} as Parameters<typeof getRefreshToken>[1];
 
         await getRefreshToken(
-            request as unknown as Parameters<typeof getRefreshToken>[0],
+            request as Partial<GetRefreshTokenRequest> as GetRefreshTokenRequest,
             response
         );
 

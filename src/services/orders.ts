@@ -1,4 +1,5 @@
 import { t } from 'i18next';
+import { Order as ApiOrderModel } from '@api/model/order';
 import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
 import { ORDER_STATUS, type EOrderStatus, type IOrderDocument, type IOrderProduct } from '@models/orders';
 import {
@@ -15,6 +16,55 @@ export const getAll = (pipeline: Array<Record<string, unknown>> = []): Promise<I
 
 const isOrderStatus = (value: string): value is EOrderStatus =>
     (Object.values(ORDER_STATUS) as string[]).includes(value);
+
+const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
+    [ORDER_STATUS.PENDING]: ApiOrderModel.StatusEnum.Pending,
+    [ORDER_STATUS.PAID]: ApiOrderModel.StatusEnum.Paid,
+    [ORDER_STATUS.PROCESSING]: ApiOrderModel.StatusEnum.Processing,
+    [ORDER_STATUS.SHIPPED]: ApiOrderModel.StatusEnum.Shipped,
+    [ORDER_STATUS.DELIVERED]: ApiOrderModel.StatusEnum.Delivered,
+    [ORDER_STATUS.CANCELLED]: ApiOrderModel.StatusEnum.Cancelled
+};
+
+const toOrderProduct = ({ item, product }: { item: CartItem; product: NonNullable<Awaited<ReturnType<typeof productRepository.findById>>>; }): IOrderProduct => ({
+    product: {
+        id: Number(product.id),
+        title: product.title,
+        price: product.price,
+        description: product.description,
+        imageUrl: product.imageUrl,
+        active: product.active
+    },
+    quantity: item.quantity
+});
+
+const toOrderResponse = (
+    order: IOrderDocument & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }>
+): Order & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }> => {
+    const items = order.products.map(({ product, quantity }) => ({
+        productId: String(product.id ?? ''),
+        quantity
+    }));
+    const total = order.products.reduce(
+        (sum, entry) => sum + Number(entry.product.price ?? 0) * entry.quantity,
+        0
+    );
+
+    return {
+        id: String(order.id),
+        userId: String(order.userId),
+        email: order.email,
+        items,
+        total,
+        notes: order.notes,
+        status: orderStatusToApi[order.status],
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        ...(order.totalItems === undefined ? {} : { totalItems: order.totalItems }),
+        ...(order.totalQuantity === undefined ? {} : { totalQuantity: order.totalQuantity }),
+        ...(order.totalPrice === undefined ? {} : { totalPrice: order.totalPrice })
+    };
+};
 
 export const search = (
     search: SearchOrdersRequest = {},
@@ -51,7 +101,7 @@ export const search = (
             return orderRepository
                 .aggregate([...basePipeline, { skip: skip }, { limit: pageSize }])
                 .then((items) => ({
-                    items: items as unknown as Order[],
+                    items: items.map((item) => toOrderResponse(item)),
                     meta: {
                         page,
                         pageSize,
@@ -102,13 +152,16 @@ export const create = (
                 t('ecommerce.product-not-found')
             ]);
 
-        const products = resolvedItems.map(
-            ({ item, product }) =>
-                ({
-                    product: product!.toObject(),
-                    quantity: item.quantity
-                }) as unknown as IOrderProduct
-        );
+        const products = resolvedItems
+            .filter(
+                (
+                    value
+                ): value is {
+                    item: CartItem;
+                    product: NonNullable<Awaited<ReturnType<typeof productRepository.findById>>>;
+                } => Boolean(value.product)
+            )
+            .map((value) => toOrderProduct(value));
 
         return orderRepository
             .create({
@@ -157,14 +210,19 @@ export const update = (
                               t('ecommerce.product-not-found')
                           ]);
 
-                      order.products = resolvedItems.map(
-                          ({ item, product }) =>
-                              ({
-                                  product: product!.toObject(),
-                                  quantity: item.quantity
-                              }) as unknown as IOrderProduct
-                      );
-                  })
+                       order.products = resolvedItems
+                           .filter(
+                               (
+                                   value
+                               ): value is {
+                                   item: CartItem;
+                                   product: NonNullable<
+                                       Awaited<ReturnType<typeof productRepository.findById>>
+                                   >;
+                               } => Boolean(value.product)
+                           )
+                           .map((value) => toOrderProduct(value));
+                   })
                 : Promise.resolve();
 
         return updateProductsPromise.then((earlyResult) => {

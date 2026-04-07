@@ -5,7 +5,7 @@ import { orderItemModel } from '@models/order-items';
 
 const hydrateOne = async (order: { id: number } & Record<string, unknown>) => {
     const items = await orderItemModel.findAll({ where: { orderId: order.id }, raw: true });
-    const products = items.map((item) => ({
+    const products: IOrderProduct[] = items.map((item) => ({
         product: {
             id: item.productId ?? undefined,
             title: item.productTitle,
@@ -15,12 +15,12 @@ const hydrateOne = async (order: { id: number } & Record<string, unknown>) => {
             active: item.productActive
         },
         quantity: item.quantity
-    })) as unknown as IOrderProduct[];
+    }));
 
     return {
         ...order,
         products
-    } as unknown as IOrderDocument;
+    } as IOrderDocument;
 };
 
 const hydrateAll = (orders: Array<{ id: number } & Record<string, unknown>>) =>
@@ -35,9 +35,7 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
             if (key === 'email') return String(row.email) === String(match[key]);
             if (key === 'products.product.id')
                 return row.products.some(
-                    (product) =>
-                        Number((product.product as unknown as { id?: number | string }).id) ===
-                        Number(match[key])
+                    (product) => Number(product.product.id ?? 0) === Number(match[key])
                 );
             return true;
         })
@@ -45,7 +43,7 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
 };
 
 const extractProductId = (product: IOrderProduct['product']): number =>
-    Number((product as unknown as { id?: number | string }).id ?? 0);
+    Number(product.id ?? 0);
 
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
@@ -62,11 +60,13 @@ const addComputedFields = (rows: IOrderDocument[]) =>
 export const aggregate = async <T = IOrderDocument>(
     pipeline: Array<Record<string, unknown>>
 ): Promise<T[]> => {
+    const persistedOrders = await orderModel.findAll({
+        order: [['createdAt', 'DESC']]
+    });
     let rows = await hydrateAll(
-        (await orderModel.findAll({
-            order: [['createdAt', 'DESC']],
-            raw: true
-        })) as unknown as Array<{ id: number } & Record<string, unknown>>
+        persistedOrders.map(
+            (order) => order.get({ plain: true }) as { id: number } & Record<string, unknown>
+        )
     );
 
     for (const stage of pipeline) {
@@ -77,8 +77,8 @@ export const aggregate = async <T = IOrderDocument>(
             )[0] ?? ['createdAt', -1];
             // eslint-disable-next-line unicorn/no-array-sort
             rows = [...rows].sort((a, b) => {
-                const av = a[field as keyof IOrderDocument] as unknown as number | string | Date;
-                const bv = b[field as keyof IOrderDocument] as unknown as number | string | Date;
+                const av = a[field as keyof IOrderDocument] as number | string | Date;
+                const bv = b[field as keyof IOrderDocument] as number | string | Date;
                 const factor = Number(direction) === -1 ? -1 : 1;
                 if (av === bv) return 0;
                 return av > bv ? factor : -factor;

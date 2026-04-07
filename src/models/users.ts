@@ -12,7 +12,16 @@ export enum ETokenType {
 }
 
 export interface ICartItem {
-    product: number;
+    product:
+        | number
+        | {
+              id?: number;
+              price?: number;
+              title?: string;
+              description?: string;
+              imageUrl?: string;
+              active?: boolean;
+          };
     quantity: number;
 }
 
@@ -174,6 +183,7 @@ export interface IUserDocument extends IUserMethods {
     imageUrl: string;
     admin: boolean;
     deletedAt?: Date | null;
+    cartUpdatedAt: Date;
     createdAt: Date;
     updatedAt: Date;
     cart: {
@@ -181,7 +191,10 @@ export interface IUserDocument extends IUserMethods {
         updatedAt: Date;
     };
     tokens: IToken[];
-    toObject: () => IUserDocument;
+    save: () => Promise<IUserDocument>;
+    update: (values: Record<string, unknown>) => Promise<unknown>;
+    destroy: () => Promise<void>;
+    toObject: () => Record<string, unknown>;
 }
 
 export type IUserMethods = {

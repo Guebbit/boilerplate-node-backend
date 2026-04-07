@@ -452,7 +452,7 @@ describe('userService.getById', () => {
         expect(found).toBeDefined();
         expect(found!.email).toBe('user@example.com');
         // Lean object — no model instance methods
-        expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
+        expect(Object.prototype.hasOwnProperty.call(found!, 'save')).toBe(false);
     });
 
     it('returns undefined for a non-existent id', async () => {

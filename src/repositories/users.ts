@@ -2,7 +2,7 @@
 /* eslint-disable unicorn/no-null */
 import { Op, type WhereOptions } from 'sequelize';
 import { userModel } from '@models/users';
-import type { IUserDocument } from '@models/users';
+import type { IUserDocument, UserModel } from '@models/users';
 import { userTokenModel } from '@models/user-tokens';
 
 type UserWhere = Record<string, unknown>;
@@ -72,11 +72,14 @@ const tokenFilter = (where: UserWhere) => {
     };
 };
 
-const withComputedRelations = async (user: IUserDocument | null) => {
+const withComputedRelations = async (
+    user: UserModel | IUserDocument | null
+): Promise<IUserDocument | null> => {
     if (!user) return null;
+    const hydratedUser = user as IUserDocument;
 
     const tokens = await userTokenModel.findAll({
-        where: { userId: (user as unknown as { id: number }).id },
+        where: { userId: hydratedUser.id },
         raw: true
     });
 
@@ -84,31 +87,28 @@ const withComputedRelations = async (user: IUserDocument | null) => {
     const cartItemModel = cartItemsModule.cartItemModel;
 
     const cartItems = await cartItemModel.findAll({
-        where: { userId: (user as unknown as { id: number }).id },
+        where: { userId: hydratedUser.id },
         raw: true
     });
 
-    (user as unknown as { tokens: unknown }).tokens = tokens.map((token) => ({
+    hydratedUser.tokens = tokens.map((token) => ({
         type: token.type,
         token: token.token,
         expiration: token.expiration ? new Date(token.expiration) : undefined
     }));
 
-    if ((user as unknown as { deletedAt?: Date | null }).deletedAt === null)
-        (user as unknown as { deletedAt?: Date }).deletedAt = undefined;
+    if (hydratedUser.deletedAt === null) hydratedUser.deletedAt = undefined;
 
-    (user as unknown as { cart: unknown }).cart = {
+    hydratedUser.cart = {
         items: cartItems.map((item) => ({ product: item.productId, quantity: item.quantity })),
-        updatedAt: (user as unknown as { cartUpdatedAt: Date }).cartUpdatedAt
+        updatedAt: hydratedUser.cartUpdatedAt
     };
 
-    return user;
+    return hydratedUser;
 };
 
 export const findById = (id: string | number): Promise<IUserDocument | null> =>
-    userModel
-        .findByPk(Number(id))
-        .then((user) => withComputedRelations(user as unknown as IUserDocument));
+    userModel.findByPk(Number(id)).then((user) => withComputedRelations(user));
 
 export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
     const includeToken = tokenFilter(where);
@@ -117,7 +117,7 @@ export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
             where: toWhere(where),
             include: includeToken ? [includeToken as never] : undefined
         })
-        .then((user) => withComputedRelations(user as unknown as IUserDocument));
+        .then((user) => withComputedRelations(user));
 };
 
 export const findAll = (
@@ -138,12 +138,12 @@ export const findAll = (
             where: toWhere(where),
             order: [[sortField, sortDirection === -1 ? 'DESC' : 'ASC']],
             offset: skip,
-            limit,
-            raw: true
+            limit
         })
-        .then(
-            (rows) => rows as unknown as IUserDocument[]
-        );
+        .then(async (rows) => {
+            const hydrated = await Promise.all(rows.map((row) => withComputedRelations(row)));
+            return hydrated.filter(Boolean) as IUserDocument[];
+        });
 };
 
 export const count = (where: UserWhere = {}): Promise<number> =>
@@ -184,16 +184,14 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
                     } as never)
                 )
             );
-            return withComputedRelations(user as unknown as IUserDocument);
+            return withComputedRelations(user);
         }) as Promise<IUserDocument>;
 
 export const save = (user: IUserDocument): Promise<IUserDocument> =>
-    (user as unknown as { save: () => Promise<IUserDocument> })
-        .save()
-        .then(() => withComputedRelations(user)) as Promise<IUserDocument>;
+    user.save().then(() => withComputedRelations(user)) as Promise<IUserDocument>;
 
 export const deleteOne = (user: IUserDocument): Promise<void> =>
-    (user as unknown as { destroy: () => Promise<void> }).destroy().then(() => {});
+    user.destroy().then(() => {});
 
 export const updateMany = async (filter: UserWhere, update: Record<string, unknown>) => {
     const { cartItemModel } = await import('@models/cart-items');
@@ -205,15 +203,8 @@ export const updateMany = async (filter: UserWhere, update: Record<string, unkno
         return { modifiedCount: deletedCount };
     }
 
-    if (typeof (userModel as unknown as { updateMany?: unknown }).updateMany === 'function')
-        return (
-            userModel as unknown as {
-                updateMany: (
-                    f: Record<string, unknown>,
-                    u: Record<string, unknown>
-                ) => Promise<{ modifiedCount: number }>;
-            }
-        ).updateMany(filter, update);
+    if ('updateMany' in userModel && typeof userModel.updateMany === 'function')
+        return userModel.updateMany(filter, update);
 
     const [modifiedCount] = await userModel.update(update as never, { where: toWhere(filter) });
     return { modifiedCount };

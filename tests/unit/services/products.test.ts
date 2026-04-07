@@ -160,7 +160,7 @@ describe('productService.getById', () => {
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
         // Lean object — no instance save() method
-        expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
+        expect(Object.prototype.hasOwnProperty.call(found!, 'save')).toBe(false);
     });
 
     it('returns null for an inactive product when called as non-admin', async () => {

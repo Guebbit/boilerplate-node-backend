@@ -10,7 +10,7 @@ export class ProductModel extends Model {
     declare description: string;
     declare imageUrl: string;
     declare active: boolean;
-    declare deletedAt: Date | null;
+    declare deletedAt: Date | null | undefined;
     declare createdAt: Date;
     declare updatedAt: Date;
 
