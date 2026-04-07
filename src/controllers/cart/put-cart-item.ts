@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
 
@@ -22,9 +22,9 @@ export const putCartItem = (
         return Promise.resolve();
     }
 
-    return userService
+    return cartService
         .cartItemSetById(user, productId, request.body.quantity)
-        .then(() => userService.cartGetWithSummary(user))
+        .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {
             successResponse(response, cart);
         });

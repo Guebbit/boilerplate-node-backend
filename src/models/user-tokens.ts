@@ -1,4 +1,5 @@
 import {
+    CreationOptional,
     DataTypes,
     ForeignKey,
     InferAttributes,
@@ -12,7 +13,7 @@ export class UserTokenModel extends Model<
     InferAttributes<UserTokenModel>,
     InferCreationAttributes<UserTokenModel>
 > {
-    declare id: number;
+    declare id: CreationOptional<number>;
     declare userId: ForeignKey<number>;
     declare type: string;
     declare token: string;

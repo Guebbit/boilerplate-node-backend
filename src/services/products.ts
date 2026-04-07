@@ -9,7 +9,7 @@ import {
     type IResponseSuccess
 } from '@utils/response';
 import { deleteFile } from '@utils/helpers-filesystem';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
@@ -127,7 +127,7 @@ export const remove = (
         if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
 
         if (hardDelete)
-            return userService
+            return cartService
                 .productRemoveFromCartsById(String(product.id))
                 .then(() => productRepository.deleteOne(product))
                 .then(() =>
@@ -137,7 +137,7 @@ export const remove = (
 
         product.deletedAt = product.deletedAt ? null : new Date();
 
-        return userService
+        return cartService
             .productRemoveFromCartsById(String(product.id))
             .then(() => productRepository.save(product))
             .then((savedProduct) =>

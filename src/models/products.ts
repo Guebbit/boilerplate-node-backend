@@ -1,10 +1,10 @@
-import { DataTypes, Model } from 'sequelize';
+import { CreationOptional, DataTypes, Model } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
 import { sequelize } from '@utils/database';
 
 export class ProductModel extends Model {
-    declare id: number;
+    declare id: CreationOptional<number>;
     declare title: string;
     declare price: number;
     declare description: string;
