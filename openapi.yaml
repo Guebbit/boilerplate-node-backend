@@ -1,0 +1,1869 @@
+openapi: 3.0.3
+info:
+    title: Ecommerce Demo API
+    version: '2.0.0'
+    description: |
+        Stable, codegen-oriented OpenAPI contract.
+        Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
+    contact:
+        name: API Team
+
+servers:
+    - url: http://localhost:3000
+      description: Local
+    - url: https://api.example.com
+      description: Production
+
+tags:
+    - name: Auth
+    - name: Account
+    - name: Users
+    - name: Products
+    - name: Cart
+    - name: Orders
+
+# If set, by default all operation requires an authentication
+# security:
+#    - bearerAuth: []
+
+components:
+    # This is a common security scheme that can be used by any operation
+    securitySchemes:
+        bearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+
+    parameters:
+        # Common parameters
+        PageParam:
+            name: page
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Page'
+            description: 1-based page index
+        PageSizeParam:
+            name: pageSize
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/PageSize'
+        TextParam:
+            name: text
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Text'
+
+        # Query ID parameters (just for filtering)
+        IdParam:
+            name: id
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Id'
+        UserIdParam:
+            name: userId
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Id'
+        ProductIdParam:
+            name: productId
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Id'
+        # OrderIdParam:
+        #     name: orderId
+        #     in: query
+        #     required: false
+        #     schema:
+        #         $ref: '#/components/schemas/Id'
+
+        # Path ID parameters (for resource lookup)
+        IdPathParam:
+            name: id
+            in: path
+            required: true
+            schema:
+                $ref: '#/components/schemas/Id'
+            description: Resource identifier
+
+        ProductIdPathParam:
+            name: productId
+            in: path
+            required: true
+            schema:
+                $ref: '#/components/schemas/Id'
+            description: Product identifier
+
+        TokenPathParam:
+            name: token
+            in: path
+            required: true
+            schema:
+                type: string
+            description: Refresh token
+
+    responses:
+        Success:
+            description: Success
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/MessageResponse'
+        Unauthorized:
+            description: Unauthorized
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        Forbidden:
+            description: Forbidden
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        NotFound:
+            description: Resource not found
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        ValidationError:
+            description: Validation failed
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ValidationErrorResponse'
+        InternalError:
+            description: Internal server error
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+
+    schemas:
+        # ---------- Commons ----------
+        Page:
+            type: integer
+            minimum: 1
+            default: 1
+            description: 1-based page index
+        PageSize:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+            description: Optional override; server may clamp to a max
+        Id:
+            type: string
+            description: Resource identifier
+        Text:
+            type: string
+            minLength: 1
+            description: Free-text search string
+        Email:
+            type: string
+            format: email
+        Password:
+            type: string
+            minLength: 8
+
+        # ---------- Meta / envelope ----------
+        PaginationMeta:
+            type: object
+            required: [page, pageSize, totalItems, totalPages]
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                totalItems:
+                    type: integer
+                    minimum: 0
+                totalPages:
+                    type: integer
+                    minimum: 0
+
+        # ---------- System Messages ----------
+
+        MessageResponse:
+            type: object
+            required: [success, message]
+            properties:
+                success:
+                    type: boolean
+                    enum: [true]
+                message:
+                    type: string
+
+        ErrorResponse:
+            type: object
+            required: [success, error]
+            properties:
+                success:
+                    type: boolean
+                    enum: [false]
+                error:
+                    $ref: '#/components/schemas/ErrorDetail'
+                traceId:
+                    type: string
+                    description: Correlation ID for support/debugging
+
+        ErrorDetail:
+            type: object
+            required: [code]
+            properties:
+                code:
+                    type: string
+                    # Example just for documentation purposes. Actual values are defined in the backend.
+                    example: AUTH_INVALID_TOKEN
+                message:
+                    type: string
+                details:
+                    type: object
+                    additionalProperties: true
+
+        ValidationErrorResponse:
+            allOf:
+                - $ref: '#/components/schemas/ErrorResponse'
+                - type: object
+                  required: [success, errors]
+                  properties:
+                      success:
+                          type: boolean
+                          enum: [false]
+                      errors:
+                          type: array
+                          items:
+                              type: object
+                              required: [field, message]
+                              properties:
+                                  field:
+                                      type: string
+                                  message:
+                                      type: string
+                                  code:
+                                      type: string
+
+        # ---------- Domain ----------
+        AuthTokens:
+            type: object
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: Access JWT
+                refreshToken:
+                    type: string
+                    description: Refresh token if returned by backend
+                expiresIn:
+                    type: integer
+                    description: Access token expiry in seconds
+
+        RefreshTokenResponse:
+            type: object
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: New access JWT
+                refreshToken:
+                    type: string
+                    description: New refresh token if returned by backend
+                expiresIn:
+                    type: integer
+                    description: New access token expiry in seconds
+
+        User:
+            type: object
+            required: [id, email, username]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        Product:
+            type: object
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                active:
+                    type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+
+        CartItem:
+            type: object
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        Order:
+            type: object
+            required: [id, userId, email, items, total, status]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                userId:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+                total:
+                    type: number
+                    format: double
+                    minimum: 0
+                notes:
+                    type: string
+                    description: Optional order notes
+                status:
+                    type: string
+                    enum: [pending, paid, processing, shipped, delivered, cancelled]
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        # ---------- Request DTOs — Auth ----------
+        LoginRequest:
+            type: object
+            additionalProperties: false
+            required: [email, password]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                password:
+                    $ref: '#/components/schemas/Password'
+
+        SignupRequest:
+            type: object
+            additionalProperties: false
+            required: [email, username, password, passwordConfirm]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                password:
+                    $ref: '#/components/schemas/Password'
+                passwordConfirm:
+                    $ref: '#/components/schemas/Password'
+                imageUrl:
+                    type: string
+                    format: uri
+
+        SignupRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [email, username, password, passwordConfirm]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                password:
+                    $ref: '#/components/schemas/Password'
+                passwordConfirm:
+                    $ref: '#/components/schemas/Password'
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        PasswordResetRequest:
+            type: object
+            additionalProperties: false
+            required: [email]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+
+        PasswordResetConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [token, password, passwordConfirm]
+            properties:
+                token:
+                    type: string
+                    description: One-time password reset token (NOT a JWT).
+                password:
+                    $ref: '#/components/schemas/Password'
+                passwordConfirm:
+                    $ref: '#/components/schemas/Password'
+
+        # ---------- Request DTOs — Users ----------
+        SearchUsersRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                text:
+                    $ref: '#/components/schemas/Text'
+                id:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                active:
+                    type: boolean
+
+        CreateUserRequest:
+            type: object
+            additionalProperties: false
+            required: [email, username, password]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
+
+        CreateUserRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [email, username, password]
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        UpdateUserRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '#/components/schemas/Password'
+                imageUrl:
+                    type: string
+                    format: uri
+
+        UpdateUserRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '#/components/schemas/Password'
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        UpdateUserByIdRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                password:
+                    $ref: '#/components/schemas/Password'
+                username:
+                    type: string
+                imageUrl:
+                    type: string
+                    format: uri
+
+        UpdateUserByIdRequestMultipart:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                password:
+                    $ref: '#/components/schemas/Password'
+                username:
+                    type: string
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        DeleteUserRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    default: false
+
+        # ---------- Request DTOs — Products ----------
+        SearchProductsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                text:
+                    $ref: '#/components/schemas/Text'
+                id:
+                    $ref: '#/components/schemas/Id'
+                minPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                maxPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+
+        CreateProductRequest:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                active:
+                    type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
+
+        CreateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional product image
+
+        UpdateProductRequest:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
+
+        UpdateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional product image
+
+        # To be used in GET /products:
+        UpdateProductRequestBody:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: string
+                imageUrl:
+                    type: string
+                    format: uri
+                active:
+                    type: string
+
+        UpdateProductByIdRequest:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUrl:
+                    type: string
+                    format: uri
+
+        UpdateProductByIdRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUpload:
+                    type: string
+                    format: binary
+                    description: Optional product image
+
+        DeleteProductRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    default: false
+
+        # ---------- Request DTOs — Cart ----------
+        UpsertCartItemRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        UpdateCartItemByIdRequest:
+            type: object
+            additionalProperties: false
+            required: [quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        RemoveCartItemRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+
+        CheckoutRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                notes:
+                    type: string
+                    description: Optional order notes
+
+        # ---------- Request DTOs — Orders ----------
+        SearchOrdersRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                id:
+                    $ref: '#/components/schemas/Id'
+                userId:
+                    $ref: '#/components/schemas/Id'
+                productId:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+
+        CreateOrderRequest:
+            type: object
+            additionalProperties: false
+            required: [userId, email, items]
+            properties:
+                userId:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                items:
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+            description: Create a new order.
+
+        UpdateOrderRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                status:
+                    type: string
+                    enum: [pending, paid, processing, shipped, delivered, cancelled]
+                    description: Updated order status
+                userId:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                items:
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+
+        UpdateOrderByIdRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                status:
+                    type: string
+                    enum: [pending, paid, processing, shipped, delivered, cancelled]
+                    description: Updated order status
+                userId:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                items:
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+
+        DeleteOrderRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+
+        # --------------- RESPONSES ---------------
+        # ---------- Response DTOs — envelope items ----------
+        UsersResponse:
+            type: object
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/User'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+        ProductsResponse:
+            type: object
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Product'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+        OrdersResponse:
+            type: object
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Order'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+        # ---------- Response DTOs — Cart ----------
+        CartSummaryResponse:
+            type: object
+            required: [itemsCount, totalQuantity, total]
+            properties:
+                itemsCount:
+                    type: integer
+                    minimum: 0
+                    description: Number of distinct cart lines/items
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of quantities across all items
+                total:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of item prices * quantity (before tax/shipping/discounts)
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. USD)
+
+        CartResponse:
+            type: object
+            required: [items, summary]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+                summary:
+                    $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponse:
+            type: object
+            required: [order]
+            properties:
+                order:
+                    $ref: '#/components/schemas/Order'
+                message:
+                    type: string
+
+paths:
+    # --------- Authentication and profile ---------
+    /account:
+        get:
+            tags: [Account]
+            summary: Current user info
+            description: Returns the full profile of the currently authenticated user
+            operationId: getAccount
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Current user info
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+
+    /account/login:
+        post:
+            tags: [Auth]
+            summary: Login
+            description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests.
+            operationId: login
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginRequest'
+            responses:
+                '200':
+                    description: Auth tokens
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokens'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/signup:
+        post:
+            tags: [Auth]
+            summary: Signup
+            description: Registers a new user account with optional image upload. Returns the newly created user profile on success.
+            operationId: signup
+            security: []
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/SignupRequestMultipart'
+            responses:
+                '201':
+                    description: Created
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/reset:
+        post:
+            tags: [Auth]
+            operationId: requestPasswordReset
+            description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PasswordResetRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/reset-confirm:
+        post:
+            tags: [Auth]
+            operationId: confirmPasswordReset
+            description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PasswordResetConfirmRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/refresh:
+        get:
+            tags: [Auth]
+            summary: Refresh access token
+            description: Creates a new short-lived access token using a refresh token. The refresh token can be provided as a query parameter, path parameter, or retrieved from the `jwt` cookie.
+            operationId: refreshToken
+            security: []
+            responses:
+                '200':
+                    description: New access token
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefreshTokenResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/refresh/{token}:
+        get:
+            tags: [Auth]
+            summary: Refresh access token with token in path
+            description: Creates a new short-lived access token using a refresh token provided in the URL path.
+            operationId: refreshTokenWithPath
+            security: []
+            parameters:
+                - $ref: '#/components/parameters/TokenPathParam'
+            responses:
+                '200':
+                    description: New access token
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefreshTokenResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/logout-all:
+        post:
+            tags: [Auth]
+            summary: Logout from all devices
+            description: Logs out the authenticated user from ALL devices by removing all refresh tokens from the database and clearing authentication cookies.
+            operationId: logoutAll
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/tokens/expired:
+        delete:
+            tags: [Auth]
+            summary: Remove expired tokens
+            description: Removes all expired tokens (refresh, password-reset, etc.) from every user record in the database. Restricted to administrators.
+            operationId: deleteExpiredTokens
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # --------- Users ---------
+    /users:
+        get:
+            tags: [Users]
+            summary: List users (paginated)
+            description: Returns a paginated list of user accounts.
+            operationId: listUsers
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/PageParam'
+                - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/TextParam'
+                - $ref: '#/components/parameters/IdParam'
+                - name: email
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/Email'
+                - name: username
+                  in: query
+                  schema:
+                      type: string
+                - name: active
+                  in: query
+                  schema:
+                      type: boolean
+            responses:
+                '200':
+                    description: Users list page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UsersResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Users]
+            summary: Create user
+            description: Creates a new user account with the supplied email, username, and password. Optional image can be uploaded.
+            operationId: createUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/CreateUserRequestMultipart'
+            responses:
+                '201':
+                    description: Created user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Users]
+            summary: Edit user
+            description: Updates an existing user's email or password. Optional image can be uploaded.
+            operationId: updateUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequestMultipart'
+            responses:
+                '200':
+                    description: Updated user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Users]
+            summary: Delete user
+            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record.
+            operationId: deleteUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeleteUserRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /users/{id}:
+        # Same as GET /users?id={id}
+        get:
+            tags: [Users]
+            summary: User details
+            description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
+            operationId: getUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: User
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Users]
+            summary: Edit user
+            description: Updates the email or password of the user identified by `{id}` in the path. Optional image can be uploaded.
+            operationId: updateUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
+            responses:
+                '200':
+                    description: Updated user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/User'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        # Same as DELETE /users
+        delete:
+            tags: [Users]
+            summary: Delete user
+            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`.
+            operationId: deleteUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+                - name: hardDelete
+                  in: query
+                  schema:
+                      type: boolean
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as GET /users, but with JSON body, more suitable for DTOs and multi-language codegen
+    /users/search:
+        post:
+            tags: [Users]
+            summary: Search users (DTO-friendly)
+            description: Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
+            operationId: searchUsers
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchUsersRequest'
+            responses:
+                '200':
+                    description: Users search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UsersResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # ----- Products -----
+
+    /products:
+        get:
+            tags: [Products]
+            summary: List products (paginated)
+            description: Returns a paginated list of products.
+            operationId: listProducts
+            parameters:
+                - $ref: '#/components/parameters/ProductIdParam'
+                - $ref: '#/components/parameters/PageParam'
+                - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/TextParam'
+                - name: minPrice
+                  in: query
+                  required: false
+                  schema:
+                      type: number
+                      format: double
+                      minimum: 0
+                - name: maxPrice
+                  in: query
+                  required: false
+                  schema:
+                      type: number
+                      format: double
+                      minimum: 0
+            responses:
+                '200':
+                    description: Products page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductsResponse'
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Products]
+            summary: Create product
+            description: Creates a new product with optional image upload
+            operationId: createProduct
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/CreateProductRequestMultipart'
+            responses:
+                '201':
+                    description: Created product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Product'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Products]
+            summary: Edit product
+            description: Updates an existing product with optional image upload
+            operationId: updateProduct
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductRequestMultipart'
+            responses:
+                '200':
+                    description: Updated product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Product'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Products]
+            summary: Delete product
+            description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record
+            operationId: deleteProduct
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeleteProductRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /products/{id}:
+        # Same as /products/id={id}
+        get:
+            tags: [Products]
+            summary: Product details
+            description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`.
+            operationId: getProductById
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Product'
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        # Same as PUT /products
+        put:
+            tags: [Products]
+            summary: Edit product
+            description: Updates the product identified by `{id}` in the path with optional image upload. Functionally equivalent to `PUT /products` with the id in the body.
+            operationId: updateProductById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductByIdRequestMultipart'
+            responses:
+                '200':
+                    description: Updated product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Product'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        # Same as DELETE /products
+        delete:
+            tags: [Products]
+            summary: Delete product
+            description: Deletes the product identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /products`.
+            operationId: deleteProductById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+                - name: hardDelete
+                  in: query
+                  schema:
+                      type: boolean
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as GET /products, but with JSON body, more suitable for DTOs and multi-language codegen
+    /products/search:
+        post:
+            tags: [Products]
+            summary: Search products (DTO-friendly)
+            description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
+            operationId: searchProducts
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchProductsRequest'
+            responses:
+                '200':
+                    description: Products search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductsResponse'
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart:
+        get:
+            tags: [Cart]
+            summary: Get cart
+            description: Returns all items currently in the authenticated user's cart along with a computed summary
+            operationId: getCart
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Cart items
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Cart]
+            summary: Add/Edit cart item
+            description: Adds or edit a product to the authenticated user's cart. Returns the updated cart.
+            operationId: upsertCartItem
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertCartItemRequest'
+            responses:
+                '200':
+                    description: Add/Edit to cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Cart]
+            summary: Empty cart or, if productId is set, remove target cart item
+            description: Clear cart or, ir productId is set, removes a specific product from the authenticated user's cart. Returns the updated cart (can be empty)
+            operationId: clearCart
+            security:
+                - bearerAuth: []
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RemoveCartItemRequest'
+            responses:
+                '200':
+                    description: Cart cleared
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart/{productId}:
+        # Same as POST /cart?productId={productId}
+        put:
+            tags: [Cart]
+            summary: Set cart item quantity
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
+            operationId: updateCartItemById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/ProductIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateCartItemByIdRequest'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Cart]
+            summary: Remove item from cart
+            description: Removes the cart line for the product identified by `{productId}` in the path from the authenticated user's cart. Returns the updated cart.
+            operationId: removeCartItem
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart/summary:
+        get:
+            tags: [Cart]
+            summary: Get cart summary
+            description: Returns a lightweight summary of the authenticated user's cart.
+            operationId: getCartSummary
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Cart summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartSummaryResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart/checkout:
+        post:
+            tags: [Orders]
+            summary: Checkout (place order from cart)
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. An optional email address and order notes can be supplied in the request body. Returns the created order.
+            operationId: checkout
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CheckoutRequest'
+            responses:
+                '201':
+                    description: Order created
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CheckoutResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /orders:
+        get:
+            tags: [Orders]
+            summary: List orders (paginated)
+            description: Returns a paginated list of orders.
+            operationId: listOrders
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdParam'
+                - $ref: '#/components/parameters/PageParam'
+                - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/UserIdParam'
+                - $ref: '#/components/parameters/ProductIdParam'
+                - name: email
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/Email'
+            responses:
+                '200':
+                    description: Orders page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrdersResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Orders]
+            summary: Create order
+            description: Creates a new order directly from the supplied payload.
+            operationId: createOrder
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateOrderRequest'
+            responses:
+                '201':
+                    description: Created order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Order'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Orders]
+            summary: Update order
+            description: Updates an existing order identified by id in the request body.
+            operationId: updateOrder
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateOrderRequest'
+            responses:
+                '200':
+                    description: Updated order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Order'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Orders]
+            summary: Delete order
+            description: Permanently removes the order identified by id.
+            operationId: deleteOrder
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeleteOrderRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as GET /orders, but with JSON body, more suitable for DTOs and multi-language codegen
+    /orders/search:
+        post:
+            tags: [Orders]
+            summary: Search orders (DTO-friendly)
+            description: Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
+            operationId: searchOrders
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchOrdersRequest'
+            responses:
+                '200':
+                    description: Orders search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrdersResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /orders/{id}:
+        # Same as GET /orders?id={id}
+        get:
+            tags: [Orders]
+            summary: Order details
+            description: Returns the full details of the order identified by `{id}`. Functionally equivalent to `GET /orders?id={id}`.
+            operationId: getOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Order'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Orders]
+            summary: Edit order
+            description: Updates the order identified by `{id}` in the path.
+            operationId: updateOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateOrderByIdRequest'
+            responses:
+                '200':
+                    description: Updated order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Order'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Orders]
+            summary: Delete order
+            description: Permanently removes the order identified by `id`.
+            operationId: deleteOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /orders/{id}/invoice:
+        get:
+            tags: [Orders]
+            summary: Download order invoice (PDF)
+            description: Generates and returns the invoice for the order identified by `{id}` as a binary PDF file. The client should save or stream the response with an appropriate `Content-Disposition` header.
+            operationId: getOrderInvoice
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Invoice PDF
+                    content:
+                        application/pdf:
+                            schema:
+                                type: string
+                                format: binary
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
