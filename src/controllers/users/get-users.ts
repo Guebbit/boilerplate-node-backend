@@ -5,6 +5,10 @@ import type { SearchUsersRequest } from '@types';
 
 export type IGetUsersQuery = Partial<Record<keyof SearchUsersRequest, string>>;
 
+/**
+ * GET /users and POST /users/search
+ * Supports body and query filters with basic pagination defaults.
+ */
 export const getUsers = (
     request: Request<{ page?: string }, unknown, SearchUsersRequest, IGetUsersQuery>,
     response: Response

@@ -3,6 +3,10 @@ import { t } from 'i18next';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 
+/**
+ * GET /users/:id
+ * Returns a single user or 404 when missing.
+ */
 export const getUserItem = (request: Request, response: Response) =>
     userService
         .getById(String(request.params.id))

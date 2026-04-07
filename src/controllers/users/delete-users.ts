@@ -4,6 +4,10 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteUserRequest } from '@types';
 
+/**
+ * DELETE /users and DELETE /users/:id
+ * Supports soft delete by default and hard delete when requested.
+ */
 export const deleteUsers = (
     request: Request<{ id?: string; hardDelete?: boolean }, unknown, DeleteUserRequest>,
     response: Response

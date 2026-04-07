@@ -1,4 +1,4 @@
-import { DataTypes, Model, Op } from 'sequelize';
+import { CreationOptional, DataTypes, Model, Op } from 'sequelize';
 import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
@@ -41,7 +41,7 @@ export interface IUser {
 }
 
 export class UserModel extends Model {
-    declare id: number;
+    declare id: CreationOptional<number>;
     declare email: string;
     declare username: string;
     declare password: string;

@@ -1,6 +1,6 @@
-import { DataTypes, ForeignKey, Model } from 'sequelize';
+import { CreationOptional, DataTypes, ForeignKey, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
-import type { CartItem, Order } from '@types';
+import type { CartItem, Order, Product } from '@types';
 
 export const ORDER_STATUS = {
     PENDING: 'pending',
@@ -12,22 +12,18 @@ export const ORDER_STATUS = {
 } as const;
 export type EOrderStatus = `${Order.StatusEnum}`;
 
-// OpenAPI `CartItem` stores `productId`; DB-hydrated orders embed product snapshots instead.
+// OpenAPI `CartItem` stores `productId`; persisted order snapshots embed full product data instead.
+export type IOrderProductSnapshot = Partial<Omit<Product, 'id'>> & {
+    id?: Product['id'] | number;
+};
+
 export interface IOrderProduct extends Omit<CartItem, 'productId'> {
-    product: {
-        id?: string | number;
-        title?: string;
-        price?: number;
-        description?: string;
-        imageUrl?: string;
-        active?: boolean;
-        [key: string]: unknown;
-    };
+    product: IOrderProductSnapshot;
     quantity: number;
 }
 
 export class OrderModel extends Model {
-    declare id: number;
+    declare id: CreationOptional<number>;
     declare userId: ForeignKey<number>;
     declare email: string;
     declare status: EOrderStatus;

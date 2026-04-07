@@ -1,4 +1,5 @@
 import {
+    CreationOptional,
     DataTypes,
     ForeignKey,
     InferAttributes,
@@ -12,7 +13,7 @@ export class OrderItemModel extends Model<
     InferAttributes<OrderItemModel>,
     InferCreationAttributes<OrderItemModel>
 > {
-    declare id: number;
+    declare id: CreationOptional<number>;
     declare orderId: ForeignKey<number>;
     declare productId: ForeignKey<number> | null;
     declare quantity: number;

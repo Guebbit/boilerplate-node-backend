@@ -36,7 +36,7 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
             if (key === 'products.product.id')
                 return row.products.some(
                     (product) =>
-                        Number((product.product as unknown as { id?: number }).id) ===
+                        Number((product.product as unknown as { id?: number | string }).id) ===
                         Number(match[key])
                 );
             return true;

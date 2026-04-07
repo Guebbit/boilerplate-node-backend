@@ -2,6 +2,7 @@ import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser, PLAIN_PASSWORD } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import * as userService from '@services/users';
+import * as cartService from '@services/cart';
 import * as userRepository from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@utils/response';
 import type { IUserDocument } from '@models/users';
@@ -106,7 +107,7 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = product.id.toString();
 
-        const result = await userService.cartItemSetById(user, pid, 3);
+        const result = await cartService.cartItemSetById(user, pid, 3);
 
         expect(result.success).toBe(true);
         expect((result as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
@@ -118,10 +119,10 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = product.id.toString();
 
-        const firstResult = await userService.cartItemSetById(user, pid, 2);
+        const firstResult = await cartService.cartItemSetById(user, pid, 2);
         const updatedUser = (firstResult as IResponseSuccess<IUserDocument>).data!;
 
-        const secondResult = await userService.cartItemSetById(updatedUser, pid, 7);
+        const secondResult = await cartService.cartItemSetById(updatedUser, pid, 7);
 
         expect((secondResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
         expect((secondResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(
@@ -134,10 +135,10 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = product.id.toString();
 
-        const setResult = await userService.cartItemSetById(user, pid, 2);
+        const setResult = await cartService.cartItemSetById(user, pid, 2);
         const userAfterSet = (setResult as IResponseSuccess<IUserDocument>).data!;
 
-        const addResult = await userService.cartItemAddById(userAfterSet, pid, 3);
+        const addResult = await cartService.cartItemAddById(userAfterSet, pid, 3);
 
         expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(5);
     });
@@ -147,10 +148,10 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = product.id.toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 1);
+        const addResult = await cartService.cartItemSetById(user, pid, 1);
         const userWithItem = (addResult as IResponseSuccess<IUserDocument>).data!;
 
-        const removeResult = await userService.cartItemRemoveById(userWithItem, pid);
+        const removeResult = await cartService.cartItemRemoveById(userWithItem, pid);
 
         expect((removeResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
     });
@@ -160,10 +161,10 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = product.id.toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 5);
+        const addResult = await cartService.cartItemSetById(user, pid, 5);
         const userWithCart = (addResult as IResponseSuccess<IUserDocument>).data!;
 
-        const clearResult = await userService.cartRemove(userWithCart);
+        const clearResult = await cartService.cartRemove(userWithCart);
 
         expect((clearResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
     });
@@ -173,10 +174,10 @@ describe('userService cart operations', () => {
         const product = await createProduct({ title: 'Visible Product' });
         const pid = product.id.toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 2);
+        const addResult = await cartService.cartItemSetById(user, pid, 2);
         const userLoaded = (addResult as IResponseSuccess<IUserDocument>).data!;
 
-        const items = await userService.cartGet(userLoaded);
+        const items = await cartService.cartGet(userLoaded);
 
         expect(items).toHaveLength(1);
         expect(items[0].quantity).toBe(2);
@@ -186,7 +187,7 @@ describe('userService cart operations', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await userService.cartItemSet(user, product, 4);
+        const result = await cartService.cartItemSet(user, product, 4);
 
         expect(result.success).toBe(true);
         expect((result as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(4);
@@ -197,10 +198,10 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = product.id.toString();
 
-        const setResult = await userService.cartItemSetById(user, pid, 1);
+        const setResult = await cartService.cartItemSetById(user, pid, 1);
         const userLoaded = (setResult as IResponseSuccess<IUserDocument>).data!;
 
-        const addResult = await userService.cartItemAdd(userLoaded, product, 9);
+        const addResult = await cartService.cartItemAdd(userLoaded, product, 9);
 
         expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(
             10
@@ -211,10 +212,10 @@ describe('userService cart operations', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const addResult = await userService.cartItemSet(user, product, 1);
+        const addResult = await cartService.cartItemSet(user, product, 1);
         const userLoaded = (addResult as IResponseSuccess<IUserDocument>).data!;
 
-        const removeResult = await userService.cartItemRemove(userLoaded, product);
+        const removeResult = await cartService.cartItemRemove(userLoaded, product);
 
         expect((removeResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
     });
@@ -226,10 +227,10 @@ describe('userService.orderConfirm', () => {
         const product = await createProduct({ price: 20 });
         const pid = product.id.toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 2);
+        const addResult = await cartService.cartItemSetById(user, pid, 2);
         const userWithCart = (addResult as IResponseSuccess<IUserDocument>).data!;
 
-        const orderResult = await userService.orderConfirm(userWithCart);
+        const orderResult = await cartService.orderConfirm(userWithCart);
 
         expect(orderResult.success).toBe(true);
 
@@ -239,7 +240,7 @@ describe('userService.orderConfirm', () => {
 
     it('rejects with 409 when the cart is empty', async () => {
         const user = await createUser();
-        const result = await userService.orderConfirm(user);
+        const result = await cartService.orderConfirm(user);
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(409);
@@ -581,12 +582,12 @@ describe('userService.productRemoveFromCartsById', () => {
         const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
         const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
 
-        const addResult1 = await userService.cartItemSetById(user1, pid, 1);
-        const addResult2 = await userService.cartItemSetById(user2, pid, 2);
+        const addResult1 = await cartService.cartItemSetById(user1, pid, 1);
+        const addResult2 = await cartService.cartItemSetById(user2, pid, 2);
         const id1 = (addResult1 as IResponseSuccess<IUserDocument>).data!.id.toString();
         const id2 = (addResult2 as IResponseSuccess<IUserDocument>).data!.id.toString();
 
-        const result = await userService.productRemoveFromCartsById(pid);
+        const result = await cartService.productRemoveFromCartsById(pid);
 
         expect(result.success).toBe(true);
 
@@ -600,7 +601,7 @@ describe('userService.productRemoveFromCartsById', () => {
         const product = await createProduct();
         const pid = product.id.toString();
 
-        const result = await userService.productRemoveFromCartsById(pid);
+        const result = await cartService.productRemoveFromCartsById(pid);
 
         expect(result.success).toBe(true);
     });

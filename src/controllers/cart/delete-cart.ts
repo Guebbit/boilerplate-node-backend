@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@api/model/removeCartItemRequest';
 
@@ -17,10 +17,12 @@ export const deleteCart = (
     const productId = String(request.body.productId);
 
     // Remove specific item or entire cart
-    return (
-        productId ? userService.cartItemRemoveById(user, productId) : userService.cartRemove(user)
-    )
-        .then(() => userService.cartGetWithSummary(user))
+    const removePromise = productId
+        ? cartService.cartItemRemoveById(user, productId)
+        : cartService.cartRemove(user);
+
+    return removePromise
+        .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {
             successResponse(response, cart);
         });

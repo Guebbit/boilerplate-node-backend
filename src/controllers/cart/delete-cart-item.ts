@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 
@@ -20,7 +20,7 @@ export const deleteCartItem = (
     const user = request.user!;
     const productId = String(request.params.productId ?? request.body.productId);
 
-    return userService
+    return cartService
         .cartGet(user)
         .then((items) => {
             const existing = items.some(
@@ -34,9 +34,9 @@ export const deleteCartItem = (
                 return;
             }
 
-            return userService
+            return cartService
                 .cartItemRemoveById(user, productId)
-                .then(() => userService.cartGetWithSummary(user))
+                .then(() => cartService.cartGetWithSummary(user))
                 .then((cart) => {
                     successResponse(response, cart);
                 });

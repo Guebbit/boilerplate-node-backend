@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
@@ -34,9 +34,9 @@ export const postCart = (
             return;
         }
 
-        return userService
+        return cartService
             .cartItemSetById(user, productId, quantity)
-            .then(() => userService.cartGetWithSummary(user))
+            .then(() => cartService.cartGetWithSummary(user))
             .then((cart) => {
                 successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
             });

@@ -1,4 +1,5 @@
 import {
+    CreationOptional,
     DataTypes,
     ForeignKey,
     InferAttributes,
@@ -12,7 +13,7 @@ export class CartItemModel extends Model<
     InferAttributes<CartItemModel>,
     InferCreationAttributes<CartItemModel>
 > {
-    declare id: number;
+    declare id: CreationOptional<number>;
     declare userId: ForeignKey<number>;
     declare productId: ForeignKey<number>;
     declare quantity: number;
