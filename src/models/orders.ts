@@ -1,4 +1,4 @@
-import { DataTypes, Model } from 'sequelize';
+import { DataTypes, ForeignKey, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
 import type { CartItem, Order } from '@types';
 
@@ -28,7 +28,7 @@ export interface IOrderProduct extends Omit<CartItem, 'productId'> {
 
 export class OrderModel extends Model {
     declare id: number;
-    declare userId: number;
+    declare userId: ForeignKey<number>;
     declare email: string;
     declare status: EOrderStatus;
     declare notes: string | null;
@@ -56,9 +56,7 @@ OrderModel.init(
             allowNull: false,
             defaultValue: ORDER_STATUS.PENDING
         },
-        notes: { type: DataTypes.TEXT, allowNull: true },
-        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+        notes: { type: DataTypes.TEXT, allowNull: true }
     },
     {
         sequelize,

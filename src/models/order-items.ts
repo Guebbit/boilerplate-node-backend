@@ -1,4 +1,11 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import {
+    DataTypes,
+    ForeignKey,
+    InferAttributes,
+    InferCreationAttributes,
+    Model,
+    NonAttribute
+} from 'sequelize';
 import { sequelize } from '@utils/database';
 
 export class OrderItemModel extends Model<
@@ -6,16 +13,16 @@ export class OrderItemModel extends Model<
     InferCreationAttributes<OrderItemModel>
 > {
     declare id: number;
-    declare orderId: number;
-    declare productId: number | null;
+    declare orderId: ForeignKey<number>;
+    declare productId: ForeignKey<number> | null;
     declare quantity: number;
     declare productTitle: string;
     declare productPrice: number;
     declare productDescription: string;
     declare productImageUrl: string;
     declare productActive: boolean;
-    declare createdAt: Date;
-    declare updatedAt: Date;
+    declare createdAt: NonAttribute<Date>;
+    declare updatedAt: NonAttribute<Date>;
 }
 
 OrderItemModel.init(
@@ -28,9 +35,7 @@ OrderItemModel.init(
         productPrice: { type: DataTypes.FLOAT, allowNull: false },
         productDescription: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
         productImageUrl: { type: DataTypes.STRING, allowNull: false },
-        productActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
-        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+        productActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true }
     },
     {
         sequelize,

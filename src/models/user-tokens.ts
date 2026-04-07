@@ -1,4 +1,11 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
+import {
+    DataTypes,
+    ForeignKey,
+    InferAttributes,
+    InferCreationAttributes,
+    Model,
+    NonAttribute
+} from 'sequelize';
 import { sequelize } from '@utils/database';
 
 export class UserTokenModel extends Model<
@@ -6,12 +13,12 @@ export class UserTokenModel extends Model<
     InferCreationAttributes<UserTokenModel>
 > {
     declare id: number;
-    declare userId: number;
+    declare userId: ForeignKey<number>;
     declare type: string;
     declare token: string;
     declare expiration: Date | null;
-    declare createdAt: Date;
-    declare updatedAt: Date;
+    declare createdAt: NonAttribute<Date>;
+    declare updatedAt: NonAttribute<Date>;
 }
 
 UserTokenModel.init(
@@ -20,9 +27,7 @@ UserTokenModel.init(
         userId: { type: DataTypes.INTEGER, allowNull: false },
         type: { type: DataTypes.STRING, allowNull: false },
         token: { type: DataTypes.STRING(512), allowNull: false },
-        expiration: { type: DataTypes.DATE, allowNull: true },
-        createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-        updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+        expiration: { type: DataTypes.DATE, allowNull: true }
     },
     {
         sequelize,
