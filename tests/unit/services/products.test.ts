@@ -279,7 +279,7 @@ describe('productService.remove', () => {
         const user = await createUser();
         const userId = user.id.toString();
         // eslint-disable-next-line unicorn/no-await-expression-member
-        const addResult = await (await import('@services/users')).cartItemSetById(user, pid, 1);
+        const addResult = await (await import('@services/cart')).cartItemSetById(user, pid, 1);
 
         // Confirm the cart item was added
         expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
