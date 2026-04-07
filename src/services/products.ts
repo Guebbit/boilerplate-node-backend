@@ -14,6 +14,18 @@ import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
 
+const toProductResponseItem = (item: IProductDocument): ProductsResponse['items'][number] => ({
+    id: String(item.id),
+    title: item.title,
+    price: item.price,
+    description: item.description,
+    active: item.active,
+    imageUrl: item.imageUrl,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    deletedAt: item.deletedAt ?? undefined
+});
+
 export const validateData = (productData: Omit<Product, 'id'>): string[] => {
     const parseResult = zodProductSchema.safeParse(productData);
     if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
@@ -66,7 +78,7 @@ export const search = (
                 limit: pageSize
             })
             .then((items) => ({
-                items: items as unknown as ProductsResponse['items'],
+                items: items.map((item) => toProductResponseItem(item)),
                 meta: {
                     page,
                     pageSize,

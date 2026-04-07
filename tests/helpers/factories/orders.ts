@@ -32,7 +32,7 @@ import type { IProductDocument } from '@models/products';
 import { orderRepository } from '@repositories/orders';
 
 const getUserId = (user: IUserDocument): number =>
-    Number((user as unknown as { id?: number }).id);
+    Number(user.id);
 
 /**
  * Convert a product record into an IOrderProduct ready to embed
@@ -43,7 +43,7 @@ const getUserId = (user: IUserDocument): number =>
  */
 export const toOrderProduct = (product: IProductDocument, quantity = 1): IOrderProduct => ({
     // toObject() produces a plain JS object that matches the embedded product shape.
-    product: product.toObject() as unknown as IOrderProduct['product'],
+    product: product.toObject() as IOrderProduct['product'],
     quantity
 });
 

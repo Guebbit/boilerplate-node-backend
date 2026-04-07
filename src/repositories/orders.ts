@@ -3,25 +3,25 @@ import { Op } from 'sequelize';
 import { orderModel, type IOrderDocument, type IOrderProduct } from '@models/orders';
 import { orderItemModel } from '@models/order-items';
 
-const hydrateOne = async (order: { id: number } & Record<string, unknown>) => {
-    const items = await orderItemModel.findAll({ where: { orderId: order.id }, raw: true });
-    const products = items.map((item) => ({
-        product: {
-            id: item.productId ?? undefined,
-            title: item.productTitle,
-            price: item.productPrice,
-            description: item.productDescription,
-            imageUrl: item.productImageUrl,
-            active: item.productActive
-        },
-        quantity: item.quantity
-    })) as unknown as IOrderProduct[];
+const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
+    orderItemModel.findAll({ where: { orderId: order.id }, raw: true }).then((items) => {
+        const products: IOrderProduct[] = items.map((item) => ({
+            product: {
+                id: item.productId ?? undefined,
+                title: item.productTitle,
+                price: item.productPrice,
+                description: item.productDescription,
+                imageUrl: item.productImageUrl,
+                active: item.productActive
+            },
+            quantity: item.quantity
+        }));
 
-    return {
-        ...order,
-        products
-    } as unknown as IOrderDocument;
-};
+        return {
+            ...order,
+            products
+        } as IOrderDocument;
+    });
 
 const hydrateAll = (orders: Array<{ id: number } & Record<string, unknown>>) =>
     Promise.all(orders.map((order) => hydrateOne(order)));
@@ -36,8 +36,8 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
             if (key === 'products.product.id')
                 return row.products.some(
                     (product) =>
-                        Number((product.product as unknown as { id?: number | string }).id) ===
-                        Number(match[key])
+                        product.product.id != null &&
+                        Number(product.product.id) === Number(match[key])
                 );
             return true;
         })
@@ -45,7 +45,7 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
 };
 
 const extractProductId = (product: IOrderProduct['product']): number =>
-    Number((product as unknown as { id?: number | string }).id ?? 0);
+    Number(product.id ?? 0);
 
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
@@ -62,11 +62,13 @@ const addComputedFields = (rows: IOrderDocument[]) =>
 export const aggregate = async <T = IOrderDocument>(
     pipeline: Array<Record<string, unknown>>
 ): Promise<T[]> => {
+    const persistedOrders = await orderModel.findAll({
+        order: [['createdAt', 'DESC']]
+    });
     let rows = await hydrateAll(
-        (await orderModel.findAll({
-            order: [['createdAt', 'DESC']],
-            raw: true
-        })) as unknown as Array<{ id: number } & Record<string, unknown>>
+        persistedOrders.map(
+            (order) => order.get({ plain: true }) as { id: number } & Record<string, unknown>
+        )
     );
 
     for (const stage of pipeline) {
@@ -77,8 +79,8 @@ export const aggregate = async <T = IOrderDocument>(
             )[0] ?? ['createdAt', -1];
             // eslint-disable-next-line unicorn/no-array-sort
             rows = [...rows].sort((a, b) => {
-                const av = a[field as keyof IOrderDocument] as unknown as number | string | Date;
-                const bv = b[field as keyof IOrderDocument] as unknown as number | string | Date;
+                const av = a[field as keyof IOrderDocument] as number | string | Date;
+                const bv = b[field as keyof IOrderDocument] as number | string | Date;
                 const factor = Number(direction) === -1 ? -1 : 1;
                 if (av === bv) return 0;
                 return av > bv ? factor : -factor;
@@ -99,72 +101,76 @@ export const findById = (id: string | number) =>
         return hydrateOne(order.get({ plain: true }) as { id: number } & Record<string, unknown>);
     });
 
-export const create = async (data: Partial<IOrderDocument>): Promise<IOrderDocument> => {
-    const order = await orderModel.create({
-        userId: Number(data.userId),
-        email: String(data.email ?? ''),
-        status: data.status,
-        notes: data.notes
-    } as never);
+export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =>
+    orderModel
+        .create({
+            userId: Number(data.userId),
+            email: String(data.email ?? ''),
+            status: data.status,
+            notes: data.notes
+        } as never)
+        .then((order) => {
+            const products = (data.products ?? []) as IOrderProduct[];
+            return Promise.all(
+                products.map((entry) =>
+                    orderItemModel.create({
+                        orderId: order.id,
+                        productId: extractProductId(entry.product),
+                        quantity: Number(entry.quantity),
+                        productTitle: String((entry.product as { title?: string }).title ?? ''),
+                        productPrice: Number((entry.product as { price?: number }).price ?? 0),
+                        productDescription: String(
+                            (entry.product as { description?: string }).description ?? ''
+                        ),
+                        productImageUrl: String((entry.product as { imageUrl?: string }).imageUrl ?? ''),
+                        productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
+                    } as never)
+                )
+            ).then(() =>
+                hydrateOne(order.get({ plain: true }) as { id: number } & Record<string, unknown>)
+            );
+        });
 
-    const products = (data.products ?? []) as IOrderProduct[];
-    await Promise.all(
-        products.map((entry) =>
-            orderItemModel.create({
-                orderId: order.id,
-                productId: extractProductId(entry.product),
-                quantity: Number(entry.quantity),
-                productTitle: String((entry.product as { title?: string }).title ?? ''),
-                productPrice: Number((entry.product as { price?: number }).price ?? 0),
-                productDescription: String(
-                    (entry.product as { description?: string }).description ?? ''
-                ),
-                productImageUrl: String((entry.product as { imageUrl?: string }).imageUrl ?? ''),
-                productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
-            } as never)
-        )
-    );
+export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
+    orderModel.findByPk(Number(order.id)).then((databaseOrder) => {
+        if (!databaseOrder) throw new Error('404');
 
-    return hydrateOne(order.get({ plain: true }) as { id: number } & Record<string, unknown>);
-};
-
-export const save = async (order: IOrderDocument): Promise<IOrderDocument> => {
-    const databaseOrder = await orderModel.findByPk(Number(order.id));
-    if (!databaseOrder) throw new Error('404');
-
-    await databaseOrder.update({
-        userId: Number(order.userId),
-        email: order.email,
-        status: order.status,
-        notes: order.notes
+        return databaseOrder
+            .update({
+                userId: Number(order.userId),
+                email: order.email,
+                status: order.status,
+                notes: order.notes
+            })
+            .then(() => {
+                if (!order.products) return;
+                return orderItemModel.destroy({ where: { orderId: databaseOrder.id } }).then(() =>
+                    Promise.all(
+                        order.products.map((entry) =>
+                            orderItemModel.create({
+                                orderId: databaseOrder.id,
+                                productId: extractProductId(entry.product),
+                                quantity: Number(entry.quantity),
+                                productTitle: String((entry.product as { title?: string }).title ?? ''),
+                                productPrice: Number((entry.product as { price?: number }).price ?? 0),
+                                productDescription: String(
+                                    (entry.product as { description?: string }).description ?? ''
+                                ),
+                                productImageUrl: String(
+                                    (entry.product as { imageUrl?: string }).imageUrl ?? ''
+                                ),
+                                productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
+                            } as never)
+                        )
+                    )
+                );
+            })
+            .then(() =>
+                hydrateOne(
+                    databaseOrder.get({ plain: true }) as { id: number } & Record<string, unknown>
+                )
+            );
     });
-
-    if (order.products) {
-        await orderItemModel.destroy({ where: { orderId: databaseOrder.id } });
-        await Promise.all(
-            order.products.map((entry) =>
-                orderItemModel.create({
-                    orderId: databaseOrder.id,
-                    productId: extractProductId(entry.product),
-                    quantity: Number(entry.quantity),
-                    productTitle: String((entry.product as { title?: string }).title ?? ''),
-                    productPrice: Number((entry.product as { price?: number }).price ?? 0),
-                    productDescription: String(
-                        (entry.product as { description?: string }).description ?? ''
-                    ),
-                    productImageUrl: String(
-                        (entry.product as { imageUrl?: string }).imageUrl ?? ''
-                    ),
-                    productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
-                } as never)
-            )
-        );
-    }
-
-    return hydrateOne(
-        databaseOrder.get({ plain: true }) as { id: number } & Record<string, unknown>
-    );
-};
 
 export const deleteOne = (order: IOrderDocument): Promise<void> =>
     orderModel.destroy({ where: { id: Number(order.id) } }).then(() => {});

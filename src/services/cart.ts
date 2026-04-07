@@ -1,8 +1,9 @@
 import { t } from 'i18next';
-import type { IOrderDocument, IOrderProduct } from '@models/orders';
+import { Order as ApiOrderModel } from '@api/model/order';
+import { ORDER_STATUS, type EOrderStatus, type IOrderDocument, type IOrderProduct } from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import type { Order, Product } from '@types';
+import type { Order } from '@types';
 import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { userRepository } from '@repositories/users';
@@ -11,42 +12,102 @@ import { cartItemModel } from '@models/cart-items';
 import { productModel } from '@models/products';
 import { userTokenModel } from '@models/user-tokens';
 
-const getUserId = (user: IUserDocument): number => Number((user as unknown as { id: number }).id);
+type CartProductSnapshot = NonNullable<ICartItem['product']>;
+type CartProductObject = Exclude<CartProductSnapshot, number>;
+type OrderProductShape = IOrderProduct['product'];
+
+const getUserId = (user: IUserDocument): number => Number(user.id);
+
+const isCartProductObject = (value: unknown): value is CartProductObject => {
+    if (typeof value !== 'object' || value === null) return false;
+
+    const candidate = value as Record<string, unknown>;
+    const numberOrUndefined = (entry: unknown) => entry === undefined || typeof entry === 'number';
+    const stringOrUndefined = (entry: unknown) => entry === undefined || typeof entry === 'string';
+
+    return (
+        numberOrUndefined(candidate.id) &&
+        numberOrUndefined(candidate.price) &&
+        stringOrUndefined(candidate.title) &&
+        stringOrUndefined(candidate.description) &&
+        stringOrUndefined(candidate.imageUrl) &&
+        (candidate.active === undefined || typeof candidate.active === 'boolean')
+    );
+};
+
+const toCartProduct = (value: unknown, fallbackProductId: number): CartProductSnapshot =>
+    isCartProductObject(value) ? value : fallbackProductId;
+
+const updateUserCartTimestamp = (user: IUserDocument) =>
+    typeof user.update === 'function'
+        ? user.update({ cartUpdatedAt: new Date() })
+        : Promise.resolve();
+
+const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
+    [ORDER_STATUS.PENDING]: ApiOrderModel.StatusEnum.Pending,
+    [ORDER_STATUS.PAID]: ApiOrderModel.StatusEnum.Paid,
+    [ORDER_STATUS.PROCESSING]: ApiOrderModel.StatusEnum.Processing,
+    [ORDER_STATUS.SHIPPED]: ApiOrderModel.StatusEnum.Shipped,
+    [ORDER_STATUS.DELIVERED]: ApiOrderModel.StatusEnum.Delivered,
+    [ORDER_STATUS.CANCELLED]: ApiOrderModel.StatusEnum.Cancelled
+};
+
+const toOrderResponse = (order: IOrderDocument): Order => {
+    const items = order.products.map(({ product, quantity }) => ({
+        productId: String(product.id ?? ''),
+        quantity
+    }));
+    const total = order.products.reduce(
+        (sum, entry) => sum + Number(entry.product.price ?? 0) * entry.quantity,
+        0
+    );
+
+    return {
+        id: String(order.id),
+        userId: String(order.userId),
+        email: order.email,
+        items,
+        total,
+        notes: order.notes,
+        status: orderStatusToApi[order.status],
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt
+    };
+};
 
 /**
  * Rebuilds the user cart and token relations from normalized SQL tables.
  * This keeps response payloads compatible with the legacy user shape.
  */
-const hydrateUserCart = async (user: IUserDocument): Promise<IUserDocument> => {
-    const rows = await cartItemModel.findAll({
-        where: { userId: getUserId(user) },
-        include: [{ model: productModel, as: 'product' }]
-    });
+const hydrateUserCart = (user: IUserDocument): Promise<IUserDocument> =>
+    cartItemModel
+        .findAll({
+            where: { userId: getUserId(user) },
+            include: [{ model: productModel, as: 'product' }]
+        })
+        .then((rows) => {
+            user.cart = {
+                items: rows.map((row) => ({
+                    product: toCartProduct(row.get('product'), Number(row.productId)),
+                    quantity: Number(row.quantity)
+                })),
+                updatedAt: user.cartUpdatedAt
+            };
 
-    (user as unknown as { cart: unknown }).cart = {
-        items: rows.map(
-            (row) =>
-                ({
-                    product: ((row as unknown as { product?: unknown }).product ??
-                        Number((row as unknown as { productId: number }).productId)) as unknown,
-                    quantity: Number((row as unknown as { quantity: number }).quantity)
-                }) as never
-        ),
-        updatedAt: (user as unknown as { cartUpdatedAt: Date }).cartUpdatedAt
-    };
+            return userTokenModel.findAll({
+                where: { userId: getUserId(user) },
+                raw: true
+            });
+        })
+        .then((tokens) => {
+            user.tokens = tokens.map((token) => ({
+                type: token.type,
+                token: token.token,
+                expiration: token.expiration ?? undefined
+            }));
 
-    const tokens = await userTokenModel.findAll({
-        where: { userId: getUserId(user) },
-        raw: true
-    });
-    (user as unknown as { tokens: unknown }).tokens = tokens.map((token) => ({
-        type: token.type,
-        token: token.token,
-        expiration: token.expiration ?? undefined
-    }));
-
-    return user;
-};
+            return user;
+        });
 
 export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
     hydrateUserCart(user).then((u) => (u.cart?.items ?? []) as ICartItem[]);
@@ -62,7 +123,7 @@ export const cartGetWithSummary = (
         let total = 0;
         for (const item of items) {
             totalQuantity += item.quantity;
-            const product = item.product as unknown as { price?: number };
+            const product = typeof item.product === 'number' ? undefined : item.product;
             total += (product?.price ?? 0) * item.quantity;
         }
         return {
@@ -86,13 +147,7 @@ export const cartItemSetById = (
             productId: Number(id),
             quantity
         } as never)
-        .then(() =>
-            (
-                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
-            ).update({
-                cartUpdatedAt: new Date()
-            })
-        )
+        .then(() => updateUserCartTimestamp(user))
         .then(() => hydrateUserCart(user))
         .then((savedUser) => generateSuccess(savedUser));
 };
@@ -124,16 +179,10 @@ export const cartItemAddById = (
                 } as never);
 
             return row.update({
-                quantity: Number((row as unknown as { quantity: number }).quantity) + quantity
+                quantity: Number(row.quantity) + quantity
             });
         })
-        .then(() =>
-            (
-                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
-            ).update({
-                cartUpdatedAt: new Date()
-            })
-        )
+        .then(() => updateUserCartTimestamp(user))
         .then(() => hydrateUserCart(user))
         .then((savedUser) => generateSuccess(savedUser));
 };
@@ -155,13 +204,7 @@ export const cartItemRemoveById = (
                 productId: Number(id)
             }
         })
-        .then(() =>
-            (
-                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
-            ).update({
-                cartUpdatedAt: new Date()
-            })
-        )
+        .then(() => updateUserCartTimestamp(user))
         .then(() => hydrateUserCart(user))
         .then((savedUser) => generateSuccess(savedUser));
 };
@@ -174,13 +217,7 @@ export const cartItemRemove = (
 export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
     return cartItemModel
         .destroy({ where: { userId: getUserId(user) } })
-        .then(() =>
-            (
-                user as unknown as { update: (values: Record<string, unknown>) => Promise<unknown> }
-            ).update({
-                cartUpdatedAt: new Date()
-            })
-        )
+        .then(() => updateUserCartTimestamp(user))
         .then(() => hydrateUserCart(user))
         .then((savedUser) => generateSuccess(savedUser));
 };
@@ -197,10 +234,17 @@ export const orderConfirm = (
                 return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
 
             const mappedProducts = products.map((entry) => {
-                const product = entry.product as Partial<Product>;
+                if (typeof entry.product === 'number') {
+                    return {
+                        product: { id: entry.product },
+                        quantity: entry.quantity
+                    };
+                }
+
+                const product: OrderProductShape = entry.product;
                 return {
                     product: {
-                        id: product.id,
+                        id: product.id === undefined ? undefined : Number(product.id),
                         title: product.title,
                         price: product.price,
                         description: product.description,
@@ -208,7 +252,7 @@ export const orderConfirm = (
                         active: product.active
                     },
                     quantity: entry.quantity
-                } as unknown as IOrderProduct;
+                };
             });
 
             return orderRepository
@@ -218,7 +262,7 @@ export const orderConfirm = (
                     products: mappedProducts
                 } as Partial<IOrderDocument>)
                 .then((order) =>
-                    cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
+                    cartRemove(user).then(() => generateSuccess<Order>(toOrderResponse(order)))
                 );
         })
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));

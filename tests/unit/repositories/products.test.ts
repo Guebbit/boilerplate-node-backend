@@ -121,7 +121,7 @@ describe('productRepository', () => {
 
             const [product] = await productRepository.findAll();
 
-            expect(typeof (product as unknown as { save?: unknown }).save).toBe('undefined');
+            expect(Object.prototype.hasOwnProperty.call(product, 'save')).toBe(false);
         });
     });
 

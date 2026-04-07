@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import { userModel as Users, IToken } from '@models/users';
+import { IToken } from '@models/users';
+import { userRepository } from '@repositories/users';
 import { verifyAccessToken } from './auth-jwt';
 import { rejectResponse } from '@utils/response';
 
@@ -15,9 +16,9 @@ export const getAuth = (request: Request, _response: Response, next: NextFunctio
     }
 
     verifyAccessToken(token)
-        .then(({ id }) => Users.findByPk(Number(id)))
+        .then(({ id }) => userRepository.findById(Number(id)))
         .then((user) => {
-            if (user) request.user = user as unknown as Request['user'];
+            if (user) request.user = user;
         })
         .catch(() => {
             // Invalid or expired token — proceed without authenticated user

@@ -54,15 +54,13 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
 
 export const findById = (id: string | number) =>
     productModel.findByPk(Number(id)).then((product) => {
-        if (product && product.deletedAt === null)
-            (product as unknown as { deletedAt?: Date }).deletedAt = undefined;
+        if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
 export const findOne = (where: ProductWhere) =>
     productModel.findOne({ where: toWhere(where) }).then((product) => {
-        if (product && product.deletedAt === null)
-            (product as unknown as { deletedAt?: Date }).deletedAt = undefined;
+        if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
@@ -92,12 +90,12 @@ export const count = (where: ProductWhere = {}): Promise<number> =>
     productModel.count({ where: toWhere(where) });
 
 export const create = (data: Partial<IProductDocument>): Promise<IProductDocument> =>
-    productModel.create(data as never) as unknown as Promise<IProductDocument>;
+    productModel.create(data as never) as Promise<IProductDocument>;
 
 export const save = (product: IProductDocument): Promise<IProductDocument> =>
-    (product as unknown as { save: () => Promise<IProductDocument> }).save();
+    product.save();
 
 export const deleteOne = (product: IProductDocument): Promise<void> =>
-    (product as unknown as { destroy: () => Promise<void> }).destroy().then(() => {});
+    product.destroy().then(() => {});
 
 export const productRepository = { findById, findOne, findAll, count, create, save, deleteOne };

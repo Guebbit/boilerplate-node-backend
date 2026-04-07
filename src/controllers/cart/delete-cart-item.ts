@@ -25,8 +25,7 @@ export const deleteCartItem = (
         .then((items) => {
             const existing = items.some(
                 (item) =>
-                    String(getProductIdFromCartItem(item as unknown as { product: unknown })) ===
-                    String(productId)
+                    String(getProductIdFromCartItem(item)) === String(productId)
             );
 
             if (!existing) {

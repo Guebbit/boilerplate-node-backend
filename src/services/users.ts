@@ -11,12 +11,23 @@ import {
 } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { zodUserSchema } from '@models/users';
-import type { IUserDocument, IUser } from '@models/users';
+import type { IUserDocument, IUser, IUserListItem } from '@models/users';
 import type { SearchUsersRequest, UsersResponse } from '@types';
 import { userRepository } from '@repositories/users';
 import { userTokenModel } from '@models/user-tokens';
 
-const getUserId = (user: IUserDocument): number => Number((user as unknown as { id: number }).id);
+const getUserId = (user: IUserDocument): number => Number(user.id);
+
+const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse['items'][number] => ({
+    id: String(user.id),
+    email: user.email,
+    username: user.username,
+    admin: user.admin,
+    active: !user.deletedAt,
+    imageUrl: user.imageUrl,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+});
 
 export const tokenAdd = (
     user: IUserDocument,
@@ -221,7 +232,7 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
                 limit: pageSize
             })
             .then((items) => ({
-                items: items as unknown as UsersResponse['items'],
+                items: items.map((item) => toUserResponseItem(item)),
                 meta: {
                     page,
                     pageSize,

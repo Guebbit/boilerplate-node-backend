@@ -2,7 +2,8 @@
 /* eslint-disable unicorn/no-null */
 import { Op, type WhereOptions } from 'sequelize';
 import { userModel } from '@models/users';
-import type { IUserDocument } from '@models/users';
+import type { IUserDocument, IUserListItem, UserModel } from '@models/users';
+import { cartItemModel } from '@models/cart-items';
 import { userTokenModel } from '@models/user-tokens';
 
 type UserWhere = Record<string, unknown>;
@@ -72,43 +73,41 @@ const tokenFilter = (where: UserWhere) => {
     };
 };
 
-const withComputedRelations = async (user: IUserDocument | null) => {
-    if (!user) return null;
+const withComputedRelations = (
+    user: UserModel | IUserDocument | null
+): Promise<IUserDocument | null> => {
+    if (!user) return Promise.resolve(null);
+    const hydratedUser = user as IUserDocument;
 
-    const tokens = await userTokenModel.findAll({
-        where: { userId: (user as unknown as { id: number }).id },
-        raw: true
+    return Promise.all([
+        userTokenModel.findAll({
+            where: { userId: hydratedUser.id },
+            raw: true
+        }),
+        cartItemModel.findAll({
+            where: { userId: hydratedUser.id },
+            raw: true
+        })
+    ]).then(([tokens, cartItems]) => {
+        hydratedUser.tokens = tokens.map((token) => ({
+            type: token.type,
+            token: token.token,
+            expiration: token.expiration ? new Date(token.expiration) : undefined
+        }));
+
+        if (hydratedUser.deletedAt === null) hydratedUser.deletedAt = undefined;
+
+        hydratedUser.cart = {
+            items: cartItems.map((item) => ({ product: item.productId, quantity: item.quantity })),
+            updatedAt: hydratedUser.cartUpdatedAt
+        };
+
+        return hydratedUser;
     });
-
-    const cartItemsModule = await import('@models/cart-items');
-    const cartItemModel = cartItemsModule.cartItemModel;
-
-    const cartItems = await cartItemModel.findAll({
-        where: { userId: (user as unknown as { id: number }).id },
-        raw: true
-    });
-
-    (user as unknown as { tokens: unknown }).tokens = tokens.map((token) => ({
-        type: token.type,
-        token: token.token,
-        expiration: token.expiration ? new Date(token.expiration) : undefined
-    }));
-
-    if ((user as unknown as { deletedAt?: Date | null }).deletedAt === null)
-        (user as unknown as { deletedAt?: Date }).deletedAt = undefined;
-
-    (user as unknown as { cart: unknown }).cart = {
-        items: cartItems.map((item) => ({ product: item.productId, quantity: item.quantity })),
-        updatedAt: (user as unknown as { cartUpdatedAt: Date }).cartUpdatedAt
-    };
-
-    return user;
 };
 
 export const findById = (id: string | number): Promise<IUserDocument | null> =>
-    userModel
-        .findByPk(Number(id))
-        .then((user) => withComputedRelations(user as unknown as IUserDocument));
+    userModel.findByPk(Number(id)).then((user) => withComputedRelations(user));
 
 export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
     const includeToken = tokenFilter(where);
@@ -117,7 +116,7 @@ export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
             where: toWhere(where),
             include: includeToken ? [includeToken as never] : undefined
         })
-        .then((user) => withComputedRelations(user as unknown as IUserDocument));
+        .then((user) => withComputedRelations(user));
 };
 
 export const findAll = (
@@ -131,19 +130,64 @@ export const findAll = (
         skip?: number;
         limit?: number;
     } = {}
-) => {
+): Promise<IUserListItem[]> => {
     const [sortField, sortDirection] = Object.entries(sort)[0] ?? ['createdAt', -1];
     return userModel
         .findAll({
             where: toWhere(where),
             order: [[sortField, sortDirection === -1 ? 'DESC' : 'ASC']],
             offset: skip,
-            limit,
-            raw: true
+            limit
         })
-        .then(
-            (rows) => rows as unknown as IUserDocument[]
-        );
+        .then((rows) => {
+            const userRows = rows.map((row) => row.get({ plain: true })) as Array<
+                IUserListItem & { cartUpdatedAt: Date; deletedAt?: Date | null }
+            >;
+            const userIds = userRows.map((row) => Number(row.id));
+
+            if (userIds.length === 0) return [] as IUserListItem[];
+
+            return Promise.all([
+                userTokenModel.findAll({
+                    where: { userId: { [Op.in]: userIds } },
+                    raw: true
+                }),
+                cartItemModel.findAll({
+                    where: { userId: { [Op.in]: userIds } },
+                    raw: true
+                })
+            ]).then(([tokens, cartItems]) => {
+                const tokensByUser = new Map<number, IUserListItem['tokens']>();
+                for (const token of tokens) {
+                    const key = Number(token.userId);
+                    const list = tokensByUser.get(key) ?? [];
+                    list.push({
+                        type: token.type,
+                        token: token.token,
+                        expiration: token.expiration ? new Date(token.expiration) : undefined
+                    });
+                    tokensByUser.set(key, list);
+                }
+
+                const cartItemsByUser = new Map<number, IUserListItem['cart']['items']>();
+                for (const item of cartItems) {
+                    const key = Number(item.userId);
+                    const list = cartItemsByUser.get(key) ?? [];
+                    list.push({ product: item.productId, quantity: item.quantity });
+                    cartItemsByUser.set(key, list);
+                }
+
+                return userRows.map((row) => ({
+                    ...row,
+                    deletedAt: row.deletedAt === null ? undefined : row.deletedAt,
+                    cart: {
+                        items: cartItemsByUser.get(Number(row.id)) ?? [],
+                        updatedAt: row.cartUpdatedAt
+                    },
+                    tokens: tokensByUser.get(Number(row.id)) ?? []
+                }));
+            });
+        });
 };
 
 export const count = (where: UserWhere = {}): Promise<number> =>
@@ -160,63 +204,56 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
             deletedAt: data.deletedAt,
             cartUpdatedAt: data.cart?.updatedAt ?? new Date()
         } as never)
-        .then(async (user) => {
+        .then((user) => {
             const items = data.cart?.items ?? [];
             const tokens = data.tokens ?? [];
-            const cartItemsModule = await import('@models/cart-items');
-            const { cartItemModel } = cartItemsModule;
-            await Promise.all(
-                items.map((item) =>
-                    cartItemModel.create({
-                        userId: user.id,
-                        productId: Number(item.product),
-                        quantity: item.quantity
-                    } as never)
+            return Promise.all([
+                Promise.all(
+                    items.map((item) =>
+                        cartItemModel.create({
+                            userId: user.id,
+                            productId: Number(item.product),
+                            quantity: item.quantity
+                        } as never)
+                    )
+                ),
+                Promise.all(
+                    tokens.map((token) =>
+                        userTokenModel.create({
+                            userId: user.id,
+                            type: token.type,
+                            token: token.token,
+                            expiration: token.expiration ?? undefined
+                        } as never)
+                    )
                 )
-            );
-            await Promise.all(
-                tokens.map((token) =>
-                    userTokenModel.create({
-                        userId: user.id,
-                        type: token.type,
-                        token: token.token,
-                        expiration: token.expiration ?? undefined
-                    } as never)
-                )
-            );
-            return withComputedRelations(user as unknown as IUserDocument);
+            ]).then(() => withComputedRelations(user));
         }) as Promise<IUserDocument>;
 
 export const save = (user: IUserDocument): Promise<IUserDocument> =>
-    (user as unknown as { save: () => Promise<IUserDocument> })
-        .save()
-        .then(() => withComputedRelations(user)) as Promise<IUserDocument>;
+    user.save().then(() => withComputedRelations(user)) as Promise<IUserDocument>;
 
 export const deleteOne = (user: IUserDocument): Promise<void> =>
-    (user as unknown as { destroy: () => Promise<void> }).destroy().then(() => {});
+    user.destroy().then(() => {});
 
-export const updateMany = async (filter: UserWhere, update: Record<string, unknown>) => {
-    const { cartItemModel } = await import('@models/cart-items');
-
+export const updateMany = (filter: UserWhere, update: Record<string, unknown>) => {
     if (filter['cart.items.product'] && update.removeFromCartItems) {
         const productId = Number(filter['cart.items.product']);
-        const deletedCount = await cartItemModel.destroy({ where: { productId } });
-        await userModel.update({ cartUpdatedAt: new Date() }, { where: {} });
-        return { modifiedCount: deletedCount };
+        return cartItemModel
+            .destroy({ where: { productId } })
+            .then((deletedCount) =>
+                userModel
+                    .update({ cartUpdatedAt: new Date() }, { where: {} })
+                    .then(() => ({ modifiedCount: deletedCount }))
+            );
     }
 
-    if (typeof (userModel as unknown as { updateMany?: unknown }).updateMany === 'function')
-        return (
-            userModel as unknown as {
-                updateMany: (
-                    f: Record<string, unknown>,
-                    u: Record<string, unknown>
-                ) => Promise<{ modifiedCount: number }>;
-            }
-        ).updateMany(filter, update);
+    if ('updateMany' in userModel && typeof userModel.updateMany === 'function')
+        return userModel.updateMany(filter, update);
 
-    const [modifiedCount] = await userModel.update(update as never, { where: toWhere(filter) });
-    return { modifiedCount };
+    return userModel
+        .update(update as never, { where: toWhere(filter) })
+        .then(([modifiedCount]) => ({ modifiedCount }));
 };
 
 export const userRepository = {

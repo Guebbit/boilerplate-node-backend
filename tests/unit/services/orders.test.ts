@@ -4,12 +4,19 @@ import { createProduct } from '../../helpers/factories/products';
 import { createOrder, toOrderProduct } from '../../helpers/factories/orders';
 import * as orderService from '@services/orders';
 import type { IOrderDocument } from '@models/orders';
+import type { Order } from '@types';
 
 beforeAll(connect);
 afterAll(disconnect);
 beforeEach(clearAll);
 
-type OrderWithTotals = IOrderDocument & {
+type OrderDocumentWithTotals = IOrderDocument & {
+    totalItems: number;
+    totalQuantity: number;
+    totalPrice: number;
+};
+
+type OrderResponseWithTotals = Order & {
     totalItems: number;
     totalQuantity: number;
     totalPrice: number;
@@ -38,7 +45,7 @@ describe('orderService.getAll', () => {
         // One order with two product lines
         await createOrder(user, [toOrderProduct(p1, 1), toOrderProduct(p2, 3)]);
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const [order] = (await orderService.getAll()) as OrderDocumentWithTotals[];
 
         // 2 distinct product lines → totalItems = 2
         expect(order.totalItems).toBe(2);
@@ -51,7 +58,7 @@ describe('orderService.getAll', () => {
         // 4 units of the same product
         await createOrder(user, [toOrderProduct(product, 4)]);
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const [order] = (await orderService.getAll()) as OrderDocumentWithTotals[];
 
         expect(order.totalQuantity).toBe(4);
     });
@@ -62,7 +69,7 @@ describe('orderService.getAll', () => {
 
         await createOrder(user, [toOrderProduct(product, 3)]); // 3 × 15 = $45
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const [order] = (await orderService.getAll()) as OrderDocumentWithTotals[];
 
         expect(order.totalPrice).toBe(45);
     });
@@ -76,7 +83,7 @@ describe('orderService.getAll', () => {
 
         await createOrder(user, [toOrderProduct(p1, 2), toOrderProduct(p2, 4)]);
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const [order] = (await orderService.getAll()) as OrderDocumentWithTotals[];
 
         expect(order.totalItems).toBe(2); // 2 product lines
         expect(order.totalQuantity).toBe(6); // 2 + 4
@@ -206,7 +213,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderProduct(product, 3)]); // 3 × $25 = $75
 
         const result = await orderService.search({});
-        const [order] = result.items as unknown as OrderWithTotals[];
+        const [order] = result.items as OrderResponseWithTotals[];
 
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(3);

@@ -9,7 +9,7 @@ import { runTokenCleanup } from '@utils/token-cleanup';
  * Given the refreshToken from the URL or, if not, from the user cookies:
  * create a new short-lived access token for the following requests.
  */
-export const getRefreshToken = async (request: Request<{ token?: string }>, response: Response) => {
+export const getRefreshToken = (request: Request<{ token?: string }>, response: Response) => {
     /**
      * Get token
      * (name of the cookie decided in the post-login.ts controller)
@@ -28,12 +28,12 @@ export const getRefreshToken = async (request: Request<{ token?: string }>, resp
     /**
      * Create new access token using refresh token stored in the server
      */
-    await runTokenCleanup();
-
-    try {
-        const token = await createAccessToken(refreshToken);
-        successResponse(response, { token });
-    } catch {
-        rejectResponse(response, 401, 'Unauthorized');
-    }
+    return runTokenCleanup()
+        .then(() => createAccessToken(refreshToken))
+        .then((token) => {
+            successResponse(response, { token });
+        })
+        .catch(() => {
+            rejectResponse(response, 401, 'Unauthorized');
+        });
 };
