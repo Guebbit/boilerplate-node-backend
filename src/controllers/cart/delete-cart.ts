@@ -17,10 +17,11 @@ export const deleteCart = (
     const productId = String(request.body.productId);
 
     // Remove specific item or entire cart
-    return (productId
+    const removePromise = productId
         ? cartService.cartItemRemoveById(user, productId)
-        : cartService.cartRemove(user)
-    )
+        : cartService.cartRemove(user);
+
+    return removePromise
         .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {
             successResponse(response, cart);
