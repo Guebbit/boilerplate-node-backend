@@ -12,17 +12,17 @@ import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
 
 /**
- * Handles get all.
+ * Gets all.
  *
- * @param pipeline
+ * @param pipeline - Aggregate pipeline stages to execute.
  */
 export const getAll = (pipeline: Array<Record<string, unknown>> = []): Promise<IOrderDocument[]> =>
     orderRepository.aggregate([...pipeline, { addFields: {} }]);
 
 /**
- * Handles is order status.
+ * Checks whether order status.
  *
- * @param value
+ * @param value - Value to validate or transform.
  */
 const isOrderStatus = (value: string): value is EOrderStatus =>
     (Object.values(ORDER_STATUS) as string[]).includes(value);
@@ -41,17 +41,17 @@ type MaybeResolvedOrderItem = { item: CartItem; product: ResolvedProduct | null 
 type ResolvedOrderItem = { item: CartItem; product: ResolvedProduct };
 
 /**
- * Handles has resolved product.
+ * Checks whether resolved product.
  *
- * @param value
+ * @param value - Value to validate or transform.
  */
 const hasResolvedProduct = (value: MaybeResolvedOrderItem): value is ResolvedOrderItem =>
     value.product !== null;
 
 /**
- * Handles to order product.
+ * Converts order product.
  *
- * @param options
+ * @param options - Additional options for the operation.
  */
 const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => ({
     product: {
@@ -66,9 +66,9 @@ const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => 
 });
 
 /**
- * Handles to order response.
+ * Converts order response.
  *
- * @param order
+ * @param order - Parameter used by this operation.
  */
 const toOrderResponse = (
     order: IOrderDocument & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }>
@@ -106,10 +106,10 @@ const toOrderResponse = (
 };
 
 /**
- * Handles search.
+ * Searches records.
  *
- * @param search
- * @param scope
+ * @param search - Search criteria for filtering and pagination.
+ * @param scope - Additional constraints applied to the query.
  */
 export const search = (
     search: SearchOrdersRequest = {},
@@ -158,10 +158,10 @@ export const search = (
 };
 
 /**
- * Handles get by id.
+ * Gets by id.
  *
  * @param id - Resource identifier.
- * @param scope
+ * @param scope - Additional constraints applied to the query.
  */
 export const getById = (
     id: string | undefined,
@@ -183,11 +183,11 @@ export const getById = (
 };
 
 /**
- * Handles create.
+ * Creates a record.
  *
- * @param userId
- * @param email
- * @param items
+ * @param userId - Parameter used by this operation.
+ * @param email - Email address used by the operation.
+ * @param items - Collection of items processed by the operation.
  */
 export const create = (
     userId: string,
@@ -225,10 +225,10 @@ export const create = (
 };
 
 /**
- * Handles update.
+ * Updates a record.
  *
  * @param id - Resource identifier.
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const update = (
     id: string,
@@ -281,7 +281,7 @@ export const update = (
 };
 
 /**
- * Handles remove.
+ * Removes a record.
  *
  * @param id - Resource identifier.
  */

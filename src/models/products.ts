@@ -15,7 +15,7 @@ export class ProductModel extends Model {
     declare updatedAt: Date;
 
     /**
-     * Handles to object.
+     * Converts object.
      */
     toObject() {
         return this.get({ plain: true });

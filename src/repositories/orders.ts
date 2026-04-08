@@ -4,9 +4,9 @@ import { orderModel, type IOrderDocument, type IOrderProduct } from '@models/ord
 import { orderItemModel } from '@models/order-items';
 
 /**
- * Handles hydrate one.
+ * Hydrates one.
  *
- * @param order
+ * @param order - Parameter used by this operation.
  */
 const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
     orderItemModel.findAll({ where: { orderId: order.id }, raw: true }).then((items) => {
@@ -29,18 +29,18 @@ const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
     });
 
 /**
- * Handles hydrate all.
+ * Hydrates all.
  *
- * @param orders
+ * @param orders - Parameter used by this operation.
  */
 const hydrateAll = (orders: Array<{ id: number } & Record<string, unknown>>) =>
     Promise.all(orders.map((order) => hydrateOne(order)));
 
 /**
- * Handles apply match.
+ * Applies match.
  *
- * @param rows
- * @param match
+ * @param rows - Database rows processed by the operation.
+ * @param match - Match criteria applied to records.
  */
 const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
     const keys = Object.keys(match);
@@ -61,17 +61,17 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
 };
 
 /**
- * Handles extract product id.
+ * Extracts product id.
  *
- * @param product
+ * @param product - Product entity used by the operation.
  */
 const extractProductId = (product: IOrderProduct['product']): number =>
     Number(product.id ?? 0);
 
 /**
- * Handles add computed fields.
+ * Adds computed fields.
  *
- * @param rows
+ * @param rows - Database rows processed by the operation.
  */
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
@@ -86,9 +86,9 @@ const addComputedFields = (rows: IOrderDocument[]) =>
     }));
 
 /**
- * Executes the lightweight aggregate pipeline used by services.
+ * Runs aggregate.
  *
- * @param pipeline
+ * @param pipeline - Aggregate pipeline stages to execute.
  */
 export const aggregate = async <T = IOrderDocument>(
     pipeline: Array<Record<string, unknown>>
@@ -127,7 +127,7 @@ export const aggregate = async <T = IOrderDocument>(
 };
 
 /**
- * Handles find by id.
+ * Finds by id.
  *
  * @param id - Resource identifier.
  */
@@ -138,9 +138,9 @@ export const findById = (id: string | number) =>
     });
 
 /**
- * Handles create.
+ * Creates a record.
  *
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =>
     orderModel
@@ -173,9 +173,9 @@ export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =
         });
 
 /**
- * Handles save.
+ * Saves changes.
  *
- * @param order
+ * @param order - Parameter used by this operation.
  */
 export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
     orderModel.findByPk(Number(order.id)).then((databaseOrder) => {
@@ -219,9 +219,9 @@ export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
     });
 
 /**
- * Handles delete one.
+ * Deletes one.
  *
- * @param order
+ * @param order - Parameter used by this operation.
  */
 export const deleteOne = (order: IOrderDocument): Promise<void> =>
     orderModel.destroy({ where: { id: Number(order.id) } }).then(() => {});

@@ -9,9 +9,9 @@ import { userTokenModel } from '@models/user-tokens';
 type UserWhere = Record<string, unknown>;
 
 /**
- * Handles to where.
+ * Converts where.
  *
- * @param where
+ * @param where - Filter conditions used to query records.
  */
 const toWhere = (where: UserWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
@@ -63,9 +63,9 @@ const toWhere = (where: UserWhere = {}): WhereOptions => {
 };
 
 /**
- * Handles token filter.
+ * Runs token filter.
  *
- * @param where
+ * @param where - Filter conditions used to query records.
  */
 const tokenFilter = (where: UserWhere) => {
     const token = where['tokens.token'];
@@ -84,7 +84,7 @@ const tokenFilter = (where: UserWhere) => {
 };
 
 /**
- * Handles with computed relations.
+ * Runs with computed relations.
  *
  * @param user - User document used to scope the operation.
  */
@@ -122,7 +122,7 @@ const withComputedRelations = (
 };
 
 /**
- * Handles find by id.
+ * Finds by id.
  *
  * @param id - Resource identifier.
  */
@@ -130,9 +130,9 @@ export const findById = (id: string | number): Promise<IUserDocument | null> =>
     userModel.findByPk(Number(id)).then((user) => withComputedRelations(user));
 
 /**
- * Handles find one.
+ * Finds one.
  *
- * @param where
+ * @param where - Filter conditions used to query records.
  */
 export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
     const includeToken = tokenFilter(where);
@@ -145,10 +145,10 @@ export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
 };
 
 /**
- * Handles find all.
+ * Finds all.
  *
- * @param where
- * @param options
+ * @param where - Filter conditions used to query records.
+ * @param options - Additional options for the operation.
  */
 export const findAll = (
     where: UserWhere = {},
@@ -222,17 +222,17 @@ export const findAll = (
 };
 
 /**
- * Handles count.
+ * Counts records.
  *
- * @param where
+ * @param where - Filter conditions used to query records.
  */
 export const count = (where: UserWhere = {}): Promise<number> =>
     userModel.count({ where: toWhere(where) });
 
 /**
- * Handles create.
+ * Creates a record.
  *
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
     userModel
@@ -272,7 +272,7 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
         }) as Promise<IUserDocument>;
 
 /**
- * Handles save.
+ * Saves changes.
  *
  * @param user - User document used to scope the operation.
  */
@@ -280,7 +280,7 @@ export const save = (user: IUserDocument): Promise<IUserDocument> =>
     user.save().then(() => withComputedRelations(user)) as Promise<IUserDocument>;
 
 /**
- * Handles delete one.
+ * Deletes one.
  *
  * @param user - User document used to scope the operation.
  */
@@ -288,10 +288,10 @@ export const deleteOne = (user: IUserDocument): Promise<void> =>
     user.destroy().then(() => {});
 
 /**
- * Handles update many.
+ * Updates many.
  *
- * @param filter
- * @param update
+ * @param filter - Filter conditions used to target records.
+ * @param update - Update payload to persist.
  */
 export const updateMany = (filter: UserWhere, update: Record<string, unknown>) => {
     if (filter['cart.items.product'] && update.removeFromCartItems) {

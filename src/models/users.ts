@@ -73,7 +73,7 @@ export class UserModel extends Model {
     declare tokens?: IToken[];
 
     /**
-     * Handles to object.
+     * Converts object.
      */
     toObject() {
         const plain = this.get({ plain: true }) as Record<string, unknown>;
@@ -97,11 +97,11 @@ export class UserModel extends Model {
     }
 
     /**
-     * Handles token add.
+     * Adds token.
      *
-     * @param type
-     * @param expirationMs
-     * @param token
+     * @param type - Token or category type used by the operation.
+     * @param expirationMs - Expiration window in milliseconds.
+     * @param token - Token value used for persistence or matching.
      */
     async tokenAdd(type: ETokenType, expirationMs: number, token: string): Promise<string> {
         await userTokenModel.create({
@@ -114,28 +114,28 @@ export class UserModel extends Model {
     }
 
     /**
-     * Handles token remove all.
+     * Removes token all.
      *
-     * @param type
+     * @param type - Token or category type used by the operation.
      */
     async tokenRemoveAll(type: ETokenType): Promise<void> {
         await userTokenModel.destroy({ where: { userId: this.id, type } });
     }
 
     /**
-     * Handles populate.
+     * Runs populate.
      *
-     * @param _path
+     * @param _path - Compatibility path argument kept for legacy calls.
      */
     async populate(_path: string) {
         return this;
     }
 
     /**
-     * Handles update many.
+     * Updates many.
      *
-     * @param filter
-     * @param update
+     * @param filter - Filter conditions used to target records.
+     * @param update - Update payload to persist.
      */
     static async updateMany(filter: Record<string, unknown>, update: Record<string, unknown>) {
         const where: Record<string, unknown> = {};
@@ -146,7 +146,7 @@ export class UserModel extends Model {
     }
 
     /**
-     * Handles token remove expired.
+     * Removes token expired.
      */
     static async tokenRemoveExpired(): Promise<{ status: number; success: boolean }> {
         const now = new Date();
@@ -197,7 +197,7 @@ UserModel.init(
         ],
         hooks: {
             /**
-             * Handles before save.
+             * Saves before.
              *
              * @param user - User document used to scope the operation.
              */

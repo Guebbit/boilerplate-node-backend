@@ -15,9 +15,9 @@ import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
 
 /**
- * Handles to product response item.
+ * Converts product response item.
  *
- * @param item
+ * @param item - Item processed by the operation.
  */
 const toProductResponseItem = (item: IProductDocument): ProductsResponse['items'][number] => ({
     id: String(item.id),
@@ -32,9 +32,9 @@ const toProductResponseItem = (item: IProductDocument): ProductsResponse['items'
 });
 
 /**
- * Handles validate data.
+ * Validates data.
  *
- * @param productData
+ * @param productData - Product payload to validate.
  */
 export const validateData = (productData: Omit<Product, 'id'>): string[] => {
     const parseResult = zodProductSchema.safeParse(productData);
@@ -43,10 +43,10 @@ export const validateData = (productData: Omit<Product, 'id'>): string[] => {
 };
 
 /**
- * Handles search.
+ * Searches records.
  *
- * @param filters
- * @param admin
+ * @param filters - Filter criteria used to query records.
+ * @param admin - Whether admin-level visibility rules should be applied.
  */
 export const search = (
     filters: SearchProductsRequest = {},
@@ -106,10 +106,10 @@ export const search = (
 };
 
 /**
- * Handles get by id.
+ * Gets by id.
  *
  * @param id - Resource identifier.
- * @param admin
+ * @param admin - Whether admin-level visibility rules should be applied.
  */
 export const getById = (id: string | undefined, admin = false) => {
     if (!id) return Promise.resolve();
@@ -124,18 +124,18 @@ export const getById = (id: string | undefined, admin = false) => {
 };
 
 /**
- * Handles create.
+ * Creates a record.
  *
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
     productRepository.create(data);
 
 /**
- * Handles update.
+ * Updates a record.
  *
  * @param id - Resource identifier.
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const update = (
     id: string,
@@ -165,10 +165,10 @@ export const update = (
 };
 
 /**
- * Handles remove.
+ * Removes a record.
  *
  * @param id - Resource identifier.
- * @param hardDelete
+ * @param hardDelete - When true, permanently deletes the record.
  */
 export const remove = (
     id: string,

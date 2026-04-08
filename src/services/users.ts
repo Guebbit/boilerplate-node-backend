@@ -17,14 +17,14 @@ import { userRepository } from '@repositories/users';
 import { userTokenModel } from '@models/user-tokens';
 
 /**
- * Handles get user id.
+ * Gets user id.
  *
  * @param user - User document used to scope the operation.
  */
 const getUserId = (user: IUserDocument): number => Number(user.id);
 
 /**
- * Handles to user response item.
+ * Converts user response item.
  *
  * @param user - User document used to scope the operation.
  */
@@ -40,11 +40,11 @@ const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse[
 });
 
 /**
- * Handles token add.
+ * Adds token.
  *
  * @param user - User document used to scope the operation.
- * @param type
- * @param expirationTime
+ * @param type - Token or category type used by the operation.
+ * @param expirationTime - Expiration window in milliseconds.
  */
 export const tokenAdd = (
     user: IUserDocument,
@@ -63,11 +63,11 @@ export const tokenAdd = (
 };
 
 /**
- * Handles password change.
+ * Runs password change.
  *
  * @param user - User document used to scope the operation.
- * @param password
- * @param passwordConfirm
+ * @param password - Password value to validate or persist.
+ * @param passwordConfirm - Confirmation value used to verify password input.
  */
 export const passwordChange = (
     user: IUserDocument,
@@ -111,13 +111,13 @@ export const passwordChange = (
 };
 
 /**
- * Handles signup.
+ * Signs up a user.
  *
- * @param email
- * @param username
- * @param password
- * @param passwordConfirm
- * @param imageUrl
+ * @param email - Email address used by the operation.
+ * @param username - Username used by the operation.
+ * @param password - Password value to validate or persist.
+ * @param passwordConfirm - Confirmation value used to verify password input.
+ * @param imageUrl - Image URL value used by the operation.
  */
 export const signup = (
     email: string,
@@ -176,10 +176,10 @@ export const signup = (
 };
 
 /**
- * Handles login.
+ * Logs in a user.
  *
- * @param email
- * @param password
+ * @param email - Email address used by the operation.
+ * @param password - Password value to validate or persist.
  */
 export const login = (
     email?: string,
@@ -223,10 +223,10 @@ export const login = (
 };
 
 /**
- * Handles validate data.
+ * Validates data.
  *
- * @param userData
- * @param requirePassword
+ * @param userData - User payload to validate.
+ * @param requirePassword - Whether password is required for validation.
  */
 export const validateData = (
     userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
@@ -244,9 +244,9 @@ export const validateData = (
 };
 
 /**
- * Handles search.
+ * Searches records.
  *
- * @param filters
+ * @param filters - Filter criteria used to query records.
  */
 export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
@@ -294,7 +294,7 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
 };
 
 /**
- * Handles get by id.
+ * Gets by id.
  *
  * @param id - Resource identifier.
  */
@@ -307,9 +307,9 @@ export const getById = (id?: string) => {
 };
 
 /**
- * Handles admin create.
+ * Creates admin.
  *
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const adminCreate = (
     data: Pick<IUser, 'email' | 'username' | 'password'> &
@@ -322,10 +322,10 @@ export const adminCreate = (
     });
 
 /**
- * Handles admin update.
+ * Updates admin.
  *
  * @param id - Resource identifier.
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const adminUpdate = (
     id: string,
@@ -344,10 +344,10 @@ export const adminUpdate = (
     });
 
 /**
- * Handles remove.
+ * Removes a record.
  *
  * @param id - Resource identifier.
- * @param hardDelete
+ * @param hardDelete - When true, permanently deletes the record.
  */
 export const remove = (
     id: string,

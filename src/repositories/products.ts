@@ -7,10 +7,10 @@ import type { IProductDocument } from '@models/products';
 type ProductWhere = Record<string, unknown>;
 
 /**
- * Handles normalize deleted at.
+ * Runs normalize deleted at.
  *
- * @param where
- * @param output
+ * @param where - Filter conditions used to query records.
+ * @param output - Parameter used by this operation.
  */
 const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>) => {
     if (where.deletedAt === null) {
@@ -21,9 +21,9 @@ const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>
 };
 
 /**
- * Handles to where.
+ * Converts where.
  *
- * @param where
+ * @param where - Filter conditions used to query records.
  */
 const toWhere = (where: ProductWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
@@ -64,7 +64,7 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
 };
 
 /**
- * Handles find by id.
+ * Finds by id.
  *
  * @param id - Resource identifier.
  */
@@ -75,9 +75,9 @@ export const findById = (id: string | number) =>
     });
 
 /**
- * Handles find one.
+ * Finds one.
  *
- * @param where
+ * @param where - Filter conditions used to query records.
  */
 export const findOne = (where: ProductWhere) =>
     productModel.findOne({ where: toWhere(where) }).then((product) => {
@@ -86,10 +86,10 @@ export const findOne = (where: ProductWhere) =>
     });
 
 /**
- * Handles find all.
+ * Finds all.
  *
- * @param where
- * @param options
+ * @param where - Filter conditions used to query records.
+ * @param options - Additional options for the operation.
  */
 export const findAll = (
     where: ProductWhere = {},
@@ -114,33 +114,33 @@ export const findAll = (
 };
 
 /**
- * Handles count.
+ * Counts records.
  *
- * @param where
+ * @param where - Filter conditions used to query records.
  */
 export const count = (where: ProductWhere = {}): Promise<number> =>
     productModel.count({ where: toWhere(where) });
 
 /**
- * Handles create.
+ * Creates a record.
  *
- * @param data
+ * @param data - Payload containing values to create or update.
  */
 export const create = (data: Partial<IProductDocument>): Promise<IProductDocument> =>
     productModel.create(data as never) as Promise<IProductDocument>;
 
 /**
- * Handles save.
+ * Saves changes.
  *
- * @param product
+ * @param product - Product entity used by the operation.
  */
 export const save = (product: IProductDocument): Promise<IProductDocument> =>
     product.save();
 
 /**
- * Handles delete one.
+ * Deletes one.
  *
- * @param product
+ * @param product - Product entity used by the operation.
  */
 export const deleteOne = (product: IProductDocument): Promise<void> =>
     product.destroy().then(() => {});
