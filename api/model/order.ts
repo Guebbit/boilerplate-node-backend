@@ -11,7 +11,7 @@
  */
 
 import { RequestFile } from './models';
-import { CartItem } from './cartItem';
+import { OrderItem } from './orderItem';
 
 export class Order {
     /**
@@ -23,7 +23,7 @@ export class Order {
     */
     'userId': string;
     'email': string;
-    'items': Array<CartItem>;
+    'items': Array<OrderItem>;
     'total': number;
     /**
     * Optional order notes
@@ -54,7 +54,7 @@ export class Order {
         {
             "name": "items",
             "baseName": "items",
-            "type": "Array<CartItem>"
+            "type": "Array<OrderItem>"
         },
         {
             "name": "total",
