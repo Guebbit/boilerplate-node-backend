@@ -134,8 +134,7 @@ export const create = (data: Partial<IProductDocument>): Promise<IProductDocumen
  *
  * @param product - Product entity used by the operation.
  */
-export const save = (product: IProductDocument): Promise<IProductDocument> =>
-    product.save();
+export const save = (product: IProductDocument): Promise<IProductDocument> => product.save();
 
 /**
  * Deletes one.

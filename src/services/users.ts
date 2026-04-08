@@ -28,7 +28,9 @@ const getUserId = (user: IUserDocument): number => Number(user.id);
  *
  * @param user - User document used to scope the operation.
  */
-const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse['items'][number] => ({
+const toUserResponseItem = (
+    user: IUserDocument | IUserListItem
+): UsersResponse['items'][number] => ({
     id: String(user.id),
     email: user.email,
     username: user.username,
@@ -259,10 +261,7 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
 
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
-        where.or = [
-            { email: { contains: text } },
-            { username: { contains: text } }
-        ];
+        where.or = [{ email: { contains: text } }, { username: { contains: text } }];
     }
 
     if (filters.email && String(filters.email).trim() !== '')

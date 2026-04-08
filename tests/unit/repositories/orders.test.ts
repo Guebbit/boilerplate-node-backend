@@ -85,7 +85,9 @@ describe('orderRepository', () => {
             await createOrder(user, [toOrderProduct(product, 2)]);
             await createOrder(user, [toOrderProduct(product, 3)]);
 
-            const [result] = await orderRepository.aggregate<{ total: number }>([{ count: 'total' }]);
+            const [result] = await orderRepository.aggregate<{ total: number }>([
+                { count: 'total' }
+            ]);
 
             expect(result.total).toBe(3);
         });

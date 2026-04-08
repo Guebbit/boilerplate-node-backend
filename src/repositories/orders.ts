@@ -65,8 +65,7 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
  *
  * @param product - Product entity used by the operation.
  */
-const extractProductId = (product: IOrderProduct['product']): number =>
-    Number(product.id ?? 0);
+const extractProductId = (product: IOrderProduct['product']): number => Number(product.id ?? 0);
 
 /**
  * Adds computed fields.
@@ -105,9 +104,10 @@ export const aggregate = async <T = IOrderDocument>(
     for (const stage of pipeline) {
         if ('match' in stage) rows = applyMatch(rows, stage.match as Record<string, unknown>);
         if ('sort' in stage) {
-            const [field, direction] = Object.entries(
-                stage.sort as Record<string, unknown>
-            )[0] ?? ['createdAt', -1];
+            const [field, direction] = Object.entries(stage.sort as Record<string, unknown>)[0] ?? [
+                'createdAt',
+                -1
+            ];
             // eslint-disable-next-line unicorn/no-array-sort
             rows = [...rows].sort((a, b) => {
                 const av = a[field as keyof IOrderDocument] as number | string | Date;
@@ -163,8 +163,12 @@ export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =
                         productDescription: String(
                             (entry.product as { description?: string }).description ?? ''
                         ),
-                        productImageUrl: String((entry.product as { imageUrl?: string }).imageUrl ?? ''),
-                        productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
+                        productImageUrl: String(
+                            (entry.product as { imageUrl?: string }).imageUrl ?? ''
+                        ),
+                        productActive: Boolean(
+                            (entry.product as { active?: boolean }).active ?? true
+                        )
                     } as never)
                 )
             ).then(() =>
@@ -197,15 +201,21 @@ export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
                                 orderId: databaseOrder.id,
                                 productId: extractProductId(entry.product),
                                 quantity: Number(entry.quantity),
-                                productTitle: String((entry.product as { title?: string }).title ?? ''),
-                                productPrice: Number((entry.product as { price?: number }).price ?? 0),
+                                productTitle: String(
+                                    (entry.product as { title?: string }).title ?? ''
+                                ),
+                                productPrice: Number(
+                                    (entry.product as { price?: number }).price ?? 0
+                                ),
                                 productDescription: String(
                                     (entry.product as { description?: string }).description ?? ''
                                 ),
                                 productImageUrl: String(
                                     (entry.product as { imageUrl?: string }).imageUrl ?? ''
                                 ),
-                                productActive: Boolean((entry.product as { active?: boolean }).active ?? true)
+                                productActive: Boolean(
+                                    (entry.product as { active?: boolean }).active ?? true
+                                )
                             } as never)
                         )
                     )

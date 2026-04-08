@@ -31,8 +31,7 @@ import type { IUserDocument } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import { orderRepository } from '@repositories/orders';
 
-const getUserId = (user: IUserDocument): number =>
-    Number(user.id);
+const getUserId = (user: IUserDocument): number => Number(user.id);
 
 /**
  * Convert a product record into an IOrderProduct ready to embed

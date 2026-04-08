@@ -24,8 +24,7 @@ export const deleteCartItem = (
         .cartGet(user)
         .then((items) => {
             const existing = items.some(
-                (item) =>
-                    String(getProductIdFromCartItem(item)) === String(productId)
+                (item) => String(getProductIdFromCartItem(item)) === String(productId)
             );
 
             if (!existing) {

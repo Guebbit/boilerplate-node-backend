@@ -1,7 +1,12 @@
 import { t } from 'i18next';
 import { Order as ApiOrderModel } from '@api/model/order';
 import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
-import { ORDER_STATUS, type EOrderStatus, type IOrderDocument, type IOrderProduct } from '@models/orders';
+import {
+    ORDER_STATUS,
+    type EOrderStatus,
+    type IOrderDocument,
+    type IOrderProduct
+} from '@models/orders';
 import {
     generateReject,
     generateSuccess,
@@ -71,7 +76,8 @@ const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => 
  * @param order - Parameter used by this operation.
  */
 const toOrderResponse = (
-    order: IOrderDocument & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }>
+    order: IOrderDocument &
+        Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }>
 ): Order & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }> => {
     const items = order.products.map(({ product, quantity }) => ({
         product: {
@@ -267,10 +273,10 @@ export const update = (
                               t('ecommerce.product-not-found')
                           ]);
 
-                        order.products = resolvedItems
-                            .filter((value) => hasResolvedProduct(value))
-                            .map((value) => toOrderProduct(value));
-                    })
+                      order.products = resolvedItems
+                          .filter((value) => hasResolvedProduct(value))
+                          .map((value) => toOrderProduct(value));
+                  })
                 : Promise.resolve();
 
         return updateProductsPromise.then((earlyResult) => {

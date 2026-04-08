@@ -62,10 +62,7 @@ export const search = (
 
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
-        where.or = [
-            { title: { contains: text } },
-            { description: { contains: text } }
-        ];
+        where.or = [{ title: { contains: text } }, { description: { contains: text } }];
     }
 
     const priceConditions: Record<string, number> = {};
@@ -73,12 +70,14 @@ export const search = (
         filters.minPrice !== undefined &&
         filters.minPrice !== null &&
         !Number.isNaN(Number(filters.minPrice))
-    ) priceConditions.min = Number(filters.minPrice);
+    )
+        priceConditions.min = Number(filters.minPrice);
     if (
         filters.maxPrice !== undefined &&
         filters.maxPrice !== null &&
         !Number.isNaN(Number(filters.maxPrice))
-    ) priceConditions.max = Number(filters.maxPrice);
+    )
+        priceConditions.max = Number(filters.maxPrice);
     if (Object.keys(priceConditions).length > 0) where.price = priceConditions;
 
     if (!admin) {

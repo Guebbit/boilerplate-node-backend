@@ -1,10 +1,20 @@
 import { t } from 'i18next';
 import { Order as ApiOrderModel } from '@api/model/order';
-import { ORDER_STATUS, type EOrderStatus, type IOrderDocument, type IOrderProduct } from '@models/orders';
+import {
+    ORDER_STATUS,
+    type EOrderStatus,
+    type IOrderDocument,
+    type IOrderProduct
+} from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import type { Order } from '@types';
-import { generateReject, generateSuccess, type IResponseReject, type IResponseSuccess } from '@utils/response';
+import {
+    generateReject,
+    generateSuccess,
+    type IResponseReject,
+    type IResponseSuccess
+} from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
@@ -351,7 +361,7 @@ export const orderConfirm = (
                             active: product.active
                         },
                         quantity: entry.quantity
-                    },
+                    }
                 };
             });
 

@@ -284,8 +284,7 @@ export const save = (user: IUserDocument): Promise<IUserDocument> =>
  *
  * @param user - User document used to scope the operation.
  */
-export const deleteOne = (user: IUserDocument): Promise<void> =>
-    user.destroy().then(() => {});
+export const deleteOne = (user: IUserDocument): Promise<void> => user.destroy().then(() => {});
 
 /**
  * Updates many.
