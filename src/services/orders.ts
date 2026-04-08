@@ -11,9 +11,19 @@ import {
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
 
+/**
+ * Gets all.
+ *
+ * @param pipeline - Aggregate pipeline stages to execute.
+ */
 export const getAll = (pipeline: Array<Record<string, unknown>> = []): Promise<IOrderDocument[]> =>
     orderRepository.aggregate([...pipeline, { addFields: {} }]);
 
+/**
+ * Checks whether order status.
+ *
+ * @param value - Value to validate or transform.
+ */
 const isOrderStatus = (value: string): value is EOrderStatus =>
     (Object.values(ORDER_STATUS) as string[]).includes(value);
 
@@ -30,9 +40,19 @@ type ResolvedProduct = NonNullable<Awaited<ReturnType<typeof productRepository.f
 type MaybeResolvedOrderItem = { item: CartItem; product: ResolvedProduct | null };
 type ResolvedOrderItem = { item: CartItem; product: ResolvedProduct };
 
+/**
+ * Checks whether resolved product.
+ *
+ * @param value - Value to validate or transform.
+ */
 const hasResolvedProduct = (value: MaybeResolvedOrderItem): value is ResolvedOrderItem =>
     value.product !== null;
 
+/**
+ * Converts order product.
+ *
+ * @param options - Additional options for the operation.
+ */
 const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => ({
     product: {
         id: String(product.id),
@@ -45,6 +65,11 @@ const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => 
     quantity: item.quantity
 });
 
+/**
+ * Converts order response.
+ *
+ * @param order - Parameter used by this operation.
+ */
 const toOrderResponse = (
     order: IOrderDocument & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }>
 ): Order & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }> => {
@@ -80,6 +105,12 @@ const toOrderResponse = (
     };
 };
 
+/**
+ * Searches records.
+ *
+ * @param search - Search criteria for filtering and pagination.
+ * @param scope - Additional constraints applied to the query.
+ */
 export const search = (
     search: SearchOrdersRequest = {},
     scope?: Record<string, unknown>
@@ -126,6 +157,12 @@ export const search = (
         });
 };
 
+/**
+ * Gets by id.
+ *
+ * @param id - Resource identifier.
+ * @param scope - Additional constraints applied to the query.
+ */
 export const getById = (
     id: string | undefined,
     scope?: Record<string, unknown>
@@ -145,6 +182,13 @@ export const getById = (
     return orderRepository.findById(id);
 };
 
+/**
+ * Creates a record.
+ *
+ * @param userId - Parameter used by this operation.
+ * @param email - Email address used by the operation.
+ * @param items - Collection of items processed by the operation.
+ */
 export const create = (
     userId: string,
     email: string,
@@ -180,6 +224,12 @@ export const create = (
     });
 };
 
+/**
+ * Updates a record.
+ *
+ * @param id - Resource identifier.
+ * @param data - Payload containing values to create or update.
+ */
 export const update = (
     id: string,
     data: {
@@ -230,6 +280,11 @@ export const update = (
     });
 };
 
+/**
+ * Removes a record.
+ *
+ * @param id - Resource identifier.
+ */
 export const remove = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> => {
     return orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);

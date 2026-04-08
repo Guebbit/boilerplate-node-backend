@@ -33,6 +33,9 @@ export class OrderModel extends Model {
      */
     declare products?: IOrderProduct[];
 
+    /**
+     * Converts object.
+     */
     toObject() {
         return this.get({ plain: true });
     }

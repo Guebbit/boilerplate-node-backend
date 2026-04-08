@@ -6,6 +6,12 @@ import type { IProductDocument } from '@models/products';
 
 type ProductWhere = Record<string, unknown>;
 
+/**
+ * Runs normalize deleted at.
+ *
+ * @param where - Filter conditions used to query records.
+ * @param output - Parameter used by this operation.
+ */
 const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>) => {
     if (where.deletedAt === null) {
         output['deletedAt'] = null;
@@ -14,6 +20,11 @@ const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>
     if (where.deletedAt !== undefined) output['deletedAt'] = where.deletedAt;
 };
 
+/**
+ * Converts where.
+ *
+ * @param where - Filter conditions used to query records.
+ */
 const toWhere = (where: ProductWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
 
@@ -52,18 +63,34 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
     return output;
 };
 
+/**
+ * Finds by id.
+ *
+ * @param id - Resource identifier.
+ */
 export const findById = (id: string | number) =>
     productModel.findByPk(Number(id)).then((product) => {
         if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
+/**
+ * Finds one.
+ *
+ * @param where - Filter conditions used to query records.
+ */
 export const findOne = (where: ProductWhere) =>
     productModel.findOne({ where: toWhere(where) }).then((product) => {
         if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
+/**
+ * Finds all.
+ *
+ * @param where - Filter conditions used to query records.
+ * @param options - Additional options for the operation.
+ */
 export const findAll = (
     where: ProductWhere = {},
     {
@@ -86,15 +113,35 @@ export const findAll = (
     }) as Promise<IProductDocument[]>;
 };
 
+/**
+ * Counts records.
+ *
+ * @param where - Filter conditions used to query records.
+ */
 export const count = (where: ProductWhere = {}): Promise<number> =>
     productModel.count({ where: toWhere(where) });
 
+/**
+ * Creates a record.
+ *
+ * @param data - Payload containing values to create or update.
+ */
 export const create = (data: Partial<IProductDocument>): Promise<IProductDocument> =>
     productModel.create(data as never) as Promise<IProductDocument>;
 
+/**
+ * Saves changes.
+ *
+ * @param product - Product entity used by the operation.
+ */
 export const save = (product: IProductDocument): Promise<IProductDocument> =>
     product.save();
 
+/**
+ * Deletes one.
+ *
+ * @param product - Product entity used by the operation.
+ */
 export const deleteOne = (product: IProductDocument): Promise<void> =>
     product.destroy().then(() => {});
 

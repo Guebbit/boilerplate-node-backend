@@ -16,8 +16,18 @@ import type { SearchUsersRequest, UsersResponse } from '@types';
 import { userRepository } from '@repositories/users';
 import { userTokenModel } from '@models/user-tokens';
 
+/**
+ * Gets user id.
+ *
+ * @param user - User document used to scope the operation.
+ */
 const getUserId = (user: IUserDocument): number => Number(user.id);
 
+/**
+ * Converts user response item.
+ *
+ * @param user - User document used to scope the operation.
+ */
 const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse['items'][number] => ({
     id: String(user.id),
     email: user.email,
@@ -29,6 +39,13 @@ const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse[
     updatedAt: user.updatedAt
 });
 
+/**
+ * Adds token.
+ *
+ * @param user - User document used to scope the operation.
+ * @param type - Token or category type used by the operation.
+ * @param expirationTime - Expiration window in milliseconds.
+ */
 export const tokenAdd = (
     user: IUserDocument,
     type: string,
@@ -45,6 +62,13 @@ export const tokenAdd = (
         .then(() => token);
 };
 
+/**
+ * Runs password change.
+ *
+ * @param user - User document used to scope the operation.
+ * @param password - Password value to validate or persist.
+ * @param passwordConfirm - Confirmation value used to verify password input.
+ */
 export const passwordChange = (
     user: IUserDocument,
     password = '',
@@ -86,6 +110,15 @@ export const passwordChange = (
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
+/**
+ * Signs up a user.
+ *
+ * @param email - Email address used by the operation.
+ * @param username - Username used by the operation.
+ * @param password - Password value to validate or persist.
+ * @param passwordConfirm - Confirmation value used to verify password input.
+ * @param imageUrl - Image URL value used by the operation.
+ */
 export const signup = (
     email: string,
     username: string,
@@ -142,6 +175,12 @@ export const signup = (
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
+/**
+ * Logs in a user.
+ *
+ * @param email - Email address used by the operation.
+ * @param password - Password value to validate or persist.
+ */
 export const login = (
     email?: string,
     password?: string
@@ -183,6 +222,12 @@ export const login = (
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
+/**
+ * Validates data.
+ *
+ * @param userData - User payload to validate.
+ * @param requirePassword - Whether password is required for validation.
+ */
 export const validateData = (
     userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
     requirePassword = true
@@ -198,6 +243,11 @@ export const validateData = (
     return [];
 };
 
+/**
+ * Searches records.
+ *
+ * @param filters - Filter criteria used to query records.
+ */
 export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
@@ -243,6 +293,11 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
     );
 };
 
+/**
+ * Gets by id.
+ *
+ * @param id - Resource identifier.
+ */
 export const getById = (id?: string) => {
     if (!id) return Promise.resolve();
     return userRepository.findById(id).then((user) => {
@@ -251,6 +306,11 @@ export const getById = (id?: string) => {
     });
 };
 
+/**
+ * Creates admin.
+ *
+ * @param data - Payload containing values to create or update.
+ */
 export const adminCreate = (
     data: Pick<IUser, 'email' | 'username' | 'password'> &
         Partial<Pick<IUser, 'admin' | 'imageUrl'>>
@@ -261,6 +321,12 @@ export const adminCreate = (
         tokens: []
     });
 
+/**
+ * Updates admin.
+ *
+ * @param id - Resource identifier.
+ * @param data - Payload containing values to create or update.
+ */
 export const adminUpdate = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
@@ -277,6 +343,12 @@ export const adminUpdate = (
         return userRepository.save(user);
     });
 
+/**
+ * Removes a record.
+ *
+ * @param id - Resource identifier.
+ * @param hardDelete - When true, permanently deletes the record.
+ */
 export const remove = (
     id: string,
     hardDelete = false

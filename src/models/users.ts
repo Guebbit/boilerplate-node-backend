@@ -72,6 +72,9 @@ export class UserModel extends Model {
      */
     declare tokens?: IToken[];
 
+    /**
+     * Converts object.
+     */
     toObject() {
         const plain = this.get({ plain: true }) as Record<string, unknown>;
         const cartItems =
@@ -93,6 +96,13 @@ export class UserModel extends Model {
         };
     }
 
+    /**
+     * Adds token.
+     *
+     * @param type - Token or category type used by the operation.
+     * @param expirationMs - Expiration window in milliseconds.
+     * @param token - Token value used for persistence or matching.
+     */
     async tokenAdd(type: ETokenType, expirationMs: number, token: string): Promise<string> {
         await userTokenModel.create({
             userId: this.id,
@@ -103,14 +113,30 @@ export class UserModel extends Model {
         return token;
     }
 
+    /**
+     * Removes token all.
+     *
+     * @param type - Token or category type used by the operation.
+     */
     async tokenRemoveAll(type: ETokenType): Promise<void> {
         await userTokenModel.destroy({ where: { userId: this.id, type } });
     }
 
+    /**
+     * Runs populate.
+     *
+     * @param _path - Compatibility path argument kept for legacy calls.
+     */
     async populate(_path: string) {
         return this;
     }
 
+    /**
+     * Updates many.
+     *
+     * @param filter - Filter conditions used to target records.
+     * @param update - Update payload to persist.
+     */
     static async updateMany(filter: Record<string, unknown>, update: Record<string, unknown>) {
         const where: Record<string, unknown> = {};
         if (filter.admin !== undefined) where.admin = filter.admin;
@@ -119,6 +145,9 @@ export class UserModel extends Model {
         return { modifiedCount };
     }
 
+    /**
+     * Removes token expired.
+     */
     static async tokenRemoveExpired(): Promise<{ status: number; success: boolean }> {
         const now = new Date();
         return userTokenModel
@@ -167,6 +196,11 @@ UserModel.init(
             { fields: ['deletedAt'] }
         ],
         hooks: {
+            /**
+             * Saves before.
+             *
+             * @param user - User document used to scope the operation.
+             */
             beforeSave: async (user) => {
                 if (!user.changed('password')) return;
                 user.password = await bcrypt.hash(user.password, 12);

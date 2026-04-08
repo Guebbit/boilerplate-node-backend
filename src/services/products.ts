@@ -14,6 +14,11 @@ import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
 
+/**
+ * Converts product response item.
+ *
+ * @param item - Item processed by the operation.
+ */
 const toProductResponseItem = (item: IProductDocument): ProductsResponse['items'][number] => ({
     id: String(item.id),
     title: item.title,
@@ -26,12 +31,23 @@ const toProductResponseItem = (item: IProductDocument): ProductsResponse['items'
     deletedAt: item.deletedAt ?? undefined
 });
 
+/**
+ * Validates data.
+ *
+ * @param productData - Product payload to validate.
+ */
 export const validateData = (productData: Omit<Product, 'id'>): string[] => {
     const parseResult = zodProductSchema.safeParse(productData);
     if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
     return [];
 };
 
+/**
+ * Searches records.
+ *
+ * @param filters - Filter criteria used to query records.
+ * @param admin - Whether admin-level visibility rules should be applied.
+ */
 export const search = (
     filters: SearchProductsRequest = {},
     admin = false
@@ -89,6 +105,12 @@ export const search = (
     );
 };
 
+/**
+ * Gets by id.
+ *
+ * @param id - Resource identifier.
+ * @param admin - Whether admin-level visibility rules should be applied.
+ */
 export const getById = (id: string | undefined, admin = false) => {
     if (!id) return Promise.resolve();
     if (admin) return productRepository.findById(id).then((product) => product?.toObject());
@@ -101,9 +123,20 @@ export const getById = (id: string | undefined, admin = false) => {
         .then((product) => product?.toObject() ?? null);
 };
 
+/**
+ * Creates a record.
+ *
+ * @param data - Payload containing values to create or update.
+ */
 export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
     productRepository.create(data);
 
+/**
+ * Updates a record.
+ *
+ * @param id - Resource identifier.
+ * @param data - Payload containing values to create or update.
+ */
 export const update = (
     id: string,
     data: Partial<Omit<Product, 'id'>>
@@ -131,6 +164,12 @@ export const update = (
     });
 };
 
+/**
+ * Removes a record.
+ *
+ * @param id - Resource identifier.
+ * @param hardDelete - When true, permanently deletes the record.
+ */
 export const remove = (
     id: string,
     hardDelete = false

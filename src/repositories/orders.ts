@@ -3,6 +3,11 @@ import { Op } from 'sequelize';
 import { orderModel, type IOrderDocument, type IOrderProduct } from '@models/orders';
 import { orderItemModel } from '@models/order-items';
 
+/**
+ * Hydrates one.
+ *
+ * @param order - Parameter used by this operation.
+ */
 const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
     orderItemModel.findAll({ where: { orderId: order.id }, raw: true }).then((items) => {
         const products: IOrderProduct[] = items.map((item) => ({
@@ -23,9 +28,20 @@ const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
         } as IOrderDocument;
     });
 
+/**
+ * Hydrates all.
+ *
+ * @param orders - Parameter used by this operation.
+ */
 const hydrateAll = (orders: Array<{ id: number } & Record<string, unknown>>) =>
     Promise.all(orders.map((order) => hydrateOne(order)));
 
+/**
+ * Applies match.
+ *
+ * @param rows - Database rows processed by the operation.
+ * @param match - Match criteria applied to records.
+ */
 const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
     const keys = Object.keys(match);
     return rows.filter((row) =>
@@ -44,9 +60,19 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
     );
 };
 
+/**
+ * Extracts product id.
+ *
+ * @param product - Product entity used by the operation.
+ */
 const extractProductId = (product: IOrderProduct['product']): number =>
     Number(product.id ?? 0);
 
+/**
+ * Adds computed fields.
+ *
+ * @param rows - Database rows processed by the operation.
+ */
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
         ...row,
@@ -59,6 +85,11 @@ const addComputedFields = (rows: IOrderDocument[]) =>
         )
     }));
 
+/**
+ * Runs aggregate.
+ *
+ * @param pipeline - Aggregate pipeline stages to execute.
+ */
 export const aggregate = async <T = IOrderDocument>(
     pipeline: Array<Record<string, unknown>>
 ): Promise<T[]> => {
@@ -95,12 +126,22 @@ export const aggregate = async <T = IOrderDocument>(
     return rows as T[];
 };
 
+/**
+ * Finds by id.
+ *
+ * @param id - Resource identifier.
+ */
 export const findById = (id: string | number) =>
     orderModel.findByPk(Number(id)).then((order) => {
         if (!order) return null;
         return hydrateOne(order.get({ plain: true }) as { id: number } & Record<string, unknown>);
     });
 
+/**
+ * Creates a record.
+ *
+ * @param data - Payload containing values to create or update.
+ */
 export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =>
     orderModel
         .create({
@@ -131,6 +172,11 @@ export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =
             );
         });
 
+/**
+ * Saves changes.
+ *
+ * @param order - Parameter used by this operation.
+ */
 export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
     orderModel.findByPk(Number(order.id)).then((databaseOrder) => {
         if (!databaseOrder) throw new Error('404');
@@ -172,6 +218,11 @@ export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
             );
     });
 
+/**
+ * Deletes one.
+ *
+ * @param order - Parameter used by this operation.
+ */
 export const deleteOne = (order: IOrderDocument): Promise<void> =>
     orderModel.destroy({ where: { id: Number(order.id) } }).then(() => {});
 
