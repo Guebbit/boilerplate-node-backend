@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
 import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
-import type { IOrderDocument, IOrderProduct } from '@models/orders';
+import type { IOrderDocument, IOrderItem } from '@models/orders';
 import { EOrderStatus } from '@models/orders';
 import {
     generateReject,
@@ -27,17 +27,17 @@ const addComputedFields: PipelineStage.AddFields = {
     $addFields: {
         // Count all OrderItems
         totalItems: {
-            $size: '$products'
+            $size: '$items'
         },
         // Sum quantities from all OrderItems
         totalQuantity: {
-            $sum: '$products.quantity'
+            $sum: '$items.quantity'
         },
         // Sum of all prices multiplied for quantity
         totalPrice: {
             $sum: {
                 $map: {
-                    input: '$products',
+                    input: '$items',
                     as: 'product',
                     in: {
                         $multiply: ['$$product.product.price', '$$product.quantity']
@@ -64,8 +64,8 @@ export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]
  * Pagination: page (1-based), pageSize
  *
  * Note on productId:
- * In this schema product data is embedded: products[].product.
- * We filter by products.product._id (or products.product.id if your productSchema uses that).
+ * In this schema product data is embedded: items[].product.
+ * We filter by items.product._id (or items.product.id if your productSchema uses that).
  *
  * @param search
  * @param scope - Additional query filters merged into the $match stage
@@ -90,8 +90,8 @@ export const search = (
         match.email = String(search.email).trim();
 
     if (search.productId && String(search.productId).trim() !== '')
-        // Assumes productSchema uses default _id. If you store product.id instead, change to "products.product.id".
-        match['products.product._id'] = new Types.ObjectId(String(search.productId));
+        // Assumes productSchema uses default _id. If you store product.id instead, change to "items.product.id".
+        match['items.product._id'] = new Types.ObjectId(String(search.productId));
 
     const basePipeline: PipelineStage[] = [
         { $match: match },
@@ -108,8 +108,7 @@ export const search = (
             return orderRepository
                 .aggregate([...basePipeline, { $skip: skip }, { $limit: pageSize }])
                 .then((items) => ({
-                    // IOrderDocument[] returned as Order[] — the API type differs from the DB schema
-                    // (products vs items, userId ObjectId vs string) but the runtime data is compatible
+                    // IOrderDocument[] returned as Order[] — userId differs (ObjectId vs string)
                     items: items as unknown as Order[],
                     meta: {
                         page,
@@ -180,19 +179,19 @@ export const create = (
                 t('ecommerce.product-not-found')
             ]);
 
-        const products = resolvedItems.map(
+        const orderItems = resolvedItems.map(
             ({ item, product }) =>
                 ({
                     product,
                     quantity: item.quantity
-                }) as unknown as IOrderProduct
+                }) as unknown as IOrderItem
         );
 
         return orderRepository
             .create({
                 userId: new Types.ObjectId(userId),
                 email,
-                products
+                items: orderItems
             } as Partial<IOrderDocument>)
             .then((order) => generateSuccess(order, 201, t('ecommerce.order-creation-success')));
     });
@@ -221,7 +220,7 @@ export const update = (
         if (data.email !== undefined) order.email = data.email;
         if (data.userId !== undefined) order.userId = new Types.ObjectId(data.userId);
 
-        const updateProductsPromise =
+        const updateItemsPromise =
             data.items && data.items.length > 0
                 ? Promise.all(
                       data.items.map((item) =>
@@ -230,24 +229,24 @@ export const update = (
                               .lean()
                               .then((product) => ({ item, product }))
                       )
-                  ).then((resolvedItems) => {
-                      const missingProduct = resolvedItems.some(({ product }) => !product);
-                      if (missingProduct)
-                          return generateReject(404, 'update order - product not found', [
-                              t('ecommerce.product-not-found')
-                          ]);
+                   ).then((resolvedItems) => {
+                       const missingProduct = resolvedItems.some(({ product }) => !product);
+                       if (missingProduct)
+                           return generateReject(404, 'update order - product not found', [
+                               t('ecommerce.product-not-found')
+                           ]);
 
-                      order.products = resolvedItems.map(
-                          ({ item, product }) =>
-                              ({
-                                  product,
-                                  quantity: item.quantity
-                              }) as unknown as IOrderProduct
-                      );
-                  })
+                       order.items = resolvedItems.map(
+                           ({ item, product }) =>
+                               ({
+                                   product,
+                                   quantity: item.quantity
+                               }) as unknown as IOrderItem
+                       );
+                   })
                 : Promise.resolve();
 
-        return updateProductsPromise.then((earlyResult) => {
+        return updateItemsPromise.then((earlyResult) => {
             if (earlyResult) return earlyResult;
             return orderRepository.save(order).then((saved) => generateSuccess(saved));
         });

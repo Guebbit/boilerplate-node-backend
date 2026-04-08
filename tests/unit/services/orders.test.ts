@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
-import { createOrder, toOrderProduct } from '../../helpers/factories/orders';
+import { createOrder, toOrderItem } from '../../helpers/factories/orders';
 import * as orderService from '@services/orders';
 import type { IOrderDocument } from '@models/orders';
 
@@ -21,8 +21,8 @@ describe('orderService.getAll', () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
 
-        await createOrder(user, [toOrderProduct(product, 1)]);
-        await createOrder(user, [toOrderProduct(product, 2)]);
+        await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 2)]);
 
         const orders = await orderService.getAll();
 
@@ -37,7 +37,7 @@ describe('orderService.getAll', () => {
         ]);
 
         // One order with two product lines
-        await createOrder(user, [toOrderProduct(p1, 1), toOrderProduct(p2, 3)]);
+        await createOrder(user, [toOrderItem(p1, 1), toOrderItem(p2, 3)]);
 
         const [order] = (await orderService.getAll()) as OrderWithTotals[];
 
@@ -50,7 +50,7 @@ describe('orderService.getAll', () => {
         const product = await createProduct({ price: 10 });
 
         // 4 units of the same product
-        await createOrder(user, [toOrderProduct(product, 4)]);
+        await createOrder(user, [toOrderItem(product, 4)]);
 
         const [order] = (await orderService.getAll()) as OrderWithTotals[];
 
@@ -61,7 +61,7 @@ describe('orderService.getAll', () => {
         const user = await createUser();
         const product = await createProduct({ price: 15 }); // $15 each
 
-        await createOrder(user, [toOrderProduct(product, 3)]); // 3 × 15 = $45
+        await createOrder(user, [toOrderItem(product, 3)]); // 3 × 15 = $45
 
         const [order] = (await orderService.getAll()) as OrderWithTotals[];
 
@@ -75,7 +75,7 @@ describe('orderService.getAll', () => {
             createProduct({ price: 5 }) // 4 × $5  = $20
         ]);
 
-        await createOrder(user, [toOrderProduct(p1, 2), toOrderProduct(p2, 4)]);
+        await createOrder(user, [toOrderItem(p1, 2), toOrderItem(p2, 4)]);
 
         const [order] = (await orderService.getAll()) as OrderWithTotals[];
 
@@ -88,8 +88,8 @@ describe('orderService.getAll', () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
 
-        const target = await createOrder(user, [toOrderProduct(product, 1)]);
-        await createOrder(user, [toOrderProduct(product, 2)]);
+        const target = await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 2)]);
 
         // Only fetch the specific order
         const orders = await orderService.getAll([{ $match: { _id: target._id } }]);
@@ -108,8 +108,8 @@ describe('orderService.search', () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
 
-        await createOrder(user, [toOrderProduct(product, 1)]);
-        await createOrder(user, [toOrderProduct(product, 2)]);
+        await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 2)]);
 
         const result = await orderService.search({});
 
@@ -122,8 +122,8 @@ describe('orderService.search', () => {
         const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
         const product = await createProduct({ price: 10 });
 
-        await createOrder(user1, [toOrderProduct(product, 1)]);
-        await createOrder(user2, [toOrderProduct(product, 2)]);
+        await createOrder(user1, [toOrderItem(product, 1)]);
+        await createOrder(user2, [toOrderItem(product, 2)]);
 
         const result = await orderService.search({
             userId: (user1._id as Types.ObjectId).toString()
@@ -143,8 +143,8 @@ describe('orderService.search', () => {
         });
         const product = await createProduct({ price: 10 });
 
-        await createOrder(user1, [toOrderProduct(product, 1)]);
-        await createOrder(user2, [toOrderProduct(product, 2)]);
+        await createOrder(user1, [toOrderItem(product, 1)]);
+        await createOrder(user2, [toOrderItem(product, 2)]);
 
         const result = await orderService.search({ email: 'alice@example.com' });
 
@@ -155,8 +155,8 @@ describe('orderService.search', () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
 
-        const target = await createOrder(user, [toOrderProduct(product, 1)]);
-        await createOrder(user, [toOrderProduct(product, 2)]);
+        const target = await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 2)]);
 
         const result = await orderService.search({
             id: (target._id as Types.ObjectId).toString()
@@ -173,8 +173,8 @@ describe('orderService.search', () => {
         ]);
 
         // order1 contains p1; order2 contains p2
-        await createOrder(user, [toOrderProduct(p1, 1)]);
-        await createOrder(user, [toOrderProduct(p2, 1)]);
+        await createOrder(user, [toOrderItem(p1, 1)]);
+        await createOrder(user, [toOrderItem(p2, 1)]);
 
         const result = await orderService.search({
             productId: (p1._id as Types.ObjectId).toString()
@@ -188,7 +188,7 @@ describe('orderService.search', () => {
         const product = await createProduct({ price: 10 });
 
         for (let i = 0; i < 5; i++) {
-            await createOrder(user, [toOrderProduct(product, i + 1)]);
+            await createOrder(user, [toOrderItem(product, i + 1)]);
         }
 
         const page1 = await orderService.search({ page: 1, pageSize: 3 });
@@ -204,7 +204,7 @@ describe('orderService.search', () => {
         const user = await createUser();
         const product = await createProduct({ price: 25 });
 
-        await createOrder(user, [toOrderProduct(product, 3)]); // 3 × $25 = $75
+        await createOrder(user, [toOrderItem(product, 3)]); // 3 × $25 = $75
 
         const result = await orderService.search({});
         const [order] = result.items as unknown as OrderWithTotals[];
@@ -219,8 +219,8 @@ describe('orderService.search', () => {
         const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
         const product = await createProduct({ price: 10 });
 
-        await createOrder(user1, [toOrderProduct(product, 1)]);
-        await createOrder(user2, [toOrderProduct(product, 2)]);
+        await createOrder(user1, [toOrderItem(product, 1)]);
+        await createOrder(user2, [toOrderItem(product, 2)]);
 
         // The scope parameter is a raw Mongoose filter merged into the $match stage
         const result = await orderService.search({}, { userId: user1._id as Types.ObjectId });
