@@ -28,7 +28,7 @@
         "podman:rebuid": "podman compose down -v && podman compose build --no-cache && podman compose up -d",
         "genapi": "rm -rf ./api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
         "update:all": "npx npm-check-updates -u",
-        "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",
+        "complete": "npm run setup:mongod && npm run build && MONGOMS_SYSTEM_BINARY=/tmp/mongod npm run test && npm run lint:fix && npm run prettier:fix",
         "publish:public": "npm publish --access public"
     },
     "devDependencies": {
