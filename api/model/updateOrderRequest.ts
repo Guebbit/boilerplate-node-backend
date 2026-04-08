@@ -11,7 +11,7 @@
  */
 
 import { RequestFile } from './models';
-import { CartItem } from './cartItem';
+import { OrderItem } from './orderItem';
 
 export class UpdateOrderRequest {
     /**
@@ -27,7 +27,7 @@ export class UpdateOrderRequest {
     */
     'userId'?: string;
     'email'?: string;
-    'items'?: Array<CartItem>;
+    'items'?: Array<OrderItem>;
 
     static discriminator: string | undefined = undefined;
 
@@ -55,7 +55,7 @@ export class UpdateOrderRequest {
         {
             "name": "items",
             "baseName": "items",
-            "type": "Array<CartItem>"
+            "type": "Array<OrderItem>"
         }    ];
 
     static getAttributeTypeMap() {

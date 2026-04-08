@@ -5,6 +5,7 @@ import { createProduct } from '../../helpers/factories/products';
 import { createOrder, toOrderProduct } from '../../helpers/factories/orders';
 import * as orderService from '@services/orders';
 import type { IOrderDocument } from '@models/orders';
+import type { OrderItem } from '@types';
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -228,5 +229,58 @@ describe('orderService.search', () => {
         expect(result.items).toHaveLength(0);
         expect(result.meta.totalItems).toBe(0);
         expect(result.meta.totalPages).toBe(0);
+    });
+});
+
+describe('orderService.create', () => {
+    it('creates an order using OrderItem product snapshots', async () => {
+        const user = await createUser();
+        const product = await createProduct({ title: 'Snapshot Product', price: 12.5 });
+
+        const response = await orderService.create(user.id, user.email, [
+            {
+                product: {
+                    ...product.toObject(),
+                    id: (product._id as Types.ObjectId).toString()
+                },
+                quantity: 3
+            } as unknown as OrderItem
+        ]);
+
+        expect(response.success).toBe(true);
+        if (!response.success) return;
+        const order = response.data as IOrderDocument;
+
+        expect(order.products[0].quantity).toBe(3);
+        expect(order.products[0].product.title).toBe('Snapshot Product');
+    });
+});
+
+describe('orderService.update', () => {
+    it('updates order items with OrderItem product snapshots', async () => {
+        const user = await createUser();
+        const initialProduct = await createProduct({ title: 'Initial', price: 3 });
+        const updatedProduct = await createProduct({ title: 'Updated', price: 9 });
+        const order = await createOrder(user, [toOrderProduct(initialProduct, 1)]);
+
+        const response = await orderService.update((order._id as Types.ObjectId).toString(), {
+            items: [
+                {
+                    product: {
+                        ...updatedProduct.toObject(),
+                        id: (updatedProduct._id as Types.ObjectId).toString()
+                    },
+                    quantity: 4
+                } as unknown as OrderItem
+            ]
+        });
+
+        expect(response.success).toBe(true);
+        if (!response.success) return;
+        const updatedOrder = response.data as IOrderDocument;
+
+        expect(updatedOrder.products).toHaveLength(1);
+        expect(updatedOrder.products[0].quantity).toBe(4);
+        expect(updatedOrder.products[0].product.title).toBe('Updated');
     });
 });
