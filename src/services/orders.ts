@@ -48,11 +48,24 @@ const addComputedFields: PipelineStage.AddFields = {
     }
 };
 
+/**
+ * Runtime discriminator for mixed order-item inputs.
+ * - CartItem (legacy): { productId, quantity }
+ * - OrderItem (snapshot): { product, quantity }
+ */
 const isCartItem = (item: CartItem | OrderItem): item is CartItem =>
     'productId' in item && !('product' in item);
 
+/**
+ * Internal shape used while normalizing API snapshot products.
+ * API Product exposes `id`; DB embedded snapshot may need `_id`.
+ */
 type SnapshotProductWithOptionalMongoId = OrderItem['product'] & { _id?: unknown };
 
+/**
+ * Minimal guard for incoming snapshot products before persistence.
+ * Ensures required business fields are present and usable.
+ */
 const isValidSnapshotProduct = (product: unknown): boolean => {
     if (!product || typeof product !== 'object') return false;
     const snapshot = product as { title?: unknown; price?: unknown };
@@ -64,6 +77,11 @@ const isValidSnapshotProduct = (product: unknown): boolean => {
     );
 };
 
+/**
+ * Normalizes API OrderItem.product into the embedded product shape used by orders.
+ * If `_id` is missing but `id` is a valid ObjectId string, it creates `_id`.
+ * `id` is then omitted from the embedded snapshot.
+ */
 const normalizeSnapshotProduct = (product: OrderItem['product']): IOrderProduct['product'] => {
     const snapshotProduct = product as SnapshotProductWithOptionalMongoId;
     const { id, ...snapshot } = snapshotProduct;
@@ -78,6 +96,12 @@ const normalizeSnapshotProduct = (product: OrderItem['product']): IOrderProduct[
     return normalizedSnapshot as IOrderProduct['product'];
 };
 
+/**
+ * Converts mixed order-item inputs into DB-ready embedded products.
+ * - CartItem inputs fetch the current product, then snapshot it.
+ * - OrderItem inputs use the provided snapshot payload.
+ * Returns either normalized products or a reject response when invalid/missing.
+ */
 const resolveOrderProducts = (
     items: Array<CartItem | OrderItem>
 ): Promise<IOrderProduct[] | IResponseReject> =>
@@ -219,12 +243,14 @@ export const getById = (
 };
 
 /**
- * Create a new order from a list of { productId, quantity } items.
- * Looks up each product and stores a full snapshot in the order document.
+ * Create a new order from mixed item input.
+ * Supports:
+ * - CartItem: { productId, quantity } (legacy compatibility)
+ * - OrderItem: { product, quantity } (explicit snapshot payload)
  *
  * @param userId
  * @param email
- * @param items - Array of { productId, quantity }
+ * @param items
  */
 export const create = (
     userId: string,
@@ -263,6 +289,7 @@ export const update = (
         status?: string;
         email?: string;
         userId?: string;
+        // Accepts both legacy CartItem and snapshot OrderItem payloads.
         items?: Array<CartItem | OrderItem>;
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
