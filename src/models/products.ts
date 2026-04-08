@@ -82,4 +82,7 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
     }
 );
 
+/**
+ * Mongoose model for product CRUD operations.
+ */
 export const productModel = model<IProductDocument, IProductModel>('Product', productSchema);

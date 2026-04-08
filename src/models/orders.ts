@@ -36,7 +36,7 @@ export interface IOrderDocument
 export type IOrderModel = Model<IOrderDocument, unknown, unknown>;
 
 /**
- *
+ * Mongoose schema for persisted order documents.
  */
 export const orderSchema = new Schema<IOrderDocument>(
     {
@@ -72,4 +72,7 @@ export const orderSchema = new Schema<IOrderDocument>(
     }
 );
 
+/**
+ * Mongoose model for order CRUD operations.
+ */
 export const orderModel = model<IOrderDocument, IOrderModel>('Order', orderSchema);
