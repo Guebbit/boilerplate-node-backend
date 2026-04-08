@@ -12,13 +12,8 @@ export const ORDER_STATUS = {
 } as const;
 export type EOrderStatus = `${Order.StatusEnum}`;
 
-// OpenAPI `CartItem` stores `productId`; persisted order snapshots embed full product data instead.
-export type IOrderProductSnapshot = Partial<Omit<Product, 'id'>> & {
-    id?: Product['id'] | number;
-};
-
 export interface IOrderProduct extends Omit<CartItem, 'productId'> {
-    product: IOrderProductSnapshot;
+    product: Product;
     quantity: number;
 }
 

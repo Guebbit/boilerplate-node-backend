@@ -341,6 +341,16 @@ components:
                     type: integer
                     minimum: 1
 
+        OrderItem:
+            type: object
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
         Order:
             type: object
             required: [id, userId, email, items, total, status]
