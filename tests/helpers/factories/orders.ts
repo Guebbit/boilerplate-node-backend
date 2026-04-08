@@ -40,10 +40,7 @@ import { orderRepository } from '@repositories/orders';
  * @param product  - The persisted product document.
  * @param quantity - How many units were ordered (default: 1).
  */
-export const toOrderItem = (
-    product: IProductDocument,
-    quantity = 1
-): Order['items'][number] => ({
+export const toOrderItem = (product: IProductDocument, quantity = 1): Order['items'][number] => ({
     // toObject() removes Mongoose Document methods and virtuals, leaving a
     // plain JS object that matches the embedded productSchema in the Order model.
     product: product.toObject() as Order['items'][number]['product'],
@@ -56,10 +53,7 @@ export const toOrderItem = (
  * @param user     - The user who placed the order.
  * @param items - Array of { product, quantity } pairs (use toOrderItem).
  */
-export const makeOrder = (
-    user: IUserDocument,
-    items: Order['items']
-): Partial<IOrderDocument> => ({
+export const makeOrder = (user: IUserDocument, items: Order['items']): Partial<IOrderDocument> => ({
     userId: user._id as Types.ObjectId,
     email: user.email,
     items
@@ -71,7 +65,5 @@ export const makeOrder = (
  * @param user     - The user who placed the order.
  * @param items - Array of { product, quantity } pairs (use toOrderItem).
  */
-export const createOrder = (
-    user: IUserDocument,
-    items: Order['items']
-): Promise<IOrderDocument> => orderRepository.create(makeOrder(user, items));
+export const createOrder = (user: IUserDocument, items: Order['items']): Promise<IOrderDocument> =>
+    orderRepository.create(makeOrder(user, items));

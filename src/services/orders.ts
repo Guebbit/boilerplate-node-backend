@@ -229,21 +229,21 @@ export const update = (
                               .lean()
                               .then((product) => ({ item, product }))
                       )
-                   ).then((resolvedItems) => {
-                       const missingProduct = resolvedItems.some(({ product }) => !product);
-                       if (missingProduct)
-                           return generateReject(404, 'update order - product not found', [
-                               t('ecommerce.product-not-found')
-                           ]);
+                  ).then((resolvedItems) => {
+                      const missingProduct = resolvedItems.some(({ product }) => !product);
+                      if (missingProduct)
+                          return generateReject(404, 'update order - product not found', [
+                              t('ecommerce.product-not-found')
+                          ]);
 
-                       order.items = resolvedItems.map(
-                           ({ item, product }) =>
-                                ({
-                                    product,
-                                    quantity: item.quantity
-                                }) as unknown as Order['items'][number]
-                        );
-                    })
+                      order.items = resolvedItems.map(
+                          ({ item, product }) =>
+                              ({
+                                  product,
+                                  quantity: item.quantity
+                              }) as unknown as Order['items'][number]
+                      );
+                  })
                 : Promise.resolve();
 
         return updateItemsPromise.then((earlyResult) => {
