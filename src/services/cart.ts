@@ -38,6 +38,11 @@ const isCartProductObject = (value: unknown): value is CartProductObject => {
 const toCartProduct = (value: unknown, fallbackProductId: number): CartProductSnapshot =>
     isCartProductObject(value) ? value : fallbackProductId;
 
+const hasRequiredOrderProductFields = (
+    value: Partial<OrderProductShape>
+): value is Partial<OrderProductShape> & Pick<OrderProductShape, 'title' | 'price'> =>
+    typeof value.title === 'string' && typeof value.price === 'number';
+
 const updateUserCartTimestamp = (user: IUserDocument) =>
     typeof user.update === 'function'
         ? user.update({ cartUpdatedAt: new Date() })
@@ -54,7 +59,14 @@ const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
 
 const toOrderResponse = (order: IOrderDocument): Order => {
     const items = order.products.map(({ product, quantity }) => ({
-        productId: String(product.id ?? ''),
+        product: {
+            id: String(product.id ?? ''),
+            title: product.title,
+            price: product.price,
+            description: product.description,
+            imageUrl: product.imageUrl,
+            active: product.active
+        },
         quantity
     }));
     const total = order.products.reduce(
@@ -234,32 +246,40 @@ export const orderConfirm = (
                 return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
 
             const mappedProducts = products.map((entry) => {
-                if (typeof entry.product === 'number') {
-                    return {
-                        product: { id: entry.product },
-                        quantity: entry.quantity
-                    };
-                }
+                if (typeof entry.product === 'number') return { isValid: false as const };
 
-                const product: OrderProductShape = entry.product;
+                const product = entry.product as Partial<OrderProductShape>;
+                if (!hasRequiredOrderProductFields(product)) return { isValid: false as const };
                 return {
-                    product: {
-                        id: product.id === undefined ? undefined : Number(product.id),
-                        title: product.title,
-                        price: product.price,
-                        description: product.description,
-                        imageUrl: product.imageUrl,
-                        active: product.active
+                    isValid: true as const,
+                    value: {
+                        product: {
+                            id: product.id === undefined ? undefined : String(product.id),
+                            title: product.title,
+                            price: product.price,
+                            description: product.description,
+                            imageUrl: product.imageUrl,
+                            active: product.active
+                        },
+                        quantity: entry.quantity
                     },
-                    quantity: entry.quantity
                 };
             });
+
+            const orderProducts: IOrderProduct[] = [];
+            for (const entry of mappedProducts) {
+                if (!entry.isValid)
+                    return generateReject(422, 'order confirm - snapshot product data required', [
+                        t('generic.error-invalid-data')
+                    ]);
+                orderProducts.push(entry.value);
+            }
 
             return orderRepository
                 .create({
                     userId: getUserId(user),
                     email: user.email,
-                    products: mappedProducts
+                    products: orderProducts
                 } as Partial<IOrderDocument>)
                 .then((order) =>
                     cartRemove(user).then(() => generateSuccess<Order>(toOrderResponse(order)))

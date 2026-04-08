@@ -35,7 +35,7 @@ const hasResolvedProduct = (value: MaybeResolvedOrderItem): value is ResolvedOrd
 
 const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => ({
     product: {
-        id: Number(product.id),
+        id: String(product.id),
         title: product.title,
         price: product.price,
         description: product.description,
@@ -49,7 +49,14 @@ const toOrderResponse = (
     order: IOrderDocument & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }>
 ): Order & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }> => {
     const items = order.products.map(({ product, quantity }) => ({
-        productId: String(product.id ?? ''),
+        product: {
+            id: String(product.id ?? ''),
+            title: product.title,
+            price: product.price,
+            description: product.description,
+            imageUrl: product.imageUrl,
+            active: product.active
+        },
         quantity
     }));
     const total = order.products.reduce(

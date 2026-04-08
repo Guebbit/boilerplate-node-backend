@@ -343,10 +343,11 @@ components:
 
         OrderItem:
             type: object
-            required: [productId, quantity]
+            additionalProperties: false
+            required: [product, quantity]
             properties:
-                productId:
-                    $ref: '#/components/schemas/Id'
+                product:
+                    $ref: '#/components/schemas/Product'
                 quantity:
                     type: integer
                     minimum: 1
@@ -364,7 +365,7 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '#/components/schemas/CartItem'
+                        $ref: '#/components/schemas/OrderItem'
                 total:
                     type: number
                     format: double

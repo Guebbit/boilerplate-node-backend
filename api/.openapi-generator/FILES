@@ -27,6 +27,7 @@ model/loginRequest.ts
 model/messageResponse.ts
 model/models.ts
 model/order.ts
+model/orderItem.ts
 model/ordersResponse.ts
 model/paginationMeta.ts
 model/passwordResetConfirmRequest.ts
