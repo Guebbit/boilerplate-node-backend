@@ -49,10 +49,24 @@ const addComputedFields: PipelineStage.AddFields = {
 };
 
 const isCartItem = (item: CartItem | OrderItem): item is CartItem =>
-    'productId' in (item as CartItem);
+    'productId' in item && !('product' in item);
+
+type SnapshotProductWithOptionalMongoId = OrderItem['product'] & { _id?: unknown };
+
+const isValidSnapshotProduct = (product: unknown): boolean => {
+    if (!product || typeof product !== 'object') return false;
+    const snapshot = product as { title?: unknown; price?: unknown };
+    return (
+        typeof snapshot.title === 'string' &&
+        snapshot.title.trim() !== '' &&
+        typeof snapshot.price === 'number' &&
+        Number.isFinite(snapshot.price)
+    );
+};
 
 const normalizeSnapshotProduct = (product: OrderItem['product']): IOrderProduct['product'] => {
-    const { id, ...snapshot } = product as unknown as Record<string, unknown>;
+    const snapshotProduct = product as SnapshotProductWithOptionalMongoId;
+    const { id, ...snapshot } = snapshotProduct;
     const normalizedSnapshot =
         !('_id' in snapshot) && typeof id === 'string' && Types.ObjectId.isValid(id)
             ? {
@@ -61,7 +75,7 @@ const normalizeSnapshotProduct = (product: OrderItem['product']): IOrderProduct[
               }
             : snapshot;
 
-    return normalizedSnapshot as unknown as IOrderProduct['product'];
+    return normalizedSnapshot as IOrderProduct['product'];
 };
 
 const resolveOrderProducts = (
@@ -86,6 +100,13 @@ const resolveOrderProducts = (
         if (missingProduct)
             return generateReject(404, 'create order - product not found', [
                 t('ecommerce.product-not-found')
+            ]);
+        const invalidSnapshot = resolvedItems.some(
+            ({ product, source }) => source === 'snapshot' && !isValidSnapshotProduct(product)
+        );
+        if (invalidSnapshot)
+            return generateReject(422, 'create order - invalid snapshot product', [
+                t('generic.error-missing-data')
             ]);
 
         return resolvedItems.map(

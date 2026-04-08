@@ -5,6 +5,7 @@ import { createProduct } from '../../helpers/factories/products';
 import { createOrder, toOrderProduct } from '../../helpers/factories/orders';
 import * as orderService from '@services/orders';
 import type { IOrderDocument } from '@models/orders';
+import type { IProductDocument } from '@models/products';
 import type { OrderItem } from '@types';
 
 beforeAll(connect);
@@ -16,6 +17,27 @@ type OrderWithTotals = IOrderDocument & {
     totalQuantity: number;
     totalPrice: number;
 };
+
+/**
+ * Convert a product document into an OrderItem snapshot payload.
+ *
+ * @param product
+ * @param quantity
+ */
+const toSnapshotOrderItem = (product: IProductDocument, quantity: number): OrderItem => ({
+    product: {
+        id: (product._id as Types.ObjectId).toString(),
+        title: product.title,
+        price: product.price,
+        description: product.description,
+        active: product.active,
+        imageUrl: product.imageUrl,
+        createdAt: product.createdAt,
+        updatedAt: product.updatedAt,
+        deletedAt: product.deletedAt
+    },
+    quantity
+});
 
 describe('orderService.getAll', () => {
     it('returns all orders when no extra pipeline stages are provided', async () => {
@@ -238,13 +260,7 @@ describe('orderService.create', () => {
         const product = await createProduct({ title: 'Snapshot Product', price: 12.5 });
 
         const response = await orderService.create(user.id, user.email, [
-            {
-                product: {
-                    ...product.toObject(),
-                    id: (product._id as Types.ObjectId).toString()
-                },
-                quantity: 3
-            } as unknown as OrderItem
+            toSnapshotOrderItem(product, 3)
         ]);
 
         expect(response.success).toBe(true);
@@ -264,15 +280,7 @@ describe('orderService.update', () => {
         const order = await createOrder(user, [toOrderProduct(initialProduct, 1)]);
 
         const response = await orderService.update((order._id as Types.ObjectId).toString(), {
-            items: [
-                {
-                    product: {
-                        ...updatedProduct.toObject(),
-                        id: (updatedProduct._id as Types.ObjectId).toString()
-                    },
-                    quantity: 4
-                } as unknown as OrderItem
-            ]
+            items: [toSnapshotOrderItem(updatedProduct, 4)]
         });
 
         expect(response.success).toBe(true);
