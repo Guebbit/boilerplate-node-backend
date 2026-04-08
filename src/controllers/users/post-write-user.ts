@@ -51,7 +51,7 @@ export const postWriteUser = async (
      */
     const issues = userService.validateData(
         { email, username, password: password || undefined, admin, imageUrl },
-        { requirePassword: isNew }
+        isNew
     );
 
     /**
