@@ -54,7 +54,14 @@ const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
 
 const toOrderResponse = (order: IOrderDocument): Order => {
     const items = order.products.map(({ product, quantity }) => ({
-        productId: String(product.id ?? ''),
+        product: {
+            id: String(product.id ?? ''),
+            title: product.title,
+            price: product.price,
+            description: product.description,
+            imageUrl: product.imageUrl,
+            active: product.active
+        },
         quantity
     }));
     const total = order.products.reduce(
@@ -236,17 +243,17 @@ export const orderConfirm = (
             const mappedProducts = products.map((entry) => {
                 if (typeof entry.product === 'number') {
                     return {
-                        product: { id: entry.product },
+                        product: { id: String(entry.product) },
                         quantity: entry.quantity
                     };
                 }
 
-                const product: OrderProductShape = entry.product;
+                const product = entry.product as Partial<OrderProductShape>;
                 return {
                     product: {
-                        id: product.id === undefined ? undefined : Number(product.id),
-                        title: product.title,
-                        price: product.price,
+                        id: product.id === undefined ? undefined : String(product.id),
+                        title: String(product.title ?? ''),
+                        price: Number(product.price ?? 0),
                         description: product.description,
                         imageUrl: product.imageUrl,
                         active: product.active

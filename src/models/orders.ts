@@ -1,6 +1,6 @@
 import { CreationOptional, DataTypes, ForeignKey, Model } from 'sequelize';
 import { sequelize } from '@utils/database';
-import type { CartItem, Order, Product } from '@types';
+import type { Order, OrderItem, Product } from '@types';
 
 export const ORDER_STATUS = {
     PENDING: 'pending',
@@ -12,9 +12,10 @@ export const ORDER_STATUS = {
 } as const;
 export type EOrderStatus = `${Order.StatusEnum}`;
 
-export interface IOrderProduct extends Omit<CartItem, 'productId'> {
-    product: Product;
-    quantity: number;
+type IOrderProductSnapshot = Omit<Product, 'id'> & { id?: string };
+
+export interface IOrderProduct extends Omit<OrderItem, 'product'> {
+    product: IOrderProductSnapshot;
 }
 
 export class OrderModel extends Model {

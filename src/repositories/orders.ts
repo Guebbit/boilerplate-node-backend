@@ -7,7 +7,7 @@ const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
     orderItemModel.findAll({ where: { orderId: order.id }, raw: true }).then((items) => {
         const products: IOrderProduct[] = items.map((item) => ({
             product: {
-                id: item.productId ?? undefined,
+                id: item.productId == null ? undefined : String(item.productId),
                 title: item.productTitle,
                 price: item.productPrice,
                 description: item.productDescription,
