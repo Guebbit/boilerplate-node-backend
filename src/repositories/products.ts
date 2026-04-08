@@ -6,7 +6,12 @@ import type { IProductDocument } from '@models/products';
 
 type ProductWhere = Record<string, unknown>;
 
-/** Normalizes deletedAt filters to support null and explicit values. */
+/**
+ * Handles normalize deleted at.
+ *
+ * @param where
+ * @param output
+ */
 const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>) => {
     if (where.deletedAt === null) {
         output['deletedAt'] = null;
@@ -15,7 +20,11 @@ const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>
     if (where.deletedAt !== undefined) output['deletedAt'] = where.deletedAt;
 };
 
-/** Converts product search filters to Sequelize where syntax. */
+/**
+ * Handles to where.
+ *
+ * @param where
+ */
 const toWhere = (where: ProductWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
 
@@ -54,21 +63,34 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
     return output;
 };
 
-/** Finds one product by id. */
+/**
+ * Handles find by id.
+ *
+ * @param id - Resource identifier.
+ */
 export const findById = (id: string | number) =>
     productModel.findByPk(Number(id)).then((product) => {
         if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
-/** Finds the first product matching the given filter. */
+/**
+ * Handles find one.
+ *
+ * @param where
+ */
 export const findOne = (where: ProductWhere) =>
     productModel.findOne({ where: toWhere(where) }).then((product) => {
         if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
-/** Lists products with pagination and sorting. */
+/**
+ * Handles find all.
+ *
+ * @param where
+ * @param options
+ */
 export const findAll = (
     where: ProductWhere = {},
     {
@@ -91,19 +113,35 @@ export const findAll = (
     }) as Promise<IProductDocument[]>;
 };
 
-/** Counts products that match the filter. */
+/**
+ * Handles count.
+ *
+ * @param where
+ */
 export const count = (where: ProductWhere = {}): Promise<number> =>
     productModel.count({ where: toWhere(where) });
 
-/** Creates a new product row. */
+/**
+ * Handles create.
+ *
+ * @param data
+ */
 export const create = (data: Partial<IProductDocument>): Promise<IProductDocument> =>
     productModel.create(data as never) as Promise<IProductDocument>;
 
-/** Saves updates for an existing product. */
+/**
+ * Handles save.
+ *
+ * @param product
+ */
 export const save = (product: IProductDocument): Promise<IProductDocument> =>
     product.save();
 
-/** Permanently deletes a product row. */
+/**
+ * Handles delete one.
+ *
+ * @param product
+ */
 export const deleteOne = (product: IProductDocument): Promise<void> =>
     product.destroy().then(() => {});
 

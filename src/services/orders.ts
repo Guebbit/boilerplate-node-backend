@@ -11,11 +11,19 @@ import {
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
 
-/** Returns all orders using the aggregate pipeline helper. */
+/**
+ * Handles get all.
+ *
+ * @param pipeline
+ */
 export const getAll = (pipeline: Array<Record<string, unknown>> = []): Promise<IOrderDocument[]> =>
     orderRepository.aggregate([...pipeline, { addFields: {} }]);
 
-/** Checks whether a status string is one of the allowed order statuses. */
+/**
+ * Handles is order status.
+ *
+ * @param value
+ */
 const isOrderStatus = (value: string): value is EOrderStatus =>
     (Object.values(ORDER_STATUS) as string[]).includes(value);
 
@@ -32,11 +40,19 @@ type ResolvedProduct = NonNullable<Awaited<ReturnType<typeof productRepository.f
 type MaybeResolvedOrderItem = { item: CartItem; product: ResolvedProduct | null };
 type ResolvedOrderItem = { item: CartItem; product: ResolvedProduct };
 
-/** Type guard that keeps order items with resolved products only. */
+/**
+ * Handles has resolved product.
+ *
+ * @param value
+ */
 const hasResolvedProduct = (value: MaybeResolvedOrderItem): value is ResolvedOrderItem =>
     value.product !== null;
 
-/** Converts a cart item and resolved product into an order snapshot item. */
+/**
+ * Handles to order product.
+ *
+ * @param options
+ */
 const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => ({
     product: {
         id: String(product.id),
@@ -49,7 +65,11 @@ const toOrderProduct = ({ item, product }: ResolvedOrderItem): IOrderProduct => 
     quantity: item.quantity
 });
 
-/** Maps persisted order data to API order response shape. */
+/**
+ * Handles to order response.
+ *
+ * @param order
+ */
 const toOrderResponse = (
     order: IOrderDocument & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }>
 ): Order & Partial<{ totalItems: number; totalQuantity: number; totalPrice: number }> => {
@@ -85,7 +105,12 @@ const toOrderResponse = (
     };
 };
 
-/** Searches orders with scope filtering and paginated metadata. */
+/**
+ * Handles search.
+ *
+ * @param search
+ * @param scope
+ */
 export const search = (
     search: SearchOrdersRequest = {},
     scope?: Record<string, unknown>
@@ -132,7 +157,12 @@ export const search = (
         });
 };
 
-/** Fetches one order by id, optionally constrained by scope. */
+/**
+ * Handles get by id.
+ *
+ * @param id - Resource identifier.
+ * @param scope
+ */
 export const getById = (
     id: string | undefined,
     scope?: Record<string, unknown>
@@ -152,7 +182,13 @@ export const getById = (
     return orderRepository.findById(id);
 };
 
-/** Creates an order after resolving and validating all referenced products. */
+/**
+ * Handles create.
+ *
+ * @param userId
+ * @param email
+ * @param items
+ */
 export const create = (
     userId: string,
     email: string,
@@ -188,7 +224,12 @@ export const create = (
     });
 };
 
-/** Updates order fields and optionally replaces its item snapshots. */
+/**
+ * Handles update.
+ *
+ * @param id - Resource identifier.
+ * @param data
+ */
 export const update = (
     id: string,
     data: {
@@ -239,7 +280,11 @@ export const update = (
     });
 };
 
-/** Deletes an order by id. */
+/**
+ * Handles remove.
+ *
+ * @param id - Resource identifier.
+ */
 export const remove = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> => {
     return orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);

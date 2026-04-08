@@ -16,10 +16,18 @@ type CartProductSnapshot = NonNullable<ICartItem['product']>;
 type CartProductObject = Exclude<CartProductSnapshot, number>;
 type OrderProductShape = IOrderProduct['product'];
 
-/** Normalizes a user identifier to a number. */
+/**
+ * Handles get user id.
+ *
+ * @param user - User document used to scope the operation.
+ */
 const getUserId = (user: IUserDocument): number => Number(user.id);
 
-/** Type guard for cart product snapshots stored as objects. */
+/**
+ * Handles is cart product object.
+ *
+ * @param value
+ */
 const isCartProductObject = (value: unknown): value is CartProductObject => {
     if (typeof value !== 'object' || value === null) return false;
 
@@ -37,17 +45,30 @@ const isCartProductObject = (value: unknown): value is CartProductObject => {
     );
 };
 
-/** Returns a cart product object when available, otherwise uses product id fallback. */
+/**
+ * Handles to cart product.
+ *
+ * @param value
+ * @param fallbackProductId
+ */
 const toCartProduct = (value: unknown, fallbackProductId: number): CartProductSnapshot =>
     isCartProductObject(value) ? value : fallbackProductId;
 
-/** Validates that order product snapshots contain required title/price fields. */
+/**
+ * Handles has required order product fields.
+ *
+ * @param value
+ */
 const hasRequiredOrderProductFields = (
     value: Partial<OrderProductShape>
 ): value is Partial<OrderProductShape> & Pick<OrderProductShape, 'title' | 'price'> =>
     typeof value.title === 'string' && typeof value.price === 'number';
 
-/** Updates cart timestamp when persistence layer supports update operations. */
+/**
+ * Handles update user cart timestamp.
+ *
+ * @param user - User document used to scope the operation.
+ */
 const updateUserCartTimestamp = (user: IUserDocument) =>
     typeof user.update === 'function'
         ? user.update({ cartUpdatedAt: new Date() })
@@ -62,7 +83,11 @@ const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
     [ORDER_STATUS.CANCELLED]: ApiOrderModel.StatusEnum.Cancelled
 };
 
-/** Maps an order document to API order response format. */
+/**
+ * Handles to order response.
+ *
+ * @param order
+ */
 const toOrderResponse = (order: IOrderDocument): Order => {
     const items = order.products.map(({ product, quantity }) => ({
         product: {
@@ -94,8 +119,9 @@ const toOrderResponse = (order: IOrderDocument): Order => {
 };
 
 /**
- * Rebuilds the user cart and token relations from normalized SQL tables.
- * This keeps response payloads compatible with the legacy user shape.
+ * Rebuilds the user cart and token relations from normalized SQL tables. This keeps response payloads compatible with the legacy user shape.
+ *
+ * @param user - User document used to scope the operation.
  */
 const hydrateUserCart = (user: IUserDocument): Promise<IUserDocument> =>
     cartItemModel
@@ -127,11 +153,19 @@ const hydrateUserCart = (user: IUserDocument): Promise<IUserDocument> =>
             return user;
         });
 
-/** Returns cart items for a user after relation hydration. */
+/**
+ * Handles cart get.
+ *
+ * @param user - User document used to scope the operation.
+ */
 export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
     hydrateUserCart(user).then((u) => (u.cart?.items ?? []) as ICartItem[]);
 
-/** Returns cart items plus derived quantity and total summary values. */
+/**
+ * Handles cart get with summary.
+ *
+ * @param user - User document used to scope the operation.
+ */
 export const cartGetWithSummary = (
     user: IUserDocument
 ): Promise<{
@@ -156,7 +190,13 @@ export const cartGetWithSummary = (
         };
     });
 
-/** Sets an absolute quantity for a product in the user cart. */
+/**
+ * Handles cart item set by id.
+ *
+ * @param user - User document used to scope the operation.
+ * @param id - Resource identifier.
+ * @param quantity - Amount to set or add.
+ */
 export const cartItemSetById = (
     user: IUserDocument,
     id: string,
@@ -173,14 +213,26 @@ export const cartItemSetById = (
         .then((savedUser) => generateSuccess(savedUser));
 };
 
-/** Sets cart quantity using a product entity reference. */
+/**
+ * Handles cart item set.
+ *
+ * @param user - User document used to scope the operation.
+ * @param product
+ * @param quantity - Amount to set or add.
+ */
 export const cartItemSet = (
     user: IUserDocument,
     product: IProductDocument,
     quantity = 1
 ): Promise<IResponseSuccess<IUserDocument>> => cartItemSetById(user, String(product.id), quantity);
 
-/** Adds quantity for a cart item, creating the item when absent. */
+/**
+ * Handles cart item add by id.
+ *
+ * @param user - User document used to scope the operation.
+ * @param id - Resource identifier.
+ * @param quantity - Amount to set or add.
+ */
 export const cartItemAddById = (
     user: IUserDocument,
     id: string,
@@ -210,14 +262,25 @@ export const cartItemAddById = (
         .then((savedUser) => generateSuccess(savedUser));
 };
 
-/** Adds quantity using a product entity reference. */
+/**
+ * Handles cart item add.
+ *
+ * @param user - User document used to scope the operation.
+ * @param product
+ * @param quantity - Amount to set or add.
+ */
 export const cartItemAdd = (
     user: IUserDocument,
     product: IProductDocument,
     quantity = 1
 ): Promise<IResponseSuccess<IUserDocument>> => cartItemAddById(user, String(product.id), quantity);
 
-/** Removes one cart item by product id. */
+/**
+ * Handles cart item remove by id.
+ *
+ * @param user - User document used to scope the operation.
+ * @param id - Resource identifier.
+ */
 export const cartItemRemoveById = (
     user: IUserDocument,
     id: string
@@ -234,13 +297,22 @@ export const cartItemRemoveById = (
         .then((savedUser) => generateSuccess(savedUser));
 };
 
-/** Removes one cart item using a product entity reference. */
+/**
+ * Handles cart item remove.
+ *
+ * @param user - User document used to scope the operation.
+ * @param product
+ */
 export const cartItemRemove = (
     user: IUserDocument,
     product: IProductDocument
 ): Promise<IResponseSuccess<IUserDocument>> => cartItemRemoveById(user, String(product.id));
 
-/** Clears all cart items for a user. */
+/**
+ * Handles cart remove.
+ *
+ * @param user - User document used to scope the operation.
+ */
 export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
     return cartItemModel
         .destroy({ where: { userId: getUserId(user) } })
@@ -251,6 +323,8 @@ export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserD
 
 /**
  * Converts the current user cart into a persisted order and then empties the cart.
+ *
+ * @param user - User document used to scope the operation.
  */
 export const orderConfirm = (
     user: IUserDocument
@@ -304,6 +378,8 @@ export const orderConfirm = (
 
 /**
  * Removes a product from all carts, used by product delete/toggle flows.
+ *
+ * @param id - Resource identifier.
  */
 export const productRemoveFromCartsById = (
     id: string
