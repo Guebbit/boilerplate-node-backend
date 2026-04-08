@@ -4,7 +4,7 @@
  * Provides:
  *
  *   toOrderItem(product, qty?) – converts a product document into the
- *                                IOrderItem shape expected by the Order schema.
+ *                                OpenAPI OrderItem shape expected by the Order schema.
  *
  *   makeOrder(user, items)        – plain-object payload, no DB write.
  *
@@ -27,22 +27,26 @@
  */
 
 import { Types } from 'mongoose';
-import type { IOrderDocument, IOrderItem } from '@models/orders';
+import type { IOrderDocument } from '@models/orders';
 import type { IUserDocument } from '@models/users';
 import type { IProductDocument } from '@models/products';
+import type { Order } from '@types';
 import { orderRepository } from '@repositories/orders';
 
 /**
- * Convert a Mongoose product document into an IOrderItem ready to embed
+ * Convert a Mongoose product document into an Order item ready to embed
  * inside an order.
  *
  * @param product  - The persisted product document.
  * @param quantity - How many units were ordered (default: 1).
  */
-export const toOrderItem = (product: IProductDocument, quantity = 1): IOrderItem => ({
+export const toOrderItem = (
+    product: IProductDocument,
+    quantity = 1
+): Order['items'][number] => ({
     // toObject() removes Mongoose Document methods and virtuals, leaving a
     // plain JS object that matches the embedded productSchema in the Order model.
-    product: product.toObject() as IOrderItem['product'],
+    product: product.toObject() as Order['items'][number]['product'],
     quantity
 });
 
@@ -54,7 +58,7 @@ export const toOrderItem = (product: IProductDocument, quantity = 1): IOrderItem
  */
 export const makeOrder = (
     user: IUserDocument,
-    items: IOrderItem[]
+    items: Order['items']
 ): Partial<IOrderDocument> => ({
     userId: user._id as Types.ObjectId,
     email: user.email,
@@ -69,5 +73,5 @@ export const makeOrder = (
  */
 export const createOrder = (
     user: IUserDocument,
-    items: IOrderItem[]
+    items: Order['items']
 ): Promise<IOrderDocument> => orderRepository.create(makeOrder(user, items));

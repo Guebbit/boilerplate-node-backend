@@ -1,7 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema } from './products';
-import type { Order, Product } from '@types';
+import type { Order } from '@types';
 
 /**
  * Valid order status values (mirrors the OpenAPI enum).
@@ -16,16 +16,6 @@ export enum EOrderStatus {
 }
 
 /**
- * Same as CartItem from the API contract,
- * but stores the full product snapshot.
- * If the product data change, it must not change for the order.
- */
-export interface IOrderItem {
-    product: Product;
-    quantity: number;
-}
-
-/**
  * Order Document interface.
  * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string)
  * and keeps `items` as embedded OrderItem snapshots in the schema.
@@ -33,7 +23,6 @@ export interface IOrderItem {
 export interface IOrderDocument
     extends Omit<Order, 'id' | 'userId' | 'status' | 'total'>, Document {
     userId: Types.ObjectId;
-    items: IOrderItem[];
     status: EOrderStatus;
     notes?: string;
 }

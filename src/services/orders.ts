@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
 import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
-import type { IOrderDocument, IOrderItem } from '@models/orders';
+import type { IOrderDocument } from '@models/orders';
 import { EOrderStatus } from '@models/orders';
 import {
     generateReject,
@@ -184,7 +184,7 @@ export const create = (
                 ({
                     product,
                     quantity: item.quantity
-                }) as unknown as IOrderItem
+                }) as unknown as Order['items'][number]
         );
 
         return orderRepository
@@ -238,12 +238,12 @@ export const update = (
 
                        order.items = resolvedItems.map(
                            ({ item, product }) =>
-                               ({
-                                   product,
-                                   quantity: item.quantity
-                               }) as unknown as IOrderItem
-                       );
-                   })
+                                ({
+                                    product,
+                                    quantity: item.quantity
+                                }) as unknown as Order['items'][number]
+                        );
+                    })
                 : Promise.resolve();
 
         return updateItemsPromise.then((earlyResult) => {
