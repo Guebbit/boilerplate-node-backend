@@ -11,7 +11,7 @@ import {
     type IResponseReject
 } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
-import type { IOrderDocument, IOrderProduct } from '@models/orders';
+import type { IOrderDocument } from '@models/orders';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem, IUser } from '@models/users';
 import type { IProductDocument } from '@models/products';
@@ -222,8 +222,8 @@ export const orderConfirm = (
                 .create({
                     userId: user._id as Types.ObjectId,
                     email: user.email,
-                    // products is ICartItem[] after populate(); cast to IOrderProduct[] for the schema
-                    products: products as unknown as IOrderProduct[]
+                    // products is ICartItem[] after populate(); cast to Order['items'] for the schema
+                    items: products as unknown as Order['items']
                 } as Partial<IOrderDocument>)
                 .then((order) =>
                     cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))

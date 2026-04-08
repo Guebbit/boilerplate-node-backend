@@ -1,7 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema } from './products';
-import type { Order, Product } from '@types';
+import type { Order } from '@types';
 
 /**
  * Valid order status values (mirrors the OpenAPI enum).
@@ -16,25 +16,13 @@ export enum EOrderStatus {
 }
 
 /**
- * Same as ICartItem in ./users.ts,
- * but instead of only productId I store the entire product data.
- * If the product data change, it must not change for the order.
- */
-export interface IOrderProduct {
-    product: Product;
-    quantity: number;
-}
-
-/**
  * Order Document interface.
  * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string)
- * and 'items' (renamed to 'products' in the Mongoose schema) so that the Mongoose
- * schema definition and the TypeScript types stay in sync.
+ * and keeps `items` as embedded OrderItem snapshots in the schema.
  */
 export interface IOrderDocument
-    extends Omit<Order, 'id' | 'userId' | 'items' | 'status' | 'total'>, Document {
+    extends Omit<Order, 'id' | 'userId' | 'status' | 'total'>, Document {
     userId: Types.ObjectId;
-    products: IOrderProduct[];
     status: EOrderStatus;
     notes?: string;
 }
@@ -60,7 +48,7 @@ export const orderSchema = new Schema<IOrderDocument>(
             type: String,
             required: true
         },
-        products: [
+        items: [
             {
                 product: productSchema,
                 quantity: {
