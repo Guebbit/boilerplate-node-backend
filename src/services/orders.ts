@@ -52,13 +52,16 @@ const isCartItem = (item: CartItem | OrderItem): item is CartItem =>
     'productId' in (item as CartItem);
 
 const normalizeSnapshotProduct = (product: OrderItem['product']): IOrderProduct['product'] => {
-    const snapshot = { ...product } as Record<string, unknown>;
+    const { id, ...snapshot } = product as unknown as Record<string, unknown>;
+    const normalizedSnapshot =
+        !('_id' in snapshot) && typeof id === 'string' && Types.ObjectId.isValid(id)
+            ? {
+                  ...snapshot,
+                  _id: new Types.ObjectId(id)
+              }
+            : snapshot;
 
-    if (!('_id' in snapshot) && typeof snapshot.id === 'string' && Types.ObjectId.isValid(snapshot.id))
-        snapshot._id = new Types.ObjectId(snapshot.id);
-
-    delete snapshot.id;
-    return snapshot as unknown as IOrderProduct['product'];
+    return normalizedSnapshot as unknown as IOrderProduct['product'];
 };
 
 const resolveOrderProducts = (
@@ -70,15 +73,16 @@ const resolveOrderProducts = (
                 return productRepository
                     .findById(item.productId)
                     .lean()
-                    .then((product) => ({ item, product }));
+                    .then((product) => ({ item, product, source: 'cart' as const }));
 
             return Promise.resolve({
                 item,
-                product: normalizeSnapshotProduct(item.product)
+                product: normalizeSnapshotProduct(item.product),
+                source: 'snapshot' as const
             });
         })
     ).then((resolvedItems) => {
-        const missingProduct = resolvedItems.some(({ product }) => !product);
+        const missingProduct = resolvedItems.some(({ product, source }) => source === 'cart' && !product);
         if (missingProduct)
             return generateReject(404, 'create order - product not found', [
                 t('ecommerce.product-not-found')
