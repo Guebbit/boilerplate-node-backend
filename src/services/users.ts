@@ -16,8 +16,10 @@ import type { SearchUsersRequest, UsersResponse } from '@types';
 import { userRepository } from '@repositories/users';
 import { userTokenModel } from '@models/user-tokens';
 
+/** Normalizes a user identifier to a number. */
 const getUserId = (user: IUserDocument): number => Number(user.id);
 
+/** Maps a user entity to API response item shape. */
 const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse['items'][number] => ({
     id: String(user.id),
     email: user.email,
@@ -29,6 +31,7 @@ const toUserResponseItem = (user: IUserDocument | IUserListItem): UsersResponse[
     updatedAt: user.updatedAt
 });
 
+/** Creates and stores a user token with an optional expiration window. */
 export const tokenAdd = (
     user: IUserDocument,
     type: string,
@@ -45,6 +48,7 @@ export const tokenAdd = (
         .then(() => token);
 };
 
+/** Validates and updates a user password. */
 export const passwordChange = (
     user: IUserDocument,
     password = '',
@@ -86,6 +90,7 @@ export const passwordChange = (
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
+/** Validates signup data and creates a new user when email is available. */
 export const signup = (
     email: string,
     username: string,
@@ -142,6 +147,7 @@ export const signup = (
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
+/** Authenticates a user with email and password credentials. */
 export const login = (
     email?: string,
     password?: string
@@ -183,6 +189,7 @@ export const login = (
         .catch((error: Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
+/** Validates user payload data and returns translated error messages. */
 export const validateData = (
     userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
     requirePassword = true
@@ -198,6 +205,7 @@ export const validateData = (
     return [];
 };
 
+/** Searches users with pagination and optional text/filter criteria. */
 export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
@@ -243,6 +251,7 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
     );
 };
 
+/** Returns one user by id in plain object form. */
 export const getById = (id?: string) => {
     if (!id) return Promise.resolve();
     return userRepository.findById(id).then((user) => {
@@ -251,6 +260,7 @@ export const getById = (id?: string) => {
     });
 };
 
+/** Creates a user from admin inputs with default relations. */
 export const adminCreate = (
     data: Pick<IUser, 'email' | 'username' | 'password'> &
         Partial<Pick<IUser, 'admin' | 'imageUrl'>>
@@ -261,6 +271,7 @@ export const adminCreate = (
         tokens: []
     });
 
+/** Applies admin-managed updates to an existing user. */
 export const adminUpdate = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
@@ -277,6 +288,7 @@ export const adminUpdate = (
         return userRepository.save(user);
     });
 
+/** Performs hard delete or soft delete toggle for a user. */
 export const remove = (
     id: string,
     hardDelete = false

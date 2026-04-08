@@ -8,6 +8,7 @@ import { userTokenModel } from '@models/user-tokens';
 
 type UserWhere = Record<string, unknown>;
 
+/** Maps service-layer user filters into Sequelize where conditions. */
 const toWhere = (where: UserWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
 
@@ -57,6 +58,7 @@ const toWhere = (where: UserWhere = {}): WhereOptions => {
     return output;
 };
 
+/** Builds an include clause when token-based filtering is requested. */
 const tokenFilter = (where: UserWhere) => {
     const token = where['tokens.token'];
     const type = where['tokens.type'];
@@ -73,6 +75,7 @@ const tokenFilter = (where: UserWhere) => {
     };
 };
 
+/** Hydrates cart and token relations so user payloads match API shape. */
 const withComputedRelations = (
     user: UserModel | IUserDocument | null
 ): Promise<IUserDocument | null> => {
@@ -106,9 +109,11 @@ const withComputedRelations = (
     });
 };
 
+/** Finds one user by id and hydrates computed relations. */
 export const findById = (id: string | number): Promise<IUserDocument | null> =>
     userModel.findByPk(Number(id)).then((user) => withComputedRelations(user));
 
+/** Finds the first user matching the provided filter. */
 export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
     const includeToken = tokenFilter(where);
     return userModel
@@ -119,6 +124,7 @@ export const findOne = (where: UserWhere): Promise<IUserDocument | null> => {
         .then((user) => withComputedRelations(user));
 };
 
+/** Lists users with pagination and relation hydration. */
 export const findAll = (
     where: UserWhere = {},
     {
@@ -190,9 +196,11 @@ export const findAll = (
         });
 };
 
+/** Counts users matching the provided filter. */
 export const count = (where: UserWhere = {}): Promise<number> =>
     userModel.count({ where: toWhere(where) });
 
+/** Creates a user together with initial cart items and tokens. */
 export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
     userModel
         .create({
@@ -230,12 +238,15 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
             ]).then(() => withComputedRelations(user));
         }) as Promise<IUserDocument>;
 
+/** Persists changes on an existing user document. */
 export const save = (user: IUserDocument): Promise<IUserDocument> =>
     user.save().then(() => withComputedRelations(user)) as Promise<IUserDocument>;
 
+/** Permanently deletes one user record. */
 export const deleteOne = (user: IUserDocument): Promise<void> =>
     user.destroy().then(() => {});
 
+/** Applies bulk updates, including cart cleanup flow for removed products. */
 export const updateMany = (filter: UserWhere, update: Record<string, unknown>) => {
     if (filter['cart.items.product'] && update.removeFromCartItems) {
         const productId = Number(filter['cart.items.product']);

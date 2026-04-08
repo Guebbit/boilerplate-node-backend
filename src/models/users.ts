@@ -72,6 +72,7 @@ export class UserModel extends Model {
      */
     declare tokens?: IToken[];
 
+    /** Converts the Sequelize instance to the legacy API user shape. */
     toObject() {
         const plain = this.get({ plain: true }) as Record<string, unknown>;
         const cartItems =
@@ -93,6 +94,7 @@ export class UserModel extends Model {
         };
     }
 
+    /** Persists a token for this user and returns the token value. */
     async tokenAdd(type: ETokenType, expirationMs: number, token: string): Promise<string> {
         await userTokenModel.create({
             userId: this.id,
@@ -103,14 +105,17 @@ export class UserModel extends Model {
         return token;
     }
 
+    /** Deletes all tokens of the given type for this user. */
     async tokenRemoveAll(type: ETokenType): Promise<void> {
         await userTokenModel.destroy({ where: { userId: this.id, type } });
     }
 
+    /** Compatibility no-op for old mongoose-style populate calls. */
     async populate(_path: string) {
         return this;
     }
 
+    /** Applies an update to all users matching a simplified filter map. */
     static async updateMany(filter: Record<string, unknown>, update: Record<string, unknown>) {
         const where: Record<string, unknown> = {};
         if (filter.admin !== undefined) where.admin = filter.admin;
@@ -119,6 +124,7 @@ export class UserModel extends Model {
         return { modifiedCount };
     }
 
+    /** Removes expired user tokens and returns an operation status result. */
     static async tokenRemoveExpired(): Promise<{ status: number; success: boolean }> {
         const now = new Date();
         return userTokenModel
@@ -167,6 +173,7 @@ UserModel.init(
             { fields: ['deletedAt'] }
         ],
         hooks: {
+            /** Hashes user passwords before save when password has changed. */
             beforeSave: async (user) => {
                 if (!user.changed('password')) return;
                 user.password = await bcrypt.hash(user.password, 12);

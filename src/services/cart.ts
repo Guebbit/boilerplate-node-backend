@@ -16,8 +16,10 @@ type CartProductSnapshot = NonNullable<ICartItem['product']>;
 type CartProductObject = Exclude<CartProductSnapshot, number>;
 type OrderProductShape = IOrderProduct['product'];
 
+/** Normalizes a user identifier to a number. */
 const getUserId = (user: IUserDocument): number => Number(user.id);
 
+/** Type guard for cart product snapshots stored as objects. */
 const isCartProductObject = (value: unknown): value is CartProductObject => {
     if (typeof value !== 'object' || value === null) return false;
 
@@ -35,14 +37,17 @@ const isCartProductObject = (value: unknown): value is CartProductObject => {
     );
 };
 
+/** Returns a cart product object when available, otherwise uses product id fallback. */
 const toCartProduct = (value: unknown, fallbackProductId: number): CartProductSnapshot =>
     isCartProductObject(value) ? value : fallbackProductId;
 
+/** Validates that order product snapshots contain required title/price fields. */
 const hasRequiredOrderProductFields = (
     value: Partial<OrderProductShape>
 ): value is Partial<OrderProductShape> & Pick<OrderProductShape, 'title' | 'price'> =>
     typeof value.title === 'string' && typeof value.price === 'number';
 
+/** Updates cart timestamp when persistence layer supports update operations. */
 const updateUserCartTimestamp = (user: IUserDocument) =>
     typeof user.update === 'function'
         ? user.update({ cartUpdatedAt: new Date() })
@@ -57,6 +62,7 @@ const orderStatusToApi: Record<EOrderStatus, Order['status']> = {
     [ORDER_STATUS.CANCELLED]: ApiOrderModel.StatusEnum.Cancelled
 };
 
+/** Maps an order document to API order response format. */
 const toOrderResponse = (order: IOrderDocument): Order => {
     const items = order.products.map(({ product, quantity }) => ({
         product: {
@@ -121,9 +127,11 @@ const hydrateUserCart = (user: IUserDocument): Promise<IUserDocument> =>
             return user;
         });
 
+/** Returns cart items for a user after relation hydration. */
 export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
     hydrateUserCart(user).then((u) => (u.cart?.items ?? []) as ICartItem[]);
 
+/** Returns cart items plus derived quantity and total summary values. */
 export const cartGetWithSummary = (
     user: IUserDocument
 ): Promise<{
@@ -148,6 +156,7 @@ export const cartGetWithSummary = (
         };
     });
 
+/** Sets an absolute quantity for a product in the user cart. */
 export const cartItemSetById = (
     user: IUserDocument,
     id: string,
@@ -164,12 +173,14 @@ export const cartItemSetById = (
         .then((savedUser) => generateSuccess(savedUser));
 };
 
+/** Sets cart quantity using a product entity reference. */
 export const cartItemSet = (
     user: IUserDocument,
     product: IProductDocument,
     quantity = 1
 ): Promise<IResponseSuccess<IUserDocument>> => cartItemSetById(user, String(product.id), quantity);
 
+/** Adds quantity for a cart item, creating the item when absent. */
 export const cartItemAddById = (
     user: IUserDocument,
     id: string,
@@ -199,12 +210,14 @@ export const cartItemAddById = (
         .then((savedUser) => generateSuccess(savedUser));
 };
 
+/** Adds quantity using a product entity reference. */
 export const cartItemAdd = (
     user: IUserDocument,
     product: IProductDocument,
     quantity = 1
 ): Promise<IResponseSuccess<IUserDocument>> => cartItemAddById(user, String(product.id), quantity);
 
+/** Removes one cart item by product id. */
 export const cartItemRemoveById = (
     user: IUserDocument,
     id: string
@@ -221,11 +234,13 @@ export const cartItemRemoveById = (
         .then((savedUser) => generateSuccess(savedUser));
 };
 
+/** Removes one cart item using a product entity reference. */
 export const cartItemRemove = (
     user: IUserDocument,
     product: IProductDocument
 ): Promise<IResponseSuccess<IUserDocument>> => cartItemRemoveById(user, String(product.id));
 
+/** Clears all cart items for a user. */
 export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
     return cartItemModel
         .destroy({ where: { userId: getUserId(user) } })

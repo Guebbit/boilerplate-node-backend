@@ -14,6 +14,7 @@ export class ProductModel extends Model {
     declare createdAt: Date;
     declare updatedAt: Date;
 
+    /** Returns a plain JSON-safe representation of the product row. */
     toObject() {
         return this.get({ plain: true });
     }

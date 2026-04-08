@@ -33,6 +33,7 @@ export class OrderModel extends Model {
      */
     declare products?: IOrderProduct[];
 
+    /** Returns the order row as a plain object. */
     toObject() {
         return this.get({ plain: true });
     }

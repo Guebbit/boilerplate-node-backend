@@ -6,6 +6,7 @@ import type { IProductDocument } from '@models/products';
 
 type ProductWhere = Record<string, unknown>;
 
+/** Normalizes deletedAt filters to support null and explicit values. */
 const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>) => {
     if (where.deletedAt === null) {
         output['deletedAt'] = null;
@@ -14,6 +15,7 @@ const normalizeDeletedAt = (where: ProductWhere, output: Record<string, unknown>
     if (where.deletedAt !== undefined) output['deletedAt'] = where.deletedAt;
 };
 
+/** Converts product search filters to Sequelize where syntax. */
 const toWhere = (where: ProductWhere = {}): WhereOptions => {
     const output: Record<string, unknown> = {};
 
@@ -52,18 +54,21 @@ const toWhere = (where: ProductWhere = {}): WhereOptions => {
     return output;
 };
 
+/** Finds one product by id. */
 export const findById = (id: string | number) =>
     productModel.findByPk(Number(id)).then((product) => {
         if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
+/** Finds the first product matching the given filter. */
 export const findOne = (where: ProductWhere) =>
     productModel.findOne({ where: toWhere(where) }).then((product) => {
         if (product && product.deletedAt === null) product.deletedAt = undefined;
         return product;
     });
 
+/** Lists products with pagination and sorting. */
 export const findAll = (
     where: ProductWhere = {},
     {
@@ -86,15 +91,19 @@ export const findAll = (
     }) as Promise<IProductDocument[]>;
 };
 
+/** Counts products that match the filter. */
 export const count = (where: ProductWhere = {}): Promise<number> =>
     productModel.count({ where: toWhere(where) });
 
+/** Creates a new product row. */
 export const create = (data: Partial<IProductDocument>): Promise<IProductDocument> =>
     productModel.create(data as never) as Promise<IProductDocument>;
 
+/** Saves updates for an existing product. */
 export const save = (product: IProductDocument): Promise<IProductDocument> =>
     product.save();
 
+/** Permanently deletes a product row. */
 export const deleteOne = (product: IProductDocument): Promise<void> =>
     product.destroy().then(() => {});
 

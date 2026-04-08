@@ -14,6 +14,7 @@ import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
 
+/** Maps a product entity to API response item shape. */
 const toProductResponseItem = (item: IProductDocument): ProductsResponse['items'][number] => ({
     id: String(item.id),
     title: item.title,
@@ -26,12 +27,14 @@ const toProductResponseItem = (item: IProductDocument): ProductsResponse['items'
     deletedAt: item.deletedAt ?? undefined
 });
 
+/** Validates product input and returns validation messages. */
 export const validateData = (productData: Omit<Product, 'id'>): string[] => {
     const parseResult = zodProductSchema.safeParse(productData);
     if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
     return [];
 };
 
+/** Searches products with paging, price filters, and admin visibility rules. */
 export const search = (
     filters: SearchProductsRequest = {},
     admin = false
@@ -89,6 +92,7 @@ export const search = (
     );
 };
 
+/** Gets one product by id, respecting admin visibility scope. */
 export const getById = (id: string | undefined, admin = false) => {
     if (!id) return Promise.resolve();
     if (admin) return productRepository.findById(id).then((product) => product?.toObject());
@@ -101,9 +105,11 @@ export const getById = (id: string | undefined, admin = false) => {
         .then((product) => product?.toObject() ?? null);
 };
 
+/** Creates a new product from API payload data. */
 export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
     productRepository.create(data);
 
+/** Updates product fields and removes replaced image files when needed. */
 export const update = (
     id: string,
     data: Partial<Omit<Product, 'id'>>
@@ -131,6 +137,7 @@ export const update = (
     });
 };
 
+/** Removes a product with hard-delete or soft-delete behavior. */
 export const remove = (
     id: string,
     hardDelete = false

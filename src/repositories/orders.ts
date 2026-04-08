@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { orderModel, type IOrderDocument, type IOrderProduct } from '@models/orders';
 import { orderItemModel } from '@models/order-items';
 
+/** Loads order items and attaches them as legacy `products` payload. */
 const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
     orderItemModel.findAll({ where: { orderId: order.id }, raw: true }).then((items) => {
         const products: IOrderProduct[] = items.map((item) => ({
@@ -23,9 +24,11 @@ const hydrateOne = (order: { id: number } & Record<string, unknown>) =>
         } as IOrderDocument;
     });
 
+/** Hydrates order items for a list of order rows. */
 const hydrateAll = (orders: Array<{ id: number } & Record<string, unknown>>) =>
     Promise.all(orders.map((order) => hydrateOne(order)));
 
+/** Applies simplified in-memory match filtering for aggregate pipelines. */
 const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
     const keys = Object.keys(match);
     return rows.filter((row) =>
@@ -44,9 +47,11 @@ const applyMatch = (rows: IOrderDocument[], match: Record<string, unknown>) => {
     );
 };
 
+/** Extracts a numeric product id from an order product snapshot. */
 const extractProductId = (product: IOrderProduct['product']): number =>
     Number(product.id ?? 0);
 
+/** Adds summary totals used by order search responses. */
 const addComputedFields = (rows: IOrderDocument[]) =>
     rows.map((row) => ({
         ...row,
@@ -59,6 +64,7 @@ const addComputedFields = (rows: IOrderDocument[]) =>
         )
     }));
 
+/** Executes the lightweight aggregate pipeline used by services. */
 export const aggregate = async <T = IOrderDocument>(
     pipeline: Array<Record<string, unknown>>
 ): Promise<T[]> => {
@@ -95,12 +101,14 @@ export const aggregate = async <T = IOrderDocument>(
     return rows as T[];
 };
 
+/** Finds one order by id and hydrates its items. */
 export const findById = (id: string | number) =>
     orderModel.findByPk(Number(id)).then((order) => {
         if (!order) return null;
         return hydrateOne(order.get({ plain: true }) as { id: number } & Record<string, unknown>);
     });
 
+/** Creates an order and persists snapshot rows for each product item. */
 export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =>
     orderModel
         .create({
@@ -131,6 +139,7 @@ export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> =
             );
         });
 
+/** Updates an existing order and replaces its persisted item snapshots. */
 export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
     orderModel.findByPk(Number(order.id)).then((databaseOrder) => {
         if (!databaseOrder) throw new Error('404');
@@ -172,6 +181,7 @@ export const save = (order: IOrderDocument): Promise<IOrderDocument> =>
             );
     });
 
+/** Permanently deletes one order by id. */
 export const deleteOne = (order: IOrderDocument): Promise<void> =>
     orderModel.destroy({ where: { id: Number(order.id) } }).then(() => {});
 
