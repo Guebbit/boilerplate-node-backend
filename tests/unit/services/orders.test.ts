@@ -5,6 +5,8 @@ import { createProduct } from '../../helpers/factories/products';
 import { createOrder, toOrderProduct } from '../../helpers/factories/orders';
 import * as orderService from '@services/orders';
 import type { IOrderDocument } from '@models/orders';
+import type { IProductDocument } from '@models/products';
+import type { OrderItem } from '@types';
 
 beforeAll(connect);
 afterAll(disconnect);
@@ -15,6 +17,27 @@ type OrderWithTotals = IOrderDocument & {
     totalQuantity: number;
     totalPrice: number;
 };
+
+/**
+ * Convert a product document into an OrderItem snapshot payload.
+ *
+ * @param product
+ * @param quantity
+ */
+const toSnapshotOrderItem = (product: IProductDocument, quantity: number): OrderItem => ({
+    product: {
+        id: (product._id as Types.ObjectId).toString(),
+        title: product.title,
+        price: product.price,
+        description: product.description,
+        active: product.active,
+        imageUrl: product.imageUrl,
+        createdAt: product.createdAt,
+        updatedAt: product.updatedAt,
+        deletedAt: product.deletedAt
+    },
+    quantity
+});
 
 describe('orderService.getAll', () => {
     it('returns all orders when no extra pipeline stages are provided', async () => {
@@ -228,5 +251,44 @@ describe('orderService.search', () => {
         expect(result.items).toHaveLength(0);
         expect(result.meta.totalItems).toBe(0);
         expect(result.meta.totalPages).toBe(0);
+    });
+});
+
+describe('orderService.create', () => {
+    it('creates an order using OrderItem product snapshots', async () => {
+        const user = await createUser();
+        const product = await createProduct({ title: 'Snapshot Product', price: 12.5 });
+
+        const response = await orderService.create(user.id, user.email, [
+            toSnapshotOrderItem(product, 3)
+        ]);
+
+        expect(response.success).toBe(true);
+        if (!response.success) return;
+        const order = response.data as IOrderDocument;
+
+        expect(order.products[0].quantity).toBe(3);
+        expect(order.products[0].product.title).toBe('Snapshot Product');
+    });
+});
+
+describe('orderService.update', () => {
+    it('updates order items with OrderItem product snapshots', async () => {
+        const user = await createUser();
+        const initialProduct = await createProduct({ title: 'Initial', price: 3 });
+        const updatedProduct = await createProduct({ title: 'Updated', price: 9 });
+        const order = await createOrder(user, [toOrderProduct(initialProduct, 1)]);
+
+        const response = await orderService.update((order._id as Types.ObjectId).toString(), {
+            items: [toSnapshotOrderItem(updatedProduct, 4)]
+        });
+
+        expect(response.success).toBe(true);
+        if (!response.success) return;
+        const updatedOrder = response.data as IOrderDocument;
+
+        expect(updatedOrder.products).toHaveLength(1);
+        expect(updatedOrder.products[0].quantity).toBe(4);
+        expect(updatedOrder.products[0].product.title).toBe('Updated');
     });
 });

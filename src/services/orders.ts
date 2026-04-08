@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
-import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
+import type { SearchOrdersRequest, OrdersResponse, Order, CartItem, OrderItem } from '@types';
 import type { IOrderDocument, IOrderProduct } from '@models/orders';
 import { EOrderStatus } from '@models/orders';
 import {
@@ -47,6 +47,100 @@ const addComputedFields: PipelineStage.AddFields = {
         }
     }
 };
+
+/**
+ * Runtime discriminator for mixed order-item inputs.
+ * - CartItem (legacy): { productId, quantity }
+ * - OrderItem (snapshot): { product, quantity }
+ */
+const isCartItem = (item: CartItem | OrderItem): item is CartItem =>
+    'productId' in item && !('product' in item);
+
+/**
+ * Internal shape used while normalizing API snapshot products.
+ * API Product exposes `id`; DB embedded snapshot may need `_id`.
+ */
+type SnapshotProductWithOptionalMongoId = OrderItem['product'] & { _id?: unknown };
+
+/**
+ * Minimal guard for incoming snapshot products before persistence.
+ * Ensures required business fields are present and usable.
+ */
+const isValidSnapshotProduct = (product: unknown): boolean => {
+    if (!product || typeof product !== 'object') return false;
+    const snapshot = product as { title?: unknown; price?: unknown };
+    return (
+        typeof snapshot.title === 'string' &&
+        snapshot.title.trim() !== '' &&
+        typeof snapshot.price === 'number' &&
+        Number.isFinite(snapshot.price)
+    );
+};
+
+/**
+ * Normalizes API OrderItem.product into the embedded product shape used by orders.
+ * If `_id` is missing but `id` is a valid ObjectId string, it creates `_id`.
+ * `id` is then omitted from the embedded snapshot.
+ */
+const normalizeSnapshotProduct = (product: OrderItem['product']): IOrderProduct['product'] => {
+    const snapshotProduct = product as SnapshotProductWithOptionalMongoId;
+    const { id, ...snapshot } = snapshotProduct;
+    const normalizedSnapshot =
+        !('_id' in snapshot) && typeof id === 'string' && Types.ObjectId.isValid(id)
+            ? {
+                  ...snapshot,
+                  _id: new Types.ObjectId(id)
+              }
+            : snapshot;
+
+    return normalizedSnapshot as IOrderProduct['product'];
+};
+
+/**
+ * Converts mixed order-item inputs into DB-ready embedded products.
+ * - CartItem inputs fetch the current product, then snapshot it.
+ * - OrderItem inputs use the provided snapshot payload.
+ * Returns either normalized products or a reject response when invalid/missing.
+ */
+const resolveOrderProducts = (
+    items: Array<CartItem | OrderItem>
+): Promise<IOrderProduct[] | IResponseReject> =>
+    Promise.all(
+        items.map((item) => {
+            if (isCartItem(item))
+                return productRepository
+                    .findById(item.productId)
+                    .lean()
+                    .then((product) => ({ item, product, source: 'cart' as const }));
+
+            return Promise.resolve({
+                item,
+                product: normalizeSnapshotProduct(item.product),
+                source: 'snapshot' as const
+            });
+        })
+    ).then((resolvedItems) => {
+        const missingProduct = resolvedItems.some(({ product, source }) => source === 'cart' && !product);
+        if (missingProduct)
+            return generateReject(404, 'create order - product not found', [
+                t('ecommerce.product-not-found')
+            ]);
+        const invalidSnapshot = resolvedItems.some(
+            ({ product, source }) => source === 'snapshot' && !isValidSnapshotProduct(product)
+        );
+        if (invalidSnapshot)
+            return generateReject(422, 'create order - invalid snapshot product', [
+                t('generic.error-missing-data')
+            ]);
+
+        return resolvedItems.map(
+            ({ item, product }) =>
+                ({
+                    product: product as IOrderProduct['product'],
+                    quantity: item.quantity
+                }) as IOrderProduct
+        );
+    });
 
 /**
  * Get all orders with optional aggregation pipeline stages.
@@ -149,44 +243,28 @@ export const getById = (
 };
 
 /**
- * Create a new order from a list of { productId, quantity } items.
- * Looks up each product and stores a full snapshot in the order document.
+ * Create a new order from mixed item input.
+ * Supports:
+ * - CartItem: { productId, quantity } (legacy compatibility)
+ * - OrderItem: { product, quantity } (explicit snapshot payload)
  *
  * @param userId
  * @param email
- * @param items - Array of { productId, quantity }
+ * @param items
  */
 export const create = (
     userId: string,
     email: string,
-    items: CartItem[]
+    items: Array<CartItem | OrderItem>
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
     if (!items || items.length === 0)
         return Promise.resolve(
             generateReject(422, 'create order - empty items', [t('generic.error-missing-data')])
         );
 
-    return Promise.all(
-        items.map((item) =>
-            productRepository
-                .findById(item.productId)
-                .lean()
-                .then((product) => ({ item, product }))
-        )
-    ).then((resolvedItems) => {
-        const missingProduct = resolvedItems.some(({ product }) => !product);
-        if (missingProduct)
-            return generateReject(404, 'create order - product not found', [
-                t('ecommerce.product-not-found')
-            ]);
-
-        const products = resolvedItems.map(
-            ({ item, product }) =>
-                ({
-                    product,
-                    quantity: item.quantity
-                }) as unknown as IOrderProduct
-        );
+    return resolveOrderProducts(items).then((productsOrReject) => {
+        if (!Array.isArray(productsOrReject)) return productsOrReject;
+        const products = productsOrReject;
 
         return orderRepository
             .create({
@@ -211,7 +289,8 @@ export const update = (
         status?: string;
         email?: string;
         userId?: string;
-        items?: CartItem[];
+        // Accepts both legacy CartItem and snapshot OrderItem payloads.
+        items?: Array<CartItem | OrderItem>;
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
     return orderRepository.findById(id).then((order) => {
@@ -221,29 +300,12 @@ export const update = (
         if (data.email !== undefined) order.email = data.email;
         if (data.userId !== undefined) order.userId = new Types.ObjectId(data.userId);
 
-        const updateProductsPromise =
+        const updateProductsPromise: Promise<IResponseReject | void> =
             data.items && data.items.length > 0
-                ? Promise.all(
-                      data.items.map((item) =>
-                          productRepository
-                              .findById(item.productId)
-                              .lean()
-                              .then((product) => ({ item, product }))
-                      )
-                  ).then((resolvedItems) => {
-                      const missingProduct = resolvedItems.some(({ product }) => !product);
-                      if (missingProduct)
-                          return generateReject(404, 'update order - product not found', [
-                              t('ecommerce.product-not-found')
-                          ]);
+                ? resolveOrderProducts(data.items).then((productsOrReject) => {
+                      if (!Array.isArray(productsOrReject)) return productsOrReject;
 
-                      order.products = resolvedItems.map(
-                          ({ item, product }) =>
-                              ({
-                                  product,
-                                  quantity: item.quantity
-                              }) as unknown as IOrderProduct
-                      );
+                      order.products = productsOrReject;
                   })
                 : Promise.resolve();
 

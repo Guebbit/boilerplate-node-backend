@@ -11,7 +11,7 @@
  */
 
 import { RequestFile } from './models';
-import { CartItem } from './cartItem';
+import { OrderItem } from './orderItem';
 
 /**
 * Create a new order.
@@ -22,7 +22,7 @@ export class CreateOrderRequest {
     */
     'userId': string;
     'email': string;
-    'items': Array<CartItem>;
+    'items': Array<OrderItem>;
 
     static discriminator: string | undefined = undefined;
 
@@ -40,7 +40,7 @@ export class CreateOrderRequest {
         {
             "name": "items",
             "baseName": "items",
-            "type": "Array<CartItem>"
+            "type": "Array<OrderItem>"
         }    ];
 
     static getAttributeTypeMap() {

@@ -831,7 +831,7 @@ components:
                     type: array
                     minItems: 1
                     items:
-                        $ref: '#/components/schemas/CartItem'
+                        $ref: '#/components/schemas/OrderItem'
             description: Create a new order.
 
         UpdateOrderRequest:
@@ -853,7 +853,7 @@ components:
                     type: array
                     minItems: 1
                     items:
-                        $ref: '#/components/schemas/CartItem'
+                        $ref: '#/components/schemas/OrderItem'
 
         UpdateOrderByIdRequest:
             type: object
@@ -871,7 +871,7 @@ components:
                     type: array
                     minItems: 1
                     items:
-                        $ref: '#/components/schemas/CartItem'
+                        $ref: '#/components/schemas/OrderItem'
 
         DeleteOrderRequest:
             type: object
