@@ -1,6 +1,6 @@
 import { orderModel } from '@models/orders';
 import type { IOrderDocument } from '@models/orders';
-import type { PipelineStage } from 'mongoose';
+import type { PipelineStage, QueryFilter } from 'mongoose';
 
 /**
  * Order Repository
@@ -24,6 +24,21 @@ export const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promis
  * @param id
  */
 export const findById = (id: string) => orderModel.findById(id);
+
+/**
+ * Find a single order matching the given query
+ *
+ * @param where
+ */
+export const findOne = (where: QueryFilter<IOrderDocument>) => orderModel.findOne(where);
+
+/**
+ * Count orders matching the given query
+ *
+ * @param where
+ */
+export const count = (where: QueryFilter<IOrderDocument> = {}): Promise<number> =>
+    orderModel.countDocuments(where);
 
 /**
  * Create a new order document
@@ -50,4 +65,4 @@ export const deleteOne = (order: IOrderDocument): Promise<void> =>
         // explicit void return to satisfy TypeScript's Promise<void> type
     });
 
-export const orderRepository = { aggregate, findById, create, save, deleteOne };
+export const orderRepository = { aggregate, findById, findOne, count, create, save, deleteOne };

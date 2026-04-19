@@ -650,13 +650,13 @@ export const remove = (
 ): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
     return userRepository.findById(id).then((user) => {
         // not found, something happened
-        if (!user) return generateReject(404, '404', [t('admin.user-not-found')]);
+        if (!user) return generateReject(404, '404', [t('ecommerce.user-not-found')]);
 
         // HARD delete
         if (hardDelete)
             return userRepository
                 .deleteOne(user)
-                .then(() => generateSuccess(undefined, 200, t('admin.user-hard-deleted')));
+                .then(() => generateSuccess(undefined, 200, t('ecommerce.user-hard-deleted')));
 
         // If deletedAt already present: it's soft-deleted → RESTORE
         user.deletedAt = user.deletedAt ? undefined : new Date();
@@ -664,7 +664,7 @@ export const remove = (
         // SOFT delete (or restore)
         return userRepository
             .save(user)
-            .then((savedUser) => generateSuccess(savedUser, 200, t('admin.user-soft-deleted')));
+            .then((savedUser) => generateSuccess(savedUser, 200, t('ecommerce.user-soft-deleted')));
     });
 };
 

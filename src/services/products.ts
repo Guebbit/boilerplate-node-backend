@@ -86,7 +86,7 @@ export const search = (
     // If not admin, filter out inactive and (soft) deleted products
     if (!admin) {
         where.active = true;
-        where.deletedAt = undefined;
+        where.deletedAt = { $exists: false };
     }
 
     // First count the total number of products matching the query
@@ -125,7 +125,7 @@ export const getById = (id: string | undefined, admin = false) => {
         .findOne({
             _id: id,
             active: true,
-            deletedAt: undefined
+            deletedAt: { $exists: false }
         })
         .lean()
         .exec();

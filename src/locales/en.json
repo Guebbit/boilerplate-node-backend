@@ -32,6 +32,9 @@
         "product-hard-deleted": "Product was permanently deleted.",
         "product-soft-deleted": "Product was soft deleted (users only).",
         "product-was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts.",
+        "user-not-found": "The requested user was not found.",
+        "user-hard-deleted": "User was permanently deleted.",
+        "user-soft-deleted": "User was soft deleted (deactivated).",
         "order-not-found": "The requested order was not found",
         "order-deleted": "Order was permanently deleted.",
         "order-creation-success": "Order created with success.",
@@ -44,10 +47,5 @@
         "error-unknown": "Something went wrong with the request.",
         "error-invalid-data": "Error: invalid data provided.",
         "error-missing-data": "Error: missing data."
-    },
-    "admin": {
-        "user-not-found": "The requested user was not found.",
-        "user-hard-deleted": "User was permanently deleted.",
-        "user-soft-deleted": "User was soft deleted (deactivated)."
     }
 }

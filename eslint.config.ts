@@ -21,6 +21,9 @@ export default tseslint.config(
         '**/docs/**',
         '**/node_modules/**',
         '**/eslint.config.ts',
+        '**/migrate-mongo-config.js',
+        'db/migrations/**',
+        'docs/**',
         'api',
         '.prism',
         '.dev'

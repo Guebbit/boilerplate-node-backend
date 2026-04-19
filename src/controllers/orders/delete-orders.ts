@@ -13,7 +13,7 @@ export const deleteOrders = (
     request: Request<{ id?: string }, unknown, DeleteOrderRequest>,
     response: Response
 ) => {
-    const id = request.params.id ?? request.body.id ?? '';
+    const id = request.params.id ?? request.body.id;
 
     // missing or not valid
     if (!id || !Types.ObjectId.isValid(id)) {

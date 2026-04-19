@@ -97,7 +97,7 @@ export const writeUsers = (
         .catch((error: Error) =>
             deleteUpload().then(() => {
                 if (error.message === '404')
-                    rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
+                    rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
                 else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
             })
         );

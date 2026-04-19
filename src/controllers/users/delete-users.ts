@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { Types } from 'mongoose';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteUserRequest } from '@types';
@@ -19,7 +20,7 @@ export const deleteUsers = (
     const id = request.params.id ?? request.body.id;
     const hardDelete = !!(request.params.hardDelete ?? request.body.hardDelete);
 
-    if (!id) {
+    if (!id || !Types.ObjectId.isValid(id)) {
         rejectResponse(response, 422, 'deleteUser - missing id', [t('generic.error-missing-data')]);
         return Promise.resolve();
     }
@@ -39,6 +40,7 @@ export const deleteUsers = (
                 rejectResponse(response, 404, 'deleteUser - not found', [
                     t('ecommerce.user-not-found')
                 ]);
+
             rejectResponse(response, 500, 'Unknown Error', [error.message]);
         });
 };
