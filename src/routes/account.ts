@@ -9,6 +9,7 @@ import { postResetConfirm } from '@controllers/account/post-reset-confirm';
 import { getRefreshToken } from '@controllers/account/get-refresh-token';
 import { postLogoutEverywhere } from '@controllers/account/post-logout-everywhere';
 import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
+import { setCache } from "@utils/helpers-response";
 
 export const router = Router();
 
@@ -16,7 +17,7 @@ export const router = Router();
 router.use(getAuth);
 
 // GET /account — current user profile (requires auth)
-router.get('/', isAuth, getAccount);
+router.get('/', setCache(3600), isAuth, getAccount);
 
 // POST /account/login — authenticate and get tokens
 router.post('/login', postLogin);

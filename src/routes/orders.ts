@@ -6,6 +6,7 @@ import { putOrders } from '@controllers/orders/put-orders';
 import { deleteOrders } from '@controllers/orders/delete-orders';
 import { getOrderItem } from '@controllers/orders/get-order-item';
 import { getOrderInvoice } from '@controllers/orders/get-order-invoice';
+import { setCache } from "@utils/helpers-response";
 
 export const router = Router();
 
@@ -16,7 +17,7 @@ router.use(getAuth, isAuth);
 router.post('/search', getOrders);
 
 // GET /orders — list (non-admin sees own orders only)
-router.get('/', getOrders);
+router.get('/', setCache(3600), getOrders);
 
 // POST /orders — admin creates order directly
 router.post('/', isAdmin, postOrders);
@@ -28,10 +29,10 @@ router.put('/', isAdmin, putOrders);
 router.delete('/', isAdmin, deleteOrders);
 
 // GET /orders/:id/invoice — must come before /:id
-router.get('/:id/invoice', getOrderInvoice);
+router.get('/:id/invoice', setCache(3600), getOrderInvoice);
 
 // GET /orders/:id
-router.get('/:id', getOrderItem);
+router.get('/:id', setCache(3600), getOrderItem);
 
 // PUT /orders/:id — admin only (update)
 router.put('/:id', isAdmin, putOrders);

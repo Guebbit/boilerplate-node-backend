@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@utils/response';
+import { extractId, extractPagination } from '@utils/helpers-request';
 import type { SearchProductsRequest } from '@types';
 import type { CastError } from 'mongoose';
 
@@ -11,38 +12,31 @@ export type IGetProductsQuery = Partial<Record<keyof SearchProductsRequest, stri
 
 /**
  * GET /products
- * List/search products via query parameters.
+ * POST /products/search
+ * List/search products via query parameters or request body.
  * Admin sees all products (including inactive/deleted); public sees only active ones.
  */
 export const getProducts = (
-    request: Request<{ page?: string }, unknown, SearchProductsRequest, IGetProductsQuery>,
+    request: Request<{ id?: string }, unknown, SearchProductsRequest, IGetProductsQuery>,
     response: Response
 ) => {
-    const page = request.body.page ?? request.query.page ?? '1';
-    const pageSize =
-        request.body.pageSize ??
-        request.query.pageSize ??
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ??
-        '10';
-    const minPrice =
-        (request.body.minPrice ?? request.query.minPrice)
-            ? Number(request.body.minPrice ?? request.query.minPrice)
-            : undefined;
-    const maxPrice =
-        (request.body.minPrice ?? request.query.minPrice)
-            ? Number(request.body.minPrice ?? request.query.minPrice)
-            : undefined;
+    const { page, pageSize } = extractPagination({
+        page: request.body?.page ?? request.query.page,
+        pageSize: request.body?.pageSize ?? request.query.pageSize
+    });
+
+    const minPriceRaw = request.body?.minPrice ?? request.query.minPrice;
+    const maxPriceRaw = request.body?.maxPrice ?? request.query.maxPrice;
 
     return productService
         .search(
             {
-                id: request.body.id ?? request.query.id,
-                page: page ? Number(page) : undefined,
-                pageSize: pageSize ? Number(pageSize) : undefined,
-                text: request.body.text ?? request.query.text,
-                minPrice,
-                maxPrice
-                // Only admin can see non-active products
+                id: extractId(request.params.id, request.body?.id, request.query.id),
+                page,
+                pageSize,
+                text: request.body?.text ?? request.query.text,
+                minPrice: minPriceRaw ? Number(minPriceRaw) : undefined,
+                maxPrice: maxPriceRaw ? Number(maxPriceRaw) : undefined
             },
             request.user?.admin === true
         )

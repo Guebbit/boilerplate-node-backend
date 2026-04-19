@@ -5,6 +5,7 @@ import { getProducts } from '@controllers/products/get-products';
 import { writeProducts } from '@controllers/products/write-products';
 import { deleteProducts } from '@controllers/products/delete-products';
 import { getProductItem } from '@controllers/products/get-product-item';
+import { setCache } from "@utils/helpers-response";
 
 export const router = Router();
 
@@ -15,7 +16,7 @@ router.use(getAuth);
 router.post('/search', getProducts);
 
 // GET /products — public
-router.get('/', getProducts);
+router.get('/', setCache(3600), getProducts);
 
 // POST /products — admin only (create)
 router.post('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
@@ -27,7 +28,7 @@ router.put('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
 router.delete('/', isAuth, isAdmin, deleteProducts);
 
 // GET /products/:id — public
-router.get('/:id', getProductItem);
+router.get('/:id', setCache(3600), getProductItem);
 
 // PUT /products/:id — admin only (update)
 router.put('/:id', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);

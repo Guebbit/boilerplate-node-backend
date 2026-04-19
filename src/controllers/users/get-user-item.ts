@@ -13,7 +13,7 @@ export const getUserItem = (request: Request, response: Response) =>
         .getById(String(request.params.id))
         .then((user) => {
             if (!user) {
-                rejectResponse(response, 404, 'Not Found', [t('admin.user-not-found')]);
+                rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
                 return;
             }
             successResponse(response, user);

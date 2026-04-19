@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@utils/response';
+import { extractId, extractPagination } from '@utils/helpers-request';
 import type { SearchOrdersRequest } from '@types';
 import { userScope } from '@utils/helpers-scopes';
 import type { CastError } from 'mongoose';
@@ -12,33 +13,27 @@ export type IGetOrdersQuery = Partial<Record<keyof SearchOrdersRequest, string>>
 
 /**
  * GET /orders
- * List/search orders via query parameters.
+ * List/search orders via query parameters or request body.
  * Non-admin users see only their own orders.
  */
 export const getOrders = (
-    request: Request<{ page?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
+    request: Request<{ id?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
 ) => {
-    const page = request.body.page ?? request.query.page ?? '1';
-    const pageSize =
-        request.body.pageSize ??
-        request.query.pageSize ??
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE ??
-        '10';
+    const { page, pageSize } = extractPagination({
+        page: request.body?.page ?? request.query.page,
+        pageSize: request.body?.pageSize ?? request.query.pageSize
+    });
 
-    /**
-     * User role filters:
-     * Only admin can see all orders. Regular users can only see their own.
-     */
     return orderService
         .search(
             {
-                id: request.body.id ?? request.query.id,
-                page: page ? Number(page) : undefined,
-                pageSize: pageSize ? Number(pageSize) : undefined,
-                userId: request.body.userId ?? request.query.userId,
-                productId: request.body.productId ?? request.query.productId,
-                email: request.body.email ?? request.query.email
+                id: extractId(request.params.id, request.body?.id, request.query.id),
+                page,
+                pageSize,
+                userId: request.body?.userId ?? request.query.userId,
+                productId: request.body?.productId ?? request.query.productId,
+                email: request.body?.email ?? request.query.email
             },
             userScope(request)
         )

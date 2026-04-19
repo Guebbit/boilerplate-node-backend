@@ -37,10 +37,6 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 - `npm run complete` - build + test + auto-fix lint/prettier
 - `npm run complete:check` - build + test + non-mutating lint/prettier checks
 
-## Development routes
-
-Routes in `src/routes/_development.ts` are mounted only when `NODE_ENV !== 'production'`.
-
 ## OpenAPI workflow
 
 - Source of truth: `openapi.yaml`

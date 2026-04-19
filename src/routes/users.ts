@@ -5,6 +5,7 @@ import { getUsers } from '@controllers/users/get-users';
 import { writeUsers } from '@controllers/users/write-users';
 import { deleteUsers } from '@controllers/users/delete-users';
 import { getUserItem } from '@controllers/users/get-user-item';
+import { setCache } from "@utils/helpers-response";
 
 export const router = Router();
 
@@ -15,7 +16,7 @@ router.use(getAuth, isAuth, isAdmin);
 router.post('/search', getUsers);
 
 // GET /users
-router.get('/', getUsers);
+router.get('/', setCache(3600), getUsers);
 
 // POST /users (create)
 router.post('/', upload.single('imageUpload'), writeUsers);
@@ -27,7 +28,7 @@ router.put('/', upload.single('imageUpload'), writeUsers);
 router.delete('/', deleteUsers);
 
 // GET /users/:id
-router.get('/:id', getUserItem);
+router.get('/:id', setCache(3600), getUserItem);
 
 // PUT /users/:id (update)
 router.put('/:id', upload.single('imageUpload'), writeUsers);

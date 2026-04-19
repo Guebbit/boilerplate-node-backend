@@ -20,7 +20,6 @@ import { router as orderRoutes } from './routes/orders';
 import { router as cartRoutes } from './routes/cart';
 import { router as userRoutes } from './routes/users';
 import { router as systemRoutes } from './routes';
-import { router as developmentRoutes } from './routes/_development';
 
 import { MulterError } from 'multer';
 import { ExtendedError } from '@utils/helpers-errors';
@@ -29,6 +28,14 @@ import { ExtendedError } from '@utils/helpers-errors';
  * Server start
  */
 const app = express();
+
+/**
+ * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
+ * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
+ * which can lead to stale data being served.
+ * By using strong ETags, we ensure that clients receive updated content when it changes.
+ */
+app.set('etag', 'strong');
 
 /**
  * Sync database then start server
@@ -136,7 +143,6 @@ app.use('/orders', orderRoutes);
 app.use('/cart', cartRoutes);
 app.use('/users', userRoutes);
 app.use('/', systemRoutes);
-if (process.env.NODE_ENV !== 'production') app.use('/', developmentRoutes);
 
 /**
  * 404 handler — catch all unmatched routes
