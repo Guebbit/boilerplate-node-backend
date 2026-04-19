@@ -44,19 +44,20 @@ const getClient = async (): Promise<RedisClientType | undefined> => {
         client.on('error', logConnectionWarning);
     }
 
-    connectPromise = client
-        .connect()
-        .then(() => {
+    const promise = (async (): Promise<RedisClientType | undefined> => {
+        try {
+            await client.connect();
             connectionWarningLogged = false;
             return client;
-        })
-        .catch((error: unknown) => {
+        } catch (error: unknown) {
             logConnectionWarning(error);
             return;
-        })
-        .finally(() => {
+        } finally {
             connectPromise = undefined;
-        });
+        }
+    })();
+
+    connectPromise = promise;
 
     return connectPromise;
 };
