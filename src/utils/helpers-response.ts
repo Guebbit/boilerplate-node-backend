@@ -6,6 +6,10 @@ type CacheOptions = {
     tags?: string[];
 };
 
+/**
+ * Keep cache entries separated by user.
+ * This avoids serving one user's private data to another user.
+ */
 const getCacheScope = (request: Request) => {
     const userId = request.user?._id;
     if (!userId) return 'guest';
@@ -16,6 +20,11 @@ const getCacheKey = (request: Request) =>
     `${request.method}:${request.originalUrl}:${getCacheScope(request)}`;
 
 /**
+ * Cache GET responses in Redis.
+ * Quick flow:
+ * 1) try Redis
+ * 2) if HIT, return cached JSON
+ * 3) if MISS, run controller and save the fresh response
  *
  * @param seconds
  */
@@ -45,6 +54,7 @@ export const setCache =
 
         const responseJson = response.json.bind(response);
         response.json = ((body: unknown) => {
+            // Save only successful responses.
             if (response.statusCode >= 200 && response.statusCode < 300)
                 void setCacheValue(cacheKey, { status: response.statusCode, body }, seconds, options.tags);
 
@@ -54,6 +64,10 @@ export const setCache =
         next();
     };
 
+/**
+ * Clear Redis cache groups after successful write operations.
+ * Example: after creating/updating/deleting a product, clear "products" cache.
+ */
 export const invalidateCache =
     (tags: string[]) => (_request: Request, response: Response, next: NextFunction) => {
         response.on('finish', () => {

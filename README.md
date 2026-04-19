@@ -34,6 +34,8 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 
 ## Redis caching
 
+- Redis is a super-fast in-memory key/value store.
+- In this project, Redis is used to temporarily store GET responses so repeated reads are faster.
 - Cacheable GET routes now use Redis-backed server-side response caching when `NODE_REDIS_URL` is configured.
 - Cache entries are scoped per authenticated user to avoid cross-user data leakage.
 - Product, order, user, account, and checkout mutations invalidate related cached responses automatically.

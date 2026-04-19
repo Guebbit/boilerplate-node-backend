@@ -1,6 +1,10 @@
 import { createClient, type RedisClientType } from 'redis';
 import { logger } from './winston';
 
+/**
+ * Redis = a very fast in-memory data store.
+ * Here we use it as a shared cache, so repeated GET requests can be served faster.
+ */
 type CacheValue = {
     status: number;
     body: unknown;
@@ -27,6 +31,10 @@ const logConnectionWarning = (error: unknown) => {
     connectionWarningLogged = true;
 };
 
+/**
+ * Reuse one Redis client for the whole app.
+ * If Redis is off/unreachable, we fail open and just skip server-side caching.
+ */
 const getClient = async (): Promise<RedisClientType | undefined> => {
     if (!isCacheEnabled()) return;
     if (client?.isReady) return client;
@@ -66,6 +74,9 @@ export const startCache = async () => {
     await getClient();
 };
 
+/**
+ * Read one cached HTTP response from Redis.
+ */
 export const getCacheValue = async (key: string): Promise<CacheValue | undefined> => {
     const redisClient = await getClient();
     if (!redisClient) return;
@@ -84,6 +95,10 @@ export const getCacheValue = async (key: string): Promise<CacheValue | undefined
     }
 };
 
+/**
+ * Save one HTTP response in Redis and attach it to one or more "tags".
+ * Tags let us delete groups of cached responses later (example: all "products" cache).
+ */
 export const setCacheValue = async (
     key: string,
     value: CacheValue,
@@ -115,6 +130,10 @@ export const setCacheValue = async (
     }
 };
 
+/**
+ * Remove all cached responses linked to the given tags.
+ * We use this after successful writes so old/stale GET responses disappear.
+ */
 export const invalidateCacheTags = async (tags: string[]) => {
     const redisClient = await getClient();
     if (!redisClient) return;
