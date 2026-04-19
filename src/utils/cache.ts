@@ -10,17 +10,40 @@ type CacheValue = {
     body: unknown;
 };
 
+/**
+ * Prefix all Redis keys so this app does not collide with other apps/environments.
+ */
 const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-backend';
 
+/**
+ * Hold the shared Redis client instance.
+ */
 let client: RedisClientType | undefined;
-let connectPromise: Promise<RedisClientType | undefined> | undefined;
+
+/**
+ * Hold the in-flight connect promise so parallel requests reuse the same connection attempt.
+ */
+let connectPromise: Promise<RedisClientType | void> | undefined;
+
+/**
+ * Avoid logging the same "Redis is down" warning again and again.
+ */
 let connectionWarningLogged = false;
 
+/**
+ * Turn cache usage on only when Redis is configured and not explicitly disabled.
+ */
 const isCacheEnabled = () =>
     Boolean(process.env.NODE_REDIS_URL) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
 
+/**
+ * Build one namespaced Redis key.
+ */
 const prefix = (value: string) => `${CACHE_PREFIX}:${value}`;
 
+/**
+ * Log one warning when Redis is unavailable, then stay quiet until a reconnect succeeds.
+ */
 const logConnectionWarning = (error: unknown) => {
     if (connectionWarningLogged) return;
 
@@ -35,11 +58,12 @@ const logConnectionWarning = (error: unknown) => {
  * Reuse one Redis client for the whole app.
  * If Redis is off/unreachable, we fail open and just skip server-side caching.
  */
-const getClient = async (): Promise<RedisClientType | undefined> => {
-    if (!isCacheEnabled()) return;
-    if (client?.isReady) return client;
+const getClient = (): Promise<RedisClientType | void> => {
+    if (!isCacheEnabled()) return Promise.resolve();
+    if (client?.isReady) return Promise.resolve(client);
     if (connectPromise) return connectPromise;
 
+    // Create the client only once, then reuse it for the rest of the app lifetime.
     if (!client) {
         client = createClient({
             url: process.env.NODE_REDIS_URL,
@@ -52,107 +76,128 @@ const getClient = async (): Promise<RedisClientType | undefined> => {
         client.on('error', logConnectionWarning);
     }
 
-    const promise = (async (): Promise<RedisClientType | undefined> => {
-        try {
-            await client.connect();
+    const redisClient = client;
+
+    const promise: Promise<RedisClientType | void> = redisClient
+        .connect()
+        .then(() => {
+            // If connect worked, allow future warnings again for later failures.
             connectionWarningLogged = false;
-            return client;
-        } catch (error: unknown) {
+            return redisClient;
+        })
+        .catch((error: unknown) => {
             logConnectionWarning(error);
             return;
-        } finally {
+        })
+        .finally(() => {
             connectPromise = undefined;
-        }
-    })();
+        });
 
     connectPromise = promise;
 
     return connectPromise;
 };
 
-export const startCache = async () => {
-    await getClient();
-};
+/**
+ * Warm up Redis during app startup so the first request does not pay the connect cost.
+ */
+export const startCache = () => getClient();
 
 /**
  * Read one cached HTTP response from Redis.
  */
-export const getCacheValue = async (key: string): Promise<CacheValue | undefined> => {
-    const redisClient = await getClient();
-    if (!redisClient) return;
+export const getCacheValue = (key: string): Promise<CacheValue | void> =>
+    getClient()
+        .then((redisClient) => {
+            if (!redisClient) return;
 
-    try {
-        const raw = await redisClient.get(prefix(`key:${key}`));
-        if (!raw) return;
-        return JSON.parse(raw) as CacheValue;
-    } catch (error) {
-        logger.warn({
-            message: 'Redis cache read failed.',
-            key,
-            error: error instanceof Error ? error.message : String(error)
+            // Read the raw JSON payload for this HTTP response.
+            return redisClient.get(prefix(`key:${key}`)).then((raw) => {
+                if (!raw) return;
+                return JSON.parse(raw) as CacheValue;
+            });
+        })
+        .catch((error) => {
+            logger.warn({
+                message: 'Redis cache read failed.',
+                key,
+                error: error instanceof Error ? error.message : String(error)
+            });
+            return;
         });
-        return;
-    }
-};
 
 /**
  * Save one HTTP response in Redis and attach it to one or more "tags".
  * Tags let us delete groups of cached responses later (example: all "products" cache).
  */
-export const setCacheValue = async (
+export const setCacheValue = (
     key: string,
     value: CacheValue,
     ttlSeconds: number,
     tags: string[] = []
-) => {
-    if (ttlSeconds <= 0) return;
-
-    const redisClient = await getClient();
-    if (!redisClient) return;
+): Promise<void> => {
+    if (ttlSeconds <= 0) return Promise.resolve();
 
     const cacheKey = prefix(`key:${key}`);
     const cacheTags = [...new Set(tags.filter(Boolean))];
 
-    try {
-        await redisClient.set(cacheKey, JSON.stringify(value), {
-            EX: ttlSeconds
-        });
+    return getClient()
+        .then((redisClient) => {
+            if (!redisClient) return;
 
-        await Promise.all(
-            cacheTags.map((tag) => redisClient.sAdd(prefix(`tag:${tag}`), cacheKey))
-        );
-    } catch (error) {
-        logger.warn({
-            message: 'Redis cache write failed.',
-            key,
-            error: error instanceof Error ? error.message : String(error)
+            // Save the response body with a TTL so Redis evicts it automatically later.
+            return redisClient
+                .set(cacheKey, JSON.stringify(value), {
+                    EX: ttlSeconds
+                })
+                .then(() =>
+                    // Also index this key by tags so future writes can invalidate related reads.
+                    Promise.all(
+                        cacheTags.map((tag) => redisClient.sAdd(prefix(`tag:${tag}`), cacheKey))
+                    )
+                )
+                .then(() => {});
+        })
+        .catch((error) => {
+            logger.warn({
+                message: 'Redis cache write failed.',
+                key,
+                error: error instanceof Error ? error.message : String(error)
+            });
         });
-    }
 };
 
 /**
  * Remove all cached responses linked to the given tags.
  * We use this after successful writes so old/stale GET responses disappear.
  */
-export const invalidateCacheTags = async (tags: string[]) => {
-    const redisClient = await getClient();
-    if (!redisClient) return;
-
+export const invalidateCacheTags = (tags: string[]): Promise<void> => {
     const cacheTags = [...new Set(tags.filter(Boolean))];
-    if (cacheTags.length === 0) return;
+    if (cacheTags.length === 0) return Promise.resolve();
 
-    try {
-        for (const tag of cacheTags) {
-            const tagKey = prefix(`tag:${tag}`);
-            const keys = await redisClient.sMembers(tagKey);
-            if (keys.length > 0) await redisClient.del(keys);
-            await redisClient.del(tagKey);
-        }
-    } catch (error) {
-        logger.warn({
-            message: 'Redis cache invalidation failed.',
-            tags: cacheTags,
-            error: error instanceof Error ? error.message : String(error)
+    return getClient()
+        .then((redisClient) => {
+            if (!redisClient) return;
+
+            // For each tag:
+            // 1) read all cached keys in that group
+            // 2) delete those cached responses
+            // 3) delete the tag set itself
+            return Promise.all(
+                cacheTags.map((tag) => {
+                    const tagKey = prefix(`tag:${tag}`);
+                    return redisClient
+                        .sMembers(tagKey)
+                        .then((keys) => (keys.length > 0 ? redisClient.del(keys) : undefined))
+                        .then(() => redisClient.del(tagKey));
+                })
+            ).then(() => {});
+        })
+        .catch((error) => {
+            logger.warn({
+                message: 'Redis cache invalidation failed.',
+                tags: cacheTags,
+                error: error instanceof Error ? error.message : String(error)
+            });
         });
-    }
 };

@@ -2,6 +2,9 @@ import type { NextFunction, Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { getCacheValue, invalidateCacheTags, setCacheValue } from './cache';
 
+/**
+ * Extra cache metadata for middleware users.
+ */
 type CacheOptions = {
     tags?: string[];
 };
@@ -16,6 +19,9 @@ const getCacheScope = (request: Request) => {
     return `user:${userId instanceof Types.ObjectId ? userId.toString() : String(userId)}`;
 };
 
+/**
+ * Build one cache key from method + URL + user scope.
+ */
 const getCacheKey = (request: Request) =>
     `${request.method}:${request.originalUrl}:${getCacheScope(request)}`;
 
@@ -30,7 +36,8 @@ const getCacheKey = (request: Request) =>
  */
 export const setCache =
     (seconds = 0, options: CacheOptions = {}) =>
-    async (request: Request, response: Response, next: NextFunction) => {
+    (request: Request, response: Response, next: NextFunction) => {
+        // Keep browser/proxy cache headers aligned with the server-side Redis cache policy.
         response.set(
             'Cache-Control',
             `${request.user ? 'private' : 'public'}, max-age=${seconds}`
@@ -42,26 +49,33 @@ export const setCache =
         }
 
         const cacheKey = getCacheKey(request);
-        const cachedResponse = await getCacheValue(cacheKey);
+        return getCacheValue(cacheKey).then((cachedResponse) => {
+            // Fast path: Redis already has a response for this exact request.
+            if (cachedResponse) {
+                response.set('x-cache', 'HIT');
+                response.status(cachedResponse.status).json(cachedResponse.body);
+                return;
+            }
 
-        if (cachedResponse) {
-            response.set('x-cache', 'HIT');
-            response.status(cachedResponse.status).json(cachedResponse.body);
-            return;
-        }
+            response.set('x-cache', 'MISS');
 
-        response.set('x-cache', 'MISS');
+            const responseJson = response.json.bind(response);
+            response.json = ((body: unknown) => {
+                // Save only successful responses, so errors do not become sticky in cache.
+                if (response.statusCode >= 200 && response.statusCode < 300)
+                    void setCacheValue(
+                        cacheKey,
+                        { status: response.statusCode, body },
+                        seconds,
+                        options.tags
+                    );
 
-        const responseJson = response.json.bind(response);
-        response.json = ((body: unknown) => {
-            // Save only successful responses.
-            if (response.statusCode >= 200 && response.statusCode < 300)
-                void setCacheValue(cacheKey, { status: response.statusCode, body }, seconds, options.tags);
+                return responseJson(body);
+            }) as Response['json'];
 
-            return responseJson(body);
-        }) as Response['json'];
-
-        next();
+            // No cache hit, so continue to the controller and let it generate a fresh response.
+            next();
+        });
     };
 
 /**
@@ -71,6 +85,7 @@ export const setCache =
 export const invalidateCache =
     (tags: string[]) => (_request: Request, response: Response, next: NextFunction) => {
         response.on('finish', () => {
+            // Only clear cache after a successful write; failed writes should not wipe valid cache.
             if (response.statusCode >= 200 && response.statusCode < 300)
                 void invalidateCacheTags(tags);
         });
