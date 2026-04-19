@@ -28,6 +28,7 @@ services:
         environment:
             MONGODB_URI: 'mongodb://database:27017/${DB_NAME:-boilerplate_mongodb}' # Mongodb connection string. "database" is the service name of the database service.
             NODE_ENV: 'development' # Node environment (production or development)
+            NODE_REDIS_URL: 'redis://redis:6379'
 
         # Persist data.
         # Compose manages the lifecycle of this volume when up/down
@@ -52,6 +53,7 @@ services:
         # Containers which this container depends on. Affects container start order.
         depends_on:
             - database
+            - redis
 
         # Health check to verify the container is ready to accept traffic
         # Inspect with "podman ps" or "podman inspect <container name>"
@@ -91,6 +93,12 @@ services:
         # Same
         ports:
             - '27017:27017'
+
+    redis:
+        image: redis:7
+        restart: unless-stopped
+        ports:
+            - '6379:6379'
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:

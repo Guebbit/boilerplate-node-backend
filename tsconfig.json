@@ -25,7 +25,7 @@
         "moduleResolution": "Node",
         "outDir": "./dist",
         "importsNotUsedAsValues": "remove",
-        "ignoreDeprecations": "5.0",
+        "ignoreDeprecations": "6.0",
         "types": ["node", "jest"],
         "typeRoots": ["./src/types", "./node_modules/@types"]
     },

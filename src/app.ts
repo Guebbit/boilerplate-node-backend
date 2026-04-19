@@ -8,6 +8,7 @@ import i18next from 'i18next';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { start } from '@utils/database';
+import { startCache } from '@utils/cache';
 import { logger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { rejectResponse } from '@utils/response';
@@ -44,6 +45,7 @@ app.set('etag', 'strong');
 Promise.resolve()
     .then(() => validateRequiredEnvironment())
     .then(() => start())
+    .then(() => startCache())
     .then(() =>
         i18next.init({
             lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',

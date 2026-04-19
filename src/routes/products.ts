@@ -5,7 +5,7 @@ import { getProducts } from '@controllers/products/get-products';
 import { writeProducts } from '@controllers/products/write-products';
 import { deleteProducts } from '@controllers/products/delete-products';
 import { getProductItem } from '@controllers/products/get-product-item';
-import { setCache } from "@utils/helpers-response";
+import { invalidateCache, setCache } from '@utils/helpers-response';
 
 export const router = Router();
 
@@ -16,22 +16,22 @@ router.use(getAuth);
 router.post('/search', getProducts);
 
 // GET /products — public
-router.get('/', setCache(3600), getProducts);
+router.get('/', setCache(3600, { tags: ['products'] }), getProducts);
 
 // POST /products — admin only (create)
-router.post('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
+router.post('/', isAuth, isAdmin, invalidateCache(['products']), upload.single('imageUpload'), writeProducts);
 
 // PUT /products — admin only, id in body (update)
-router.put('/', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
+router.put('/', isAuth, isAdmin, invalidateCache(['products']), upload.single('imageUpload'), writeProducts);
 
 // DELETE /products — admin only, id in body
-router.delete('/', isAuth, isAdmin, deleteProducts);
+router.delete('/', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
 
 // GET /products/:id — public
-router.get('/:id', setCache(3600), getProductItem);
+router.get('/:id', setCache(3600, { tags: ['products'] }), getProductItem);
 
 // PUT /products/:id — admin only (update)
-router.put('/:id', isAuth, isAdmin, upload.single('imageUpload'), writeProducts);
+router.put('/:id', isAuth, isAdmin, invalidateCache(['products']), upload.single('imageUpload'), writeProducts);
 
 // DELETE /products/:id — admin only
-router.delete('/:id', isAuth, isAdmin, deleteProducts);
+router.delete('/:id', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);

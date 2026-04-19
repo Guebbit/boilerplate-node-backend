@@ -9,7 +9,7 @@ import { postResetConfirm } from '@controllers/account/post-reset-confirm';
 import { getRefreshToken } from '@controllers/account/get-refresh-token';
 import { postLogoutEverywhere } from '@controllers/account/post-logout-everywhere';
 import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
-import { setCache } from "@utils/helpers-response";
+import { invalidateCache, setCache } from '@utils/helpers-response';
 
 export const router = Router();
 
@@ -17,19 +17,19 @@ export const router = Router();
 router.use(getAuth);
 
 // GET /account — current user profile (requires auth)
-router.get('/', setCache(3600), isAuth, getAccount);
+router.get('/', setCache(3600, { tags: ['account'] }), isAuth, getAccount);
 
 // POST /account/login — authenticate and get tokens
 router.post('/login', postLogin);
 
 // POST /account/signup — register new user
-router.post('/signup', upload.single('imageUpload'), postSignup);
+router.post('/signup', invalidateCache(['users', 'account']), upload.single('imageUpload'), postSignup);
 
 // POST /account/reset — request password reset email
 router.post('/reset', postResetRequest);
 
 // POST /account/reset-confirm — complete password reset with token
-router.post('/reset-confirm', postResetConfirm);
+router.post('/reset-confirm', invalidateCache(['users', 'account']), postResetConfirm);
 
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
@@ -38,7 +38,7 @@ router.get('/refresh', getRefreshToken);
 router.get('/refresh/:token', getRefreshToken);
 
 // POST /account/logout-all — revoke all refresh tokens (requires auth)
-router.post('/logout-all', isAuth, postLogoutEverywhere);
+router.post('/logout-all', isAuth, invalidateCache(['account']), postLogoutEverywhere);
 
 // DELETE /account/tokens/expired — remove expired tokens from the DB (admin only)
-router.delete('/tokens/expired', isAuth, isAdmin, deleteExpiredTokens);
+router.delete('/tokens/expired', isAuth, isAdmin, invalidateCache(['users', 'account']), deleteExpiredTokens);

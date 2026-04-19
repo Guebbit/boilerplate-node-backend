@@ -7,6 +7,7 @@ import { putCartItem } from '@controllers/cart/put-cart-item';
 import { deleteCart } from '@controllers/cart/delete-cart';
 import { deleteCartItem } from '@controllers/cart/delete-cart-item';
 import { postCheckout } from '@controllers/cart/post-checkout';
+import { invalidateCache } from '@utils/helpers-response';
 
 export const router = Router();
 
@@ -18,7 +19,7 @@ router.use(getAuth, isAuth);
 router.get('/summary', getCartSummary);
 
 // POST /cart/checkout
-router.post('/checkout', postCheckout);
+router.post('/checkout', invalidateCache(['orders']), postCheckout);
 
 // GET /cart
 router.get('/', getCart);
