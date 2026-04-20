@@ -6,7 +6,7 @@ import { putOrders } from '@controllers/orders/put-orders';
 import { deleteOrders } from '@controllers/orders/delete-orders';
 import { getOrderItem } from '@controllers/orders/get-order-item';
 import { getOrderInvoice } from '@controllers/orders/get-order-invoice';
-import { setCache } from "@utils/helpers-response";
+import { invalidateCache, setCache } from '@utils/helpers-response';
 
 export const router = Router();
 
@@ -17,25 +17,25 @@ router.use(getAuth, isAuth);
 router.post('/search', getOrders);
 
 // GET /orders — list (non-admin sees own orders only)
-router.get('/', setCache(3600), getOrders);
+router.get('/', setCache(3600, { tags: ['orders'] }), getOrders);
 
 // POST /orders — admin creates order directly
-router.post('/', isAdmin, postOrders);
+router.post('/', isAdmin, invalidateCache(['orders']), postOrders);
 
 // PUT /orders — admin, id in body (update)
-router.put('/', isAdmin, putOrders);
+router.put('/', isAdmin, invalidateCache(['orders']), putOrders);
 
 // DELETE /orders — admin, id in body
-router.delete('/', isAdmin, deleteOrders);
+router.delete('/', isAdmin, invalidateCache(['orders']), deleteOrders);
 
 // GET /orders/:id/invoice — must come before /:id
-router.get('/:id/invoice', setCache(3600), getOrderInvoice);
+router.get('/:id/invoice', setCache(3600, { tags: ['orders'] }), getOrderInvoice);
 
 // GET /orders/:id
-router.get('/:id', setCache(3600), getOrderItem);
+router.get('/:id', setCache(3600, { tags: ['orders'] }), getOrderItem);
 
 // PUT /orders/:id — admin only (update)
-router.put('/:id', isAdmin, putOrders);
+router.put('/:id', isAdmin, invalidateCache(['orders']), putOrders);
 
 // DELETE /orders/:id — admin only
-router.delete('/:id', isAdmin, deleteOrders);
+router.delete('/:id', isAdmin, invalidateCache(['orders']), deleteOrders);

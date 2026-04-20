@@ -8,6 +8,8 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
     - `cp .env-example .env`
 - Create a MongoDB database and link it using `.env` variables:
     - `NODE_DB_URI`
+- Optional: configure Redis for server-side response caching:
+    - `NODE_REDIS_URL`
 - Link external services using `.env` variables (for example SMTP/email responders on another server):
     - `NODE_SMTP_HOST`, `NODE_SMTP_PORT`, `NODE_SMTP_USER`, `NODE_SMTP_PASS`, `NODE_SMTP_SENDER`
 - Optional: use Docker/Podman to run the app and its dependencies.
@@ -24,8 +26,54 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
     - `NODE_DB_URI`
     - `NODE_ACCESS_TOKEN_SECRET`
     - `NODE_REFRESH_TOKEN_SECRET`
-4. Start development server:
+4. Optional: enable Redis response caching by setting:
+    - `NODE_REDIS_URL`
+    - `NODE_REDIS_CACHE_ENABLED=1`
+5. Start development server:
     - `npm run dev`
+
+## Redis caching
+
+- Redis is a super-fast in-memory key/value store.
+- "In-memory" means it keeps data in RAM, so reads/writes are usually much faster than going back to the database every time.
+- In this project, Redis is used as a temporary response cache for GET requests.
+- Simple idea: if the same GET request happens again, the API can answer from Redis instead of rebuilding the response from scratch.
+
+### Small visual
+
+```text
+First GET request
+Client -> Express -> MongoDB -> Response
+                  -> Redis saves a copy
+
+Next same GET request
+Client -> Express -> Redis -> Response
+                  -> MongoDB skipped
+
+Write request (POST/PUT/PATCH/DELETE)
+Client -> Express -> MongoDB update -> related Redis cache cleared
+```
+
+### What this project stores in Redis
+
+- A cached JSON response body
+- The HTTP status code for that response
+- Tags like `products`, `orders`, or `users` so related cache entries can be deleted together
+- A user-aware scope, so one user's private response is not served to another user
+
+### Why this helps
+
+- Faster repeated reads
+- Less repeated work for the API
+- Less unnecessary database traffic
+- Safer private caching because auth-related responses are scoped per user
+
+### Safety behavior
+
+- Cacheable GET routes now use Redis-backed server-side response caching when `NODE_REDIS_URL` is configured.
+- Cache entries are scoped per authenticated user to avoid cross-user data leakage.
+- Product, order, user, account, and checkout mutations invalidate related cached responses automatically.
+- If Redis is unavailable, the API continues without server-side caching.
 
 ## Scripts
 
