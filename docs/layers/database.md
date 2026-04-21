@@ -8,7 +8,7 @@ The connection URI is read from the `NODE_DB_URI` environment variable.
 
 ## Migrations
 
-Migrations are managed by [migrate-mongo](https://github.com/seppevs/migrate-mongo). Each migration is a JS file in `db/migrations/` that exports `up` and `down` functions.
+Migrations are managed by [migrate-mongo](https://github.com/seppevs/migrate-mongo). The CLI is executed through a TypeScript runtime (`tsx`) so migrations in `db/migrations/` can import shared TypeScript helpers safely.
 
 ```bash
 npm run db:migrate         # apply pending migrations
@@ -20,16 +20,18 @@ Applied migrations are tracked in a `migrations_changelog` collection in MongoDB
 
 ### Writing a migration
 
-```js
-// db/migrations/20240101000001-add-index.js
-export async function up(db) {
+```ts
+// db/migrations/20240101000001-add-index.ts
+export const up = async (db) => {
     await db.collection('products').createIndex({ title: 'text' });
-}
+};
 
-export async function down(db) {
+export const down = async (db) => {
     await db.collection('products').dropIndex('title_text');
-}
+};
 ```
+
+Use migration-safe helpers from `src/migrations/` to share domain/database logic. Avoid importing app bootstrap/runtime modules (for example `src/app.ts`) inside migrations.
 
 ## Seeds
 

@@ -34,7 +34,8 @@ npm run dev
 | `NODE_ACCESS_TOKEN_SECRET` | Secret used to sign JWT access tokens     |
 | `NODE_REFRESH_TOKEN_SECRET` | Secret used to sign refresh tokens       |
 | `NODE_PORT`               | HTTP port (default `3000`)                 |
-| `NODE_ENABLE_CLUSTERING`  | Set to `1` to fork one worker per CPU core |
+| `NODE_ENABLE_CLUSTERING`  | Set to `1` to enable cluster mode (`0` recommended for local hot-reload) |
+| `NODE_CLUSTER_WORKERS`    | Optional explicit worker count in cluster mode |
 
 ## Scripts reference
 
@@ -46,6 +47,7 @@ npm run dev
 | `npm run test:integration` | Run HTTP integration tests only                |
 | `npm run complete`      | Build → test → lint:fix → prettier:fix           |
 | `npm run db:migrate`    | Apply pending migrations                         |
+| `npm run dev:docker:cluster` | Docker/Podman dev command with clustering enabled |
 | `npm run db:seed`       | Insert sample data                               |
 | `npm run db:seed:reset` | Drop the DB then re-seed                         |
 | `npm run genapi`        | Regenerate TypeScript client from openapi.yaml   |
@@ -55,6 +57,9 @@ npm run dev
 ## Docker / Podman
 
 A `docker-compose.yml` is included. Use the `podman:*` scripts if you prefer Podman.
+
+- Default compose/dev flow is single-worker hot-reload (`NODE_ENABLE_CLUSTERING=0`).
+- To test multi-worker clustering in Docker/Podman, set `NODE_ENABLE_CLUSTERING=1` before `compose up`.
 
 ```bash
 podman compose up -d       # start services

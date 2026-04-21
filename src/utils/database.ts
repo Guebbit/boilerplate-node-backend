@@ -39,6 +39,17 @@ export const start = () => {
     return attemptConnect(0);
 };
 
+export const stopDatabase = () =>
+    mongoose.disconnect().then(
+        () => {},
+        (error: unknown) => {
+            logger.warn({
+                message: 'MongoDB disconnect failed.',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    );
+
 /**
  * The active Mongoose connection.
  * Available after `start()` resolves.

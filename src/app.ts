@@ -8,8 +8,8 @@ import crypto from 'node:crypto';
 import i18next from 'i18next';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { start } from '@utils/database';
-import { startCache } from '@utils/cache';
+import { start, stopDatabase } from '@utils/database';
+import { startCache, stopCache } from '@utils/cache';
 import { logger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { rejectResponse } from '@utils/response';
@@ -37,10 +37,52 @@ import { ExtendedError } from '@utils/helpers-errors';
  */
 export const app = express();
 const DEFAULT_PORT = 3000;
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
+let activeServer: Server | undefined;
+let shutdownPromise: Promise<void> | undefined;
 
 const getPort = () => {
     const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
     return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
+};
+
+const getShutdownTimeoutMs = () => {
+    const parsedTimeout = Number.parseInt(
+        process.env.NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS ?? String(DEFAULT_SHUTDOWN_TIMEOUT_MS),
+        10
+    );
+    return Number.isNaN(parsedTimeout) ? DEFAULT_SHUTDOWN_TIMEOUT_MS : parsedTimeout;
+};
+
+const closeServer = (server: Server) =>
+    new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+            if (error) return reject(error);
+            resolve();
+        });
+    });
+
+const onProcessSignal = (signal: NodeJS.Signals) => {
+    logger.info(`Received ${signal}, starting graceful shutdown.`);
+    const forcedExitTimer = setTimeout(() => {
+        logger.error('Graceful shutdown timeout reached. Forcing process exit.');
+        process.exit(1);
+    }, getShutdownTimeoutMs());
+    forcedExitTimer.unref();
+
+    void Promise.resolve()
+        .then(() => stopServer())
+        .then(() => {
+            logger.info('Graceful shutdown completed.');
+            process.exit(0);
+        })
+        .catch((error: unknown) => {
+            logger.error({
+                message: 'Graceful shutdown failed.',
+                error: error instanceof Error ? error.message : String(error)
+            });
+            process.exit(1);
+        });
 };
 
 /**
@@ -55,8 +97,10 @@ app.set('etag', 'strong');
  * Sync dependencies then start HTTP server.
  * Exported to make integration tests start/stop the app without side effects on import.
  */
-export const startServer = () =>
-    Promise.resolve()
+export const startServer = () => {
+    if (activeServer?.listening) return Promise.resolve(activeServer);
+
+    return Promise.resolve()
         .then(() => validateRequiredEnvironment())
         .then(() => start())
         .then(() => startCache())
@@ -78,10 +122,36 @@ export const startServer = () =>
                     logger.info('------------- SERVER START -------------');
                     const server = app.listen(port, () => {
                         logger.info(`Server listening on port ${port}`);
+                        activeServer = server;
                         resolve(server);
                     });
                 })
         );
+};
+
+export const stopServer = () => {
+    if (shutdownPromise) return shutdownPromise;
+
+    shutdownPromise = Promise.resolve(activeServer)
+        .then((server) => {
+            if (!server?.listening) return;
+            return closeServer(server);
+        })
+        .then(() => stopCache())
+        .then(() => stopDatabase())
+        .finally(() => {
+            activeServer = undefined;
+            shutdownPromise = undefined;
+        });
+
+    return shutdownPromise;
+};
+
+const registerSignalHandlers = () => {
+    if (process.env.NODE_ENV === 'test') return;
+    process.on('SIGTERM', () => onProcessSignal('SIGTERM'));
+    process.on('SIGINT', () => onProcessSignal('SIGINT'));
+};
 
 /**
  * Secure headers
@@ -266,6 +336,7 @@ process
     });
 
 if (process.env.NODE_ENV !== 'test') {
+    registerSignalHandlers();
     void startServer().catch((error: Error) =>
         logger.error('------------- SERVER ERROR -------------', error)
     );

@@ -114,6 +114,22 @@ const getClient = (): Promise<RedisClientType | void> => {
  */
 export const startCache = () => getClient();
 
+export const stopCache = (): Promise<void> => {
+    const redisClient = client;
+    if (!redisClient || !redisClient.isOpen) return Promise.resolve();
+
+    return redisClient
+        .quit()
+        .then(
+            () => {},
+            () => redisClient.disconnect()
+        )
+        .finally(() => {
+            connectPromise = undefined;
+            client = undefined;
+        });
+};
+
 /**
  * Read one cached HTTP response from Redis.
  */
