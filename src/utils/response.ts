@@ -32,28 +32,36 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
  * Normalize response payloads so Mongo documents and plain objects expose `id` instead of `_id`.
  */
 const serializeResponseData = (value: unknown): unknown => {
+    // Keep primitives and nullable values untouched.
     if (value === null || value === undefined) return value;
     if (typeof value !== 'object') return value;
+
+    // Preserve native runtime objects as-is.
     if (value instanceof Date || Buffer.isBuffer(value)) return value;
     if (value instanceof Types.ObjectId) return value.toString();
+
+    // Normalize every item in arrays because API payloads can contain lists of documents.
     if (Array.isArray(value)) return value.map((item) => serializeResponseData(item));
 
     const jsonSerializable = value as { toJSON?: () => unknown };
     const toJson = jsonSerializable.toJSON;
     const shouldApplyToJson = typeof toJson === 'function' && !isPlainObject(value);
 
-    // Apply toJSON only to non-plain objects so plain objects still go through `_id` → `id`.
+    // Let Mongoose documents serialize themselves first, then normalize the resulting plain object.
     if (shouldApplyToJson) return serializeResponseData(toJson.call(value));
 
+    // Unknown non-plain objects are returned unchanged instead of guessing how to transform them.
     if (!isPlainObject(value)) return value;
 
     const serialized: Record<string, unknown> = {};
 
     for (const [key, propertyValue] of Object.entries(value)) {
+        // Drop internal Mongoose version metadata from public API responses.
         if (key === '__v') continue;
 
         const normalizedValue = serializeResponseData(propertyValue);
 
+        // Convert Mongo's storage field name to the API-facing field name.
         if (key === '_id') {
             serialized.id = normalizedValue;
             continue;
