@@ -55,6 +55,9 @@ const escapePrometheusLabelValue = (value: string): string =>
         .split('\n')
         .join(String.raw`\n`);
 
+/**
+ * Collapse high-cardinality identifiers into placeholders so metrics stay cheap to store and query.
+ */
 const sanitizeRouteSegment = (segment: string): string => {
     // Normalize dynamic IDs to reduce high-cardinality metric labels.
     if (/^\d+$/.test(segment)) return ':id';
@@ -79,9 +82,15 @@ export const normalizeRoutePath = (path: string): string => {
     return segments.length > 0 ? `/${segments.join('/')}` : '/';
 };
 
+/**
+ * Deterministic map keys let us aggregate metrics without carrying nested objects around.
+ */
 const toCounterKey = (method: string, route: string, statusCode: number): string =>
     [method.toUpperCase(), route, String(statusCode)].join('|');
 
+/**
+ * Histogram series ignore status code because latency is usually grouped by endpoint shape, not outcome.
+ */
 const toHistogramKey = (method: string, route: string): string => [method.toUpperCase(), route].join('|');
 
 /**
@@ -102,7 +111,13 @@ const parseTraceparent = (
     return { traceId, parentSpanId };
 };
 
+/**
+ * W3C trace ids are 16 random bytes encoded as hex.
+ */
 const generateTraceId = (): string => crypto.randomBytes(16).toString('hex');
+/**
+ * Span ids are smaller because they only identify one hop inside a trace.
+ */
 const generateSpanId = (): string => crypto.randomBytes(8).toString('hex');
 
 /**
@@ -119,6 +134,9 @@ export const createTraceContext = (incomingTraceparent: string | undefined): ITr
     };
 };
 
+/**
+ * Re-encode the local trace context back into the standard W3C header format.
+ */
 export const toTraceparentHeader = (traceContext: ITraceContext): string =>
     `00-${traceContext.traceId}-${traceContext.spanId}-01`;
 
@@ -154,6 +172,9 @@ export const recordRequestMetric = ({
     requestDurationHistogram.set(histogramKey, existing);
 };
 
+/**
+ * Split compact storage keys back into labels only when rendering metrics.
+ */
 const toMethodRouteLabels = (
     key: string
 ): {

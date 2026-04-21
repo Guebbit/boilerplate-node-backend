@@ -16,11 +16,17 @@ const DEFAULT_CRASH_BACKOFF_BASE_MS = 500;
 const DEFAULT_CRASH_BACKOFF_MAX_MS = 30_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 
+/**
+ * Cluster settings come from env vars, so normalize them before using them in process control.
+ */
 const parseNumber = (rawValue: string | undefined, fallback: number) => {
     const parsedValue = Number.parseInt(rawValue ?? String(fallback), 10);
     return Number.isNaN(parsedValue) ? fallback : parsedValue;
 };
 
+/**
+ * A cluster cannot scale below one worker, even if config is missing or invalid.
+ */
 const getWorkerTarget = () => {
     const requestedWorkers = parseNumber(process.env.NODE_CLUSTER_WORKERS, os.cpus().length);
     return requestedWorkers <= 0 ? 1 : requestedWorkers;
@@ -122,6 +128,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         if (!shouldRespawn(code, signal, worker.exitedAfterDisconnect)) return;
 
         const now = Date.now();
+        // A sliding crash window lets us distinguish a crash loop from an isolated failure.
         const recentCrashes = crashHistory.filter((timestamp) => now - timestamp <= crashWindowMs);
         recentCrashes.push(now);
         crashHistory.length = 0;

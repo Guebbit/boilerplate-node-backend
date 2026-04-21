@@ -6,6 +6,10 @@ import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { nodemailer } from '@utils/nodemailer';
 
+/**
+ * POST /account/reset-request
+ * Password-reset flows should be indistinguishable for valid and invalid emails to avoid user enumeration.
+ */
 export const postResetRequest = (
     request: Request<unknown, unknown, PasswordResetRequest>,
     response: Response
@@ -26,7 +30,7 @@ export const postResetRequest = (
                 : // eslint-disable-next-line unicorn/no-useless-undefined
                   Promise.resolve(undefined)
         )
-            // silent — prevent email enumeration
+            // Fail closed and keep the public response identical to protect account privacy.
             .catch(() => {
                 // eslint-disable-next-line unicorn/no-useless-undefined
                 return undefined;

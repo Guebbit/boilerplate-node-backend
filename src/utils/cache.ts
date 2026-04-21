@@ -15,6 +15,9 @@ type CacheValue = {
  */
 const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-backend';
 
+/**
+ * Support both a full Redis URI and host/port fragments so deployment config can stay flexible.
+ */
 const getRedisUrl = (): string | undefined => {
     if (process.env.NODE_REDIS_URL) return process.env.NODE_REDIS_URL;
     if (!process.env.NODE_REDIS_PORT) return;
@@ -114,6 +117,9 @@ const getClient = (): Promise<RedisClientType | void> => {
  */
 export const startCache = () => getClient();
 
+/**
+ * Close Redis gracefully and forget the cached client so a later restart begins from a clean state.
+ */
 export const stopCache = (): Promise<void> => {
     const redisClient = client;
     if (!redisClient || !redisClient.isOpen) return Promise.resolve();
