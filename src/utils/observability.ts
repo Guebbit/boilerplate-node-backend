@@ -145,17 +145,11 @@ export const recordRequestMetric = ({
 
     existing.count += 1;
     existing.sum += durationMs;
-    let bucketMatched = false;
     for (const [index, bucket] of HISTOGRAM_BUCKETS_MS.entries()) {
         if (durationMs <= bucket) {
             existing.bucketCounts[index] += 1;
-            bucketMatched = true;
             break;
         }
-    }
-    if (!bucketMatched) {
-        const lastBucketIndex = HISTOGRAM_BUCKETS_MS.length - 1;
-        existing.bucketCounts[lastBucketIndex] += 1;
     }
     requestDurationHistogram.set(histogramKey, existing);
 };
