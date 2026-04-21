@@ -106,6 +106,7 @@ export const recordRequestMetric = ({
     for (const [index, bucket] of HISTOGRAM_BUCKETS_MS.entries()) {
         if (durationMs <= bucket) {
             existing.bucketCounts[index] += 1;
+            break;
         }
     }
     requestDurationHistogram.set(histogramKey, existing);
@@ -154,7 +155,7 @@ const renderHistogramMetrics = (): string[] => {
         }
         lines.push(
             `http_request_duration_milliseconds_bucket{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}",le="+Inf"} ${value.count}`,
-            `http_request_duration_milliseconds_sum{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}"} ${value.sum.toFixed(3)}`,
+            `http_request_duration_milliseconds_sum{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}"} ${value.sum}`,
             `http_request_duration_milliseconds_count{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}"} ${value.count}`
         );
     }
@@ -179,4 +180,4 @@ export const getPrometheusMetrics = (): string =>
     [...renderCounterMetrics(), ...renderHistogramMetrics(), ...renderProcessMetrics(), ''].join('\n');
 
 export const getRouteLabel = (request: Request): string =>
-    normalizeRoutePath(request.originalUrl || request.path || '/');
+    normalizeRoutePath(request.path || request.originalUrl || '/');

@@ -27,9 +27,9 @@ app.use((request, response, next) => {
     next();
 });
 app.use((request, response, next) => {
-    const startedAt = process.hrtime.bigint();
+    const startTime = process.hrtime.bigint();
     response.once('finish', () => {
-        const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+        const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startTime) / 1_000_000;
         recordRequestMetric({
             method: request.method,
             route: getRouteLabel(request),
@@ -105,7 +105,9 @@ describe('API integration', () => {
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/plain');
         expect(body).toContain('# HELP http_requests_total');
-        expect(body).toContain('http_requests_total{method="GET",route="/",status_code="200"}');
+        expect(body).toMatch(
+            /http_requests_total\{[^}]*method="GET"[^}]*route="\/"[^}]*status_code="200"[^}]*\} \d+/
+        );
         expect(body).toContain('# HELP process_uptime_seconds');
     });
 });
