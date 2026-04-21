@@ -32,10 +32,11 @@ const serializeResponseData = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map((item) => serializeResponseData(item));
 
     const jsonSerializable = value as { toJSON?: () => unknown };
+    const toJson = jsonSerializable.toJSON;
+    const shouldApplyToJson = typeof toJson === 'function' && !isPlainObject(value);
 
-    // Keep plain objects on the recursive path so custom toJSON methods do not bypass `_id` → `id`.
-    if (typeof jsonSerializable.toJSON === 'function' && !isPlainObject(value))
-        return serializeResponseData(jsonSerializable.toJSON());
+    // Apply toJSON only to non-plain objects so plain objects still go through `_id` → `id`.
+    if (shouldApplyToJson) return serializeResponseData(toJson.call(value));
 
     if (!isPlainObject(value)) return value;
 
