@@ -22,6 +22,7 @@ async function seed() {
             _id: new Types.ObjectId('65dd2bdb923652b7800fe180'),
             username: 'root',
             email: 'root@root.it',
+            // The password can be put plain because there is a pre-save hook that hashes it
             password: 'rootroot',
             imageUrl: String.raw`\images\9726c4217f5998511f372afab4800ac8.jpg`,
             admin: true,

@@ -1,9 +1,12 @@
 name: CI
+
 on:
+    # Run on every PR and on pushes to main
     pull_request:
     push:
         branches: [main]
 
+# Prevent multiple runs on same branch/PR; cancel older ones
 concurrency:
     group: ci-${{ github.ref }}
     cancel-in-progress: true
@@ -11,25 +14,33 @@ concurrency:
 jobs:
     ci:
         runs-on: ubuntu-latest
-        timeout-minutes: 15
+        timeout-minutes: 15  # Hard timeout to avoid hanging jobs
+
+        # Spin up required services for tests
         services:
             mongodb:
                 image: mongo:8
-                ports: ["27017:27017"]
+                ports: ["27017:27017"] # Default Mongo port
             redis:
                 image: redis:7
-                ports: ["6379:6379"]
+                ports: ["6379:6379"]   # Default Redis port
 
         steps:
+            # Checkout repo code
             - uses: actions/checkout@v4
+
+            # Setup Node.js + enable npm caching
             - uses: actions/setup-node@v4
               with:
                   node-version: 20
                   cache: npm
+
+            # Install dependencies (clean install from lockfile)
             - run: npm ci
+
+            # Types, linting and tests
             - run: npm run ts-check
             - run: npm run lint
             - run: npm run test:unit
-            # Integration tests validate real HTTP behavior (routing, middleware, response shape).
             - run: npm run test:integration
             - run: npm run lint:openapi

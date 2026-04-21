@@ -41,6 +41,7 @@ export const getProducts = (
             request.user?.admin === true
         )
         .then((result) => {
+            console.log("AAAAAAAAAAAa", result)
             successResponse(response, result);
         })
         .catch((error: CastError) => {

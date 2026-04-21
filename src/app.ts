@@ -7,6 +7,7 @@ import type { Server } from 'node:http';
 import crypto from 'node:crypto';
 import i18next from 'i18next';
 import helmet from 'helmet';
+import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { start, stopDatabase } from '@utils/database';
 import { startCache, stopCache } from '@utils/cache';
@@ -98,14 +99,6 @@ const onProcessSignal = (signal: NodeJS.Signals) => {
 };
 
 /**
- * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
- * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
- * which can lead to stale data being served.
- * By using strong ETags, we ensure that clients receive updated content when it changes.
- */
-app.set('etag', 'strong');
-
-/**
  * Sync dependencies then start HTTP server.
  * Exported to make integration tests start/stop the app without side effects on import.
  */
@@ -172,9 +165,72 @@ const registerSignalHandlers = () => {
 };
 
 /**
+ * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
+ * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
+ * which can lead to stale data being served.
+ * By using strong ETags, we ensure that clients receive updated content when it changes.
+ */
+app.set('etag', 'strong');
+
+/**
  * Secure headers
  */
 app.use(helmet());
+
+/**
+ * Allowed origins, separated by comma if multiple
+ */
+const allowedOrigins = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:5173')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+/**
+ * Strict CORS
+ */
+app.use(cors({
+    origin(origin, cb) {
+        // Allow non-browser requests (no Origin header), like curl/healthchecks
+        if (!origin)
+            return cb(null, true);
+        // Allowed origins
+        if (allowedOrigins.includes(origin))
+            return cb(null, true);
+        // Not allowed
+        return cb(new Error(`CORS blocked for origin: ${origin}`));
+    },
+
+    /**
+     * Enables sending credentials in cross-origin requests.
+     * "Credentials" = cookies, Authorization headers, TLS client certs.
+     *     *
+     * Client must also explicitly opt-in:
+     * fetch(..., { credentials: 'include' })
+     * axios(..., { withCredentials: true })
+     *
+     * If you don't use cookies/auth across origins → set this to false
+     */
+    credentials: true,
+
+
+    /**
+     * Allowed HTTP methods for CORS (sent in Access-Control-Allow-Methods).
+     * If a method isn’t listed → browser blocks the request
+     */
+    methods: ['GET','POST','PUT','PATCH','DELETE', 'OPTIONS'],
+
+    /**
+     * Request headers the client is allowed to send (preflight check).
+     * Missing header here → preflight fails
+     */
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-request-id', 'traceparent'],
+
+    /**
+     * Response headers the browser is allowed to read in JS.
+     * Without this → headers exist but are not accessible
+     */
+    exposedHeaders: ['x-request-id', 'traceparent', 'x-trace-id'],
+}));
 
 /**
  * Parses URL-encoded data (from HTML forms)
