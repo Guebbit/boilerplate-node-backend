@@ -21,8 +21,7 @@ export default tseslint.config(
         '**/docs/**',
         '**/node_modules/**',
         '**/eslint.config.ts',
-        '**/migrate-mongo-config.js',
-        'db/migrations/**',
+        '**/migrate-mongo-config.ts',
         'docs/**',
         'api',
         '.prism',
@@ -180,6 +179,33 @@ export default tseslint.config(
             //     },
             //   },
             // ],
+        }
+    },
+    {
+        files: ['db/migrations/**/*.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        '@controllers/*',
+                        '@middlewares/*',
+                        '@models/*',
+                        '@repositories/*',
+                        '@services/*',
+                        '@utils/*',
+                        '../../src/app',
+                        '../../src/cluster',
+                        '../../src/controllers/*',
+                        '../../src/middlewares/*',
+                        '../../src/models/*',
+                        '../../src/repositories/*',
+                        '../../src/routes/*',
+                        '../../src/services/*',
+                        '../../src/utils/*'
+                    ]
+                }
+            ]
         }
     },
 

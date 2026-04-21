@@ -29,6 +29,7 @@ services:
             MONGODB_URI: 'mongodb://database:27017/${DB_NAME:-boilerplate_mongodb}' # Mongodb connection string. "database" is the service name of the database service.
             NODE_ENV: 'development' # Node environment (production or development)
             NODE_REDIS_URL: 'redis://redis:6379'
+            NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
 
         # Persist data.
         # Compose manages the lifecycle of this volume when up/down
@@ -48,7 +49,12 @@ services:
             # - example-volume:/data/db
 
         # Commands to be executed at RUNTIME when the container starts. Replaces Dockerfile commands (if any)
-        command: ['npm', 'run', 'dev:docker']
+        command:
+            [
+                'sh',
+                '-c',
+                'if [ "$${NODE_ENABLE_CLUSTERING:-0}" = "1" ]; then npm run dev:docker:cluster; else npm run dev:docker; fi'
+            ]
 
         # Containers which this container depends on. Affects container start order.
         depends_on:

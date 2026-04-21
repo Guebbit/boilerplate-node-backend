@@ -41,6 +41,10 @@ The three-layer approach solves all of these.
 
 ## Clustering
 
-`src/cluster.ts` uses Node.js `cluster` to fork one worker process per CPU core when `NODE_ENABLE_CLUSTERING=1`. Each worker runs the full Express app. The master process restarts dead workers automatically.
+`src/cluster.ts` uses Node.js `cluster` to fork workers when `NODE_ENABLE_CLUSTERING=1`. By default it uses one worker per CPU core (override with `NODE_CLUSTER_WORKERS`).
+
+The primary process now tracks worker crashes in a time window and applies exponential backoff before respawning to avoid tight crash loops. It also coordinates graceful shutdown on `SIGTERM`/`SIGINT` by signaling workers, waiting up to a timeout, and force-killing only if required.
+
+Workers perform graceful shutdown by stopping new HTTP accepts, draining in-flight requests, and closing DB/cache clients.
 
 This is a simple, zero-dependency way to utilize multiple cores without introducing a reverse proxy.

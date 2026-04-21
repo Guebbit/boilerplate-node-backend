@@ -12,10 +12,11 @@
 │   ├── routes/             # Route definitions + middleware stacks
 │   ├── middlewares/        # auth-jwt, authorizations, security
 │   ├── utils/              # Shared utilities (db, logger, mailer, …)
+│   ├── migrations/         # Migration-safe helpers (shared by db/migrations/*.ts)
 │   ├── types/              # Global TypeScript types
 │   └── locales/            # i18n translation files
 ├── db/
-│   ├── migrations/         # migrate-mongo migration scripts
+│   ├── migrations/         # migrate-mongo TypeScript migration scripts
 │   └── seeds/              # Seed data scripts
 ├── tests/
 │   ├── helpers/            # DB setup + data factories
