@@ -1,6 +1,20 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { app } from '../../src/app';
+import crypto from 'node:crypto';
+import express from 'express';
+import { router as systemRoutes } from '../../src/routes';
+import { rejectResponse } from '../../src/utils/response';
+
+const app = express();
+app.use(express.json());
+app.use((request, response, next) => {
+    const requestId = request.get('x-request-id') ?? crypto.randomUUID();
+    request.requestId = requestId;
+    response.setHeader('x-request-id', requestId);
+    next();
+});
+app.use('/', systemRoutes);
+app.use((_request, response) => rejectResponse(response, 404, 'Not Found'));
 
 let server: Server;
 let baseUrl = '';

@@ -3,6 +3,7 @@ import { logger } from './winston';
 
 const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
+const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -11,7 +12,7 @@ const getDatabaseUri = () => {
 
     const host = process.env.NODE_MONGODB_HOST ?? '127.0.0.1';
     const port = process.env.NODE_MONGODB_PORT ?? '27017';
-    const databaseName = process.env.NODE_MONGODB_NAME ?? 'boilerplate-node-backend';
+    const databaseName = process.env.NODE_MONGODB_NAME ?? DEFAULT_DATABASE_NAME;
     return `mongodb://${host}:${port}/${databaseName}`;
 };
 

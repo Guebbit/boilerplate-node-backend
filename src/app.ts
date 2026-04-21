@@ -30,10 +30,11 @@ import { ExtendedError } from '@utils/helpers-errors';
  * Server start
  */
 export const app = express();
+const DEFAULT_PORT = 3000;
 
 const getPort = () => {
-    const parsedPort = Number.parseInt(process.env.NODE_PORT ?? '3000', 10);
-    return Number.isNaN(parsedPort) ? 3000 : parsedPort;
+    const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
+    return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
 };
 
 /**
@@ -219,5 +220,7 @@ process
     });
 
 if (process.env.NODE_ENV !== 'test') {
-    void startServer().catch((error: Error) => logger.info('------------- SERVER ERROR -------------', error));
+    void startServer().catch((error: Error) =>
+        logger.error('------------- SERVER ERROR -------------', error)
+    );
 }

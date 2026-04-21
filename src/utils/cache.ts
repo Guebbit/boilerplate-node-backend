@@ -15,9 +15,9 @@ type CacheValue = {
  */
 const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-backend';
 
-const getRedisUrl = () => {
+const getRedisUrl = (): string | undefined => {
     if (process.env.NODE_REDIS_URL) return process.env.NODE_REDIS_URL;
-    if (!process.env.NODE_REDIS_PORT) return undefined;
+    if (!process.env.NODE_REDIS_PORT) return;
 
     const host = process.env.NODE_REDIS_HOST ?? '127.0.0.1';
     return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
@@ -73,8 +73,11 @@ const getClient = (): Promise<RedisClientType | void> => {
 
     // Create the client only once, then reuse it for the rest of the app lifetime.
     if (!client) {
+        const redisUrl = getRedisUrl();
+        if (!redisUrl) return Promise.resolve();
+
         client = createClient({
-            url: getRedisUrl(),
+            url: redisUrl,
             socket: {
                 connectTimeout: 1000,
                 reconnectStrategy: false
