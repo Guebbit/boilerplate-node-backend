@@ -90,31 +90,36 @@ app.set('etag', 'strong');
  * Sync dependencies then start HTTP server.
  * Exported to make integration tests start/stop the app without side effects on import.
  */
-export const startServer = async () => {
-    if (activeServer?.listening) return activeServer;
+export const startServer = () => {
+    if (activeServer?.listening) return Promise.resolve(activeServer);
 
     validateRequiredEnvironment();
-    await start();
-    await startCache();
-    await i18next.init({
-        lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
-        fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
-        resources: {
-            en: {
-                translation: enTranslation as Record<string, unknown>
-            }
-        }
-    });
-
-    return new Promise<Server>((resolve) => {
-        const port = getPort();
-        logger.info('------------- SERVER START -------------');
-        const server = app.listen(port, () => {
-            logger.info(`Server listening on port ${port}`);
-            activeServer = server;
-            resolve(server);
-        });
-    });
+    return Promise.resolve()
+        .then(() => start())
+        .then(() => startCache())
+        .then(() =>
+            i18next.init({
+                lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
+                fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
+                resources: {
+                    en: {
+                        translation: enTranslation as Record<string, unknown>
+                    }
+                }
+            })
+        )
+        .then(
+            () =>
+                new Promise<Server>((resolve) => {
+                    const port = getPort();
+                    logger.info('------------- SERVER START -------------');
+                    const server = app.listen(port, () => {
+                        logger.info(`Server listening on port ${port}`);
+                        activeServer = server;
+                        resolve(server);
+                    });
+                })
+        );
 };
 
 export const stopServer = () => {
