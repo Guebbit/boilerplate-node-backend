@@ -26,7 +26,7 @@ const requestDurationHistogram = new Map<string, IHistogramData>();
 
 const TRACE_ID_REGEX = /^[\da-f]{32}$/i;
 const SPAN_ID_REGEX = /^[\da-f]{16}$/i;
-const traceparentRegex = /^00-([\da-f]{32})-([\da-f]{16})-([\da-f]{2})$/i;
+const TRACEPARENT_REGEX = /^00-([\da-f]{32})-([\da-f]{16})-([\da-f]{2})$/i;
 
 const escapePrometheusLabelValue = (value: string): string =>
     value
@@ -66,7 +66,7 @@ const parseTraceparent = (
     traceparent: string | undefined
 ): { traceId?: string; parentSpanId?: string } => {
     if (!traceparent) return {};
-    const match = traceparentRegex.exec(traceparent.trim());
+    const match = TRACEPARENT_REGEX.exec(traceparent.trim());
     if (!match) return {};
 
     const traceId = match[1];
