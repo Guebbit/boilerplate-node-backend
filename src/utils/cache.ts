@@ -120,16 +120,14 @@ export const stopCache = (): Promise<void> => {
 
     return redisClient
         .quit()
-        .catch(() =>
-            Promise.resolve().then(() => {
-                redisClient.disconnect();
-            })
+        .then(
+            () => {},
+            () => redisClient.disconnect()
         )
         .finally(() => {
             connectPromise = undefined;
             client = undefined;
-        })
-        .then(() => {});
+        });
 };
 
 /**
