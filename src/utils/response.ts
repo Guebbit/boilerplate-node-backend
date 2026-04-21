@@ -20,10 +20,7 @@ export interface IResponseReject extends IResponseNeutral {
 }
 
 /**
- * Success Response Function
- * @param data
- * @param status
- * @param message
+ * Build the canonical success envelope so every endpoint speaks the same response dialect.
  */
 export const generateSuccess = <T>(data: T, status = 200, message = '') =>
     ({
@@ -34,11 +31,7 @@ export const generateSuccess = <T>(data: T, status = 200, message = '') =>
     }) as IResponseSuccess<T>;
 
 /**
- * Success Response wrapped and ready to be sent
- * @param response
- * @param data
- * @param status
- * @param message
+ * Serialize the success envelope immediately when a controller is done with its work.
  */
 export const successResponse = <T>(response: Response, data: T, status = 200, message = '') =>
     response.status(status).json(generateSuccess(data, status, message)) as Response<
@@ -46,10 +39,7 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
     >;
 
 /**
- *
- * @param status
- * @param message
- * @param errors
+ * Build the canonical error envelope so clients can parse failures predictably.
  */
 export const generateReject = (status = 400, message = '', errors: string[] = []) =>
     ({
@@ -60,11 +50,7 @@ export const generateReject = (status = 400, message = '', errors: string[] = []
     }) as IResponseReject;
 
 /**
- *
- * @param response
- * @param status
- * @param message
- * @param errors
+ * Send a normalized error payload instead of leaking framework-specific response shapes.
  */
 export const rejectResponse = (
     response: Response,

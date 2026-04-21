@@ -41,11 +41,17 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 let activeServer: Server | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
+/**
+ * Treat port configuration as untrusted input and fall back to a safe default.
+ */
 const getPort = () => {
     const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
     return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
 };
 
+/**
+ * Graceful shutdown needs a hard upper bound so a stuck dependency cannot hang the process forever.
+ */
 const getShutdownTimeoutMs = () => {
     const parsedTimeout = Number.parseInt(
         process.env.NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS ?? String(DEFAULT_SHUTDOWN_TIMEOUT_MS),
@@ -54,6 +60,9 @@ const getShutdownTimeoutMs = () => {
     return Number.isNaN(parsedTimeout) ? DEFAULT_SHUTDOWN_TIMEOUT_MS : parsedTimeout;
 };
 
+/**
+ * Promisify server.close so HTTP teardown composes with the rest of the async shutdown flow.
+ */
 const closeServer = (server: Server) =>
     new Promise<void>((resolve, reject) => {
         server.close((error) => {
@@ -62,6 +71,9 @@ const closeServer = (server: Server) =>
         });
     });
 
+/**
+ * Route every process signal through one shutdown path to keep teardown semantics consistent.
+ */
 const onProcessSignal = (signal: NodeJS.Signals) => {
     logger.info(`Received ${signal}, starting graceful shutdown.`);
     const forcedExitTimer = setTimeout(() => {
@@ -129,6 +141,9 @@ export const startServer = () => {
         );
 };
 
+/**
+ * Memoize shutdown so concurrent callers do not race while closing the same resources.
+ */
 export const stopServer = () => {
     if (shutdownPromise) return shutdownPromise;
 
@@ -147,6 +162,9 @@ export const stopServer = () => {
     return shutdownPromise;
 };
 
+/**
+ * Tests control process lifecycle explicitly, so signal hooks stay disabled there.
+ */
 const registerSignalHandlers = () => {
     if (process.env.NODE_ENV === 'test') return;
     process.on('SIGTERM', () => onProcessSignal('SIGTERM'));

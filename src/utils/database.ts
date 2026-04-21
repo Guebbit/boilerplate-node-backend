@@ -5,8 +5,14 @@ const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
 const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
 
+/**
+ * Backoff delays should yield to the event loop instead of blocking the whole process.
+ */
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Accept either a full Mongo URI or host/port/database fragments so local and hosted setups share one code path.
+ */
 const getDatabaseUri = () => {
     if (process.env.NODE_DB_URI) return process.env.NODE_DB_URI;
 
@@ -39,6 +45,9 @@ export const start = () => {
     return attemptConnect(0);
 };
 
+/**
+ * Shutdown should try to release the driver cleanly, but disconnect failures are not recoverable work.
+ */
 export const stopDatabase = () =>
     mongoose.disconnect().then(
         () => {},

@@ -3,6 +3,9 @@ const REQUIRED_ENV_KEYS = [
     'NODE_REFRESH_TOKEN_SECRET'
 ] as const;
 
+/**
+ * Fail fast on missing mandatory configuration so runtime errors do not appear only after serving traffic.
+ */
 export const validateRequiredEnvironment = () => {
     const missing = REQUIRED_ENV_KEYS.filter((key) => {
         const value = process.env[key];
