@@ -7,8 +7,7 @@ export const router = Router();
 /**
  * Only in development
  */
-if (process.env.NODE_ENV !== 'production')
-    router.get('/heavy', getHeavyLoad);
+if (process.env.NODE_ENV !== 'production') router.get('/heavy', getHeavyLoad);
 
 /**
  * GET /

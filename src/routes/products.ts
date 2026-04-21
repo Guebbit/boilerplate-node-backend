@@ -19,10 +19,24 @@ router.post('/search', getProducts);
 router.get('/', setCache(3600, { tags: ['products'] }), getProducts);
 
 // POST /products — admin only (create)
-router.post('/', isAuth, isAdmin, invalidateCache(['products']), upload.single('imageUpload'), writeProducts);
+router.post(
+    '/',
+    isAuth,
+    isAdmin,
+    invalidateCache(['products']),
+    upload.single('imageUpload'),
+    writeProducts
+);
 
 // PUT /products — admin only, id in body (update)
-router.put('/', isAuth, isAdmin, invalidateCache(['products']), upload.single('imageUpload'), writeProducts);
+router.put(
+    '/',
+    isAuth,
+    isAdmin,
+    invalidateCache(['products']),
+    upload.single('imageUpload'),
+    writeProducts
+);
 
 // DELETE /products — admin only, id in body
 router.delete('/', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
@@ -31,7 +45,14 @@ router.delete('/', isAuth, isAdmin, invalidateCache(['products']), deleteProduct
 router.get('/:id', setCache(3600, { tags: ['products'] }), getProductItem);
 
 // PUT /products/:id — admin only (update)
-router.put('/:id', isAuth, isAdmin, invalidateCache(['products']), upload.single('imageUpload'), writeProducts);
+router.put(
+    '/:id',
+    isAuth,
+    isAdmin,
+    invalidateCache(['products']),
+    upload.single('imageUpload'),
+    writeProducts
+);
 
 // DELETE /products/:id — admin only
 router.delete('/:id', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);

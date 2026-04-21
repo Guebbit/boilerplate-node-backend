@@ -23,7 +23,12 @@ router.get('/', setCache(3600, { tags: ['account'] }), isAuth, getAccount);
 router.post('/login', postLogin);
 
 // POST /account/signup — register new user
-router.post('/signup', invalidateCache(['users', 'account']), upload.single('imageUpload'), postSignup);
+router.post(
+    '/signup',
+    invalidateCache(['users', 'account']),
+    upload.single('imageUpload'),
+    postSignup
+);
 
 // POST /account/reset — request password reset email
 router.post('/reset', postResetRequest);
@@ -41,4 +46,10 @@ router.get('/refresh/:token', getRefreshToken);
 router.post('/logout-all', isAuth, invalidateCache(['account']), postLogoutEverywhere);
 
 // DELETE /account/tokens/expired — remove expired tokens from the DB (admin only)
-router.delete('/tokens/expired', isAuth, isAdmin, invalidateCache(['users', 'account']), deleteExpiredTokens);
+router.delete(
+    '/tokens/expired',
+    isAuth,
+    isAdmin,
+    invalidateCache(['users', 'account']),
+    deleteExpiredTokens
+);

@@ -92,13 +92,16 @@ services:
 
         # Same
         ports:
-            - '27017:27017'
+            - '${NODE_MONGODB_PORT:-27017}:27017'
 
+    # Redis is used as an in-memory cache layer. The app stores response data here with a TTL so repeated
+    # requests are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is lost),
+    # which is fine since Redis here is cache-only, not a primary store.
     redis:
         image: redis:7
         restart: unless-stopped
         ports:
-            - '6379:6379'
+            - '${NODE_REDIS_PORT:-6379}:6379'
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:

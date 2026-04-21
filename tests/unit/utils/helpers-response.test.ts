@@ -63,7 +63,7 @@ describe('setCache', () => {
     });
 
     it('stores successful uncached responses after the handler runs', async () => {
-        mockedCache.getCacheValue.mockResolvedValue((void 0) as never);
+        mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
 
         const middleware = setCache(120, { tags: ['products'] });
         const { response, headers } = createResponse();

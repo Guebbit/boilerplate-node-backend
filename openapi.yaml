@@ -1331,10 +1331,10 @@ paths:
             description: Returns a paginated list of products.
             operationId: listProducts
             parameters:
-                - $ref: '#/components/parameters/ProductIdParam'
                 - $ref: '#/components/parameters/PageParam'
                 - $ref: '#/components/parameters/PageSizeParam'
                 - $ref: '#/components/parameters/TextParam'
+                - $ref: '#/components/parameters/ProductIdParam'
                 - name: minPrice
                   in: query
                   required: false
@@ -1677,9 +1677,9 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '#/components/parameters/IdParam'
                 - $ref: '#/components/parameters/PageParam'
                 - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/IdParam'
                 - $ref: '#/components/parameters/UserIdParam'
                 - $ref: '#/components/parameters/ProductIdParam'
                 - name: email
