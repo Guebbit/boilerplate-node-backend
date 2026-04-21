@@ -6,20 +6,22 @@ describe('generateSuccess', () => {
     it('serializes nested _id fields as id and removes __v from plain objects', () => {
         const productId = new Types.ObjectId();
         const orderId = new Types.ObjectId();
-
-        const response = generateSuccess({
+        const responseData = {
             _id: orderId,
-            ['__v']: 3,
             items: [
                 {
                     product: {
                         _id: productId,
-                        ['__v']: 1,
                         title: 'Keyboard'
                     }
                 }
             ]
-        });
+        };
+
+        Reflect.set(responseData, '__v', 3);
+        Reflect.set(responseData.items[0].product, '__v', 1);
+
+        const response = generateSuccess(responseData);
 
         expect(response.data).toEqual({
             id: orderId.toString(),
