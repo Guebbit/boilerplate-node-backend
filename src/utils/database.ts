@@ -39,7 +39,7 @@ export const start = () => {
     return attemptConnect(0);
 };
 
-export const stop = () =>
+export const stopDatabase = () =>
     mongoose.disconnect().then(
         () => {},
         (error: unknown) => {

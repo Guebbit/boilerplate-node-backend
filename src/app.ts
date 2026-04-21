@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import i18next from 'i18next';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { start, stop as stopDatabase } from '@utils/database';
+import { start, stopDatabase } from '@utils/database';
 import { startCache, stopCache } from '@utils/cache';
 import { logger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';

@@ -69,8 +69,13 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         respawnTimers.add(timer);
     };
 
-    const shouldRespawn = (code: number | null, signal: string | null, exitedAfterDisconnect: boolean) =>
-        !isShuttingDown && !exitedAfterDisconnect && code !== 0 && signal !== 'SIGTERM' && signal !== 'SIGINT';
+    const shouldRespawn = (code: number | null, signal: string | null, exitedAfterDisconnect: boolean) => {
+        if (isShuttingDown) return false;
+        if (exitedAfterDisconnect) return false;
+        if (code === 0) return false;
+        if (signal === 'SIGTERM' || signal === 'SIGINT') return false;
+        return true;
+    };
 
     const startPrimaryShutdown = (signal: NodeJS.Signals) => {
         if (isShuttingDown) return;
