@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { Types } from 'mongoose';
 
 export interface IResponseNeutral {
     success: boolean;
@@ -19,6 +20,42 @@ export interface IResponseReject extends IResponseNeutral {
     errors: string[];
 }
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+    Object.prototype.toString.call(value) === '[object Object]' &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+
+const serializeResponseData = (value: unknown): unknown => {
+    if (value === null || value === undefined) return value;
+    if (typeof value !== 'object') return value;
+    if (value instanceof Date || Buffer.isBuffer(value)) return value;
+    if (value instanceof Types.ObjectId) return value.toString();
+    if (Array.isArray(value)) return value.map((item) => serializeResponseData(item));
+
+    const jsonSerializable = value as { toJSON?: () => unknown };
+
+    if (typeof jsonSerializable.toJSON === 'function' && !isPlainObject(value))
+        return serializeResponseData(jsonSerializable.toJSON());
+
+    if (!isPlainObject(value)) return value;
+
+    const serialized: Record<string, unknown> = {};
+
+    for (const [key, propertyValue] of Object.entries(value)) {
+        if (key === '__v') continue;
+
+        const normalizedValue = serializeResponseData(propertyValue);
+
+        if (key === '_id') {
+            serialized.id = normalizedValue;
+            continue;
+        }
+
+        serialized[key] = normalizedValue;
+    }
+
+    return serialized;
+};
+
 /**
  * Build the canonical success envelope so every endpoint speaks the same response dialect.
  */
@@ -27,7 +64,7 @@ export const generateSuccess = <T>(data: T, status = 200, message = '') =>
         success: true,
         status,
         message,
-        data
+        data: serializeResponseData(data) as T
     }) as IResponseSuccess<T>;
 
 /**
