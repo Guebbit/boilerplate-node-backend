@@ -45,6 +45,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
     let isShuttingDown = false;
     const crashHistory: number[] = [];
     const respawnTimers = new Set<NodeJS.Timeout>();
+    const getWorkers = () => Object.values(cluster.workers ?? {});
 
     const clearRespawnTimers = () => {
         for (const timer of respawnTimers) clearTimeout(timer);
@@ -68,7 +69,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         respawnTimers.add(timer);
     };
 
-    const shouldRespawn = (code: number | null, signal: NodeJS.Signals | null, exitedAfterDisconnect: boolean) =>
+    const shouldRespawn = (code: number | null, signal: string | null, exitedAfterDisconnect: boolean) =>
         !isShuttingDown && !exitedAfterDisconnect && code !== 0 && signal !== 'SIGTERM' && signal !== 'SIGINT';
 
     const startPrimaryShutdown = (signal: NodeJS.Signals) => {
@@ -78,18 +79,18 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
 
         logger.info(`Primary received ${signal}; starting coordinated shutdown.`);
 
-        for (const worker of Object.values(cluster.workers)) {
+        for (const worker of getWorkers()) {
             if (!worker) continue;
             worker.process.kill('SIGTERM');
         }
 
         const forceShutdownTimer = setTimeout(() => {
             logger.warn('Cluster shutdown timeout reached; forcing remaining workers.');
-            for (const worker of Object.values(cluster.workers)) {
+            for (const worker of getWorkers()) {
                 if (!worker) continue;
                 worker.process.kill('SIGKILL');
             }
-            process.exit(1);
+            process.exitCode = 1;
         }, shutdownTimeoutMs);
         forceShutdownTimer.unref();
     };
@@ -105,10 +106,10 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         });
 
         if (isShuttingDown) {
-            const aliveWorkers = Object.values(cluster.workers).filter(Boolean).length;
+            const aliveWorkers = getWorkers().filter(Boolean).length;
             if (aliveWorkers === 0) {
                 logger.info('All workers exited; primary shutting down.');
-                process.exit(0);
+                process.exitCode = 0;
             }
             return;
         }

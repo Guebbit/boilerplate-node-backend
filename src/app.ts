@@ -56,6 +56,28 @@ const closeServer = (server: Server) =>
         });
     });
 
+const onProcessSignal = (signal: NodeJS.Signals) => {
+    logger.info(`Received ${signal}, starting graceful shutdown.`);
+    const forcedExitTimer = setTimeout(() => {
+        logger.error('Graceful shutdown timeout reached. Forcing process exit.');
+        process.exit(1);
+    }, getShutdownTimeoutMs());
+    forcedExitTimer.unref();
+
+    void stopServer()
+        .then(() => {
+            logger.info('Graceful shutdown completed.');
+            process.exit(0);
+        })
+        .catch((error: unknown) => {
+            logger.error({
+                message: 'Graceful shutdown failed.',
+                error: error instanceof Error ? error.message : String(error)
+            });
+            process.exit(1);
+        });
+};
+
 /**
  * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
  * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
@@ -68,41 +90,32 @@ app.set('etag', 'strong');
  * Sync dependencies then start HTTP server.
  * Exported to make integration tests start/stop the app without side effects on import.
  */
-export const startServer = () =>
-    Promise.resolve()
-        .then(() => {
-            if (activeServer?.listening) return activeServer;
-            return;
-        })
-        .then((server) => {
-            if (server) return server;
-            return Promise.resolve()
-        .then(() => validateRequiredEnvironment())
-        .then(() => start())
-        .then(() => startCache())
-        .then(() =>
-            i18next.init({
-                lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
-                fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
-                resources: {
-                    en: {
-                        translation: enTranslation as Record<string, unknown>
-                    }
-                }
-            })
-        )
-        .then(
-            () =>
-                new Promise<Server>((resolve) => {
-                    const port = getPort();
-                    logger.info('------------- SERVER START -------------');
-                    const server = app.listen(port, () => {
-                        logger.info(`Server listening on port ${port}`);
-                        activeServer = server;
-                        resolve(server);
-                    });
-                })
+export const startServer = async () => {
+    if (activeServer?.listening) return activeServer;
+
+    validateRequiredEnvironment();
+    await start();
+    await startCache();
+    await i18next.init({
+        lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
+        fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
+        resources: {
+            en: {
+                translation: enTranslation as Record<string, unknown>
+            }
+        }
+    });
+
+    return new Promise<Server>((resolve) => {
+        const port = getPort();
+        logger.info('------------- SERVER START -------------');
+        const server = app.listen(port, () => {
+            logger.info(`Server listening on port ${port}`);
+            activeServer = server;
+            resolve(server);
         });
+    });
+};
 
 export const stopServer = () => {
     if (shutdownPromise) return shutdownPromise;
@@ -126,31 +139,8 @@ export const stopServer = () => {
 
 const registerSignalHandlers = () => {
     if (process.env.NODE_ENV === 'test') return;
-
-    const onSignal = (signal: NodeJS.Signals) => {
-        logger.info(`Received ${signal}, starting graceful shutdown.`);
-        const forcedExitTimer = setTimeout(() => {
-            logger.error('Graceful shutdown timeout reached. Forcing process exit.');
-            process.exit(1);
-        }, getShutdownTimeoutMs());
-        forcedExitTimer.unref();
-
-        void stopServer()
-            .then(() => {
-                logger.info('Graceful shutdown completed.');
-                process.exit(0);
-            })
-            .catch((error: unknown) => {
-                logger.error({
-                    message: 'Graceful shutdown failed.',
-                    error: error instanceof Error ? error.message : String(error)
-                });
-                process.exit(1);
-            });
-    };
-
-    process.on('SIGTERM', () => onSignal('SIGTERM'));
-    process.on('SIGINT', () => onSignal('SIGINT'));
+    process.on('SIGTERM', () => onProcessSignal('SIGTERM'));
+    process.on('SIGINT', () => onProcessSignal('SIGINT'));
 };
 
 /**
