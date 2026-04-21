@@ -93,8 +93,8 @@ app.set('etag', 'strong');
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
-    validateRequiredEnvironment();
     return Promise.resolve()
+        .then(() => validateRequiredEnvironment())
         .then(() => start())
         .then(() => startCache())
         .then(() =>
