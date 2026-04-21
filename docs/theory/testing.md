@@ -14,6 +14,8 @@ tests/
 │   ├── setup.ts            # global Jest setup (starts in-memory MongoDB)
 │   ├── database.ts         # connects Mongoose to the test DB
 │   └── factories/          # create test documents (users, products, orders)
+├── integration/
+│   └── app-health.test.ts  # HTTP-level integration tests (real middleware + routes)
 └── unit/
     ├── controllers/        # controller-level tests
     ├── repositories/       # repository tests (real DB, no mocks)
@@ -27,6 +29,7 @@ tests/
 | Repository | Real in-memory MongoDB — queries are tested against an actual Mongoose connection |
 | Service    | Real DB via repositories — business logic tested end-to-end without HTTP          |
 | Controller | Isolated unit tests for specific controller behaviours                            |
+| Integration | Real Express server (in test process) to validate route + middleware behavior    |
 
 ## No mocked database
 
@@ -47,6 +50,7 @@ Factories use sensible defaults so tests only specify the fields they care about
 
 ```bash
 npm run test                         # run all tests
+npm run test:integration             # run integration tests only
 npx jest tests/unit/services/products.test.ts  # run one file
 ```
 

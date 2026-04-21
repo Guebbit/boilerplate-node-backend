@@ -29,9 +29,10 @@ npm run dev
 
 | Variable                  | Description                                |
 | ------------------------- | ------------------------------------------ |
-| `NODE_DB_URI`             | MongoDB connection string                  |
-| `NODE_JWT_SECRET`         | Secret used to sign JWT access tokens      |
-| `NODE_JWT_REFRESH_SECRET` | Secret used to sign refresh tokens         |
+| `NODE_DB_URI`             | MongoDB connection string (preferred)      |
+| `NODE_MONGODB_PORT`       | MongoDB fallback port when URI is omitted  |
+| `NODE_ACCESS_TOKEN_SECRET` | Secret used to sign JWT access tokens     |
+| `NODE_REFRESH_TOKEN_SECRET` | Secret used to sign refresh tokens       |
 | `NODE_PORT`               | HTTP port (default `3000`)                 |
 | `NODE_ENABLE_CLUSTERING`  | Set to `1` to fork one worker per CPU core |
 
@@ -41,7 +42,8 @@ npm run dev
 | ----------------------- | ------------------------------------------------ |
 | `npm run dev`           | Start with hot-reload (tsx watch)                |
 | `npm run build`         | Type-check + lint                                |
-| `npm run test`          | Run unit tests (Jest + mongodb-memory-server)    |
+| `npm run test`          | Run unit + integration tests                      |
+| `npm run test:integration` | Run HTTP integration tests only                |
 | `npm run complete`      | Build → test → lint:fix → prettier:fix           |
 | `npm run db:migrate`    | Apply pending migrations                         |
 | `npm run db:seed`       | Insert sample data                               |
