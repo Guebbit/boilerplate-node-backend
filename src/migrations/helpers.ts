@@ -8,4 +8,7 @@ export const collections = {
     orders: 'orders'
 } as const;
 
-export const getCollection = (database: MigrationDatabase, name: string) => database.collection(name);
+type MigrationCollectionName = (typeof collections)[keyof typeof collections];
+
+export const getCollection = (database: MigrationDatabase, name: MigrationCollectionName) =>
+    database.collection(name);
