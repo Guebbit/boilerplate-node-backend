@@ -18,6 +18,25 @@ Request -> trace context middleware -> business route -> metrics recorded -> res
                x-trace-id + traceparent                      /metrics exposes counters/histograms
 ```
 
+## Quick code map (`src/utils/observability.ts`)
+
+```text
+createTraceContext()
+  -> parseTraceparent() (if header exists)
+  -> generateTraceId()/generateSpanId() fallback
+
+recordRequestMetric()
+  -> http_requests_total (counter)
+  -> http_request_duration_milliseconds_* (histogram)
+
+getPrometheusMetrics()
+  -> renderCounterMetrics()
+  -> renderHistogramMetrics()
+  -> renderProcessMetrics()
+```
+
+Use this map when reading the file from top to bottom.
+
 ## Metrics available
 
 - `http_requests_total{method,route,status_code}`
