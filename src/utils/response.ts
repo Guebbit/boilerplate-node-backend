@@ -20,10 +20,17 @@ export interface IResponseReject extends IResponseNeutral {
     errors: string[];
 }
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-    Object.prototype.toString.call(value) === '[object Object]' &&
-    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+    const prototype = Object.getPrototypeOf(value);
+    return (
+        Object.prototype.toString.call(value) === '[object Object]' &&
+        (prototype === Object.prototype || prototype === null)
+    );
+};
 
+/**
+ * Normalize response payloads so Mongo documents and plain objects expose `id` instead of `_id`.
+ */
 const serializeResponseData = (value: unknown): unknown => {
     if (value === null || value === undefined) return value;
     if (typeof value !== 'object') return value;
