@@ -105,6 +105,7 @@ describe('API integration', () => {
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/plain');
         expect(body).toContain('# HELP http_requests_total');
-        expect(body).toContain('http_requests_total{method="GET",route="/metrics",status_code="200"}');
+        expect(body).toContain('http_requests_total{method="GET",route="/",status_code="200"}');
+        expect(body).toContain('# HELP process_uptime_seconds');
     });
 });

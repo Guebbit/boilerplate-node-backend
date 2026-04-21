@@ -29,7 +29,7 @@ const SPAN_ID_REGEX = /^[\da-f]{16}$/i;
 const traceparentRegex = /^00-([\da-f]{32})-([\da-f]{16})-([\da-f]{2})$/i;
 
 const escapePrometheusLabelValue = (value: string): string =>
-    value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+    value.split('\\').join(String.raw`\\`).split('"').join(String.raw`\"`);
 
 const sanitizeRouteSegment = (segment: string): string => {
     // Normalize high-cardinality dynamic IDs to keep Prometheus labels stable.
@@ -44,7 +44,10 @@ const sanitizeRouteSegment = (segment: string): string => {
 
 export const normalizeRoutePath = (path: string): string => {
     const pathWithoutQueryString = path.split('?')[0] ?? '/';
-    const segments = pathWithoutQueryString.split('/').filter(Boolean).map(sanitizeRouteSegment);
+    const segments = pathWithoutQueryString
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => sanitizeRouteSegment(segment));
     return segments.length > 0 ? `/${segments.join('/')}` : '/';
 };
 
@@ -150,12 +153,8 @@ const renderHistogramMetrics = (): string[] => {
             );
         }
         lines.push(
-            `http_request_duration_milliseconds_bucket{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}",le="+Inf"} ${value.count}`
-        );
-        lines.push(
-            `http_request_duration_milliseconds_sum{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}"} ${value.sum.toFixed(3)}`
-        );
-        lines.push(
+            `http_request_duration_milliseconds_bucket{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}",le="+Inf"} ${value.count}`,
+            `http_request_duration_milliseconds_sum{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}"} ${value.sum.toFixed(3)}`,
             `http_request_duration_milliseconds_count{method="${escapePrometheusLabelValue(labels.method)}",route="${escapePrometheusLabelValue(labels.route)}"} ${value.count}`
         );
     }
