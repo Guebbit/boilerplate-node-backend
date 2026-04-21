@@ -29,7 +29,13 @@ const SPAN_ID_REGEX = /^[\da-f]{16}$/i;
 const traceparentRegex = /^00-([\da-f]{32})-([\da-f]{16})-([\da-f]{2})$/i;
 
 const escapePrometheusLabelValue = (value: string): string =>
-    value.split('\\').join(String.raw`\\`).split('"').join(String.raw`\"`);
+    value
+        .split('\\')
+        .join(String.raw`\\`)
+        .split('"')
+        .join(String.raw`\"`)
+        .split('\n')
+        .join(String.raw`\n`);
 
 const sanitizeRouteSegment = (segment: string): string => {
     // Normalize high-cardinality dynamic IDs to keep Prometheus labels stable.
@@ -43,7 +49,7 @@ const sanitizeRouteSegment = (segment: string): string => {
 };
 
 export const normalizeRoutePath = (path: string): string => {
-    const pathWithoutQueryString = path.split('?')[0] ?? '/';
+    const pathWithoutQueryString = path.split('?')[0] || '/';
     const segments = pathWithoutQueryString
         .split('/')
         .filter(Boolean)
