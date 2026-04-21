@@ -33,6 +33,7 @@ const serializeResponseData = (value: unknown): unknown => {
 
     const jsonSerializable = value as { toJSON?: () => unknown };
 
+    // Keep plain objects on the recursive path so custom toJSON methods do not bypass `_id` → `id`.
     if (typeof jsonSerializable.toJSON === 'function' && !isPlainObject(value))
         return serializeResponseData(jsonSerializable.toJSON());
 
