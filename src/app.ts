@@ -133,10 +133,8 @@ export const stopServer = () => {
         })
         .then(() => stopCache())
         .then(() => stopDatabase())
-        .then(() => {
-            activeServer = undefined;
-        })
         .finally(() => {
+            activeServer = undefined;
             shutdownPromise = undefined;
         });
 
