@@ -64,7 +64,7 @@ const serializeResponseData = (value: unknown): unknown => {
         // Convert Mongo's storage field name to the API-facing field name.
         if (key === '_id') {
             serialized.id = normalizedValue;
-            continue;
+            // continue; // Adding "continue" will remove _id, no need for this.
         }
 
         serialized[key] = normalizedValue;

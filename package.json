@@ -24,7 +24,7 @@
         "test:unit:target": "npx jest tests/path/file.test.ts",
         "test:prism": "kill $(lsof -t -i:4010) 2>/dev/null; npx @stoplight/prism-cli mock openapi.yaml --errors & PRISM_PID=$!; sleep 2; curl -f http://localhost:4010/products; kill $PRISM_PID",
         "setup:mongod": "docker create --name mongo-temp mongo:latest && docker cp mongo-temp:/usr/bin/mongod /tmp/mongod && docker rm mongo-temp",
-        "db:migrate": "migrate-mongo up",
+        "db:migrate:up": "migrate-mongo up",
         "db:migrate:down": "migrate-mongo down",
         "db:migrate:status": "migrate-mongo status",
         "db:seed": "tsx db/seeds/index.ts",

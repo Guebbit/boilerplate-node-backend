@@ -1,4 +1,5 @@
 const { ObjectId } = require('mongodb');
+const {hash} = require("bcrypt");
 
 module.exports = {
     async up(db) {
@@ -14,7 +15,7 @@ module.exports = {
                 _id: new ObjectId('65dd2bdb923652b7800fe180'),
                 username: 'root',
                 email: 'root@root.it',
-                password: 'rootroot',
+                password: await hash('rootroot', 12),
                 imageUrl: '\\images\\9726c4217f5998511f372afab4800ac8.jpg',
                 admin: true,
                 cart: {
@@ -36,8 +37,7 @@ module.exports = {
                 _id: new ObjectId('65de646a44f861fd83c13f13'),
                 username: 'ginopinoshow',
                 email: 'gino@pino.it',
-                password:
-                    '$2b$12$HwOdA7il/qvuU.psvWDOyuSMJ7ji/qMeFS3ma7DB8W6A/tGfCYEX.',
+                password: await hash('password', 12),
                 imageUrl: '\\images\\96346b77daf138a279677cb75c400ee9.jpg',
                 admin: false,
                 cart: { items: [], updatedAt: new Date() },

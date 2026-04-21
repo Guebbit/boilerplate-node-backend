@@ -41,8 +41,7 @@ export const postLogin = (
              * Authentication successful.
              * Create refresh token...
              */
-            const user = result.data!;
-            const userId = (user._id as Types.ObjectId).toString();
+            const userId = (result.data?._id as Types.ObjectId)?.toString();
             return createRefreshToken(userId, remember)
                 .then((refreshToken) => {
                     // ...and add it to the client cookies

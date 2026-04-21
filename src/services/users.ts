@@ -442,6 +442,7 @@ export const login = (
             // user not found
             if (!user)
                 return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
+
             return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
                 // User found but password doesn't match
                 if (!doMatch)
