@@ -64,7 +64,8 @@ const onProcessSignal = (signal: NodeJS.Signals) => {
     }, getShutdownTimeoutMs());
     forcedExitTimer.unref();
 
-    void stopServer()
+    void Promise.resolve()
+        .then(() => stopServer())
         .then(() => {
             logger.info('Graceful shutdown completed.');
             process.exit(0);

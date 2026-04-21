@@ -115,15 +115,19 @@ const getClient = (): Promise<RedisClientType | void> => {
 export const startCache = () => getClient();
 
 export const stopCache = (): Promise<void> => {
-    connectPromise = undefined;
     const redisClient = client;
-    client = undefined;
     if (!redisClient || !redisClient.isOpen) return Promise.resolve();
 
     return redisClient
         .quit()
-        .catch(() => {
-            redisClient.disconnect();
+        .catch(() =>
+            Promise.resolve().then(() => {
+                redisClient.disconnect();
+            })
+        )
+        .finally(() => {
+            connectPromise = undefined;
+            client = undefined;
         })
         .then(() => {});
 };
