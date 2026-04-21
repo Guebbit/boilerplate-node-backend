@@ -4,6 +4,12 @@ import crypto from 'node:crypto';
 import express from 'express';
 import { router as systemRoutes } from '../../src/routes';
 import { rejectResponse } from '../../src/utils/response';
+import {
+    createTraceContext,
+    getRouteLabel,
+    recordRequestMetric,
+    toTraceparentHeader
+} from '../../src/utils/observability';
 
 const app = express();
 app.use(express.json());
@@ -11,6 +17,26 @@ app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
     request.requestId = requestId;
     response.setHeader('x-request-id', requestId);
+    next();
+});
+app.use((request, response, next) => {
+    const traceContext = createTraceContext(request.get('traceparent'));
+    request.traceContext = traceContext;
+    response.setHeader('traceparent', toTraceparentHeader(traceContext));
+    response.setHeader('x-trace-id', traceContext.traceId);
+    next();
+});
+app.use((request, response, next) => {
+    const startedAt = process.hrtime.bigint();
+    response.once('finish', () => {
+        const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+        recordRequestMetric({
+            method: request.method,
+            route: getRouteLabel(request),
+            statusCode: response.statusCode,
+            durationMs: elapsedTimeInMilliseconds
+        });
+    });
     next();
 });
 app.use('/', systemRoutes);
@@ -53,6 +79,8 @@ describe('API integration', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('x-request-id')).toBeTruthy();
+        expect(response.headers.get('x-trace-id')).toMatch(/^[\da-f]{32}$/);
+        expect(response.headers.get('traceparent')).toMatch(/^00-[\da-f]{32}-[\da-f]{16}-01$/);
         expect(body.success).toBe(true);
         expect(body.data.status).toBe('ok');
     });
@@ -68,5 +96,15 @@ describe('API integration', () => {
         expect(response.status).toBe(404);
         expect(body.success).toBe(false);
         expect(body.message).toBe('Not Found');
+    });
+
+    it('GET /metrics returns prometheus metrics', async () => {
+        const response = await fetch(`${baseUrl}/metrics`);
+        const body = await response.text();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/plain');
+        expect(body).toContain('# HELP http_requests_total');
+        expect(body).toContain('http_requests_total{method="GET",route="/metrics",status_code="200"}');
     });
 });

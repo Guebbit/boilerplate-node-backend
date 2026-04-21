@@ -15,7 +15,8 @@ export default defineConfig({
                 items: [
                     { text: 'Getting Started', link: '/guide/getting-started' },
                     { text: 'Project Structure', link: '/guide/project-structure' },
-                    { text: 'Endpoint Lifecycle', link: '/guide/endpoint-lifecycle' }
+                    { text: 'Endpoint Lifecycle', link: '/guide/endpoint-lifecycle' },
+                    { text: 'Observability', link: '/guide/observability' }
                 ]
             },
             {
