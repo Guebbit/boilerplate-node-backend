@@ -14,6 +14,12 @@ import { logger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { rejectResponse } from '@utils/response';
 import { validateRequiredEnvironment } from '@utils/environment';
+import {
+    createTraceContext,
+    getRouteLabel,
+    recordRequestMetric,
+    toTraceparentHeader
+} from '@utils/observability';
 import enTranslation from './locales/en.json';
 
 import { router as productRoutes } from './routes/products';
@@ -139,13 +145,49 @@ app.use((request, response, next) => {
 });
 
 /**
+ * Distributed trace context.
+ * - If upstream sends `traceparent`, continue that trace.
+ * - Otherwise, start a new trace.
+ * We also return `traceparent` and `x-trace-id` so clients can correlate calls quickly.
+ */
+app.use((request, response, next) => {
+    const traceContext = createTraceContext(request.get('traceparent'));
+    request.traceContext = traceContext;
+    response.setHeader('traceparent', toTraceparentHeader(traceContext));
+    response.setHeader('x-trace-id', traceContext.traceId);
+    next();
+});
+
+/**
  * Request logger
  */
 app.use((request, _response, next) => {
     logger.info({
         requestId: request.requestId,
+        traceId: request.traceContext?.traceId,
+        spanId: request.traceContext?.spanId,
+        parentSpanId: request.traceContext?.parentSpanId,
         method: request.method,
         url: `${request.protocol}://${request.get('host')}${request.originalUrl}`
+    });
+    next();
+});
+
+/**
+ * Request metrics collector (Prometheus style):
+ * - total requests by method/route/status
+ * - request duration histogram
+ */
+app.use((request, response, next) => {
+    const startTime = process.hrtime.bigint();
+    response.once('finish', () => {
+        const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startTime) / 1_000_000;
+        recordRequestMetric({
+            method: request.method,
+            route: getRouteLabel(request),
+            statusCode: response.statusCode,
+            durationMs: elapsedTimeInMilliseconds
+        });
     });
     next();
 });
@@ -177,6 +219,8 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     if (error instanceof MulterError) {
         logger.error({
             requestId: request.requestId,
+            traceId: request.traceContext?.traceId,
+            spanId: request.traceContext?.spanId,
             message: error.message,
             code: error.code,
             field: error.field
@@ -190,6 +234,8 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
 
     logger.error({
         requestId: request.requestId,
+        traceId: request.traceContext?.traceId,
+        spanId: request.traceContext?.spanId,
         message: error.message,
         stack: error.stack,
         name: error.name

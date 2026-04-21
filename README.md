@@ -78,6 +78,47 @@ Client -> Express -> MongoDB update -> related Redis cache cleared
 - Product, order, user, account, and checkout mutations invalidate related cached responses automatically.
 - If Redis is unavailable, the API continues without server-side caching.
 
+## Observability (metrics + traces)
+
+You now get:
+
+- **Trace headers** on every response:
+    - `x-trace-id`
+    - `traceparent` (W3C format)
+- **Metrics endpoint**:
+    - `GET /metrics` (Prometheus text format)
+
+### Quick visual
+
+```text
+Client
+  -> API request (optional traceparent)
+  -> Express middleware
+       -> requestId + trace context
+       -> route handler
+       -> metrics collector
+  <- response with x-request-id + x-trace-id + traceparent
+
+Prometheus
+  -> GET /metrics
+  <- http_requests_total, http_request_duration_milliseconds, process_* metrics
+```
+
+### Quick examples
+
+```bash
+# 1) Check health and inspect trace headers
+curl -i http://localhost:3000/
+
+# 2) Continue an existing trace from another service
+curl -i \
+  -H "traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-1111111111111111-01" \
+  http://localhost:3000/products
+
+# 3) Scrape metrics
+curl http://localhost:3000/metrics
+```
+
 ## Scripts
 
 - `npm run dev` - run API in watch mode
