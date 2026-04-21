@@ -4,9 +4,14 @@ on:
     push:
         branches: [main]
 
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
     ci:
         runs-on: ubuntu-latest
+        timeout-minutes: 15
         services:
             mongodb:
                 image: mongo:8
@@ -25,4 +30,6 @@ jobs:
             - run: npm run ts-check
             - run: npm run lint
             - run: npm run test:unit
+            # Integration tests validate real HTTP behavior (routing, middleware, response shape).
+            - run: npm run test:integration
             - run: npm run lint:openapi

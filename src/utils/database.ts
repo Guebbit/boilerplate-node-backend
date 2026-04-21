@@ -3,8 +3,18 @@ import { logger } from './winston';
 
 const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
+const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getDatabaseUri = () => {
+    if (process.env.NODE_DB_URI) return process.env.NODE_DB_URI;
+
+    const host = process.env.NODE_MONGODB_HOST ?? '127.0.0.1';
+    const port = process.env.NODE_MONGODB_PORT ?? '27017';
+    const databaseName = process.env.NODE_MONGODB_NAME ?? DEFAULT_DATABASE_NAME;
+    return `mongodb://${host}:${port}/${databaseName}`;
+};
 
 /**
  * Connect to MongoDB with exponential-backoff retry.
@@ -13,7 +23,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 export const start = () => {
     const attemptConnect = (attempt: number): Promise<void> =>
-        mongoose.connect(process.env.NODE_DB_URI ?? '').then(
+        mongoose.connect(getDatabaseUri()).then(
             () => {},
             () => {
                 if (attempt >= MAX_RETRIES - 1)

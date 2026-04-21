@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
+import type { Server } from 'node:http';
 import crypto from 'node:crypto';
 import i18next from 'i18next';
 import helmet from 'helmet';
@@ -28,7 +29,13 @@ import { ExtendedError } from '@utils/helpers-errors';
 /**
  * Server start
  */
-const app = express();
+export const app = express();
+const DEFAULT_PORT = 3000;
+
+const getPort = () => {
+    const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
+    return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
+};
 
 /**
  * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
@@ -39,29 +46,36 @@ const app = express();
 app.set('etag', 'strong');
 
 /**
- * Sync database then start server
- * AFTER sync we can use the database, since it is initialized
+ * Sync dependencies then start HTTP server.
+ * Exported to make integration tests start/stop the app without side effects on import.
  */
-Promise.resolve()
-    .then(() => validateRequiredEnvironment())
-    .then(() => start())
-    .then(() => startCache())
-    .then(() =>
-        i18next.init({
-            lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
-            fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
-            resources: {
-                en: {
-                    translation: enTranslation as Record<string, unknown>
+export const startServer = () =>
+    Promise.resolve()
+        .then(() => validateRequiredEnvironment())
+        .then(() => start())
+        .then(() => startCache())
+        .then(() =>
+            i18next.init({
+                lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
+                fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
+                resources: {
+                    en: {
+                        translation: enTranslation as Record<string, unknown>
+                    }
                 }
-            }
-        })
-    )
-    .then(() => {
-        logger.info('------------- SERVER START -------------');
-        app.listen(process.env.NODE_PORT ?? 3000);
-    })
-    .catch((error: Error) => logger.info('------------- SERVER ERROR -------------', error));
+            })
+        )
+        .then(
+            () =>
+                new Promise<Server>((resolve) => {
+                    const port = getPort();
+                    logger.info('------------- SERVER START -------------');
+                    const server = app.listen(port, () => {
+                        logger.info(`Server listening on port ${port}`);
+                        resolve(server);
+                    });
+                })
+        );
 
 /**
  * Secure headers
@@ -204,3 +218,9 @@ process
         });
         process.exit(1);
     });
+
+if (process.env.NODE_ENV !== 'test') {
+    void startServer().catch((error: Error) =>
+        logger.error('------------- SERVER ERROR -------------', error)
+    );
+}

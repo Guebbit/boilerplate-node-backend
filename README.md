@@ -23,11 +23,14 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 2. Create env file:
     - `cp .env-example .env`
 3. Set required environment variables in `.env`:
-    - `NODE_DB_URI`
     - `NODE_ACCESS_TOKEN_SECRET`
     - `NODE_REFRESH_TOKEN_SECRET`
+    - Database config:
+        - Preferred: `NODE_DB_URI`
+        - Or fallback: `NODE_MONGODB_HOST` + `NODE_MONGODB_PORT` (+ optional `NODE_MONGODB_NAME`)
 4. Optional: enable Redis response caching by setting:
-    - `NODE_REDIS_URL`
+    - Preferred: `NODE_REDIS_URL`
+    - Or fallback: `NODE_REDIS_HOST` + `NODE_REDIS_PORT`
     - `NODE_REDIS_CACHE_ENABLED=1`
 5. Start development server:
     - `npm run dev`
@@ -80,10 +83,31 @@ Client -> Express -> MongoDB update -> related Redis cache cleared
 - `npm run dev` - run API in watch mode
 - `npm run ts-check` - TypeScript type-check
 - `npm run lint` - lint checks
-- `npm run test` - unit tests
+- `npm run test` - unit + integration tests
+- `npm run test:unit` - unit tests
+- `npm run test:integration` - HTTP integration tests
 - `npm run build` - type-check + lint
 - `npm run complete` - build + test + auto-fix lint/prettier
 - `npm run complete:check` - build + test + non-mutating lint/prettier checks
+
+## Port variables (quick map)
+
+```text
+NODE_PORT          -> Express app listening port
+NODE_MONGODB_PORT  -> Mongo fallback port when NODE_DB_URI is not set
+NODE_REDIS_PORT    -> Redis fallback port when NODE_REDIS_URL is not set
+```
+
+## CI pipeline (quick visual)
+
+```text
+npm ci
+  -> ts-check
+  -> lint
+  -> test:unit
+  -> test:integration
+  -> lint:openapi
+```
 
 ## OpenAPI workflow
 
