@@ -113,9 +113,9 @@ export const createNestFastifyApplication = async () => {
     await fastifyInstance.register(fastifyCors, {
         origin: (origin, callback) => {
             // Fastify CORS callback requires `null` for the no-error branch.
-            const noError = undefined as unknown as null;
-            if (!origin) return callback(noError, true);
-            if (allowedOrigins.has(origin)) return callback(noError, true);
+            const corsNoError = undefined as unknown as null;
+            if (!origin) return callback(corsNoError, true);
+            if (allowedOrigins.has(origin)) return callback(corsNoError, true);
             return callback(new Error(`CORS blocked for origin: ${origin}`), false);
         },
         credentials: true,

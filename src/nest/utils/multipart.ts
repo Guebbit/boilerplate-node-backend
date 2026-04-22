@@ -8,7 +8,11 @@ import type { IRequestContext } from '@nest/types/request-context';
 /**
  * Extract extension from filename.
  */
-const getExtension = (filename: string) => filename.slice(filename.lastIndexOf('.') + 1);
+const getExtension = (filename: string) => {
+    const extensionIndex = filename.lastIndexOf('.');
+    if (extensionIndex < 0) return '';
+    return filename.slice(extensionIndex + 1);
+};
 
 /**
  * Parse incoming multipart payload and persist imageUpload file (if provided).
