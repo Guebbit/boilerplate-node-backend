@@ -41,7 +41,8 @@ export class CacheResponseInterceptor implements NestInterceptor {
 
         if (request.method !== 'GET') return next.handle();
 
-        const cacheKey = `${request.method}:${request.url}:${this.getRequestScope(request)}`;
+        const requestPath = request.url.split('?')[0] ?? request.url;
+        const cacheKey = `${request.method}:${requestPath}:${this.getRequestScope(request)}`;
 
         response.header(
             'Cache-Control',

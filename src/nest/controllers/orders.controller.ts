@@ -45,7 +45,10 @@ export class OrdersController {
         return request.user?.admin
             ? undefined
             : {
-                  userId: new Types.ObjectId((request.user?._id as Types.ObjectId).toString())
+                  userId:
+                      request.user?._id instanceof Types.ObjectId
+                          ? request.user._id
+                          : new Types.ObjectId(String(request.user?._id))
               };
     }
 

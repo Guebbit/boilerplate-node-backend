@@ -68,6 +68,26 @@ type CookieCapableResponse = {
 };
 
 /**
+ * Adapter-safe cookie setter that supports both Express and Fastify reply APIs.
+ */
+const setCookieOnResponse = (
+    response: CookieCapableResponse,
+    name: string,
+    value: string,
+    options: {
+        httpOnly?: boolean;
+        secure?: boolean;
+        sameSite?: 'lax' | 'strict' | 'none';
+        maxAge?: number;
+        path?: string;
+    }
+) => {
+    if (typeof response.setCookie === 'function') response.setCookie(name, value, options);
+    else if (typeof response.cookie === 'function') response.cookie(name, value, options);
+    else logger.warn(`No cookie method available on response object while setting cookie: ${name}`);
+};
+
+/**
  * Remember me with different expiry times
  */
 export enum ERefreshTokenExpiryTime {
@@ -223,9 +243,7 @@ export const createRefreshCookie = (
         path: '/'
     } as const;
 
-    if (typeof response.setCookie === 'function') response.setCookie('jwt', token, cookieOptions);
-    else if (typeof response.cookie === 'function') response.cookie('jwt', token, cookieOptions);
-    else logger.warn('No cookie method available on response object while setting refresh cookie.');
+    setCookieOnResponse(response, 'jwt', token, cookieOptions);
 };
 
 /**
@@ -258,10 +276,7 @@ export const createLoggedCookie = (response: CookieCapableResponse, remember?: E
         path: '/'
     } as const;
 
-    if (typeof response.setCookie === 'function')
-        response.setCookie('isAuth', 'true', cookieOptions);
-    else if (typeof response.cookie === 'function') response.cookie('isAuth', 'true', cookieOptions);
-    else logger.warn('No cookie method available on response object while setting auth marker cookie.');
+    setCookieOnResponse(response, 'isAuth', 'true', cookieOptions);
 };
 
 /**

@@ -9,9 +9,8 @@ import type { IRequestContext } from '@nest/types/request-context';
  * Extract extension from filename.
  */
 const getExtension = (filename: string) => {
-    const extensionIndex = filename.lastIndexOf('.');
-    if (extensionIndex < 0) return '';
-    return filename.slice(extensionIndex + 1);
+    const extension = path.extname(filename).slice(1);
+    return extension || 'bin';
 };
 
 /**
@@ -70,8 +69,10 @@ export const parseMultipartImageRequest = async (
     return {
         body,
         imageUrlRaw,
-        imageUrl:
-            imageUrlRaw?.replace(process.env.NODE_PUBLIC_PATH ?? 'public', '') ??
-            (typeof body.imageUrl === 'string' ? body.imageUrl : undefined)
+        imageUrl: imageUrlRaw
+            ? `/${path.relative(path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public'), imageUrlRaw).split(path.sep).join('/')}`
+            : typeof body.imageUrl === 'string'
+              ? body.imageUrl
+              : undefined
     };
 };
