@@ -1,6 +1,7 @@
 import { sign, verify, decode } from 'jsonwebtoken';
 import { userModel as Users, ETokenType, IToken } from '@models/users';
 import type { CastError } from 'mongoose';
+import { logger } from '@utils/winston';
 
 /**
  *
@@ -224,6 +225,7 @@ export const createRefreshCookie = (
 
     if (typeof response.setCookie === 'function') response.setCookie('jwt', token, cookieOptions);
     else if (typeof response.cookie === 'function') response.cookie('jwt', token, cookieOptions);
+    else logger.warn('No cookie method available on response object while setting refresh cookie.');
 };
 
 /**
@@ -259,6 +261,7 @@ export const createLoggedCookie = (response: CookieCapableResponse, remember?: E
     if (typeof response.setCookie === 'function')
         response.setCookie('isAuth', 'true', cookieOptions);
     else if (typeof response.cookie === 'function') response.cookie('isAuth', 'true', cookieOptions);
+    else logger.warn('No cookie method available on response object while setting auth marker cookie.');
 };
 
 /**

@@ -184,8 +184,8 @@ export class AccountController {
             });
 
             if (!user)
-                fail(422, 'reset-confirm - invalid token', [t('reset.token-not-found')]);
-            const targetUser = user!;
+                return fail(422, 'reset-confirm - invalid token', [t('reset.token-not-found')]);
+            const targetUser = user;
 
             const tokenEntry = targetUser.tokens.find(
                 (tk) => tk.token === token && tk.type === 'password'

@@ -30,7 +30,7 @@ export class RequestContextInterceptor implements NestInterceptor {
             spanId: traceContext.spanId,
             parentSpanId: traceContext.parentSpanId,
             method: request.method,
-            url: `${request.protocol}://${request.hostname}${request.url}`
+            url: `${request.protocol}://${request.hostname}${request.url ?? request.raw.url ?? '/'}`
         });
 
         return next.handle();

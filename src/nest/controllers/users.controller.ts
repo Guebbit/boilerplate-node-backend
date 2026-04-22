@@ -90,7 +90,7 @@ export class UsersController {
             if (error instanceof HttpException) throw error;
             const castError = error as { kind?: string; message?: string };
             if (castError.message === '404' || castError.kind === 'ObjectId')
-                fail(404, 'deleteUser - not found', [t('ecommerce.user-not-found')]);
+                fail(404, 'getUser - not found', [t('ecommerce.user-not-found')]);
             fail(500, 'Unknown Error', [String(castError.message)]);
         }
     }

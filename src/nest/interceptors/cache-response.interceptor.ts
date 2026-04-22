@@ -19,6 +19,15 @@ import { Types } from 'mongoose';
 export class CacheResponseInterceptor implements NestInterceptor {
     constructor(private readonly reflector: Reflector) {}
 
+    /**
+     * Normalize request user identity to one stable cache scope value.
+     */
+    private getRequestScope(request: IRequestContext): string {
+        const userId = request.user?._id;
+        if (!userId) return 'guest';
+        return `user:${userId instanceof Types.ObjectId ? userId.toString() : String(userId)}`;
+    }
+
     async intercept(context: ExecutionContext, next: CallHandler): Promise<Observable<unknown>> {
         const cacheConfig = this.reflector.get<{ seconds: number; tags: string[] }>(
             CACHEABLE_METADATA_KEY,
@@ -32,11 +41,7 @@ export class CacheResponseInterceptor implements NestInterceptor {
 
         if (request.method !== 'GET') return next.handle();
 
-        const userId = request.user?._id;
-        const scope = userId
-            ? `user:${userId instanceof Types.ObjectId ? userId.toString() : String(userId)}`
-            : 'guest';
-        const cacheKey = `${request.method}:${request.url}:${scope}`;
+        const cacheKey = `${request.method}:${request.url}:${this.getRequestScope(request)}`;
 
         response.header(
             'Cache-Control',

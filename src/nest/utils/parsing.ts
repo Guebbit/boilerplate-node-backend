@@ -6,6 +6,7 @@ export const toBooleanFlag = (value: unknown): boolean =>
 
 /**
  * Parse optional numeric values while preserving undefined when invalid/missing.
+ * Empty strings are treated as "missing" to match query/form semantics.
  */
 export const toNumberOrUndefined = (value: unknown): number | undefined => {
     if (value === undefined || value === null || value === '') return;
