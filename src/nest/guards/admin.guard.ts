@@ -10,8 +10,9 @@ export class AdminGuard implements CanActivate {
     canActivate(context: ExecutionContext): boolean {
         const request = context.switchToHttp().getRequest<IRequestContext>();
         const user = request.user;
-        if (!user) return fail(403, 'Forbidden: Access denied.');
-        if (!user.admin)
+        if (!user) fail(403, 'Forbidden: Access denied.');
+        const authenticatedUser = user as NonNullable<typeof user>;
+        if (!authenticatedUser.admin)
             fail(403, "Forbidden: You don't have permission.");
         return true;
     }

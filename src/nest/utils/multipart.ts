@@ -66,13 +66,18 @@ export const parseMultipartImageRequest = async (
         body[part.fieldname] = part.value;
     }
 
+    const imageUrl = imageUrlRaw
+        ? `/${path
+              .relative(path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public'), imageUrlRaw)
+              .split(path.sep)
+              .join('/')}`
+        : typeof body.imageUrl === 'string'
+          ? body.imageUrl
+          : undefined;
+
     return {
         body,
         imageUrlRaw,
-        imageUrl: imageUrlRaw
-            ? `/${path.relative(path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public'), imageUrlRaw).split(path.sep).join('/')}`
-            : typeof body.imageUrl === 'string'
-              ? body.imageUrl
-              : undefined
+        imageUrl
     };
 };

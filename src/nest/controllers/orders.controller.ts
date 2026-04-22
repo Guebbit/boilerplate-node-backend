@@ -20,6 +20,7 @@ import { t } from 'i18next';
 import { Types } from 'mongoose';
 import type { FastifyReply } from 'fastify';
 import { orderService } from '@services/orders';
+import type { IOrderDocument } from '@models/orders';
 import { userService } from '@services/users';
 import { extractId, extractPagination } from '@utils/helpers-request';
 import { nodemailer } from '@utils/nodemailer';
@@ -136,7 +137,7 @@ export class OrdersController {
         try {
             const order = await orderService.getById(id, this.getUserScope(request));
             if (!order) fail(404, 'Not Found', [t('ecommerce.order-not-found')]);
-            const targetOrder = order!;
+            const targetOrder = order as IOrderDocument;
 
             const templatePath = path.resolve('views', 'templates-files', 'invoice-order-file.ejs');
             const html = await ejs.renderFile(templatePath, {
