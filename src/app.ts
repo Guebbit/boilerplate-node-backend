@@ -139,7 +139,6 @@ export const createLegacyExpressApp = (): Express => {
         /**
          * Enables sending credentials in cross-origin requests.
          * "Credentials" = cookies, Authorization headers, TLS client certs.
-         *     *
          * Client must also explicitly opt-in:
          * fetch(..., { credentials: 'include' })
          * axios(..., { withCredentials: true })
@@ -153,7 +152,7 @@ export const createLegacyExpressApp = (): Express => {
          * Allowed HTTP methods for CORS (sent in Access-Control-Allow-Methods).
          * If a method isn’t listed → browser blocks the request
          */
-        methods: ['GET','POST','PUT','PATCH','DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
         /**
          * Request headers the client is allowed to send (preflight check).
