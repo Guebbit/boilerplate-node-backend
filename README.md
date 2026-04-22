@@ -1,6 +1,6 @@
 # Boilerplate Node Backend
 
-TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first tooling.
+TypeScript Node.js backend with NestJS on Fastify, JWT auth, Mongoose, and OpenAPI-first tooling.
 
 ## Instructions
 
@@ -46,15 +46,15 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 
 ```text
 First GET request
-Client -> Express -> MongoDB -> Response
+Client -> Fastify (NestJS host) -> MongoDB -> Response
                   -> Redis saves a copy
 
 Next same GET request
-Client -> Express -> Redis -> Response
+Client -> Fastify (NestJS host) -> Redis -> Response
                   -> MongoDB skipped
 
 Write request (POST/PUT/PATCH/DELETE)
-Client -> Express -> MongoDB update -> related Redis cache cleared
+Client -> Fastify (NestJS host) -> MongoDB update -> related Redis cache cleared
 ```
 
 ### What this project stores in Redis
@@ -93,10 +93,10 @@ You now get:
 ```text
 Client
   -> API request (optional traceparent)
-  -> Express middleware
-       -> requestId + trace context
-       -> route handler
-       -> metrics collector
+  -> Fastify runtime (NestJS)
+        -> requestId + trace context
+        -> route handler
+        -> metrics collector
   <- response with x-request-id + x-trace-id + traceparent
 
 Prometheus
@@ -138,10 +138,20 @@ curl http://localhost:3000/metrics
 
 Migrations run through a TypeScript-compatible runtime (`tsx`) so `db/migrations/*.ts` can import migration-safe helpers from `src/migrations/`.
 
+## Fastify + NestJS notes (brief)
+
+- **What changed**:
+    - The HTTP server runtime is now **Fastify**.
+    - The application bootstraps through **NestJS** (`src/nest/app.module.ts`).
+- **Compared to Express with no framework**:
+    - **Fastify vs Express**: Fastify is generally optimized for lower overhead and high throughput out of the box.
+    - **NestJS vs no framework**: NestJS adds an app structure (modules/providers/controllers patterns) that scales better when the codebase grows.
+    - **Boilerplate compatibility**: existing Express-style route/controller files are still supported during this transition, so future projects can migrate incrementally.
+
 ## Port variables (quick map)
 
 ```text
-NODE_PORT          -> Express app listening port
+NODE_PORT          -> NestJS/Fastify app listening port
 NODE_MONGODB_PORT  -> Mongo fallback port when NODE_DB_URI is not set
 NODE_REDIS_PORT    -> Redis fallback port when NODE_REDIS_URL is not set
 ```

@@ -23,6 +23,8 @@
         "noPropertyAccessFromIndexSignature": false,
         "resolveJsonModule": true,
         "moduleResolution": "Node",
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
         "outDir": "./dist",
         "importsNotUsedAsValues": "remove",
         "ignoreDeprecations": "5.0",

@@ -2,7 +2,7 @@
 layout: home
 hero:
     name: Node API Boilerplate
-    text: Express · MongoDB · Mongoose
+    text: NestJS · Fastify · MongoDB · Mongoose
     tagline: A production-ready REST API starter with a clean layered architecture.
     actions:
         - theme: brand
@@ -13,7 +13,9 @@ hero:
           link: /guide/endpoint-lifecycle
 features:
     - title: Layered Architecture
-      details: Controller → Service → Repository separation keeps each concern isolated and testable.
+      details: NestJS app bootstrap + Controller → Service → Repository separation keeps each concern isolated and testable.
+    - title: Fast runtime
+      details: Fastify handles the HTTP runtime while NestJS provides scalable project structure for larger backends.
     - title: OpenAPI-first
       details: The API contract lives in openapi.yaml and drives code generation, mocking, and validation.
     - title: Auth out of the box

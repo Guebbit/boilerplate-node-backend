@@ -82,6 +82,10 @@
         "vitepress": "^1.6.4"
     },
     "dependencies": {
+        "@fastify/express": "^4.0.5",
+        "@nestjs/common": "^11.1.19",
+        "@nestjs/core": "^11.1.19",
+        "@nestjs/platform-fastify": "^11.1.19",
         "@openapitools/openapi-generator-cli": "^2.31.0",
         "@types/jsonwebtoken": "^9.0.10",
         "@types/ws": "^8.18.1",
@@ -106,6 +110,8 @@
         "nodemailer": "^8.0.4",
         "puppeteer-core": "^24.40.0",
         "redis": "^5.12.1",
+        "reflect-metadata": "^0.2.2",
+        "rxjs": "^7.8.2",
         "winston": "^3.19.0",
         "ws": "^8.20.0",
         "zod": "^4.3.6"
