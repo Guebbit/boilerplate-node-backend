@@ -1,4 +1,3 @@
-import type { Request } from 'express';
 import crypto from 'node:crypto';
 
 /**
@@ -258,5 +257,5 @@ export const getPrometheusMetrics = (): string =>
 /**
  * Best-effort route extraction for metric labels.
  */
-export const getRouteLabel = (request: Request): string =>
-    normalizeRoutePath(request.path || request.originalUrl || '/');
+export const getRouteLabel = (request: { path?: string; originalUrl?: string; url?: string }): string =>
+    normalizeRoutePath(request.path || request.originalUrl || request.url || '/');

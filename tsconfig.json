@@ -11,7 +11,8 @@
             "@repositories/*": ["src/repositories/*"],
             "@models/*": ["src/models/*"],
             "@middlewares/*": ["src/middlewares/*"],
-            "@utils/*": ["src/utils/*"]
+            "@utils/*": ["src/utils/*"],
+            "@nest/*": ["src/nest/*"]
         },
         "strict": true,
         "composite": true,

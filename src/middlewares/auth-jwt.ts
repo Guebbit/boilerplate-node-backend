@@ -1,4 +1,3 @@
-import type { Response } from 'express';
 import { sign, verify, decode } from 'jsonwebtoken';
 import { userModel as Users, ETokenType, IToken } from '@models/users';
 import type { CastError } from 'mongoose';
@@ -29,6 +28,43 @@ import type { CastError } from 'mongoose';
 export interface ITokenData {
     id: string;
 }
+
+/**
+ * Minimal response contract for cookie operations across Express/Fastify adapters.
+ */
+type CookieCapableResponse = {
+    cookie?: (
+        name: string,
+        value: string,
+        options: {
+            httpOnly?: boolean;
+            secure?: boolean;
+            sameSite?: 'lax' | 'strict' | 'none';
+            maxAge?: number;
+            path?: string;
+        }
+    ) => unknown;
+    setCookie?: (
+        name: string,
+        value: string,
+        options: {
+            httpOnly?: boolean;
+            secure?: boolean;
+            sameSite?: 'lax' | 'strict' | 'none';
+            maxAge?: number;
+            path?: string;
+        }
+    ) => unknown;
+    clearCookie?: (
+        name: string,
+        options?: {
+            httpOnly?: boolean;
+            secure?: boolean;
+            sameSite?: 'lax' | 'strict' | 'none';
+            path?: string;
+        }
+    ) => unknown;
+};
 
 /**
  * Remember me with different expiry times
@@ -171,11 +207,11 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
  * @param remember
  */
 export const createRefreshCookie = (
-    response: Response,
+    response: CookieCapableResponse,
     token: string,
     remember?: ERefreshTokenExpiryTime
 ) => {
-    response.cookie('jwt', token, {
+    const cookieOptions = {
         // Prevent access to the cookie via JavaScript
         httpOnly: true,
         // Only sends cookie over HTTPS.
@@ -184,7 +220,10 @@ export const createRefreshCookie = (
         // maxAge is the expiration date from now in milliseconds, meanwhile "expires" is the exact date of expiration
         maxAge: getExpiryTimeMilliseconds(remember),
         path: '/'
-    });
+    } as const;
+
+    if (typeof response.setCookie === 'function') response.setCookie('jwt', token, cookieOptions);
+    else if (typeof response.cookie === 'function') response.cookie('jwt', token, cookieOptions);
 };
 
 /**
@@ -192,13 +231,14 @@ export const createRefreshCookie = (
  *
  * @param response
  */
-export const destroyRefreshCookie = (response: Response) => {
-    response.clearCookie('jwt', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/'
-    });
+export const destroyRefreshCookie = (response: CookieCapableResponse) => {
+    if (typeof response.clearCookie === 'function')
+        response.clearCookie('jwt', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/'
+        });
 };
 
 /**
@@ -209,12 +249,16 @@ export const destroyRefreshCookie = (response: Response) => {
  * @param response
  * @param remember
  */
-export const createLoggedCookie = (response: Response, remember?: ERefreshTokenExpiryTime) => {
-    response.cookie('isAuth', 'true', {
+export const createLoggedCookie = (response: CookieCapableResponse, remember?: ERefreshTokenExpiryTime) => {
+    const cookieOptions = {
         maxAge: getExpiryTimeMilliseconds(remember),
         sameSite: 'lax',
         path: '/'
-    });
+    } as const;
+
+    if (typeof response.setCookie === 'function')
+        response.setCookie('isAuth', 'true', cookieOptions);
+    else if (typeof response.cookie === 'function') response.cookie('isAuth', 'true', cookieOptions);
 };
 
 /**
@@ -222,10 +266,11 @@ export const createLoggedCookie = (response: Response, remember?: ERefreshTokenE
  *
  * @param response
  */
-export const destroyLoggedCookie = (response: Response) => {
-    response.clearCookie('isAuth', {
-        path: '/'
-    });
+export const destroyLoggedCookie = (response: CookieCapableResponse) => {
+    if (typeof response.clearCookie === 'function')
+        response.clearCookie('isAuth', {
+            path: '/'
+        });
 };
 
 /**

@@ -82,7 +82,13 @@
         "vitepress": "^1.6.4"
     },
     "dependencies": {
+        "@fastify/cookie": "^11.0.2",
+        "@fastify/cors": "^11.2.0",
         "@fastify/express": "^4.0.5",
+        "@fastify/formbody": "^8.0.2",
+        "@fastify/helmet": "^13.0.2",
+        "@fastify/multipart": "^10.0.0",
+        "@fastify/rate-limit": "^10.3.0",
         "@nestjs/common": "^11.1.19",
         "@nestjs/core": "^11.1.19",
         "@nestjs/platform-fastify": "^11.1.19",

@@ -146,7 +146,7 @@ Migrations run through a TypeScript-compatible runtime (`tsx`) so `db/migrations
 - **Compared to Express with no framework**:
     - **Fastify vs Express**: Fastify is generally optimized for lower overhead and high throughput out of the box.
     - **NestJS vs no framework**: NestJS adds an app structure (modules/providers/controllers patterns) that scales better when the codebase grows.
-    - **Boilerplate compatibility**: existing Express-style route/controller files are still supported during this transition, so future projects can migrate incrementally.
+    - **What this boilerplate now uses directly**: routing, guards, and cross-cutting concerns are handled through NestJS controllers/guards/interceptors running on Fastify plugins.
 
 ## Port variables (quick map)
 
