@@ -28,6 +28,8 @@ import { router as authRoutes } from './routes/account';
 import { router as orderRoutes } from './routes/orders';
 import { router as cartRoutes } from './routes/cart';
 import { router as userRoutes } from './routes/users';
+import { router as adminRoutes } from './routes/admin';
+import { router as feedbackRoutes } from './routes/feedback';
 import { router as systemRoutes } from './routes';
 
 import { MulterError } from 'multer';
@@ -180,57 +182,67 @@ app.use(helmet());
 /**
  * Allowed origins, separated by comma if multiple
  */
-const allowedOrigins = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:5173')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+const allowedOrigins = new Set(
+    (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:5173')
+        .split(',')
+        .map((originValue) => originValue.trim())
+        .filter(Boolean)
+);
 
 /**
  * Strict CORS
  */
-app.use(cors({
-    origin(origin, cb) {
-        // Allow non-browser requests (no Origin header), like curl/healthchecks
-        if (!origin)
-            return cb(null, true);
-        // Allowed origins
-        if (allowedOrigins.includes(origin))
-            return cb(null, true);
-        // Not allowed
-        return cb(new Error(`CORS blocked for origin: ${origin}`));
-    },
+app.use(
+    cors({
+        origin(origin, callback) {
+            // `cors` callback typing expects `Error | null`; we pass `undefined` through a typed alias
+            // to keep strict linting (`unicorn/no-null`) and runtime behavior aligned.
+            const noCorsError = undefined as unknown as Error | null;
+            // Allow non-browser requests (no Origin header), like curl/healthchecks
+            if (!origin) return callback(noCorsError, true);
+            // Allowed origins
+            if (allowedOrigins.has(origin)) return callback(noCorsError, true);
+            // Not allowed
+            return callback(new Error(`CORS blocked for origin: ${origin}`));
+        },
 
-    /**
-     * Enables sending credentials in cross-origin requests.
-     * "Credentials" = cookies, Authorization headers, TLS client certs.
-     *     *
-     * Client must also explicitly opt-in:
-     * fetch(..., { credentials: 'include' })
-     * axios(..., { withCredentials: true })
-     *
-     * If you don't use cookies/auth across origins → set this to false
-     */
-    credentials: true,
+        /**
+         * Enables sending credentials in cross-origin requests.
+         * "Credentials" = cookies, Authorization headers, TLS client certs.
+         *     *
+         * Client must also explicitly opt-in:
+         * fetch(..., { credentials: 'include' })
+         * axios(..., { withCredentials: true })
+         *
+         * If you don't use cookies/auth across origins → set this to false
+         */
+        credentials: true,
 
+        /**
+         * Allowed HTTP methods for CORS (sent in Access-Control-Allow-Methods).
+         * If a method isn’t listed → browser blocks the request
+         */
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
-    /**
-     * Allowed HTTP methods for CORS (sent in Access-Control-Allow-Methods).
-     * If a method isn’t listed → browser blocks the request
-     */
-    methods: ['GET','POST','PUT','PATCH','DELETE', 'OPTIONS'],
+        /**
+         * Request headers the client is allowed to send (preflight check).
+         * Missing header here → preflight fails
+         */
+        allowedHeaders: [
+            'Content-Type',
+            'Authorization',
+            'X-Requested-With',
+            'x-request-id',
+            'traceparent'
+        ],
 
-    /**
-     * Request headers the client is allowed to send (preflight check).
-     * Missing header here → preflight fails
-     */
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-request-id', 'traceparent'],
-
-    /**
-     * Response headers the browser is allowed to read in JS.
-     * Without this → headers exist but are not accessible
-     */
-    exposedHeaders: ['x-request-id', 'traceparent', 'x-trace-id'],
-}));
+        /**
+         * Response headers the browser is allowed to read in JS.
+         * Without this → headers exist but are not accessible
+         */
+        exposedHeaders: ['x-request-id', 'traceparent', 'x-trace-id']
+    })
+);
 
 /**
  * Parses URL-encoded data (from HTML forms)
@@ -344,6 +356,8 @@ app.use('/products', productRoutes);
 app.use('/orders', orderRoutes);
 app.use('/cart', cartRoutes);
 app.use('/users', userRoutes);
+app.use('/admin', adminRoutes);
+app.use('/feedback', feedbackRoutes);
 app.use('/', systemRoutes);
 
 /**

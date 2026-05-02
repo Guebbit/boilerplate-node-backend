@@ -18,6 +18,8 @@ export class CreateProductRequest {
     'description'?: string;
     'active'?: boolean;
     'imageUrl'?: string;
+    'categories'?: Array<string>;
+    'tags'?: Array<string>;
 
     static discriminator: string | undefined = undefined;
 
@@ -46,6 +48,16 @@ export class CreateProductRequest {
             "name": "imageUrl",
             "baseName": "imageUrl",
             "type": "string"
+        },
+        {
+            "name": "categories",
+            "baseName": "categories",
+            "type": "Array<string>"
+        },
+        {
+            "name": "tags",
+            "baseName": "tags",
+            "type": "Array<string>"
         }    ];
 
     static getAttributeTypeMap() {

@@ -20,3 +20,18 @@ export const extractPagination = (
  */
 export const extractId = (...candidates: (string | undefined)[]): string | undefined =>
     candidates.find(Boolean) as string | undefined;
+
+/**
+ * Parse a request input that can be string[], comma-separated string, or scalar into a clean string[].
+ */
+export const extractStringList = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    if (typeof value === 'string')
+        return value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+    if (value === undefined || value === null) return [];
+    const normalized = String(value).trim();
+    return normalized ? [normalized] : [];
+};

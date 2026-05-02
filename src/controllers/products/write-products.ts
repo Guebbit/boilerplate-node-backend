@@ -4,6 +4,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
+import { extractStringList } from '@utils/helpers-request';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
@@ -41,6 +42,8 @@ export const writeProducts = (
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    const categories = extractStringList((request.body as { categories?: unknown }).categories);
+    const tags = extractStringList((request.body as { tags?: unknown }).tags);
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
@@ -50,7 +53,9 @@ export const writeProducts = (
     const errors = productService.validateData({
         ...request.body,
         imageUrl,
-        active: !!request.body.active
+        active: !!request.body.active,
+        categories,
+        tags
     });
     if (errors.length > 0)
         return deleteUpload().then(() => {
@@ -73,7 +78,9 @@ export const writeProducts = (
             .create({
                 ...request.body,
                 imageUrl,
-                active: !!request.body.active
+                active: !!request.body.active,
+                categories,
+                tags
             })
             .then((product) => {
                 successResponse(response, product.toObject(), 201);
@@ -92,7 +99,9 @@ export const writeProducts = (
         .update(id, {
             ...request.body,
             imageUrl,
-            active: !!request.body.active
+            active: !!request.body.active,
+            categories,
+            tags
         })
         .then((product) => {
             successResponse(response, product.toObject());
