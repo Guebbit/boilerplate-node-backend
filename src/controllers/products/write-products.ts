@@ -4,6 +4,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
+import { extractStringList } from '@utils/helpers-request';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
@@ -12,16 +13,6 @@ import type {
     UpdateProductByIdRequest,
     UpdateProductByIdRequestMultipart
 } from '@types';
-
-const normalizeStringList = (value: unknown): string[] => {
-    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
-    if (typeof value === 'string')
-        return value
-            .split(',')
-            .map((item) => item.trim())
-            .filter(Boolean);
-    return [];
-};
 
 /**
  * POST /products — create a new product (admin).
@@ -51,8 +42,8 @@ export const writeProducts = (
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
-    const categories = normalizeStringList((request.body as { categories?: unknown }).categories);
-    const tags = normalizeStringList((request.body as { tags?: unknown }).tags);
+    const categories = extractStringList((request.body as { categories?: unknown }).categories);
+    const tags = extractStringList((request.body as { tags?: unknown }).tags);
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 

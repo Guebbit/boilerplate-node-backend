@@ -10,6 +10,7 @@ import { activityEventRepository } from '@repositories/activity-events';
 
 const FAILED_LOGIN_WINDOW_MINUTES = 15;
 const FAILED_LOGIN_SUSPICIOUS_THRESHOLD = 5;
+const MILLISECONDS_PER_MINUTE = 60_000;
 
 type ActivitySearchFilters = SearchActivityEventsRequest & { type?: EActivityEventType };
 
@@ -101,7 +102,7 @@ export const logLoginAttempt = (input: LogLoginAttemptInput) => {
         .then(() => {
             if (input.success) return;
 
-            const since = new Date(Date.now() - FAILED_LOGIN_WINDOW_MINUTES * 60_000);
+            const since = new Date(Date.now() - FAILED_LOGIN_WINDOW_MINUTES * MILLISECONDS_PER_MINUTE);
             const where: QueryFilter<IActivityEventDocument> = {
                 type: EActivityEventType.LOGIN_FAILED,
                 createdAt: { $gte: since },
