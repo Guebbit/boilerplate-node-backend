@@ -369,10 +369,63 @@ Dashboards are importable via Grafana UI (Dashboards → Import → Upload JSON)
 - `docs/index.md` — Phase 5 feature card added.
 - `docs/.vitepress/config.mts` — sidebar entries for Tempo and Grafana Dashboards added.
 
-### 🔜 Phase 6 — Audit analytics (planned)
+### ✅ Phase 6 — Audit & security analytics
 
-- Persist audit events to MongoDB for querying and reporting
-- Formalize audit event schema
+**Goal:** implement a formal, queryable audit trail for every security-relevant event across the entire request lifecycle.
+
+**What was added:**
+
+#### 1. Formal audit event schema and utility (`src/utils/audit.ts`)
+
+- `IAuditEvent` interface — all required and optional fields defined in TypeScript
+- `AuditAction` const object — typed, dot-notation action name constants grouped by domain
+- `emitAuditEvent(event)` — single call site; sets log level (`info` for success, `warn` for failure) automatically
+- `extractRequestContext(req)` — helper to pull `ip`, `user_agent`, `request_id`, `trace_id` from a request object
+
+**Event schema fields:**
+
+| Field           | Required | Description                                     |
+| --------------- | -------- | ----------------------------------------------- |
+| `actor_user_id` | ✅        | User ID or `'anonymous'`                        |
+| `actor_role`    | ✅        | `'admin' \| 'user' \| 'anonymous'`             |
+| `action`        | ✅        | Dot-notation action name from `AuditAction`     |
+| `outcome`       | ✅        | `'success' \| 'failure'`                       |
+| `ip`            | —        | Client IP                                       |
+| `user_agent`    | —        | User-Agent header                               |
+| `request_id`    | —        | x-request-id correlation header                 |
+| `trace_id`      | —        | OTel trace ID for cross-signal correlation      |
+| `target_type`   | —        | Resource type: `'user'`, `'product'`, `'order'` |
+| `target_id`     | —        | ID of the affected resource                     |
+| `metadata`      | —        | Non-sensitive extra context                     |
+
+#### 2. Instrumented call sites
+
+All security-relevant controllers and middleware now call `emitAuditEvent()`:
+
+- **Auth controllers**: login (success/failure), signup (success/failure), password reset (requested/completed), token refresh (success/failure), logout-all, expired-token cleanup
+- **Admin controllers**: user create/update/delete, product create/update/delete, order create/update/delete
+- **Authorization middleware**: `isAuth` → `security.unauthorized` (401), `isAdmin` → `security.forbidden` (403)
+
+#### 3. Audit log routing
+
+- `auditLogger` (from Phase 1) already writes to `audit.log` and console
+- Phase 4 Loki transport ships audit events under `{log_type="audit"}` label
+- Audit events are fully distinct from the `app` stream and can be queried independently in Loki/Grafana
+
+#### 4. Sensitive data protection
+
+All audit events pass through the same `redactSensitiveFields()` pipeline as application logs. Tokens, passwords, and auth headers are automatically replaced with `[REDACTED]`.
+
+#### 5. Documentation updated
+
+- `docs/guide/audit-logging.md` — complete rewrite with formal schema table, action taxonomy, sample log entry, Loki queries, instrumented call-site table, architecture diagram
+- `docs/index.md` — Phase 6 feature card added
+
+**Tests added:**
+
+- `tests/unit/utils/audit.test.ts` — `AuditAction` constants, `emitAuditEvent()` log level selection and field pass-through, `extractRequestContext()` edge cases (14 tests)
+
+---
 
 ### 🔜 Phase 7 — PostHog product analytics (planned)
 

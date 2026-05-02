@@ -5,6 +5,7 @@ import { userRepository } from '@repositories/users';
 import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { nodemailer } from '@utils/nodemailer';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * POST /account/reset-request
@@ -51,6 +52,15 @@ export const postResetRequest = (
                             token: data.token
                         }
                     );
+
+                // Always log the request attempt (email obfuscated to protect privacy)
+                emitAuditEvent({
+                    action: AuditAction.AUTH_PASSWORD_RESET_REQUESTED,
+                    actor_user_id: 'anonymous',
+                    actor_role: 'anonymous',
+                    outcome: 'success',
+                    ...extractRequestContext(request),
+                });
 
                 successResponse(response, undefined, 200, t('reset.email-sent'));
             })

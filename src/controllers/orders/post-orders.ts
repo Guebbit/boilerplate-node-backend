@@ -5,6 +5,7 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { nodemailer } from '@utils/nodemailer';
 import { orderCreatedTotal } from '@utils/domain-metrics';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * POST /orders
@@ -48,6 +49,15 @@ export const postOrders = (
         );
 
         orderCreatedTotal.inc();
+        emitAuditEvent({
+            action: AuditAction.ADMIN_ORDER_CREATED,
+            actor_user_id: request.user?.id ?? 'unknown',
+            actor_role: request.user?.admin ? 'admin' : 'user',
+            outcome: 'success',
+            target_type: 'order',
+            target_id: String((result.data as { _id?: unknown })?._id ?? ''),
+            ...extractRequestContext(request),
+        });
         successResponse(response, result.data, 201);
     });
 };

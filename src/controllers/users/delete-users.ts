@@ -5,6 +5,7 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteUserRequest } from '@types';
 import type { CastError } from 'mongoose';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * DELETE /users — delete a user by id in the request body (admin).
@@ -33,6 +34,16 @@ export const deleteUsers = (
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
+            emitAuditEvent({
+                action: AuditAction.ADMIN_USER_DELETED,
+                actor_user_id: request.user?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id,
+                ...extractRequestContext(request),
+                metadata: { hardDelete }
+            });
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {
