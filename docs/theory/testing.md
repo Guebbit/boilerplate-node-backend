@@ -24,12 +24,12 @@ tests/
 
 ## What is tested
 
-| Layer      | How                                                                               |
-| ---------- | --------------------------------------------------------------------------------- |
-| Repository | Real in-memory MongoDB — queries are tested against an actual Mongoose connection |
-| Service    | Real DB via repositories — business logic tested end-to-end without HTTP          |
-| Controller | Isolated unit tests for specific controller behaviours                            |
-| Integration | Real Express server (in test process) to validate route + middleware behavior    |
+| Layer       | How                                                                               |
+| ----------- | --------------------------------------------------------------------------------- |
+| Repository  | Real in-memory MongoDB — queries are tested against an actual Mongoose connection |
+| Service     | Real DB via repositories — business logic tested end-to-end without HTTP          |
+| Controller  | Isolated unit tests for specific controller behaviours                            |
+| Integration | Real Express server (in test process) to validate route + middleware behavior     |
 
 ## No mocked database
 

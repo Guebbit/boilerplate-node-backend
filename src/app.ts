@@ -409,7 +409,10 @@ process
     .on('unhandledRejection', (reason, promise) => {
         auditLogger.error('process.unhandledRejection', {
             action: 'process.unhandledRejection',
-            reason: reason instanceof Error ? { name: reason.name, message: reason.message } : String(reason)
+            reason:
+                reason instanceof Error
+                    ? { name: reason.name, message: reason.message }
+                    : String(reason)
         });
         unhandledRejections.set(promise, reason);
     })

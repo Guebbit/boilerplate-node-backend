@@ -38,7 +38,10 @@ const getWorkerTarget = () => {
 
 if (cluster.isPrimary && CLUSTER_ENABLED) {
     const workerTarget = getWorkerTarget();
-    const crashWindowMs = parseNumber(process.env.NODE_CLUSTER_CRASH_WINDOW_MS, DEFAULT_CRASH_WINDOW_MS);
+    const crashWindowMs = parseNumber(
+        process.env.NODE_CLUSTER_CRASH_WINDOW_MS,
+        DEFAULT_CRASH_WINDOW_MS
+    );
     const crashBackoffBaseMs = parseNumber(
         process.env.NODE_CLUSTER_CRASH_BACKOFF_BASE_MS,
         DEFAULT_CRASH_BACKOFF_BASE_MS
@@ -79,7 +82,11 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         respawnTimers.add(timer);
     };
 
-    const shouldRespawn = (code: number | null, signal: string | null, exitedAfterDisconnect: boolean) => {
+    const shouldRespawn = (
+        code: number | null,
+        signal: string | null,
+        exitedAfterDisconnect: boolean
+    ) => {
         if (isShuttingDown) return false;
         if (exitedAfterDisconnect) return false;
         if (code === 0) return false;

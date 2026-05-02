@@ -32,5 +32,7 @@ export const getFeedback = (
             status
         })
         .then((result) => successResponse(response, result))
-        .catch((error: CastError) => rejectResponse(response, 500, 'Unknown Error', [error.message]));
+        .catch((error: CastError) =>
+            rejectResponse(response, 500, 'Unknown Error', [error.message])
+        );
 };

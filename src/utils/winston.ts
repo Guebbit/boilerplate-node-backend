@@ -33,7 +33,9 @@ export const redactSensitiveFields = (input: unknown): unknown => {
     if (input !== null && typeof input === 'object') {
         const result: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-            result[key] = SENSITIVE_FIELDS.has(key.toLowerCase()) ? REDACTED : redactSensitiveFields(value);
+            result[key] = SENSITIVE_FIELDS.has(key.toLowerCase())
+                ? REDACTED
+                : redactSensitiveFields(value);
         }
         return result;
     }

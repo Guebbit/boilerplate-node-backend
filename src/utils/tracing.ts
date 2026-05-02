@@ -11,7 +11,10 @@
 
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
-import { ATTR_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+import {
+    ATTR_SERVICE_NAME,
+    SEMRESATTRS_SERVICE_VERSION
+} from '@opentelemetry/semantic-conventions';
 import {
     ConsoleSpanExporter,
     SimpleSpanProcessor,

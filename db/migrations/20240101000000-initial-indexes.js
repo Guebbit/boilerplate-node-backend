@@ -1,5 +1,5 @@
 const { ObjectId } = require('mongodb');
-const {hash} = require("bcrypt");
+const { hash } = require('bcrypt');
 
 module.exports = {
     async up(db) {
@@ -22,16 +22,16 @@ module.exports = {
                     items: [
                         {
                             product: new ObjectId('65dc8a99604c307b702b5ccc'),
-                            quantity: 2,
+                            quantity: 2
                         },
                         {
                             product: new ObjectId('65dcdec2b18ad5e4bd597f0f'),
-                            quantity: 3,
-                        },
+                            quantity: 3
+                        }
                     ],
-                    updatedAt: new Date(),
+                    updatedAt: new Date()
                 },
-                tokens: [],
+                tokens: []
             },
             {
                 _id: new ObjectId('65de646a44f861fd83c13f13'),
@@ -41,8 +41,8 @@ module.exports = {
                 imageUrl: '\\images\\96346b77daf138a279677cb75c400ee9.jpg',
                 admin: false,
                 cart: { items: [], updatedAt: new Date() },
-                tokens: [],
-            },
+                tokens: []
+            }
         ]);
 
         // ---- PRODUCTS ----
@@ -53,7 +53,7 @@ module.exports = {
                 price: 100,
                 imageUrl: '\\images\\ad2e01890eebf72d06481c4fac3522ac.jpg',
                 active: true,
-                description: 'Piccolo Sallyno panino. Da mangiare di coccole',
+                description: 'Piccolo Sallyno panino. Da mangiare di coccole'
             },
             {
                 _id: new ObjectId('65dc8ad8604c307b702b5cd4'),
@@ -63,7 +63,7 @@ module.exports = {
                 active: true,
                 description:
                     'Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.',
-                deletedAt: new Date('2024-02-26T23:34:44.832Z'),
+                deletedAt: new Date('2024-02-26T23:34:44.832Z')
             },
             {
                 _id: new ObjectId('65dc9be92f2794d1c16741e1'),
@@ -72,7 +72,7 @@ module.exports = {
                 imageUrl: '\\images\\60de15db7aed7174ef2d53d21e1f57a5.jpg',
                 active: true,
                 description:
-                    'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire',
+                    'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire'
             },
             {
                 _id: new ObjectId('65dcdec2b18ad5e4bd597f0f'),
@@ -80,8 +80,7 @@ module.exports = {
                 price: 77,
                 imageUrl: '\\images\\f12ba2e44fe347010397f1dcba399808.jpg',
                 active: true,
-                description:
-                    'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.',
+                description: 'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.'
             },
             {
                 _id: new ObjectId('6622c88a5123b1e286f440f8'),
@@ -89,9 +88,8 @@ module.exports = {
                 price: 40,
                 imageUrl: '\\images\\043cf5b2517fc99ce9a2c2f84288416d.jpg',
                 active: false,
-                description:
-                    'Produttori di rumori molesti a tutte le ore. Inactive product.',
-            },
+                description: 'Produttori di rumori molesti a tutte le ore. Inactive product.'
+            }
         ]);
 
         // ---- ORDERS ----
@@ -108,10 +106,9 @@ module.exports = {
                             price: 100,
                             imageUrl: '\\images\\ad2e01890eebf72d06481c4fac3522ac.jpg',
                             active: true,
-                            description:
-                                'Piccolo Sallyno panino. Da mangiare di coccole',
+                            description: 'Piccolo Sallyno panino. Da mangiare di coccole'
                         },
-                        quantity: 1,
+                        quantity: 1
                     },
                     {
                         product: {
@@ -121,11 +118,11 @@ module.exports = {
                             imageUrl: '\\images\\60de15db7aed7174ef2d53d21e1f57a5.jpg',
                             active: true,
                             description:
-                                'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire',
+                                'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire'
                         },
-                        quantity: 10,
-                    },
-                ],
+                        quantity: 10
+                    }
+                ]
             },
             {
                 _id: new ObjectId('661c795a9e22bcbef63a5832'),
@@ -140,12 +137,12 @@ module.exports = {
                             imageUrl: '\\images\\f12ba2e44fe347010397f1dcba399808.jpg',
                             active: true,
                             description:
-                                'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.',
+                                'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.'
                         },
-                        quantity: 20,
-                    },
-                ],
-            },
+                        quantity: 20
+                    }
+                ]
+            }
         ]);
     },
 
@@ -155,5 +152,5 @@ module.exports = {
         await db.collection('users').deleteMany({});
         await db.collection('products').deleteMany({});
         await db.collection('orders').deleteMany({});
-    },
+    }
 };

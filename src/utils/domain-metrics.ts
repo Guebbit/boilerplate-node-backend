@@ -217,7 +217,10 @@ export const mongooseMetricsPlugin = (schema: Schema): void => {
             (this.constructor as { collection?: { name?: string } }).collection?.name ?? 'unknown';
         const startMs = queryStartTimes.get(this);
         if (startMs !== undefined) {
-            databaseQueryDuration.observe({ collection, operation: 'save' }, (Date.now() - startMs) / 1000);
+            databaseQueryDuration.observe(
+                { collection, operation: 'save' },
+                (Date.now() - startMs) / 1000
+            );
             queryStartTimes.delete(this);
         }
         databaseQueryTotal.inc({ collection, operation: 'save' });

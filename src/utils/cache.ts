@@ -44,8 +44,7 @@ let connectionWarningLogged = false;
 /**
  * Turn cache usage on only when Redis is configured and not explicitly disabled.
  */
-const isCacheEnabled = () =>
-    Boolean(getRedisUrl()) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
+const isCacheEnabled = () => Boolean(getRedisUrl()) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
 
 /**
  * Build one namespaced Redis key.

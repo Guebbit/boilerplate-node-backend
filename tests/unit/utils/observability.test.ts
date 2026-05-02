@@ -43,7 +43,9 @@ describe('normalizeRoutePath', () => {
     });
 
     it('collapses UUIDs', () => {
-        expect(normalizeRoutePath('/items/550e8400-e29b-41d4-a716-446655440000')).toBe('/items/:id');
+        expect(normalizeRoutePath('/items/550e8400-e29b-41d4-a716-446655440000')).toBe(
+            '/items/:id'
+        );
     });
 
     it('strips query strings', () => {

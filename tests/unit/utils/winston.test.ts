@@ -32,7 +32,11 @@ describe('redactSensitiveFields', () => {
 
     it('redacts authorization and cookie headers', () => {
         // Use camelCase-compatible keys as the linter requires; the redaction is case-insensitive
-        const input = { authorization: 'Bearer abc', cookie: 'jwt=xyz', contentType: 'application/json' };
+        const input = {
+            authorization: 'Bearer abc',
+            cookie: 'jwt=xyz',
+            contentType: 'application/json'
+        };
         const result = redactSensitiveFields(input) as Record<string, unknown>;
         expect(result['authorization']).toBe('[REDACTED]');
         expect(result['cookie']).toBe('[REDACTED]');

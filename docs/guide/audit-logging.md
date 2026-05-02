@@ -11,20 +11,20 @@ import { auditLogger } from '@utils/winston';
 
 // Log a failed login attempt
 auditLogger.warn('auth.login.failed', {
-  action: 'auth.login.failed',
-  actor: 'anonymous',
-  ip: req.ip,
-  request_id: req.requestId,
-  reason: 'invalid_credentials'
+    action: 'auth.login.failed',
+    actor: 'anonymous',
+    ip: req.ip,
+    request_id: req.requestId,
+    reason: 'invalid_credentials'
 });
 
 // Log an admin action
 auditLogger.info('admin.product.deleted', {
-  action: 'admin.product.deleted',
-  actor: req.user?.id,
-  request_id: req.requestId,
-  resource_type: 'product',
-  resource_id: productId
+    action: 'admin.product.deleted',
+    actor: req.user?.id,
+    request_id: req.requestId,
+    resource_type: 'product',
+    resource_id: productId
 });
 ```
 
@@ -35,12 +35,12 @@ auditLogger.info('admin.product.deleted', {
 Audit logs answer **"who did what, when, and with what outcome?"**  
 They differ from application logs:
 
-| Application log | Audit log |
-|---|---|
-| Debugging / performance | Compliance / security |
-| High volume, short retention | Lower volume, longer retention |
-| Any error or event | Only security-relevant actions |
-| Can be noisy | Should be precise and structured |
+| Application log              | Audit log                        |
+| ---------------------------- | -------------------------------- |
+| Debugging / performance      | Compliance / security            |
+| High volume, short retention | Lower volume, longer retention   |
+| Any error or event           | Only security-relevant actions   |
+| Can be noisy                 | Should be precise and structured |
 
 ---
 
@@ -60,22 +60,22 @@ Use `auditLogger` (not `logger`) for:
 
 Every audit event **must** include:
 
-| Field | Description |
-|---|---|
-| `action` | What happened — use dot-notation e.g. `auth.login.failed` |
-| `actor` | Who triggered it — `user_id` string or `'anonymous'` |
-| `request_id` | Correlation ID from `req.requestId` |
-| `ip` | Client IP from `req.ip` |
+| Field        | Description                                               |
+| ------------ | --------------------------------------------------------- |
+| `action`     | What happened — use dot-notation e.g. `auth.login.failed` |
+| `actor`      | Who triggered it — `user_id` string or `'anonymous'`      |
+| `request_id` | Correlation ID from `req.requestId`                       |
+| `ip`         | Client IP from `req.ip`                                   |
 
 Optional but recommended:
 
-| Field | Description |
-|---|---|
-| `resource_type` | What was affected — `'user'`, `'product'`, `'order'` |
-| `resource_id` | The ID of the affected resource |
-| `outcome` | `'success'` or `'failure'` |
-| `reason` | Human-readable reason for failures |
-| `trace_id` | From `req.traceContext?.traceId` for cross-service correlation |
+| Field           | Description                                                    |
+| --------------- | -------------------------------------------------------------- |
+| `resource_type` | What was affected — `'user'`, `'product'`, `'order'`           |
+| `resource_id`   | The ID of the affected resource                                |
+| `outcome`       | `'success'` or `'failure'`                                     |
+| `reason`        | Human-readable reason for failures                             |
+| `trace_id`      | From `req.traceContext?.traceId` for cross-service correlation |
 
 ---
 
@@ -121,16 +121,16 @@ process.uncaughtException   — unexpected synchronous throw
 
 ```json
 {
-  "timestamp": "2024-01-15T10:30:45.123+00:00",
-  "level": "warn",
-  "message": "auth.login.failed",
-  "service": "api",
-  "log_type": "audit",
-  "action": "auth.login.failed",
-  "actor": "anonymous",
-  "ip": "203.0.113.42",
-  "request_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "reason": "invalid_credentials"
+    "timestamp": "2024-01-15T10:30:45.123+00:00",
+    "level": "warn",
+    "message": "auth.login.failed",
+    "service": "api",
+    "log_type": "audit",
+    "action": "auth.login.failed",
+    "actor": "anonymous",
+    "ip": "203.0.113.42",
+    "request_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "reason": "invalid_credentials"
 }
 ```
 
@@ -159,10 +159,10 @@ Auth / Admin action
 
 ## Output files
 
-| File | Contents |
-|---|---|
-| `audit.log` | All audit events regardless of level |
-| Console | All audit events (pretty in dev, JSON in production) |
+| File        | Contents                                             |
+| ----------- | ---------------------------------------------------- |
+| `audit.log` | All audit events regardless of level                 |
+| Console     | All audit events (pretty in dev, JSON in production) |
 
 ---
 
@@ -177,12 +177,12 @@ Auth / Admin action
 import { auditLogger } from '@utils/winston';
 
 auditLogger.info('admin.user.deleted', {
-  action: 'admin.user.deleted',
-  actor: requestingUser.id,
-  resource_type: 'user',
-  resource_id: targetUserId,
-  request_id: requestId,
-  ip
+    action: 'admin.user.deleted',
+    actor: requestingUser.id,
+    resource_type: 'user',
+    resource_id: targetUserId,
+    request_id: requestId,
+    ip
 });
 ```
 
@@ -206,10 +206,10 @@ The `auditLogger` is already isolated. To ship events to a different backend:
 
 ```ts
 // Example: additional file transport for audit entries
-new winston.transports.File({ filename: 'audit.log' })
+new winston.transports.File({ filename: 'audit.log' });
 
 // Example (future): HTTP transport to a SIEM
-new winston.transports.Http({ host: 'siem.internal', port: 9000 })
+new winston.transports.Http({ host: 'siem.internal', port: 9000 });
 ```
 
 ---
