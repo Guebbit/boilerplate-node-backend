@@ -58,3 +58,8 @@ curl -i \
 # Read metrics
 curl http://localhost:3000/metrics
 ```
+
+## Related docs
+
+- [Structured Logging](./structured-logging.md) — JSON log format, redaction, request access log
+- [Audit Logging](./audit-logging.md) — security and compliance events

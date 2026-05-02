@@ -11,8 +11,9 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { start, stopDatabase } from '@utils/database';
 import { startCache, stopCache } from '@utils/cache';
-import { logger } from '@utils/winston';
+import { logger, auditLogger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
+import { requestLogger } from '@middlewares/request-logger';
 import { rejectResponse } from '@utils/response';
 import { validateRequiredEnvironment } from '@utils/environment';
 import {
@@ -286,13 +287,7 @@ app.use(cookieParser());
  */
 app.use(rateLimiter);
 
-/**
- * Request ID correlation.
- * requestId is a per-request unique identifier used to trace one HTTP call across logs,
- * middleware, controllers, and error handlers.
- * If a client already sends x-request-id we reuse it, otherwise we generate a new one.
- * The same ID is returned in the response header so frontend and backend can correlate issues.
- */
+/** Attach or reuse x-request-id for request correlation. */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
     request.requestId = requestId;
@@ -300,12 +295,7 @@ app.use((request, response, next) => {
     next();
 });
 
-/**
- * Distributed trace context.
- * - If upstream sends `traceparent`, continue that trace.
- * - Otherwise, start a new trace.
- * We also return `traceparent` and `x-trace-id` so clients can correlate calls quickly.
- */
+/** Attach trace context and propagate trace headers. */
 app.use((request, response, next) => {
     const traceContext = createTraceContext(request.get('traceparent'));
     request.traceContext = traceContext;
@@ -314,20 +304,8 @@ app.use((request, response, next) => {
     next();
 });
 
-/**
- * Request logger
- */
-app.use((request, _response, next) => {
-    logger.info({
-        requestId: request.requestId,
-        traceId: request.traceContext?.traceId,
-        spanId: request.traceContext?.spanId,
-        parentSpanId: request.traceContext?.parentSpanId,
-        method: request.method,
-        url: `${request.protocol}://${request.get('host')}${request.originalUrl}`
-    });
-    next();
-});
+/** Emit one structured access log per completed request. */
+app.use(requestLogger);
 
 /**
  * Request metrics collector (Prometheus style):
@@ -402,22 +380,24 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     rejectResponse(response, 500, 'Internal Server Error', [error.message]);
 });
 
-/**
- * Error handling LAST RESORT
- */
+/** Last-resort process error handlers (audit stream). */
 const unhandledRejections = new Map();
 process
     .on('unhandledRejection', (reason, promise) => {
-        logger.error(reason);
+        auditLogger.error('process.unhandledRejection', {
+            action: 'process.unhandledRejection',
+            reason: reason instanceof Error ? { name: reason.name, message: reason.message } : String(reason)
+        });
         unhandledRejections.set(promise, reason);
     })
     .on('rejectionHandled', (promise) => unhandledRejections.delete(promise))
     .on('uncaughtException', (error, origin) => {
         if (process.env.NODE_ENV !== 'production') return;
-        logger.error({
+        auditLogger.error('process.uncaughtException', {
+            action: 'process.uncaughtException',
+            name: error.name,
             message: error.message,
             stack: error.stack,
-            name: error.name,
             origin
         });
         process.exit(1);
