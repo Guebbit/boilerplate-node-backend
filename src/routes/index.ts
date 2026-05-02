@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { successResponse } from '@utils/response';
 import { getHeavyLoad } from '@controllers/_development/get-heavy-load';
-import { getPrometheusMetrics } from '@utils/observability';
+import { getPrometheusMetrics, metricsRegistry } from '@utils/observability';
 
 export const router = Router();
 
@@ -21,8 +21,15 @@ router.get('/', (request, response) => {
 /**
  * GET /metrics
  * Prometheus-compatible metrics endpoint.
+ * Returns text/plain (Prometheus exposition format 0.0.4).
  */
 router.get('/metrics', (_request, response) => {
-    response.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-    response.send(getPrometheusMetrics());
+    void getPrometheusMetrics()
+        .then((metrics) => {
+            response.setHeader('Content-Type', metricsRegistry.contentType);
+            response.send(metrics);
+        })
+        .catch(() => {
+            response.status(500).send('# metrics unavailable\n');
+        });
 });

@@ -8,6 +8,8 @@ import {
     createTraceContext,
     getRouteLabel,
     recordRequestMetric,
+    incrementInflight,
+    decrementInflight,
     toTraceparentHeader
 } from '../../src/utils/observability';
 
@@ -27,8 +29,10 @@ app.use((request, response, next) => {
     next();
 });
 app.use((request, response, next) => {
+    incrementInflight();
     const startTime = process.hrtime.bigint();
     response.once('finish', () => {
+        decrementInflight();
         const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startTime) / 1_000_000;
         recordRequestMetric({
             method: request.method,
@@ -104,10 +108,28 @@ describe('API integration', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/plain');
+
+        // HTTP request counter (populated by the earlier GET / request)
         expect(body).toContain('# HELP http_requests_total');
         expect(body).toMatch(
             /http_requests_total{[^}]*method="GET"[^}]*route="\/"[^}]*status_code="200"[^}]*} \d+/
         );
+
+        // HTTP duration histogram
+        expect(body).toContain('# HELP http_request_duration_milliseconds');
+        expect(body).toContain('http_request_duration_milliseconds_bucket');
+
+        // In-flight gauge
+        expect(body).toContain('# HELP http_requests_in_flight');
+
+        // Error counter
+        expect(body).toContain('# HELP http_request_errors_total');
+
+        // Custom process uptime gauge
         expect(body).toContain('# HELP process_uptime_seconds');
+
+        // Default Node.js metrics (CPU, memory, event loop)
+        expect(body).toContain('# HELP nodejs_eventloop_lag_seconds');
+        expect(body).toContain('# HELP process_resident_memory_bytes');
     });
 });

@@ -13,36 +13,42 @@ This boilerplate includes **traces** and **metrics** out of the box.
 ## Visual flow
 
 ```text
-Request -> trace context middleware -> business route -> metrics recorded -> response
-                     |                                               |
-               x-trace-id + traceparent                      /metrics exposes counters/histograms
+Request → trace context middleware → business route → metrics recorded → response
+               |                                              |
+         x-trace-id + traceparent                  /metrics exposes prom-client data
 ```
 
 ## Quick code map (`src/utils/observability.ts`)
 
 ```text
 createTraceContext()
-  -> parseTraceparent() (if header exists)
-  -> generateTraceId()/generateSpanId() fallback
+  → parseTraceparent() (if header exists)
+  → generateTraceId()/generateSpanId() fallback
 
 recordRequestMetric()
-  -> http_requests_total (counter)
-  -> http_request_duration_milliseconds_* (histogram)
+  → httpRequestsTotal.inc()
+  → httpRequestDuration.observe()
+  → httpRequestErrorsTotal.inc() (4xx/5xx only)
+
+incrementInflight() / decrementInflight()
+  → httpInflightRequests gauge
 
 getPrometheusMetrics()
-  -> renderCounterMetrics()
-  -> renderHistogramMetrics()
-  -> renderProcessMetrics()
+  → metricsRegistry.metrics()  (prom-client)
 ```
-
-Use this map when reading the file from top to bottom.
 
 ## Metrics available
 
+See the full list in [Prometheus Metrics](./prometheus-metrics.md).
+
+Quick reference:
 - `http_requests_total{method,route,status_code}`
 - `http_request_duration_milliseconds_*` (histogram)
+- `http_request_errors_total{method,route,status_code}`
+- `http_requests_in_flight`
 - `process_uptime_seconds`
 - `process_resident_memory_bytes`
+- `nodejs_eventloop_lag_seconds` (and more via `collectDefaultMetrics`)
 
 ## Examples
 
@@ -61,5 +67,6 @@ curl http://localhost:3000/metrics
 
 ## Related docs
 
+- [Prometheus Metrics](./prometheus-metrics.md) — full metric list, PromQL examples, scrape config
 - [Structured Logging](./structured-logging.md) — JSON log format, redaction, request access log
 - [Audit Logging](./audit-logging.md) — security and compliance events

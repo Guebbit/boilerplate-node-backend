@@ -26,4 +26,7 @@ features:
     - title: Audit Logging (Phase 1)
       details: Dedicated audit logger for security and admin events, separate from the main app log stream and ready for SIEM routing.
       link: /guide/audit-logging
+    - title: Prometheus Metrics (Phase 2)
+      details: HTTP counters, latency histograms, in-flight gauge, business counters (login/signup/checkout/orders), and DB query metrics — all via prom-client.
+      link: /guide/prometheus-metrics
 ---

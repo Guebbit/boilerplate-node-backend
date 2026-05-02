@@ -20,7 +20,9 @@ import {
     createTraceContext,
     getRouteLabel,
     recordRequestMetric,
-    toTraceparentHeader
+    toTraceparentHeader,
+    incrementInflight,
+    decrementInflight
 } from '@utils/observability';
 import enTranslation from './locales/en.json';
 
@@ -311,10 +313,13 @@ app.use(requestLogger);
  * Request metrics collector (Prometheus style):
  * - total requests by method/route/status
  * - request duration histogram
+ * - in-flight gauge
  */
 app.use((request, response, next) => {
+    incrementInflight();
     const startTime = process.hrtime.bigint();
     response.once('finish', () => {
+        decrementInflight();
         const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startTime) / 1_000_000;
         recordRequestMetric({
             method: request.method,

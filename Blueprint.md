@@ -70,7 +70,9 @@
 |---|---|---|
 | Request correlation ID | `x-request-id` header propagation | `app.ts` |
 | Distributed tracing | W3C `traceparent` header | `src/utils/observability.ts` |
-| Prometheus metrics | In-memory counter + histogram | `src/utils/observability.ts` |
+| Prometheus metrics | prom-client counters, histograms, gauges | `src/utils/observability.ts` ← Phase 2 |
+| Domain / business metrics | auth, cart, order counters | `src/utils/domain-metrics.ts` ← Phase 2 |
+| DB query metrics | Mongoose plugin (duration, count, errors) | `src/utils/domain-metrics.ts` ← Phase 2 |
 | Structured logging | Winston JSON logger | `src/utils/winston.ts` ← Phase 1 |
 | Audit logging | Dedicated `auditLogger` | `src/utils/winston.ts` ← Phase 1 |
 | Request access log | `requestLogger` middleware | `src/middlewares/request-logger.ts` ← Phase 1 |
@@ -158,12 +160,76 @@ What was already in place before the observability plan:
 
 ---
 
-### 🔜 Phase 2 — Prometheus metrics (planned)
+### ✅ Phase 2 — Prometheus metrics integration
 
-- Expose `/metrics` endpoint already present; ensure it covers all important counters
-- Per-route request counters and latency histograms
-- MongoDB query timing histograms
-- Business counters: login success/fail, checkout success/fail, order created
+**Goal:** expose real Prometheus metrics via `prom-client` covering HTTP, business domain, and DB layers.
+
+**What was added:**
+
+#### 1. prom-client HTTP metrics (`src/utils/observability.ts`)
+
+- Replaced custom in-memory metric implementation with `prom-client` (v15.1.3)
+- `metricsRegistry` — shared prom-client Registry exported for tests and the metrics route
+- `collectDefaultMetrics()` — Node.js process metrics (CPU, memory, event loop, GC, heap)
+- `process_uptime_seconds` — custom Gauge (not in prom-client defaults)
+- `http_requests_total{method,route,status_code}` — request counter
+- `http_request_duration_milliseconds{method,route}` — histogram (buckets: 5–5000 ms)
+- `http_request_errors_total{method,route,status_code}` — 4xx/5xx error counter
+- `http_requests_in_flight` — live gauge incremented/decremented per request
+- `incrementInflight()` / `decrementInflight()` — helpers used by Express middleware
+- `getPrometheusMetrics()` — now returns `Promise<string>` via `metricsRegistry.metrics()`
+
+#### 2. Business domain metrics (`src/utils/domain-metrics.ts`)
+
+New file with business counters and DB metrics:
+
+| Metric | Labels | Where incremented |
+|---|---|---|
+| `auth_login_total` | `status` | `post-login.ts` |
+| `auth_signup_total` | `status` | `post-signup.ts` |
+| `auth_password_reset_total` | `status` | ready for instrumentation |
+| `auth_refresh_total` | `status` | ready for instrumentation |
+| `auth_token_cleanup_total` | — | ready for instrumentation |
+| `cart_checkout_total` | `status` | `post-checkout.ts` |
+| `order_created_total` | — | `post-orders.ts` |
+| `db_query_total` | `collection`, `operation` | Mongoose plugin |
+| `db_query_duration_seconds` | `collection`, `operation` | Mongoose plugin |
+| `db_errors_total` | `collection`, `operation` | Mongoose plugin |
+
+Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps all query and save operations with pre/post hooks to record DB timing and errors.
+
+#### 3. Mongoose plugin registration (`src/utils/database.ts`)
+
+- `mongoose.plugin(mongooseMetricsPlugin)` called at module load, before any schema is defined
+- Applies to every model automatically
+
+#### 4. Updated `/metrics` route (`src/routes/index.ts`)
+
+- Now async: `await getPrometheusMetrics()` with `metricsRegistry.contentType` header
+
+#### 5. Updated Express middleware (`src/app.ts`)
+
+- Request metrics middleware now calls `incrementInflight()` on start and `decrementInflight()` on finish
+
+#### 6. Instrumented controllers
+
+- `src/controllers/account/post-login.ts` → `authLoginTotal`
+- `src/controllers/account/post-signup.ts` → `authSignupTotal`
+- `src/controllers/cart/post-checkout.ts` → `cartCheckoutTotal`
+- `src/controllers/orders/post-orders.ts` → `orderCreatedTotal`
+
+#### 7. Tests added/updated
+
+- `tests/integration/app-health.test.ts` — updated: now tests histogram buckets, in-flight gauge, error counter, Node.js default metrics
+- `tests/unit/utils/observability.test.ts` — new: 16 tests for `normalizeRoutePath`, `createTraceContext`, `toTraceparentHeader`, `recordRequestMetric`, and `getPrometheusMetrics`
+
+#### 8. Documentation added
+
+- `docs/guide/prometheus-metrics.md` — full metric list, data flow diagram, PromQL examples, scrape config
+- `docs/guide/observability.md` — updated to reference new metrics and Phase 2 doc
+- `docs/index.md` — added Phase 2 feature card
+
+---
 
 ### 🔜 Phase 3 — OpenTelemetry instrumentation (planned)
 

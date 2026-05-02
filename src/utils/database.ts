@@ -1,5 +1,10 @@
 import mongoose from 'mongoose';
 import { logger } from './winston';
+import { mongooseMetricsPlugin } from './domain-metrics';
+
+// Register query metrics plugin globally before any schema is defined.
+// mongoose.plugin() applies to all schemas created after this call.
+mongoose.plugin(mongooseMetricsPlugin);
 
 const MAX_RETRIES = 10;
 const BASE_DELAY_MS = 1000;
