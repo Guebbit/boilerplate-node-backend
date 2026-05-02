@@ -11,7 +11,6 @@ import {
 import { successResponse, rejectResponse } from '@utils/response';
 import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '@utils/token-cleanup';
-import { activityEventService } from '@services/activity-events';
 
 /**
  * POST /account/login
@@ -26,8 +25,6 @@ export const postLogin = (
      * Get POST data
      */
     const { email, password, remember } = request.body;
-    const ipAddress = request.ip;
-    const userAgent = typeof request.get === 'function' ? request.get('user-agent') : undefined;
 
     /**
      * Run token cleanup as a background pre-flight step, then authenticate.
@@ -36,14 +33,6 @@ export const postLogin = (
         .then(() => userService.login(email, password))
         .then((result) => {
             if (!result.success) {
-                void activityEventService
-                    .logLoginAttempt({
-                        email,
-                        success: false,
-                        ipAddress,
-                        userAgent
-                    })
-                    .catch(() => {});
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
@@ -53,15 +42,6 @@ export const postLogin = (
              * Create refresh token...
              */
             const userId = (result.data?._id as Types.ObjectId)?.toString();
-            void activityEventService
-                .logLoginAttempt({
-                    email,
-                    userId,
-                    success: true,
-                    ipAddress,
-                    userAgent
-                })
-                .catch(() => {});
             return createRefreshToken(userId, remember)
                 .then((refreshToken) => {
                     // ...and add it to the client cookies

@@ -2,7 +2,6 @@
 .openapi-generator-ignore
 api.ts
 api/accountApi.ts
-api/adminApi.ts
 api/apis.ts
 api/authApi.ts
 api/cartApi.ts
@@ -11,8 +10,6 @@ api/ordersApi.ts
 api/productsApi.ts
 api/usersApi.ts
 git_push.sh
-model/activityEvent.ts
-model/activityEventsResponse.ts
 model/authTokens.ts
 model/cartItem.ts
 model/cartResponse.ts
@@ -43,7 +40,6 @@ model/product.ts
 model/productsResponse.ts
 model/refreshTokenResponse.ts
 model/removeCartItemRequest.ts
-model/searchActivityEventsRequest.ts
 model/searchFeedbackRequestsRequest.ts
 model/searchOrdersRequest.ts
 model/searchProductsRequest.ts
@@ -56,7 +52,6 @@ model/updateOrderRequest.ts
 model/updateProductByIdRequest.ts
 model/updateProductRequest.ts
 model/updateProductRequestBody.ts
-model/updateSuspiciousAlertRequest.ts
 model/updateUserByIdRequest.ts
 model/updateUserRequest.ts
 model/upsertCartItemRequest.ts

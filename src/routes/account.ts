@@ -10,7 +10,6 @@ import { getRefreshToken } from '@controllers/account/get-refresh-token';
 import { postLogoutEverywhere } from '@controllers/account/post-logout-everywhere';
 import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
 import { invalidateCache, setCache } from '@utils/helpers-response';
-import { auditAdminActivity } from '@middlewares/audit-admin-activity';
 
 export const router = Router();
 
@@ -51,7 +50,6 @@ router.delete(
     '/tokens/expired',
     isAuth,
     isAdmin,
-    auditAdminActivity,
     invalidateCache(['users', 'account']),
     deleteExpiredTokens
 );

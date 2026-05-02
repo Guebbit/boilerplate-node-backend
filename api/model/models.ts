@@ -1,7 +1,5 @@
 import localVarRequest from 'request';
 
-export * from './activityEvent';
-export * from './activityEventsResponse';
 export * from './authTokens';
 export * from './cartItem';
 export * from './cartResponse';
@@ -31,7 +29,6 @@ export * from './product';
 export * from './productsResponse';
 export * from './refreshTokenResponse';
 export * from './removeCartItemRequest';
-export * from './searchActivityEventsRequest';
 export * from './searchFeedbackRequestsRequest';
 export * from './searchOrdersRequest';
 export * from './searchProductsRequest';
@@ -44,7 +41,6 @@ export * from './updateOrderRequest';
 export * from './updateProductByIdRequest';
 export * from './updateProductRequest';
 export * from './updateProductRequestBody';
-export * from './updateSuspiciousAlertRequest';
 export * from './updateUserByIdRequest';
 export * from './updateUserRequest';
 export * from './upsertCartItemRequest';
@@ -66,8 +62,6 @@ export interface RequestDetailedFile {
 export type RequestFile = string | Buffer | fs.ReadStream | RequestDetailedFile;
 
 
-import { ActivityEvent } from './activityEvent';
-import { ActivityEventsResponse } from './activityEventsResponse';
 import { AuthTokens } from './authTokens';
 import { CartItem } from './cartItem';
 import { CartResponse } from './cartResponse';
@@ -97,7 +91,6 @@ import { Product } from './product';
 import { ProductsResponse } from './productsResponse';
 import { RefreshTokenResponse } from './refreshTokenResponse';
 import { RemoveCartItemRequest } from './removeCartItemRequest';
-import { SearchActivityEventsRequest } from './searchActivityEventsRequest';
 import { SearchFeedbackRequestsRequest } from './searchFeedbackRequestsRequest';
 import { SearchOrdersRequest } from './searchOrdersRequest';
 import { SearchProductsRequest } from './searchProductsRequest';
@@ -110,7 +103,6 @@ import { UpdateOrderRequest } from './updateOrderRequest';
 import { UpdateProductByIdRequest } from './updateProductByIdRequest';
 import { UpdateProductRequest } from './updateProductRequest';
 import { UpdateProductRequestBody } from './updateProductRequestBody';
-import { UpdateSuspiciousAlertRequest } from './updateSuspiciousAlertRequest';
 import { UpdateUserByIdRequest } from './updateUserByIdRequest';
 import { UpdateUserRequest } from './updateUserRequest';
 import { UpsertCartItemRequest } from './upsertCartItemRequest';
@@ -132,8 +124,6 @@ let primitives = [
                  ];
 
 let enumsMap: {[index: string]: any} = {
-        "ActivityEvent.TypeEnum": ActivityEvent.TypeEnum,
-        "ActivityEvent.SeverityEnum": ActivityEvent.SeverityEnum,
         "FeedbackRequest.StatusEnum": FeedbackRequest.StatusEnum,
         "Order.StatusEnum": Order.StatusEnum,
         "SearchFeedbackRequestsRequest.StatusEnum": SearchFeedbackRequestsRequest.StatusEnum,
@@ -143,8 +133,6 @@ let enumsMap: {[index: string]: any} = {
 }
 
 let typeMap: {[index: string]: any} = {
-    "ActivityEvent": ActivityEvent,
-    "ActivityEventsResponse": ActivityEventsResponse,
     "AuthTokens": AuthTokens,
     "CartItem": CartItem,
     "CartResponse": CartResponse,
@@ -174,7 +162,6 @@ let typeMap: {[index: string]: any} = {
     "ProductsResponse": ProductsResponse,
     "RefreshTokenResponse": RefreshTokenResponse,
     "RemoveCartItemRequest": RemoveCartItemRequest,
-    "SearchActivityEventsRequest": SearchActivityEventsRequest,
     "SearchFeedbackRequestsRequest": SearchFeedbackRequestsRequest,
     "SearchOrdersRequest": SearchOrdersRequest,
     "SearchProductsRequest": SearchProductsRequest,
@@ -187,7 +174,6 @@ let typeMap: {[index: string]: any} = {
     "UpdateProductByIdRequest": UpdateProductByIdRequest,
     "UpdateProductRequest": UpdateProductRequest,
     "UpdateProductRequestBody": UpdateProductRequestBody,
-    "UpdateSuspiciousAlertRequest": UpdateSuspiciousAlertRequest,
     "UpdateUserByIdRequest": UpdateUserByIdRequest,
     "UpdateUserRequest": UpdateUserRequest,
     "UpsertCartItemRequest": UpsertCartItemRequest,

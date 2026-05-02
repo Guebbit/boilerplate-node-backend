@@ -6,7 +6,6 @@ import { writeProducts } from '@controllers/products/write-products';
 import { deleteProducts } from '@controllers/products/delete-products';
 import { getProductItem } from '@controllers/products/get-product-item';
 import { invalidateCache, setCache } from '@utils/helpers-response';
-import { auditAdminActivity } from '@middlewares/audit-admin-activity';
 
 export const router = Router();
 
@@ -24,7 +23,6 @@ router.post(
     '/',
     isAuth,
     isAdmin,
-    auditAdminActivity,
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
@@ -35,14 +33,13 @@ router.put(
     '/',
     isAuth,
     isAdmin,
-    auditAdminActivity,
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
 );
 
 // DELETE /products — admin only, id in body
-router.delete('/', isAuth, isAdmin, auditAdminActivity, invalidateCache(['products']), deleteProducts);
+router.delete('/', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
 
 // GET /products/:id — public
 router.get('/:id', setCache(3600, { tags: ['products'] }), getProductItem);
@@ -52,7 +49,6 @@ router.put(
     '/:id',
     isAuth,
     isAdmin,
-    auditAdminActivity,
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
@@ -63,7 +59,6 @@ router.delete(
     '/:id',
     isAuth,
     isAdmin,
-    auditAdminActivity,
     invalidateCache(['products']),
     deleteProducts
 );
