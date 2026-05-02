@@ -4,6 +4,7 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { nodemailer } from '@utils/nodemailer';
+import { orderCreatedTotal } from '@utils/domain-metrics';
 
 /**
  * POST /orders
@@ -46,6 +47,7 @@ export const postOrders = (
             }
         );
 
+        orderCreatedTotal.inc();
         successResponse(response, result.data, 201);
     });
 };

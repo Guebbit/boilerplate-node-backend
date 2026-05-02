@@ -6,6 +6,7 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
+import { authSignupTotal } from '@utils/domain-metrics';
 
 /**
  * POST /account/signup
@@ -36,14 +37,17 @@ export const postSignup = (
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {
+                    authSignupTotal.inc({ status: 'failure' });
                     rejectResponse(response, result.status, result.message, result.errors);
                 });
 
             // Registration successful
+            authSignupTotal.inc({ status: 'success' });
             successResponse(response, result.data, 201);
         })
         .catch((error: CastError | Error) => {
             const [status, message] = databaseErrorInterpreter(error);
+            authSignupTotal.inc({ status: 'failure' });
             rejectResponse(response, status, message);
             return deleteUpload();
         });
