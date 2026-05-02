@@ -100,7 +100,8 @@ export const updateStatus = (
         const nextStatus = toFeedbackStatus(payload.status);
         if (nextStatus !== undefined) feedback.status = nextStatus;
         if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
-        if (nextStatus === EFeedbackStatus.RESOLVED) feedback.respondedAt = new Date();
+        if (nextStatus === EFeedbackStatus.RESOLVED && !feedback.respondedAt)
+            feedback.respondedAt = new Date();
         return feedbackRequestRepository.save(feedback);
     });
 

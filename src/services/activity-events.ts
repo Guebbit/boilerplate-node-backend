@@ -100,6 +100,7 @@ export const logLoginAttempt = (input: LogLoginAttemptInput) => {
             userAgent: input.userAgent
         })
         .then(() => {
+            // Successful logins are stored as history only; suspicious detection applies to failed attempts.
             if (input.success) return;
 
             const since = new Date(Date.now() - FAILED_LOGIN_WINDOW_MINUTES * MILLISECONDS_PER_MINUTE);

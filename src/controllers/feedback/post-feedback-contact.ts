@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { successResponse, rejectResponse } from '@utils/response';
 import { nodemailer } from '@utils/nodemailer';
+import { logger } from '@utils/winston';
 import type { CreateFeedbackRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
 
@@ -49,6 +50,11 @@ export const postFeedbackContact = (
                         message: createdFeedbackRequest.message,
                         createdAt: createdFeedbackRequest.createdAt?.toISOString()
                     }
+                ).catch((error: Error) =>
+                    logger.error({
+                        message: 'feedback contact notification email failed',
+                        error: error.message
+                    })
                 );
 
             successResponse(response, createdFeedbackRequest.toObject(), 201);
