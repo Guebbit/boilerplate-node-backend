@@ -43,7 +43,6 @@ export const postLogin = (
                     actor_role: 'anonymous',
                     outcome: 'failure',
                     ...extractRequestContext(request),
-                    metadata: { email }
                 });
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;

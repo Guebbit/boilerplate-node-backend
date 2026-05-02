@@ -154,4 +154,3 @@ describe('extractRequestContext', () => {
         expect(ctx.user_agent).toBeUndefined();
     });
 });
-
