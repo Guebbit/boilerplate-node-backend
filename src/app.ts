@@ -275,13 +275,7 @@ app.use(cookieParser());
  */
 app.use(rateLimiter);
 
-/**
- * Request ID correlation.
- * requestId is a per-request unique identifier used to trace one HTTP call across logs,
- * middleware, controllers, and error handlers.
- * If a client already sends x-request-id we reuse it, otherwise we generate a new one.
- * The same ID is returned in the response header so frontend and backend can correlate issues.
- */
+/** Attach or reuse x-request-id for request correlation. */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
     request.requestId = requestId;
@@ -289,12 +283,7 @@ app.use((request, response, next) => {
     next();
 });
 
-/**
- * Distributed trace context.
- * - If upstream sends `traceparent`, continue that trace.
- * - Otherwise, start a new trace.
- * We also return `traceparent` and `x-trace-id` so clients can correlate calls quickly.
- */
+/** Attach trace context and propagate trace headers. */
 app.use((request, response, next) => {
     const traceContext = createTraceContext(request.get('traceparent'));
     request.traceContext = traceContext;
@@ -303,12 +292,7 @@ app.use((request, response, next) => {
     next();
 });
 
-/**
- * Structured HTTP access logger.
- * Emits one log entry per completed request with method, route, status_code,
- * duration_ms, request_id, trace_id, and user_id (when authenticated).
- * See src/middlewares/request-logger.ts for the full log shape.
- */
+/** Emit one structured access log per completed request. */
 app.use(requestLogger);
 
 /**
@@ -382,12 +366,7 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     rejectResponse(response, 500, 'Internal Server Error', [error.message]);
 });
 
-/**
- * Error handling LAST RESORT
- * These process-level events are logged via auditLogger because they represent
- * unexpected, security-relevant application failures that should be tracked
- * separately from normal request-level logs.
- */
+/** Last-resort process error handlers (audit stream). */
 const unhandledRejections = new Map();
 process
     .on('unhandledRejection', (reason, promise) => {
