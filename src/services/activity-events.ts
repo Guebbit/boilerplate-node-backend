@@ -26,7 +26,7 @@ export const search = (filters: ActivitySearchFilters = {}): Promise<ActivityEve
         where.actorUserId = new Types.ObjectId(String(filters.actorUserId));
     if (filters.targetEmail && String(filters.targetEmail).trim() !== '')
         where.targetEmail = { $regex: String(filters.targetEmail).trim(), $options: 'i' };
-    if (filters.resolved != null) where.resolved = filters.resolved;
+    if (filters.resolved !== undefined) where.resolved = filters.resolved;
     if (filters.text && String(filters.text).trim() !== '') {
         const text = String(filters.text).trim();
         where.$or = [

@@ -182,24 +182,29 @@ app.use(helmet());
 /**
  * Allowed origins, separated by comma if multiple
  */
-const allowedOrigins = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:5173')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+const allowedOrigins = new Set(
+    (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:5173')
+        .split(',')
+        .map(originValue => originValue.trim())
+        .filter(Boolean)
+);
 
 /**
  * Strict CORS
  */
 app.use(cors({
-    origin(origin, cb) {
+    origin(origin, callback) {
+        // `cors` callback typing expects `Error | null`; we pass `undefined` through a typed alias
+        // to keep strict linting (`unicorn/no-null`) and runtime behavior aligned.
+        const noCorsError = undefined as unknown as Error | null;
         // Allow non-browser requests (no Origin header), like curl/healthchecks
         if (!origin)
-            return cb(null, true);
+            return callback(noCorsError, true);
         // Allowed origins
-        if (allowedOrigins.includes(origin))
-            return cb(null, true);
+        if (allowedOrigins.has(origin))
+            return callback(noCorsError, true);
         // Not allowed
-        return cb(new Error(`CORS blocked for origin: ${origin}`));
+        return callback(new Error(`CORS blocked for origin: ${origin}`));
     },
 
     /**

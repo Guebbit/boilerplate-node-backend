@@ -62,9 +62,7 @@ const sanitizeRouteSegment = (segment: string): string => {
     // Normalize dynamic IDs to reduce high-cardinality metric labels.
     if (/^\d+$/.test(segment)) return ':id';
     if (/^[\da-f]{24}$/i.test(segment)) return ':id';
-    if (
-        /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(segment)
-    )
+    if (/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(segment))
         return ':id';
     return segment;
 };
