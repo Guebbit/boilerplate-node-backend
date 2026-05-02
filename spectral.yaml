@@ -1,0 +1,92 @@
+extends:
+    - 'spectral:oas'
+
+rules:
+    # --- Quality gates ---
+    operation-operationId: error
+    operation-tags: error
+
+    # --- Avoid nullable (optional) ---
+    avoid-nullable:
+        description: 'Prefer optional properties over nullable=true for codegen friendliness.'
+        severity: warn
+        given: '$..nullable'
+        then:
+            function: falsy
+
+    # --- Catch the common typo: $refs instead of $ref ---
+    no-refs-typo:
+        description: "Do not use '$refs' (typo). Use '$ref'."
+        severity: error
+        given: '$..$refs'
+        then:
+            function: truthy
+
+    # --- operationId naming: camelCase, no HTTP verb prefix ---
+    operation-id-no-http-verb-prefix:
+        description: 'operationId must not start with an HTTP verb (post, put, get). Use semantic verbs: list, create, update, delete, search, get, login, signup, etc (delete is allowed).'
+        severity: error
+        given: '$.paths[*][*].operationId'
+        then:
+            function: pattern
+            functionOptions:
+                notMatch: '^(post|put|patch)[A-Z]'
+
+    operation-id-camel-case:
+        description: 'operationId must be camelCase.'
+        severity: error
+        given: '$.paths[*][*].operationId'
+        then:
+            function: pattern
+            functionOptions:
+                match: '^[a-z][a-zA-Z0-9]*$'
+
+    # --- Request schema naming conventions ---
+    request-schema-no-http-verb-prefix:
+        description: 'Request schema names must not start with an HTTP verb (Post, Put, Patch, Get). Use semantic names: CreateXRequest, UpdateXRequest, DeleteXRequest, SearchXRequest, etc (Delete is allowed).'
+        severity: error
+        given: '$.components.schemas'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions:
+                notMatch: '^(Post|Put|Patch|Get)[A-Z].*Request$'
+
+    request-schema-pascal-case:
+        description: 'Request schema names must be PascalCase.'
+        severity: error
+        given: '$.components.schemas[?(@property.match(/Request$/))]~'
+        then:
+            function: pattern
+            functionOptions:
+                match: '^[A-Z][a-zA-Z0-9]*Request$'
+
+    # --- Response schema naming conventions ---
+    response-schema-no-http-verb-prefix:
+        description: 'Response schema names must not start with an HTTP verb (Post, Put, Patch, Get). Use semantic names: UsersResponse, CartResponse, CheckoutResponse, etc (Delete is allowed).'
+        severity: error
+        given: '$.components.schemas'
+        then:
+            field: '@key'
+            function: pattern
+            functionOptions:
+                notMatch: '^(Post|Put|Patch|Get)[A-Z].*Response$'
+
+    response-schema-pascal-case:
+        description: 'Response schema names must be PascalCase.'
+        severity: error
+        given: '$.components.schemas[?(@property.match(/Response$/))]~'
+        then:
+            function: pattern
+            functionOptions:
+                match: '^[A-Z][a-zA-Z0-9]*Response$'
+
+    # --- Parameter naming ---
+    parameter-name-camel-case:
+        description: 'Parameter names must be camelCase.'
+        severity: error
+        given: '$.components.parameters[*].name'
+        then:
+            function: pattern
+            functionOptions:
+                match: '^[a-z][a-zA-Z0-9]*$'

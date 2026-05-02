@@ -1,1299 +1,271 @@
-# Backend Replication Blueprint (Agnostic, MongoDB)
+# Blueprint — Node API Boilerplate (MongoDB/Mongoose)
 
-This document captures the backend architecture and behavior of this repository in a language-agnostic way so it can be replicated later in **PHP**, **Java**, and **Python** with MongoDB.
-
-## 1) Architectural Style
-
-- OpenAPI-first monolith backend.
-- Clear layered design:
-    - **Routes/Endpoints**
-    - **Controllers**
-    - **Services**
-    - **Repositories/DAOs**
-    - **MongoDB Models/Schemas**
-- Shared utilities:
-    - auth/JWT
-    - response envelope
-    - logging
-    - uploads
-    - email templates
-    - invoice PDF generation
-    - environment validation
-    - token cleanup
-- Domain modules:
-    - account/auth
-    - users
-    - products
-    - cart
-    - orders
-    - system/health
-
-## 2) API Contract Strategy
-
-- `openapi.yaml` is the source of truth.
-- API is operation-based and domain-grouped.
-- Typed artifacts are generated from OpenAPI.
-- Common listing pattern:
-    - `GET /resource` for listing
-    - `POST /resource/search` for advanced filters
-
-## 3) Security & Auth Model
-
-- Access token:
-    - JWT
-    - short-lived
-    - sent via `Authorization: Bearer ...`
-- Refresh token:
-    - long-lived
-    - stored in DB and in httpOnly cookie (`jwt`)
-    - revocable server-side
-- Refresh endpoints:
-    - from cookie: `GET /account/refresh`
-    - from path token: `GET /account/refresh/{token}`
-- Role model:
-    - authenticated user
-    - admin
-- Middleware/guard composition:
-    - optional auth hydration
-    - strict auth required
-    - admin required
-
-## 4) Data/Persistence Model (MongoDB)
-
-- Mongoose-style schemas with timestamps.
-- **Users**:
-    - profile fields
-    - `admin` flag
-    - cart items
-    - token list (`type`, `token`, `expiration`)
-    - soft delete via `deletedAt`
-- **Products**:
-    - catalog fields
-    - `active` flag
-    - soft delete via `deletedAt`
-- **Orders**:
-    - user reference (`userId`)
-    - user email snapshot
-    - embedded product snapshots + quantity
-    - status lifecycle
-    - optional notes
-- Delete strategy:
-    - soft delete for users/products
-    - hard delete supported by explicit route behavior/flags
-
-## 5) Business Rules Pattern
-
-- Validation belongs in service layer (schema + custom business checks).
-- Repositories remain persistence-only (CRUD/query/aggregate).
-- Services implement:
-    - filtering/search logic
-    - pagination
-    - ownership scope checks
-    - create/update/delete policies
-- Cart checkout rule:
-    - cart -> order conversion
-    - then cart clear
-
-## 6) Cross-Cutting Concerns
-
-- Standard JSON response envelope for success/errors.
-- Request correlation ID via `x-request-id`.
-- Global error handler with typed operational errors.
-- i18n-friendly message keys.
-- Upload handling with MIME allowlist + deterministic pathing.
-- Email templating for signup/reset/order notifications.
-- Optional invoice PDF endpoint.
-
-## 7) Runtime / Ops
-
-- Required env validation at startup.
-- DB connect retry/backoff.
-- Optional clustering mode.
-- Security middleware:
-    - rate limiting
-    - secure headers
-- Development-only routes mounted only outside production.
-
-## 8) Testing Approach
-
-- Unit-focused tests for repositories/services/controllers.
-- Isolated MongoDB in tests via memory-server setup helpers.
-- Test factories for users/products/orders.
-- Scripts exist for:
-    - lint
-    - type-check/build
-    - tests
-    - OpenAPI lint
-
-## 9) Replication Priorities
-
-- Preserve behavior parity before internal refactors.
-- Keep route auth and ownership semantics exactly.
-- Keep one canonical response envelope shape.
-- Preserve cart/order coupling and order snapshot behavior.
-- Preserve full token lifecycle:
-    - issue
-    - store
-    - refresh
-    - revoke
-    - cleanup
+> Tracks architectural decisions, phase-by-phase additions, and design rationale.
+> Updated at each implementation phase.
 
 ---
 
-## Endpoint Map with Auth Role
-
-### Account/Auth
-
-- `GET /account` — auth
-- `POST /account/login` — public
-- `POST /account/signup` — public
-- `POST /account/reset` — public
-- `POST /account/reset-confirm` — public
-- `GET /account/refresh` — public (requires valid refresh token)
-- `GET /account/refresh/{token}` — public (requires valid refresh token)
-- `POST /account/logout-all` — auth
-- `DELETE /account/tokens/expired` — admin
-
-### Users (admin module)
-
-- `GET /users` — admin
-- `POST /users/search` — admin
-- `POST /users` — admin
-- `PUT /users` — admin
-- `DELETE /users` — admin
-- `GET /users/{id}` — admin
-- `PUT /users/{id}` — admin
-- `DELETE /users/{id}` — admin
-
-### Products
-
-- `GET /products` — public
-- `POST /products/search` — public
-- `GET /products/{id}` — public
-- `POST /products` — admin
-- `PUT /products` — admin
-- `DELETE /products` — admin
-- `PUT /products/{id}` — admin
-- `DELETE /products/{id}` — admin
-
-### Cart
-
-- `GET /cart` — auth
-- `POST /cart` — auth
-- `DELETE /cart` — auth
-- `PUT /cart/{productId}` — auth# Backend Replication Blueprint (Agnostic, MongoDB)
-		
-		
-This document captures the backend architecture and behavior of this repository in a language-agnostic way so it can be replicated later in **PHP**, **Java**, and **Python** with MongoDB.
-		
-		
-## 1) Architectural Style
-		
-		
-- OpenAPI-first monolith backend.
-		
-- Clear layered design:
-		
-    - **Routes/Endpoints**
-		
-    - **Controllers**
-		
-    - **Services**
-		
-    - **Repositories/DAOs**
-		
-    - **MongoDB Models/Schemas**
-		
-- Shared utilities:
-		
-    - auth/JWT
-		
-    - response envelope
-		
-    - logging
-		
-    - uploads
-		
-    - email templates
-		
-    - invoice PDF generation
-		
-    - environment validation
-		
-    - token cleanup
-		
-- Domain modules:
-		
-    - account/auth
-		
-    - users
-		
-    - products
-		
-    - cart
-		
-    - orders
-		
-    - system/health
-		
-		
-## 2) API Contract Strategy
-		
-		
-- `openapi.yaml` is the source of truth.
-		
-- API is operation-based and domain-grouped.
-		
-- Typed artifacts are generated from OpenAPI.
-		
-- Common listing pattern:
-		
-    - `GET /resource` for listing
-		
-    - `POST /resource/search` for advanced filters
-		
-		
-## 3) Security & Auth Model
-		
-		
-- Access token:
-		
-    - JWT
-		
-    - short-lived
-		
-    - sent via `Authorization: Bearer ...`
-		
-- Refresh token:
-		
-    - long-lived
-		
-    - stored in DB and in httpOnly cookie (`jwt`)
-		
-    - revocable server-side
-		
-- Refresh endpoints:
-		
-    - from cookie: `GET /account/refresh`
-		
-    - from path token: `GET /account/refresh/{token}`
-		
-- Role model:
-		
-    - authenticated user
-		
-    - admin
-		
-- Middleware/guard composition:
-		
-    - optional auth hydration
-		
-    - strict auth required
-		
-    - admin required
-		
-		
-## 4) Data/Persistence Model (MongoDB)
-		
-		
-- Mongoose-style schemas with timestamps.
-		
-- **Users**:
-		
-    - profile fields
-		
-    - `admin` flag
-		
-    - cart items
-		
-    - token list (`type`, `token`, `expiration`)
-		
-    - soft delete via `deletedAt`
-		
-- **Products**:
-		
-    - catalog fields
-		
-    - `active` flag
-		
-    - soft delete via `deletedAt`
-		
-- **Orders**:
-		
-    - user reference (`userId`)
-		
-    - user email snapshot
-		
-    - embedded product snapshots + quantity
-		
-    - status lifecycle
-		
-    - optional notes
-		
-- Delete strategy:
-		
-    - soft delete for users/products
-		
-    - hard delete supported by explicit route behavior/flags
-		
-		
-## 5) Business Rules Pattern
-		
-		
-- Validation belongs in service layer (schema + custom business checks).
-		
-- Repositories remain persistence-only (CRUD/query/aggregate).
-		
-- Services implement:
-		
-    - filtering/search logic
-		
-    - pagination
-		
-    - ownership scope checks
-		
-    - create/update/delete policies
-		
-- Cart checkout rule:
-		
-    - cart -> order conversion
-		
-    - then cart clear
-		
-		
-## 6) Cross-Cutting Concerns
-		
-		
-- Standard JSON response envelope for success/errors.
-		
-- Request correlation ID via `x-request-id`.
-		
-- Global error handler with typed operational errors.
-		
-- i18n-friendly message keys.
-		
-- Upload handling with MIME allowlist + deterministic pathing.
-		
-- Email templating for signup/reset/order notifications.
-		
-- Optional invoice PDF endpoint.
-		
-		
-## 7) Runtime / Ops
-		
-		
-- Required env validation at startup.
-		
-- DB connect retry/backoff.
-		
-- Optional clustering mode.
-		
-- Security middleware:
-		
-    - rate limiting
-		
-    - secure headers
-		
-- Development-only routes mounted only outside production.
-		
-		
-## 8) Testing Approach
-		
-		
-- Unit-focused tests for repositories/services/controllers.
-		
-- Isolated MongoDB in tests via memory-server setup helpers.
-		
-- Test factories for users/products/orders.
-		
-- Scripts exist for:
-		
-    - lint
-		
-    - type-check/build
-		
-    - tests
-		
-    - OpenAPI lint
-		
-		
-## 9) Replication Priorities
-		
-		
-- Preserve behavior parity before internal refactors.
-		
-- Keep route auth and ownership semantics exactly.
-		
-- Keep one canonical response envelope shape.
-		
-- Preserve cart/order coupling and order snapshot behavior.
-		
-- Preserve full token lifecycle:
-		
-    - issue
-		
-    - store
-		
-    - refresh
-		
-    - revoke
-		
-    - cleanup
-		
-		
----
-		
-		
-## Endpoint Map with Auth Role
-		
-		
-### Account/Auth
-		
-		
-- `GET /account` — auth
-		
-- `POST /account/login` — public
-		
-- `POST /account/signup` — public
-		
-- `POST /account/reset` — public
-		
-- `POST /account/reset-confirm` — public
-		
-- `GET /account/refresh` — public (requires valid refresh token)
-		
-- `GET /account/refresh/{token}` — public (requires valid refresh token)
-		
-- `POST /account/logout-all` — auth
-		
-- `DELETE /account/tokens/expired` — admin
-		
-		
-### Users (admin module)
-		
-		
-- `GET /users` — admin
-		
-- `POST /users/search` — admin
-		
-- `POST /users` — admin
-		
-- `PUT /users` — admin
-		
-- `DELETE /users` — admin
-		
-- `GET /users/{id}` — admin
-		
-- `PUT /users/{id}` — admin
-		
-- `DELETE /users/{id}` — admin
-		
-		
-### Products
-		
-		
-- `GET /products` — public
-		
-- `POST /products/search` — public
-		
-- `GET /products/{id}` — public
-		
-- `POST /products` — admin
-		
-- `PUT /products` — admin
-		
-- `DELETE /products` — admin
-		
-- `PUT /products/{id}` — admin
-		
-- `DELETE /products/{id}` — admin
-		
-		
-### Cart
-		
-		
-- `GET /cart` — auth
-		
-- `POST /cart` — auth
-		
-- `DELETE /cart` — auth
-		
-- `PUT /cart/{productId}` — auth
-		
-- `DELETE /cart/{productId}` — auth
-		
-- `GET /cart/summary` — auth
-		
-- `POST /cart/checkout` — auth
-		
-		
-### Orders
-		
-		
-- `GET /orders` — auth (scoped for non-admin)
-		
-- `POST /orders/search` — auth (scoped for non-admin)
-		
-- `POST /orders` — admin
-		
-- `PUT /orders` — admin
-		
-- `DELETE /orders` — admin
-		
-- `GET /orders/{id}` — auth (owner or admin)
-		
-- `PUT /orders/{id}` — admin
-		
-- `DELETE /orders/{id}` — admin
-		
-- `GET /orders/{id}/invoice` — auth (owner or admin)
-		
-		
----
-		
-		
-## Canonical Response Envelope
-		
-		
-### Success
-		
-		
-- `success: true`
-		
-- `status: <http-status>`
-		
-- `message: <string>`
-		
-- `data: <payload>`
-		
-		
-### Error
-		
-		
-- `success: false`
-		
-- `status: <http-status>`
-		
-- `message: <technical-or-domain-code>`
-		
-- `errors: <string[]>`
-		
-		
----
-		
-		
-## Environment Variable Matrix (Minimum + Common)
-		
-		
-### Required minimum
-		
-		
-- `NODE_DB_URI`
-		
-- `NODE_ACCESS_TOKEN_SECRET`
-		
-- `NODE_REFRESH_TOKEN_SECRET`
-		
-		
-### Common runtime
-		
-		
-- `NODE_ENV`
-		
-- `NODE_PORT`
-		
-- `NODE_URL`
-		
-- `NODE_ENABLE_CLUSTERING`
-		
-- `NODE_DEFAULT_LOCALE`
-		
-- `NODE_FALLBACK_LOCALE`
-		
-- `NODE_TOKEN_CLEANUP_INTERVAL`
-		
-		
-### JWT expiry tuning
-		
-		
-- `NODE_ACCESS_TOKEN_SECRET_TIME`
-		
-- `NODE_REFRESH_TOKEN_SECRET_TIME_SHORT`
-		
-- `NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM`
-		
-- `NODE_REFRESH_TOKEN_SECRET_TIME_LONG`
-		
-		
-### SMTP/mail
-		
-		
-- `NODE_SMTP_NAME`
-		
-- `NODE_SMTP_HOST`
-		
-- `NODE_SMTP_PORT`
-		
-- `NODE_SMTP_USER`
-		
-- `NODE_SMTP_PASS`
-		
-- `NODE_SMTP_SENDER`
-		
-		
-### Upload/static
-		
-		
-- `NODE_PUBLIC_PATH`
-		
-		
-### Optional PDF runtime
-		
-		
-- `PUPPETEER_EXECUTABLE_PATH`
-		
-		
----
-		
-		
-## Test Plan Blueprint
-		
-		
-Cover at least:
-		
-		
-- auth token issue/refresh/revoke paths
-		
-- role-based access (auth vs admin)
-		
-- ownership scoping (orders for non-admin users)
-		
-- users/products search filters + pagination
-		
-- cart operations + summary math
-		
-- checkout flow (order created + cart cleared)
-		
-- soft delete vs hard delete behaviors
-		
-- token cleanup behavior (manual + scheduled trigger points)
-		
-- repository-only tests (CRUD and query correctness)
-		
-- controller mapping tests (status/envelope/error mapping)
-		
-		
----
-		
-		
-## Commands (Reference)
-		
-		
-- Start dev server: `npm run dev`
-		
-- Type-check: `npm run ts-check`
-		
-- Lint: `npm run lint`
-		
-- Test: `npm run test`
-		
-- OpenAPI lint: `npm run lint:openapi`
-		
-- Full non-mutating check: `npm run complete:check`
-		
-		
----
-		
-		
-## Reusable Master Prompt (Copy/Paste)
-		
-		
-Use with `LANGUAGE=PHP`, then `LANGUAGE=Java`, then `LANGUAGE=Python`.
-		
-		
-```md
-		
-You are a senior backend architect. Build a production-ready **{LANGUAGE} + MongoDB** backend by replicating the behavior and architecture of an existing OpenAPI-first ecommerce backend.
-		
-		
-# Goal
-		
-		
-Create a backend with equivalent domain behavior, security model, API surface, and layering.
-		
-Prioritize behavioral parity over framework-specific idioms.
-		
-		
-# Mandatory architecture
-		
-		
-Implement these layers and keep responsibilities strict:
-		
-		
-1. **Routes/Endpoints**: HTTP mapping + auth middleware composition only.
-		
-2. **Controllers**: parse input, call services, map to response envelope.
-		
-3. **Services**: business logic, validation, authorization scope logic, orchestration.
-		
-4. **Repositories/DAOs**: Mongo-only CRUD/aggregation operations; no business rules.
-		
-5. **Models/Schemas**: document definitions + indexes + timestamps.
-		
-		
-# Domains and features
-		
-		
-Implement modules:
-		
-		
-- account/auth
-		
-- users
-		
-- products
-		
-- cart
-		
-- orders
-		
-- system (health)
-		
-		
-# API behavior to reproduce
-		
-		
-## Account/Auth
-		
-		
-- `GET /account` (auth required)
-		
-- `POST /account/login` (returns access token, sets refresh cookie)
-		
-- `POST /account/signup`
-		
-- `POST /account/reset`
-		
-- `POST /account/reset-confirm`
-		
-- `GET /account/refresh`
-		
-- `GET /account/refresh/{token}`
-		
-- `POST /account/logout-all` (auth required)
-		
-- `DELETE /account/tokens/expired` (admin)
-		
-		
-## Users (admin-only module)
-		
-		
-- `GET /users`
-		
-- `POST /users/search`
-		
-- `POST /users`
-		
-- `PUT /users`
-		
-- `DELETE /users`
-		
-- `GET /users/{id}`
-		
-- `PUT /users/{id}`
-		
-- `DELETE /users/{id}`
-		
-		
-## Products
-		
-		
-- Public read/search:
-		
-    - `GET /products`
-		
-    - `POST /products/search`
-		
-    - `GET /products/{id}`
-		
-- Admin write:
-		
-    - `POST /products`
-		
-    - `PUT /products`
-		
-    - `DELETE /products`
-		
-    - `PUT /products/{id}`
-		
-    - `DELETE /products/{id}`
-		
-		
-## Cart (auth required)
-		
-		
-- `GET /cart`
-		
-- `POST /cart`
-		
-- `DELETE /cart`
-		
-- `PUT /cart/{productId}`
-		
-- `DELETE /cart/{productId}`
-		
-- `GET /cart/summary`
-		
-- `POST /cart/checkout`
-		
-		
-## Orders (auth required; admin for writes)
-		
-		
-- `GET /orders`
-		
-- `POST /orders/search`
-		
-- `POST /orders` (admin create)
-		
-- `PUT /orders` (admin update)
-		
-- `DELETE /orders` (admin delete)
-		
-- `GET /orders/{id}` (owner or admin)
-		
-- `PUT /orders/{id}` (admin)
-		
-- `DELETE /orders/{id}` (admin)
-		
-- `GET /orders/{id}/invoice` (owner or admin)
-		
-		
-# Security model
-		
-		
-- Access JWT: short-lived bearer token.
-		
-- Refresh token: long-lived, stored in DB and cookie, revocable server-side.
-		
-- Middleware chain supports:
-		
-    - optional auth hydration,
-		
-    - strict auth enforcement,
-		
-    - admin enforcement.
-		
-- Add global rate limiting and secure headers.
-		
-- Add request correlation ID (`x-request-id`) support.
-		
-		
-# Data model requirements (MongoDB)
-		
-		
-- **User**: email, username, passwordHash, admin, imageUrl, cart(items), tokens(type/token/expiration), deletedAt, timestamps.
-		
-- **Product**: title, price, description, active, imageUrl, deletedAt, timestamps.
-		
-- **Order**: userId, email, products[] as embedded product snapshots + quantity, status enum, notes, timestamps.
-		
-- Soft delete for users/products via `deletedAt`.
-		
-- Orders remain hard-deletable.
-		
-		
-# Business rules
-		
-		
-- Validation in service layer (schema-based + custom checks).
-		
-- Search endpoints support pagination and filters.
-		
-- Non-admin product visibility excludes inactive/deleted items.
-		
-- Non-admin order listing/details scoped to own userId.
-		
-- Cart totals computed (items count, quantity, price).
-		
-- Checkout creates order from cart and then clears cart.
-		
-- Password reset uses one-time expiring token.
-		
-- Token cleanup job + admin cleanup endpoint.
-		
-		
-# Response/error contract
-		
-		
-- Enforce one uniform JSON envelope for all endpoints:
-		
-    - success boolean
-		
-    - status code
-		
-    - message
-		
-    - data (success) OR errors (failure)
-		
-- Global error handler that maps known validation/domain errors and falls back to 500.
-		
-		
-# Non-functional requirements
-		
-		
-- Environment validation at startup (DB URI + JWT secrets minimum).
-		
-- DB connection retries with exponential backoff.
-		
-- Structured logging.
-		
-- i18n-ready message keys.
-		
-- Optional file upload/image handling.
-		
-- Optional email templating.
-		
-- Optional invoice PDF generation endpoint.
-		
-		
-# Testing requirements
-		
-		
-- Unit tests for services/repositories/controllers.
-		
-- Isolated test DB (Mongo memory/local isolated instance).
-		
-- Fixtures/factories for users/products/orders.
-		
-- Coverage for auth, RBAC, search filters, pagination, cart/checkout, token lifecycle, soft/hard delete flows.
-		
-		
-# Deliverables
-		
-		
-1. Final folder structure by layer/domain.
-		
-2. Complete endpoint map with auth/role per endpoint.
-		
-3. Mongo schema definitions and indexes.
-		
-4. Service-level rule summary per domain.
-		
-5. Error catalog + response examples.
-		
-6. Env var matrix.
-		
-7. Test plan + implemented tests.
-		
-8. Run commands for lint, tests, and app start.
-		
-9. Short migration notes for `{LANGUAGE}` framework choices.
-		
-		
-# Constraints
-		
-		
-- Keep behavior equivalent to the reference architecture.
-		
-- Use idiomatic libraries for `{LANGUAGE}` but preserve contract and flows.
-		
-- Do not skip RBAC, token revocation, ownership scoping, pagination, or soft-delete semantics.
-		
-```
-		
-		
----
-		
-		
-## Migration Notes by Language (Short)
-		
-		
-- **PHP**: prefer Laravel + MongoDB driver/ODM; map services/repositories explicitly; use middleware for auth/admin.
-		
-- **Java**: prefer Spring Boot + Spring Data MongoDB; use filters/interceptors for correlation-id and JWT handling.
-		
-- **Python**: prefer FastAPI + Pydantic + Mongo driver/ODM; use dependency injection for auth scope and service wiring.
-- `DELETE /cart/{productId}` — auth
-- `GET /cart/summary` — auth
-- `POST /cart/checkout` — auth
-
-### Orders
-
-- `GET /orders` — auth (scoped for non-admin)
-- `POST /orders/search` — auth (scoped for non-admin)
-- `POST /orders` — admin
-- `PUT /orders` — admin
-- `DELETE /orders` — admin
-- `GET /orders/{id}` — auth (owner or admin)
-- `PUT /orders/{id}` — admin
-- `DELETE /orders/{id}` — admin
-- `GET /orders/{id}/invoice` — auth (owner or admin)
-
----
-
-## Canonical Response Envelope
-
-### Success
-
-- `success: true`
-- `status: <http-status>`
-- `message: <string>`
-- `data: <payload>`
-
-### Error
-
-- `success: false`
-- `status: <http-status>`
-- `message: <technical-or-domain-code>`
-- `errors: <string[]>`
-
----
-
-## Environment Variable Matrix (Minimum + Common)
-
-### Required minimum
-
-- `NODE_DB_URI`
-- `NODE_ACCESS_TOKEN_SECRET`
-- `NODE_REFRESH_TOKEN_SECRET`
-
-### Common runtime
-
-- `NODE_ENV`
-- `NODE_PORT`
-- `NODE_URL`
-- `NODE_ENABLE_CLUSTERING`
-- `NODE_DEFAULT_LOCALE`
-- `NODE_FALLBACK_LOCALE`
-- `NODE_TOKEN_CLEANUP_INTERVAL`
-
-### JWT expiry tuning
-
-- `NODE_ACCESS_TOKEN_SECRET_TIME`
-- `NODE_REFRESH_TOKEN_SECRET_TIME_SHORT`
-- `NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM`
-- `NODE_REFRESH_TOKEN_SECRET_TIME_LONG`
-
-### SMTP/mail
-
-- `NODE_SMTP_NAME`
-- `NODE_SMTP_HOST`
-- `NODE_SMTP_PORT`
-- `NODE_SMTP_USER`
-- `NODE_SMTP_PASS`
-- `NODE_SMTP_SENDER`
-
-### Upload/static
-
-- `NODE_PUBLIC_PATH`
-
-### Optional PDF runtime
-
-- `PUPPETEER_EXECUTABLE_PATH`
-
----
-
-## Test Plan Blueprint
-
-Cover at least:
-
-- auth token issue/refresh/revoke paths
-- role-based access (auth vs admin)
-- ownership scoping (orders for non-admin users)
-- users/products search filters + pagination
-- cart operations + summary math
-- checkout flow (order created + cart cleared)
-- soft delete vs hard delete behaviors
-- token cleanup behavior (manual + scheduled trigger points)
-- repository-only tests (CRUD and query correctness)
-- controller mapping tests (status/envelope/error mapping)
-
----
-
-## Commands (Reference)
-
-- Start dev server: `npm run dev`
-- Type-check: `npm run ts-check`
-- Lint: `npm run lint`
-- Test: `npm run test`
-- OpenAPI lint: `npm run lint:openapi`
-- Full non-mutating check: `npm run complete:check`
-
----
-
-## Reusable Master Prompt (Copy/Paste)
-
-Use with `LANGUAGE=PHP`, then `LANGUAGE=Java`, then `LANGUAGE=Python`.
-
-```md
-You are a senior backend architect. Build a production-ready **{LANGUAGE} + MongoDB** backend by replicating the behavior and architecture of an existing OpenAPI-first ecommerce backend.
-
-# Goal
-
-Create a backend with equivalent domain behavior, security model, API surface, and layering.
-Prioritize behavioral parity over framework-specific idioms.
-
-# Mandatory architecture
-
-Implement these layers and keep responsibilities strict:
-
-1. **Routes/Endpoints**: HTTP mapping + auth middleware composition only.
-2. **Controllers**: parse input, call services, map to response envelope.
-3. **Services**: business logic, validation, authorization scope logic, orchestration.
-4. **Repositories/DAOs**: Mongo-only CRUD/aggregation operations; no business rules.
-5. **Models/Schemas**: document definitions + indexes + timestamps.
-
-# Domains and features
-
-Implement modules:
-
-- account/auth
-- users
-- products
-- cart
-- orders
-- system (health)
-
-# API behavior to reproduce
-
-## Account/Auth
-
-- `GET /account` (auth required)
-- `POST /account/login` (returns access token, sets refresh cookie)
-- `POST /account/signup`
-- `POST /account/reset`
-- `POST /account/reset-confirm`
-- `GET /account/refresh`
-- `GET /account/refresh/{token}`
-- `POST /account/logout-all` (auth required)
-- `DELETE /account/tokens/expired` (admin)
-
-## Users (admin-only module)
-
-- `GET /users`
-- `POST /users/search`
-- `POST /users`
-- `PUT /users`
-- `DELETE /users`
-- `GET /users/{id}`
-- `PUT /users/{id}`
-- `DELETE /users/{id}`
-
-## Products
-
-- Public read/search:
-    - `GET /products`
-    - `POST /products/search`
-    - `GET /products/{id}`
-- Admin write:
-    - `POST /products`
-    - `PUT /products`
-    - `DELETE /products`
-    - `PUT /products/{id}`
-    - `DELETE /products/{id}`
-
-## Cart (auth required)
-
-- `GET /cart`
-- `POST /cart`
-- `DELETE /cart`
-- `PUT /cart/{productId}`
-- `DELETE /cart/{productId}`
-- `GET /cart/summary`
-- `POST /cart/checkout`
-
-## Orders (auth required; admin for writes)
-
-- `GET /orders`
-- `POST /orders/search`
-- `POST /orders` (admin create)
-- `PUT /orders` (admin update)
-- `DELETE /orders` (admin delete)
-- `GET /orders/{id}` (owner or admin)
-- `PUT /orders/{id}` (admin)
-- `DELETE /orders/{id}` (admin)
-- `GET /orders/{id}/invoice` (owner or admin)
-
-# Security model
-
-- Access JWT: short-lived bearer token.
-- Refresh token: long-lived, stored in DB and cookie, revocable server-side.
-- Middleware chain supports:
-    - optional auth hydration,
-    - strict auth enforcement,
-    - admin enforcement.
-- Add global rate limiting and secure headers.
-- Add request correlation ID (`x-request-id`) support.
-
-# Data model requirements (MongoDB)
-
-- **User**: email, username, passwordHash, admin, imageUrl, cart(items), tokens(type/token/expiration), deletedAt, timestamps.
-- **Product**: title, price, description, active, imageUrl, deletedAt, timestamps.
-- **Order**: userId, email, products[] as embedded product snapshots + quantity, status enum, notes, timestamps.
-- Soft delete for users/products via `deletedAt`.
-- Orders remain hard-deletable.
-
-# Business rules
-
-- Validation in service layer (schema-based + custom checks).
-- Search endpoints support pagination and filters.
-- Non-admin product visibility excludes inactive/deleted items.
-- Non-admin order listing/details scoped to own userId.
-- Cart totals computed (items count, quantity, price).
-- Checkout creates order from cart and then clears cart.
-- Password reset uses one-time expiring token.
-- Token cleanup job + admin cleanup endpoint.
-
-# Response/error contract
-
-- Enforce one uniform JSON envelope for all endpoints:
-    - success boolean
-    - status code
-    - message
-    - data (success) OR errors (failure)
-- Global error handler that maps known validation/domain errors and falls back to 500.
-
-# Non-functional requirements
-
-- Environment validation at startup (DB URI + JWT secrets minimum).
-- DB connection retries with exponential backoff.
-- Structured logging.
-- i18n-ready message keys.
-- Optional file upload/image handling.
-- Optional email templating.
-- Optional invoice PDF generation endpoint.
-
-# Testing requirements
-
-- Unit tests for services/repositories/controllers.
-- Isolated test DB (Mongo memory/local isolated instance).
-- Fixtures/factories for users/products/orders.
-- Coverage for auth, RBAC, search filters, pagination, cart/checkout, token lifecycle, soft/hard delete flows.
-
-# Deliverables
-
-1. Final folder structure by layer/domain.
-2. Complete endpoint map with auth/role per endpoint.
-3. Mongo schema definitions and indexes.
-4. Service-level rule summary per domain.
-5. Error catalog + response examples.
-6. Env var matrix.
-7. Test plan + implemented tests.
-8. Run commands for lint, tests, and app start.
-9. Short migration notes for `{LANGUAGE}` framework choices.
-
-# Constraints
-
-- Keep behavior equivalent to the reference architecture.
-- Use idiomatic libraries for `{LANGUAGE}` but preserve contract and flows.
-- Do not skip RBAC, token revocation, ownership scoping, pagination, or soft-delete semantics.
+## Architecture overview
+
+```text
+┌──────────────────────────────────────────────────┐
+│                  HTTP Client                      │
+└──────────────────────────┬───────────────────────┘
+                           │ HTTP
+                           ▼
+┌──────────────────────────────────────────────────┐
+│               Express App (app.ts)                │
+│                                                   │
+│  Middleware chain (in order):                     │
+│    helmet → cors → urlencoded → json →            │
+│    cookieParser → rateLimiter →                   │
+│    request-id → trace-context →                   │
+│    requestLogger ←── Phase 1                      │
+│    request-metrics                                │
+│                                                   │
+│  Routes:                                          │
+│    /account  /products  /orders  /cart  /users  / │
+└───────────┬──────────────────────────┬────────────┘
+            │                          │
+            ▼                          ▼
+    ┌───────────────┐         ┌──────────────────┐
+    │  Controllers  │         │  System / Health  │
+    └───────┬───────┘         │  /metrics  /health│
+            │                 └──────────────────┘
+            ▼
+    ┌───────────────┐
+    │   Services    │  ← Business logic, validation
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │ Repositories  │  ← MongoDB / Mongoose queries
+    └───────┬───────┘
+            │
+            ▼
+    ┌───────────────┐
+    │    MongoDB    │
+    └───────────────┘
 ```
 
 ---
 
-## Migration Notes by Language (Short)
+## Layer responsibilities
 
-- **PHP**: prefer Laravel + MongoDB driver/ODM; map services/repositories explicitly; use middleware for auth/admin.
-- **Java**: prefer Spring Boot + Spring Data MongoDB; use filters/interceptors for correlation-id and JWT handling.
-- **Python**: prefer FastAPI + Pydantic + Mongo driver/ODM; use dependency injection for auth scope and service wiring.
+| Layer | File location | Responsibility |
+|---|---|---|
+| Routes | `src/routes/` | HTTP method + path → middleware stack |
+| Controllers | `src/controllers/` | Parse input, call service, format response |
+| Services | `src/services/` | Business logic, validation, authorization scope |
+| Repositories | `src/repositories/` | MongoDB CRUD/aggregation, no business rules |
+| Models | `src/models/` | Mongoose schemas, TypeScript types, indexes |
+| Middlewares | `src/middlewares/` | Auth guards, security, request logging |
+| Utils | `src/utils/` | Shared cross-cutting helpers |
+
+---
+
+## Cross-cutting concerns
+
+| Concern | Implementation | Location |
+|---|---|---|
+| Request correlation ID | `x-request-id` header propagation | `app.ts` |
+| Distributed tracing | W3C `traceparent` header | `src/utils/observability.ts` |
+| Prometheus metrics | In-memory counter + histogram | `src/utils/observability.ts` |
+| Structured logging | Winston JSON logger | `src/utils/winston.ts` ← Phase 1 |
+| Audit logging | Dedicated `auditLogger` | `src/utils/winston.ts` ← Phase 1 |
+| Request access log | `requestLogger` middleware | `src/middlewares/request-logger.ts` ← Phase 1 |
+| Sensitive redaction | `redactSensitiveFields()` | `src/utils/winston.ts` ← Phase 1 |
+| Error handling | Global Express error handler | `app.ts` |
+| Auth (JWT) | Access token + refresh token | `src/middlewares/auth-jwt.ts` |
+| Rate limiting | `express-rate-limit` | `src/middlewares/security.ts` |
+| Secure headers | `helmet` | `app.ts` |
+| i18n | `i18next` | `src/locales/` |
+
+---
+
+## Observability phases
+
+### ✅ Phase 0 — Baseline inventory (pre-existing)
+
+What was already in place before the observability plan:
+
+- Winston logger (`src/utils/winston.ts`) — basic JSON format
+- Request correlation ID middleware in `app.ts`
+- W3C traceparent / trace context middleware in `app.ts`
+- Prometheus-style metrics endpoint (`GET /metrics`) via `src/utils/observability.ts`
+- Global error handler logging errors with `logger.error`
+
+### ✅ Phase 1 — Structured logging foundation
+
+**Goal:** make all application and request logs production-grade, consistent, and safe.
+
+**What was added:**
+
+#### 1. Enhanced Winston logger (`src/utils/winston.ts`)
+
+- `timestamp` field in every log entry (ISO 8601 with timezone)
+- `service` tag from `NODE_SERVICE_NAME` env var (default `api`)
+- `NODE_LOG_LEVEL` env var support for runtime log-level control
+- Non-production pretty-print console format (colourised, human-readable)
+- Production JSON format on console
+- `error.log` file for error-level entries
+
+#### 2. Sensitive field redaction
+
+- `redactSensitiveFields()` — recursive walk that replaces sensitive values with `[REDACTED]`
+- Applied automatically to every log entry via a Winston format plugin
+- Fields redacted: `password`, `token`, `authorization`, `cookie`, `jwt`, `secret`, `api_key`, and more
+- Case-insensitive matching
+
+#### 3. Error serialization
+
+- `serializeError()` — converts `Error` instances to plain objects `{ name, message, stack }`
+- Stack omitted in production to prevent internal path leakage
+
+#### 4. Structured request access log (`src/middlewares/request-logger.ts`)
+
+- New `requestLogger` middleware replaces the previous basic request logger
+- Fires on `response.finish` (after response is sent) so `status_code` and `duration_ms` are always present
+- Log level derived from status code: `info` (2xx), `warn` (4xx), `error` (5xx)
+- Fields: `timestamp`, `level`, `message`, `request_id`, `trace_id`, `span_id`, `method`, `route`, `status_code`, `duration_ms`, `user_id`, `ip`, `headers`
+- `user_id` present only when request is authenticated
+- Authorization / Cookie headers stripped from logged headers
+
+#### 5. Dedicated audit logger
+
+- `auditLogger` instance in `src/utils/winston.ts`
+- Always writes to `audit.log` file
+- Tagged with `log_type: "audit"` for easy log aggregator filtering
+- Same redaction pipeline as main logger
+- Used for process-level security events (`unhandledRejection`, `uncaughtException`)
+- Ready for service-layer audit events (auth, admin actions)
+
+#### 6. Environment variables added
+
+| Variable | Purpose |
+|---|---|
+| `NODE_LOG_LEVEL` | Override Winston log level |
+| `NODE_SERVICE_NAME` | Service tag in every log entry |
+
+#### 7. Documentation added
+
+- `docs/guide/structured-logging.md` — log format, redaction, examples, code map
+- `docs/guide/audit-logging.md` — audit event taxonomy, required fields, examples
+
+**Tests added:**
+- `tests/unit/utils/winston.test.ts` — 12 tests for `redactSensitiveFields` and `serializeError`
+- `tests/unit/middlewares/request-logger.test.ts` — 9 tests for the request logger middleware
+
+---
+
+### 🔜 Phase 2 — Prometheus metrics (planned)
+
+- Expose `/metrics` endpoint already present; ensure it covers all important counters
+- Per-route request counters and latency histograms
+- MongoDB query timing histograms
+- Business counters: login success/fail, checkout success/fail, order created
+
+### 🔜 Phase 3 — OpenTelemetry instrumentation (planned)
+
+- W3C traceparent already propagated; add OTel SDK spans
+- Instrument HTTP layer, service methods, repository calls
+- Export to Tempo or Jaeger
+
+### 🔜 Phase 4 — Loki centralized logs (planned)
+
+- Ship Winston output to Loki
+- Use `service`, `log_type`, `level` as stream labels
+- Correlate with trace IDs from Phase 3
+
+### 🔜 Phase 5 — Tempo + Grafana dashboards (planned)
+
+- Connect traces to Tempo
+- Build Grafana dashboards: API, Auth, Ecommerce, DB, Ops
+
+### 🔜 Phase 6 — Audit analytics (planned)
+
+- Persist audit events to MongoDB for querying and reporting
+- Formalize audit event schema
+
+### 🔜 Phase 7 — PostHog product analytics (planned)
+
+- Track funnel events: signup, product search, cart, checkout, order
+- Business-level analytics separate from operational observability
+
+---
+
+## Environment variable matrix
+
+### Required
+
+| Variable | Description |
+|---|---|
+| `NODE_DB_URI` | MongoDB connection string |
+| `NODE_ACCESS_TOKEN_SECRET` | JWT access token signing secret |
+| `NODE_REFRESH_TOKEN_SECRET` | JWT refresh token signing secret |
+
+### Runtime
+
+| Variable | Default | Description |
+|---|---|---|
+| `NODE_ENV` | — | `production` / `development` / `test` |
+| `NODE_PORT` | `3000` | HTTP port |
+| `NODE_URL` | — | Public base URL |
+| `NODE_ENABLE_CLUSTERING` | `1` | Enable multi-worker cluster mode |
+| `NODE_CLUSTER_WORKERS` | `0` (auto) | Explicit worker count |
+| `NODE_DEFAULT_LOCALE` | `en` | Default i18n locale |
+| `NODE_FALLBACK_LOCALE` | `en` | Fallback i18n locale |
+| `NODE_TOKEN_CLEANUP_INTERVAL` | `3600000` | Token sweep interval (ms) |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` | `15000` | Max shutdown time (ms) |
+| `NODE_CORS_ORIGIN` | `http://localhost:5173` | Comma-separated allowed origins |
+
+### Phase 1 — Structured logging
+
+| Variable | Default | Description |
+|---|---|---|
+| `NODE_LOG_LEVEL` | `info` (prod) / `debug` (dev) | Winston log level |
+| `NODE_SERVICE_NAME` | `api` | Service tag in log entries |
+
+### JWT expiry
+
+| Variable | Description |
+|---|---|
+| `NODE_ACCESS_TOKEN_SECRET_TIME` | Access token lifetime (seconds) |
+| `NODE_REFRESH_TOKEN_SECRET_TIME_SHORT` | Short refresh token (7 days) |
+| `NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM` | Medium refresh token (30 days) |
+| `NODE_REFRESH_TOKEN_SECRET_TIME_LONG` | Long refresh token (1 year) |
+
+### SMTP
+
+| Variable | Description |
+|---|---|
+| `NODE_SMTP_HOST` | SMTP server hostname |
+| `NODE_SMTP_PORT` | SMTP port |
+| `NODE_SMTP_USER` | SMTP username |
+| `NODE_SMTP_PASS` | SMTP password |
+| `NODE_SMTP_SENDER` | From address |
+
+### Upload
+
+| Variable | Description |
+|---|---|
+| `NODE_PUBLIC_PATH` | Public static files directory |
+
+### Optional PDF
+
+| Variable | Description |
+|---|---|
+| `PUPPETEER_EXECUTABLE_PATH` | Chromium path for PDF generation |
+
+---
+
+## Domain modules
+
+| Module | Routes | Notes |
+|---|---|---|
+| Account / Auth | `/account` | Login, signup, refresh, password reset, logout-all |
+| Users | `/users` | Admin-only CRUD |
+| Products | `/products` | Public read, admin write, soft delete |
+| Cart | `/cart` | Per-user cart with computed totals, checkout |
+| Orders | `/orders` | Owner/admin access, invoice PDF |
+| System | `/` | Health check, metrics |
