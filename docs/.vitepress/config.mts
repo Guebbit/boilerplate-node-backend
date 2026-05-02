@@ -18,7 +18,9 @@ export default defineConfig({
                     { text: 'Endpoint Lifecycle', link: '/guide/endpoint-lifecycle' },
                     { text: 'Observability', link: '/guide/observability' },
                     { text: 'Structured Logging', link: '/guide/structured-logging' },
-                    { text: 'Audit Logging', link: '/guide/audit-logging' }
+                    { text: 'Audit Logging', link: '/guide/audit-logging' },
+                    { text: 'Prometheus Metrics', link: '/guide/prometheus-metrics' },
+                    { text: 'OpenTelemetry Tracing', link: '/guide/opentelemetry-tracing' }
                 ]
             },
             {

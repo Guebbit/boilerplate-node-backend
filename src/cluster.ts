@@ -2,6 +2,10 @@
  * This is the MAIN file of the repo (check "package.json") so we can use clusters.
  * If you don't need clusters, you can just change the MAIN attribute in the "package.json" and use "app.ts"
  */
+// Phase 3: start OTel tracing before any other module is loaded.
+import { startTracing } from '@utils/tracing';
+startTracing();
+
 import os from 'node:os';
 import cluster from 'node:cluster';
 import { logger } from '@utils/winston';

@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 
+// ─── Phase 3: OTel must start before any other imports ───────────────────────
+// Importing tracing.ts here ensures the SDK is initialized (and Express/HTTP
+// instrumentation patches applied) before express or mongoose are loaded.
+import { startTracing, shutdownTracing } from '@utils/tracing';
+startTracing();
+
 import 'dotenv/config';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
@@ -24,6 +30,7 @@ import {
     incrementInflight,
     decrementInflight
 } from '@utils/observability';
+import { getActiveSpanContext, recordErrorOnActiveSpan } from '@utils/tracer';
 import enTranslation from './locales/en.json';
 
 import { router as productRoutes } from './routes/products';
@@ -152,6 +159,7 @@ export const stopServer = () => {
         })
         .then(() => stopCache())
         .then(() => stopDatabase())
+        .then(() => shutdownTracing()) // flush OTel spans before exit
         .finally(() => {
             activeServer = undefined;
             shutdownPromise = undefined;
@@ -299,7 +307,14 @@ app.use((request, response, next) => {
 
 /** Attach trace context and propagate trace headers. */
 app.use((request, response, next) => {
-    const traceContext = createTraceContext(request.get('traceparent'));
+    // Prefer OTel span IDs when the SDK has an active span for this request
+    // (set by HttpInstrumentation). Fall back to manual W3C parsing otherwise.
+    const otel = getActiveSpanContext();
+    const traceContext =
+        otel.traceId && otel.spanId
+            ? { traceId: otel.traceId, spanId: otel.spanId }
+            : createTraceContext(request.get('traceparent'));
+
     request.traceContext = traceContext;
     response.setHeader('traceparent', toTraceparentHeader(traceContext));
     response.setHeader('x-trace-id', traceContext.traceId);
@@ -355,6 +370,9 @@ app.use((request: Request, response: Response) => {
  */
 app.use((error: Error, request: Request, response: Response, _next: NextFunction) => {
     if (response.headersSent) return;
+
+    // Record the error on the active OTel span so it surfaces in traces.
+    recordErrorOnActiveSpan(error);
 
     // Multer file-upload errors
     if (error instanceof MulterError) {

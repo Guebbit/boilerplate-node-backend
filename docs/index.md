@@ -29,4 +29,7 @@ features:
     - title: Prometheus Metrics (Phase 2)
       details: HTTP counters, latency histograms, in-flight gauge, business counters (login/signup/checkout/orders), and DB query metrics — all via prom-client.
       link: /guide/prometheus-metrics
+    - title: OpenTelemetry Tracing (Phase 3)
+      details: Distributed traces for every HTTP request, Mongoose query, and email send. Trace IDs in every log line. Export to Grafana Tempo or Jaeger via OTLP.
+      link: /guide/opentelemetry-tracing
 ---
