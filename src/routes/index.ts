@@ -24,8 +24,12 @@ router.get('/', (request, response) => {
  * Returns text/plain (Prometheus exposition format 0.0.4).
  */
 router.get('/metrics', (_request, response) => {
-    void getPrometheusMetrics().then((metrics) => {
-        response.setHeader('Content-Type', metricsRegistry.contentType);
-        response.send(metrics);
-    });
+    void getPrometheusMetrics()
+        .then((metrics) => {
+            response.setHeader('Content-Type', metricsRegistry.contentType);
+            response.send(metrics);
+        })
+        .catch(() => {
+            response.status(500).send('# metrics unavailable\n');
+        });
 });

@@ -120,7 +120,7 @@ const sanitizeRouteSegment = (segment: string): string => {
  * Example: /orders/660f1234abcd → /orders/:id
  */
 export const normalizeRoutePath = (path: string): string => {
-    const pathWithoutQuery = path.split('?')[0] ?? '/';
+    const pathWithoutQuery = path.split('?')[0] || '/';
     const segments = pathWithoutQuery
         .split('/')
         .filter(Boolean)

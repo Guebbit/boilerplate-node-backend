@@ -122,19 +122,19 @@ const QUERY_OPS: MongooseDefaultQueryMiddleware[] = [
 // WeakMap keeps start times without preventing GC of Query objects.
 const queryStartTimes = new WeakMap<object, number>();
 
-// Runtime Query shape not fully reflected in Mongoose types; use a local alias to access them safely.
-interface IRuntimeQuery {
+// Runtime Query shape not fully reflected in Mongoose types; used internally for safe property access.
+interface IMongooseQueryInternal {
     mongooseCollection?: { name?: string };
     op?: string;
 }
 
 /** Extract collection name from a Mongoose Query object. */
 const getCollectionName = (query: MongooseQuery<unknown, unknown>): string =>
-    (query as unknown as IRuntimeQuery).mongooseCollection?.name ?? 'unknown';
+    (query as unknown as IMongooseQueryInternal).mongooseCollection?.name ?? 'unknown';
 
 /** Extract the operation name from a Mongoose Query object. */
 const getOperation = (query: MongooseQuery<unknown, unknown>): string =>
-    (query as unknown as IRuntimeQuery).op ?? 'query';
+    (query as unknown as IMongooseQueryInternal).op ?? 'query';
 
 export const mongooseMetricsPlugin = (schema: Schema): void => {
     // ── Query pre hook: record start time ─────────────────────────────────
