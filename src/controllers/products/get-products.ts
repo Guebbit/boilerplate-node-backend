@@ -10,6 +10,16 @@ import type { CastError } from 'mongoose';
  */
 export type IGetProductsQuery = Partial<Record<keyof SearchProductsRequest, string>>;
 
+const normalizeStringList = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    if (typeof value === 'string')
+        return value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+    return [];
+};
+
 /**
  * GET /products
  * POST /products/search
@@ -27,6 +37,10 @@ export const getProducts = (
 
     const minPriceRaw = request.body?.minPrice ?? request.query.minPrice;
     const maxPriceRaw = request.body?.maxPrice ?? request.query.maxPrice;
+    const categoryRaw = request.body?.category ?? request.query.category;
+    const tagRaw = request.body?.tag ?? request.query.tag;
+    const category = normalizeStringList(categoryRaw)[0];
+    const tag = normalizeStringList(tagRaw)[0];
 
     return productService
         .search(
@@ -36,7 +50,9 @@ export const getProducts = (
                 pageSize,
                 text: request.body?.text ?? request.query.text,
                 minPrice: minPriceRaw ? Number(minPriceRaw) : undefined,
-                maxPrice: maxPriceRaw ? Number(maxPriceRaw) : undefined
+                maxPrice: maxPriceRaw ? Number(maxPriceRaw) : undefined,
+                category,
+                tag
             },
             request.user?.admin === true
         )

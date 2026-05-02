@@ -12,21 +12,20 @@
 
 import { RequestFile } from './models';
 
-export class Product {
+export class FeedbackRequest {
     /**
     * Resource identifier
     */
     'id': string;
-    'title': string;
-    'price': number;
-    'description'?: string;
-    'active'?: boolean;
-    'imageUrl'?: string;
-    'categories'?: Array<string>;
-    'tags'?: Array<string>;
-    'createdAt'?: Date;
+    'name'?: string;
+    'email': string;
+    'subject': string;
+    'message': string;
+    'status': FeedbackRequest.StatusEnum;
+    'adminNotes'?: string;
+    'respondedAt'?: Date;
+    'createdAt': Date;
     'updatedAt'?: Date;
-    'deletedAt'?: Date;
 
     static discriminator: string | undefined = undefined;
 
@@ -37,39 +36,39 @@ export class Product {
             "type": "string"
         },
         {
-            "name": "title",
-            "baseName": "title",
+            "name": "name",
+            "baseName": "name",
             "type": "string"
         },
         {
-            "name": "price",
-            "baseName": "price",
-            "type": "number"
-        },
-        {
-            "name": "description",
-            "baseName": "description",
+            "name": "email",
+            "baseName": "email",
             "type": "string"
         },
         {
-            "name": "active",
-            "baseName": "active",
-            "type": "boolean"
-        },
-        {
-            "name": "imageUrl",
-            "baseName": "imageUrl",
+            "name": "subject",
+            "baseName": "subject",
             "type": "string"
         },
         {
-            "name": "categories",
-            "baseName": "categories",
-            "type": "Array<string>"
+            "name": "message",
+            "baseName": "message",
+            "type": "string"
         },
         {
-            "name": "tags",
-            "baseName": "tags",
-            "type": "Array<string>"
+            "name": "status",
+            "baseName": "status",
+            "type": "FeedbackRequest.StatusEnum"
+        },
+        {
+            "name": "adminNotes",
+            "baseName": "adminNotes",
+            "type": "string"
+        },
+        {
+            "name": "respondedAt",
+            "baseName": "respondedAt",
+            "type": "Date"
         },
         {
             "name": "createdAt",
@@ -80,15 +79,18 @@ export class Product {
             "name": "updatedAt",
             "baseName": "updatedAt",
             "type": "Date"
-        },
-        {
-            "name": "deletedAt",
-            "baseName": "deletedAt",
-            "type": "Date"
         }    ];
 
     static getAttributeTypeMap() {
-        return Product.attributeTypeMap;
+        return FeedbackRequest.attributeTypeMap;
     }
 }
 
+export namespace FeedbackRequest {
+    export enum StatusEnum {
+        New = <any> 'new',
+        InProgress = <any> 'in_progress',
+        Resolved = <any> 'resolved',
+        Spam = <any> 'spam'
+    }
+}

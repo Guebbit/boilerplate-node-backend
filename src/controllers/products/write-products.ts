@@ -13,6 +13,16 @@ import type {
     UpdateProductByIdRequestMultipart
 } from '@types';
 
+const normalizeStringList = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    if (typeof value === 'string')
+        return value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+    return [];
+};
+
 /**
  * POST /products — create a new product (admin).
  * PUT /products — update a product by id in the request body (admin).
@@ -41,6 +51,8 @@ export const writeProducts = (
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    const categories = normalizeStringList((request.body as { categories?: unknown }).categories);
+    const tags = normalizeStringList((request.body as { tags?: unknown }).tags);
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
@@ -50,7 +62,9 @@ export const writeProducts = (
     const errors = productService.validateData({
         ...request.body,
         imageUrl,
-        active: !!request.body.active
+        active: !!request.body.active,
+        categories,
+        tags
     });
     if (errors.length > 0)
         return deleteUpload().then(() => {
@@ -73,7 +87,9 @@ export const writeProducts = (
             .create({
                 ...request.body,
                 imageUrl,
-                active: !!request.body.active
+                active: !!request.body.active,
+                categories,
+                tags
             })
             .then((product) => {
                 successResponse(response, product.toObject(), 201);
@@ -92,7 +108,9 @@ export const writeProducts = (
         .update(id, {
             ...request.body,
             imageUrl,
-            active: !!request.body.active
+            active: !!request.body.active,
+            categories,
+            tags
         })
         .then((product) => {
             successResponse(response, product.toObject());

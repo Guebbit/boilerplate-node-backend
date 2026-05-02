@@ -6,11 +6,13 @@ import { writeUsers } from '@controllers/users/write-users';
 import { deleteUsers } from '@controllers/users/delete-users';
 import { getUserItem } from '@controllers/users/get-user-item';
 import { invalidateCache, setCache } from '@utils/helpers-response';
+import { auditAdminActivity } from '@middlewares/audit-admin-activity';
 
 export const router = Router();
 
 // All routes require authentication + admin role
 router.use(getAuth, isAuth, isAdmin);
+router.use(auditAdminActivity);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id
 router.post('/search', getUsers);

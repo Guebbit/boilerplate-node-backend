@@ -1,11 +1,14 @@
 import localVarRequest from 'request';
 
+export * from './activityEvent';
+export * from './activityEventsResponse';
 export * from './authTokens';
 export * from './cartItem';
 export * from './cartResponse';
 export * from './cartSummaryResponse';
 export * from './checkoutRequest';
 export * from './checkoutResponse';
+export * from './createFeedbackRequest';
 export * from './createOrderRequest';
 export * from './createProductRequest';
 export * from './createUserRequest';
@@ -14,6 +17,8 @@ export * from './deleteProductRequest';
 export * from './deleteUserRequest';
 export * from './errorDetail';
 export * from './errorResponse';
+export * from './feedbackRequest';
+export * from './feedbackRequestsResponse';
 export * from './loginRequest';
 export * from './messageResponse';
 export * from './order';
@@ -26,16 +31,20 @@ export * from './product';
 export * from './productsResponse';
 export * from './refreshTokenResponse';
 export * from './removeCartItemRequest';
+export * from './searchActivityEventsRequest';
+export * from './searchFeedbackRequestsRequest';
 export * from './searchOrdersRequest';
 export * from './searchProductsRequest';
 export * from './searchUsersRequest';
 export * from './signupRequest';
 export * from './updateCartItemByIdRequest';
+export * from './updateFeedbackRequestStatusRequest';
 export * from './updateOrderByIdRequest';
 export * from './updateOrderRequest';
 export * from './updateProductByIdRequest';
 export * from './updateProductRequest';
 export * from './updateProductRequestBody';
+export * from './updateSuspiciousAlertRequest';
 export * from './updateUserByIdRequest';
 export * from './updateUserRequest';
 export * from './upsertCartItemRequest';
@@ -57,12 +66,15 @@ export interface RequestDetailedFile {
 export type RequestFile = string | Buffer | fs.ReadStream | RequestDetailedFile;
 
 
+import { ActivityEvent } from './activityEvent';
+import { ActivityEventsResponse } from './activityEventsResponse';
 import { AuthTokens } from './authTokens';
 import { CartItem } from './cartItem';
 import { CartResponse } from './cartResponse';
 import { CartSummaryResponse } from './cartSummaryResponse';
 import { CheckoutRequest } from './checkoutRequest';
 import { CheckoutResponse } from './checkoutResponse';
+import { CreateFeedbackRequest } from './createFeedbackRequest';
 import { CreateOrderRequest } from './createOrderRequest';
 import { CreateProductRequest } from './createProductRequest';
 import { CreateUserRequest } from './createUserRequest';
@@ -71,6 +83,8 @@ import { DeleteProductRequest } from './deleteProductRequest';
 import { DeleteUserRequest } from './deleteUserRequest';
 import { ErrorDetail } from './errorDetail';
 import { ErrorResponse } from './errorResponse';
+import { FeedbackRequest } from './feedbackRequest';
+import { FeedbackRequestsResponse } from './feedbackRequestsResponse';
 import { LoginRequest } from './loginRequest';
 import { MessageResponse } from './messageResponse';
 import { Order } from './order';
@@ -83,16 +97,20 @@ import { Product } from './product';
 import { ProductsResponse } from './productsResponse';
 import { RefreshTokenResponse } from './refreshTokenResponse';
 import { RemoveCartItemRequest } from './removeCartItemRequest';
+import { SearchActivityEventsRequest } from './searchActivityEventsRequest';
+import { SearchFeedbackRequestsRequest } from './searchFeedbackRequestsRequest';
 import { SearchOrdersRequest } from './searchOrdersRequest';
 import { SearchProductsRequest } from './searchProductsRequest';
 import { SearchUsersRequest } from './searchUsersRequest';
 import { SignupRequest } from './signupRequest';
 import { UpdateCartItemByIdRequest } from './updateCartItemByIdRequest';
+import { UpdateFeedbackRequestStatusRequest } from './updateFeedbackRequestStatusRequest';
 import { UpdateOrderByIdRequest } from './updateOrderByIdRequest';
 import { UpdateOrderRequest } from './updateOrderRequest';
 import { UpdateProductByIdRequest } from './updateProductByIdRequest';
 import { UpdateProductRequest } from './updateProductRequest';
 import { UpdateProductRequestBody } from './updateProductRequestBody';
+import { UpdateSuspiciousAlertRequest } from './updateSuspiciousAlertRequest';
 import { UpdateUserByIdRequest } from './updateUserByIdRequest';
 import { UpdateUserRequest } from './updateUserRequest';
 import { UpsertCartItemRequest } from './upsertCartItemRequest';
@@ -114,18 +132,26 @@ let primitives = [
                  ];
 
 let enumsMap: {[index: string]: any} = {
+        "ActivityEvent.TypeEnum": ActivityEvent.TypeEnum,
+        "ActivityEvent.SeverityEnum": ActivityEvent.SeverityEnum,
+        "FeedbackRequest.StatusEnum": FeedbackRequest.StatusEnum,
         "Order.StatusEnum": Order.StatusEnum,
+        "SearchFeedbackRequestsRequest.StatusEnum": SearchFeedbackRequestsRequest.StatusEnum,
+        "UpdateFeedbackRequestStatusRequest.StatusEnum": UpdateFeedbackRequestStatusRequest.StatusEnum,
         "UpdateOrderByIdRequest.StatusEnum": UpdateOrderByIdRequest.StatusEnum,
         "UpdateOrderRequest.StatusEnum": UpdateOrderRequest.StatusEnum,
 }
 
 let typeMap: {[index: string]: any} = {
+    "ActivityEvent": ActivityEvent,
+    "ActivityEventsResponse": ActivityEventsResponse,
     "AuthTokens": AuthTokens,
     "CartItem": CartItem,
     "CartResponse": CartResponse,
     "CartSummaryResponse": CartSummaryResponse,
     "CheckoutRequest": CheckoutRequest,
     "CheckoutResponse": CheckoutResponse,
+    "CreateFeedbackRequest": CreateFeedbackRequest,
     "CreateOrderRequest": CreateOrderRequest,
     "CreateProductRequest": CreateProductRequest,
     "CreateUserRequest": CreateUserRequest,
@@ -134,6 +160,8 @@ let typeMap: {[index: string]: any} = {
     "DeleteUserRequest": DeleteUserRequest,
     "ErrorDetail": ErrorDetail,
     "ErrorResponse": ErrorResponse,
+    "FeedbackRequest": FeedbackRequest,
+    "FeedbackRequestsResponse": FeedbackRequestsResponse,
     "LoginRequest": LoginRequest,
     "MessageResponse": MessageResponse,
     "Order": Order,
@@ -146,16 +174,20 @@ let typeMap: {[index: string]: any} = {
     "ProductsResponse": ProductsResponse,
     "RefreshTokenResponse": RefreshTokenResponse,
     "RemoveCartItemRequest": RemoveCartItemRequest,
+    "SearchActivityEventsRequest": SearchActivityEventsRequest,
+    "SearchFeedbackRequestsRequest": SearchFeedbackRequestsRequest,
     "SearchOrdersRequest": SearchOrdersRequest,
     "SearchProductsRequest": SearchProductsRequest,
     "SearchUsersRequest": SearchUsersRequest,
     "SignupRequest": SignupRequest,
     "UpdateCartItemByIdRequest": UpdateCartItemByIdRequest,
+    "UpdateFeedbackRequestStatusRequest": UpdateFeedbackRequestStatusRequest,
     "UpdateOrderByIdRequest": UpdateOrderByIdRequest,
     "UpdateOrderRequest": UpdateOrderRequest,
     "UpdateProductByIdRequest": UpdateProductByIdRequest,
     "UpdateProductRequest": UpdateProductRequest,
     "UpdateProductRequestBody": UpdateProductRequestBody,
+    "UpdateSuspiciousAlertRequest": UpdateSuspiciousAlertRequest,
     "UpdateUserByIdRequest": UpdateUserByIdRequest,
     "UpdateUserRequest": UpdateUserRequest,
     "UpsertCartItemRequest": UpsertCartItemRequest,

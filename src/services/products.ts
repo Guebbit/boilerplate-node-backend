@@ -32,6 +32,11 @@ export const validateData = (productData: Omit<Product, 'id'>): string[] => {
     return [];
 };
 
+const sanitizeStringArray = (values?: string[] | null): string[] => {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+};
+
 /**
  * Search products (DTO-friendly) — matches POST /products/search in OpenAPI.
  *
@@ -66,6 +71,12 @@ export const search = (
             { description: { $regex: text, $options: 'i' } }
         ];
     }
+
+    // Filter by categories/tags
+    if (filters.category && String(filters.category).trim() !== '')
+        where.categories = { $elemMatch: { $regex: String(filters.category).trim(), $options: 'i' } };
+    if (filters.tag && String(filters.tag).trim() !== '')
+        where.tags = { $elemMatch: { $regex: String(filters.tag).trim(), $options: 'i' } };
 
     // Filter by price range
     const priceConditions: Record<string, number> = {};
@@ -137,7 +148,11 @@ export const getById = (id: string | undefined, admin = false) => {
  * @param data
  */
 export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
-    productRepository.create(data);
+    productRepository.create({
+        ...data,
+        categories: sanitizeStringArray(data.categories),
+        tags: sanitizeStringArray(data.tags)
+    });
 
 /**
  * Update an existing product by ID.
@@ -159,6 +174,8 @@ export const update = (
         if (data.price !== undefined) product.price = data.price;
         if (data.description !== undefined) product.description = data.description;
         if (data.active !== undefined) product.active = data.active;
+        if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
+        if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
 
         // If a new image was uploaded, update the URL on the document
         const oldImageUrl = product.imageUrl;

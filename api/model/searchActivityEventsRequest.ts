@@ -12,7 +12,7 @@
 
 import { RequestFile } from './models';
 
-export class SearchProductsRequest {
+export class SearchActivityEventsRequest {
     /**
     * 1-based page index
     */
@@ -28,11 +28,9 @@ export class SearchProductsRequest {
     /**
     * Resource identifier
     */
-    'id'?: string;
-    'minPrice'?: number;
-    'maxPrice'?: number;
-    'category'?: string;
-    'tag'?: string;
+    'actorUserId'?: string;
+    'targetEmail'?: string;
+    'resolved'?: boolean;
 
     static discriminator: string | undefined = undefined;
 
@@ -53,33 +51,23 @@ export class SearchProductsRequest {
             "type": "string"
         },
         {
-            "name": "id",
-            "baseName": "id",
+            "name": "actorUserId",
+            "baseName": "actorUserId",
             "type": "string"
         },
         {
-            "name": "minPrice",
-            "baseName": "minPrice",
-            "type": "number"
-        },
-        {
-            "name": "maxPrice",
-            "baseName": "maxPrice",
-            "type": "number"
-        },
-        {
-            "name": "category",
-            "baseName": "category",
+            "name": "targetEmail",
+            "baseName": "targetEmail",
             "type": "string"
         },
         {
-            "name": "tag",
-            "baseName": "tag",
-            "type": "string"
+            "name": "resolved",
+            "baseName": "resolved",
+            "type": "boolean"
         }    ];
 
     static getAttributeTypeMap() {
-        return SearchProductsRequest.attributeTypeMap;
+        return SearchActivityEventsRequest.attributeTypeMap;
     }
 }
 
