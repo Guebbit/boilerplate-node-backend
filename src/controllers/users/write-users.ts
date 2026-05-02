@@ -14,6 +14,7 @@ import {
     User
 } from '@types';
 import type { IUser } from '@models/users';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * POST /users — create a new user (admin).
@@ -77,6 +78,15 @@ export const writeUsers = (
                 imageUrl
             })
             .then((user) => {
+                emitAuditEvent({
+                    action: AuditAction.ADMIN_USER_CREATED,
+                    actor_user_id: request.user?.id ?? 'unknown',
+                    actor_role: 'admin',
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: String(user._id),
+                    ...extractRequestContext(request),
+                });
                 successResponse(response, user.toObject(), 201);
             })
             .catch((error: Error) =>
@@ -92,6 +102,15 @@ export const writeUsers = (
     return userService
         .adminUpdate(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
         .then((user) => {
+            emitAuditEvent({
+                action: AuditAction.ADMIN_USER_UPDATED,
+                actor_user_id: request.user?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id,
+                ...extractRequestContext(request),
+            });
             successResponse(response, user.toObject());
         })
         .catch((error: Error) =>

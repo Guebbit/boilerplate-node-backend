@@ -38,4 +38,7 @@ features:
     - title: Tempo & Grafana Dashboards (Phase 5)
       details: Grafana Tempo as the OTLP trace backend, pre-built dashboard JSON files (API overview, logs, traces), and step-by-step log/trace correlation guide.
       link: /guide/grafana-dashboards
+    - title: Audit & Security Analytics (Phase 6)
+      details: Formal audit event schema (IAuditEvent), dedicated emitAuditEvent() helper, and instrumented call sites across all auth, admin, and access-control operations. Events ship to a separate Loki stream.
+      link: /guide/audit-logging
 ---

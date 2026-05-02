@@ -7,6 +7,7 @@ import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { authSignupTotal } from '@utils/domain-metrics';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * POST /account/signup
@@ -38,11 +39,25 @@ export const postSignup = (
             if (!result.success)
                 return deleteUpload().then(() => {
                     authSignupTotal.inc({ status: 'failure' });
+                    emitAuditEvent({
+                        action: AuditAction.AUTH_SIGNUP_FAILED,
+                        actor_user_id: 'anonymous',
+                        actor_role: 'anonymous',
+                        outcome: 'failure',
+                        ...extractRequestContext(request),
+                    });
                     rejectResponse(response, result.status, result.message, result.errors);
                 });
 
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
+            emitAuditEvent({
+                action: AuditAction.AUTH_SIGNUP_SUCCEEDED,
+                actor_user_id: String((result.data as { _id?: unknown })?._id ?? 'unknown'),
+                actor_role: 'user',
+                outcome: 'success',
+                ...extractRequestContext(request),
+            });
             successResponse(response, result.data, 201);
         })
         .catch((error: CastError | Error) => {

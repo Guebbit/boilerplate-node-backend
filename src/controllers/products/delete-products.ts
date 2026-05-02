@@ -5,6 +5,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CastError } from 'mongoose';
 import { DeleteProductRequest } from '@api/model/deleteProductRequest';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * DELETE /products/:id
@@ -32,6 +33,16 @@ export const deleteProducts = (
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
+            emitAuditEvent({
+                action: AuditAction.ADMIN_PRODUCT_DELETED,
+                actor_user_id: request.user?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                target_type: 'product',
+                target_id: id,
+                ...extractRequestContext(request),
+                metadata: { hardDelete: !!request.query.hardDelete }
+            });
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {

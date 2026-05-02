@@ -3,6 +3,7 @@ import { t } from 'i18next';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * PUT /orders — update an order by id in the request body (admin).
@@ -31,6 +32,16 @@ export const putOrders = (
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
+
+            emitAuditEvent({
+                action: AuditAction.ADMIN_ORDER_UPDATED,
+                actor_user_id: request.user?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                target_type: 'order',
+                target_id: id,
+                ...extractRequestContext(request),
+            });
 
             successResponse(response, result.data);
         })

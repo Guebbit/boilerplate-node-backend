@@ -4,6 +4,7 @@ import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { DeleteOrderRequest } from '@types';
 import { type CastError, Types } from 'mongoose';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * DELETE /orders — delete an order by id in the request body (admin).
@@ -30,6 +31,15 @@ export const deleteOrders = (
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
+            emitAuditEvent({
+                action: AuditAction.ADMIN_ORDER_DELETED,
+                actor_user_id: request.user?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                target_type: 'order',
+                target_id: id,
+                ...extractRequestContext(request),
+            });
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {

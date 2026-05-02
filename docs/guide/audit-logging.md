@@ -1,30 +1,33 @@
 # Audit Logging
 
-> **TL;DR** — Security and admin events are logged to a dedicated `auditLogger` (separate from the main app logger) so they can be routed to a different sink, queried independently, and retained longer.
+> **TL;DR** — Security and admin events are logged to a dedicated `auditLogger` (separate from the main app logger) with a formal schema, automatic redaction, and optional Loki shipping under a distinct stream label.
 
 ---
 
 ## Quick-start
 
 ```ts
-import { auditLogger } from '@utils/winston';
+import { emitAuditEvent, AuditAction, extractRequestContext } from '@utils/audit';
 
-// Log a failed login attempt
-auditLogger.warn('auth.login.failed', {
-    action: 'auth.login.failed',
-    actor: 'anonymous',
-    ip: req.ip,
-    request_id: req.requestId,
-    reason: 'invalid_credentials'
+// Failed login
+emitAuditEvent({
+    action: AuditAction.AUTH_LOGIN_FAILED,
+    actor_user_id: 'anonymous',
+    actor_role: 'anonymous',
+    outcome: 'failure',
+    ...extractRequestContext(req),
+    metadata: { email: req.body.email }
 });
 
-// Log an admin action
-auditLogger.info('admin.product.deleted', {
-    action: 'admin.product.deleted',
-    actor: req.user?.id,
-    request_id: req.requestId,
-    resource_type: 'product',
-    resource_id: productId
+// Admin deletes a user
+emitAuditEvent({
+    action: AuditAction.ADMIN_USER_DELETED,
+    actor_user_id: req.user!.id,
+    actor_role: 'admin',
+    outcome: 'success',
+    target_type: 'user',
+    target_id: userId,
+    ...extractRequestContext(req),
 });
 ```
 
@@ -32,8 +35,7 @@ auditLogger.info('admin.product.deleted', {
 
 ## What is an audit log?
 
-Audit logs answer **"who did what, when, and with what outcome?"**  
-They differ from application logs:
+Audit logs answer **"who did what, when, and with what outcome?"**
 
 | Application log              | Audit log                        |
 | ---------------------------- | -------------------------------- |
@@ -44,80 +46,121 @@ They differ from application logs:
 
 ---
 
-## When to use `auditLogger`
+## Architecture
 
-Use `auditLogger` (not `logger`) for:
-
-- Auth events: login success/fail, logout, refresh, password reset
-- Admin actions: create/update/delete users, products, orders
-- Access control: 401/403 responses to protected resources
-- Token lifecycle: cleanup, revocation
-- Unexpected process failures: unhandled rejections, uncaught exceptions
-
----
-
-## Required fields
-
-Every audit event **must** include:
-
-| Field        | Description                                               |
-| ------------ | --------------------------------------------------------- |
-| `action`     | What happened — use dot-notation e.g. `auth.login.failed` |
-| `actor`      | Who triggered it — `user_id` string or `'anonymous'`      |
-| `request_id` | Correlation ID from `req.requestId`                       |
-| `ip`         | Client IP from `req.ip`                                   |
-
-Optional but recommended:
-
-| Field           | Description                                                    |
-| --------------- | -------------------------------------------------------------- |
-| `resource_type` | What was affected — `'user'`, `'product'`, `'order'`           |
-| `resource_id`   | The ID of the affected resource                                |
-| `outcome`       | `'success'` or `'failure'`                                     |
-| `reason`        | Human-readable reason for failures                             |
-| `trace_id`      | From `req.traceContext?.traceId` for cross-service correlation |
-
----
-
-## Audit event taxonomy
-
-### Auth events
-
-```
-auth.login.succeeded        — successful login
-auth.login.failed           — wrong credentials
-auth.signup.succeeded       — new user created
-auth.password_reset.requested
-auth.password_reset.completed
-auth.refresh.succeeded      — new access token issued
-auth.logout_all.succeeded   — all tokens revoked for a user
-auth.token.expired_cleanup  — background job ran
-```
-
-### Admin events
-
-```
-admin.user.created
-admin.user.updated
-admin.user.deleted
-admin.product.created
-admin.product.updated
-admin.product.deleted
-```
-
-### Security events
-
-```
-security.unauthorized       — 401 returned to client
-security.forbidden          — 403 returned to client
-security.rate_limit_hit     — IP/user hit rate limit
-process.unhandledRejection  — unexpected promise rejection
-process.uncaughtException   — unexpected synchronous throw
+```text
+Request
+  │
+  ├─ Middleware (isAuth / isAdmin)
+  │      │  401/403 → security.unauthorized / security.forbidden
+  │      ▼
+  └─ Controller
+         │
+         ├─ Service call
+         │
+         ├─── emitAuditEvent() ──► auditLogger (audit stream)
+         │                              │
+         │                 ┌────────────┼────────────┐
+         │                 ▼            ▼            ▼
+         │             audit.log    Console    Loki (log_type=audit)
+         │
+         └─── logger (app stream)
 ```
 
 ---
 
-## Example log entry
+## Formal audit event schema
+
+Every event emitted through `emitAuditEvent()` must satisfy `IAuditEvent`:
+
+| Field            | Type                                  | Required | Description                                       |
+| ---------------- | ------------------------------------- | -------- | ------------------------------------------------- |
+| `actor_user_id`  | `string`                              | ✅        | User ID, or `'anonymous'` for unauthenticated     |
+| `actor_role`     | `'admin' \| 'user' \| 'anonymous'`   | ✅        | Role of the actor                                 |
+| `action`         | `AuditActionValue`                    | ✅        | Dot-notation action name                          |
+| `outcome`        | `'success' \| 'failure'`             | ✅        | Whether the action succeeded                      |
+| `ip`             | `string`                              | —        | Client IP from `req.ip`                           |
+| `user_agent`     | `string`                              | —        | User-Agent header                                 |
+| `request_id`     | `string`                              | —        | `req.requestId` (x-request-id)                    |
+| `trace_id`       | `string`                              | —        | OTel trace ID for cross-signal correlation        |
+| `target_type`    | `string`                              | —        | Resource type: `'user'`, `'product'`, `'order'`   |
+| `target_id`      | `string`                              | —        | ID of the affected resource                       |
+| `metadata`       | `Record<string, unknown>`             | —        | Extra context (keep small, non-sensitive)         |
+
+> **Timestamp** is injected automatically by Winston's `format.timestamp()` — no need to add it manually.
+
+---
+
+## `emitAuditEvent()` — log levels
+
+| Outcome     | Log level |
+| ----------- | --------- |
+| `'success'` | `info`    |
+| `'failure'` | `warn`    |
+
+---
+
+## `extractRequestContext()` helper
+
+Reduces boilerplate when building events inside request handlers:
+
+```ts
+const ctx = extractRequestContext(req);
+// → { ip, user_agent, request_id, trace_id }
+
+emitAuditEvent({
+    action: AuditAction.AUTH_LOGIN_SUCCEEDED,
+    actor_user_id: userId,
+    actor_role: 'user',
+    outcome: 'success',
+    ...ctx,          // spread all four fields at once
+});
+```
+
+---
+
+## Action taxonomy
+
+### Auth
+
+| Action key                           | Value                            | When                            |
+| ------------------------------------ | -------------------------------- | ------------------------------- |
+| `AUTH_LOGIN_SUCCEEDED`               | `auth.login.succeeded`           | Successful login                |
+| `AUTH_LOGIN_FAILED`                  | `auth.login.failed`              | Wrong credentials               |
+| `AUTH_SIGNUP_SUCCEEDED`              | `auth.signup.succeeded`          | New account created             |
+| `AUTH_SIGNUP_FAILED`                 | `auth.signup.failed`             | Signup validation error         |
+| `AUTH_PASSWORD_RESET_REQUESTED`      | `auth.password_reset.requested`  | Reset email sent                |
+| `AUTH_PASSWORD_RESET_COMPLETED`      | `auth.password_reset.completed`  | Password successfully changed   |
+| `AUTH_REFRESH_SUCCEEDED`             | `auth.refresh.succeeded`         | New access token issued         |
+| `AUTH_REFRESH_FAILED`                | `auth.refresh.failed`            | Invalid or missing refresh token|
+| `AUTH_LOGOUT_ALL_SUCCEEDED`          | `auth.logout_all.succeeded`      | All sessions revoked            |
+| `AUTH_TOKEN_EXPIRED_CLEANUP`         | `auth.token.expired_cleanup`     | Admin ran token cleanup         |
+
+### Admin
+
+| Action key               | Value                     | When                        |
+| ------------------------ | ------------------------- | --------------------------- |
+| `ADMIN_USER_CREATED`     | `admin.user.created`      | Admin creates a user        |
+| `ADMIN_USER_UPDATED`     | `admin.user.updated`      | Admin edits a user          |
+| `ADMIN_USER_DELETED`     | `admin.user.deleted`      | Admin soft/hard-deletes user|
+| `ADMIN_PRODUCT_CREATED`  | `admin.product.created`   | Admin creates a product     |
+| `ADMIN_PRODUCT_UPDATED`  | `admin.product.updated`   | Admin edits a product       |
+| `ADMIN_PRODUCT_DELETED`  | `admin.product.deleted`   | Admin deletes a product     |
+| `ADMIN_ORDER_CREATED`    | `admin.order.created`     | Admin creates an order      |
+| `ADMIN_ORDER_UPDATED`    | `admin.order.updated`     | Admin updates an order      |
+| `ADMIN_ORDER_DELETED`    | `admin.order.deleted`     | Admin deletes an order      |
+
+### Security / access control
+
+| Action key                  | Value                       | When                             |
+| --------------------------- | --------------------------- | -------------------------------- |
+| `SECURITY_UNAUTHORIZED`     | `security.unauthorized`     | `isAuth` rejects with 401        |
+| `SECURITY_FORBIDDEN`        | `security.forbidden`        | `isAdmin` rejects with 403       |
+| `SECURITY_RATE_LIMIT_HIT`   | `security.rate_limit_hit`   | Rate limiter triggered           |
+
+---
+
+## Sample log entry
 
 ```json
 {
@@ -127,89 +170,111 @@ process.uncaughtException   — unexpected synchronous throw
     "service": "api",
     "log_type": "audit",
     "action": "auth.login.failed",
-    "actor": "anonymous",
+    "actor_user_id": "anonymous",
+    "actor_role": "anonymous",
+    "outcome": "failure",
     "ip": "203.0.113.42",
-    "request_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    "reason": "invalid_credentials"
+    "user_agent": "Mozilla/5.0 (X11; Linux x86_64)",
+    "request_id": "c4f9e11a-3b2d-4a1e-89f6-000000000001",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "metadata": { "email": "attacker@example.com" }
 }
 ```
 
-The `log_type: "audit"` field is automatically added by `auditLogger.defaultMeta` so log aggregators can filter audit events by stream label without needing custom queries.
+The `log_type: "audit"` label is set by `auditLogger.defaultMeta` — Loki stream queries and dashboards can filter with `{log_type="audit"}`.
 
 ---
 
-## Flow diagram
+## Instrumented call sites (Phase 6)
 
-```text
-Auth / Admin action
-       │
-       ▼
-  Service layer
-       │
-       ├─── normal logs ──► logger (app log stream)
-       │
-       └─── audit events ─► auditLogger
-                                 │
-                    ┌────────────┼────────────┐
-                    ▼            ▼            ▼
-               audit.log     Console      (future: Loki stream / SIEM)
-```
-
----
-
-## Output files
-
-| File        | Contents                                             |
-| ----------- | ---------------------------------------------------- |
-| `audit.log` | All audit events regardless of level                 |
-| Console     | All audit events (pretty in dev, JSON in production) |
+| File                                           | Events emitted                                      |
+| ---------------------------------------------- | --------------------------------------------------- |
+| `controllers/account/post-login.ts`            | `AUTH_LOGIN_SUCCEEDED`, `AUTH_LOGIN_FAILED`         |
+| `controllers/account/post-signup.ts`           | `AUTH_SIGNUP_SUCCEEDED`, `AUTH_SIGNUP_FAILED`       |
+| `controllers/account/post-reset-request.ts`    | `AUTH_PASSWORD_RESET_REQUESTED`                     |
+| `controllers/account/post-reset-confirm.ts`    | `AUTH_PASSWORD_RESET_COMPLETED`                     |
+| `controllers/account/post-logout-everywhere.ts`| `AUTH_LOGOUT_ALL_SUCCEEDED`                         |
+| `controllers/account/get-refresh-token.ts`     | `AUTH_REFRESH_SUCCEEDED`, `AUTH_REFRESH_FAILED`     |
+| `controllers/account/delete-expired-tokens.ts` | `AUTH_TOKEN_EXPIRED_CLEANUP`                        |
+| `controllers/users/write-users.ts`             | `ADMIN_USER_CREATED`, `ADMIN_USER_UPDATED`          |
+| `controllers/users/delete-users.ts`            | `ADMIN_USER_DELETED`                                |
+| `controllers/products/write-products.ts`       | `ADMIN_PRODUCT_CREATED`, `ADMIN_PRODUCT_UPDATED`    |
+| `controllers/products/delete-products.ts`      | `ADMIN_PRODUCT_DELETED`                             |
+| `controllers/orders/post-orders.ts`            | `ADMIN_ORDER_CREATED`                               |
+| `controllers/orders/put-orders.ts`             | `ADMIN_ORDER_UPDATED`                               |
+| `controllers/orders/delete-orders.ts`          | `ADMIN_ORDER_DELETED`                               |
+| `middlewares/authorizations.ts`                | `SECURITY_UNAUTHORIZED`, `SECURITY_FORBIDDEN`       |
 
 ---
 
-## Adding new audit events
+## Output files and transports
 
-1. Choose an action name from the taxonomy above (or add a new one following `domain.resource.verb` naming).
-2. Import `auditLogger` where the action happens (service layer is preferred).
-3. Include the required fields.
-
-```ts
-// In src/services/users.ts — admin deletes a user
-import { auditLogger } from '@utils/winston';
-
-auditLogger.info('admin.user.deleted', {
-    action: 'admin.user.deleted',
-    actor: requestingUser.id,
-    resource_type: 'user',
-    resource_id: targetUserId,
-    request_id: requestId,
-    ip
-});
-```
+| Destination | Contents                                       | Activation        |
+| ----------- | ---------------------------------------------- | ----------------- |
+| `audit.log` | All audit events regardless of level           | Always            |
+| Console     | All audit events (pretty in dev, JSON in prod) | Always            |
+| Loki        | All audit events under `log_type=audit` label  | Set `NODE_LOKI_HOST` |
 
 ---
 
 ## Sensitive data
 
-Audit log entries go through the **same redaction pipeline** as application logs.  
-Fields like `password`, `token`, `authorization`, and `cookie` are automatically replaced with `[REDACTED]`.
+Audit log entries pass through the **same redaction pipeline** as application logs. Fields like `password`, `token`, `authorization`, and `cookie` are automatically replaced with `[REDACTED]`.
 
 See [Structured Logging → Sensitive field redaction](./structured-logging.md#sensitive-field-redaction) for the full field list.
 
 ---
 
-## Future: shipping to a SIEM or separate Loki stream
+## Adding new audit events
 
-The `auditLogger` is already isolated. To ship events to a different backend:
-
-1. Add a new Winston transport to `auditLogger` in `src/utils/winston.ts`.
-2. Use `log_type: 'audit'` as the Loki stream label.
+1. Add the action constant to `AuditAction` in `src/utils/audit.ts`.
+2. Import `emitAuditEvent`, `AuditAction`, `extractRequestContext` at the call site.
+3. Include all required fields (`actor_user_id`, `actor_role`, `action`, `outcome`).
 
 ```ts
-// Example: additional file transport for audit entries
-new winston.transports.File({ filename: 'audit.log' });
+// Example: custom domain event
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
-// Example (future): HTTP transport to a SIEM
-new winston.transports.Http({ host: 'siem.internal', port: 9000 });
+emitAuditEvent({
+    action: AuditAction.ADMIN_USER_DELETED,
+    actor_user_id: req.user!.id,
+    actor_role: 'admin',
+    outcome: 'success',
+    target_type: 'user',
+    target_id: userId,
+    ...extractRequestContext(req),
+    metadata: { hardDelete: true }
+});
+```
+
+---
+
+## Querying audit logs
+
+### With Loki / Grafana
+
+```logql
+# All audit events
+{log_type="audit"}
+
+# Only failures
+{log_type="audit"} | json | outcome = "failure"
+
+# Forbidden access attempts
+{log_type="audit"} | json | action = "security.forbidden"
+
+# Admin actions by a specific user
+{log_type="audit"} | json | actor_role = "admin" | actor_user_id = "user-id-here"
+```
+
+### With grep (local file)
+
+```bash
+# All failed login attempts
+grep '"action":"auth.login.failed"' audit.log | jq .
+
+# All 403s from the last hour
+grep '"action":"security.forbidden"' audit.log | tail -50 | jq .
 ```
 
 ---
@@ -217,4 +282,5 @@ new winston.transports.Http({ host: 'siem.internal', port: 9000 });
 ## Related docs
 
 - [Structured Logging](./structured-logging.md) — main app logger, redaction, request access log
+- [Loki Logging](./loki-logging.md) — shipping audit logs to Loki
 - [Observability](./observability.md) — Prometheus metrics and trace context

@@ -12,6 +12,7 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '@utils/token-cleanup';
 import { authLoginTotal } from '@utils/domain-metrics';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * POST /account/login
@@ -36,6 +37,14 @@ export const postLogin = (
             if (!result.success) {
                 // Record failed login before responding
                 authLoginTotal.inc({ status: 'failure' });
+                emitAuditEvent({
+                    action: AuditAction.AUTH_LOGIN_FAILED,
+                    actor_user_id: 'anonymous',
+                    actor_role: 'anonymous',
+                    outcome: 'failure',
+                    ...extractRequestContext(request),
+                    metadata: { email }
+                });
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
@@ -59,6 +68,13 @@ export const postLogin = (
                 })
                 .then((accessToken) => {
                     authLoginTotal.inc({ status: 'success' });
+                    emitAuditEvent({
+                        action: AuditAction.AUTH_LOGIN_SUCCEEDED,
+                        actor_user_id: userId,
+                        actor_role: result.data?.admin ? 'admin' : 'user',
+                        outcome: 'success',
+                        ...extractRequestContext(request),
+                    });
                     successResponse(
                         response,
                         { token: accessToken },
