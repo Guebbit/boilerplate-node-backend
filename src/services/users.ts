@@ -39,7 +39,7 @@ const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocumen
     const data = response.data as IUserDocument & { id?: string; _id?: string };
 
     // Keep `_id` mirrored from `id` for compatibility with call sites that still read Mongo-style keys.
-    if (!data?._id && data?.id) {
+    if (!data._id && data.id) {
         return {
             ...response,
             data: {
