@@ -1,7 +1,80 @@
 import mongoose from 'mongoose';
 import { logger } from './winston';
+import { mongoQueryDurationMs, mongoQueryTotal, mongoQueryErrorsTotal } from './domain-metrics';
 
 const MAX_RETRIES = 10;
+
+/**
+ * Mongoose operations tracked for timing metrics.
+ * Covers the most common query types; aggregate/save/remove are included separately.
+ */
+const TRACKED_OPS = [
+    'find',
+    'findOne',
+    'findOneAndUpdate',
+    'findOneAndDelete',
+    'updateOne',
+    'updateMany',
+    'deleteOne',
+    'deleteMany',
+    'countDocuments',
+    'estimatedDocumentCount'
+] as const;
+
+/**
+ * Global Mongoose plugin — measures query duration for every schema.
+ *
+ * Must be registered before any mongoose.model() call.
+ * database.ts is imported by app.ts before routes/models, so the ordering is correct.
+ *
+ * Each pre-hook saves a high-resolution start time on `this` (the Query).
+ * Each post-hook reads it, computes elapsed ms, and records the histogram.
+ */
+mongoose.plugin((schema: mongoose.Schema) => {
+    for (const op of TRACKED_OPS) {
+        schema.pre(op, function (this: mongoose.Query<unknown, unknown>) {
+            (this as mongoose.Query<unknown, unknown> & { _metricsStart: bigint })._metricsStart =
+                process.hrtime.bigint();
+        });
+
+        schema.post(op, function (this: mongoose.Query<unknown, unknown>) {
+            const q = this as mongoose.Query<unknown, unknown> & { _metricsStart?: bigint };
+            if (q._metricsStart === undefined) return;
+            const durationMs = Number(process.hrtime.bigint() - q._metricsStart) / 1_000_000;
+            const collection = this.model?.collection?.name ?? 'unknown';
+            mongoQueryDurationMs.labels(collection, op).observe(durationMs);
+            mongoQueryTotal.labels(collection, op).inc();
+        });
+    }
+
+    // save / validate / remove use document middleware — `this` is the document
+    schema.pre('save', function (this: mongoose.Document) {
+        (this as mongoose.Document & { _metricsStart: bigint })._metricsStart =
+            process.hrtime.bigint();
+    });
+    schema.post('save', function (this: mongoose.Document) {
+        const document_ = this as mongoose.Document & { _metricsStart?: bigint };
+        if (document_._metricsStart === undefined) return;
+        const durationMs = Number(process.hrtime.bigint() - document_._metricsStart) / 1_000_000;
+        const collection = (this as { collection?: { name?: string } }).collection?.name ?? 'unknown';
+        mongoQueryDurationMs.labels(collection, 'save').observe(durationMs);
+        mongoQueryTotal.labels(collection, 'save').inc();
+    });
+
+    // Capture query-level errors too
+    schema.post(/.*/, function (_result: unknown, next: (error?: mongoose.CallbackError) => void) {
+        next();
+    });
+});
+
+/**
+ * Connection-level error handler for query execution errors.
+ * Fires for driver-level failures such as network drops during a query.
+ */
+mongoose.connection.on('error', () => {
+    mongoQueryErrorsTotal.labels('connection', 'error').inc();
+});
+
 const BASE_DELAY_MS = 1000;
 const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
 

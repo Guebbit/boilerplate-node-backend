@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { successResponse } from '@utils/response';
 import { getHeavyLoad } from '@controllers/_development/get-heavy-load';
-import { getPrometheusMetrics } from '@utils/observability';
+import { getPrometheusMetrics, prometheusContentType } from '@utils/observability';
 
 export const router = Router();
 
@@ -21,8 +21,11 @@ router.get('/', (request, response) => {
 /**
  * GET /metrics
  * Prometheus-compatible metrics endpoint.
+ * Scraped by Prometheus on its configured interval (default 15s).
  */
 router.get('/metrics', (_request, response) => {
-    response.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-    response.send(getPrometheusMetrics());
+    return getPrometheusMetrics().then((metrics) => {
+        response.setHeader('Content-Type', prometheusContentType);
+        response.send(metrics);
+    });
 });

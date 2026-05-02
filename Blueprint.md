@@ -21,7 +21,7 @@
 │    cookieParser → rateLimiter →                   │
 │    request-id → trace-context →                   │
 │    requestLogger ←── Phase 1                      │
-│    request-metrics                                │
+│    request-metrics ←── Phase 2                    │
 │                                                   │
 │  Routes:                                          │
 │    /account  /products  /orders  /cart  /users  / │
@@ -70,7 +70,7 @@
 |---|---|---|
 | Request correlation ID | `x-request-id` header propagation | `app.ts` |
 | Distributed tracing | W3C `traceparent` header | `src/utils/observability.ts` |
-| Prometheus metrics | In-memory counter + histogram | `src/utils/observability.ts` |
+| Prometheus metrics | prom-client counter + histogram + gauge | `src/utils/observability.ts`, `src/utils/domain-metrics.ts` ← Phase 2 |
 | Structured logging | Winston JSON logger | `src/utils/winston.ts` ← Phase 1 |
 | Audit logging | Dedicated `auditLogger` | `src/utils/winston.ts` ← Phase 1 |
 | Request access log | `requestLogger` middleware | `src/middlewares/request-logger.ts` ← Phase 1 |
@@ -158,12 +158,52 @@ What was already in place before the observability plan:
 
 ---
 
-### 🔜 Phase 2 — Prometheus metrics (planned)
+### ✅ Phase 2 — Prometheus metrics
 
-- Expose `/metrics` endpoint already present; ensure it covers all important counters
-- Per-route request counters and latency histograms
-- MongoDB query timing histograms
-- Business counters: login success/fail, checkout success/fail, order created
+**Library:** `prom-client` (v15) — the standard Prometheus client for Node.js.
+
+**HTTP metrics** (auto-collected by inline middleware in `src/app.ts`):
+- `http_requests_total{method,route,status_code}` — request counter
+- `http_request_duration_milliseconds` — latency histogram (buckets: 5–5000 ms)
+- `http_errors_total{method,route,status_code}` — 4xx/5xx error counter
+- `http_in_flight_requests` — gauge for concurrent active requests
+
+**Domain counters** (`src/utils/domain-metrics.ts`, incremented in controllers):
+- `auth_login_success_total` / `auth_login_failure_total`
+- `auth_signup_total`
+- `cart_checkout_success_total` / `cart_checkout_failure_total`
+- `order_created_total`
+
+**MongoDB query metrics** (global Mongoose plugin in `src/utils/database.ts`):
+- `mongodb_query_duration_milliseconds{collection,operation}` — histogram
+- `mongodb_queries_total{collection,operation}` — counter
+- `mongodb_query_errors_total{collection,operation}` — error counter
+
+**Process / runtime metrics** (via `collectDefaultMetrics()`):
+- `process_uptime_seconds`, `process_resident_memory_bytes`, `nodejs_eventloop_lag_seconds`, GC, CPU, handles
+- `process_runtime_errors_total` — uncaught exception counter
+
+**Endpoint:** `GET /metrics` — returns Prometheus text format.
+
+**Files changed:**
+- `src/utils/observability.ts` — replaced custom Map-based implementation with prom-client
+- `src/utils/domain-metrics.ts` — new file: domain and MongoDB metric definitions
+- `src/utils/database.ts` — added global Mongoose query timing plugin
+- `src/app.ts` — updated middleware to track in-flight requests and runtime errors
+- `src/routes/index.ts` — `/metrics` handler made async for prom-client
+- `src/controllers/account/post-login.ts` — login success/failure counters
+- `src/controllers/account/post-signup.ts` — signup counter
+- `src/controllers/cart/post-checkout.ts` — checkout success/failure counters
+- `src/controllers/orders/post-orders.ts` — order creation counter
+
+**Docs:** `docs/guide/metrics.md` — ADHD-friendly reference with visual diagram, PromQL examples, and FAQ.
+
+**Tests added:**
+- `tests/unit/utils/observability.test.ts` — 20 tests for metrics recording and trace context
+- `tests/unit/utils/domain-metrics.test.ts` — 8 tests for domain counters
+- `tests/integration/app-health.test.ts` — updated with Phase 2 assertions
+
+---
 
 ### 🔜 Phase 3 — OpenTelemetry instrumentation (planned)
 
@@ -225,6 +265,10 @@ What was already in place before the observability plan:
 |---|---|---|
 | `NODE_LOG_LEVEL` | `info` (prod) / `debug` (dev) | Winston log level |
 | `NODE_SERVICE_NAME` | `api` | Service tag in log entries |
+
+### Phase 2 — Prometheus metrics
+
+No new environment variables required. The `/metrics` endpoint is always available at startup.
 
 ### JWT expiry
 

@@ -6,6 +6,7 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
+import { signupTotal } from '@utils/domain-metrics';
 
 /**
  * POST /account/signup
@@ -40,6 +41,7 @@ export const postSignup = (
                 });
 
             // Registration successful
+            signupTotal.inc();
             successResponse(response, result.data, 201);
         })
         .catch((error: CastError | Error) => {

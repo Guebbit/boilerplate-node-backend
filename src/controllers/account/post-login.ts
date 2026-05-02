@@ -11,6 +11,7 @@ import {
 import { successResponse, rejectResponse } from '@utils/response';
 import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '@utils/token-cleanup';
+import { loginSuccessTotal, loginFailureTotal } from '@utils/domain-metrics';
 
 /**
  * POST /account/login
@@ -33,6 +34,7 @@ export const postLogin = (
         .then(() => userService.login(email, password))
         .then((result) => {
             if (!result.success) {
+                loginFailureTotal.inc();
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
@@ -55,6 +57,7 @@ export const postLogin = (
                     return createAccessToken(refreshToken);
                 })
                 .then((accessToken) => {
+                    loginSuccessTotal.inc();
                     successResponse(
                         response,
                         { token: accessToken },

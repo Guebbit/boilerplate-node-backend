@@ -19,6 +19,8 @@ import { validateRequiredEnvironment } from '@utils/environment';
 import {
     createTraceContext,
     getRouteLabel,
+    inFlightRequests,
+    processRuntimeErrorsTotal,
     recordRequestMetric,
     toTraceparentHeader
 } from '@utils/observability';
@@ -309,12 +311,16 @@ app.use(requestLogger);
 
 /**
  * Request metrics collector (Prometheus style):
+ * - in-flight gauge (inc on arrival, dec on finish)
  * - total requests by method/route/status
  * - request duration histogram
+ * - error counter (4xx/5xx derived inside recordRequestMetric)
  */
 app.use((request, response, next) => {
     const startTime = process.hrtime.bigint();
+    inFlightRequests.inc();
     response.once('finish', () => {
+        inFlightRequests.dec();
         const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startTime) / 1_000_000;
         recordRequestMetric({
             method: request.method,
@@ -392,6 +398,7 @@ process
     })
     .on('rejectionHandled', (promise) => unhandledRejections.delete(promise))
     .on('uncaughtException', (error, origin) => {
+        processRuntimeErrorsTotal.inc();
         if (process.env.NODE_ENV !== 'production') return;
         auditLogger.error('process.uncaughtException', {
             action: 'process.uncaughtException',

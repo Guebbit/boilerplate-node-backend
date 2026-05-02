@@ -7,6 +7,7 @@ import { rejectResponse } from '../../src/utils/response';
 import {
     createTraceContext,
     getRouteLabel,
+    inFlightRequests,
     recordRequestMetric,
     toTraceparentHeader
 } from '../../src/utils/observability';
@@ -28,7 +29,9 @@ app.use((request, response, next) => {
 });
 app.use((request, response, next) => {
     const startTime = process.hrtime.bigint();
+    inFlightRequests.inc();
     response.once('finish', () => {
+        inFlightRequests.dec();
         const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startTime) / 1_000_000;
         recordRequestMetric({
             method: request.method,
@@ -98,16 +101,37 @@ describe('API integration', () => {
         expect(body.message).toBe('Not Found');
     });
 
-    it('GET /metrics returns prometheus metrics', async () => {
+    it('GET /metrics returns prometheus metrics with all Phase 2 metric families', async () => {
         const response = await fetch(`${baseUrl}/metrics`);
         const body = await response.text();
 
+        // ── Basic shape ──────────────────────────────────────────────────────
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/plain');
+
+        // ── HTTP request counter (recorded from the GET / call above) ────────
         expect(body).toContain('# HELP http_requests_total');
         expect(body).toMatch(
             /http_requests_total{[^}]*method="GET"[^}]*route="\/"[^}]*status_code="200"[^}]*} \d+/
         );
+
+        // ── HTTP error counter (recorded from the 404 call above) ────────────
+        expect(body).toContain('# HELP http_errors_total');
+        expect(body).toMatch(/http_errors_total{[^}]*status_code="404"[^}]*} \d+/);
+
+        // ── Duration histogram ────────────────────────────────────────────────
+        expect(body).toContain('# HELP http_request_duration_milliseconds');
+        expect(body).toContain('http_request_duration_milliseconds_bucket');
+
+        // ── In-flight gauge (always present even when 0) ──────────────────────
+        expect(body).toContain('# HELP http_in_flight_requests');
+        expect(body).toMatch(/http_in_flight_requests \d+/);
+
+        // ── Process / runtime metrics ─────────────────────────────────────────
         expect(body).toContain('# HELP process_uptime_seconds');
+        expect(body).toContain('# HELP nodejs_eventloop_lag_seconds');
+
+        // ── Runtime error counter (present even when 0) ───────────────────────
+        expect(body).toContain('# HELP process_runtime_errors_total');
     });
 });
