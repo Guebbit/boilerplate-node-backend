@@ -28,6 +28,7 @@ export const postFeedbackContact = (
     return feedbackRequestService
         .create(parseResult.data)
         .then((createdFeedbackRequest) => {
+            // Notification target precedence: dedicated contact mailbox, then generic SMTP sender; skip email if neither is configured.
             const notifyEmail =
                 process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';
 

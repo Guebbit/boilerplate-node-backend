@@ -29,6 +29,7 @@ export const getProducts = (
     const maxPriceRaw = request.body?.maxPrice ?? request.query.maxPrice;
     const categoryRaw = request.body?.category ?? request.query.category;
     const tagRaw = request.body?.tag ?? request.query.tag;
+    // OpenAPI currently models category/tag as single-value filters; if arrays are provided we pick the first one.
     const category = extractStringList(categoryRaw)[0];
     const tag = extractStringList(tagRaw)[0];
 
