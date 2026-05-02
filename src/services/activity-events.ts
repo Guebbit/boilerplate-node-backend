@@ -87,7 +87,9 @@ type LogLoginAttemptInput = {
 };
 
 export const logLoginAttempt = (input: LogLoginAttemptInput) => {
-    const eventType = input.success ? EActivityEventType.LOGIN_SUCCESS : EActivityEventType.LOGIN_FAILED;
+    const eventType = input.success
+        ? EActivityEventType.LOGIN_SUCCESS
+        : EActivityEventType.LOGIN_FAILED;
 
     return activityEventRepository
         .create({
@@ -103,7 +105,9 @@ export const logLoginAttempt = (input: LogLoginAttemptInput) => {
             // Successful logins are stored as history only; suspicious detection applies to failed attempts.
             if (input.success) return;
 
-            const since = new Date(Date.now() - FAILED_LOGIN_WINDOW_MINUTES * MILLISECONDS_PER_MINUTE);
+            const since = new Date(
+                Date.now() - FAILED_LOGIN_WINDOW_MINUTES * MILLISECONDS_PER_MINUTE
+            );
             const where: QueryFilter<IActivityEventDocument> = {
                 type: EActivityEventType.LOGIN_FAILED,
                 createdAt: { $gte: since },

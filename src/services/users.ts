@@ -19,6 +19,39 @@ import type { Order, SearchUsersRequest, UsersResponse } from '@types';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
 
+const toObjectIdString = (value: unknown): string => {
+    if (value instanceof Types.ObjectId) return value.toString();
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && value && 'id' in value && typeof value.id === 'string')
+        return value.id;
+    if (typeof value === 'object' && value && '_id' in value) return toObjectIdString(value._id);
+    return '';
+};
+
+const matchesProductId = (product: unknown, id: string): boolean =>
+    toObjectIdString(product) === id;
+
+const resolveUserId = (user: IUserDocument): string =>
+    toObjectIdString(user._id) || toObjectIdString(user.id);
+
+const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocument> => {
+    const response = generateSuccess(user);
+    const data = response.data as IUserDocument & { id?: string; _id?: string };
+
+    // Keep `_id` mirrored from `id` for compatibility with call sites that still read Mongo-style keys.
+    if (!data?._id && data?.id) {
+        return {
+            ...response,
+            data: {
+                ...data,
+                _id: data.id
+            } as unknown as IUserDocument
+        };
+    }
+
+    return response;
+};
+
 /**
  * User Service
  * Handles all business logic for the User entity.
@@ -33,8 +66,18 @@ import { orderRepository } from '@repositories/orders';
  *
  * @param user
  */
-export const cartGet = (user: IUserDocument): Promise<ICartItem[]> =>
-    user.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
+export const cartGet = (user: IUserDocument): Promise<ICartItem[]> => {
+    if (typeof user.populate === 'function')
+        return user.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
+
+    const userId = resolveUserId(user);
+    if (!userId) return Promise.resolve(user.cart.items ?? []);
+
+    return userRepository.findById(userId).then((freshUser) => {
+        if (!freshUser) return user.cart.items ?? [];
+        return freshUser.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
+    });
+};
 
 /**
  * Get user cart with computed summary (item count, total quantity, total price).
@@ -81,7 +124,9 @@ export const cartItemSetById = (
     /**
      * Check if already present
      */
-    const cartProductIndex = user.cart.items.findIndex((item) => item.product.equals(id));
+    const cartProductIndex = user.cart.items.findIndex((item) =>
+        matchesProductId(item.product, id)
+    );
 
     /**
      * if present: directly update the quantity
@@ -98,7 +143,7 @@ export const cartItemSetById = (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
 };
 
 /**
@@ -130,7 +175,9 @@ export const cartItemAddById = (
     /**
      * Check if already present
      */
-    const cartProductIndex = user.cart.items.findIndex((item) => item.product.equals(id));
+    const cartProductIndex = user.cart.items.findIndex((item) =>
+        matchesProductId(item.product, id)
+    );
 
     /**
      * if present: directly update the quantity
@@ -149,7 +196,7 @@ export const cartItemAddById = (
      * Save
      */
     user.cart.updatedAt = new Date();
-    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
 };
 
 /**
@@ -176,9 +223,11 @@ export const cartItemRemoveById = (
     user: IUserDocument,
     id: string
 ): Promise<IResponseSuccess<IUserDocument>> => {
-    user.cart.items = user.cart.items.filter(({ product }: ICartItem) => !product.equals(id));
+    user.cart.items = user.cart.items.filter(
+        ({ product }: ICartItem) => !matchesProductId(product, id)
+    );
     user.cart.updatedAt = new Date();
-    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
 };
 
 /**
@@ -203,7 +252,7 @@ export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserD
         items: [],
         updatedAt: new Date()
     };
-    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
 };
 
 /**
@@ -220,7 +269,7 @@ export const orderConfirm = (
                 return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
             return orderRepository
                 .create({
-                    userId: user._id as Types.ObjectId,
+                    userId: new Types.ObjectId(resolveUserId(user)),
                     email: user.email,
                     // products is ICartItem[] after populate(); cast to Order['items'] for the schema
                     items: products as unknown as Order['items']
