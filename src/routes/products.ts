@@ -55,4 +55,10 @@ router.put(
 );
 
 // DELETE /products/:id — admin only
-router.delete('/:id', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
+router.delete(
+    '/:id',
+    isAuth,
+    isAdmin,
+    invalidateCache(['products']),
+    deleteProducts
+);

@@ -12,7 +12,7 @@
 
 import { RequestFile } from './models';
 
-export class SearchProductsRequest {
+export class SearchFeedbackRequestsRequest {
     /**
     * 1-based page index
     */
@@ -25,14 +25,8 @@ export class SearchProductsRequest {
     * Free-text search string
     */
     'text'?: string;
-    /**
-    * Resource identifier
-    */
-    'id'?: string;
-    'minPrice'?: number;
-    'maxPrice'?: number;
-    'category'?: string;
-    'tag'?: string;
+    'status'?: SearchFeedbackRequestsRequest.StatusEnum;
+    'email'?: string;
 
     static discriminator: string | undefined = undefined;
 
@@ -53,33 +47,26 @@ export class SearchProductsRequest {
             "type": "string"
         },
         {
-            "name": "id",
-            "baseName": "id",
-            "type": "string"
+            "name": "status",
+            "baseName": "status",
+            "type": "SearchFeedbackRequestsRequest.StatusEnum"
         },
         {
-            "name": "minPrice",
-            "baseName": "minPrice",
-            "type": "number"
-        },
-        {
-            "name": "maxPrice",
-            "baseName": "maxPrice",
-            "type": "number"
-        },
-        {
-            "name": "category",
-            "baseName": "category",
-            "type": "string"
-        },
-        {
-            "name": "tag",
-            "baseName": "tag",
+            "name": "email",
+            "baseName": "email",
             "type": "string"
         }    ];
 
     static getAttributeTypeMap() {
-        return SearchProductsRequest.attributeTypeMap;
+        return SearchFeedbackRequestsRequest.attributeTypeMap;
     }
 }
 
+export namespace SearchFeedbackRequestsRequest {
+    export enum StatusEnum {
+        New = <any> 'new',
+        InProgress = <any> 'in_progress',
+        Resolved = <any> 'resolved',
+        Spam = <any> 'spam'
+    }
+}

@@ -62,10 +62,7 @@ const sanitizeRouteSegment = (segment: string): string => {
     // Normalize dynamic IDs to reduce high-cardinality metric labels.
     if (/^\d+$/.test(segment)) return ':id';
     if (/^[\da-f]{24}$/i.test(segment)) return ':id';
-    if (
-        /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(segment)
-    )
-        return ':id';
+    if (/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(segment)) return ':id';
     return segment;
 };
 
@@ -91,7 +88,8 @@ const toCounterKey = (method: string, route: string, statusCode: number): string
 /**
  * Histogram series ignore status code because latency is usually grouped by endpoint shape, not outcome.
  */
-const toHistogramKey = (method: string, route: string): string => [method.toUpperCase(), route].join('|');
+const toHistogramKey = (method: string, route: string): string =>
+    [method.toUpperCase(), route].join('|');
 
 /**
  * Parse incoming W3C traceparent.
@@ -253,7 +251,9 @@ const renderProcessMetrics = (): string[] => {
  * Single payload used by GET /metrics.
  */
 export const getPrometheusMetrics = (): string =>
-    [...renderCounterMetrics(), ...renderHistogramMetrics(), ...renderProcessMetrics(), ''].join('\n');
+    [...renderCounterMetrics(), ...renderHistogramMetrics(), ...renderProcessMetrics(), ''].join(
+        '\n'
+    );
 
 /**
  * Best-effort route extraction for metric labels.

@@ -21,6 +21,8 @@ tags:
     - name: Products
     - name: Cart
     - name: Orders
+    - name: Admin
+    - name: Feedback
 
 # If set, by default all operation requires an authentication
 # security:
@@ -321,6 +323,14 @@ components:
                 imageUrl:
                     type: string
                     format: uri
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
                 createdAt:
                     type: string
                     format: date-time
@@ -328,6 +338,35 @@ components:
                     type: string
                     format: date-time
                 deletedAt:
+                    type: string
+                    format: date-time
+
+        FeedbackRequest:
+            type: object
+            required: [id, email, subject, message, status, createdAt]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                adminNotes:
+                    type: string
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
                     type: string
                     format: date-time
 
@@ -607,6 +646,10 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                category:
+                    type: string
+                tag:
+                    type: string
 
         CreateProductRequest:
             type: object
@@ -626,6 +669,14 @@ components:
                 imageUrl:
                     type: string
                     format: uri
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
 
         CreateProductRequestMultipart:
             type: object
@@ -646,6 +697,14 @@ components:
                     type: string
                     format: binary
                     description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
 
         UpdateProductRequest:
             type: object
@@ -667,6 +726,14 @@ components:
                 imageUrl:
                     type: string
                     format: uri
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
 
         UpdateProductRequestMultipart:
             type: object
@@ -689,6 +756,14 @@ components:
                     type: string
                     format: binary
                     description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
 
         # To be used in GET /products:
         UpdateProductRequestBody:
@@ -728,6 +803,14 @@ components:
                 imageUrl:
                     type: string
                     format: uri
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
 
         UpdateProductByIdRequestMultipart:
             type: object
@@ -748,6 +831,14 @@ components:
                     type: string
                     format: binary
                     description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
 
         DeleteProductRequest:
             type: object
@@ -881,6 +972,46 @@ components:
                 id:
                     $ref: '#/components/schemas/Id'
 
+        CreateFeedbackRequest:
+            type: object
+            additionalProperties: false
+            required: [email, subject, message]
+            properties:
+                name:
+                    type: string
+                email:
+                    $ref: '#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+
+        SearchFeedbackRequestsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                text:
+                    $ref: '#/components/schemas/Text'
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                email:
+                    $ref: '#/components/schemas/Email'
+
+        UpdateFeedbackRequestStatusRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                adminNotes:
+                    type: string
+
         # --------------- RESPONSES ---------------
         # ---------- Response DTOs — envelope items ----------
         UsersResponse:
@@ -913,6 +1044,17 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/Order'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+        FeedbackRequestsResponse:
+            type: object
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FeedbackRequest'
                 meta:
                     $ref: '#/components/schemas/PaginationMeta'
 
@@ -1319,6 +1461,83 @@ paths:
                                 $ref: '#/components/schemas/UsersResponse'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /feedback/contact:
+        post:
+            tags: [Feedback]
+            summary: Submit contact request
+            description: Creates a user feedback/contact request and notifies admins via email.
+            operationId: createFeedbackRequest
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateFeedbackRequest'
+            responses:
+                '201':
+                    description: Created feedback request
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequest'
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /feedback:
+        get:
+            tags: [Feedback]
+            summary: List feedback requests
+            description: Returns feedback/contact requests for admin review.
+            operationId: listFeedbackRequests
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchFeedbackRequestsRequest'
+            responses:
+                '200':
+                    description: Feedback request list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequestsResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /feedback/{id}:
+        put:
+            tags: [Feedback]
+            summary: Update feedback request status
+            description: Updates status/notes of a feedback request.
+            operationId: updateFeedbackRequestStatus
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateFeedbackRequestStatusRequest'
+            responses:
+                '200':
+                    description: Updated feedback request
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequest'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 

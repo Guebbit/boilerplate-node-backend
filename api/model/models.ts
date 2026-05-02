@@ -6,6 +6,7 @@ export * from './cartResponse';
 export * from './cartSummaryResponse';
 export * from './checkoutRequest';
 export * from './checkoutResponse';
+export * from './createFeedbackRequest';
 export * from './createOrderRequest';
 export * from './createProductRequest';
 export * from './createUserRequest';
@@ -14,6 +15,8 @@ export * from './deleteProductRequest';
 export * from './deleteUserRequest';
 export * from './errorDetail';
 export * from './errorResponse';
+export * from './feedbackRequest';
+export * from './feedbackRequestsResponse';
 export * from './loginRequest';
 export * from './messageResponse';
 export * from './order';
@@ -26,11 +29,13 @@ export * from './product';
 export * from './productsResponse';
 export * from './refreshTokenResponse';
 export * from './removeCartItemRequest';
+export * from './searchFeedbackRequestsRequest';
 export * from './searchOrdersRequest';
 export * from './searchProductsRequest';
 export * from './searchUsersRequest';
 export * from './signupRequest';
 export * from './updateCartItemByIdRequest';
+export * from './updateFeedbackRequestStatusRequest';
 export * from './updateOrderByIdRequest';
 export * from './updateOrderRequest';
 export * from './updateProductByIdRequest';
@@ -63,6 +68,7 @@ import { CartResponse } from './cartResponse';
 import { CartSummaryResponse } from './cartSummaryResponse';
 import { CheckoutRequest } from './checkoutRequest';
 import { CheckoutResponse } from './checkoutResponse';
+import { CreateFeedbackRequest } from './createFeedbackRequest';
 import { CreateOrderRequest } from './createOrderRequest';
 import { CreateProductRequest } from './createProductRequest';
 import { CreateUserRequest } from './createUserRequest';
@@ -71,6 +77,8 @@ import { DeleteProductRequest } from './deleteProductRequest';
 import { DeleteUserRequest } from './deleteUserRequest';
 import { ErrorDetail } from './errorDetail';
 import { ErrorResponse } from './errorResponse';
+import { FeedbackRequest } from './feedbackRequest';
+import { FeedbackRequestsResponse } from './feedbackRequestsResponse';
 import { LoginRequest } from './loginRequest';
 import { MessageResponse } from './messageResponse';
 import { Order } from './order';
@@ -83,11 +91,13 @@ import { Product } from './product';
 import { ProductsResponse } from './productsResponse';
 import { RefreshTokenResponse } from './refreshTokenResponse';
 import { RemoveCartItemRequest } from './removeCartItemRequest';
+import { SearchFeedbackRequestsRequest } from './searchFeedbackRequestsRequest';
 import { SearchOrdersRequest } from './searchOrdersRequest';
 import { SearchProductsRequest } from './searchProductsRequest';
 import { SearchUsersRequest } from './searchUsersRequest';
 import { SignupRequest } from './signupRequest';
 import { UpdateCartItemByIdRequest } from './updateCartItemByIdRequest';
+import { UpdateFeedbackRequestStatusRequest } from './updateFeedbackRequestStatusRequest';
 import { UpdateOrderByIdRequest } from './updateOrderByIdRequest';
 import { UpdateOrderRequest } from './updateOrderRequest';
 import { UpdateProductByIdRequest } from './updateProductByIdRequest';
@@ -114,7 +124,10 @@ let primitives = [
                  ];
 
 let enumsMap: {[index: string]: any} = {
+        "FeedbackRequest.StatusEnum": FeedbackRequest.StatusEnum,
         "Order.StatusEnum": Order.StatusEnum,
+        "SearchFeedbackRequestsRequest.StatusEnum": SearchFeedbackRequestsRequest.StatusEnum,
+        "UpdateFeedbackRequestStatusRequest.StatusEnum": UpdateFeedbackRequestStatusRequest.StatusEnum,
         "UpdateOrderByIdRequest.StatusEnum": UpdateOrderByIdRequest.StatusEnum,
         "UpdateOrderRequest.StatusEnum": UpdateOrderRequest.StatusEnum,
 }
@@ -126,6 +139,7 @@ let typeMap: {[index: string]: any} = {
     "CartSummaryResponse": CartSummaryResponse,
     "CheckoutRequest": CheckoutRequest,
     "CheckoutResponse": CheckoutResponse,
+    "CreateFeedbackRequest": CreateFeedbackRequest,
     "CreateOrderRequest": CreateOrderRequest,
     "CreateProductRequest": CreateProductRequest,
     "CreateUserRequest": CreateUserRequest,
@@ -134,6 +148,8 @@ let typeMap: {[index: string]: any} = {
     "DeleteUserRequest": DeleteUserRequest,
     "ErrorDetail": ErrorDetail,
     "ErrorResponse": ErrorResponse,
+    "FeedbackRequest": FeedbackRequest,
+    "FeedbackRequestsResponse": FeedbackRequestsResponse,
     "LoginRequest": LoginRequest,
     "MessageResponse": MessageResponse,
     "Order": Order,
@@ -146,11 +162,13 @@ let typeMap: {[index: string]: any} = {
     "ProductsResponse": ProductsResponse,
     "RefreshTokenResponse": RefreshTokenResponse,
     "RemoveCartItemRequest": RemoveCartItemRequest,
+    "SearchFeedbackRequestsRequest": SearchFeedbackRequestsRequest,
     "SearchOrdersRequest": SearchOrdersRequest,
     "SearchProductsRequest": SearchProductsRequest,
     "SearchUsersRequest": SearchUsersRequest,
     "SignupRequest": SignupRequest,
     "UpdateCartItemByIdRequest": UpdateCartItemByIdRequest,
+    "UpdateFeedbackRequestStatusRequest": UpdateFeedbackRequestStatusRequest,
     "UpdateOrderByIdRequest": UpdateOrderByIdRequest,
     "UpdateOrderRequest": UpdateOrderRequest,
     "UpdateProductByIdRequest": UpdateProductByIdRequest,

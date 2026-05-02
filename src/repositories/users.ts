@@ -71,7 +71,20 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
  *
  * @param user
  */
-export const save = (user: IUserDocument): Promise<IUserDocument> => user.save();
+export const save = (user: IUserDocument): Promise<IUserDocument> => {
+    if (typeof user.save === 'function') return user.save();
+
+    const userLike = user as unknown as { _id?: string; id?: string };
+    const id = userLike._id ?? userLike.id;
+    if (!id) throw new Error('Cannot save user without id');
+
+    return userModel
+        .findByIdAndUpdate(id, user, { new: true, runValidators: true })
+        .then((savedUser) => {
+            if (!savedUser) throw new Error('404');
+            return savedUser;
+        });
+};
 
 /**
  * Hard-delete a user document from the database

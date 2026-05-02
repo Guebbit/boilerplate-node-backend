@@ -106,7 +106,7 @@ describe('API integration', () => {
         expect(response.headers.get('content-type')).toContain('text/plain');
         expect(body).toContain('# HELP http_requests_total');
         expect(body).toMatch(
-            /http_requests_total\{[^}]*method="GET"[^}]*route="\/"[^}]*status_code="200"[^}]*\} \d+/
+            /http_requests_total{[^}]*method="GET"[^}]*route="\/"[^}]*status_code="200"[^}]*} \d+/
         );
         expect(body).toContain('# HELP process_uptime_seconds');
     });

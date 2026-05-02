@@ -41,6 +41,8 @@ export const zodProductSchema = z.object({
         }),
 
     imageUrl: z.string(),
+    categories: z.array(z.string()).nullish(),
+    tags: z.array(z.string()).nullish(),
 
     active: z.boolean().nullable().optional(),
     createdAt: z.date().nullable().optional(),
@@ -68,6 +70,14 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
         imageUrl: {
             type: String,
             default: 'https://placekitten.com/400/400'
+        },
+        categories: {
+            type: [String],
+            default: []
+        },
+        tags: {
+            type: [String],
+            default: []
         },
         active: {
             type: Boolean,

@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, extractPagination } from '@utils/helpers-request';
+import { extractId, extractPagination, extractStringList } from '@utils/helpers-request';
 import type { SearchProductsRequest } from '@types';
 import type { CastError } from 'mongoose';
 
@@ -27,6 +27,11 @@ export const getProducts = (
 
     const minPriceRaw = request.body?.minPrice ?? request.query.minPrice;
     const maxPriceRaw = request.body?.maxPrice ?? request.query.maxPrice;
+    const categoryRaw = request.body?.category ?? request.query.category;
+    const tagRaw = request.body?.tag ?? request.query.tag;
+    // OpenAPI currently models category/tag as single-value filters; if arrays are provided we pick the first one.
+    const category = extractStringList(categoryRaw)[0];
+    const tag = extractStringList(tagRaw)[0];
 
     return productService
         .search(
@@ -36,7 +41,9 @@ export const getProducts = (
                 pageSize,
                 text: request.body?.text ?? request.query.text,
                 minPrice: minPriceRaw ? Number(minPriceRaw) : undefined,
-                maxPrice: maxPriceRaw ? Number(maxPriceRaw) : undefined
+                maxPrice: maxPriceRaw ? Number(maxPriceRaw) : undefined,
+                category,
+                tag
             },
             request.user?.admin === true
         )

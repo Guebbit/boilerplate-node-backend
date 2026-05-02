@@ -106,8 +106,10 @@ export class ProductsApi {
      * @param description 
      * @param active 
      * @param imageUpload Optional product image
+     * @param categories 
+     * @param tags 
      */
-    public async createProduct (title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
+    public async createProduct (title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, categories?: Array<string>, tags?: Array<string>, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
         const localVarPath = this.basePath + '/products';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -154,6 +156,14 @@ export class ProductsApi {
             localVarFormParams['imageUpload'] = imageUpload;
         }
         localVarUseFormData = true;
+
+        if (categories !== undefined) {
+            localVarFormParams['categories'] = ObjectSerializer.serialize(categories, "Array<string>");
+        }
+
+        if (tags !== undefined) {
+            localVarFormParams['tags'] = ObjectSerializer.serialize(tags, "Array<string>");
+        }
 
         let localVarRequestOptions: localVarRequest.Options = {
             method: 'POST',
@@ -420,14 +430,14 @@ export class ProductsApi {
     /**
      * Returns a paginated list of products.
      * @summary List products (paginated)
-     * @param productId 
      * @param page 1-based page index
      * @param pageSize 
      * @param text 
+     * @param productId 
      * @param minPrice 
      * @param maxPrice 
      */
-    public async listProducts (productId?: string, page?: number, pageSize?: number, text?: string, minPrice?: number, maxPrice?: number, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: ProductsResponse;  }> {
+    public async listProducts (page?: number, pageSize?: number, text?: string, productId?: string, minPrice?: number, maxPrice?: number, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: ProductsResponse;  }> {
         const localVarPath = this.basePath + '/products';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -440,10 +450,6 @@ export class ProductsApi {
         }
         let localVarFormParams: any = {};
 
-        if (productId !== undefined) {
-            localVarQueryParameters['productId'] = ObjectSerializer.serialize(productId, "string");
-        }
-
         if (page !== undefined) {
             localVarQueryParameters['page'] = ObjectSerializer.serialize(page, "number");
         }
@@ -454,6 +460,10 @@ export class ProductsApi {
 
         if (text !== undefined) {
             localVarQueryParameters['text'] = ObjectSerializer.serialize(text, "string");
+        }
+
+        if (productId !== undefined) {
+            localVarQueryParameters['productId'] = ObjectSerializer.serialize(productId, "string");
         }
 
         if (minPrice !== undefined) {
@@ -587,8 +597,10 @@ export class ProductsApi {
      * @param description 
      * @param active 
      * @param imageUpload Optional product image
+     * @param categories 
+     * @param tags 
      */
-    public async updateProduct (id: string, title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
+    public async updateProduct (id: string, title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, categories?: Array<string>, tags?: Array<string>, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
         const localVarPath = this.basePath + '/products';
         let localVarQueryParameters: any = {};
         let localVarHeaderParams: any = (<any>Object).assign({}, this._defaultHeaders);
@@ -645,6 +657,14 @@ export class ProductsApi {
         }
         localVarUseFormData = true;
 
+        if (categories !== undefined) {
+            localVarFormParams['categories'] = ObjectSerializer.serialize(categories, "Array<string>");
+        }
+
+        if (tags !== undefined) {
+            localVarFormParams['tags'] = ObjectSerializer.serialize(tags, "Array<string>");
+        }
+
         let localVarRequestOptions: localVarRequest.Options = {
             method: 'PUT',
             qs: localVarQueryParameters,
@@ -698,8 +718,10 @@ export class ProductsApi {
      * @param description 
      * @param active 
      * @param imageUpload Optional product image
+     * @param categories 
+     * @param tags 
      */
-    public async updateProductById (id: string, title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
+    public async updateProductById (id: string, title: string, price: number, description?: string, active?: boolean, imageUpload?: RequestFile, categories?: Array<string>, tags?: Array<string>, options: {headers: {[name: string]: string}} = {headers: {}}) : Promise<{ response: http.IncomingMessage; body: Product;  }> {
         const localVarPath = this.basePath + '/products/{id}'
             .replace('{' + 'id' + '}', encodeURIComponent(String(id)));
         let localVarQueryParameters: any = {};
@@ -752,6 +774,14 @@ export class ProductsApi {
             localVarFormParams['imageUpload'] = imageUpload;
         }
         localVarUseFormData = true;
+
+        if (categories !== undefined) {
+            localVarFormParams['categories'] = ObjectSerializer.serialize(categories, "Array<string>");
+        }
+
+        if (tags !== undefined) {
+            localVarFormParams['tags'] = ObjectSerializer.serialize(tags, "Array<string>");
+        }
 
         let localVarRequestOptions: localVarRequest.Options = {
             method: 'PUT',
