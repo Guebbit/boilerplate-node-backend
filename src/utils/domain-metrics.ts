@@ -10,7 +10,13 @@
 
 import type { Schema, Query as MongooseQuery, MongooseDefaultQueryMiddleware } from 'mongoose';
 import { Counter, Histogram } from 'prom-client';
+import {
+    SEMATTRS_DB_SYSTEM,
+    SEMATTRS_DB_OPERATION,
+    SEMATTRS_DB_MONGODB_COLLECTION
+} from '@opentelemetry/semantic-conventions';
 import { metricsRegistry } from './observability';
+import { getTracer } from './tracer';
 
 // ─── Auth metrics ─────────────────────────────────────────────────────────────
 
@@ -121,6 +127,8 @@ const QUERY_OPS: MongooseDefaultQueryMiddleware[] = [
 
 // WeakMap keeps start times without preventing GC of Query objects.
 const queryStartTimes = new WeakMap<object, number>();
+// WeakMap keeps active OTel spans keyed on the same Query/Document object.
+const querySpans = new WeakMap<object, ReturnType<ReturnType<typeof getTracer>['startSpan']>>();
 
 // Runtime Query shape not fully reflected in Mongoose types; used internally for safe property access.
 interface IMongooseQueryInternal {
@@ -137,12 +145,23 @@ const getOperation = (query: MongooseQuery<unknown, unknown>): string =>
     (query as unknown as IMongooseQueryInternal).op ?? 'query';
 
 export const mongooseMetricsPlugin = (schema: Schema): void => {
-    // ── Query pre hook: record start time ─────────────────────────────────
+    // ── Query pre hook: record start time + open OTel span ────────────────
     schema.pre<MongooseQuery<unknown, unknown>>(QUERY_OPS, function () {
         queryStartTimes.set(this, Date.now());
+        // Start a child span for this DB operation.
+        const collection = getCollectionName(this);
+        const operation = getOperation(this);
+        const span = getTracer().startSpan(`db.${collection}.${operation}`, {
+            attributes: {
+                [SEMATTRS_DB_SYSTEM]: 'mongodb',
+                [SEMATTRS_DB_OPERATION]: operation,
+                [SEMATTRS_DB_MONGODB_COLLECTION]: collection
+            }
+        });
+        querySpans.set(this, span);
     });
 
-    // ── Query post hook: record duration and increment counter ────────────
+    // ── Query post hook: record duration, end span ─────────────────────────
     schema.post<MongooseQuery<unknown, unknown>>(QUERY_OPS, function (_result, next) {
         const collection = getCollectionName(this);
         const operation = getOperation(this);
@@ -152,10 +171,13 @@ export const mongooseMetricsPlugin = (schema: Schema): void => {
             queryStartTimes.delete(this);
         }
         databaseQueryTotal.inc({ collection, operation });
+        // End the OTel span (success path).
+        querySpans.get(this)?.end();
+        querySpans.delete(this);
         next();
     });
 
-    // ── Query error hook: increment error counter ─────────────────────────
+    // ── Query error hook: increment error counter, record error on span ───
     // The 3-argument form (error, result, next) is the Mongoose error-handling post hook.
     schema.post<MongooseQuery<unknown, unknown>>(
         QUERY_OPS,
@@ -163,6 +185,13 @@ export const mongooseMetricsPlugin = (schema: Schema): void => {
             const collection = getCollectionName(this);
             const operation = getOperation(this);
             databaseErrorsTotal.inc({ collection, operation });
+            // Record the error on the span before ending it.
+            const span = querySpans.get(this);
+            if (span) {
+                span.recordException(error);
+                span.end();
+                querySpans.delete(this);
+            }
             next(error);
         }
     );
@@ -170,6 +199,16 @@ export const mongooseMetricsPlugin = (schema: Schema): void => {
     // ── Document save pre hook ─────────────────────────────────────────────
     schema.pre('save', function () {
         queryStartTimes.set(this, Date.now());
+        const collection =
+            (this.constructor as { collection?: { name?: string } }).collection?.name ?? 'unknown';
+        const span = getTracer().startSpan(`db.${collection}.save`, {
+            attributes: {
+                [SEMATTRS_DB_SYSTEM]: 'mongodb',
+                [SEMATTRS_DB_OPERATION]: 'save',
+                [SEMATTRS_DB_MONGODB_COLLECTION]: collection
+            }
+        });
+        querySpans.set(this, span);
     });
 
     // ── Document save post hook ────────────────────────────────────────────
@@ -182,6 +221,8 @@ export const mongooseMetricsPlugin = (schema: Schema): void => {
             queryStartTimes.delete(this);
         }
         databaseQueryTotal.inc({ collection, operation: 'save' });
+        querySpans.get(this)?.end();
+        querySpans.delete(this);
         next();
     });
 
@@ -190,6 +231,12 @@ export const mongooseMetricsPlugin = (schema: Schema): void => {
         const collection =
             (this.constructor as { collection?: { name?: string } }).collection?.name ?? 'unknown';
         databaseErrorsTotal.inc({ collection, operation: 'save' });
+        const span = querySpans.get(this);
+        if (span) {
+            span.recordException(error);
+            span.end();
+            querySpans.delete(this);
+        }
         next(error);
     });
 };

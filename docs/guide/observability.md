@@ -1,9 +1,10 @@
 # Observability
 
-This boilerplate includes **traces** and **metrics** out of the box.
+This boilerplate includes **traces**, **metrics**, and **log correlation** out of the box.
 
 ## What is included
 
+- OpenTelemetry SDK spans for every request, DB query, and email send (Phase 3)
 - Trace correlation headers in every response:
     - `x-trace-id`
     - `traceparent`
@@ -13,12 +14,38 @@ This boilerplate includes **traces** and **metrics** out of the box.
 ## Visual flow
 
 ```text
-Request → trace context middleware → business route → metrics recorded → response
-               |                                              |
-         x-trace-id + traceparent                  /metrics exposes prom-client data
+Request → OTel SDK (auto-instrument) → trace-context middleware → business route → metrics recorded → response
+               │                               │                                           │
+         span created                   x-trace-id + traceparent               /metrics exposes prom-client data
+         trace_id in logs
 ```
 
-## Quick code map (`src/utils/observability.ts`)
+## Quick code map
+
+### `src/utils/tracing.ts` (Phase 3)
+
+```text
+startTracing()
+  → NodeSDK init
+  → ConsoleSpanExporter (non-production)
+  → OTLPTraceExporter (when OTEL_EXPORTER_OTLP_ENDPOINT set)
+  → HttpInstrumentation + ExpressInstrumentation
+
+shutdownTracing()
+  → sdk.shutdown() (flushes pending spans)
+```
+
+### `src/utils/tracer.ts` (Phase 3)
+
+```text
+getTracer()           → returns the active tracer
+withSpan()            → runs callback inside a named span
+getActiveSpanContext() → reads traceId/spanId from active span
+setActiveSpanAttributes() → attaches attrs to active span
+recordErrorOnActiveSpan() → marks span as error + exception event
+```
+
+### `src/utils/observability.ts` (Phase 2)
 
 ```text
 createTraceContext()
@@ -41,14 +68,9 @@ getPrometheusMetrics()
 
 See the full list in [Prometheus Metrics](./prometheus-metrics.md).
 
-Quick reference:
-- `http_requests_total{method,route,status_code}`
-- `http_request_duration_milliseconds_*` (histogram)
-- `http_request_errors_total{method,route,status_code}`
-- `http_requests_in_flight`
-- `process_uptime_seconds`
-- `process_resident_memory_bytes`
-- `nodejs_eventloop_lag_seconds` (and more via `collectDefaultMetrics`)
+## Traces available
+
+See [OpenTelemetry Tracing](./opentelemetry-tracing.md).
 
 ## Examples
 
@@ -67,6 +89,7 @@ curl http://localhost:3000/metrics
 
 ## Related docs
 
+- [OpenTelemetry Tracing](./opentelemetry-tracing.md) — spans, exporters, Tempo config
 - [Prometheus Metrics](./prometheus-metrics.md) — full metric list, PromQL examples, scrape config
 - [Structured Logging](./structured-logging.md) — JSON log format, redaction, request access log
 - [Audit Logging](./audit-logging.md) — security and compliance events

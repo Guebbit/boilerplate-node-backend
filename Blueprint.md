@@ -11,17 +11,18 @@
 ┌──────────────────────────────────────────────────┐
 │                  HTTP Client                      │
 └──────────────────────────┬───────────────────────┘
-                           │ HTTP
+                           │ HTTP  (W3C traceparent)
                            ▼
 ┌──────────────────────────────────────────────────┐
 │               Express App (app.ts)                │
 │                                                   │
 │  Middleware chain (in order):                     │
+│    tracing (OTel SDK init) ←── Phase 3            │
 │    helmet → cors → urlencoded → json →            │
 │    cookieParser → rateLimiter →                   │
 │    request-id → trace-context →                   │
 │    requestLogger ←── Phase 1                      │
-│    request-metrics                                │
+│    request-metrics ←── Phase 2                    │
 │                                                   │
 │  Routes:                                          │
 │    /account  /products  /orders  /cart  /users  / │
@@ -39,7 +40,7 @@
             │
             ▼
     ┌───────────────┐
-    │ Repositories  │  ← MongoDB / Mongoose queries
+    │ Repositories  │  ← MongoDB / Mongoose queries + OTel DB spans
     └───────┬───────┘
             │
             ▼
@@ -69,15 +70,17 @@
 | Concern | Implementation | Location |
 |---|---|---|
 | Request correlation ID | `x-request-id` header propagation | `app.ts` |
-| Distributed tracing | W3C `traceparent` header | `src/utils/observability.ts` |
+| Distributed tracing | W3C `traceparent` + OTel SDK spans | `src/utils/tracing.ts` ← Phase 3 |
+| OTel tracer helper | `getTracer()`, `withSpan()`, `recordErrorOnActiveSpan()` | `src/utils/tracer.ts` ← Phase 3 |
 | Prometheus metrics | prom-client counters, histograms, gauges | `src/utils/observability.ts` ← Phase 2 |
 | Domain / business metrics | auth, cart, order counters | `src/utils/domain-metrics.ts` ← Phase 2 |
-| DB query metrics | Mongoose plugin (duration, count, errors) | `src/utils/domain-metrics.ts` ← Phase 2 |
+| DB query metrics + spans | Mongoose plugin (duration, count, errors, OTel spans) | `src/utils/domain-metrics.ts` ← Phase 2/3 |
+| Email span | `nodemailer()` wrapped in OTel span | `src/utils/nodemailer.ts` ← Phase 3 |
 | Structured logging | Winston JSON logger | `src/utils/winston.ts` ← Phase 1 |
 | Audit logging | Dedicated `auditLogger` | `src/utils/winston.ts` ← Phase 1 |
-| Request access log | `requestLogger` middleware | `src/middlewares/request-logger.ts` ← Phase 1 |
+| Request access log | `requestLogger` middleware + OTel trace IDs | `src/middlewares/request-logger.ts` ← Phase 1/3 |
 | Sensitive redaction | `redactSensitiveFields()` | `src/utils/winston.ts` ← Phase 1 |
-| Error handling | Global Express error handler | `app.ts` |
+| Error handling | Global Express error handler + span error recording | `app.ts` |
 | Auth (JWT) | Access token + refresh token | `src/middlewares/auth-jwt.ts` |
 | Rate limiting | `express-rate-limit` | `src/middlewares/security.ts` |
 | Secure headers | `helmet` | `app.ts` |
@@ -231,11 +234,77 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 ---
 
-### 🔜 Phase 3 — OpenTelemetry instrumentation (planned)
+### ✅ Phase 3 — OpenTelemetry instrumentation
 
-- W3C traceparent already propagated; add OTel SDK spans
-- Instrument HTTP layer, service methods, repository calls
-- Export to Tempo or Jaeger
+**Goal:** add real distributed tracing to every layer of the stack and correlate trace IDs with Phase 1 logs and Phase 2 metrics.
+
+**What was added:**
+
+#### 1. OTel SDK setup (`src/utils/tracing.ts`)
+
+- `startTracing()` — initialises `NodeSDK` with:
+  - `ConsoleSpanExporter` (non-production stdout)
+  - `OTLPTraceExporter` via `BatchSpanProcessor` (when `OTEL_EXPORTER_OTLP_ENDPOINT` is set)
+  - `HttpInstrumentation` — auto-instruments incoming HTTP requests
+  - `ExpressInstrumentation` — auto-instruments Express router
+  - `resourceFromAttributes()` — sets `service.name` and `service.version` on every span
+- `shutdownTracing()` — flushes pending spans; called during graceful server shutdown
+
+#### 2. Tracer helper (`src/utils/tracer.ts`)
+
+| Export | Purpose |
+|---|---|
+| `getTracer()` | Returns the active OTel tracer (scoped to this service) |
+| `withSpan(name, callback, attrs?)` | Runs async callback inside a named span; records errors |
+| `getActiveSpanContext()` | Returns `{ traceId, spanId }` from the active OTel span |
+| `setActiveSpanAttributes(attrs)` | Attaches attributes to the active span |
+| `recordErrorOnActiveSpan(error)` | Marks span as error and records exception event |
+
+#### 3. Updated `src/app.ts`
+
+- OTel `startTracing()` is the **first import** — ensures patching before Express loads
+- Trace-context middleware: prefers OTel span IDs over manual W3C parsing
+- Global error handler: calls `recordErrorOnActiveSpan(error)` so every unhandled error lands on the trace
+- `stopServer()` calls `shutdownTracing()` to flush spans before process exit
+
+#### 4. Updated `src/cluster.ts`
+
+- Calls `startTracing()` before forking workers
+
+#### 5. DB spans in Mongoose plugin (`src/utils/domain-metrics.ts`)
+
+- Every query/save now opens an OTel child span alongside the existing Prometheus metric
+- Span attributes: `db.system`, `db.operation`, `db.mongodb.collection`
+- Error path records exception event on the span
+
+#### 6. Email span (`src/utils/nodemailer.ts`)
+
+- `nodemailer()` now wraps the full email-send flow in `withSpan('email.send')`
+- Span attributes: `messaging.system`, `messaging.destination`, `email.template`
+
+#### 7. Log/trace correlation (`src/middlewares/request-logger.ts`)
+
+- `requestLogger` prefers OTel span IDs for `trace_id` and `span_id` in access logs
+- Falls back to manual `traceContext` when no OTel span is active
+
+#### 8. Environment variables added
+
+| Variable | Default | Description |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL |
+| `OTEL_EXPORTER_OTLP_HEADERS` | _(unset)_ | Comma-separated `key=value` auth headers |
+
+#### 9. Tests added
+
+- `tests/unit/utils/tracing.test.ts` — 32 tests using `NodeTracerProvider` + `InMemorySpanExporter`
+
+#### 10. Documentation added
+
+- `docs/guide/opentelemetry-tracing.md` — full tracing guide with flow diagram, Tempo Docker Compose snippet, code examples, env var table
+- `docs/index.md` — Phase 3 feature card added
+- `docs/.vitepress/config.mts` — sidebar entry added
+
+---
 
 ### 🔜 Phase 4 — Loki centralized logs (planned)
 
@@ -291,6 +360,13 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 |---|---|---|
 | `NODE_LOG_LEVEL` | `info` (prod) / `debug` (dev) | Winston log level |
 | `NODE_SERVICE_NAME` | `api` | Service tag in log entries |
+
+### Phase 3 — OpenTelemetry tracing
+
+| Variable | Default | Description |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL |
+| `OTEL_EXPORTER_OTLP_HEADERS` | _(unset)_ | Comma-separated `key=value` auth headers |
 
 ### JWT expiry
 

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from '@utils/winston';
 import { getRouteLabel } from '@utils/observability';
+import { getActiveSpanContext } from '@utils/tracer';
 
 // Headers that should be masked in request logs.
 const SENSITIVE_HEADERS = new Set(['authorization', 'cookie', 'set-cookie']);
@@ -30,10 +31,16 @@ export const requestLogger = (request: Request, response: Response, next: NextFu
         const method = request.method;
         const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
 
+        // Prefer the OTel span context for trace IDs (authoritative when SDK is active).
+        // Fall back to the manually propagated traceContext from the middleware chain.
+        const otel = getActiveSpanContext();
+        const traceId = otel.traceId ?? request.traceContext?.traceId;
+        const spanId = otel.spanId ?? request.traceContext?.spanId;
+
         logger.log(level, `${method} ${route} ${statusCode} ${durationMs.toFixed(1)}ms`, {
             request_id: request.requestId,
-            trace_id: request.traceContext?.traceId,
-            span_id: request.traceContext?.spanId,
+            trace_id: traceId,
+            span_id: spanId,
             parent_span_id: request.traceContext?.parentSpanId,
             method,
             route,
