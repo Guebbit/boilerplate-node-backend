@@ -14,16 +14,16 @@ concurrency:
 jobs:
     ci:
         runs-on: ubuntu-latest
-        timeout-minutes: 15  # Hard timeout to avoid hanging jobs
+        timeout-minutes: 15 # Hard timeout to avoid hanging jobs
 
         # Spin up required services for tests
         services:
             mongodb:
                 image: mongo:8
-                ports: ["27017:27017"] # Default Mongo port
+                ports: ['27017:27017'] # Default Mongo port
             redis:
                 image: redis:7
-                ports: ["6379:6379"]   # Default Redis port
+                ports: ['6379:6379'] # Default Redis port
 
         steps:
             # Checkout repo code

@@ -8,32 +8,32 @@
 
 ### HTTP layer
 
-| Metric | Type | Labels | What it tells you |
-|---|---|---|---|
-| `http_requests_total` | Counter | `method`, `route`, `status_code` | Traffic per endpoint |
-| `http_request_duration_milliseconds` | Histogram | `method`, `route` | Latency (p50/p95/p99) |
-| `http_request_errors_total` | Counter | `method`, `route`, `status_code` | 4xx/5xx rate |
-| `http_requests_in_flight` | Gauge | — | Concurrent live requests |
+| Metric                               | Type      | Labels                           | What it tells you        |
+| ------------------------------------ | --------- | -------------------------------- | ------------------------ |
+| `http_requests_total`                | Counter   | `method`, `route`, `status_code` | Traffic per endpoint     |
+| `http_request_duration_milliseconds` | Histogram | `method`, `route`                | Latency (p50/p95/p99)    |
+| `http_request_errors_total`          | Counter   | `method`, `route`, `status_code` | 4xx/5xx rate             |
+| `http_requests_in_flight`            | Gauge     | —                                | Concurrent live requests |
 
 ### Business / domain
 
-| Metric | Type | Labels | What it tells you |
-|---|---|---|---|
-| `auth_login_total` | Counter | `status` (success\|failure) | Login funnel health |
-| `auth_signup_total` | Counter | `status` | Sign-up funnel health |
-| `auth_password_reset_total` | Counter | `status` | Password reset requests |
-| `auth_refresh_total` | Counter | `status` | Token refresh activity |
-| `auth_token_cleanup_total` | Counter | — | Token cleanup job runs |
-| `cart_checkout_total` | Counter | `status` | Checkout conversion |
-| `order_created_total` | Counter | — | Order volume |
+| Metric                      | Type    | Labels                      | What it tells you       |
+| --------------------------- | ------- | --------------------------- | ----------------------- |
+| `auth_login_total`          | Counter | `status` (success\|failure) | Login funnel health     |
+| `auth_signup_total`         | Counter | `status`                    | Sign-up funnel health   |
+| `auth_password_reset_total` | Counter | `status`                    | Password reset requests |
+| `auth_refresh_total`        | Counter | `status`                    | Token refresh activity  |
+| `auth_token_cleanup_total`  | Counter | —                           | Token cleanup job runs  |
+| `cart_checkout_total`       | Counter | `status`                    | Checkout conversion     |
+| `order_created_total`       | Counter | —                           | Order volume            |
 
 ### Database (Mongoose)
 
-| Metric | Type | Labels | What it tells you |
-|---|---|---|---|
-| `db_query_total` | Counter | `collection`, `operation` | Query volume per model |
-| `db_query_duration_seconds` | Histogram | `collection`, `operation` | Query latency |
-| `db_errors_total` | Counter | `collection`, `operation` | Query error rate |
+| Metric                      | Type      | Labels                    | What it tells you      |
+| --------------------------- | --------- | ------------------------- | ---------------------- |
+| `db_query_total`            | Counter   | `collection`, `operation` | Query volume per model |
+| `db_query_duration_seconds` | Histogram | `collection`, `operation` | Query latency          |
+| `db_errors_total`           | Counter   | `collection`, `operation` | Query error rate       |
 
 ### Process / runtime (built-in)
 
@@ -165,11 +165,11 @@ Add this to your `prometheus.yml`:
 
 ```yaml
 scrape_configs:
-  - job_name: 'node-api'
-    static_configs:
-      - targets: ['localhost:3000']
-    metrics_path: /metrics
-    scrape_interval: 15s
+    - job_name: 'node-api'
+      static_configs:
+          - targets: ['localhost:3000']
+      metrics_path: /metrics
+      scrape_interval: 15s
 ```
 
 ---

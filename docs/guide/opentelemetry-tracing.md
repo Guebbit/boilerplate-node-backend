@@ -24,13 +24,13 @@ Trace = the full journey of one request through the system
 
 ## What is instrumented
 
-| Layer | How | What you get |
-|---|---|---|
-| HTTP requests | `HttpInstrumentation` (auto) | Span per incoming request |
-| Express routes | `ExpressInstrumentation` (auto) | Span per route handler |
-| MongoDB queries | Custom Mongoose plugin (manual) | Span per `find` / `save` / etc |
-| Email sends | Wrapped in `withSpan()` | Span for each `nodemailer` call |
-| Errors | `recordErrorOnActiveSpan()` | Exception event on active span |
+| Layer           | How                             | What you get                    |
+| --------------- | ------------------------------- | ------------------------------- |
+| HTTP requests   | `HttpInstrumentation` (auto)    | Span per incoming request       |
+| Express routes  | `ExpressInstrumentation` (auto) | Span per route handler          |
+| MongoDB queries | Custom Mongoose plugin (manual) | Span per `find` / `save` / etc  |
+| Email sends     | Wrapped in `withSpan()`         | Span for each `nodemailer` call |
+| Errors          | `recordErrorOnActiveSpan()`     | Exception event on active span  |
 
 ---
 
@@ -146,41 +146,41 @@ The exporter sends spans to `http://tempo:4318/v1/traces` via OTLP/HTTP.
 
 ```yaml
 services:
-  tempo:
-    image: grafana/tempo:latest
-    ports:
-      - "4318:4318"   # OTLP HTTP
-      - "3200:3200"   # Tempo query API
-    command: ["-config.file=/etc/tempo.yaml"]
-    volumes:
-      - ./tempo.yaml:/etc/tempo.yaml
+    tempo:
+        image: grafana/tempo:latest
+        ports:
+            - '4318:4318' # OTLP HTTP
+            - '3200:3200' # Tempo query API
+        command: ['-config.file=/etc/tempo.yaml']
+        volumes:
+            - ./tempo.yaml:/etc/tempo.yaml
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_AUTH_ANONYMOUS_ENABLED=true
+    grafana:
+        image: grafana/grafana:latest
+        ports:
+            - '3001:3000'
+        environment:
+            - GF_AUTH_ANONYMOUS_ENABLED=true
 ```
 
 ### Minimal Tempo config (`tempo.yaml`)
 
 ```yaml
 server:
-  http_listen_port: 3200
+    http_listen_port: 3200
 
 distributor:
-  receivers:
-    otlp:
-      protocols:
-        http:
-          endpoint: 0.0.0.0:4318
+    receivers:
+        otlp:
+            protocols:
+                http:
+                    endpoint: 0.0.0.0:4318
 
 storage:
-  trace:
-    backend: local
-    local:
-      path: /tmp/tempo/blocks
+    trace:
+        backend: local
+        local:
+            path: /tmp/tempo/blocks
 ```
 
 ---
@@ -191,13 +191,10 @@ storage:
 import { withSpan } from '@utils/tracer';
 
 // Wrap any async operation in a named span.
-const result = await withSpan(
-    'cart.checkout',
-    async (span) => {
-        span.setAttribute('user.id', userId);
-        return await cartService.checkout(userId);
-    }
-);
+const result = await withSpan('cart.checkout', async (span) => {
+    span.setAttribute('user.id', userId);
+    return await cartService.checkout(userId);
+});
 ```
 
 Or set attributes on the currently active span:
@@ -216,15 +213,15 @@ Every request log line includes `trace_id` and `span_id`:
 
 ```json
 {
-  "level": "info",
-  "message": "GET /products 200 12.3ms",
-  "request_id": "550e8400-e29b-41d4-a716-446655440000",
-  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-  "span_id": "b7ad6b7169203331",
-  "method": "GET",
-  "route": "/products",
-  "status_code": 200,
-  "duration_ms": 12.3
+    "level": "info",
+    "message": "GET /products 200 12.3ms",
+    "request_id": "550e8400-e29b-41d4-a716-446655440000",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "span_id": "b7ad6b7169203331",
+    "method": "GET",
+    "route": "/products",
+    "status_code": 200,
+    "duration_ms": 12.3
 }
 ```
 
@@ -234,11 +231,11 @@ Use `trace_id` to jump from a Loki log entry directly to the corresponding Tempo
 
 ## Environment variables
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL |
-| `OTEL_EXPORTER_OTLP_HEADERS` | _(unset)_ | Comma-separated `key=value` auth headers |
-| `NODE_SERVICE_NAME` | `api` | Service name in every span |
+| Variable                      | Default   | Purpose                                  |
+| ----------------------------- | --------- | ---------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL             |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | _(unset)_ | Comma-separated `key=value` auth headers |
+| `NODE_SERVICE_NAME`           | `api`     | Service name in every span               |
 
 ---
 

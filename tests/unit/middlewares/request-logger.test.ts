@@ -37,24 +37,25 @@ const mockLog = logger.log as jest.MockedFunction<typeof logger.log>;
 // Helper: build a minimal fake request/response pair
 // ---------------------------------------------------------------------------
 
-const buildMockRequest = (overrides: Partial<Request> = {}): Request => ({
-    method: 'GET',
-    path: '/products',
-    originalUrl: '/products',
-    ip: '127.0.0.1',
-    requestId: 'test-request-id',
-    traceContext: {
-        traceId: 'aaaa',
-        spanId: 'bbbb'
-    },
-    user: undefined,
-    // Build headers using fromEntries to avoid linter warnings on hyphenated keys
-    headers: Object.fromEntries([
-        ['content-type', 'application/json'],
-        ['user-agent', 'jest-test']
-    ]) as Request['headers'],
-    ...overrides
-} as unknown as Request);
+const buildMockRequest = (overrides: Partial<Request> = {}): Request =>
+    ({
+        method: 'GET',
+        path: '/products',
+        originalUrl: '/products',
+        ip: '127.0.0.1',
+        requestId: 'test-request-id',
+        traceContext: {
+            traceId: 'aaaa',
+            spanId: 'bbbb'
+        },
+        user: undefined,
+        // Build headers using fromEntries to avoid linter warnings on hyphenated keys
+        headers: Object.fromEntries([
+            ['content-type', 'application/json'],
+            ['user-agent', 'jest-test']
+        ]) as Request['headers'],
+        ...overrides
+    }) as unknown as Request;
 
 /**
  * Build a minimal mock response backed by a plain object with an `on` / `once`

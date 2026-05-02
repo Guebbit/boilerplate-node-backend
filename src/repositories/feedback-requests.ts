@@ -23,8 +23,9 @@ export const findAll = (
 export const count = (where: IFeedbackRequestQueryFilter = {}): Promise<number> =>
     feedbackRequestModel.countDocuments(where);
 
-export const create = (data: Partial<IFeedbackRequestDocument>): Promise<IFeedbackRequestDocument> =>
-    feedbackRequestModel.create(data);
+export const create = (
+    data: Partial<IFeedbackRequestDocument>
+): Promise<IFeedbackRequestDocument> => feedbackRequestModel.create(data);
 
 export const save = (feedback: IFeedbackRequestDocument): Promise<IFeedbackRequestDocument> =>
     feedback.save();

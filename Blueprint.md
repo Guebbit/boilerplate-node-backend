@@ -53,38 +53,38 @@
 
 ## Layer responsibilities
 
-| Layer | File location | Responsibility |
-|---|---|---|
-| Routes | `src/routes/` | HTTP method + path → middleware stack |
-| Controllers | `src/controllers/` | Parse input, call service, format response |
-| Services | `src/services/` | Business logic, validation, authorization scope |
-| Repositories | `src/repositories/` | MongoDB CRUD/aggregation, no business rules |
-| Models | `src/models/` | Mongoose schemas, TypeScript types, indexes |
-| Middlewares | `src/middlewares/` | Auth guards, security, request logging |
-| Utils | `src/utils/` | Shared cross-cutting helpers |
+| Layer        | File location       | Responsibility                                  |
+| ------------ | ------------------- | ----------------------------------------------- |
+| Routes       | `src/routes/`       | HTTP method + path → middleware stack           |
+| Controllers  | `src/controllers/`  | Parse input, call service, format response      |
+| Services     | `src/services/`     | Business logic, validation, authorization scope |
+| Repositories | `src/repositories/` | MongoDB CRUD/aggregation, no business rules     |
+| Models       | `src/models/`       | Mongoose schemas, TypeScript types, indexes     |
+| Middlewares  | `src/middlewares/`  | Auth guards, security, request logging          |
+| Utils        | `src/utils/`        | Shared cross-cutting helpers                    |
 
 ---
 
 ## Cross-cutting concerns
 
-| Concern | Implementation | Location |
-|---|---|---|
-| Request correlation ID | `x-request-id` header propagation | `app.ts` |
-| Distributed tracing | W3C `traceparent` + OTel SDK spans | `src/utils/tracing.ts` ← Phase 3 |
-| OTel tracer helper | `getTracer()`, `withSpan()`, `recordErrorOnActiveSpan()` | `src/utils/tracer.ts` ← Phase 3 |
-| Prometheus metrics | prom-client counters, histograms, gauges | `src/utils/observability.ts` ← Phase 2 |
-| Domain / business metrics | auth, cart, order counters | `src/utils/domain-metrics.ts` ← Phase 2 |
-| DB query metrics + spans | Mongoose plugin (duration, count, errors, OTel spans) | `src/utils/domain-metrics.ts` ← Phase 2/3 |
-| Email span | `nodemailer()` wrapped in OTel span | `src/utils/nodemailer.ts` ← Phase 3 |
-| Structured logging | Winston JSON logger | `src/utils/winston.ts` ← Phase 1 |
-| Audit logging | Dedicated `auditLogger` | `src/utils/winston.ts` ← Phase 1 |
-| Request access log | `requestLogger` middleware + OTel trace IDs | `src/middlewares/request-logger.ts` ← Phase 1/3 |
-| Sensitive redaction | `redactSensitiveFields()` | `src/utils/winston.ts` ← Phase 1 |
-| Error handling | Global Express error handler + span error recording | `app.ts` |
-| Auth (JWT) | Access token + refresh token | `src/middlewares/auth-jwt.ts` |
-| Rate limiting | `express-rate-limit` | `src/middlewares/security.ts` |
-| Secure headers | `helmet` | `app.ts` |
-| i18n | `i18next` | `src/locales/` |
+| Concern                   | Implementation                                           | Location                                        |
+| ------------------------- | -------------------------------------------------------- | ----------------------------------------------- |
+| Request correlation ID    | `x-request-id` header propagation                        | `app.ts`                                        |
+| Distributed tracing       | W3C `traceparent` + OTel SDK spans                       | `src/utils/tracing.ts` ← Phase 3                |
+| OTel tracer helper        | `getTracer()`, `withSpan()`, `recordErrorOnActiveSpan()` | `src/utils/tracer.ts` ← Phase 3                 |
+| Prometheus metrics        | prom-client counters, histograms, gauges                 | `src/utils/observability.ts` ← Phase 2          |
+| Domain / business metrics | auth, cart, order counters                               | `src/utils/domain-metrics.ts` ← Phase 2         |
+| DB query metrics + spans  | Mongoose plugin (duration, count, errors, OTel spans)    | `src/utils/domain-metrics.ts` ← Phase 2/3       |
+| Email span                | `nodemailer()` wrapped in OTel span                      | `src/utils/nodemailer.ts` ← Phase 3             |
+| Structured logging        | Winston JSON logger                                      | `src/utils/winston.ts` ← Phase 1                |
+| Audit logging             | Dedicated `auditLogger`                                  | `src/utils/winston.ts` ← Phase 1                |
+| Request access log        | `requestLogger` middleware + OTel trace IDs              | `src/middlewares/request-logger.ts` ← Phase 1/3 |
+| Sensitive redaction       | `redactSensitiveFields()`                                | `src/utils/winston.ts` ← Phase 1                |
+| Error handling            | Global Express error handler + span error recording      | `app.ts`                                        |
+| Auth (JWT)                | Access token + refresh token                             | `src/middlewares/auth-jwt.ts`                   |
+| Rate limiting             | `express-rate-limit`                                     | `src/middlewares/security.ts`                   |
+| Secure headers            | `helmet`                                                 | `app.ts`                                        |
+| i18n                      | `i18next`                                                | `src/locales/`                                  |
 
 ---
 
@@ -147,9 +147,9 @@ What was already in place before the observability plan:
 
 #### 6. Environment variables added
 
-| Variable | Purpose |
-|---|---|
-| `NODE_LOG_LEVEL` | Override Winston log level |
+| Variable            | Purpose                        |
+| ------------------- | ------------------------------ |
+| `NODE_LOG_LEVEL`    | Override Winston log level     |
 | `NODE_SERVICE_NAME` | Service tag in every log entry |
 
 #### 7. Documentation added
@@ -158,6 +158,7 @@ What was already in place before the observability plan:
 - `docs/guide/audit-logging.md` — audit event taxonomy, required fields, examples
 
 **Tests added:**
+
 - `tests/unit/utils/winston.test.ts` — 12 tests for `redactSensitiveFields` and `serializeError`
 - `tests/unit/middlewares/request-logger.test.ts` — 9 tests for the request logger middleware
 
@@ -186,18 +187,18 @@ What was already in place before the observability plan:
 
 New file with business counters and DB metrics:
 
-| Metric | Labels | Where incremented |
-|---|---|---|
-| `auth_login_total` | `status` | `post-login.ts` |
-| `auth_signup_total` | `status` | `post-signup.ts` |
-| `auth_password_reset_total` | `status` | ready for instrumentation |
-| `auth_refresh_total` | `status` | ready for instrumentation |
-| `auth_token_cleanup_total` | — | ready for instrumentation |
-| `cart_checkout_total` | `status` | `post-checkout.ts` |
-| `order_created_total` | — | `post-orders.ts` |
-| `db_query_total` | `collection`, `operation` | Mongoose plugin |
-| `db_query_duration_seconds` | `collection`, `operation` | Mongoose plugin |
-| `db_errors_total` | `collection`, `operation` | Mongoose plugin |
+| Metric                      | Labels                    | Where incremented         |
+| --------------------------- | ------------------------- | ------------------------- |
+| `auth_login_total`          | `status`                  | `post-login.ts`           |
+| `auth_signup_total`         | `status`                  | `post-signup.ts`          |
+| `auth_password_reset_total` | `status`                  | ready for instrumentation |
+| `auth_refresh_total`        | `status`                  | ready for instrumentation |
+| `auth_token_cleanup_total`  | —                         | ready for instrumentation |
+| `cart_checkout_total`       | `status`                  | `post-checkout.ts`        |
+| `order_created_total`       | —                         | `post-orders.ts`          |
+| `db_query_total`            | `collection`, `operation` | Mongoose plugin           |
+| `db_query_duration_seconds` | `collection`, `operation` | Mongoose plugin           |
+| `db_errors_total`           | `collection`, `operation` | Mongoose plugin           |
 
 Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps all query and save operations with pre/post hooks to record DB timing and errors.
 
@@ -243,22 +244,22 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 #### 1. OTel SDK setup (`src/utils/tracing.ts`)
 
 - `startTracing()` — initialises `NodeSDK` with:
-  - `ConsoleSpanExporter` (non-production stdout)
-  - `OTLPTraceExporter` via `BatchSpanProcessor` (when `OTEL_EXPORTER_OTLP_ENDPOINT` is set)
-  - `HttpInstrumentation` — auto-instruments incoming HTTP requests
-  - `ExpressInstrumentation` — auto-instruments Express router
-  - `resourceFromAttributes()` — sets `service.name` and `service.version` on every span
+    - `ConsoleSpanExporter` (non-production stdout)
+    - `OTLPTraceExporter` via `BatchSpanProcessor` (when `OTEL_EXPORTER_OTLP_ENDPOINT` is set)
+    - `HttpInstrumentation` — auto-instruments incoming HTTP requests
+    - `ExpressInstrumentation` — auto-instruments Express router
+    - `resourceFromAttributes()` — sets `service.name` and `service.version` on every span
 - `shutdownTracing()` — flushes pending spans; called during graceful server shutdown
 
 #### 2. Tracer helper (`src/utils/tracer.ts`)
 
-| Export | Purpose |
-|---|---|
-| `getTracer()` | Returns the active OTel tracer (scoped to this service) |
+| Export                             | Purpose                                                 |
+| ---------------------------------- | ------------------------------------------------------- |
+| `getTracer()`                      | Returns the active OTel tracer (scoped to this service) |
 | `withSpan(name, callback, attrs?)` | Runs async callback inside a named span; records errors |
-| `getActiveSpanContext()` | Returns `{ traceId, spanId }` from the active OTel span |
-| `setActiveSpanAttributes(attrs)` | Attaches attributes to the active span |
-| `recordErrorOnActiveSpan(error)` | Marks span as error and records exception event |
+| `getActiveSpanContext()`           | Returns `{ traceId, spanId }` from the active OTel span |
+| `setActiveSpanAttributes(attrs)`   | Attaches attributes to the active span                  |
+| `recordErrorOnActiveSpan(error)`   | Marks span as error and records exception event         |
 
 #### 3. Updated `src/app.ts`
 
@@ -289,10 +290,10 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 #### 8. Environment variables added
 
-| Variable | Default | Description |
-|---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL |
-| `OTEL_EXPORTER_OTLP_HEADERS` | _(unset)_ | Comma-separated `key=value` auth headers |
+| Variable                      | Default   | Description                              |
+| ----------------------------- | --------- | ---------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL             |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | _(unset)_ | Comma-separated `key=value` auth headers |
 
 #### 9. Tests added
 
@@ -333,81 +334,81 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 ### Required
 
-| Variable | Description |
-|---|---|
-| `NODE_DB_URI` | MongoDB connection string |
-| `NODE_ACCESS_TOKEN_SECRET` | JWT access token signing secret |
+| Variable                    | Description                      |
+| --------------------------- | -------------------------------- |
+| `NODE_DB_URI`               | MongoDB connection string        |
+| `NODE_ACCESS_TOKEN_SECRET`  | JWT access token signing secret  |
 | `NODE_REFRESH_TOKEN_SECRET` | JWT refresh token signing secret |
 
 ### Runtime
 
-| Variable | Default | Description |
-|---|---|---|
-| `NODE_ENV` | — | `production` / `development` / `test` |
-| `NODE_PORT` | `3000` | HTTP port |
-| `NODE_URL` | — | Public base URL |
-| `NODE_ENABLE_CLUSTERING` | `1` | Enable multi-worker cluster mode |
-| `NODE_CLUSTER_WORKERS` | `0` (auto) | Explicit worker count |
-| `NODE_DEFAULT_LOCALE` | `en` | Default i18n locale |
-| `NODE_FALLBACK_LOCALE` | `en` | Fallback i18n locale |
-| `NODE_TOKEN_CLEANUP_INTERVAL` | `3600000` | Token sweep interval (ms) |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` | `15000` | Max shutdown time (ms) |
-| `NODE_CORS_ORIGIN` | `http://localhost:5173` | Comma-separated allowed origins |
+| Variable                            | Default                 | Description                           |
+| ----------------------------------- | ----------------------- | ------------------------------------- |
+| `NODE_ENV`                          | —                       | `production` / `development` / `test` |
+| `NODE_PORT`                         | `3000`                  | HTTP port                             |
+| `NODE_URL`                          | —                       | Public base URL                       |
+| `NODE_ENABLE_CLUSTERING`            | `1`                     | Enable multi-worker cluster mode      |
+| `NODE_CLUSTER_WORKERS`              | `0` (auto)              | Explicit worker count                 |
+| `NODE_DEFAULT_LOCALE`               | `en`                    | Default i18n locale                   |
+| `NODE_FALLBACK_LOCALE`              | `en`                    | Fallback i18n locale                  |
+| `NODE_TOKEN_CLEANUP_INTERVAL`       | `3600000`               | Token sweep interval (ms)             |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` | `15000`                 | Max shutdown time (ms)                |
+| `NODE_CORS_ORIGIN`                  | `http://localhost:5173` | Comma-separated allowed origins       |
 
 ### Phase 1 — Structured logging
 
-| Variable | Default | Description |
-|---|---|---|
-| `NODE_LOG_LEVEL` | `info` (prod) / `debug` (dev) | Winston log level |
-| `NODE_SERVICE_NAME` | `api` | Service tag in log entries |
+| Variable            | Default                       | Description                |
+| ------------------- | ----------------------------- | -------------------------- |
+| `NODE_LOG_LEVEL`    | `info` (prod) / `debug` (dev) | Winston log level          |
+| `NODE_SERVICE_NAME` | `api`                         | Service tag in log entries |
 
 ### Phase 3 — OpenTelemetry tracing
 
-| Variable | Default | Description |
-|---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL |
-| `OTEL_EXPORTER_OTLP_HEADERS` | _(unset)_ | Comma-separated `key=value` auth headers |
+| Variable                      | Default   | Description                              |
+| ----------------------------- | --------- | ---------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL             |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | _(unset)_ | Comma-separated `key=value` auth headers |
 
 ### JWT expiry
 
-| Variable | Description |
-|---|---|
-| `NODE_ACCESS_TOKEN_SECRET_TIME` | Access token lifetime (seconds) |
-| `NODE_REFRESH_TOKEN_SECRET_TIME_SHORT` | Short refresh token (7 days) |
-| `NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM` | Medium refresh token (30 days) |
-| `NODE_REFRESH_TOKEN_SECRET_TIME_LONG` | Long refresh token (1 year) |
+| Variable                                | Description                     |
+| --------------------------------------- | ------------------------------- |
+| `NODE_ACCESS_TOKEN_SECRET_TIME`         | Access token lifetime (seconds) |
+| `NODE_REFRESH_TOKEN_SECRET_TIME_SHORT`  | Short refresh token (7 days)    |
+| `NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM` | Medium refresh token (30 days)  |
+| `NODE_REFRESH_TOKEN_SECRET_TIME_LONG`   | Long refresh token (1 year)     |
 
 ### SMTP
 
-| Variable | Description |
-|---|---|
-| `NODE_SMTP_HOST` | SMTP server hostname |
-| `NODE_SMTP_PORT` | SMTP port |
-| `NODE_SMTP_USER` | SMTP username |
-| `NODE_SMTP_PASS` | SMTP password |
-| `NODE_SMTP_SENDER` | From address |
+| Variable           | Description          |
+| ------------------ | -------------------- |
+| `NODE_SMTP_HOST`   | SMTP server hostname |
+| `NODE_SMTP_PORT`   | SMTP port            |
+| `NODE_SMTP_USER`   | SMTP username        |
+| `NODE_SMTP_PASS`   | SMTP password        |
+| `NODE_SMTP_SENDER` | From address         |
 
 ### Upload
 
-| Variable | Description |
-|---|---|
+| Variable           | Description                   |
+| ------------------ | ----------------------------- |
 | `NODE_PUBLIC_PATH` | Public static files directory |
 
 ### Optional PDF
 
-| Variable | Description |
-|---|---|
+| Variable                    | Description                      |
+| --------------------------- | -------------------------------- |
 | `PUPPETEER_EXECUTABLE_PATH` | Chromium path for PDF generation |
 
 ---
 
 ## Domain modules
 
-| Module | Routes | Notes |
-|---|---|---|
-| Account / Auth | `/account` | Login, signup, refresh, password reset, logout-all |
-| Users | `/users` | Admin-only CRUD |
-| Products | `/products` | Public read, admin write, soft delete |
-| Cart | `/cart` | Per-user cart with computed totals, checkout |
-| Orders | `/orders` | Owner/admin access, invoice PDF |
-| System | `/` | Health check, metrics |
+| Module         | Routes      | Notes                                              |
+| -------------- | ----------- | -------------------------------------------------- |
+| Account / Auth | `/account`  | Login, signup, refresh, password reset, logout-all |
+| Users          | `/users`    | Admin-only CRUD                                    |
+| Products       | `/products` | Public read, admin write, soft delete              |
+| Cart           | `/cart`     | Per-user cart with computed totals, checkout       |
+| Orders         | `/orders`   | Owner/admin access, invoice PDF                    |
+| System         | `/`         | Health check, metrics                              |

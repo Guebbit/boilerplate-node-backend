@@ -74,7 +74,9 @@ export const search = (
 
     // Filter by categories/tags
     if (filters.category && String(filters.category).trim() !== '')
-        where.categories = { $elemMatch: { $regex: String(filters.category).trim(), $options: 'i' } };
+        where.categories = {
+            $elemMatch: { $regex: String(filters.category).trim(), $options: 'i' }
+        };
     if (filters.tag && String(filters.tag).trim() !== '')
         where.tags = { $elemMatch: { $regex: String(filters.tag).trim(), $options: 'i' } };
 
@@ -174,7 +176,8 @@ export const update = (
         if (data.price !== undefined) product.price = data.price;
         if (data.description !== undefined) product.description = data.description;
         if (data.active !== undefined) product.active = data.active;
-        if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
+        if (data.categories !== undefined)
+            product.categories = sanitizeStringArray(data.categories);
         if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
 
         // If a new image was uploaded, update the URL on the document

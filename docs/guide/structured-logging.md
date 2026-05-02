@@ -24,11 +24,11 @@ logger.info('Login attempt', { username: 'alice', password: 'hunter2' });
 
 ## Why structured logging?
 
-| Plain text log | Structured JSON log |
-|---|---|
-| `GET /products 200 32ms` | `{ "level": "info", "message": "GET /products 200 32ms", "status_code": 200, "duration_ms": 32 }` |
-| Hard to filter / query | Easy to filter in Loki / Kibana / grep |
-| Loses correlation context | Carries `request_id`, `trace_id` |
+| Plain text log            | Structured JSON log                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /products 200 32ms`  | `{ "level": "info", "message": "GET /products 200 32ms", "status_code": 200, "duration_ms": 32 }` |
+| Hard to filter / query    | Easy to filter in Loki / Kibana / grep                                                            |
+| Loses correlation context | Carries `request_id`, `trace_id`                                                                  |
 
 ---
 
@@ -38,19 +38,19 @@ Every log entry produced by this app contains these fields:
 
 ```json
 {
-  "timestamp":  "2024-01-15T10:30:45.123+00:00",
-  "level":      "info",
-  "message":    "GET /products 200 32.5ms",
-  "service":    "api",
-  "request_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "trace_id":   "4bf92f3577b34da6a3ce929d0e0e4736",
-  "span_id":    "1111111111111111",
-  "method":     "GET",
-  "route":      "/products",
-  "status_code": 200,
-  "duration_ms": 32.5,
-  "user_id":    "660f1234abcd1234abcd1234",
-  "ip":         "::1"
+    "timestamp": "2024-01-15T10:30:45.123+00:00",
+    "level": "info",
+    "message": "GET /products 200 32.5ms",
+    "service": "api",
+    "request_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "span_id": "1111111111111111",
+    "method": "GET",
+    "route": "/products",
+    "status_code": 200,
+    "duration_ms": 32.5,
+    "user_id": "660f1234abcd1234abcd1234",
+    "ip": "::1"
 }
 ```
 
@@ -81,11 +81,11 @@ requestLogger middleware   ← waits for response.finish, then emits log
 
 ## Environment variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `NODE_LOG_LEVEL` | `info` (prod) / `debug` (dev) | Winston log level |
-| `NODE_SERVICE_NAME` | `api` | Service tag in every log entry |
-| `NODE_ENV` | — | Controls pretty vs JSON console output |
+| Variable            | Default                       | Description                            |
+| ------------------- | ----------------------------- | -------------------------------------- |
+| `NODE_LOG_LEVEL`    | `info` (prod) / `debug` (dev) | Winston log level                      |
+| `NODE_SERVICE_NAME` | `api`                         | Service tag in every log entry         |
+| `NODE_ENV`          | —                             | Controls pretty vs JSON console output |
 
 ---
 
@@ -93,13 +93,13 @@ requestLogger middleware   ← waits for response.finish, then emits log
 
 From most severe to most verbose:
 
-| Level | When to use |
-|---|---|
-| `error` | Unrecoverable failures, 5xx responses |
-| `warn`  | Client errors, 4xx responses, degraded state |
+| Level   | When to use                                        |
+| ------- | -------------------------------------------------- |
+| `error` | Unrecoverable failures, 5xx responses              |
+| `warn`  | Client errors, 4xx responses, degraded state       |
 | `info`  | Normal operation (server start, request completed) |
-| `http`  | Per-request details if you need more granularity |
-| `debug` | Internal state for local debugging |
+| `http`  | Per-request details if you need more granularity   |
+| `debug` | Internal state for local debugging                 |
 
 ---
 
@@ -121,7 +121,7 @@ Matching is **case-insensitive** and applies **recursively** through nested obje
 
 ```ts
 logger.info('Signup', {
-  body: { email: 'alice@example.com', password: 's3cr3t' }
+    body: { email: 'alice@example.com', password: 's3cr3t' }
 });
 
 // What actually gets logged:
@@ -138,11 +138,11 @@ Throwing an `Error` object into a log call is safe — it is automatically seria
 
 ```ts
 try {
-  await db.find(query);
+    await db.find(query);
 } catch (error) {
-  logger.error('Query failed', { error });
-  // Produces: { "error": { "name": "MongoError", "message": "...", "stack": "..." } }
-  // In production, stack is omitted to avoid leaking internals.
+    logger.error('Query failed', { error });
+    // Produces: { "error": { "name": "MongoError", "message": "...", "stack": "..." } }
+    // In production, stack is omitted to avoid leaking internals.
 }
 ```
 
@@ -179,17 +179,30 @@ The `requestLogger` middleware (mounted in `app.ts`) emits one structured entry 
 **Sample output (production, JSON format):**
 
 ```json
-{"timestamp":"2024-01-15T10:30:45.123+00:00","level":"info","message":"GET /products 200 32.5ms","service":"api","request_id":"...","trace_id":"...","method":"GET","route":"/products","status_code":200,"duration_ms":32.5,"user_id":"660f...","ip":"::1"}
+{
+    "timestamp": "2024-01-15T10:30:45.123+00:00",
+    "level": "info",
+    "message": "GET /products 200 32.5ms",
+    "service": "api",
+    "request_id": "...",
+    "trace_id": "...",
+    "method": "GET",
+    "route": "/products",
+    "status_code": 200,
+    "duration_ms": 32.5,
+    "user_id": "660f...",
+    "ip": "::1"
+}
 ```
 
 ---
 
 ## Output files
 
-| File | Contents |
-|---|---|
-| Console | All levels (format depends on `NODE_ENV`) |
-| `error.log` | Error-level entries only |
+| File        | Contents                                  |
+| ----------- | ----------------------------------------- |
+| Console     | All levels (format depends on `NODE_ENV`) |
+| `error.log` | Error-level entries only                  |
 
 ---
 

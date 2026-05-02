@@ -44,45 +44,42 @@ export const nodemailer = (
     data: Data
 ): Promise<SentMessageInfo> => {
     // Wrap the entire email operation in an OTel span to track latency and failures.
-    return withSpan(
-        'email.send',
-        (span) => {
-            span.setAttributes({
-                [SEMATTRS_MESSAGING_SYSTEM]: 'smtp',
-                [SEMATTRS_MESSAGING_DESTINATION]: String(request.to ?? ''),
-                // Custom attribute: email template used to render the body.
-                // eslint-disable-next-line @typescript-eslint/naming-convention
-                'email.template': templateName
-            });
+    return withSpan('email.send', (span) => {
+        span.setAttributes({
+            [SEMATTRS_MESSAGING_SYSTEM]: 'smtp',
+            [SEMATTRS_MESSAGING_DESTINATION]: String(request.to ?? ''),
+            // Custom attribute: email template used to render the body.
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'email.template': templateName
+        });
 
-            return (
-                // Render the EJS template
-                ejs
-                    .renderFile(
-                        // Retrieve the template
-                        path.resolve(
-                            getDirname(import.meta.url),
-                            '../../views/templates-emails',
-                            templateName
-                        ),
-                        // Populate the template
-                        data
-                    )
-                    /**
-                     * Send email (nodemailer returns a Promise when no callback is provided)
-                     */
-                    .then((html) =>
-                        transporter.sendMail({
-                            from: process.env.NODE_SMTP_SENDER,
-                            html,
-                            ...request
-                        })
-                    )
-                    .then((info: SentMessageInfo) => {
-                        logger.info('Message sent: %s', info.messageId);
-                        return info;
+        return (
+            // Render the EJS template
+            ejs
+                .renderFile(
+                    // Retrieve the template
+                    path.resolve(
+                        getDirname(import.meta.url),
+                        '../../views/templates-emails',
+                        templateName
+                    ),
+                    // Populate the template
+                    data
+                )
+                /**
+                 * Send email (nodemailer returns a Promise when no callback is provided)
+                 */
+                .then((html) =>
+                    transporter.sendMail({
+                        from: process.env.NODE_SMTP_SENDER,
+                        html,
+                        ...request
                     })
-            );
-        }
-    );
+                )
+                .then((info: SentMessageInfo) => {
+                    logger.info('Message sent: %s', info.messageId);
+                    return info;
+                })
+        );
+    });
 };
