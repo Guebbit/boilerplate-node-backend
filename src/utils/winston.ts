@@ -1,4 +1,5 @@
 import winston from 'winston';
+import LokiTransport from 'winston-loki';
 
 // Field names that must never be logged in clear text.
 const SENSITIVE_FIELDS = new Set([
@@ -91,6 +92,41 @@ const prettyFormat = winston.format.combine(
     })
 );
 
+// ─── Loki transport (Phase 4) ────────────────────────────────────────────────
+
+/**
+ * Build an optional Loki transport when NODE_LOKI_HOST is set.
+ * Labels become Loki stream selectors; keep them low-cardinality.
+ */
+export const buildLokiTransport = (extraLabels: Record<string, string> = {}): LokiTransport | undefined => {
+    const lokiHost = process.env.NODE_LOKI_HOST;
+    if (!lokiHost) return undefined; // Loki disabled — no env var set
+
+    return new LokiTransport({
+        host: lokiHost,
+        // Stream labels: service + log_type + any caller extras.
+        labels: {
+            service: process.env.NODE_SERVICE_NAME ?? 'api',
+            env: process.env.NODE_ENV ?? 'development',
+            ...extraLabels
+        },
+        // Use the shared JSON format so every field is structured.
+        format: baseFormat,
+        // Silence connection errors so Loki unavailability never crashes the app.
+        onConnectionError: (error) => {
+            // Only log to stderr — using console directly avoids a circular call.
+            process.stderr.write(`[winston-loki] connection error: ${String(error)}\n`);
+        }
+    });
+};
+
+/** Returns true when a Loki host is configured and the transport is active. */
+export const isLokiEnabled = (): boolean => Boolean(process.env.NODE_LOKI_HOST);
+
+// Build Loki transports once; reuse below.
+const appLokiTransport = buildLokiTransport({ log_type: 'app' });
+const auditLokiTransport = buildLokiTransport({ log_type: 'audit' });
+
 // Main application logger.
 export const logger = winston.createLogger({
     level: resolveLogLevel(),
@@ -105,7 +141,9 @@ export const logger = winston.createLogger({
         }),
         new winston.transports.Console({
             format: process.env.NODE_ENV === 'production' ? baseFormat : prettyFormat
-        })
+        }),
+        // Loki transport added only when NODE_LOKI_HOST is configured.
+        ...(appLokiTransport ? [appLokiTransport] : [])
     ]
 });
 
@@ -123,6 +161,8 @@ export const auditLogger = winston.createLogger({
         }),
         new winston.transports.Console({
             format: process.env.NODE_ENV === 'production' ? baseFormat : prettyFormat
-        })
+        }),
+        // Audit logs ship to Loki under a separate log_type label for easy filtering.
+        ...(auditLokiTransport ? [auditLokiTransport] : [])
     ]
 });

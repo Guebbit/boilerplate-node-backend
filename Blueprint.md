@@ -307,16 +307,67 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 ---
 
-### 🔜 Phase 4 — Loki centralized logs (planned)
+---
 
-- Ship Winston output to Loki
-- Use `service`, `log_type`, `level` as stream labels
-- Correlate with trace IDs from Phase 3
+### ✅ Phase 4 — Loki centralized logging
 
-### 🔜 Phase 5 — Tempo + Grafana dashboards (planned)
+**Goal:** optionally ship every Winston log line to Grafana Loki for centralised querying, alerting, and log/trace correlation.
 
-- Connect traces to Tempo
-- Build Grafana dashboards: API, Auth, Ecommerce, DB, Ops
+**What was added:**
+
+#### 1. Optional Loki transport (`src/utils/winston.ts`)
+
+- `buildLokiTransport(extraLabels)` — creates a `LokiTransport` instance when `NODE_LOKI_HOST` is set; returns `null` otherwise (zero cost when disabled).
+- `isLokiEnabled()` — helper for code and tests to check whether Loki is active.
+- Both `logger` and `auditLogger` include the transport when configured.
+- Stream labels: `service`, `env`, `log_type` (`app` / `audit`).
+- `onConnectionError` writes to `process.stderr` so a Loki outage never crashes the app.
+
+#### 2. Environment variables added
+
+| Variable          | Default   | Description                               |
+| ----------------- | --------- | ----------------------------------------- |
+| `NODE_LOKI_HOST`  | _(unset)_ | Loki push API base URL; disables if unset |
+
+#### 3. Tests added/updated
+
+- `tests/unit/utils/winston.test.ts` — 5 new tests covering `isLokiEnabled` and `buildLokiTransport` (null when unset, object when set, extra labels accepted).
+
+#### 4. Documentation added
+
+- `docs/guide/loki-logging.md` — Loki setup guide with data-flow diagram, stream label table, Docker Compose snippet, trace correlation guide.
+- `docs/index.md` — Phase 4 feature card added.
+- `docs/.vitepress/config.mts` — sidebar entry added.
+
+---
+
+### ✅ Phase 5 — Tempo + Grafana dashboards
+
+**Goal:** complete the observability stack with Grafana Tempo as the trace backend and pre-built Grafana dashboard JSON files covering metrics, logs, and traces.
+
+**What was added:**
+
+#### 1. Tempo backend (builds on Phase 3)
+
+- `src/utils/tracing.ts` already exports `OTLPTraceExporter` pointing at `OTEL_EXPORTER_OTLP_ENDPOINT/v1/traces`.
+- No code change required — the existing exporter is fully Tempo-compatible.
+
+#### 2. Sample Grafana dashboard JSON files (`docs/grafana-dashboards/`)
+
+| File                       | Title                | Data sources         |
+| -------------------------- | -------------------- | -------------------- |
+| `api-overview.json`        | API Overview         | Prometheus           |
+| `logs-and-audit.json`      | Logs & Audit         | Loki + Tempo         |
+| `distributed-traces.json`  | Distributed Traces   | Tempo                |
+
+Dashboards are importable via Grafana UI (Dashboards → Import → Upload JSON) or the REST API.
+
+#### 3. Documentation added
+
+- `docs/guide/tempo.md` — Tempo data-flow diagram, Docker Compose snippet, minimal `tempo.yaml`, Grafana data source setup, auth headers, env var table.
+- `docs/guide/grafana-dashboards.md` — dashboard import steps (UI + API), panel-by-panel explanation, log→trace and trace→log correlation setup, full observability flow diagram.
+- `docs/index.md` — Phase 5 feature card added.
+- `docs/.vitepress/config.mts` — sidebar entries for Tempo and Grafana Dashboards added.
 
 ### 🔜 Phase 6 — Audit analytics (planned)
 
@@ -368,6 +419,12 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 | ----------------------------- | --------- | ---------------------------------------- |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | _(unset)_ | Tempo / Jaeger OTLP base URL             |
 | `OTEL_EXPORTER_OTLP_HEADERS`  | _(unset)_ | Comma-separated `key=value` auth headers |
+
+### Phase 4 — Loki centralized logging
+
+| Variable         | Default   | Description                               |
+| ---------------- | --------- | ----------------------------------------- |
+| `NODE_LOKI_HOST` | _(unset)_ | Loki push API base URL; disables if unset |
 
 ### JWT expiry
 
