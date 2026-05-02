@@ -11,8 +11,9 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { start, stopDatabase } from '@utils/database';
 import { startCache, stopCache } from '@utils/cache';
-import { logger } from '@utils/winston';
+import { logger, auditLogger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
+import { requestLogger } from '@middlewares/request-logger';
 import { rejectResponse } from '@utils/response';
 import { validateRequiredEnvironment } from '@utils/environment';
 import {
@@ -303,19 +304,12 @@ app.use((request, response, next) => {
 });
 
 /**
- * Request logger
+ * Structured HTTP access logger.
+ * Emits one log entry per completed request with method, route, status_code,
+ * duration_ms, request_id, trace_id, and user_id (when authenticated).
+ * See src/middlewares/request-logger.ts for the full log shape.
  */
-app.use((request, _response, next) => {
-    logger.info({
-        requestId: request.requestId,
-        traceId: request.traceContext?.traceId,
-        spanId: request.traceContext?.spanId,
-        parentSpanId: request.traceContext?.parentSpanId,
-        method: request.method,
-        url: `${request.protocol}://${request.get('host')}${request.originalUrl}`
-    });
-    next();
-});
+app.use(requestLogger);
 
 /**
  * Request metrics collector (Prometheus style):
@@ -390,20 +384,27 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
 
 /**
  * Error handling LAST RESORT
+ * These process-level events are logged via auditLogger because they represent
+ * unexpected, security-relevant application failures that should be tracked
+ * separately from normal request-level logs.
  */
 const unhandledRejections = new Map();
 process
     .on('unhandledRejection', (reason, promise) => {
-        logger.error(reason);
+        auditLogger.error('process.unhandledRejection', {
+            action: 'process.unhandledRejection',
+            reason: reason instanceof Error ? { name: reason.name, message: reason.message } : String(reason)
+        });
         unhandledRejections.set(promise, reason);
     })
     .on('rejectionHandled', (promise) => unhandledRejections.delete(promise))
     .on('uncaughtException', (error, origin) => {
         if (process.env.NODE_ENV !== 'production') return;
-        logger.error({
+        auditLogger.error('process.uncaughtException', {
+            action: 'process.uncaughtException',
+            name: error.name,
             message: error.message,
             stack: error.stack,
-            name: error.name,
             origin
         });
         process.exit(1);
