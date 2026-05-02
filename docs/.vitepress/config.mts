@@ -20,7 +20,10 @@ export default defineConfig({
                     { text: 'Structured Logging', link: '/guide/structured-logging' },
                     { text: 'Audit Logging', link: '/guide/audit-logging' },
                     { text: 'Prometheus Metrics', link: '/guide/prometheus-metrics' },
-                    { text: 'OpenTelemetry Tracing', link: '/guide/opentelemetry-tracing' }
+                    { text: 'OpenTelemetry Tracing', link: '/guide/opentelemetry-tracing' },
+                    { text: 'Loki Logging', link: '/guide/loki-logging' },
+                    { text: 'Grafana Tempo', link: '/guide/tempo' },
+                    { text: 'Grafana Dashboards', link: '/guide/grafana-dashboards' }
                 ]
             },
             {

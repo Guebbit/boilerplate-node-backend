@@ -1,4 +1,12 @@
-import { redactSensitiveFields, serializeError } from '@utils/winston';
+import { redactSensitiveFields, serializeError, buildLokiTransport, isLokiEnabled } from '@utils/winston';
+
+// Mock winston-loki to avoid real HTTP connections in tests.
+jest.mock('winston-loki', () => {
+    return jest.fn().mockImplementation(() => ({
+        name: 'loki',
+        close: jest.fn()
+    }));
+});
 
 // ---------------------------------------------------------------------------
 // redactSensitiveFields
@@ -116,3 +124,67 @@ describe('serializeError', () => {
         expect(result['message']).toBe('bad input');
     });
 });
+
+// ---------------------------------------------------------------------------
+// isLokiEnabled / buildLokiTransport (Phase 4)
+// ---------------------------------------------------------------------------
+
+describe('isLokiEnabled', () => {
+    const originalLokiHost = process.env.NODE_LOKI_HOST;
+
+    afterEach(() => {
+        // Restore env after each test.
+        if (originalLokiHost === undefined) {
+            delete process.env.NODE_LOKI_HOST;
+        } else {
+            process.env.NODE_LOKI_HOST = originalLokiHost;
+        }
+    });
+
+    it('returns false when NODE_LOKI_HOST is not set', () => {
+        delete process.env.NODE_LOKI_HOST;
+        expect(isLokiEnabled()).toBe(false);
+    });
+
+    it('returns true when NODE_LOKI_HOST is set', () => {
+        process.env.NODE_LOKI_HOST = 'http://loki:3100';
+        expect(isLokiEnabled()).toBe(true);
+    });
+});
+
+describe('buildLokiTransport', () => {
+    const originalLokiHost = process.env.NODE_LOKI_HOST;
+
+    afterEach(() => {
+        if (originalLokiHost === undefined) {
+            delete process.env.NODE_LOKI_HOST;
+        } else {
+            process.env.NODE_LOKI_HOST = originalLokiHost;
+        }
+    });
+
+    it('returns undefined when NODE_LOKI_HOST is not set', () => {
+        delete process.env.NODE_LOKI_HOST;
+        expect(buildLokiTransport()).toBeUndefined();
+    });
+
+    it('returns an object when NODE_LOKI_HOST is set', () => {
+        process.env.NODE_LOKI_HOST = 'http://loki:3100';
+        const lokiTransport = buildLokiTransport();
+        // Verify the transport was constructed (connection is async; just check it's an object).
+        expect(lokiTransport).toBeDefined();
+        expect(typeof lokiTransport).toBe('object');
+        // Close immediately so no background HTTP handles keep the test runner alive.
+        lokiTransport?.close?.();
+    });
+
+    it('accepts extra labels without throwing', () => {
+        process.env.NODE_LOKI_HOST = 'http://loki:3100';
+        let lokiTransport: ReturnType<typeof buildLokiTransport>;
+        expect(() => {
+            lokiTransport = buildLokiTransport({ log_type: 'audit' });
+        }).not.toThrow();
+        lokiTransport?.close?.();
+    });
+});
+
