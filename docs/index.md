@@ -44,4 +44,7 @@ features:
     - title: Product Analytics — PostHog (Phase 7)
       details: Business/product events (signup, login, product view/search, cart, checkout, orders) sent to PostHog. Fire-and-forget, fully opt-in via NODE_POSTHOG_API_KEY + NODE_POSTHOG_HOST, zero breaking change when disabled.
       link: /guide/product-analytics
+    - title: Admin Dashboard Contract
+      details: Three admin-only endpoints (health, metrics summary, audit log) expose all observability data as JSON, ready for FE visualization. openapi.yaml is the contract.
+      link: /guide/admin-dashboard
 ---
