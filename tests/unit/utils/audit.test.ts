@@ -47,7 +47,7 @@ describe('emitAuditEvent', () => {
             actor_role: 'user',
             outcome: 'success',
             ip: '1.2.3.4',
-            request_id: 'req-abc',
+            request_id: 'req-abc'
         };
 
         emitAuditEvent(event);
@@ -66,7 +66,7 @@ describe('emitAuditEvent', () => {
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
             outcome: 'failure',
-            ip: '1.2.3.4',
+            ip: '1.2.3.4'
         };
 
         emitAuditEvent(event);
@@ -85,7 +85,7 @@ describe('emitAuditEvent', () => {
             target_id: 'user-789',
             request_id: 'req-xyz',
             trace_id: 'trace-001',
-            metadata: { hardDelete: true },
+            metadata: { hardDelete: true }
         };
 
         emitAuditEvent(event);
@@ -103,7 +103,7 @@ describe('emitAuditEvent', () => {
             action: AuditAction.SECURITY_UNAUTHORIZED,
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
-            outcome: 'failure',
+            outcome: 'failure'
         });
 
         const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, ...unknown[]];
@@ -114,13 +114,13 @@ describe('emitAuditEvent', () => {
 describe('extractRequestContext', () => {
     it('extracts ip, user_agent, request_id, and trace_id', () => {
         const mockHeaders: Record<string, string | string[] | undefined> = {
-            ['user-agent']: 'Mozilla/5.0',
+            ['user-agent']: 'Mozilla/5.0'
         };
         const request = {
             ip: '10.0.0.1',
             headers: mockHeaders,
             requestId: 'req-111',
-            traceContext: { traceId: 'trace-222' },
+            traceContext: { traceId: 'trace-222' }
         };
 
         const ctx = extractRequestContext(request);
@@ -142,7 +142,7 @@ describe('extractRequestContext', () => {
 
     it('normalizes array user-agent to first element', () => {
         const mockHeaders: Record<string, string | string[] | undefined> = {
-            ['user-agent']: ['agent-a', 'agent-b'],
+            ['user-agent']: ['agent-a', 'agent-b']
         };
         const ctx = extractRequestContext({ headers: mockHeaders });
         expect(ctx.user_agent).toBe('agent-a');

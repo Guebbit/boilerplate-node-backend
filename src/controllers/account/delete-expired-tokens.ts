@@ -22,7 +22,7 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
                 actor_user_id: request.user?.id ?? 'anonymous',
                 actor_role: 'admin',
                 outcome: 'success',
-                ...extractRequestContext(request),
+                ...extractRequestContext(request)
             });
             return successResponse(response, undefined, status);
         })

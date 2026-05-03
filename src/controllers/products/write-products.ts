@@ -91,7 +91,7 @@ export const writeProducts = (
                     outcome: 'success',
                     target_type: 'product',
                     target_id: String(product._id),
-                    ...extractRequestContext(request),
+                    ...extractRequestContext(request)
                 });
                 successResponse(response, product.toObject(), 201);
             })
@@ -121,7 +121,7 @@ export const writeProducts = (
                 outcome: 'success',
                 target_type: 'product',
                 target_id: id,
-                ...extractRequestContext(request),
+                ...extractRequestContext(request)
             });
             successResponse(response, product.toObject());
         })

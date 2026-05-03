@@ -38,7 +38,7 @@ export const deleteOrders = (
                 outcome: 'success',
                 target_type: 'order',
                 target_id: id,
-                ...extractRequestContext(request),
+                ...extractRequestContext(request)
             });
             successResponse(response, undefined, 200, result.message);
         })

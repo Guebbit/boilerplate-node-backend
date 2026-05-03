@@ -23,7 +23,7 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
             actor_user_id: request.user?.id ?? 'anonymous',
             actor_role: request.user?.admin ? 'admin' : 'user',
             outcome: 'success',
-            ...extractRequestContext(request),
+            ...extractRequestContext(request)
         });
 
         successResponse(response, undefined, 200, 'Logged out from all devices');

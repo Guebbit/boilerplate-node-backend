@@ -56,7 +56,7 @@ export const postOrders = (
             outcome: 'success',
             target_type: 'order',
             target_id: String((result.data as { _id?: unknown })?._id ?? ''),
-            ...extractRequestContext(request),
+            ...extractRequestContext(request)
         });
         successResponse(response, result.data, 201);
     });

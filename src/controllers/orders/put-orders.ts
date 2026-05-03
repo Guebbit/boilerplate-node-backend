@@ -40,7 +40,7 @@ export const putOrders = (
                 outcome: 'success',
                 target_type: 'order',
                 target_id: id,
-                ...extractRequestContext(request),
+                ...extractRequestContext(request)
             });
 
             successResponse(response, result.data);

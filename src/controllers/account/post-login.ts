@@ -42,7 +42,7 @@ export const postLogin = (
                     actor_user_id: 'anonymous',
                     actor_role: 'anonymous',
                     outcome: 'failure',
-                    ...extractRequestContext(request),
+                    ...extractRequestContext(request)
                 });
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
@@ -72,7 +72,7 @@ export const postLogin = (
                         actor_user_id: userId,
                         actor_role: result.data?.admin ? 'admin' : 'user',
                         outcome: 'success',
-                        ...extractRequestContext(request),
+                        ...extractRequestContext(request)
                     });
                     successResponse(
                         response,

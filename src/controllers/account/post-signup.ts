@@ -44,7 +44,7 @@ export const postSignup = (
                         actor_user_id: 'anonymous',
                         actor_role: 'anonymous',
                         outcome: 'failure',
-                        ...extractRequestContext(request),
+                        ...extractRequestContext(request)
                     });
                     rejectResponse(response, result.status, result.message, result.errors);
                 });
@@ -56,7 +56,7 @@ export const postSignup = (
                 actor_user_id: String((result.data as { _id?: unknown })?._id ?? 'unknown'),
                 actor_role: 'user',
                 outcome: 'success',
-                ...extractRequestContext(request),
+                ...extractRequestContext(request)
             });
             successResponse(response, result.data, 201);
         })
