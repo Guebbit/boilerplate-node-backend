@@ -34,7 +34,7 @@ export enum AuditAction {
     // Security / access-control
     SECURITY_UNAUTHORIZED = 'security.unauthorized',
     SECURITY_FORBIDDEN = 'security.forbidden',
-    SECURITY_RATE_LIMIT_HIT = 'security.rate_limit_hit',
+    SECURITY_RATE_LIMIT_HIT = 'security.rate_limit_hit'
 }
 
 export type AuditActionValue = AuditAction;
@@ -95,6 +95,6 @@ export const extractRequestContext = (request: {
         ip: request.ip,
         user_agent: Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent,
         request_id: request.requestId,
-        trace_id: request.traceContext?.traceId,
+        trace_id: request.traceContext?.traceId
     };
 };

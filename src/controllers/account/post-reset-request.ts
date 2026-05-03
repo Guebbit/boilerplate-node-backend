@@ -59,7 +59,7 @@ export const postResetRequest = (
                     actor_user_id: 'anonymous',
                     actor_role: 'anonymous',
                     outcome: 'success',
-                    ...extractRequestContext(request),
+                    ...extractRequestContext(request)
                 });
 
                 successResponse(response, undefined, 200, t('reset.email-sent'));

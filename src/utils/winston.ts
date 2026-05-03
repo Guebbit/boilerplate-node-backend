@@ -98,7 +98,9 @@ const prettyFormat = winston.format.combine(
  * Build an optional Loki transport when NODE_LOKI_HOST is set.
  * Labels become Loki stream selectors; keep them low-cardinality.
  */
-export const buildLokiTransport = (extraLabels: Record<string, string> = {}): LokiTransport | undefined => {
+export const buildLokiTransport = (
+    extraLabels: Record<string, string> = {}
+): LokiTransport | undefined => {
     const lokiHost = process.env.NODE_LOKI_HOST;
     if (!lokiHost) return undefined; // Loki disabled — no env var set
 

@@ -1,4 +1,9 @@
-import { redactSensitiveFields, serializeError, buildLokiTransport, isLokiEnabled } from '@utils/winston';
+import {
+    redactSensitiveFields,
+    serializeError,
+    buildLokiTransport,
+    isLokiEnabled
+} from '@utils/winston';
 
 // Mock winston-loki to avoid real HTTP connections in tests.
 jest.mock('winston-loki', () => {
@@ -187,4 +192,3 @@ describe('buildLokiTransport', () => {
         lokiTransport?.close?.();
     });
 });
-

@@ -85,7 +85,7 @@ export const postResetConfirm = (
                         actor_user_id: String(user._id),
                         actor_role: user.admin ? 'admin' : 'user',
                         outcome: 'success',
-                        ...extractRequestContext(request),
+                        ...extractRequestContext(request)
                     });
 
                     destroyRefreshCookie(response);
