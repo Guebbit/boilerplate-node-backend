@@ -3,6 +3,7 @@ import { t } from 'i18next';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
 /**
  * DELETE /cart/:productId
@@ -26,6 +27,12 @@ export const deleteCartItem = (
         .cartItemRemoveById(user, productId)
         .then(() => userService.cartGetWithSummary(user))
         .then((cart) => {
+            emitAnalyticsEvent({
+                distinctId: user.id,
+                event: AnalyticsEvent.CART_ITEM_REMOVED,
+                traceId: request.traceContext?.traceId,
+                properties: { product_id: productId },
+            });
             successResponse(response, cart);
         });
 };

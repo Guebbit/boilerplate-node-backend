@@ -6,6 +6,7 @@ import type { CreateOrderRequest } from '@types';
 import { nodemailer } from '@utils/nodemailer';
 import { orderCreatedTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
 /**
  * POST /orders
@@ -49,14 +50,21 @@ export const postOrders = (
         );
 
         orderCreatedTotal.inc();
+        const orderId = String((result.data as { _id?: unknown })?._id ?? '');
         emitAuditEvent({
             action: AuditAction.ADMIN_ORDER_CREATED,
             actor_user_id: request.user?.id ?? 'unknown',
             actor_role: request.user?.admin ? 'admin' : 'user',
             outcome: 'success',
             target_type: 'order',
-            target_id: String((result.data as { _id?: unknown })?._id ?? ''),
+            target_id: orderId,
             ...extractRequestContext(request),
+        });
+        emitAnalyticsEvent({
+            distinctId: request.user?.id ?? 'unknown',
+            event: AnalyticsEvent.ORDER_CREATED,
+            traceId: request.traceContext?.traceId,
+            properties: { order_id: orderId },
         });
         successResponse(response, result.data, 201);
     });

@@ -41,4 +41,7 @@ features:
     - title: Audit & Security Analytics (Phase 6)
       details: Formal audit event schema (IAuditEvent), dedicated emitAuditEvent() helper, and instrumented call sites across all auth, admin, and access-control operations. Events ship to a separate Loki stream.
       link: /guide/audit-logging
+    - title: Product Analytics — PostHog (Phase 7)
+      details: Business/product events (signup, login, product view/search, cart, checkout, orders) sent to PostHog. Fire-and-forget, fully opt-in via NODE_POSTHOG_API_KEY + NODE_POSTHOG_HOST, zero breaking change when disabled.
+      link: /guide/product-analytics
 ---
