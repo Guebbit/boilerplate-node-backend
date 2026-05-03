@@ -85,7 +85,7 @@ export const writeUsers = (
                     outcome: 'success',
                     target_type: 'user',
                     target_id: String(user._id),
-                    ...extractRequestContext(request),
+                    ...extractRequestContext(request)
                 });
                 successResponse(response, user.toObject(), 201);
             })
@@ -109,7 +109,7 @@ export const writeUsers = (
                 outcome: 'success',
                 target_type: 'user',
                 target_id: id,
-                ...extractRequestContext(request),
+                ...extractRequestContext(request)
             });
             successResponse(response, user.toObject());
         })

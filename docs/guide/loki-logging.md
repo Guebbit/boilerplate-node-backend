@@ -61,11 +61,11 @@ The transport is added at **module load time**. If `NODE_LOKI_HOST` is unset, th
 
 ## Stream labels
 
-| Label        | Example value   | Notes                                   |
-| ------------ | --------------- | --------------------------------------- |
-| `service`    | `api`           | From `NODE_SERVICE_NAME`                |
-| `env`        | `production`    | From `NODE_ENV`                         |
-| `log_type`   | `app` / `audit` | `app` = main logger, `audit` = audit    |
+| Label      | Example value   | Notes                                |
+| ---------- | --------------- | ------------------------------------ |
+| `service`  | `api`           | From `NODE_SERVICE_NAME`             |
+| `env`      | `production`    | From `NODE_ENV`                      |
+| `log_type` | `app` / `audit` | `app` = main logger, `audit` = audit |
 
 Keep labels **low-cardinality** — don't put user IDs or request IDs here.
 
@@ -81,18 +81,18 @@ Every log line includes `trace_id` and `span_id` (set by the request logger midd
     "message": "GET /products 200 12ms",
     "service": "api",
     "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-    "span_id":  "b7ad6b7169203331",
+    "span_id": "b7ad6b7169203331",
     "request_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
 To enable the link in Grafana, configure the Loki data source with a **Derived Field**:
 
-| Field         | Value                                    |
-| ------------- | ---------------------------------------- |
-| Name          | `trace_id`                               |
-| Regex         | `"trace_id":"([a-f0-9]{32})"`            |
-| URL template  | `http://<grafana-host>:3000/explore?orgId=1&left={"datasource":"tempo","queries":[{"query":"${__value.raw}","queryType":"traceql"}]}`  |
+| Field        | Value                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Name         | `trace_id`                                                                                                                            |
+| Regex        | `"trace_id":"([a-f0-9]{32})"`                                                                                                         |
+| URL template | `http://<grafana-host>:3000/explore?orgId=1&left={"datasource":"tempo","queries":[{"query":"${__value.raw}","queryType":"traceql"}]}` |
 
 > **Note:** Replace `<grafana-host>` with your actual Grafana hostname or IP (e.g. `localhost`, `grafana`, or a public domain). The default Grafana port is `3000` unless you changed it.
 
@@ -130,11 +130,11 @@ NODE_LOKI_HOST=http://loki:3100
 
 ## Environment variables
 
-| Variable          | Default   | Purpose                                  |
-| ----------------- | --------- | ---------------------------------------- |
-| `NODE_LOKI_HOST`  | _(unset)_ | Loki push API base URL; disables if unset |
-| `NODE_SERVICE_NAME` | `api`   | Becomes the `service` stream label       |
-| `NODE_ENV`        | `development` | Becomes the `env` stream label       |
+| Variable            | Default       | Purpose                                   |
+| ------------------- | ------------- | ----------------------------------------- |
+| `NODE_LOKI_HOST`    | _(unset)_     | Loki push API base URL; disables if unset |
+| `NODE_SERVICE_NAME` | `api`         | Becomes the `service` stream label        |
+| `NODE_ENV`          | `development` | Becomes the `env` stream label            |
 
 ---
 

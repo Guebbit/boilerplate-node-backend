@@ -46,7 +46,7 @@ export const getRefreshToken = async (request: Request<{ token?: string }>, resp
             actor_user_id: request.user?.id ?? 'anonymous',
             actor_role: request.user?.admin ? 'admin' : request.user ? 'user' : 'anonymous',
             outcome: 'success',
-            ...extractRequestContext(request),
+            ...extractRequestContext(request)
         });
         successResponse(response, { token });
     } catch {

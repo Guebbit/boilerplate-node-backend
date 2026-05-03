@@ -326,9 +326,9 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 #### 2. Environment variables added
 
-| Variable          | Default   | Description                               |
-| ----------------- | --------- | ----------------------------------------- |
-| `NODE_LOKI_HOST`  | _(unset)_ | Loki push API base URL; disables if unset |
+| Variable         | Default   | Description                               |
+| ---------------- | --------- | ----------------------------------------- |
+| `NODE_LOKI_HOST` | _(unset)_ | Loki push API base URL; disables if unset |
 
 #### 3. Tests added/updated
 
@@ -355,11 +355,11 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 #### 2. Sample Grafana dashboard JSON files (`docs/grafana-dashboards/`)
 
-| File                       | Title                | Data sources         |
-| -------------------------- | -------------------- | -------------------- |
-| `api-overview.json`        | API Overview         | Prometheus           |
-| `logs-and-audit.json`      | Logs & Audit         | Loki + Tempo         |
-| `distributed-traces.json`  | Distributed Traces   | Tempo                |
+| File                      | Title              | Data sources |
+| ------------------------- | ------------------ | ------------ |
+| `api-overview.json`       | API Overview       | Prometheus   |
+| `logs-and-audit.json`     | Logs & Audit       | Loki + Tempo |
+| `distributed-traces.json` | Distributed Traces | Tempo        |
 
 Dashboards are importable via Grafana UI (Dashboards → Import → Upload JSON) or the REST API.
 
@@ -387,10 +387,10 @@ Dashboards are importable via Grafana UI (Dashboards → Import → Upload JSON)
 
 | Field           | Required | Description                                     |
 | --------------- | -------- | ----------------------------------------------- |
-| `actor_user_id` | ✅        | User ID or `'anonymous'`                        |
-| `actor_role`    | ✅        | `'admin' \| 'user' \| 'anonymous'`             |
-| `action`        | ✅        | Dot-notation action name from `AuditAction`     |
-| `outcome`       | ✅        | `'success' \| 'failure'`                       |
+| `actor_user_id` | ✅       | User ID or `'anonymous'`                        |
+| `actor_role`    | ✅       | `'admin' \| 'user' \| 'anonymous'`              |
+| `action`        | ✅       | Dot-notation action name from `AuditAction`     |
+| `outcome`       | ✅       | `'success' \| 'failure'`                        |
 | `ip`            | —        | Client IP                                       |
 | `user_agent`    | —        | User-Agent header                               |
 | `request_id`    | —        | x-request-id correlation header                 |

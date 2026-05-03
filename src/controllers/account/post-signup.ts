@@ -45,7 +45,7 @@ export const postSignup = (
                         actor_user_id: 'anonymous',
                         actor_role: 'anonymous',
                         outcome: 'failure',
-                        ...extractRequestContext(request),
+                        ...extractRequestContext(request)
                     });
                     rejectResponse(response, result.status, result.message, result.errors);
                 });
@@ -58,7 +58,7 @@ export const postSignup = (
                 actor_user_id: newUserId,
                 actor_role: 'user',
                 outcome: 'success',
-                ...extractRequestContext(request),
+                ...extractRequestContext(request)
             });
             emitAnalyticsEvent({
                 distinctId: newUserId,

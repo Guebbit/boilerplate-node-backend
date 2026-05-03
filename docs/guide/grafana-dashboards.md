@@ -6,11 +6,11 @@
 
 ## Available dashboards
 
-| File                        | Title                  | Data sources          | What you get                             |
-| --------------------------- | ---------------------- | --------------------- | ---------------------------------------- |
-| `api-overview.json`         | API Overview           | Prometheus            | Request rate, latency p50/p95, error rate, in-flight count |
-| `logs-and-audit.json`       | Logs & Audit           | Loki (+ Tempo links)  | App logs, audit events, error/warn rate  |
-| `distributed-traces.json`   | Distributed Traces     | Tempo                 | Recent traces, slow traces (>500ms)      |
+| File                      | Title              | Data sources         | What you get                                               |
+| ------------------------- | ------------------ | -------------------- | ---------------------------------------------------------- |
+| `api-overview.json`       | API Overview       | Prometheus           | Request rate, latency p50/p95, error rate, in-flight count |
+| `logs-and-audit.json`     | Logs & Audit       | Loki (+ Tempo links) | App logs, audit events, error/warn rate                    |
+| `distributed-traces.json` | Distributed Traces | Tempo                | Recent traces, slow traces (>500ms)                        |
 
 ---
 
@@ -55,6 +55,7 @@ curl -X POST http://admin:admin@localhost:3001/api/dashboards/import \
 ```
 
 Key panels:
+
 - **Request Rate** — `sum(rate(http_requests_total[5m])) by (method, route)`
 - **Latency p95** — `histogram_quantile(0.95, sum(rate(http_request_duration_milliseconds_bucket[5m])) by (le, route))`
 - **Error Rate** — `sum(rate(http_request_errors_total[5m])) / sum(rate(http_requests_total[5m]))`
@@ -98,9 +99,9 @@ Click any trace to open the **span waterfall** and see all child spans, duration
 ## Log → Trace correlation in Grafana
 
 1. Configure **Loki data source** → **Derived Fields**:
-   - **Name**: `trace_id`
-   - **Regex**: `"trace_id":"([a-f0-9]{32})"`
-   - Enable **Internal link** → select your Tempo data source
+    - **Name**: `trace_id`
+    - **Regex**: `"trace_id":"([a-f0-9]{32})"`
+    - Enable **Internal link** → select your Tempo data source
 2. Now every Loki log line with a `trace_id` shows a 🔗 icon — click it to jump to Tempo.
 
 ---
@@ -108,10 +109,10 @@ Click any trace to open the **span waterfall** and see all child spans, duration
 ## Trace → Log correlation in Grafana
 
 1. Configure **Tempo data source** → **Trace to logs**:
-   - Data source: Loki
-   - Tags: `service`
-   - Map tag name: `service.name` → `service`
-   - Span start shift: `-1m`, end shift: `1m`
+    - Data source: Loki
+    - Tags: `service`
+    - Map tag name: `service.name` → `service`
+    - Span start shift: `-1m`, end shift: `1m`
 2. Every trace span in Grafana now shows a **Logs for this span** button.
 
 ---
