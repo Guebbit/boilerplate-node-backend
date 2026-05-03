@@ -272,23 +272,6 @@ app.use(
 app.use(express.json());
 
 /**
- * Triggered every time a piece of the request body arrives:
- * logs incoming data pieces
- */
-// app.use((req, res, next) => {
-//     req.on("data", (chunk) => {
-//         console.log("------------- REQUEST CHUNK DATA -------------", chunk)
-//     });
-//     req.on("end", () => {
-//         console.log("------------- REQUEST END -------------")
-//         // res.statusCode = 200;
-//         // res.setHeader("Location", "/");
-//         // res.end();
-//         next();
-//     });
-// });
-
-/**
  * Parse cookies (needed for the JWT refresh token cookie)
  */
 app.use(cookieParser());

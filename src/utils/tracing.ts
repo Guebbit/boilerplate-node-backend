@@ -11,10 +11,7 @@
 
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { resourceFromAttributes } from '@opentelemetry/resources';
-import {
-    ATTR_SERVICE_NAME,
-    SEMRESATTRS_SERVICE_VERSION
-} from '@opentelemetry/semantic-conventions';
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import {
     ConsoleSpanExporter,
     SimpleSpanProcessor,
@@ -79,7 +76,7 @@ export const startTracing = (): void => {
     // Service identity resource: visible in every exported span.
     const resource = resourceFromAttributes({
         [ATTR_SERVICE_NAME]: process.env.NODE_SERVICE_NAME ?? 'api',
-        [SEMRESATTRS_SERVICE_VERSION]: process.env.npm_package_version ?? '0.0.0'
+        [ATTR_SERVICE_VERSION]: process.env.npm_package_version ?? '0.0.0'
     });
 
     const processors = buildProcessors();
