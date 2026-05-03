@@ -8,6 +8,7 @@ import type { CastError } from 'mongoose';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { authSignupTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
 /**
  * POST /account/signup
@@ -51,12 +52,18 @@ export const postSignup = (
 
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
+            const newUserId = String((result.data as { _id?: unknown })?._id ?? 'unknown');
             emitAuditEvent({
                 action: AuditAction.AUTH_SIGNUP_SUCCEEDED,
-                actor_user_id: String((result.data as { _id?: unknown })?._id ?? 'unknown'),
+                actor_user_id: newUserId,
                 actor_role: 'user',
                 outcome: 'success',
                 ...extractRequestContext(request)
+            });
+            emitAnalyticsEvent({
+                distinctId: newUserId,
+                event: AnalyticsEvent.USER_SIGNED_UP,
+                traceId: request.traceContext?.traceId,
             });
             successResponse(response, result.data, 201);
         })

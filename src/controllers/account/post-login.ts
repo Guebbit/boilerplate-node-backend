@@ -13,6 +13,7 @@ import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '@utils/token-cleanup';
 import { authLoginTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
 /**
  * POST /account/login
@@ -73,6 +74,12 @@ export const postLogin = (
                         actor_role: result.data?.admin ? 'admin' : 'user',
                         outcome: 'success',
                         ...extractRequestContext(request)
+                    });
+                    emitAnalyticsEvent({
+                        distinctId: userId,
+                        event: AnalyticsEvent.USER_LOGGED_IN,
+                        traceId: request.traceContext?.traceId,
+                        properties: { role: result.data?.admin ? 'admin' : 'user' },
                     });
                     successResponse(
                         response,

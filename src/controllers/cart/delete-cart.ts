@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { userService } from '@services/users';
 import { successResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@api/model/removeCartItemRequest';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
 /**
  * DELETE /cart
@@ -22,6 +23,12 @@ export const deleteCart = (
     )
         .then(() => userService.cartGetWithSummary(user))
         .then((cart) => {
+            emitAnalyticsEvent({
+                distinctId: user.id,
+                event: AnalyticsEvent.CART_CLEARED,
+                traceId: request.traceContext?.traceId,
+                properties: { ...(productId ? { product_id: productId } : {}) },
+            });
             successResponse(response, cart);
         });
 };

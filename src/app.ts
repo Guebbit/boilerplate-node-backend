@@ -4,6 +4,7 @@
 // Importing tracing.ts here ensures the SDK is initialized (and Express/HTTP
 // instrumentation patches applied) before express or mongoose are loaded.
 import { startTracing, shutdownTracing } from '@utils/tracing';
+import { shutdownAnalytics } from '@utils/analytics';
 startTracing();
 
 import 'dotenv/config';
@@ -159,6 +160,7 @@ export const stopServer = () => {
         })
         .then(() => stopCache())
         .then(() => stopDatabase())
+        .then(() => shutdownAnalytics()) // flush PostHog events before exit
         .then(() => shutdownTracing()) // flush OTel spans before exit
         .finally(() => {
             activeServer = undefined;

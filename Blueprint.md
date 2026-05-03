@@ -78,6 +78,7 @@
 | Email span                | `nodemailer()` wrapped in OTel span                      | `src/utils/nodemailer.ts` ← Phase 3             |
 | Structured logging        | Winston JSON logger                                      | `src/utils/winston.ts` ← Phase 1                |
 | Audit logging             | Dedicated `auditLogger`                                  | `src/utils/winston.ts` ← Phase 1                |
+| Product analytics         | PostHog event capture (`emitAnalyticsEvent`)             | `src/utils/analytics.ts` ← Phase 7              |
 | Request access log        | `requestLogger` middleware + OTel trace IDs              | `src/middlewares/request-logger.ts` ← Phase 1/3 |
 | Sensitive redaction       | `redactSensitiveFields()`                                | `src/utils/winston.ts` ← Phase 1                |
 | Error handling            | Global Express error handler + span error recording      | `app.ts`                                        |
@@ -427,10 +428,39 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 
 ---
 
-### 🔜 Phase 7 — PostHog product analytics (planned)
+### ✅ Phase 7 — PostHog product analytics
 
-- Track funnel events: signup, product search, cart, checkout, order
-- Business-level analytics separate from operational observability
+**Goal:** instrument business/product flows with event tracking sent to PostHog, fully opt-in with zero breaking change.
+
+**New file:**
+
+- `src/utils/analytics.ts` — `AnalyticsEvent` enum, `IAnalyticsEvent` interface, lazy `PostHog` client singleton, `isPostHogEnabled()`, `emitAnalyticsEvent()`, `shutdownAnalytics()`
+
+**Modified files:**
+
+- `src/app.ts` — `shutdownAnalytics()` added to graceful-shutdown chain
+- `src/controllers/account/post-login.ts` — `user_logged_in`
+- `src/controllers/account/post-signup.ts` — `user_signed_up`
+- `src/controllers/products/get-products.ts` — `products_searched`
+- `src/controllers/products/get-product-item.ts` — `product_viewed`
+- `src/controllers/cart/post-cart.ts` — `cart_item_added`
+- `src/controllers/cart/put-cart-item.ts` — `cart_item_updated`
+- `src/controllers/cart/delete-cart-item.ts` — `cart_item_removed`
+- `src/controllers/cart/delete-cart.ts` — `cart_cleared`
+- `src/controllers/cart/post-checkout.ts` — `checkout_completed`, `checkout_failed`
+- `src/controllers/orders/post-orders.ts` — `order_created`
+- `.env-example` — `NODE_POSTHOG_API_KEY`, `NODE_POSTHOG_HOST`
+
+**New dependency:** `posthog-node`
+
+**Docs added:**
+
+- `docs/guide/product-analytics.md` — event taxonomy, payload schema, sample funnel, architecture diagram, how to add new events
+- `docs/index.md` — Phase 7 feature card added
+
+**Tests added:**
+
+- `tests/unit/utils/analytics.test.ts` — `isPostHogEnabled()`, `AnalyticsEvent` enum, `emitAnalyticsEvent()` (disabled no-op, client creation, capture payload, trace_id injection), `shutdownAnalytics()` (13 tests)
 
 ---
 
@@ -478,6 +508,13 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 | Variable         | Default   | Description                               |
 | ---------------- | --------- | ----------------------------------------- |
 | `NODE_LOKI_HOST` | _(unset)_ | Loki push API base URL; disables if unset |
+
+### Phase 7 — PostHog product analytics
+
+| Variable               | Default   | Description                                            |
+| ---------------------- | --------- | ------------------------------------------------------ |
+| `NODE_POSTHOG_API_KEY` | _(unset)_ | PostHog project write key; analytics disabled if unset |
+| `NODE_POSTHOG_HOST`    | _(unset)_ | PostHog ingest host (cloud or self-hosted)             |
 
 ### JWT expiry
 

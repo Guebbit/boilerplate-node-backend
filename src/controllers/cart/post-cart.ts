@@ -4,6 +4,7 @@ import { userService } from '@services/users';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
 /**
  * POST /cart
@@ -38,6 +39,12 @@ export const postCart = (
             .cartItemSetById(user, productId, quantity)
             .then(() => userService.cartGetWithSummary(user))
             .then((cart) => {
+                emitAnalyticsEvent({
+                    distinctId: user.id,
+                    event: AnalyticsEvent.CART_ITEM_ADDED,
+                    traceId: request.traceContext?.traceId,
+                    properties: { product_id: productId, quantity },
+                });
                 successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
             });
     });
