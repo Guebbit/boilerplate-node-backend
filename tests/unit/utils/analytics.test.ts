@@ -3,7 +3,7 @@ import {
     emitAnalyticsEvent,
     shutdownAnalytics,
     AnalyticsEvent,
-    IAnalyticsEvent,
+    IAnalyticsEvent
 } from '@utils/analytics';
 
 // ─── Mock posthog-node ────────────────────────────────────────────────────────
@@ -15,12 +15,14 @@ const mockShutdown = jest.fn().mockResolvedValue(void 0);
 jest.mock('posthog-node', () => ({
     PostHog: jest.fn().mockImplementation(() => ({
         capture: mockCapture,
-        shutdown: mockShutdown,
-    })),
+        shutdown: mockShutdown
+    }))
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { PostHog: mockedPostHog } = require('posthog-node') as { PostHog: jest.MockedClass<{ new (...args: unknown[]): unknown }> };
+const { PostHog: mockedPostHog } = require('posthog-node') as {
+    PostHog: jest.MockedClass<{ new (...args: unknown[]): unknown }>;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -89,7 +91,7 @@ describe('emitAnalyticsEvent()', () => {
         disablePostHog();
         emitAnalyticsEvent({
             distinctId: 'user-1',
-            event: AnalyticsEvent.USER_LOGGED_IN,
+            event: AnalyticsEvent.USER_LOGGED_IN
         });
         expect(mockedPostHog).not.toHaveBeenCalled();
     });
@@ -98,7 +100,7 @@ describe('emitAnalyticsEvent()', () => {
         enablePostHog();
         emitAnalyticsEvent({
             distinctId: 'user-1',
-            event: AnalyticsEvent.USER_LOGGED_IN,
+            event: AnalyticsEvent.USER_LOGGED_IN
         });
         expect(mockedPostHog).toHaveBeenCalledTimes(1);
         expect(mockedPostHog).toHaveBeenCalledWith(
@@ -119,7 +121,7 @@ describe('emitAnalyticsEvent()', () => {
         const event: IAnalyticsEvent = {
             distinctId: 'user-42',
             event: AnalyticsEvent.CART_ITEM_ADDED,
-            properties: { product_id: 'prod-7', quantity: 2 },
+            properties: { product_id: 'prod-7', quantity: 2 }
         };
         emitAnalyticsEvent(event);
 
@@ -140,7 +142,7 @@ describe('emitAnalyticsEvent()', () => {
         emitAnalyticsEvent({
             distinctId: 'u1',
             event: AnalyticsEvent.CHECKOUT_COMPLETED,
-            traceId: 'abc123',
+            traceId: 'abc123'
         });
 
         const payload = mockCapture.mock.calls[0][0] as {
@@ -153,7 +155,7 @@ describe('emitAnalyticsEvent()', () => {
         enablePostHog();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: AnalyticsEvent.PRODUCT_VIEWED,
+            event: AnalyticsEvent.PRODUCT_VIEWED
         });
 
         const payload = mockCapture.mock.calls[0][0] as {

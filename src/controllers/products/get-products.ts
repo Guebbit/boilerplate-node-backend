@@ -57,8 +57,8 @@ export const getProducts = (
                     text: request.body?.text ?? request.query.text,
                     page,
                     pageSize,
-                    result_count: (result as { list?: unknown[] })?.list?.length ?? 0,
-                },
+                    result_count: result.items.length
+                }
             });
             successResponse(response, result);
         })

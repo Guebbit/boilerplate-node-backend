@@ -52,7 +52,7 @@ export const postSignup = (
 
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
-            const newUserId = String((result.data as { _id?: unknown })?._id ?? 'unknown');
+            const newUserId = result.data?.id ?? 'unknown';
             emitAuditEvent({
                 action: AuditAction.AUTH_SIGNUP_SUCCEEDED,
                 actor_user_id: newUserId,
@@ -63,7 +63,7 @@ export const postSignup = (
             emitAnalyticsEvent({
                 distinctId: newUserId,
                 event: AnalyticsEvent.USER_SIGNED_UP,
-                traceId: request.traceContext?.traceId,
+                traceId: request.traceContext?.traceId
             });
             successResponse(response, result.data, 201);
         })

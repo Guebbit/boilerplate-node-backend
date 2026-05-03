@@ -16,7 +16,7 @@ const getClient = (): PostHog => {
             host: process.env.NODE_POSTHOG_HOST,
             // Disable auto-flush; we flush manually on shutdown.
             flushAt: 20,
-            flushInterval: 10_000,
+            flushInterval: 10_000
         });
     }
     return _client;
@@ -51,7 +51,7 @@ export enum AnalyticsEvent {
     // Checkout / orders
     CHECKOUT_COMPLETED = 'checkout_completed',
     CHECKOUT_FAILED = 'checkout_failed',
-    ORDER_CREATED = 'order_created',
+    ORDER_CREATED = 'order_created'
 }
 
 // ─── Payload schema ───────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ export const emitAnalyticsEvent = (event: IAnalyticsEvent): void => {
         properties: {
             ...event.properties,
             // Attach OTel trace ID for log/trace/analytics correlation.
-            ...(event.traceId ? { trace_id: event.traceId } : {}),
-        },
+            ...(event.traceId ? { trace_id: event.traceId } : {})
+        }
     });
 };

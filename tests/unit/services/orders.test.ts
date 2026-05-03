@@ -207,7 +207,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderItem(product, 3)]); // 3 × $25 = $75
 
         const result = await orderService.search({});
-        const [order] = result.items as unknown as OrderWithTotals[];
+        const [order] = result.items as OrderWithTotals[];
 
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(3);

@@ -50,7 +50,7 @@ export const postOrders = (
         );
 
         orderCreatedTotal.inc();
-        const orderId = String((result.data as { _id?: unknown })?._id ?? '');
+        const orderId = result.data?._id?.toString() ?? '';
         emitAuditEvent({
             action: AuditAction.ADMIN_ORDER_CREATED,
             actor_user_id: request.user?.id ?? 'unknown',
@@ -58,13 +58,13 @@ export const postOrders = (
             outcome: 'success',
             target_type: 'order',
             target_id: orderId,
-            ...extractRequestContext(request),
+            ...extractRequestContext(request)
         });
         emitAnalyticsEvent({
             distinctId: request.user?.id ?? 'unknown',
             event: AnalyticsEvent.ORDER_CREATED,
             traceId: request.traceContext?.traceId,
-            properties: { order_id: orderId },
+            properties: { order_id: orderId }
         });
         successResponse(response, result.data, 201);
     });

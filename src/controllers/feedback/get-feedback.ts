@@ -6,7 +6,6 @@ import { rejectResponse, successResponse } from '@utils/response';
 import { feedbackRequestService } from '@services/feedback-requests';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
-const FEEDBACK_STATUSES = new Set(['new', 'in_progress', 'resolved', 'spam']);
 
 export const getFeedback = (
     request: Request<unknown, unknown, SearchFeedbackRequestsRequest, FeedbackQuery>,
@@ -18,10 +17,8 @@ export const getFeedback = (
     });
 
     const statusRaw = request.body?.status ?? request.query.status;
-    const status =
-        statusRaw && FEEDBACK_STATUSES.has(String(statusRaw))
-            ? (String(statusRaw) as unknown as SearchFeedbackRequestsRequest['status'])
-            : undefined;
+    // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping
+    const status = statusRaw ? String(statusRaw) : undefined;
 
     return feedbackRequestService
         .search({

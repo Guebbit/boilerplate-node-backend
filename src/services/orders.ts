@@ -1,8 +1,8 @@
 import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
-import type { SearchOrdersRequest, OrdersResponse, Order, CartItem } from '@types';
-import type { IOrderDocument } from '@models/orders';
+import type { SearchOrdersRequest, CartItem } from '@types';
+import type { IOrderDocument, IOrderDocumentItem } from '@models/orders';
 import { EOrderStatus } from '@models/orders';
 import {
     generateReject,
@@ -73,7 +73,10 @@ export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]
 export const search = (
     search: SearchOrdersRequest = {},
     scope?: Record<string, unknown>
-): Promise<OrdersResponse> => {
+): Promise<{
+    items: IOrderDocument[];
+    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}> => {
     const page = Math.max(1, Number(search.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));
     const skip = (page - 1) * pageSize;
@@ -108,8 +111,7 @@ export const search = (
             return orderRepository
                 .aggregate([...basePipeline, { $skip: skip }, { $limit: pageSize }])
                 .then((items) => ({
-                    // IOrderDocument[] returned as Order[] — userId differs (ObjectId vs string)
-                    items: items as unknown as Order[],
+                    items,
                     meta: {
                         page,
                         pageSize,
@@ -179,13 +181,11 @@ export const create = (
                 t('ecommerce.product-not-found')
             ]);
 
-        const orderItems = resolvedItems.map(
-            ({ item, product }) =>
-                ({
-                    product,
-                    quantity: item.quantity
-                }) as unknown as Order['items'][number]
-        );
+        const orderItems: IOrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
+            // lean() returns a plain object compatible with IProductDocument at runtime
+            product: product! as IOrderDocumentItem['product'],
+            quantity: item.quantity
+        }));
 
         return orderRepository
             .create({
@@ -236,13 +236,11 @@ export const update = (
                               t('ecommerce.product-not-found')
                           ]);
 
-                      order.items = resolvedItems.map(
-                          ({ item, product }) =>
-                              ({
-                                  product,
-                                  quantity: item.quantity
-                              }) as unknown as Order['items'][number]
-                      );
+                      order.items = resolvedItems.map(({ item, product }) => ({
+                          // lean() returns a plain object compatible with IProductDocument at runtime
+                          product: product! as IOrderDocumentItem['product'],
+                          quantity: item.quantity
+                      }));
                   })
                 : Promise.resolve();
 

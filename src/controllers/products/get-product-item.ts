@@ -23,7 +23,7 @@ export const getProductItem = (request: Request, response: Response) =>
                 distinctId: request.user?.id ?? 'anonymous',
                 event: AnalyticsEvent.PRODUCT_VIEWED,
                 traceId: request.traceContext?.traceId,
-                properties: { product_id: String(request.params.id) },
+                properties: { product_id: String(request.params.id) }
             });
             successResponse(response, product);
         })

@@ -18,18 +18,18 @@ export const postCheckout = (request: Request, response: Response) => {
                 distinctId: user.id,
                 event: AnalyticsEvent.CHECKOUT_FAILED,
                 traceId: request.traceContext?.traceId,
-                properties: { reason: result.message },
+                properties: { reason: result.message }
             });
             rejectResponse(response, result.status, result.message, result.errors);
             return;
         }
         cartCheckoutTotal.inc({ status: 'success' });
-        const orderId = String((result.data as { _id?: unknown })?._id ?? '');
+        const orderId = result.data?._id?.toString() ?? '';
         emitAnalyticsEvent({
             distinctId: user.id,
             event: AnalyticsEvent.CHECKOUT_COMPLETED,
             traceId: request.traceContext?.traceId,
-            properties: { order_id: orderId },
+            properties: { order_id: orderId }
         });
         successResponse(
             response,

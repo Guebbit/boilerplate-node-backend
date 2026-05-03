@@ -3,6 +3,7 @@ import { connect, disconnect, clearAll } from '../../helpers/database';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import { createOrder, makeOrder, toOrderItem } from '../../helpers/factories/orders';
+import type { IProductDocument } from '@models/products';
 import * as orderRepository from '@repositories/orders';
 
 beforeAll(connect);
@@ -40,8 +41,9 @@ describe('orderRepository', () => {
             const order = await createOrder(user, [toOrderItem(product, 1)]);
 
             // The product object is embedded, not referenced by ObjectId
-            expect(order.items[0].product.title).toBe('Snapshot Test');
-            expect(order.items[0].product.price).toBe(29.99);
+            const snapshot = order.items[0].product as IProductDocument;
+            expect(snapshot.title).toBe('Snapshot Test');
+            expect(snapshot.price).toBe(29.99);
         });
 
         it('supports multiple products in a single order', async () => {

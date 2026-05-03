@@ -79,7 +79,7 @@ export const postLogin = (
                         distinctId: userId,
                         event: AnalyticsEvent.USER_LOGGED_IN,
                         traceId: request.traceContext?.traceId,
-                        properties: { role: result.data?.admin ? 'admin' : 'user' },
+                        properties: { role: result.data?.admin ? 'admin' : 'user' }
                     });
                     successResponse(
                         response,

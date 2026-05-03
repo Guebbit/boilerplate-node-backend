@@ -2,8 +2,7 @@ import type { QueryFilter } from 'mongoose';
 import {
     SearchFeedbackRequestsRequest,
     UpdateFeedbackRequestStatusRequest,
-    type CreateFeedbackRequest,
-    type FeedbackRequestsResponse
+    type CreateFeedbackRequest
 } from '@types';
 import { EFeedbackStatus, type IFeedbackRequestDocument } from '@models/feedback-requests';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
@@ -13,6 +12,7 @@ const toFeedbackStatus = (
         | SearchFeedbackRequestsRequest.StatusEnum
         | UpdateFeedbackRequestStatusRequest.StatusEnum
         | EFeedbackStatus
+        | string
 ): EFeedbackStatus | undefined => {
     switch (status) {
         case SearchFeedbackRequestsRequest.StatusEnum.New:
@@ -51,8 +51,11 @@ export const create = (payload: CreateFeedbackRequest): Promise<IFeedbackRequest
     });
 
 export const search = (
-    filters: SearchFeedbackRequestsRequest = {}
-): Promise<FeedbackRequestsResponse> => {
+    filters: Omit<SearchFeedbackRequestsRequest, 'status'> & { status?: string } = {}
+): Promise<{
+    items: IFeedbackRequestDocument[];
+    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}> => {
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
     const skip = (page - 1) * pageSize;
@@ -80,7 +83,7 @@ export const search = (
                 limit: pageSize
             })
             .then((items) => ({
-                items: items as unknown as FeedbackRequestsResponse['items'],
+                items,
                 meta: {
                     page,
                     pageSize,
