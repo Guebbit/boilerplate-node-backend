@@ -17,6 +17,11 @@ export const getAdminAuditLogs = (request: Request, response: Response): void =>
         return;
     }
 
+    if (since && Number.isNaN(new Date(since).getTime())) {
+        rejectResponse(response, 422, 'since must be a valid ISO-8601 date-time string');
+        return;
+    }
+
     const items = getRecentAuditEvents({
         actor,
         action,

@@ -30,8 +30,9 @@ export const getRecentAuditEvents = (options?: {
     if (options?.action) items = items.filter((e) => e.action === options.action);
     if (options?.outcome) items = items.filter((e) => e.outcome === options.outcome);
     if (options?.since) {
-        const since = new Date(options.since).getTime();
-        items = items.filter((e) => new Date(e.timestamp).getTime() >= since);
+        const sinceTime = new Date(options.since).getTime();
+        if (Number.isNaN(sinceTime)) return [];
+        items = items.filter((e) => new Date(e.timestamp).getTime() >= sinceTime);
     }
     const limit = options?.limit ?? 50;
     return items.slice(0, limit);
