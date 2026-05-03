@@ -31,7 +31,7 @@ export const deleteCartItem = (
                 distinctId: user.id,
                 event: AnalyticsEvent.CART_ITEM_REMOVED,
                 traceId: request.traceContext?.traceId,
-                properties: { product_id: productId },
+                properties: { product_id: productId }
             });
             successResponse(response, cart);
         });

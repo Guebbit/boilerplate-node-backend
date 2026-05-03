@@ -138,11 +138,11 @@ interface IMongooseQueryInternal {
 
 /** Extract collection name from a Mongoose Query object. */
 const getCollectionName = (query: MongooseQuery<unknown, unknown>): string =>
-    (query as unknown as IMongooseQueryInternal).mongooseCollection?.name ?? 'unknown';
+    (query as IMongooseQueryInternal).mongooseCollection?.name ?? 'unknown';
 
 /** Extract the operation name from a Mongoose Query object. */
 const getOperation = (query: MongooseQuery<unknown, unknown>): string =>
-    (query as unknown as IMongooseQueryInternal).op ?? 'query';
+    (query as IMongooseQueryInternal).op ?? 'query';
 
 export const mongooseMetricsPlugin = (schema: Schema): void => {
     // ── Query pre hook: record start time + open OTel span ────────────────

@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { t } from 'i18next';
 import type { QueryFilter } from 'mongoose';
-import type { SearchProductsRequest, ProductsResponse, Product } from '@types';
+import type { SearchProductsRequest, Product } from '@types';
 import {
     generateReject,
     generateSuccess,
@@ -49,7 +49,10 @@ const sanitizeStringArray = (values?: string[] | null): string[] => {
 export const search = (
     filters: SearchProductsRequest = {},
     admin = false
-): Promise<ProductsResponse> => {
+): Promise<{
+    items: IProductDocument[];
+    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}> => {
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
@@ -111,7 +114,7 @@ export const search = (
                 limit: pageSize
             })
             .then((items) => ({
-                items: items as unknown as ProductsResponse['items'],
+                items,
                 meta: {
                     page,
                     pageSize,

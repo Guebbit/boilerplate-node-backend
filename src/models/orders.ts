@@ -1,6 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema } from './products';
+import type { IProductDocument } from './products';
 import type { Order } from '@types';
 
 /**
@@ -16,15 +17,26 @@ export enum EOrderStatus {
 }
 
 /**
+ * A single item stored inside an order document.
+ * Uses IProductDocument (or ObjectId before populate) rather than the OpenAPI
+ * OrderItem class, because Mongoose embeds the product snapshot directly.
+ */
+export interface IOrderDocumentItem {
+    product: IProductDocument | Types.ObjectId;
+    quantity: number;
+}
+
+/**
  * Order Document interface.
- * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string)
- * and keeps `items` as embedded OrderItem snapshots in the schema.
+ * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string),
+ * 'items' (embedded IOrderDocumentItem instead of OpenAPI OrderItem), and 'status'.
  */
 export interface IOrderDocument
-    extends Omit<Order, 'id' | 'userId' | 'status' | 'total'>, Document {
+    extends Omit<Order, 'id' | 'userId' | 'status' | 'total' | 'items'>, Document {
     userId: Types.ObjectId;
     status: EOrderStatus;
     notes?: string;
+    items: IOrderDocumentItem[];
 }
 
 /**

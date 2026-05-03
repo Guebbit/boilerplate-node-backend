@@ -31,7 +31,7 @@ export const putCartItem = (
                 distinctId: user.id,
                 event: AnalyticsEvent.CART_ITEM_UPDATED,
                 traceId: request.traceContext?.traceId,
-                properties: { product_id: productId, quantity: request.body.quantity },
+                properties: { product_id: productId, quantity: request.body.quantity }
             });
             successResponse(response, cart);
         });

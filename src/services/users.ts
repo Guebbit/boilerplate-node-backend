@@ -15,7 +15,7 @@ import type { IOrderDocument } from '@models/orders';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, ICartItem, IUser } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import type { Order, SearchUsersRequest, UsersResponse } from '@types';
+import type { SearchUsersRequest } from '@types';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
 
@@ -36,19 +36,11 @@ const resolveUserId = (user: IUserDocument): string =>
 
 const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocument> => {
     const response = generateSuccess(user);
-    const data = response.data as IUserDocument & { id?: string; _id?: string };
-
-    // Keep `_id` mirrored from `id` for compatibility with call sites that still read Mongo-style keys.
-    if (!data._id && data.id) {
-        return {
-            ...response,
-            data: {
-                ...data,
-                _id: data.id
-            } as unknown as IUserDocument
-        };
+    // After serializeResponseData, _id is gone (converted to id). Patch it back for backward compat.
+    const data = response.data as { _id?: unknown; id?: unknown };
+    if (!data._id && typeof data.id === 'string') {
+        data._id = data.id;
     }
-
     return response;
 };
 
@@ -96,7 +88,8 @@ export const cartGetWithSummary = (
         let total = 0;
         for (const item of items) {
             totalQuantity += item.quantity;
-            const product = item.product as unknown as { price?: number };
+            // product is populated at this point (via cartGet → user.populate)
+            const product = item.product as { price?: number };
             total += (product?.price ?? 0) * item.quantity;
         }
         return {
@@ -262,20 +255,20 @@ export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserD
  */
 export const orderConfirm = (
     user: IUserDocument
-): Promise<IResponseSuccess<Order> | IResponseReject> =>
+): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
     cartGet(user)
-        .then<IResponseSuccess<Order> | IResponseReject>((products) => {
+        .then<IResponseSuccess<IOrderDocument> | IResponseReject>((products) => {
             if (products.length === 0)
                 return generateReject(409, 'empty cart', [t('generic.error-missing-data')]);
             return orderRepository
                 .create({
                     userId: new Types.ObjectId(resolveUserId(user)),
                     email: user.email,
-                    // products is ICartItem[] after populate(); cast to Order['items'] for the schema
-                    items: products as unknown as Order['items']
+                    // ICartItem is compatible with IOrderDocumentItem (Types.ObjectId is in the union)
+                    items: products as IOrderDocument['items']
                 } as Partial<IOrderDocument>)
                 .then((order) =>
-                    cartRemove(user).then(() => generateSuccess<Order>(order as unknown as Order))
+                    cartRemove(user).then(() => generateSuccess<IOrderDocument>(order))
                 );
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
@@ -581,7 +574,12 @@ export const validateData = (
  *
  * @param filters
  */
-export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse> => {
+export const search = (
+    filters: SearchUsersRequest = {}
+): Promise<{
+    items: IUserDocument[];
+    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+}> => {
     // Pagination
     const page = Math.max(1, Number(filters.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
@@ -623,7 +621,7 @@ export const search = (filters: SearchUsersRequest = {}): Promise<UsersResponse>
                 limit: pageSize
             })
             .then((items) => ({
-                items: items as unknown as UsersResponse['items'],
+                items,
                 meta: {
                     page,
                     pageSize,

@@ -8,12 +8,12 @@
 
 Product analytics answers **"what are users doing in your product?"**
 
-| Observability signal | Answers                              |
-| -------------------- | ------------------------------------ |
-| Logs                 | What happened technically?           |
-| Metrics              | How is the system performing?        |
-| Traces               | Where did the request spend time?    |
-| **Product events**   | **What did the user do / achieve?**  |
+| Observability signal | Answers                             |
+| -------------------- | ----------------------------------- |
+| Logs                 | What happened technically?          |
+| Metrics              | How is the system performing?       |
+| Traces               | Where did the request spend time?   |
+| **Product events**   | **What did the user do / achieve?** |
 
 ---
 
@@ -40,8 +40,8 @@ import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 emitAnalyticsEvent({
     distinctId: req.user?.id ?? 'anonymous',
     event: AnalyticsEvent.PRODUCT_VIEWED,
-    traceId: req.traceContext?.traceId,      // optional — links to OTel trace
-    properties: { product_id: '64a...' },
+    traceId: req.traceContext?.traceId, // optional — links to OTel trace
+    properties: { product_id: '64a...' }
 });
 ```
 
@@ -72,10 +72,10 @@ Controller
 
 ## Configuration
 
-| Env var                  | Required | Default                     | Description                                   |
-| ------------------------ | -------- | --------------------------- | --------------------------------------------- |
-| `NODE_POSTHOG_API_KEY`   | ✅ (to enable) | —                   | PostHog project write key                     |
-| `NODE_POSTHOG_HOST`      | ✅ (to enable) | —                   | PostHog ingest base URL                       |
+| Env var                | Required       | Default | Description               |
+| ---------------------- | -------------- | ------- | ------------------------- |
+| `NODE_POSTHOG_API_KEY` | ✅ (to enable) | —       | PostHog project write key |
+| `NODE_POSTHOG_HOST`    | ✅ (to enable) | —       | PostHog ingest base URL   |
 
 Both must be set; either missing → analytics silently disabled.
 
@@ -85,34 +85,34 @@ Both must be set; either missing → analytics silently disabled.
 
 ### Auth / Onboarding
 
-| Event              | `distinctId`   | Key properties         | Emitted in                              |
-| ------------------ | -------------- | ---------------------- | --------------------------------------- |
-| `user_signed_up`   | new user ID    | —                      | `POST /account/signup` (success)        |
-| `user_logged_in`   | user ID        | `role`                 | `POST /account/login` (success)         |
+| Event            | `distinctId` | Key properties | Emitted in                       |
+| ---------------- | ------------ | -------------- | -------------------------------- |
+| `user_signed_up` | new user ID  | —              | `POST /account/signup` (success) |
+| `user_logged_in` | user ID      | `role`         | `POST /account/login` (success)  |
 
 ### Product discovery
 
-| Event                | `distinctId`          | Key properties                          | Emitted in                      |
-| -------------------- | --------------------- | --------------------------------------- | ------------------------------- |
-| `products_searched`  | user ID / `anonymous` | `text`, `page`, `pageSize`, `result_count` | `GET /products`, `POST /products/search` |
-| `product_viewed`     | user ID / `anonymous` | `product_id`                            | `GET /products/:id`             |
+| Event               | `distinctId`          | Key properties                             | Emitted in                               |
+| ------------------- | --------------------- | ------------------------------------------ | ---------------------------------------- |
+| `products_searched` | user ID / `anonymous` | `text`, `page`, `pageSize`, `result_count` | `GET /products`, `POST /products/search` |
+| `product_viewed`    | user ID / `anonymous` | `product_id`                               | `GET /products/:id`                      |
 
 ### Cart
 
-| Event                | `distinctId` | Key properties                 | Emitted in                    |
-| -------------------- | ------------ | ------------------------------ | ----------------------------- |
-| `cart_item_added`    | user ID      | `product_id`, `quantity`       | `POST /cart`                  |
-| `cart_item_updated`  | user ID      | `product_id`, `quantity`       | `PUT /cart/:productId`        |
-| `cart_item_removed`  | user ID      | `product_id`                   | `DELETE /cart/:productId`     |
-| `cart_cleared`       | user ID      | `product_id` (if partial)      | `DELETE /cart`                |
+| Event               | `distinctId` | Key properties            | Emitted in                |
+| ------------------- | ------------ | ------------------------- | ------------------------- |
+| `cart_item_added`   | user ID      | `product_id`, `quantity`  | `POST /cart`              |
+| `cart_item_updated` | user ID      | `product_id`, `quantity`  | `PUT /cart/:productId`    |
+| `cart_item_removed` | user ID      | `product_id`              | `DELETE /cart/:productId` |
+| `cart_cleared`      | user ID      | `product_id` (if partial) | `DELETE /cart`            |
 
 ### Checkout / Orders
 
-| Event                 | `distinctId` | Key properties          | Emitted in            |
-| --------------------- | ------------ | ----------------------- | --------------------- |
-| `checkout_completed`  | user ID      | `order_id`              | `POST /cart/checkout` |
-| `checkout_failed`     | user ID      | `reason`                | `POST /cart/checkout` |
-| `order_created`       | user ID      | `order_id`              | `POST /orders` (admin)|
+| Event                | `distinctId` | Key properties | Emitted in             |
+| -------------------- | ------------ | -------------- | ---------------------- |
+| `checkout_completed` | user ID      | `order_id`     | `POST /cart/checkout`  |
+| `checkout_failed`    | user ID      | `reason`       | `POST /cart/checkout`  |
+| `order_created`      | user ID      | `order_id`     | `POST /orders` (admin) |
 
 Every event also carries `trace_id` when available so you can jump from a PostHog funnel step straight to the matching Grafana Tempo trace.
 
@@ -179,28 +179,27 @@ Filter by time window (e.g. 7 days) to see abandonment rate.
 
 ```ts
 // src/utils/analytics.ts — add to enum
-WISHLIST_ITEM_ADDED = 'wishlist_item_added',
-
-// controller call site
-emitAnalyticsEvent({
-    distinctId: req.user!.id,
-    event: AnalyticsEvent.WISHLIST_ITEM_ADDED,
-    traceId: req.traceContext?.traceId,
-    properties: { product_id: productId },
-});
+((WISHLIST_ITEM_ADDED = 'wishlist_item_added'),
+    // controller call site
+    emitAnalyticsEvent({
+        distinctId: req.user!.id,
+        event: AnalyticsEvent.WISHLIST_ITEM_ADDED,
+        traceId: req.traceContext?.traceId,
+        properties: { product_id: productId }
+    }));
 ```
 
 ---
 
 ## IAnalyticsEvent schema
 
-| Field          | Type                  | Required | Description                                       |
-| -------------- | --------------------- | -------- | ------------------------------------------------- |
-| `distinctId`   | `string`              | ✅        | PostHog user identity (user ID or `'anonymous'`)  |
-| `event`        | `AnalyticsEvent`      | ✅        | Event name from the enum                          |
-| `timestamp`    | `Date`                | —        | Event time; defaults to now                       |
-| `traceId`      | `string`              | —        | OTel trace ID for cross-signal correlation        |
-| `properties`   | `Record<string, unknown>` | —    | Domain-specific payload fields                    |
+| Field        | Type                      | Required | Description                                      |
+| ------------ | ------------------------- | -------- | ------------------------------------------------ |
+| `distinctId` | `string`                  | ✅       | PostHog user identity (user ID or `'anonymous'`) |
+| `event`      | `AnalyticsEvent`          | ✅       | Event name from the enum                         |
+| `timestamp`  | `Date`                    | —        | Event time; defaults to now                      |
+| `traceId`    | `string`                  | —        | OTel trace ID for cross-signal correlation       |
+| `properties` | `Record<string, unknown>` | —        | Domain-specific payload fields                   |
 
 ---
 

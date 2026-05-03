@@ -208,13 +208,12 @@ const allowedOrigins = new Set(
 app.use(
     cors({
         origin(origin, callback) {
-            // `cors` callback typing expects `Error | null`; we pass `undefined` through a typed alias
-            // to keep strict linting (`unicorn/no-null`) and runtime behavior aligned.
-            const noCorsError = undefined as unknown as Error | null;
             // Allow non-browser requests (no Origin header), like curl/healthchecks
-            if (!origin) return callback(noCorsError, true);
+            // eslint-disable-next-line unicorn/no-null
+            if (!origin) return callback(null, true);
             // Allowed origins
-            if (allowedOrigins.has(origin)) return callback(noCorsError, true);
+            // eslint-disable-next-line unicorn/no-null
+            if (allowedOrigins.has(origin)) return callback(null, true);
             // Not allowed
             return callback(new Error(`CORS blocked for origin: ${origin}`));
         },

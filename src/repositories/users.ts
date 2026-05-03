@@ -74,8 +74,7 @@ export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> =>
 export const save = (user: IUserDocument): Promise<IUserDocument> => {
     if (typeof user.save === 'function') return user.save();
 
-    const userLike = user as unknown as { _id?: string; id?: string };
-    const id = userLike._id ?? userLike.id;
+    const id = user._id?.toString() ?? user.id;
     if (!id) throw new Error('Cannot save user without id');
 
     return userModel

@@ -27,7 +27,7 @@ export const deleteCart = (
                 distinctId: user.id,
                 event: AnalyticsEvent.CART_CLEARED,
                 traceId: request.traceContext?.traceId,
-                properties: { ...(productId ? { product_id: productId } : {}) },
+                properties: { ...(productId ? { product_id: productId } : {}) }
             });
             successResponse(response, cart);
         });
