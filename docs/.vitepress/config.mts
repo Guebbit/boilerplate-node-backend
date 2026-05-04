@@ -23,7 +23,9 @@ export default defineConfig({
                     { text: 'OpenTelemetry Tracing', link: '/guide/opentelemetry-tracing' },
                     { text: 'Loki Logging', link: '/guide/loki-logging' },
                     { text: 'Grafana Tempo', link: '/guide/tempo' },
-                    { text: 'Grafana Dashboards', link: '/guide/grafana-dashboards' }
+                    { text: 'Grafana Dashboards', link: '/guide/grafana-dashboards' },
+                    { text: 'Audit Logging', link: '/guide/audit-logging' },
+                    { text: 'Product Analytics', link: '/guide/product-analytics' }
                 ]
             },
             {

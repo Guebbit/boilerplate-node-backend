@@ -179,14 +179,22 @@ Filter by time window (e.g. 7 days) to see abandonment rate.
 
 ```ts
 // src/utils/analytics.ts — add to enum
-((WISHLIST_ITEM_ADDED = 'wishlist_item_added'),
-    // controller call site
-    emitAnalyticsEvent({
-        distinctId: req.user!.id,
-        event: AnalyticsEvent.WISHLIST_ITEM_ADDED,
-        traceId: req.traceContext?.traceId,
-        properties: { product_id: productId }
-    }));
+export enum AnalyticsEvent {
+    // ...existing events...
+    WISHLIST_ITEM_ADDED = 'wishlist_item_added'
+}
+```
+
+```ts
+// controller call site
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+
+emitAnalyticsEvent({
+    distinctId: req.user!.id,
+    event: AnalyticsEvent.WISHLIST_ITEM_ADDED,
+    traceId: req.traceContext?.traceId,
+    properties: { product_id: productId }
+});
 ```
 
 ---

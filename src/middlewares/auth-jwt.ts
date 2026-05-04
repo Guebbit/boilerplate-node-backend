@@ -150,12 +150,6 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
                 } as ITokenData,
                 process.env.NODE_REFRESH_TOKEN_SECRET ?? '',
                 {
-                    /**
-                     * TODO opzione scelta nel login
-                     * Short: 604_800 = 7 days
-                     * Medium: 2_592_000 = 30 days
-                     * Long: 31_536_000 = 1 year
-                     */
                     expiresIn: getExpiryTime(remember),
                     algorithm: 'HS256'
                 }

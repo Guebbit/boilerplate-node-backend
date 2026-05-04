@@ -308,8 +308,6 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 ---
 
----
-
 ### ✅ Phase 4 — Loki centralized logging
 
 **Goal:** optionally ship every Winston log line to Grafana Loki for centralised querying, alerting, and log/trace correlation.
@@ -318,7 +316,7 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 #### 1. Optional Loki transport (`src/utils/winston.ts`)
 
-- `buildLokiTransport(extraLabels)` — creates a `LokiTransport` instance when `NODE_LOKI_HOST` is set; returns `null` otherwise (zero cost when disabled).
+- `buildLokiTransport(extraLabels)` — creates a `LokiTransport` instance when `NODE_LOKI_HOST` is set; returns `undefined` otherwise (zero cost when disabled).
 - `isLokiEnabled()` — helper for code and tests to check whether Loki is active.
 - Both `logger` and `auditLogger` include the transport when configured.
 - Stream labels: `service`, `env`, `log_type` (`app` / `audit`).
