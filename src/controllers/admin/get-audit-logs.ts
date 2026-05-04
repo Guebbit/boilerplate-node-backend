@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { getRecentAuditEvents } from '@utils/audit';
+import { adminService } from '@services/admin';
 import { successResponse, rejectResponse } from '@utils/response';
 
 /** Returns recent audit events from the in-memory ring buffer. */
@@ -22,7 +22,7 @@ export const getAdminAuditLogs = (request: Request, response: Response): void =>
         return;
     }
 
-    const items = getRecentAuditEvents({
+    const result = adminService.getAuditLogs({
         actor,
         action,
         outcome: outcome as 'success' | 'failure' | undefined,
@@ -30,5 +30,5 @@ export const getAdminAuditLogs = (request: Request, response: Response): void =>
         limit: parsedLimit
     });
 
-    successResponse(response, { items, total: items.length }, 200, 'Audit log');
+    successResponse(response, result, 200, 'Audit log');
 };
