@@ -40,11 +40,11 @@ flowchart TD
 
 ## Read by intent
 
-| Need | Go to |
-| --- | --- |
-| Understand runtime and security dependencies | [Runtime & Security](./runtime-and-security.md) |
-| Understand logging, metrics, tracing, testing, and docs tooling | [Observability & Quality](./observability-and-quality.md) |
-| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/) |
+| Need                                                             | Go to                                                     |
+| ---------------------------------------------------------------- | --------------------------------------------------------- |
+| Understand runtime and security dependencies                     | [Runtime & Security](./runtime-and-security.md)           |
+| Understand logging, metrics, tracing, testing, and docs tooling  | [Observability & Quality](./observability-and-quality.md) |
+| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                            |
 
 ## Boilerplate reminder
 

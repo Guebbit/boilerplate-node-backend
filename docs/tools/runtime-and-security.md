@@ -2,15 +2,15 @@
 
 ## Core runtime
 
-| Tool | Why it is here | Repo example |
-| --- | --- | --- |
-| Express | simple REST transport layer | routes + middlewares + controllers |
-| MongoDB | document database | default persistence engine for this variant |
-| Mongoose | schema + model layer on top of MongoDB | models and repositories |
-| Redis | optional response cache | repeated GET requests and cache invalidation |
-| Zod | input shaping and validation | service-level validation patterns |
-| Multer | multipart/file upload handling | upload-friendly endpoints |
-| i18next | translation dictionary support | user-facing messages/locales |
+| Tool     | Why it is here                         | Repo example                                 |
+| -------- | -------------------------------------- | -------------------------------------------- |
+| Express  | simple REST transport layer            | routes + middlewares + controllers           |
+| MongoDB  | document database                      | default persistence engine for this variant  |
+| Mongoose | schema + model layer on top of MongoDB | models and repositories                      |
+| Redis    | optional response cache                | repeated GET requests and cache invalidation |
+| Zod      | input shaping and validation           | service-level validation patterns            |
+| Multer   | multipart/file upload handling         | upload-friendly endpoints                    |
+| i18next  | translation dictionary support         | user-facing messages/locales                 |
 
 ## Runtime visual
 
@@ -25,16 +25,16 @@ flowchart LR
 
 ## Security stack
 
-| Tool | Job |
-| --- | --- |
-| Helmet | safe default HTTP headers |
-| cors | origin allowlist and browser access control |
-| express-rate-limit | simple abuse protection at the edge |
-| jsonwebtoken | access/refresh token flows |
-| cookie-parser | read cookies safely in Express |
-| express-session + connect-mongo | server-side session storage when needed |
-| csrf-sync | CSRF protection for cookie/session flows |
-| bcrypt | password hashing |
+| Tool                            | Job                                         |
+| ------------------------------- | ------------------------------------------- |
+| Helmet                          | safe default HTTP headers                   |
+| cors                            | origin allowlist and browser access control |
+| express-rate-limit              | simple abuse protection at the edge         |
+| jsonwebtoken                    | access/refresh token flows                  |
+| cookie-parser                   | read cookies safely in Express              |
+| express-session + connect-mongo | server-side session storage when needed     |
+| csrf-sync                       | CSRF protection for cookie/session flows    |
+| bcrypt                          | password hashing                            |
 
 ## Security visual
 

@@ -24,12 +24,12 @@ flowchart LR
 
 ## Where each topic lives
 
-| Need | Go to |
-| --- | --- |
-| Understand the code shape | [Architecture](./architecture.md) |
-| Follow one request end-to-end | [Request Flow](./request-flow.md) |
-| Understand dependency choices | [Tools](../tools/) |
-| Change contract, types, or mocks | [API](../api/) |
+| Need                             | Go to                             |
+| -------------------------------- | --------------------------------- |
+| Understand the code shape        | [Architecture](./architecture.md) |
+| Follow one request end-to-end    | [Request Flow](./request-flow.md) |
+| Understand dependency choices    | [Tools](../tools/)                |
+| Change contract, types, or mocks | [API](../api/)                    |
 
 ## Repo-specific reminder
 

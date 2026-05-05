@@ -2,13 +2,13 @@
 
 ## Observability stack
 
-| Tool | Why it is here |
-| --- | --- |
-| Winston | structured app logs |
-| Loki | optional central log shipping |
+| Tool                     | Why it is here                           |
+| ------------------------ | ---------------------------------------- |
+| Winston                  | structured app logs                      |
+| Loki                     | optional central log shipping            |
 | Prometheus / prom-client | counters, histograms, gauges, `/metrics` |
-| OpenTelemetry | trace context and distributed tracing |
-| PostHog | optional product analytics |
+| OpenTelemetry            | trace context and distributed tracing    |
+| PostHog                  | optional product analytics               |
 
 ## Observability visual
 
@@ -24,13 +24,13 @@ flowchart TD
 
 ## Quality and maintenance tools
 
-| Tool | Why it is here |
-| --- | --- |
-| Jest | unit and integration test coverage |
-| ESLint | code consistency and correctness checks |
-| Prettier | predictable formatting |
-| VitePress | documentation site |
-| Mermaid + vitepress-plugin-mermaid | ADHD-friendly visual diagrams in docs |
+| Tool                               | Why it is here                          |
+| ---------------------------------- | --------------------------------------- |
+| Jest                               | unit and integration test coverage      |
+| ESLint                             | code consistency and correctness checks |
+| Prettier                           | predictable formatting                  |
+| VitePress                          | documentation site                      |
+| Mermaid + vitepress-plugin-mermaid | ADHD-friendly visual diagrams in docs   |
 
 ## Maintenance mindset
 
