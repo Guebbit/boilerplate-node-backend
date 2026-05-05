@@ -34,7 +34,7 @@
         "podman:restart": "podman compose down && podman compose up -d",
         "podman:rebuild": "podman compose down -v && podman compose build --no-cache && podman compose up -d",
         "podman:nuke": "pkill -9 -f 'podman|conmon|runc' 2>/dev/null || true; systemctl --user restart podman",
-        "genapi": "rm -rf ./api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
+        "genapi": "rm -rf ./api && npx @openapitools/openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
         "update:all": "npx npm-check-updates -u",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
@@ -71,6 +71,7 @@
         "globals": "^17.4.0",
         "jest": "^30.3.0",
         "jiti": "^2.6.1",
+        "mermaid": "^11.14.0",
         "migrate-mongo": "^14.0.7",
         "mongodb-memory-server": "^11.0.1",
         "nodemon": "^3.1.14",
@@ -79,7 +80,8 @@
         "tsx": "^4.21.0",
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.56.1",
-        "vitepress": "^1.6.4"
+        "vitepress": "^1.6.4",
+        "vitepress-plugin-mermaid": "^2.0.17"
     },
     "dependencies": {
         "@openapitools/openapi-generator-cli": "^2.31.0",
