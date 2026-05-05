@@ -308,8 +308,6 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 ---
 
----
-
 ### ✅ Phase 4 — Loki centralized logging
 
 **Goal:** optionally ship every Winston log line to Grafana Loki for centralised querying, alerting, and log/trace correlation.
@@ -318,7 +316,7 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 
 #### 1. Optional Loki transport (`src/utils/winston.ts`)
 
-- `buildLokiTransport(extraLabels)` — creates a `LokiTransport` instance when `NODE_LOKI_HOST` is set; returns `null` otherwise (zero cost when disabled).
+- `buildLokiTransport(extraLabels)` — creates a `LokiTransport` instance when `NODE_LOKI_HOST` is set; returns `undefined` otherwise (zero cost when disabled).
 - `isLokiEnabled()` — helper for code and tests to check whether Loki is active.
 - Both `logger` and `auditLogger` include the transport when configured.
 - Stream labels: `service`, `env`, `log_type` (`app` / `audit`).
@@ -461,6 +459,38 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 **Tests added:**
 
 - `tests/unit/utils/analytics.test.ts` — `isPostHogEnabled()`, `AnalyticsEvent` enum, `emitAnalyticsEvent()` (disabled no-op, client creation, capture payload, trace_id injection), `shutdownAnalytics()` (13 tests)
+
+---
+
+### ✅ Phase 8 — Admin dashboard contract (FE visualization)
+
+**Goal:** expose all observability data as structured JSON endpoints so the FE `Admin.vue` can visualize the backend without parsing Prometheus text or reading log files.
+
+**New files:**
+
+- `src/controllers/admin/get-health.ts` — JSON health summary (uptime, DB status, memory, integrations)
+- `src/controllers/admin/get-metrics-summary.ts` — parsed KPIs from prom-client (requests, error rate, latency p50/p95, auth/business/DB counters)
+- `src/controllers/admin/get-audit-logs.ts` — query audit ring buffer with filters
+
+**Modified files:**
+
+- `src/utils/audit.ts` — in-memory ring buffer (200 events); `emitAuditEvent()` now also pushes to buffer; `getRecentAuditEvents()` exported for admin queries
+- `src/routes/admin.ts` — `GET /admin/health`, `GET /admin/metrics/summary`, `GET /admin/audit` wired behind `isAdmin` middleware
+- `tsconfig.json` — added `"lib": ["ES2023"]` to enable `toSorted`, `toReversed`, `Array.at()` for Node 20+
+- `openapi.yaml` — new schemas: `AdminHealth`, `AdminHealthResponse`, `AdminMetricsSummary`, `AdminMetricsSummaryResponse`, `AuditEventItem`, `AuditLogsResponse`; new paths: `GET /`, `GET /metrics`, `GET /admin/health`, `GET /admin/metrics/summary`, `GET /admin/audit`
+
+**Docs added:**
+
+- `docs/guide/admin-dashboard.md` — endpoint descriptions, response shapes, dashboard use, FE integration hints, external observability links
+- `docs/index.md` — Admin Dashboard Contract feature card added
+
+**Admin endpoint map:**
+
+| Endpoint                     | Auth  | Description                                               |
+| ---------------------------- | ----- | --------------------------------------------------------- |
+| `GET /admin/health`          | admin | System health (DB, memory, integrations, uptime)          |
+| `GET /admin/metrics/summary` | admin | KPI metrics as JSON (error rate, latency, auth, business) |
+| `GET /admin/audit`           | admin | Recent audit events with filters                          |
 
 ---
 

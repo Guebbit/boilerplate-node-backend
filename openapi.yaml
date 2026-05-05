@@ -1100,7 +1100,292 @@ components:
                 message:
                     type: string
 
+        # ---------- Admin / Observability ----------
+
+        AdminHealthIntegrations:
+            type: object
+            properties:
+                loki: { type: boolean }
+                posthog: { type: boolean }
+                otelEnabled: { type: boolean }
+
+        AdminHealthMemory:
+            type: object
+            required: [heapUsedMb, heapTotalMb, rssMb]
+            properties:
+                heapUsedMb: { type: integer }
+                heapTotalMb: { type: integer }
+                rssMb: { type: integer }
+
+        AdminHealthSystem:
+            type: object
+            required: [platform, cpuCount, loadAvg]
+            properties:
+                platform: { type: string }
+                cpuCount: { type: integer }
+                loadAvg:
+                    type: array
+                    items: { type: number }
+
+        AdminHealth:
+            type: object
+            required:
+                [status, environment, service, nodeVersion, uptimeSeconds, database, timestamp]
+            properties:
+                status:
+                    type: string
+                    enum: [ok, degraded]
+                environment: { type: string }
+                service: { type: string }
+                nodeVersion: { type: string }
+                uptimeSeconds: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    required: [status]
+                    properties:
+                        status:
+                            type: string
+                            enum: [connected, connecting, disconnected]
+                integrations: { $ref: '#/components/schemas/AdminHealthIntegrations' }
+                memory: { $ref: '#/components/schemas/AdminHealthMemory' }
+                system: { $ref: '#/components/schemas/AdminHealthSystem' }
+                timestamp: { type: string, format: date-time }
+
+        AdminHealthResponse:
+            type: object
+            required: [success, data]
+            properties:
+                success: { type: boolean, enum: [true] }
+                data: { $ref: '#/components/schemas/AdminHealth' }
+
+        AdminMetricsLatency:
+            type: object
+            required: [p50, p95]
+            properties:
+                p50: { type: number, description: Median latency in ms }
+                p95: { type: number, description: 95th-percentile latency in ms }
+
+        AdminMetricsSummary:
+            type: object
+            required: [http, auth, business, database, process, timestamp]
+            properties:
+                http:
+                    type: object
+                    required: [totalRequests, totalErrors, errorRate, inFlight, latencyMs]
+                    properties:
+                        totalRequests: { type: integer, minimum: 0 }
+                        totalErrors: { type: integer, minimum: 0 }
+                        errorRate:
+                            type: number
+                            minimum: 0
+                            maximum: 1
+                            description: Fraction of requests that returned 4xx/5xx
+                        inFlight: { type: integer, minimum: 0 }
+                        latencyMs: { $ref: '#/components/schemas/AdminMetricsLatency' }
+                auth:
+                    type: object
+                    properties:
+                        loginSuccess: { type: integer, minimum: 0 }
+                        loginFailure: { type: integer, minimum: 0 }
+                        signupSuccess: { type: integer, minimum: 0 }
+                business:
+                    type: object
+                    properties:
+                        checkoutSuccess: { type: integer, minimum: 0 }
+                        ordersCreated: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    properties:
+                        queriesTotal: { type: integer, minimum: 0 }
+                        errorsTotal: { type: integer, minimum: 0 }
+                process:
+                    type: object
+                    properties:
+                        uptimeSeconds: { type: integer, minimum: 0 }
+                        heapUsedMb: { type: integer, minimum: 0 }
+                timestamp: { type: string, format: date-time }
+
+        AdminMetricsSummaryResponse:
+            type: object
+            required: [success, data]
+            properties:
+                success: { type: boolean, enum: [true] }
+                data: { $ref: '#/components/schemas/AdminMetricsSummary' }
+
+        AuditEventItem:
+            type: object
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id: { type: string }
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                action:
+                    {
+                        type: string,
+                        description: 'Dot-notation action name (e.g. auth.login.succeeded)'
+                    }
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip: { type: string }
+                user_agent: { type: string }
+                request_id: { type: string }
+                trace_id: { type: string }
+                target_type: { type: string }
+                target_id: { type: string }
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp: { type: string, format: date-time }
+                level:
+                    type: string
+                    enum: [info, warn]
+
+        AuditLogsResponse:
+            type: object
+            required: [success, data]
+            properties:
+                success: { type: boolean, enum: [true] }
+                data:
+                    type: object
+                    required: [items, total]
+                    properties:
+                        items:
+                            type: array
+                            items: { $ref: '#/components/schemas/AuditEventItem' }
+                        total: { type: integer, minimum: 0 }
+
 paths:
+    # --------- System ---------
+    /:
+        get:
+            tags: [Admin]
+            summary: API health check
+            description: Returns a simple liveness indicator. Use `GET /admin/health` for the full admin health summary.
+            operationId: getHealth
+            responses:
+                '200':
+                    description: API is running
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MessageResponse'
+
+    /metrics:
+        get:
+            tags: [Admin]
+            summary: Prometheus metrics
+            description: |
+                Raw Prometheus text (exposition format 0.0.4).
+                Intended for Prometheus scraping, not for browser clients.
+                Use `GET /admin/metrics/summary` for a JSON summary suitable for dashboards.
+            operationId: getPrometheusMetrics
+            responses:
+                '200':
+                    description: Prometheus exposition text
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+
+    # --------- Admin — observability & dashboard ---------
+    /admin/health:
+        get:
+            tags: [Admin]
+            summary: Admin health summary
+            description: |
+                Full JSON health snapshot for the admin dashboard.
+                Includes uptime, database status, memory, integrations, and system info.
+                Requires admin role.
+            operationId: getAdminHealth
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Health summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminHealthResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /admin/metrics/summary:
+        get:
+            tags: [Admin]
+            summary: Metrics summary (JSON)
+            description: |
+                Key operational metrics derived from Prometheus counters/histograms,
+                returned as structured JSON for dashboard KPI cards and charts.
+                Requires admin role.
+            operationId: getAdminMetricsSummary
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Metrics summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminMetricsSummaryResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /admin/audit:
+        get:
+            tags: [Admin]
+            summary: Recent audit events
+            description: |
+                Returns the most recent audit events from the in-memory ring buffer (up to 200).
+                Events include auth flows, admin CRUD actions, and security blocks.
+                Requires admin role.
+            operationId: getAdminAuditLogs
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: actor
+                  in: query
+                  schema: { type: string }
+                  description: Filter by actor user ID
+                - name: action
+                  in: query
+                  schema: { type: string }
+                  description: 'Filter by action name (e.g. auth.login.failed)'
+                - name: outcome
+                  in: query
+                  schema:
+                      type: string
+                      enum: [success, failure]
+                  description: Filter by outcome
+                - name: since
+                  in: query
+                  schema:
+                      type: string
+                      format: date-time
+                  description: Return events after this ISO-8601 timestamp
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 200
+                      default: 50
+                  description: Maximum number of events to return
+            responses:
+                '200':
+                    description: Audit events
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuditLogsResponse'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
     # --------- Authentication and profile ---------
     /account:
         get:

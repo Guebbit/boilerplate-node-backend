@@ -1,5 +1,43 @@
 import { auditLogger } from './winston';
 
+// ─── In-memory ring buffer for admin dashboard queries ───────────────────────
+
+const RING_BUFFER_SIZE = 200;
+
+export interface IStoredAuditEvent extends IAuditEvent {
+    timestamp: string;
+    level: 'info' | 'warn';
+}
+
+const auditRingBuffer: IStoredAuditEvent[] = [];
+
+/** Push an event into the ring buffer, evicting the oldest when full. */
+const pushToRingBuffer = (event: IStoredAuditEvent): void => {
+    if (auditRingBuffer.length >= RING_BUFFER_SIZE) auditRingBuffer.shift();
+    auditRingBuffer.push(event);
+};
+
+/** Return a snapshot of stored events, newest-first, with optional filters. */
+export const getRecentAuditEvents = (options?: {
+    actor?: string;
+    action?: string;
+    outcome?: 'success' | 'failure';
+    since?: string;
+    limit?: number;
+}): IStoredAuditEvent[] => {
+    let items = auditRingBuffer.toReversed();
+    if (options?.actor) items = items.filter((e) => e.actor_user_id === options.actor);
+    if (options?.action) items = items.filter((e) => e.action === options.action);
+    if (options?.outcome) items = items.filter((e) => e.outcome === options.outcome);
+    if (options?.since) {
+        const sinceTime = new Date(options.since).getTime();
+        if (Number.isNaN(sinceTime)) return [];
+        items = items.filter((e) => new Date(e.timestamp).getTime() >= sinceTime);
+    }
+    const limit = options?.limit ?? 50;
+    return items.slice(0, limit);
+};
+
 // ─── Action name constants ───────────────────────────────────────────────────
 // Follow domain.resource.verb dot-notation.
 
@@ -72,10 +110,12 @@ export interface IAuditEvent {
 /**
  * Emit a structured audit event.
  * Failures and security blocks use 'warn'; successful actions use 'info'.
+ * Also stores the event in the in-memory ring buffer for admin queries.
  */
 export const emitAuditEvent = (event: IAuditEvent): void => {
-    const level = event.outcome === 'success' ? 'info' : 'warn';
+    const level = event.outcome === 'success' ? 'info' : ('warn' as const);
     auditLogger.log(level, event.action, event);
+    pushToRingBuffer({ ...event, timestamp: new Date().toISOString(), level });
 };
 
 // ─── Request context helper ───────────────────────────────────────────────────

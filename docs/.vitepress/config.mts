@@ -1,59 +1,77 @@
 import { defineConfig } from 'vitepress';
+import { withMermaid } from 'vitepress-plugin-mermaid';
 
-export default defineConfig({
-    title: 'Node API Boilerplate',
-    description: 'Express + MongoDB + Mongoose REST API boilerplate',
-    themeConfig: {
-        nav: [
-            { text: 'Guide', link: '/guide/getting-started' },
-            { text: 'Layers', link: '/layers/database' },
-            { text: 'Theory', link: '/theory/architecture' }
-        ],
-        sidebar: [
-            {
-                text: 'Guide',
-                items: [
-                    { text: 'Getting Started', link: '/guide/getting-started' },
-                    { text: 'Project Structure', link: '/guide/project-structure' },
-                    { text: 'Endpoint Lifecycle', link: '/guide/endpoint-lifecycle' },
-                    { text: 'Observability', link: '/guide/observability' },
-                    { text: 'Structured Logging', link: '/guide/structured-logging' },
-                    { text: 'Audit Logging', link: '/guide/audit-logging' },
-                    { text: 'Prometheus Metrics', link: '/guide/prometheus-metrics' },
-                    { text: 'OpenTelemetry Tracing', link: '/guide/opentelemetry-tracing' },
-                    { text: 'Loki Logging', link: '/guide/loki-logging' },
-                    { text: 'Grafana Tempo', link: '/guide/tempo' },
-                    { text: 'Grafana Dashboards', link: '/guide/grafana-dashboards' }
+export default withMermaid(
+    defineConfig({
+        title: 'Boilerplate Node Backend',
+        description: 'ADHD-friendly docs for the Express + MongoDB + Mongoose REST boilerplate',
+        themeConfig: {
+            nav: [
+                { text: 'Home', link: '/' },
+                { text: 'Theory', link: '/theory/' },
+                { text: 'Tools', link: '/tools/' },
+                { text: 'API', link: '/api/' }
+            ],
+            sidebar: {
+                '/theory/': [
+                    {
+                        text: 'Theory',
+                        items: [
+                            { text: 'Overview', link: '/theory/' },
+                            { text: 'Architecture', link: '/theory/architecture' },
+                            { text: 'Layers', link: '/theory/layers' },
+                            { text: 'Request Flow', link: '/theory/request-flow' }
+                        ]
+                    }
+                ],
+                '/tools/': [
+                    {
+                        text: 'Tools',
+                        items: [
+                            { text: 'Overview', link: '/tools/' },
+                            { text: 'Runtime', link: '/tools/runtime' },
+                            { text: 'Security', link: '/tools/security' },
+                            { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
+                            { text: 'Redis Cache', link: '/tools/redis-cache' },
+                            { text: 'Winston & Audit Logs', link: '/tools/winston' },
+                            { text: 'Prometheus', link: '/tools/prometheus' },
+                            { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
+                            { text: 'Grafana', link: '/tools/grafana' },
+                            { text: 'PostHog', link: '/tools/posthog' },
+                            { text: 'Testing & Docs', link: '/tools/testing-and-docs' }
+                        ]
+                    }
+                ],
+                '/api/': [
+                    {
+                        text: 'API',
+                        items: [
+                            { text: 'Overview', link: '/api/' },
+                            { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
+                            { text: 'REST Style', link: '/api/rest-style' }
+                        ]
+                    }
                 ]
             },
-            {
-                text: 'Layers',
-                items: [
-                    { text: 'Database', link: '/layers/database' },
-                    { text: 'Model', link: '/layers/model' },
-                    { text: 'Repository', link: '/layers/repository' },
-                    { text: 'Service', link: '/layers/service' },
-                    { text: 'Controller', link: '/layers/controller' },
-                    { text: 'Routes & Middlewares', link: '/layers/routes' },
-                    { text: 'OpenAPI', link: '/layers/openapi' }
-                ]
-            },
-            {
-                text: 'Theory',
-                items: [
-                    { text: 'Architecture', link: '/theory/architecture' },
-                    { text: 'Authentication', link: '/theory/authentication' },
-                    { text: 'Soft Delete', link: '/theory/soft-delete' },
-                    { text: 'Error Handling', link: '/theory/error-handling' },
-                    { text: 'Testing', link: '/theory/testing' }
-                ]
+            socialLinks: [
+                {
+                    icon: 'github',
+                    link: 'https://github.com/Guebbit/boilerplate-node-backend'
+                }
+            ]
+        },
+        mermaid: {
+            theme: 'neutral',
+            useMaxWidth: true,
+            htmlLabels: true,
+            themeVariables: {
+                primaryColor: '#ede9fe',
+                primaryBorderColor: '#7c3aed',
+                primaryTextColor: '#111827',
+                secondaryColor: '#dbeafe',
+                tertiaryColor: '#f8fafc',
+                lineColor: '#64748b'
             }
-        ],
-        socialLinks: [
-            {
-                icon: 'github',
-                link: 'https://github.com/Guebbit/boilerplate-node-api-mongodb-mongoose'
-            }
-        ]
-    }
-});
+        }
+    })
+);

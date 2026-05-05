@@ -1,6 +1,7 @@
 {
     "compilerOptions": {
         "target": "ES6",
+        "lib": ["ES2023"],
         "module": "es2020",
         "baseUrl": ".",
         "paths": {

@@ -1,47 +1,95 @@
 ---
 layout: home
 hero:
-    name: Node API Boilerplate
-    text: Express · MongoDB · Mongoose
-    tagline: A production-ready REST API starter with a clean layered architecture.
+    name: Boilerplate Node Backend
+    text: api-mongodb-mongoose
+    tagline: Single-package REST API boilerplate in the Node backend family.
     actions:
         - theme: brand
-          text: Get Started
-          link: /guide/getting-started
+          text: Read Theory
+          link: /theory/
         - theme: alt
-          text: Endpoint Lifecycle
-          link: /guide/endpoint-lifecycle
+          text: Explore Tools
+          link: /tools/
+        - theme: alt
+          text: Follow the API flow
+          link: /api/
 features:
-    - title: Layered Architecture
-      details: Controller → Service → Repository separation keeps each concern isolated and testable.
-    - title: OpenAPI-first
-      details: The API contract lives in openapi.yaml and drives code generation, mocking, and validation.
-    - title: Auth out of the box
-      details: JWT access tokens + refresh tokens with per-session revocation already wired up.
-    - title: Ready for production
-      details: Clustering, rate limiting, soft deletes, migrations, seeds, structured logging — all included.
-    - title: Structured Logging (Phase 1)
-      details: Production-grade JSON logs with timestamps, request IDs, duration, user ID, and automatic sensitive-field redaction.
-      link: /guide/structured-logging
-    - title: Audit Logging (Phase 1)
-      details: Dedicated audit logger for security and admin events, separate from the main app log stream and ready for SIEM routing.
-      link: /guide/audit-logging
-    - title: Prometheus Metrics (Phase 2)
-      details: HTTP counters, latency histograms, in-flight gauge, business counters (login/signup/checkout/orders), and DB query metrics — all via prom-client.
-      link: /guide/prometheus-metrics
-    - title: OpenTelemetry Tracing (Phase 3)
-      details: Distributed traces for every HTTP request, Mongoose query, and email send. Trace IDs in every log line. Export to Grafana Tempo or Jaeger via OTLP.
-      link: /guide/opentelemetry-tracing
-    - title: Loki Centralized Logging (Phase 4)
-      details: Optional Winston transport ships every structured log line to Grafana Loki. Stream labels, trace/log correlation, and zero-breaking-change activation via NODE_LOKI_HOST.
-      link: /guide/loki-logging
-    - title: Tempo & Grafana Dashboards (Phase 5)
-      details: Grafana Tempo as the OTLP trace backend, pre-built dashboard JSON files (API overview, logs, traces), and step-by-step log/trace correlation guide.
-      link: /guide/grafana-dashboards
-    - title: Audit & Security Analytics (Phase 6)
-      details: Formal audit event schema (IAuditEvent), dedicated emitAuditEvent() helper, and instrumented call sites across all auth, admin, and access-control operations. Events ship to a separate Loki stream.
-      link: /guide/audit-logging
-    - title: Product Analytics — PostHog (Phase 7)
-      details: Business/product events (signup, login, product view/search, cart, checkout, orders) sent to PostHog. Fire-and-forget, fully opt-in via NODE_POSTHOG_API_KEY + NODE_POSTHOG_HOST, zero breaking change when disabled.
-      link: /guide/product-analytics
+    - title: This repo's specific shape
+      details: Express 5 + MongoDB + Mongoose + OpenAPI-first REST API, shipped as one package instead of a monorepo.
+    - title: Layers stay visible
+      details: Routes, middlewares, controllers, services, repositories, and models each keep a small, clear job.
+    - title: Tooling is part of the boilerplate
+      details: Security, Redis cache hooks, Prometheus, OpenTelemetry, Grafana dashboards, logging, and PostHog are all examples already wired in.
+    - title: Contract-first workflow
+      details: openapi.yaml stays the source of truth for API shape, generated types, mocks, and implementation alignment.
 ---
+
+## What this docs site is for
+
+This docs site stays short, visual, and practical.
+Use it to understand **what this boilerplate is**, **how the app layers fit together**, and **which tools already exist in the repo**.
+
+> Think of the repo as **an example backend blueprint**, not a finished product with product-specific business rules.
+
+## Family map
+
+```mermaid
+flowchart TD
+    A[Node backend boilerplate family] --> B[api-mongodb-mongoose\nthis repo]
+    A --> C[mvc-mongodb-mongoose\nsame data stack, monorepo shape]
+    A --> D[api-mongodb-mongoose-fastify-nestjs\nsame REST idea, different framework stack]
+    A --> E[api-mysql-sequelize\nsame API-first idea, SQL stack]
+    A --> F[mvc-mysql-sequelize\nMVC or monorepo + SQL stack]
+
+    B --> T[Theory]
+    B --> U[Tools]
+    B --> V[API]
+```
+
+## Read this repo as
+
+- **API**: REST API.
+- **Framework**: [Express](./tools/runtime.md).
+- **Database**: [MongoDB + Mongoose](./tools/mongodb-mongoose.md).
+- **Observability**: [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
+- **Contract**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth).
+- **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
+
+## Three sections, three jobs
+
+### [Theory](./theory/)
+
+Big picture: architecture, layers, and request flow.
+
+### [Tools](./tools/)
+
+Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, Grafana, analytics, testing, and docs.
+
+### [API](./api/)
+
+Contract-first workflow: OpenAPI, REST style, codegen, mocks, and implementation alignment.
+
+## Quick visual of the current repo
+
+```mermaid
+flowchart LR
+    Spec[openapi.yaml] --> Routes[Routes + middlewares]
+    Routes --> Controllers[Controllers]
+    Controllers --> Services[Services]
+    Services --> Repositories[Repositories]
+    Repositories --> Models[Models]
+    Models --> Mongo[(MongoDB)]
+
+    Routes --> Obs[Logs + metrics + traces]
+    Controllers --> Cache[Redis cache hooks]
+    Obs --> Grafana[Grafana dashboards]
+    Spec --> Types[Generated API types]
+```
+
+## Good starting points
+
+- Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
+- Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.
+- Want observability? Read [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
+- Want to change payloads or routes? Start in [API Overview](./api/) and keep [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) first.
