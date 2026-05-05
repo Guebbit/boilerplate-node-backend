@@ -44,5 +44,6 @@ flowchart TD
 ## Related pages
 
 - [OpenAPI Workflow](./openapi-workflow.md)
-- [Theory / Architecture](../theory/architecture.md)
-- [Tools / Observability & Quality](../tools/observability-and-quality.md)
+- [Theory / Layers](../theory/layers.md)
+- [Prometheus](../tools/prometheus.md)
+- [Grafana](../tools/grafana.md)

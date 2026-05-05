@@ -32,20 +32,20 @@ flowchart LR
 
 ### Security first
 
-Things like [Helmet](../tools/runtime-and-security.md#security-stack), CORS, cookies, auth, and rate limits happen near the edge.
+Things like [Helmet](../tools/security.md), CORS, cookies, auth, and rate limits happen near the edge.
 That keeps the inside layers focused.
 
 ### Validation close to intent
 
-Input coercion and business validation usually happen in services, often with [Zod](../tools/runtime-and-security.md#core-runtime), instead of being mixed into repositories.
+Input coercion and business validation usually happen in services, often with [Zod](../tools/runtime.md), instead of being mixed into repositories.
 
 ### Optional acceleration
 
-[Redis cache hooks](../tools/runtime-and-security.md#core-runtime) speed up repeated reads, but the API still works when Redis is off.
+[Redis cache hooks](../tools/redis-cache.md) speed up repeated reads, but the API still works when Redis is off.
 
 ### Signals everywhere
 
-[Winston](../tools/observability-and-quality.md#observability-stack), [Prometheus](../tools/observability-and-quality.md#observability-stack), and [OpenTelemetry](../tools/observability-and-quality.md#observability-stack) make it easier to debug the same request from multiple angles.
+[Winston](../tools/winston.md), [Prometheus](../tools/prometheus.md), [OpenTelemetry](../tools/opentelemetry.md), and [Grafana](../tools/grafana.md) make it easier to debug the same request from multiple angles.
 
 ## Why the flow matters
 
@@ -53,4 +53,4 @@ When you change behavior, ask:
 
 - Is this an **API contract** change? Go to [API](../api/).
 - Is this a **dependency or infrastructure** concern? Go to [Tools](../tools/).
-- Is this a **layer ownership** issue? Go back to [Architecture](./architecture.md).
+- Is this a **layer ownership** issue? Go back to [Layers](./layers.md).

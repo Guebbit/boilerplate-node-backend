@@ -19,6 +19,7 @@ export default withMermaid(
                         items: [
                             { text: 'Overview', link: '/theory/' },
                             { text: 'Architecture', link: '/theory/architecture' },
+                            { text: 'Layers', link: '/theory/layers' },
                             { text: 'Request Flow', link: '/theory/request-flow' }
                         ]
                     }
@@ -28,14 +29,16 @@ export default withMermaid(
                         text: 'Tools',
                         items: [
                             { text: 'Overview', link: '/tools/' },
-                            {
-                                text: 'Runtime & Security',
-                                link: '/tools/runtime-and-security'
-                            },
-                            {
-                                text: 'Observability & Quality',
-                                link: '/tools/observability-and-quality'
-                            }
+                            { text: 'Runtime', link: '/tools/runtime' },
+                            { text: 'Security', link: '/tools/security' },
+                            { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
+                            { text: 'Redis Cache', link: '/tools/redis-cache' },
+                            { text: 'Winston & Audit Logs', link: '/tools/winston' },
+                            { text: 'Prometheus', link: '/tools/prometheus' },
+                            { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
+                            { text: 'Grafana', link: '/tools/grafana' },
+                            { text: 'PostHog', link: '/tools/posthog' },
+                            { text: 'Testing & Docs', link: '/tools/testing-and-docs' }
                         ]
                     }
                 ],
@@ -59,10 +62,8 @@ export default withMermaid(
         },
         mermaid: {
             theme: 'neutral',
-            flowchart: {
-                useMaxWidth: true,
-                htmlLabels: true
-            },
+            useMaxWidth: true,
+            htmlLabels: true,
             themeVariables: {
                 primaryColor: '#ede9fe',
                 primaryBorderColor: '#7c3aed',

@@ -14,14 +14,14 @@ flowchart LR
 
 ## What each layer owns
 
-| Layer        | Owns                                          | Avoids              |
-| ------------ | --------------------------------------------- | ------------------- |
-| Routes       | URL map, middleware order                     | business logic      |
-| Middlewares  | auth, rate limits, request guards             | database queries    |
-| Controllers  | request/response mapping                      | deep business rules |
-| Services     | business decisions, orchestration, validation | Express details     |
-| Repositories | query shape, persistence access               | HTTP concerns       |
-| Models       | schema and persistence metadata               | route logic         |
+| Layer | Owns | Avoids |
+| --- | --- | --- |
+| Routes | URL map, middleware order | business logic |
+| Middlewares | auth, rate limits, request guards | database queries |
+| Controllers | request/response mapping | deep business rules |
+| Services | business decisions, orchestration, validation | Express details |
+| Repositories | query shape, persistence access | HTTP concerns |
+| Models | schema and persistence metadata | route logic |
 
 ## Why this matters in a boilerplate
 
@@ -56,6 +56,7 @@ The point is that the **architecture stays recognizable even when the stack chan
 
 ## Related pages
 
+- See [Layers](./layers.md) for a simpler walkthrough of each folder.
 - See [Request Flow](./request-flow.md) for the live path of one endpoint.
-- See [Runtime & Security](../tools/runtime-and-security.md) for the libraries enabling this shape.
+- See [Runtime](../tools/runtime.md) and [MongoDB & Mongoose](../tools/mongodb-mongoose.md) for the libraries enabling this shape.
 - See [OpenAPI Workflow](../api/openapi-workflow.md) for how the contract drives implementation.

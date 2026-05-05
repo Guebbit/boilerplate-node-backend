@@ -35,6 +35,12 @@ npm run genapi
 npm run test:prism
 ```
 
+## How this connects to the rest of the docs
+
+- [Theory / Layers](../theory/layers.md) explains where implementation code lands after the spec changes.
+- [Tools](../tools/) explains the non-OpenAPI dependencies around the API runtime.
+- [REST Style](./rest-style.md) explains the style choices used by the contract.
+
 ## What to document here
 
 Document:
@@ -46,9 +52,3 @@ Document:
 
 Do **not** create a page for every tiny request or response object.
 Those belong in the spec itself.
-
-## Related pages
-
-- [REST Style](./rest-style.md)
-- [Theory / Request Flow](../theory/request-flow.md)
-- [Tools / Runtime & Security](../tools/runtime-and-security.md)

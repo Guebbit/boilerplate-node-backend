@@ -1,6 +1,6 @@
 # Tools
 
-This section explains **why dependencies exist**.
+This section explains **why dependencies exist** and where they fit in the app.
 
 > OpenAPI-specific tools are documented in [API](../api/), not here.
 
@@ -10,43 +10,30 @@ This section explains **why dependencies exist**.
 flowchart TD
     A[Boilerplate tools] --> B[Runtime]
     A --> C[Security]
-    A --> D[Observability]
-    A --> E[Quality]
-    A --> F[Docs]
+    A --> D[Database + Cache]
+    A --> E[Observability]
+    A --> F[Quality + Docs]
 
-    B --> B1[Express]
-    B --> B2[MongoDB + Mongoose]
-    B --> B3[Redis]
-    B --> B4[Zod]
-
-    C --> C1[Helmet]
-    C --> C2[CORS]
-    C --> C3[express-rate-limit]
-    C --> C4[JWT + cookies + sessions]
-
-    D --> D1[Winston]
-    D --> D2[Prometheus]
-    D --> D3[OpenTelemetry]
-    D --> D4[Loki]
-    D --> D5[PostHog]
-
-    E --> E1[Jest]
-    E --> E2[ESLint]
-    E --> E3[Prettier]
-
-    F --> F1[VitePress]
-    F --> F2[Mermaid]
+    E --> E1[Winston]
+    E --> E2[Prometheus]
+    E --> E3[OpenTelemetry]
+    E --> E4[Grafana]
+    E --> E5[PostHog]
 ```
 
 ## Read by intent
 
-| Need                                                             | Go to                                                     |
-| ---------------------------------------------------------------- | --------------------------------------------------------- |
-| Understand runtime and security dependencies                     | [Runtime & Security](./runtime-and-security.md)           |
-| Understand logging, metrics, tracing, testing, and docs tooling  | [Observability & Quality](./observability-and-quality.md) |
-| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                            |
+| Need | Go to |
+| --- | --- |
+| Understand framework-level dependencies | [Runtime](./runtime.md) |
+| Understand security middleware and auth helpers | [Security](./security.md) |
+| Understand persistence and cache tools | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md) |
+| Understand logs, metrics, traces, dashboards, and analytics | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
+| Understand tests and docs tooling | [Testing & Docs](./testing-and-docs.md) |
+| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/) |
 
-## Boilerplate reminder
+## Why this section is bigger now
 
-These tools are here as **good defaults and examples**.
-Use them as building blocks, not as rules that every future project must copy 1:1.
+This boilerplate does not only give you Express + Mongo.
+It also gives you **opinionated example tooling** around security, observability, and maintenance.
+That is why major tools now have their own pages.

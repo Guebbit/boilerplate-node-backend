@@ -26,7 +26,8 @@ flowchart LR
 | --- | --- |
 | Change the contract and related tooling | [OpenAPI Workflow](./openapi-workflow.md) |
 | Understand route style and response patterns | [REST Style](./rest-style.md) |
-| Understand why implementation is layered this way | [Theory](../theory/) |
+| Understand the app layers behind the API | [Theory / Layers](../theory/layers.md) |
+| Understand runtime, cache, and observability tools around the API | [Tools](../tools/) |
 
 ## Repo-specific reminder
 

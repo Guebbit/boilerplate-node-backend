@@ -17,18 +17,18 @@ hero:
 features:
     - title: This repo's specific shape
       details: Express 5 + MongoDB + Mongoose + OpenAPI-first REST API, shipped as one package instead of a monorepo.
-    - title: Boilerplate family mindset
-      details: Same purpose can exist with other stacks such as mvc-mongodb-mongoose or api-mysql-sequelize. This repo is the Mongo + Mongoose REST variant.
-    - title: Production-minded defaults
-      details: Auth, security headers, rate limiting, Redis cache hooks, observability, logging, and clustering are already wired.
+    - title: Layers stay visible
+      details: Routes, middlewares, controllers, services, repositories, and models each keep a small, clear job.
+    - title: Tooling is part of the boilerplate
+      details: Security, Redis cache hooks, Prometheus, OpenTelemetry, Grafana dashboards, logging, and PostHog are all examples already wired in.
     - title: Contract-first workflow
       details: openapi.yaml stays the source of truth for API shape, generated types, mocks, and implementation alignment.
 ---
 
 ## What this docs site is for
 
-This docs site stays intentionally short.
-Use it to understand **what this boilerplate is**, **why the code is shaped this way**, and **where to change things safely**.
+This docs site stays short, visual, and practical.
+Use it to understand **what this boilerplate is**, **how the app layers fit together**, and **which tools already exist in the repo**.
 
 > Think of the repo as **an example backend blueprint**, not a finished product with product-specific business rules.
 
@@ -42,32 +42,33 @@ flowchart TD
     A --> E[api-mysql-sequelize\nsame API-first idea, SQL stack]
     A --> F[mvc-mysql-sequelize\nMVC or monorepo + SQL stack]
 
-    B --> T[Theory section]
-    B --> U[Tools section]
-    B --> V[API section]
+    B --> T[Theory]
+    B --> U[Tools]
+    B --> V[API]
 ```
 
-### Read this repo as:
+## Read this repo as
 
 - **API**: REST API.
-- **Transport/framework**: [Express](./tools/runtime-and-security.md#core-runtime).
-- **Database**: [MongoDB](./tools/runtime-and-security.md#core-runtime) with [Mongoose](./tools/runtime-and-security.md#core-runtime).
+- **Framework**: [Express](./tools/runtime.md).
+- **Database**: [MongoDB + Mongoose](./tools/mongodb-mongoose.md).
+- **Observability**: [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
 - **Contract**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth).
-- **Style**: layered code with a contract-first workflow from [Theory](./theory/) to [API](./api/).
+- **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
 
 ## Three sections, three jobs
 
 ### [Theory](./theory/)
 
-Use this when you want the big picture: architecture, request flow, and the strategies already present in the code.
+Big picture: architecture, layers, and request flow.
 
 ### [Tools](./tools/)
 
-Use this when you want to know why dependencies exist: security, runtime, observability, testing, docs, and quality tools.
+Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, Grafana, analytics, testing, and docs.
 
 ### [API](./api/)
 
-Use this when you want to change the REST contract, regenerate types, mock endpoints, or keep implementation aligned with the spec.
+Contract-first workflow: OpenAPI, REST style, codegen, mocks, and implementation alignment.
 
 ## Quick visual of the current repo
 
@@ -82,11 +83,13 @@ flowchart LR
 
     Routes --> Obs[Logs + metrics + traces]
     Controllers --> Cache[Redis cache hooks]
+    Obs --> Grafana[Grafana dashboards]
     Spec --> Types[Generated API types]
 ```
 
 ## Good starting points
 
-- Want the architecture? Start at [Theory Overview](./theory/).
-- Want to know why [Helmet](./tools/runtime-and-security.md#security-stack) or [Prometheus](./tools/observability-and-quality.md#observability-stack) is here? Go to [Tools](./tools/).
+- Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
+- Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.
+- Want observability? Read [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
 - Want to change payloads or routes? Start in [API Overview](./api/) and keep [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) first.
