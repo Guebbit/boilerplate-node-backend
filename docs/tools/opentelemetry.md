@@ -3,7 +3,7 @@
 ## Why OpenTelemetry is here
 
 OpenTelemetry gives the boilerplate **trace context** and distributed-tracing support.
-It helps answer: *which request path was slow, and where did the time go?*
+It helps answer: _which request path was slow, and where did the time go?_
 
 ## Trace flow
 

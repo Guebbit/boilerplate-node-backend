@@ -14,14 +14,14 @@ flowchart LR
 
 ## What each layer owns
 
-| Layer | Owns | Avoids |
-| --- | --- | --- |
-| Routes | URL map, middleware order | business logic |
-| Middlewares | auth, rate limits, request guards | database queries |
-| Controllers | request/response mapping | deep business rules |
-| Services | business decisions, orchestration, validation | Express details |
-| Repositories | query shape, persistence access | HTTP concerns |
-| Models | schema and persistence metadata | route logic |
+| Layer        | Owns                                          | Avoids              |
+| ------------ | --------------------------------------------- | ------------------- |
+| Routes       | URL map, middleware order                     | business logic      |
+| Middlewares  | auth, rate limits, request guards             | database queries    |
+| Controllers  | request/response mapping                      | deep business rules |
+| Services     | business decisions, orchestration, validation | Express details     |
+| Repositories | query shape, persistence access               | HTTP concerns       |
+| Models       | schema and persistence metadata               | route logic         |
 
 ## Why this matters in a boilerplate
 

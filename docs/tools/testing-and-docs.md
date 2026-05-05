@@ -2,13 +2,13 @@
 
 ## Quality tools
 
-| Tool | Why it is here |
-| --- | --- |
-| Jest | unit and integration tests |
-| ESLint | code consistency and correctness checks |
-| Prettier | predictable formatting |
-| VitePress | documentation site |
-| Mermaid + vitepress-plugin-mermaid | ADHD-friendly visual diagrams |
+| Tool                               | Why it is here                          |
+| ---------------------------------- | --------------------------------------- |
+| Jest                               | unit and integration tests              |
+| ESLint                             | code consistency and correctness checks |
+| Prettier                           | predictable formatting                  |
+| VitePress                          | documentation site                      |
+| Mermaid + vitepress-plugin-mermaid | ADHD-friendly visual diagrams           |
 
 ## Maintenance flow
 
@@ -31,4 +31,4 @@ flowchart LR
 
 - [Theory](../theory/)
 - [API](../api/)
-- [AI_README](../../AI_README.md)
+- Root file `AI_README.md` for agent-focused repo context

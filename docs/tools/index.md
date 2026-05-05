@@ -23,14 +23,14 @@ flowchart TD
 
 ## Read by intent
 
-| Need | Go to |
-| --- | --- |
-| Understand framework-level dependencies | [Runtime](./runtime.md) |
-| Understand security middleware and auth helpers | [Security](./security.md) |
-| Understand persistence and cache tools | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md) |
-| Understand logs, metrics, traces, dashboards, and analytics | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
-| Understand tests and docs tooling | [Testing & Docs](./testing-and-docs.md) |
-| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/) |
+| Need                                                             | Go to                                                                                                                                         |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Understand framework-level dependencies                          | [Runtime](./runtime.md)                                                                                                                       |
+| Understand security middleware and auth helpers                  | [Security](./security.md)                                                                                                                     |
+| Understand persistence and cache tools                           | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md)                                                               |
+| Understand logs, metrics, traces, dashboards, and analytics      | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
+| Understand tests and docs tooling                                | [Testing & Docs](./testing-and-docs.md)                                                                                                       |
+| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                                                                                                                |
 
 ## Why this section is bigger now
 

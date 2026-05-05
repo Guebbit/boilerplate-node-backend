@@ -2,12 +2,12 @@
 
 ## Main runtime tools
 
-| Tool | Why it is here | Repo role |
-| --- | --- | --- |
-| Express | REST transport layer | routes + middleware pipeline |
-| Zod | validation and coercion | service and schema helpers |
-| Multer | multipart/file uploads | upload-aware endpoints |
-| i18next | translations/messages | shared locale-backed text |
+| Tool    | Why it is here          | Repo role                    |
+| ------- | ----------------------- | ---------------------------- |
+| Express | REST transport layer    | routes + middleware pipeline |
+| Zod     | validation and coercion | service and schema helpers   |
+| Multer  | multipart/file uploads  | upload-aware endpoints       |
+| i18next | translations/messages   | shared locale-backed text    |
 
 ## Runtime visual
 

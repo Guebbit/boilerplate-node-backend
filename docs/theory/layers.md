@@ -17,15 +17,15 @@ flowchart TD
 
 ## Quick map
 
-| Layer | Folder | Main job |
-| --- | --- | --- |
-| Routes | `src/routes` | match URLs and attach middleware |
-| Middlewares | `src/middlewares` | auth, authorization, rate limit, request guards |
-| Controllers | `src/controllers` | parse request, call services, send response |
-| Services | `src/services` | business rules and orchestration |
-| Repositories | `src/repositories` | persistence queries |
-| Models | `src/models` | Mongoose schema/types |
-| Utils | `src/utils` | shared helpers such as cache, logs, metrics, tracing |
+| Layer        | Folder             | Main job                                             |
+| ------------ | ------------------ | ---------------------------------------------------- |
+| Routes       | `src/routes`       | match URLs and attach middleware                     |
+| Middlewares  | `src/middlewares`  | auth, authorization, rate limit, request guards      |
+| Controllers  | `src/controllers`  | parse request, call services, send response          |
+| Services     | `src/services`     | business rules and orchestration                     |
+| Repositories | `src/repositories` | persistence queries                                  |
+| Models       | `src/models`       | Mongoose schema/types                                |
+| Utils        | `src/utils`        | shared helpers such as cache, logs, metrics, tracing |
 
 ## How to read a feature
 

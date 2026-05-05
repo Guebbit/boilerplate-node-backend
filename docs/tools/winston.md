@@ -7,10 +7,10 @@ When Loki is configured, those logs can be shipped out centrally.
 
 ## Logging stack
 
-| Tool | Job |
-| --- | --- |
-| Winston | structured application logs |
-| winston-loki | optional log shipping to Loki |
+| Tool         | Job                                        |
+| ------------ | ------------------------------------------ |
+| Winston      | structured application logs                |
+| winston-loki | optional log shipping to Loki              |
 | audit logger | dedicated stream for security/admin events |
 
 ## Logging visual

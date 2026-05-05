@@ -7,10 +7,10 @@ That means the persistence example is document-oriented, not SQL-oriented.
 
 ## What each piece does
 
-| Tool | Job |
-| --- | --- |
-| MongoDB | document database |
-| Mongoose | schema, model, and query layer |
+| Tool          | Job                             |
+| ------------- | ------------------------------- |
+| MongoDB       | document database               |
+| Mongoose      | schema, model, and query layer  |
 | migrate-mongo | migrations for database changes |
 
 ## Persistence visual
