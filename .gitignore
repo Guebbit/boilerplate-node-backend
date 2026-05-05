@@ -5,3 +5,4 @@ dist
 *.log
 src/storage/invoices/*
 src/storage/files/*
+.vitepress/cache
