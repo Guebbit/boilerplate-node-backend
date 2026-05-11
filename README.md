@@ -126,6 +126,7 @@ curl http://localhost:3000/metrics
 - `npm run dev:docker:cluster` - docker/podman clustered dev mode
 - `npm run ts-check` - TypeScript type-check
 - `npm run lint` - lint checks
+- `npm run prettier:check` - prettier non-mutating formatting check
 - `npm run test` - unit + integration tests
 - `npm run test:unit` - unit tests
 - `npm run test:integration` - HTTP integration tests
@@ -166,6 +167,16 @@ npm ci
     - `npm run genapi`
 
 Use the generated `api/` output as derived artifacts from `openapi.yaml`.
+
+## Frontend/backend tandem sync discipline
+
+- Treat `openapi.yaml` as the canonical contract for both paired boilerplates.
+- After any contract edit, regenerate derived artifacts (`npm run genapi`) and commit the generated `api/` changes.
+- Keep paired branches aligned (backend `api-mongodb-mongoose` with the intended frontend branch) before merging contract changes.
+- Local pairing reminder:
+    - Backend default URL: `http://localhost:3000`
+    - Frontend dev URL: `http://localhost:8080`
+    - Backend CORS should allow frontend origin `http://localhost:8080` (set `NODE_CORS_ORIGIN=http://localhost:8080`).
 
 ## Mock/testing helpers
 

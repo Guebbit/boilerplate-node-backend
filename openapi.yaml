@@ -765,26 +765,6 @@ components:
                     items:
                         type: string
 
-        # To be used in GET /products:
-        UpdateProductRequestBody:
-            type: object
-            additionalProperties: false
-            required: [id, title, price]
-            properties:
-                id:
-                    $ref: '#/components/schemas/Id'
-                title:
-                    type: string
-                description:
-                    type: string
-                price:
-                    type: string
-                imageUrl:
-                    type: string
-                    format: uri
-                active:
-                    type: string
-
         UpdateProductByIdRequest:
             type: object
             additionalProperties: false
