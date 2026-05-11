@@ -174,7 +174,8 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
 - After any contract edit, regenerate derived artifacts (`npm run genapi`) and commit the generated `api/` changes.
 - Keep paired branches aligned (backend `api-mongodb-mongoose` with the intended frontend branch) before merging contract changes.
 - Local pairing reminder:
-    - Frontend default URL: `http://localhost:3000`
+    - Backend default URL: `http://localhost:3000`
+    - Frontend dev URL: `http://localhost:8080`
     - Backend CORS should allow frontend origin `http://localhost:8080` (set `NODE_CORS_ORIGIN=http://localhost:8080`).
 
 ## Mock/testing helpers
