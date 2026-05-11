@@ -114,8 +114,7 @@ const getMetricsSummary = (): Promise<{
         const metricFamilies = metrics as MetricFamily[];
         const totalRequests = sumMetricValues(metricFamilies, 'http_requests_total');
         const totalErrors = sumMetricValues(metricFamilies, 'http_request_errors_total');
-        const errorRate =
-            totalRequests > 0 ? Number((totalErrors / totalRequests).toFixed(4)) : 0;
+        const errorRate = totalRequests > 0 ? Number((totalErrors / totalRequests).toFixed(4)) : 0;
         const inFlight = findMetricValue(metricFamilies, 'http_requests_in_flight');
         const uptimeSeconds = findMetricValue(metricFamilies, 'process_uptime_seconds');
         const heapUsedBytes = findMetricValue(metricFamilies, 'nodejs_heap_size_used_bytes');

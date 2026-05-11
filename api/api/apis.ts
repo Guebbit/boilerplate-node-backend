@@ -1,5 +1,7 @@
 export * from './accountApi';
 import { AccountApi } from './accountApi';
+export * from './adminApi';
+import { AdminApi } from './adminApi';
 export * from './authApi';
 import { AuthApi } from './authApi';
 export * from './cartApi';
@@ -23,4 +25,4 @@ export class HttpError extends Error {
 
 export { RequestFile } from '../model/models';
 
-export const APIS = [AccountApi, AuthApi, CartApi, FeedbackApi, OrdersApi, ProductsApi, UsersApi];
+export const APIS = [AccountApi, AdminApi, AuthApi, CartApi, FeedbackApi, OrdersApi, ProductsApi, UsersApi];

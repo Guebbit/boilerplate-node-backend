@@ -17,6 +17,7 @@
         "lint:openapi": "spectral lint openapi.yaml",
         "lint:openapi:fix": "spectral lint openapi.yaml --format stylish",
         "prettier": "npx prettier .",
+        "prettier:check": "npx prettier . --check",
         "prettier:fix": "npx prettier . --write",
         "test": "npm run test:unit && npm run test:integration",
         "test:unit": "jest",
@@ -34,7 +35,7 @@
         "podman:restart": "podman compose down && podman compose up -d",
         "podman:rebuild": "podman compose down -v && podman compose build --no-cache && podman compose up -d",
         "podman:nuke": "pkill -9 -f 'podman|conmon|runc' 2>/dev/null || true; systemctl --user restart podman",
-        "genapi": "rm -rf ./api && npx @openapitools/openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
+        "genapi": "rm -rf ./api && openapi-generator-cli generate -i openapi.yaml -g typescript-node -o ./api",
         "update:all": "npx npm-check-updates -u",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
@@ -84,7 +85,7 @@
         "vitepress-plugin-mermaid": "^2.0.17"
     },
     "dependencies": {
-        "@openapitools/openapi-generator-cli": "^2.31.0",
+        "@openapitools/openapi-generator-cli": "2.31.0",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.216.0",
         "@opentelemetry/instrumentation-express": "^0.64.0",
