@@ -48,7 +48,7 @@ jobs:
             - name: Verify generated API artifacts are committed
               run: |
                   if [ -n "$(git status --porcelain -- api)" ]; then
-                    echo "Generated api/ artifacts are stale. Run npm run genapi and commit api/ changes."
+                    echo "Generated api/ artifacts are stale. Run npm run genapi && npm run prettier:fix and commit api/ changes."
                     git status --short -- api
                     exit 1
                   fi
