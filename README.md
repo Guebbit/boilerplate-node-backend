@@ -2,6 +2,8 @@
 
 TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first tooling.
 
+> CI/runtime baseline: Node.js 22.
+
 ## Instructions
 
 - Create `.env` file using the example:
