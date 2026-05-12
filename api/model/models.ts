@@ -1,5 +1,22 @@
 import localVarRequest from 'request';
 
+export * from './adminHealth';
+export * from './adminHealthDatabase';
+export * from './adminHealthIntegrations';
+export * from './adminHealthMemory';
+export * from './adminHealthResponse';
+export * from './adminHealthSystem';
+export * from './adminMetricsLatency';
+export * from './adminMetricsSummary';
+export * from './adminMetricsSummaryAuth';
+export * from './adminMetricsSummaryBusiness';
+export * from './adminMetricsSummaryDatabase';
+export * from './adminMetricsSummaryHttp';
+export * from './adminMetricsSummaryProcess';
+export * from './adminMetricsSummaryResponse';
+export * from './auditEventItem';
+export * from './auditLogsResponse';
+export * from './auditLogsResponseData';
 export * from './authTokens';
 export * from './cartItem';
 export * from './cartResponse';
@@ -40,7 +57,6 @@ export * from './updateOrderByIdRequest';
 export * from './updateOrderRequest';
 export * from './updateProductByIdRequest';
 export * from './updateProductRequest';
-export * from './updateProductRequestBody';
 export * from './updateUserByIdRequest';
 export * from './updateUserRequest';
 export * from './upsertCartItemRequest';
@@ -62,6 +78,23 @@ export interface RequestDetailedFile {
 export type RequestFile = string | Buffer | fs.ReadStream | RequestDetailedFile;
 
 
+import { AdminHealth } from './adminHealth';
+import { AdminHealthDatabase } from './adminHealthDatabase';
+import { AdminHealthIntegrations } from './adminHealthIntegrations';
+import { AdminHealthMemory } from './adminHealthMemory';
+import { AdminHealthResponse } from './adminHealthResponse';
+import { AdminHealthSystem } from './adminHealthSystem';
+import { AdminMetricsLatency } from './adminMetricsLatency';
+import { AdminMetricsSummary } from './adminMetricsSummary';
+import { AdminMetricsSummaryAuth } from './adminMetricsSummaryAuth';
+import { AdminMetricsSummaryBusiness } from './adminMetricsSummaryBusiness';
+import { AdminMetricsSummaryDatabase } from './adminMetricsSummaryDatabase';
+import { AdminMetricsSummaryHttp } from './adminMetricsSummaryHttp';
+import { AdminMetricsSummaryProcess } from './adminMetricsSummaryProcess';
+import { AdminMetricsSummaryResponse } from './adminMetricsSummaryResponse';
+import { AuditEventItem } from './auditEventItem';
+import { AuditLogsResponse } from './auditLogsResponse';
+import { AuditLogsResponseData } from './auditLogsResponseData';
 import { AuthTokens } from './authTokens';
 import { CartItem } from './cartItem';
 import { CartResponse } from './cartResponse';
@@ -102,7 +135,6 @@ import { UpdateOrderByIdRequest } from './updateOrderByIdRequest';
 import { UpdateOrderRequest } from './updateOrderRequest';
 import { UpdateProductByIdRequest } from './updateProductByIdRequest';
 import { UpdateProductRequest } from './updateProductRequest';
-import { UpdateProductRequestBody } from './updateProductRequestBody';
 import { UpdateUserByIdRequest } from './updateUserByIdRequest';
 import { UpdateUserRequest } from './updateUserRequest';
 import { UpsertCartItemRequest } from './upsertCartItemRequest';
@@ -124,6 +156,11 @@ let primitives = [
                  ];
 
 let enumsMap: {[index: string]: any} = {
+        "AdminHealth.StatusEnum": AdminHealth.StatusEnum,
+        "AdminHealthDatabase.StatusEnum": AdminHealthDatabase.StatusEnum,
+        "AuditEventItem.ActorRoleEnum": AuditEventItem.ActorRoleEnum,
+        "AuditEventItem.OutcomeEnum": AuditEventItem.OutcomeEnum,
+        "AuditEventItem.LevelEnum": AuditEventItem.LevelEnum,
         "FeedbackRequest.StatusEnum": FeedbackRequest.StatusEnum,
         "Order.StatusEnum": Order.StatusEnum,
         "SearchFeedbackRequestsRequest.StatusEnum": SearchFeedbackRequestsRequest.StatusEnum,
@@ -133,6 +170,23 @@ let enumsMap: {[index: string]: any} = {
 }
 
 let typeMap: {[index: string]: any} = {
+    "AdminHealth": AdminHealth,
+    "AdminHealthDatabase": AdminHealthDatabase,
+    "AdminHealthIntegrations": AdminHealthIntegrations,
+    "AdminHealthMemory": AdminHealthMemory,
+    "AdminHealthResponse": AdminHealthResponse,
+    "AdminHealthSystem": AdminHealthSystem,
+    "AdminMetricsLatency": AdminMetricsLatency,
+    "AdminMetricsSummary": AdminMetricsSummary,
+    "AdminMetricsSummaryAuth": AdminMetricsSummaryAuth,
+    "AdminMetricsSummaryBusiness": AdminMetricsSummaryBusiness,
+    "AdminMetricsSummaryDatabase": AdminMetricsSummaryDatabase,
+    "AdminMetricsSummaryHttp": AdminMetricsSummaryHttp,
+    "AdminMetricsSummaryProcess": AdminMetricsSummaryProcess,
+    "AdminMetricsSummaryResponse": AdminMetricsSummaryResponse,
+    "AuditEventItem": AuditEventItem,
+    "AuditLogsResponse": AuditLogsResponse,
+    "AuditLogsResponseData": AuditLogsResponseData,
     "AuthTokens": AuthTokens,
     "CartItem": CartItem,
     "CartResponse": CartResponse,
@@ -173,7 +227,6 @@ let typeMap: {[index: string]: any} = {
     "UpdateOrderRequest": UpdateOrderRequest,
     "UpdateProductByIdRequest": UpdateProductByIdRequest,
     "UpdateProductRequest": UpdateProductRequest,
-    "UpdateProductRequestBody": UpdateProductRequestBody,
     "UpdateUserByIdRequest": UpdateUserByIdRequest,
     "UpdateUserRequest": UpdateUserRequest,
     "UpsertCartItemRequest": UpsertCartItemRequest,
