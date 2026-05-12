@@ -69,7 +69,7 @@ Both `morgan` and Winston write structured **JSON** to stdout, ready for Loki/Cl
 Start the local stack:
 
 ```bash
-docker compose -f docker-compose.observability.yml up -d
+docker compose up -d
 ```
 
 Then add to your `.env`:

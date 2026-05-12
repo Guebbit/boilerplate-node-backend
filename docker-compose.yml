@@ -1,18 +1,17 @@
 version: "3.9"
 
-# Local observability stack: Tempo (tracing) + Grafana (dashboards)
 # FOR LOCAL DEVELOPMENT ONLY — anonymous admin auth is enabled for convenience.
 # Do NOT use this configuration in production or any publicly exposed environment.
 #
-# Usage: docker compose -f docker-compose.observability.yml up -d
+# Usage:
+#   docker compose up -d
 #
-# Then set the following in your .env:
+# Then add to your .env:
 #   OTEL_ENABLED=true
 #   OTEL_EXPORTER=otlp
 #   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 #
-# Open Grafana at http://localhost:3001 (default: admin/admin — change before exposing publicly)
-# Tempo data source is auto-provisioned at http://tempo:3200
+# Grafana UI: http://localhost:3001 (admin/admin — change before exposing publicly)
 
 services:
   tempo:
