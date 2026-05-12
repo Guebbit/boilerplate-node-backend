@@ -82,7 +82,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 ### Viewing traces in Grafana
 
-1. Open **http://localhost:3001** (admin/admin).
+1. Open **http://localhost:3001** — default credentials are `admin/admin`
+   (**change these before exposing the service publicly**).
 2. Go to **Explore** → select the **Tempo** data source.
 3. Search by **Service Name** (`api`) or paste a `traceId` from a log line.
 
