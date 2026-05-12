@@ -33,7 +33,7 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/tempo.yaml:ro
     ports:
       - "3001:3000"   # Grafana UI (using 3001 to avoid clash with the API)
     depends_on:
