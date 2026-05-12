@@ -5,7 +5,7 @@ import { UpdateFeedbackRequestStatusRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
 
 const updateFeedbackStatusSchema = z.object({
-    status: z.nativeEnum(UpdateFeedbackRequestStatusRequest.StatusEnum).optional(),
+    status: z.nativeEnum(UpdateFeedbackRequestStatusRequest.status).optional(),
     adminNotes: z.string().max(5000).optional()
 });
 

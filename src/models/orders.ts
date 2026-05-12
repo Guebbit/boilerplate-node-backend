@@ -32,11 +32,15 @@ export interface IOrderDocumentItem {
  * 'items' (embedded IOrderDocumentItem instead of OpenAPI OrderItem), and 'status'.
  */
 export interface IOrderDocument
-    extends Omit<Order, 'id' | 'userId' | 'status' | 'total' | 'items'>, Document {
+    extends
+        Omit<Order, 'id' | 'userId' | 'status' | 'total' | 'items' | 'createdAt' | 'updatedAt'>,
+        Document {
     userId: Types.ObjectId;
     status: EOrderStatus;
     notes?: string;
     items: IOrderDocumentItem[];
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 /**

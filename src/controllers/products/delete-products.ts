@@ -4,7 +4,7 @@ import { Types } from 'mongoose';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CastError } from 'mongoose';
-import { DeleteProductRequest } from '@api/model/deleteProductRequest';
+import type { DeleteProductRequest } from '@types';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**

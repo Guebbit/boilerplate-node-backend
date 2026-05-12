@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { userService } from '@services/users';
 import { successResponse } from '@utils/response';
-import type { RemoveCartItemRequest } from '@api/model/removeCartItemRequest';
+import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
 /**

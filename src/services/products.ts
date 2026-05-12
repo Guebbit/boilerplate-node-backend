@@ -152,7 +152,9 @@ export const getById = (id: string | undefined, admin = false) => {
  *
  * @param data
  */
-export const create = (data: Omit<Product, 'id'>): Promise<IProductDocument> =>
+export const create = (
+    data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
+): Promise<IProductDocument> =>
     productRepository.create({
         ...data,
         categories: sanitizeStringArray(data.categories),

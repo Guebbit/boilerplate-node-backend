@@ -9,29 +9,29 @@ import { feedbackRequestRepository } from '@repositories/feedback-requests';
 
 const toFeedbackStatus = (
     status?:
-        | SearchFeedbackRequestsRequest.StatusEnum
-        | UpdateFeedbackRequestStatusRequest.StatusEnum
+        | SearchFeedbackRequestsRequest.status
+        | UpdateFeedbackRequestStatusRequest.status
         | EFeedbackStatus
         | string
 ): EFeedbackStatus | undefined => {
     switch (status) {
-        case SearchFeedbackRequestsRequest.StatusEnum.New:
-        case UpdateFeedbackRequestStatusRequest.StatusEnum.New:
+        case SearchFeedbackRequestsRequest.status.NEW:
+        case UpdateFeedbackRequestStatusRequest.status.NEW:
         case EFeedbackStatus.NEW: {
             return EFeedbackStatus.NEW;
         }
-        case SearchFeedbackRequestsRequest.StatusEnum.InProgress:
-        case UpdateFeedbackRequestStatusRequest.StatusEnum.InProgress:
+        case SearchFeedbackRequestsRequest.status.IN_PROGRESS:
+        case UpdateFeedbackRequestStatusRequest.status.IN_PROGRESS:
         case EFeedbackStatus.IN_PROGRESS: {
             return EFeedbackStatus.IN_PROGRESS;
         }
-        case SearchFeedbackRequestsRequest.StatusEnum.Resolved:
-        case UpdateFeedbackRequestStatusRequest.StatusEnum.Resolved:
+        case SearchFeedbackRequestsRequest.status.RESOLVED:
+        case UpdateFeedbackRequestStatusRequest.status.RESOLVED:
         case EFeedbackStatus.RESOLVED: {
             return EFeedbackStatus.RESOLVED;
         }
-        case SearchFeedbackRequestsRequest.StatusEnum.Spam:
-        case UpdateFeedbackRequestStatusRequest.StatusEnum.Spam:
+        case SearchFeedbackRequestsRequest.status.SPAM:
+        case UpdateFeedbackRequestStatusRequest.status.SPAM:
         case EFeedbackStatus.SPAM: {
             return EFeedbackStatus.SPAM;
         }

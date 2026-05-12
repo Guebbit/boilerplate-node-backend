@@ -6,8 +6,8 @@ import type {
     CreateProductRequest,
     UpdateProductRequest,
     UpdateProductByIdRequest
-} from '@api/api';
-export * from '@api/api';
+} from '@api/index';
+export * from '@api/index';
 
 // Generic helper
 export type WithFileUpload<T, K extends string = 'imageUpload'> = T & {

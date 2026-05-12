@@ -7,7 +7,12 @@ import type { Product } from '@types';
 /**
  * Product Document interface
  */
-export interface IProductDocument extends Omit<Product, 'id'>, Document {}
+export interface IProductDocument
+    extends Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>, Document {
+    createdAt?: Date;
+    updatedAt?: Date;
+    deletedAt?: Date;
+}
 
 /**
  * Product Document instance methods
