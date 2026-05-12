@@ -7,7 +7,7 @@ import { logger } from '@utils/winston';
  * WebSocket test endpoint.
  */
 export const getWebsocketTest = (request: Request, response: Response) => {
-    const port = 3001;
+    const port = process.env.WEBSOCKET_PORT ? Number.parseInt(process.env.WEBSOCKET_PORT) : 3001;
     const url = `ws://localhost:${port}`;
 
     // Create a WebSocket server

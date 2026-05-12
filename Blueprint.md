@@ -517,7 +517,7 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 | `NODE_FALLBACK_LOCALE`              | `en`                    | Fallback i18n locale                  |
 | `NODE_TOKEN_CLEANUP_INTERVAL`       | `3600000`               | Token sweep interval (ms)             |
 | `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` | `15000`                 | Max shutdown time (ms)                |
-| `NODE_CORS_ORIGIN`                  | `http://localhost:5173` | Comma-separated allowed origins       |
+| `NODE_CORS_ORIGIN`                  | `http://localhost:8080` | Comma-separated allowed origins       |
 
 ### Phase 1 — Structured logging
 

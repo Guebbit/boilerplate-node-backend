@@ -196,7 +196,7 @@ app.use(helmet());
  * Allowed origins, separated by comma if multiple
  */
 const allowedOrigins = new Set(
-    (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:5173')
+    (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
         .split(',')
         .map((originValue) => originValue.trim())
         .filter(Boolean)
