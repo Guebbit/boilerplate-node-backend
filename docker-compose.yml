@@ -30,6 +30,9 @@ services:
             NODE_ENV: 'development' # Node environment (production or development)
             NODE_REDIS_URL: 'redis://redis:6379'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
+            # Observability: send traces to Tempo over OTLP/HTTP.
+            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://tempo:4318'
+            NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
 
         # Persist data.
         # Compose manages the lifecycle of this volume when up/down
@@ -60,11 +63,12 @@ services:
         depends_on:
             - database
             - redis
+            - tempo
 
         # Health check to verify the container is ready to accept traffic
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
-            test: ['CMD', 'curl', '-f', 'http://localhost:${NODE_PORT:-3000}/valid/endpoint']
+            test: ['CMD', 'curl', '-f', 'http://localhost:${NODE_PORT:-3000}/healthz']
             # How often to run the test
             interval: 2m
             # How long to wait for the test to complete
@@ -109,9 +113,37 @@ services:
         ports:
             - '${NODE_REDIS_PORT:-6379}:6379'
 
+    # Tempo: stores OpenTelemetry traces emitted by the app. Receives OTLP/HTTP on :4318.
+    tempo:
+        image: grafana/tempo:latest
+        restart: unless-stopped
+        command: ['-config.file=/etc/tempo/tempo.yaml']
+        volumes:
+            - ./.docker/observability/tempo.yaml:/etc/tempo/tempo.yaml:Z
+            - tempo_volume:/var/tempo
+        ports:
+            - '4318:4318' # OTLP/HTTP (used by the app)
+
+    # Grafana: single UI to read Tempo traces. Default datasource is auto-provisioned.
+    grafana:
+        image: grafana/grafana:latest
+        restart: unless-stopped
+        environment:
+            GF_AUTH_ANONYMOUS_ENABLED: 'true'
+            GF_AUTH_ANONYMOUS_ORG_ROLE: 'Admin'
+            GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+        volumes:
+            - ./.docker/observability/grafana/provisioning:/etc/grafana/provisioning:Z
+            - ./.docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:Z
+        ports:
+            - '3001:3000'
+        depends_on:
+            - tempo
+
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:
     boilerplate_mongodb_volume:
+    tempo_volume:
 
 # Commands:
 # podman ps: list running containers (-a for all)

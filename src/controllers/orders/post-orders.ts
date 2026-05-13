@@ -7,6 +7,7 @@ import { nodemailer } from '@utils/nodemailer';
 import { orderCreatedTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * POST /orders
@@ -63,7 +64,7 @@ export const postOrders = (
         emitAnalyticsEvent({
             distinctId: request.user?.id ?? 'unknown',
             event: AnalyticsEvent.ORDER_CREATED,
-            traceId: request.traceContext?.traceId,
+            traceId: getActiveSpanContext().traceId,
             properties: { order_id: orderId }
         });
         successResponse(response, result.data, 201);

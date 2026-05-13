@@ -4,6 +4,7 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * DELETE /cart/:productId
@@ -30,7 +31,7 @@ export const deleteCartItem = (
             emitAnalyticsEvent({
                 distinctId: user.id,
                 event: AnalyticsEvent.CART_ITEM_REMOVED,
-                traceId: request.traceContext?.traceId,
+                traceId: getActiveSpanContext().traceId,
                 properties: { product_id: productId }
             });
             successResponse(response, cart);

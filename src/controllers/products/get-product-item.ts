@@ -4,6 +4,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CastError } from 'mongoose';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * GET /products/:id
@@ -22,7 +23,7 @@ export const getProductItem = (request: Request, response: Response) =>
             emitAnalyticsEvent({
                 distinctId: request.user?.id ?? 'anonymous',
                 event: AnalyticsEvent.PRODUCT_VIEWED,
-                traceId: request.traceContext?.traceId,
+                traceId: getActiveSpanContext().traceId,
                 properties: { product_id: String(request.params.id) }
             });
             successResponse(response, product);

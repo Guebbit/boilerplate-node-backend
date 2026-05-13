@@ -5,6 +5,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * POST /cart
@@ -42,7 +43,7 @@ export const postCart = (
                 emitAnalyticsEvent({
                     distinctId: user.id,
                     event: AnalyticsEvent.CART_ITEM_ADDED,
-                    traceId: request.traceContext?.traceId,
+                    traceId: getActiveSpanContext().traceId,
                     properties: { product_id: productId, quantity }
                 });
                 successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));

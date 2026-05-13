@@ -1,0 +1,29 @@
+# Single-binary Grafana Tempo config for local development.
+# Receives spans over OTLP/HTTP on :4318 and OTLP/gRPC on :4317.
+# Storage is on the local filesystem (mounted as a named volume).
+server:
+    http_listen_port: 3200
+
+distributor:
+    receivers:
+        otlp:
+            protocols:
+                http:
+                    endpoint: 0.0.0.0:4318
+                grpc:
+                    endpoint: 0.0.0.0:4317
+
+ingester:
+    max_block_duration: 5m
+
+compactor:
+    compaction:
+        block_retention: 24h
+
+storage:
+    trace:
+        backend: local
+        wal:
+            path: /var/tempo/wal
+        local:
+            path: /var/tempo/blocks

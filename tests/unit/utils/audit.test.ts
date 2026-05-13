@@ -112,15 +112,14 @@ describe('emitAuditEvent', () => {
 });
 
 describe('extractRequestContext', () => {
-    it('extracts ip, user_agent, request_id, and trace_id', () => {
+    it('extracts ip, user_agent, and request_id', () => {
         const mockHeaders: Record<string, string | string[] | undefined> = {
             ['user-agent']: 'Mozilla/5.0'
         };
         const request = {
             ip: '10.0.0.1',
             headers: mockHeaders,
-            requestId: 'req-111',
-            traceContext: { traceId: 'trace-222' }
+            requestId: 'req-111'
         };
 
         const ctx = extractRequestContext(request);
@@ -128,7 +127,8 @@ describe('extractRequestContext', () => {
         expect(ctx.ip).toBe('10.0.0.1');
         expect(ctx.user_agent).toBe('Mozilla/5.0');
         expect(ctx.request_id).toBe('req-111');
-        expect(ctx.trace_id).toBe('trace-222');
+        // trace_id comes from the active OTel span; undefined when no SDK is active in tests
+        expect(ctx.trace_id).toBeUndefined();
     });
 
     it('returns undefined for missing fields', () => {

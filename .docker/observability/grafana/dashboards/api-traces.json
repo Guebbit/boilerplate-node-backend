@@ -1,0 +1,56 @@
+{
+    "title": "API Traces",
+    "uid": "api-traces",
+    "schemaVersion": 39,
+    "version": 1,
+    "editable": true,
+    "tags": ["api", "tempo"],
+    "timezone": "browser",
+    "time": { "from": "now-1h", "to": "now" },
+    "refresh": "30s",
+    "panels": [
+        {
+            "id": 1,
+            "type": "traces",
+            "title": "Search recent traces",
+            "datasource": { "type": "tempo", "uid": "tempo" },
+            "gridPos": { "h": 14, "w": 24, "x": 0, "y": 0 },
+            "targets": [
+                {
+                    "refId": "A",
+                    "queryType": "traceqlSearch",
+                    "filters": [
+                        {
+                            "id": "service-name",
+                            "tag": "service.name",
+                            "operator": "=",
+                            "scope": "resource"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "type": "traces",
+            "title": "Errors only",
+            "datasource": { "type": "tempo", "uid": "tempo" },
+            "gridPos": { "h": 14, "w": 24, "x": 0, "y": 14 },
+            "targets": [
+                {
+                    "refId": "A",
+                    "queryType": "traceqlSearch",
+                    "filters": [
+                        {
+                            "id": "status",
+                            "tag": "status",
+                            "operator": "=",
+                            "value": "error",
+                            "scope": "intrinsic"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

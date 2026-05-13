@@ -4,6 +4,7 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { cartCheckoutTotal } from '@utils/domain-metrics';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * POST /cart/checkout
@@ -17,7 +18,7 @@ export const postCheckout = (request: Request, response: Response) => {
             emitAnalyticsEvent({
                 distinctId: user.id,
                 event: AnalyticsEvent.CHECKOUT_FAILED,
-                traceId: request.traceContext?.traceId,
+                traceId: getActiveSpanContext().traceId,
                 properties: { reason: result.message }
             });
             rejectResponse(response, result.status, result.message, result.errors);
@@ -28,7 +29,7 @@ export const postCheckout = (request: Request, response: Response) => {
         emitAnalyticsEvent({
             distinctId: user.id,
             event: AnalyticsEvent.CHECKOUT_COMPLETED,
-            traceId: request.traceContext?.traceId,
+            traceId: getActiveSpanContext().traceId,
             properties: { order_id: orderId }
         });
         successResponse(

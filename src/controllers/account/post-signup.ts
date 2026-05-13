@@ -9,6 +9,7 @@ import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { authSignupTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * POST /account/signup
@@ -63,7 +64,7 @@ export const postSignup = (
             emitAnalyticsEvent({
                 distinctId: newUserId,
                 event: AnalyticsEvent.USER_SIGNED_UP,
-                traceId: request.traceContext?.traceId
+                traceId: getActiveSpanContext().traceId
             });
             successResponse(response, result.data, 201);
         })
