@@ -36,6 +36,7 @@ export default withMermaid(
                             { text: 'Winston & Audit Logs', link: '/tools/winston' },
                             { text: 'Prometheus', link: '/tools/prometheus' },
                             { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
+                            { text: 'Tempo', link: '/tools/tempo' },
                             { text: 'Grafana', link: '/tools/grafana' },
                             { text: 'PostHog', link: '/tools/posthog' },
                             { text: 'Testing & Docs', link: '/tools/testing-and-docs' }

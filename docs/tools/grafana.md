@@ -1,42 +1,39 @@
 # Grafana
 
-## Why Grafana has its own page
+## What it is
 
-Grafana is where the different observability signals come together.
-It is not just another dependency.
-It is the **visual layer** over metrics, logs, and traces.
+Grafana is the **single UI** in this boilerplate's observability story.
+You open it, search a trace, and see what happened.
 
-## Grafana view of the repo
+## Where to find it
+
+- URL: `http://localhost:3001`
+- Login: anonymous Admin in dev (no password)
+- Datasource: **Tempo** (auto-provisioned, default)
+- Dashboards: **API Traces** (auto-provisioned)
+
+Container, dashboards, and datasource provisioning all live in `.docker/observability/grafana/`.
+
+## Find a request that broke
+
+1. Look at the application log line — it carries a `trace_id`.
+2. Open Grafana → **Explore** → datasource **Tempo**.
+3. Paste the `trace_id`. You see the full span tree (HTTP → Express handler → DB query → Redis), with errors marked red.
+
+## How signals come together
 
 ```mermaid
 flowchart TD
-    Prometheus[Prometheus metrics] --> Grafana
-    Loki[Loki logs] --> Grafana
     Tempo[Tempo traces] --> Grafana
-    Grafana --> Dash1[API overview dashboard]
-    Grafana --> Dash2[Logs and audit dashboard]
-    Grafana --> Dash3[Distributed traces dashboard]
+    AppLogs[App stdout JSON logs] -.via trace_id.-> Grafana
+    Metrics[/metrics endpoint, opt-in/] -.optional.-> Grafana
 ```
 
-## What this repo already gives you
-
-Inside `docs/grafana-dashboards/` you already have dashboard JSON examples for:
-
-- API overview
-- logs and audit
-- distributed traces
-
-So Grafana is part of the boilerplate story, not a random afterthought.
-
-## How to think about it
-
-- [Prometheus](./prometheus.md) feeds metrics.
-- [Winston + Loki](./winston.md) feed logs.
-- [OpenTelemetry](./opentelemetry.md) feeds traces.
-- Grafana gives the single screen that joins them.
+The current default ships **traces only** (Tempo). Logs stay on stdout (Docker captures them); metrics are exposed at `/metrics` for whoever wants to add a Prometheus scrape later.
 
 ## Related pages
 
-- [Prometheus](./prometheus.md)
+- [Tempo](./tempo.md)
 - [OpenTelemetry](./opentelemetry.md)
+- [Prometheus](./prometheus.md)
 - [Winston & Audit Logs](./winston.md)

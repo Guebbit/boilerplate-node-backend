@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-// ─── Phase 3: OTel must start before any other imports ───────────────────────
-// Importing tracing.ts here ensures the SDK is initialized (and Express/HTTP
-// instrumentation patches applied) before express or mongoose are loaded.
+// OTel must initialize before express/http/mongoose are imported.
 import { startTracing, shutdownTracing } from '@utils/tracing';
 import { shutdownAnalytics } from '@utils/analytics';
 startTracing();
@@ -24,10 +22,8 @@ import { requestLogger } from '@middlewares/request-logger';
 import { rejectResponse } from '@utils/response';
 import { validateRequiredEnvironment } from '@utils/environment';
 import {
-    createTraceContext,
     getRouteLabel,
     recordRequestMetric,
-    toTraceparentHeader,
     incrementInflight,
     decrementInflight
 } from '@utils/observability';
@@ -55,17 +51,11 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 let activeServer: Server | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
-/**
- * Treat port configuration as untrusted input and fall back to a safe default.
- */
 const getPort = () => {
     const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
     return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
 };
 
-/**
- * Graceful shutdown needs a hard upper bound so a stuck dependency cannot hang the process forever.
- */
 const getShutdownTimeoutMs = () => {
     const parsedTimeout = Number.parseInt(
         process.env.NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS ?? String(DEFAULT_SHUTDOWN_TIMEOUT_MS),
@@ -74,9 +64,6 @@ const getShutdownTimeoutMs = () => {
     return Number.isNaN(parsedTimeout) ? DEFAULT_SHUTDOWN_TIMEOUT_MS : parsedTimeout;
 };
 
-/**
- * Promisify server.close so HTTP teardown composes with the rest of the async shutdown flow.
- */
 const closeServer = (server: Server) =>
     new Promise<void>((resolve, reject) => {
         server.close((error) => {
@@ -85,9 +72,6 @@ const closeServer = (server: Server) =>
         });
     });
 
-/**
- * Route every process signal through one shutdown path to keep teardown semantics consistent.
- */
 const onProcessSignal = (signal: NodeJS.Signals) => {
     logger.info(`Received ${signal}, starting graceful shutdown.`);
     const forcedExitTimer = setTimeout(() => {
@@ -111,10 +95,6 @@ const onProcessSignal = (signal: NodeJS.Signals) => {
         });
 };
 
-/**
- * Sync dependencies then start HTTP server.
- * Exported to make integration tests start/stop the app without side effects on import.
- */
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
@@ -147,9 +127,6 @@ export const startServer = () => {
         );
 };
 
-/**
- * Memoize shutdown so concurrent callers do not race while closing the same resources.
- */
 export const stopServer = () => {
     if (shutdownPromise) return shutdownPromise;
 
@@ -160,8 +137,8 @@ export const stopServer = () => {
         })
         .then(() => stopCache())
         .then(() => stopDatabase())
-        .then(() => shutdownAnalytics()) // flush PostHog events before exit
-        .then(() => shutdownTracing()) // flush OTel spans before exit
+        .then(() => shutdownAnalytics())
+        .then(() => shutdownTracing())
         .finally(() => {
             activeServer = undefined;
             shutdownPromise = undefined;
@@ -170,9 +147,6 @@ export const stopServer = () => {
     return shutdownPromise;
 };
 
-/**
- * Tests control process lifecycle explicitly, so signal hooks stay disabled there.
- */
 const registerSignalHandlers = () => {
     if (process.env.NODE_ENV === 'test') return;
     process.on('SIGTERM', () => onProcessSignal('SIGTERM'));
@@ -211,35 +185,12 @@ app.use(
             // Allow non-browser requests (no Origin header), like curl/healthchecks
             // eslint-disable-next-line unicorn/no-null
             if (!origin) return callback(null, true);
-            // Allowed origins
             // eslint-disable-next-line unicorn/no-null
             if (allowedOrigins.has(origin)) return callback(null, true);
-            // Not allowed
             return callback(new Error(`CORS blocked for origin: ${origin}`));
         },
-
-        /**
-         * Enables sending credentials in cross-origin requests.
-         * "Credentials" = cookies, Authorization headers, TLS client certs.
-         *     *
-         * Client must also explicitly opt-in:
-         * fetch(..., { credentials: 'include' })
-         * axios(..., { withCredentials: true })
-         *
-         * If you don't use cookies/auth across origins → set this to false
-         */
         credentials: true,
-
-        /**
-         * Allowed HTTP methods for CORS (sent in Access-Control-Allow-Methods).
-         * If a method isn’t listed → browser blocks the request
-         */
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-
-        /**
-         * Request headers the client is allowed to send (preflight check).
-         * Missing header here → preflight fails
-         */
         allowedHeaders: [
             'Content-Type',
             'Authorization',
@@ -247,41 +198,23 @@ app.use(
             'x-request-id',
             'traceparent'
         ],
-
-        /**
-         * Response headers the browser is allowed to read in JS.
-         * Without this → headers exist but are not accessible
-         */
-        exposedHeaders: ['x-request-id', 'traceparent', 'x-trace-id']
+        exposedHeaders: ['x-request-id', 'traceparent']
     })
 );
 
-/**
- * Parses URL-encoded data (from HTML forms)
- * Extended: true allows nested objects using the qs library
- */
 app.use(
     express.urlencoded({
         extended: true
     })
 );
 
-/**
- * Parses JSON request bodies
- */
 app.use(express.json());
 
-/**
- * Parse cookies (needed for the JWT refresh token cookie)
- */
 app.use(cookieParser());
 
-/**
- * Security: rate limit all requests before any DB access
- */
 app.use(rateLimiter);
 
-/** Attach or reuse x-request-id for request correlation. */
+/** Attach or reuse x-request-id for client/server log correlation. */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
     request.requestId = requestId;
@@ -289,31 +222,9 @@ app.use((request, response, next) => {
     next();
 });
 
-/** Attach trace context and propagate trace headers. */
-app.use((request, response, next) => {
-    // Prefer OTel span IDs when the SDK has an active span for this request
-    // (set by HttpInstrumentation). Fall back to manual W3C parsing otherwise.
-    const otel = getActiveSpanContext();
-    const traceContext =
-        otel.traceId && otel.spanId
-            ? { traceId: otel.traceId, spanId: otel.spanId }
-            : createTraceContext(request.get('traceparent'));
-
-    request.traceContext = traceContext;
-    response.setHeader('traceparent', toTraceparentHeader(traceContext));
-    response.setHeader('x-trace-id', traceContext.traceId);
-    next();
-});
-
-/** Emit one structured access log per completed request. */
+/** Slim access log + Prometheus HTTP metrics. */
 app.use(requestLogger);
 
-/**
- * Request metrics collector (Prometheus style):
- * - total requests by method/route/status
- * - request duration histogram
- * - in-flight gauge
- */
 app.use((request, response, next) => {
     incrementInflight();
     const startTime = process.hrtime.bigint();
@@ -350,40 +261,26 @@ app.use((request: Request, response: Response) => {
 });
 
 /**
- * Global JSON error handler
+ * Global JSON error handler. One log line per error; the stack lives on the OTel span.
  */
 app.use((error: Error, request: Request, response: Response, _next: NextFunction) => {
     if (response.headersSent) return;
 
-    // Record the error on the active OTel span so it surfaces in traces.
     recordErrorOnActiveSpan(error);
 
-    // Multer file-upload errors
-    if (error instanceof MulterError) {
-        logger.error({
-            requestId: request.requestId,
-            traceId: request.traceContext?.traceId,
-            spanId: request.traceContext?.spanId,
-            message: error.message,
-            code: error.code,
-            field: error.field
-        });
-        return rejectResponse(response, 400, error.message, [error.code]);
-    }
+    const status =
+        error instanceof MulterError ? 400 : error instanceof ExtendedError ? error.httpCode : 500;
 
-    // Operational errors with a known HTTP status code
-    if (error instanceof ExtendedError)
-        return rejectResponse(response, error.httpCode, error.name, error.errors);
-
-    logger.error({
-        requestId: request.requestId,
-        traceId: request.traceContext?.traceId,
-        spanId: request.traceContext?.spanId,
-        message: error.message,
-        stack: error.stack,
-        name: error.name
+    logger.error(`${error.name}: ${error.message}`, {
+        request_id: request.requestId,
+        trace_id: getActiveSpanContext().traceId,
+        status
     });
 
+    if (error instanceof MulterError)
+        return rejectResponse(response, 400, error.message, [error.code]);
+    if (error instanceof ExtendedError)
+        return rejectResponse(response, error.httpCode, error.name, error.errors);
     rejectResponse(response, 500, 'Internal Server Error', [error.message]);
 });
 
@@ -407,7 +304,6 @@ process
             action: 'process.uncaughtException',
             name: error.name,
             message: error.message,
-            stack: error.stack,
             origin
         });
         process.exit(1);

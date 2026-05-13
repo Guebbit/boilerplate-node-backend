@@ -1,0 +1,14 @@
+# Auto-provisioned Tempo datasource so Grafana can query traces on first start.
+apiVersion: 1
+
+datasources:
+    - name: Tempo
+      type: tempo
+      access: proxy
+      url: http://tempo:3200
+      uid: tempo
+      isDefault: true
+      jsonData:
+          httpMethod: GET
+          serviceMap:
+              datasourceUid: tempo

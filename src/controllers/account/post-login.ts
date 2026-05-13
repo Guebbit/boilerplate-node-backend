@@ -14,6 +14,7 @@ import { runTokenCleanup } from '@utils/token-cleanup';
 import { authLoginTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * POST /account/login
@@ -78,7 +79,7 @@ export const postLogin = (
                     emitAnalyticsEvent({
                         distinctId: userId,
                         event: AnalyticsEvent.USER_LOGGED_IN,
-                        traceId: request.traceContext?.traceId,
+                        traceId: getActiveSpanContext().traceId,
                         properties: { role: result.data?.admin ? 'admin' : 'user' }
                     });
                     successResponse(
