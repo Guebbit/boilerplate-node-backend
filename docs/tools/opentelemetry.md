@@ -1,32 +1,54 @@
 # OpenTelemetry
 
-## Why OpenTelemetry is here
+## Why it is here
 
-OpenTelemetry gives the boilerplate **trace context** and distributed-tracing support.
-It helps answer: _which request path was slow, and where did the time go?_
+OpenTelemetry (OTel) is the **trace** layer of this boilerplate.
+A trace is the timeline of a single request: HTTP in, every Mongoose query, every Redis call, the response out.
+When something is slow or breaks, a trace tells you _what happened and where_ — much more than a log line can.
+
+We use OTel **auto-instrumentation**: there is no per-request code to write.
+
+## What is instrumented out of the box
+
+| Library | Source | Spans you get |
+| --- | --- | --- |
+| HTTP server | `@opentelemetry/instrumentation-http` | one root span per incoming request |
+| Express | `@opentelemetry/instrumentation-express` | one child span per route handler/middleware |
+| Mongoose | `@opentelemetry/instrumentation-mongoose` | one child span per query (`find`, `save`, …) |
+| Redis | `@opentelemetry/instrumentation-redis` | one child span per Redis command |
+
+All of this is wired in `src/utils/tracing.ts`.
+
+## Configuration
+
+| Env var | Effect |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the collector (Tempo). When unset, traces are simply not exported. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | Optional `key=value,key=value` for auth/tenant headers. |
+| `NODE_SERVICE_NAME` | The `service.name` resource attribute used by Tempo/Grafana (default `api`). |
+
+Local docker-compose sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` automatically.
 
 ## Trace flow
 
 ```mermaid
 flowchart LR
     Client --> HTTP[HTTP request]
-    HTTP --> OTel[OpenTelemetry SDK]
-    OTel --> Express[Express route flow]
-    Express --> DB[Mongoose query spans]
-    OTel --> Export[OTLP exporter]
-    Export --> Tempo[Tempo / tracing backend]
-    Tempo --> Grafana[Grafana trace views]
+    HTTP --> SDK[OTel SDK]
+    SDK --> Express[Express handler]
+    SDK --> DB[Mongoose query]
+    SDK --> Redis[Redis command]
+    SDK --> Tempo[Tempo via OTLP]
+    Tempo --> Grafana[Grafana trace view]
 ```
 
-## Why it matters in this repo
+## How logs and traces correlate
 
-- tracing starts early in app boot,
-- HTTP and Express are instrumented,
-- database spans and correlation helpers already exist,
-- it works nicely with logs and metrics together.
+Every slim access log and every error log carries a `trace_id` field.
+Copy that ID into Grafana → Explore → Tempo to jump straight to the trace for that request.
 
 ## Related pages
 
-- [Prometheus](./prometheus.md)
+- [Tempo](./tempo.md)
 - [Grafana](./grafana.md)
 - [Winston & Audit Logs](./winston.md)

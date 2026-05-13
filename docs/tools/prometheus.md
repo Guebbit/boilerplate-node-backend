@@ -1,36 +1,37 @@
-# Prometheus
+# Prometheus (opt-in)
 
-## Why Prometheus is here
+## Status in this repo
 
-This boilerplate exposes **machine-readable metrics** so the API can be monitored without guessing.
+Prometheus is **not** wired up by default — the boilerplate does not ship a Prometheus container.
+The app, however, exposes a `/metrics` endpoint in the standard Prometheus exposition format, so adding a scrape later is a one-line config change.
 
-## What it tracks
+If you only care about traces, ignore this page and use [Tempo + Grafana](./tempo.md).
 
-- HTTP request counts
-- HTTP latency histograms
-- in-flight requests
-- auth and business counters
-- database query counts and errors
-- default Node/process metrics
+## What `/metrics` exposes
 
-## Metrics flow
+| Metric | Why it is here |
+| --- | --- |
+| `http_requests_total` | request rate, split by method/route/status |
+| `http_request_duration_milliseconds` | latency histogram for p50/p95/p99 |
+| `http_request_errors_total` | 4xx/5xx counts |
+| `http_requests_in_flight` | concurrency at a glance |
+| `auth_login_total` / `auth_signup_total` / `cart_checkout_total` / `order_created_total` / … | business counters that you cannot derive from traces |
+| `process_*` and `nodejs_*` | default `prom-client` runtime metrics (CPU, memory, event-loop, GC) |
 
-```mermaid
-flowchart LR
-    Request --> Middleware[Observability middleware]
-    Middleware --> Metrics[prom-client registry]
-    Metrics --> Endpoint[/metrics]
-    Endpoint --> Prometheus[Prometheus scrape]
-    Prometheus --> Grafana[Grafana dashboards]
+Database query metrics are intentionally **not** Prometheus counters — Mongoose spans from OTel give richer per-query data in Tempo.
+
+## Add a Prometheus scrape later
+
+```yaml
+scrape_configs:
+    - job_name: api
+      metrics_path: /metrics
+      static_configs:
+          - targets: ['app:3000']
 ```
-
-## Repo-specific value
-
-This repo goes beyond a plain `/metrics` endpoint.
-It also exposes admin-oriented summary endpoints and database/domain counters that make the boilerplate feel closer to a production starter.
 
 ## Related pages
 
-- [OpenTelemetry](./opentelemetry.md)
 - [Grafana](./grafana.md)
-- [Winston & Audit Logs](./winston.md)
+- [Tempo](./tempo.md)
+- [OpenTelemetry](./opentelemetry.md)

@@ -65,6 +65,16 @@ The entity names are examples.
 - easier stack swaps later
 - easier onboarding when ADHD brain wants clear buckets
 
+## Observability in one paragraph
+
+Three signals, only one wired end-to-end by default:
+
+- **Traces** (Tempo, via OpenTelemetry) — the timeline of one request, every DB and Redis call, every error.
+- **Logs** (Winston → stdout) — slim per-request access logs and error logs, each carrying the `trace_id` that links back to a trace.
+- **Metrics** (`/metrics`, opt-in) — Prometheus exposition for HTTP rates/latency and a few business counters.
+
+When something breaks, the log line gives you a `trace_id`, you paste it in Grafana → Tempo, and you get the full picture.
+
 ## Related pages
 
 - [Architecture](./architecture.md)

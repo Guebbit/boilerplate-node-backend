@@ -17,8 +17,9 @@ flowchart TD
     E --> E1[Winston]
     E --> E2[Prometheus]
     E --> E3[OpenTelemetry]
-    E --> E4[Grafana]
-    E --> E5[PostHog]
+    E --> E4[Tempo]
+    E --> E5[Grafana]
+    E --> E6[PostHog]
 ```
 
 ## Read by intent
@@ -28,7 +29,7 @@ flowchart TD
 | Understand framework-level dependencies                          | [Runtime](./runtime.md)                                                                                                                       |
 | Understand security middleware and auth helpers                  | [Security](./security.md)                                                                                                                     |
 | Understand persistence and cache tools                           | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md)                                                               |
-| Understand logs, metrics, traces, dashboards, and analytics      | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
+| Understand logs, metrics, traces, dashboards, and analytics      | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Tempo](./tempo.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
 | Understand tests and docs tooling                                | [Testing & Docs](./testing-and-docs.md)                                                                                                       |
 | Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                                                                                                                |
 
