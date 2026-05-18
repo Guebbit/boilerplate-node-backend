@@ -71,6 +71,14 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 `redactSensitiveFields` replaces values of well-known sensitive keys (`password`, `token`, `cookie`, `authorization`, …) with `[REDACTED]` before logging. It runs on every log entry and on every audit event.
 
+## Useful links
+
+- [Winston docs](https://github.com/winstonjs/winston#readme)
+- [Winston transports](https://github.com/winstonjs/winston/blob/master/docs/transports.md)
+- [Winston-Loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you later want to ship logs to Loki
+- [Grafana Loki overview](https://grafana.com/docs/loki/latest/get-started/overview/)
+- [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for audit/security logs
+
 ## Related pages
 
 - [OpenTelemetry](./opentelemetry.md)

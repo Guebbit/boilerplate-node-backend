@@ -19,13 +19,13 @@ That keeps backend, generated types, and consumers in sync.
 
 ## Tools around the contract
 
-| Tool | Job |
-| --- | --- |
-| `openapi.yaml` | single contract file |
-| Spectral | lint the spec |
-| OpenAPI Generator | generate the `api/` client and types |
-| Prism | mock the API from the spec |
-| Bruno / Mockoon / Insomnia assets | explore or fake the API during development |
+| Tool                                                                                       | Job                                                |
+| ------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| [`openapi.yaml`](https://spec.openapis.org/oas/latest.html)                                | single contract file (OpenAPI 3.x specification)   |
+| [Spectral](https://stoplight.io/open-source/spectral)                                      | lint the spec                                      |
+| [openapi-typescript-codegen](https://github.com/ferdikoomen/openapi-typescript-codegen)    | generate the `api/` client and types               |
+| [Prism](https://stoplight.io/open-source/prism)                                            | mock the API from the spec                         |
+| [Bruno](https://www.usebruno.com/) / [Mockoon](https://mockoon.com/) / [Insomnia](https://insomnia.rest/) assets | explore or fake the API during development         |
 
 ## Commands used in this repo
 
@@ -52,3 +52,12 @@ Document:
 
 Do **not** create a page for every tiny request or response object.
 Those belong in the spec itself.
+
+## Useful links
+
+- [OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0)
+- [Swagger guide](https://swagger.io/docs/specification/about/)
+- [OpenAPI Initiative on GitHub](https://github.com/OAI/OpenAPI-Specification)
+- [Spectral rulesets](https://docs.stoplight.io/docs/spectral/01baf06bdd05a-rulesets) — basis for `spectral.yaml`
+- [Prism mock options](https://docs.stoplight.io/docs/prism/83dbbd75532cf-http-mocking)
+- [openapi-typescript-codegen options](https://github.com/ferdikoomen/openapi-typescript-codegen#usage)

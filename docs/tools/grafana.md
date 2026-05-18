@@ -31,6 +31,14 @@ flowchart TD
 
 The current default ships **traces only** (Tempo). Logs stay on stdout (Docker captures them); metrics are exposed at `/metrics` for whoever wants to add a Prometheus scrape later.
 
+## Useful links
+
+- [Grafana documentation](https://grafana.com/docs/grafana/latest/)
+- [Explore view](https://grafana.com/docs/grafana/latest/explore/)
+- [Provisioning datasources & dashboards](https://grafana.com/docs/grafana/latest/administration/provisioning/)
+- [Tempo datasource](https://grafana.com/docs/grafana/latest/datasources/tempo/)
+- [Anonymous access config](https://grafana.com/docs/grafana/latest/setup-grafana/configure-security/configure-authentication/grafana/#anonymous-authentication)
+
 ## Related pages
 
 - [Tempo](./tempo.md)

@@ -28,6 +28,13 @@ A single trace is much more useful than a fat log object when something breaks: 
 - Grafana UI: `http://localhost:3001` → **Explore** → **Tempo**.
 - Search by `service.name = "api"`, by `trace_id`, by HTTP route, or by error.
 
+## Useful links
+
+- [Tempo documentation](https://grafana.com/docs/tempo/latest/)
+- [TraceQL query language](https://grafana.com/docs/tempo/latest/traceql/)
+- [Tempo single-binary deployment](https://grafana.com/docs/tempo/latest/setup/deployment/#monolithic-mode)
+- [Tempo configuration reference](https://grafana.com/docs/tempo/latest/configuration/)
+
 ## Related pages
 
 - [OpenTelemetry](./opentelemetry.md)

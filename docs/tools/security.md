@@ -2,16 +2,16 @@
 
 ## Main security tools
 
-| Tool                            | Why it is here                              |
-| ------------------------------- | ------------------------------------------- |
-| Helmet                          | safe default HTTP headers                   |
-| cors                            | origin allowlist and browser access control |
-| express-rate-limit              | basic abuse protection at the edge          |
-| jsonwebtoken                    | access and refresh token flows              |
-| cookie-parser                   | cookie access in Express                    |
-| express-session + connect-mongo | stateful session support when needed        |
-| csrf-sync                       | CSRF protection for cookie/session flows    |
-| bcrypt                          | password hashing                            |
+| Tool                                                                                | Why it is here                              |
+| ----------------------------------------------------------------------------------- | ------------------------------------------- |
+| [Helmet](https://helmetjs.github.io/)                                               | safe default HTTP headers                   |
+| [cors](https://github.com/expressjs/cors#readme)                                    | origin allowlist and browser access control |
+| [express-rate-limit](https://express-rate-limit.mintlify.app/)                      | basic abuse protection at the edge          |
+| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken#readme)                   | access and refresh token flows              |
+| [cookie-parser](https://github.com/expressjs/cookie-parser#readme)                  | cookie access in Express                    |
+| [express-session](https://github.com/expressjs/session#readme) + [connect-mongo](https://github.com/jdesboeufs/connect-mongo#readme) | stateful session support when needed        |
+| [csrf-sync](https://github.com/Psifi-Solutions/csrf-sync#readme)                    | CSRF protection for cookie/session flows    |
+| [bcrypt](https://github.com/kelektiv/node.bcrypt.js#readme)                         | password hashing                            |
 
 ## Security flow
 
@@ -28,6 +28,16 @@ flowchart LR
 
 Security concerns should happen **before** business logic reaches deep layers.
 That is why auth, headers, origin checks, and rate limiting stay near routes and middlewares.
+
+## Useful links
+
+- [OWASP REST Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html)
+- [OWASP JWT Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
+- [Helmet content security policy](https://helmetjs.github.io/#content-security-policy)
+- [MDN — CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS)
+- [express-rate-limit configuration](https://express-rate-limit.mintlify.app/reference/configuration)
+- [jsonwebtoken algorithms](https://github.com/auth0/node-jsonwebtoken#algorithms-supported)
+- [bcrypt cost factor guidance](https://github.com/kelektiv/node.bcrypt.js#a-note-on-rounds)
 
 ## Related pages
 

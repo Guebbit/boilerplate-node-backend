@@ -53,6 +53,8 @@ flowchart TD
 - **Framework**: [Express](./tools/runtime.md).
 - **Database**: [MongoDB + Mongoose](./tools/mongodb-mongoose.md).
 - **Observability**: [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
+- **Real-time / outbound**: [WebSockets](./tools/websockets.md) and [email + PDF rendering](./tools/email-and-rendering.md).
+- **Process model**: [Clustering & graceful shutdown](./theory/clustering.md).
 - **Contract**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth).
 - **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
 

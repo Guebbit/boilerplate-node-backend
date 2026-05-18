@@ -21,6 +21,13 @@ Examples like signup, login, product view, cart, checkout, and order events show
 It is optional by design.
 If PostHog is not configured, the app still works.
 
+## Useful links
+
+- [PostHog documentation](https://posthog.com/docs)
+- [Node.js library](https://posthog.com/docs/libraries/node)
+- [Capture events guide](https://posthog.com/docs/getting-started/send-events)
+- [Self-hosting PostHog](https://posthog.com/docs/self-host)
+
 ## Related pages
 
 - [Request Flow](../theory/request-flow.md)

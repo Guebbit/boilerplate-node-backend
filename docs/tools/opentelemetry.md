@@ -12,10 +12,10 @@ We use OTel **auto-instrumentation**: there is no per-request code to write.
 
 | Library | Source | Spans you get |
 | --- | --- | --- |
-| HTTP server | `@opentelemetry/instrumentation-http` | one root span per incoming request |
-| Express | `@opentelemetry/instrumentation-express` | one child span per route handler/middleware |
-| Mongoose | `@opentelemetry/instrumentation-mongoose` | one child span per query (`find`, `save`, …) |
-| Redis | `@opentelemetry/instrumentation-redis` | one child span per Redis command |
+| HTTP server | [`@opentelemetry/instrumentation-http`](https://www.npmjs.com/package/@opentelemetry/instrumentation-http) | one root span per incoming request |
+| Express | [`@opentelemetry/instrumentation-express`](https://www.npmjs.com/package/@opentelemetry/instrumentation-express) | one child span per route handler/middleware |
+| Mongoose | [`@opentelemetry/instrumentation-mongoose`](https://www.npmjs.com/package/@opentelemetry/instrumentation-mongoose) | one child span per query (`find`, `save`, …) |
+| Redis | [`@opentelemetry/instrumentation-redis`](https://www.npmjs.com/package/@opentelemetry/instrumentation-redis) | one child span per Redis command |
 
 All of this is wired in `src/utils/tracing.ts`.
 
@@ -46,6 +46,16 @@ flowchart LR
 
 Every slim access log and every error log carries a `trace_id` field.
 Copy that ID into Grafana → Explore → Tempo to jump straight to the trace for that request.
+
+## Useful links
+
+- [OpenTelemetry concepts](https://opentelemetry.io/docs/concepts/)
+- [Traces & spans](https://opentelemetry.io/docs/concepts/signals/traces/)
+- [JavaScript SDK getting started](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)
+- [Node SDK reference](https://opentelemetry.io/docs/languages/js/instrumentation/)
+- [OTLP/HTTP protocol](https://opentelemetry.io/docs/specs/otlp/#otlphttp)
+- [Semantic conventions](https://opentelemetry.io/docs/specs/semconv/)
+- [Auto-instrumentation packages list](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node)
 
 ## Related pages
 

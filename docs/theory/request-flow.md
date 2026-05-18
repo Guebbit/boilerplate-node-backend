@@ -54,3 +54,4 @@ When you change behavior, ask:
 - Is this an **API contract** change? Go to [API](../api/).
 - Is this a **dependency or infrastructure** concern? Go to [Tools](../tools/).
 - Is this a **layer ownership** issue? Go back to [Layers](./layers.md).
+- Is this about **process lifecycle**, scaling, or shutdown? Go to [Clustering & Shutdown](./clustering.md).
