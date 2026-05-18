@@ -30,6 +30,14 @@ scrape_configs:
           - targets: ['app:3000']
 ```
 
+## Useful links
+
+- [Prometheus docs](https://prometheus.io/docs/introduction/overview/)
+- [Prometheus exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/)
+- [prom-client (Node.js client)](https://github.com/siimon/prom-client#readme)
+- [Metric & label naming](https://prometheus.io/docs/practices/naming/)
+- [Histogram vs Summary](https://prometheus.io/docs/practices/histograms/)
+
 ## Related pages
 
 - [Grafana](./grafana.md)

@@ -47,3 +47,12 @@ flowchart TD
 - [Theory / Layers](../theory/layers.md)
 - [Prometheus](../tools/prometheus.md)
 - [Grafana](../tools/grafana.md)
+
+## Useful links
+
+- [MDN — HTTP methods](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods)
+- [MDN — HTTP status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)
+- [REST API Tutorial](https://restfulapi.net/)
+- [Microsoft REST API design guidance](https://learn.microsoft.com/azure/architecture/best-practices/api-design)
+- [Google API design guide](https://cloud.google.com/apis/design)
+- [JSON:API specification](https://jsonapi.org/) — useful pattern reference even if not adopted here
