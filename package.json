@@ -16,6 +16,7 @@
         "lint:fix": "eslint --fix",
         "lint:openapi": "spectral lint openapi.yaml",
         "lint:openapi:fix": "spectral lint openapi.yaml --format stylish",
+        "lint:asyncapi": "npx @asyncapi/cli validate asyncapi.yaml",
         "prettier": "npx prettier .",
         "prettier:check": "npx prettier . --check",
         "prettier:fix": "npx prettier . --write",
@@ -40,6 +41,7 @@
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",
+        "docs:asyncapi": "npx @asyncapi/cli start studio asyncapi.yaml",
         "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",
         "complete:check": "npm run build && npm run test && npm run lint && npm run prettier:check",
         "publish:public": "npm publish --access public"

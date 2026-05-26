@@ -52,6 +52,7 @@ export default withMermaid(
                         items: [
                             { text: 'Overview', link: '/api/' },
                             { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
+                            { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' },
                             { text: 'REST Style', link: '/api/rest-style' }
                         ]
                     }

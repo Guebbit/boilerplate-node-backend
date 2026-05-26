@@ -1,0 +1,588 @@
+asyncapi: 2.6.0
+id: 'urn:boilerplate-node-backend:asyncapi:contracts'
+info:
+    title: Boilerplate Node Backend Async Contracts
+    version: 1.0.0
+    contact:
+        name: Boilerplate maintainers
+        url: https://github.com/Guebbit/boilerplate-node-backend
+        email: noreply@example.com
+    license:
+        name: AGPL-3.0
+    description: |
+        AsyncAPI contract for real-time/event-driven flows in this boilerplate.
+
+        Implemented now:
+        - WebSocket chat events over `/ws/chat`
+        - SSE observability events over `/observability/events`
+
+        Future examples (documented-only):
+        - Ecommerce domain events that can later map to Kafka/RabbitMQ topics.
+defaultContentType: application/json
+tags:
+    - name: implemented
+      description: Contracts already implemented in the backend runtime.
+    - name: future-example
+      description: Contracts documented for future evolution only.
+servers:
+    websocketLocal:
+        url: localhost:3000
+        protocol: ws
+        description: Local WebSocket server (`/ws/chat`).
+    sseLocal:
+        url: localhost:3000
+        protocol: http
+        description: Local HTTP server for SSE (`/observability/events`).
+    kafkaFutureExample:
+        url: localhost:9092
+        protocol: kafka
+        description: Future example server for topic naming alignment (not implemented in this PR).
+channels:
+    realtime.chat.command.join:
+        description: '[Implemented] Client command to join the default chat room.'
+        publish:
+            operationId: websocketChatJoin
+            summary: Client sends a join command.
+            message:
+                $ref: '#/components/messages/ChatJoinCommand'
+    realtime.chat.command.message.send:
+        description: '[Implemented] Client command to send a chat message.'
+        publish:
+            operationId: websocketChatSendMessage
+            summary: Client sends a new chat message.
+            message:
+                $ref: '#/components/messages/ChatMessageSendCommand'
+    realtime.chat.event.user.joined:
+        description: '[Implemented] Broadcast when a user joins (maps to `chat:system`).'
+        subscribe:
+            operationId: websocketChatUserJoined
+            message:
+                $ref: '#/components/messages/ChatSystemUserJoinedEvent'
+    realtime.chat.event.user.left:
+        description: '[Implemented] Broadcast when a user leaves (maps to `chat:system`).'
+        subscribe:
+            operationId: websocketChatUserLeft
+            message:
+                $ref: '#/components/messages/ChatSystemUserLeftEvent'
+    realtime.chat.event.message.new:
+        description: '[Implemented] Broadcast when a new message is emitted.'
+        subscribe:
+            operationId: websocketChatMessageNew
+            message:
+                $ref: '#/components/messages/ChatMessageNewEvent'
+    realtime.chat.event.presence.updated:
+        description: '[Implemented] Broadcast of chat room presence updates.'
+        subscribe:
+            operationId: websocketChatPresenceUpdated
+            message:
+                $ref: '#/components/messages/ChatPresenceUpdatedEvent'
+    realtime.chat.event.error:
+        description: '[Implemented] Chat protocol validation/runtime error sent to a client.'
+        subscribe:
+            operationId: websocketChatError
+            message:
+                $ref: '#/components/messages/ChatErrorEvent'
+    observability.metrics.snapshot:
+        description: '[Implemented] Initial metrics snapshot sent on SSE connect.'
+        subscribe:
+            operationId: sseMetricsSnapshot
+            message:
+                $ref: '#/components/messages/MetricsSnapshotEvent'
+    observability.metrics.updated:
+        description: '[Implemented] Periodic SSE metrics update.'
+        subscribe:
+            operationId: sseMetricsUpdated
+            message:
+                $ref: '#/components/messages/MetricsUpdatedEvent'
+    observability.heartbeat:
+        description: '[Implemented] SSE heartbeat event.'
+        subscribe:
+            operationId: sseHeartbeat
+            message:
+                $ref: '#/components/messages/HeartbeatEvent'
+    ecommerce.order.created:
+        description: '[Future example] Order created domain event contract (not implemented).'
+        subscribe:
+            operationId: ecommerceOrderCreated
+            message:
+                $ref: '#/components/messages/OrderCreatedEvent'
+    ecommerce.payment.succeeded:
+        description: '[Future example] Payment success domain event contract (not implemented).'
+        subscribe:
+            operationId: ecommercePaymentSucceeded
+            message:
+                $ref: '#/components/messages/PaymentSucceededEvent'
+    ecommerce.payment.failed:
+        description: '[Future example] Payment failure domain event contract (not implemented).'
+        subscribe:
+            operationId: ecommercePaymentFailed
+            message:
+                $ref: '#/components/messages/PaymentFailedEvent'
+    ecommerce.inventory.updated:
+        description: '[Future example] Inventory update domain event contract (not implemented).'
+        subscribe:
+            operationId: ecommerceInventoryUpdated
+            message:
+                $ref: '#/components/messages/InventoryUpdatedEvent'
+    ecommerce.cart.checked_out:
+        description: '[Future example] Cart checkout domain event contract (not implemented).'
+        subscribe:
+            operationId: ecommerceCartCheckedOut
+            message:
+                $ref: '#/components/messages/CartCheckedOutEvent'
+components:
+    messages:
+        ChatJoinCommand:
+            name: ChatJoinCommand
+            messageId: realtime.chat.command.join
+            title: Chat join command
+            payload:
+                type: object
+                required:
+                    - type
+                    - payload
+                properties:
+                    type:
+                        type: string
+                        enum:
+                            - chat:join
+                    payload:
+                        type: object
+                        required:
+                            - username
+                        properties:
+                            username:
+                                type: string
+                                minLength: 1
+                                maxLength: 32
+                            room:
+                                type: string
+                                enum:
+                                    - general
+                        additionalProperties: false
+                additionalProperties: false
+        ChatMessageSendCommand:
+            name: ChatMessageSendCommand
+            messageId: realtime.chat.command.message.send
+            title: Chat message send command
+            payload:
+                type: object
+                required:
+                    - type
+                    - payload
+                properties:
+                    type:
+                        type: string
+                        enum:
+                            - chat:message:send
+                    payload:
+                        type: object
+                        required:
+                            - message
+                        properties:
+                            message:
+                                type: string
+                                minLength: 1
+                                maxLength: 500
+                        additionalProperties: false
+                additionalProperties: false
+        ChatSystemUserJoinedEvent:
+            name: ChatSystemUserJoinedEvent
+            messageId: realtime.chat.event.user.joined
+            title: User joined room notice
+            payload:
+                $ref: '#/components/schemas/ChatSystemPayload'
+            examples:
+                - payload:
+                      type: chat:system
+                      payload:
+                          room: general
+                          message: alice joined general
+                          timestamp: '2026-01-01T12:00:00.000Z'
+        ChatSystemUserLeftEvent:
+            name: ChatSystemUserLeftEvent
+            messageId: realtime.chat.event.user.left
+            title: User left room notice
+            payload:
+                $ref: '#/components/schemas/ChatSystemPayload'
+            examples:
+                - payload:
+                      type: chat:system
+                      payload:
+                          room: general
+                          message: alice left general
+                          timestamp: '2026-01-01T12:05:00.000Z'
+        ChatMessageNewEvent:
+            name: ChatMessageNewEvent
+            messageId: realtime.chat.event.message.new
+            title: New chat message event
+            payload:
+                $ref: '#/components/schemas/ChatMessagePayload'
+        ChatPresenceUpdatedEvent:
+            name: ChatPresenceUpdatedEvent
+            messageId: realtime.chat.event.presence.updated
+            title: Chat room presence event
+            payload:
+                $ref: '#/components/schemas/ChatPresencePayload'
+        ChatErrorEvent:
+            name: ChatErrorEvent
+            messageId: realtime.chat.event.error
+            title: Chat error event
+            payload:
+                type: object
+                required:
+                    - type
+                    - payload
+                properties:
+                    type:
+                        type: string
+                        enum:
+                            - chat:error
+                    payload:
+                        type: object
+                        required:
+                            - message
+                        properties:
+                            message:
+                                type: string
+                        additionalProperties: false
+                additionalProperties: false
+        MetricsSnapshotEvent:
+            name: MetricsSnapshotEvent
+            messageId: observability.metrics.snapshot
+            title: Initial observability metrics snapshot
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+        MetricsUpdatedEvent:
+            name: MetricsUpdatedEvent
+            messageId: observability.metrics.updated
+            title: Periodic observability metrics update
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+        HeartbeatEvent:
+            name: HeartbeatEvent
+            messageId: observability.heartbeat
+            title: Observability heartbeat
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+        OrderCreatedEvent:
+            name: OrderCreatedEvent
+            messageId: ecommerce.order.created
+            title: Ecommerce example - order created
+            payload:
+                type: object
+                required:
+                    - eventName
+                    - eventId
+                    - occurredAt
+                    - orderId
+                    - userId
+                    - totalAmount
+                    - currency
+                properties:
+                    eventName:
+                        type: string
+                        enum:
+                            - ecommerce.order.created
+                    eventId:
+                        type: string
+                        format: uuid
+                    occurredAt:
+                        type: string
+                        format: date-time
+                    orderId:
+                        type: string
+                    userId:
+                        type: string
+                    totalAmount:
+                        type: number
+                    currency:
+                        type: string
+                        minLength: 3
+                        maxLength: 3
+                additionalProperties: false
+        PaymentSucceededEvent:
+            name: PaymentSucceededEvent
+            messageId: ecommerce.payment.succeeded
+            title: Ecommerce example - payment succeeded
+            payload:
+                $ref: '#/components/schemas/PaymentEventBase'
+            examples:
+                - payload:
+                      eventName: ecommerce.payment.succeeded
+                      eventId: d6f58c4a-a6e9-4ac8-83d9-093ff79df57d
+                      occurredAt: '2026-01-01T13:00:00.000Z'
+                      orderId: ord_1001
+                      paymentId: pay_9001
+                      amount: 59.9
+                      currency: EUR
+        PaymentFailedEvent:
+            name: PaymentFailedEvent
+            messageId: ecommerce.payment.failed
+            title: Ecommerce example - payment failed
+            payload:
+                allOf:
+                    - $ref: '#/components/schemas/PaymentEventBase'
+                    - type: object
+                      required:
+                          - failureReason
+                      properties:
+                          eventName:
+                              type: string
+                              enum:
+                                  - ecommerce.payment.failed
+                          failureReason:
+                              type: string
+                              minLength: 1
+        InventoryUpdatedEvent:
+            name: InventoryUpdatedEvent
+            messageId: ecommerce.inventory.updated
+            title: Ecommerce example - inventory updated
+            payload:
+                type: object
+                required:
+                    - eventName
+                    - eventId
+                    - occurredAt
+                    - productId
+                    - delta
+                    - availableStock
+                properties:
+                    eventName:
+                        type: string
+                        enum:
+                            - ecommerce.inventory.updated
+                    eventId:
+                        type: string
+                        format: uuid
+                    occurredAt:
+                        type: string
+                        format: date-time
+                    productId:
+                        type: string
+                    delta:
+                        type: integer
+                    availableStock:
+                        type: integer
+                        minimum: 0
+                additionalProperties: false
+        CartCheckedOutEvent:
+            name: CartCheckedOutEvent
+            messageId: ecommerce.cart.checked_out
+            title: Ecommerce example - cart checked out
+            payload:
+                type: object
+                required:
+                    - eventName
+                    - eventId
+                    - occurredAt
+                    - cartId
+                    - userId
+                    - orderId
+                    - itemCount
+                properties:
+                    eventName:
+                        type: string
+                        enum:
+                            - ecommerce.cart.checked_out
+                    eventId:
+                        type: string
+                        format: uuid
+                    occurredAt:
+                        type: string
+                        format: date-time
+                    cartId:
+                        type: string
+                    userId:
+                        type: string
+                    orderId:
+                        type: string
+                    itemCount:
+                        type: integer
+                        minimum: 1
+                additionalProperties: false
+    schemas:
+        ChatSystemPayload:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:system
+                payload:
+                    type: object
+                    required:
+                        - message
+                        - room
+                        - timestamp
+                    properties:
+                        message:
+                            type: string
+                        room:
+                            type: string
+                            enum:
+                                - general
+                        timestamp:
+                            type: string
+                            format: date-time
+                    additionalProperties: false
+            additionalProperties: false
+        ChatMessagePayload:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:message
+                payload:
+                    type: object
+                    required:
+                        - id
+                        - username
+                        - room
+                        - message
+                        - timestamp
+                    properties:
+                        id:
+                            type: string
+                        username:
+                            type: string
+                        room:
+                            type: string
+                            enum:
+                                - general
+                        message:
+                            type: string
+                        timestamp:
+                            type: string
+                            format: date-time
+                    additionalProperties: false
+            additionalProperties: false
+        ChatPresencePayload:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:presence
+                payload:
+                    type: object
+                    required:
+                        - room
+                        - users
+                    properties:
+                        room:
+                            type: string
+                            enum:
+                                - general
+                        users:
+                            type: array
+                            items:
+                                type: string
+                    additionalProperties: false
+            additionalProperties: false
+        ObservabilityMetricsPayload:
+            type: object
+            required:
+                - timestamp
+                - uptimeSeconds
+                - memory
+                - http
+                - realtime
+            properties:
+                timestamp:
+                    type: string
+                    format: date-time
+                uptimeSeconds:
+                    type: integer
+                    minimum: 0
+                memory:
+                    type: object
+                    required:
+                        - rss
+                        - heapUsed
+                        - heapTotal
+                        - external
+                    properties:
+                        rss:
+                            type: integer
+                            minimum: 0
+                        heapUsed:
+                            type: integer
+                            minimum: 0
+                        heapTotal:
+                            type: integer
+                            minimum: 0
+                        external:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+                http:
+                    type: object
+                    required:
+                        - totalRequests
+                        - totalErrors
+                    properties:
+                        totalRequests:
+                            type: integer
+                            minimum: 0
+                        totalErrors:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+                realtime:
+                    type: object
+                    required:
+                        - websocketConnections
+                        - sseClients
+                    properties:
+                        websocketConnections:
+                            type: integer
+                            minimum: 0
+                        sseClients:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+            additionalProperties: false
+        PaymentEventBase:
+            type: object
+            required:
+                - eventName
+                - eventId
+                - occurredAt
+                - orderId
+                - paymentId
+                - amount
+                - currency
+            properties:
+                eventName:
+                    type: string
+                    enum:
+                        - ecommerce.payment.succeeded
+                        - ecommerce.payment.failed
+                eventId:
+                    type: string
+                    format: uuid
+                occurredAt:
+                    type: string
+                    format: date-time
+                orderId:
+                    type: string
+                paymentId:
+                    type: string
+                amount:
+                    type: number
+                currency:
+                    type: string
+                    minLength: 3
+                    maxLength: 3
+            additionalProperties: false
