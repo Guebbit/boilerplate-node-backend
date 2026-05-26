@@ -9,18 +9,15 @@ For this boilerplate, keep REST and async contracts separate:
 
 Current scope of `asyncapi.yaml`:
 
-- Implemented now:
-  - WebSocket chat contracts (`/ws/chat`)
-  - SSE observability contracts (`/observability/events`)
-- Future examples (documented only):
-  - ecommerce events (`order.created`, `payment.*`, `inventory.updated`, `cart.checked_out`)
-
-Kafka/RabbitMQ runtime wiring is intentionally out of scope for this PR.
+- WebSocket chat contracts (`/ws/chat`)
+- SSE observability contracts (`/observability/events`)
+- Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
 
 ## Commands used in this repo
 
 ```bash
 npm run lint:asyncapi
+npm run gen:asyncapi-types
 npm run docs:asyncapi
 ```
 
@@ -30,6 +27,6 @@ npm run docs:asyncapi
 - AsyncAPI describes message/event contracts across async transports.
 - Together they provide one contract layer for REST and one for real-time/event-driven flows.
 
-## Naming guidance for future Kafka adoption
+## Naming convention
 
-Channels use topic-friendly naming (for example `ecommerce.order.created`) so the same contracts can map naturally to Kafka topics in a future PR.
+Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`) so the same contracts can map naturally to Kafka topics in a future PR.

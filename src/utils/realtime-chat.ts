@@ -7,15 +7,20 @@ import {
     type TChatRoom
 } from '@utils/realtime-contracts';
 
+// Per-connection state: username (set after join) and current room.
 interface IChatClientState {
     username?: string;
     room: TChatRoom;
 }
 
+// In-memory map of active WebSocket connections → their chat state.
 const chatClients = new Map<WebSocket, IChatClientState>();
+
+// Limits enforced server-side, mirroring asyncapi.yaml schema constraints.
 const MAX_USERNAME_LENGTH = 32;
 const MAX_MESSAGE_LENGTH = 500;
 
+// Safe JSON parse — returns undefined on malformed input instead of throwing.
 const safeJsonParse = (input: string): unknown => {
     try {
         return JSON.parse(input) as unknown;
@@ -24,16 +29,19 @@ const safeJsonParse = (input: string): unknown => {
     }
 };
 
+// Sends a typed server event to a single client only if the socket is still open.
 const sendEvent = (ws: WebSocket, event: TChatServerEvent) => {
     if (ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify(event));
 };
 
+// Returns the list of joined usernames in a room (used for presence updates).
 const getActiveUsernames = (room: TChatRoom): string[] =>
     [...chatClients.values()]
         .filter((client) => client.room === room && Boolean(client.username))
         .map((client) => client.username as string);
 
+// Sends an event to every connected client that is inside the given room.
 const broadcastToRoom = (room: TChatRoom, event: TChatServerEvent) => {
     for (const [client, state] of chatClients) {
         if (state.room !== room) continue;
@@ -41,6 +49,7 @@ const broadcastToRoom = (room: TChatRoom, event: TChatServerEvent) => {
     }
 };
 
+// Broadcasts the current user-list for a room so all clients stay in sync.
 const emitPresence = (room: TChatRoom) =>
     broadcastToRoom(room, {
         type: 'chat:presence',
@@ -50,6 +59,7 @@ const emitPresence = (room: TChatRoom) =>
         }
     });
 
+// Parses and validates a raw WebSocket message into a typed client event.
 const toClientEvent = (rawMessage: RawData): TChatClientEvent | undefined => {
     const parsed = safeJsonParse(
         rawMessage instanceof Buffer ? rawMessage.toString('utf8') : String(rawMessage)
@@ -59,16 +69,19 @@ const toClientEvent = (rawMessage: RawData): TChatClientEvent | undefined => {
     return parsed as TChatClientEvent;
 };
 
+// Sends a chat:error event back to the offending client.
 const emitError = (ws: WebSocket, message: string) =>
     sendEvent(ws, {
         type: 'chat:error',
         payload: { message }
     });
 
+// Called on new WebSocket connection — registers the client in the default room.
 export const onChatConnected = (ws: WebSocket) => {
     chatClients.set(ws, { room: DEFAULT_CHAT_ROOM });
 };
 
+// Called on disconnect — removes the client and notifies the room if the user had joined.
 export const onChatDisconnected = (ws: WebSocket) => {
     const state = chatClients.get(ws);
     if (!state) return;
@@ -87,6 +100,7 @@ export const onChatDisconnected = (ws: WebSocket) => {
     emitPresence(state.room);
 };
 
+// Main message handler — dispatches join and message-send commands.
 export const onChatMessage = (ws: WebSocket, rawMessage: RawData) => {
     const event = toClientEvent(rawMessage);
     if (!event) {
@@ -112,6 +126,7 @@ export const onChatMessage = (ws: WebSocket, rawMessage: RawData) => {
         }
 
         state.username = username;
+        // Acknowledge the join to the joining client only.
         sendEvent(ws, {
             type: 'chat:joined',
             payload: {
@@ -149,6 +164,7 @@ export const onChatMessage = (ws: WebSocket, rawMessage: RawData) => {
         return;
     }
 
+    // Broadcast the new message to everyone in the room with a stable UUID.
     broadcastToRoom(state.room, {
         type: 'chat:message',
         payload: {
@@ -161,8 +177,10 @@ export const onChatMessage = (ws: WebSocket, rawMessage: RawData) => {
     });
 };
 
+// Returns the total number of open WebSocket connections (used by observability).
 export const getActiveWebSocketConnections = (): number => chatClients.size;
 
+// Clears all state — intended for tests only.
 export const clearRealtimeChatState = () => {
     chatClients.clear();
 };

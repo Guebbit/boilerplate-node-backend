@@ -1,6 +1,9 @@
+// Default room name — mirrors the `enum: [general]` constraint in asyncapi.yaml.
 export const DEFAULT_CHAT_ROOM = 'general';
 
 export type TChatRoom = typeof DEFAULT_CHAT_ROOM;
+
+// --- Chat client → server commands ---
 
 export interface IChatJoinEvent {
     type: 'chat:join';
@@ -17,7 +20,10 @@ export interface IChatMessageSendEvent {
     };
 }
 
+// Union of all messages a client can send to the server.
 export type TChatClientEvent = IChatJoinEvent | IChatMessageSendEvent;
+
+// --- Chat server → client events ---
 
 export interface IChatSystemEvent {
     type: 'chat:system';
@@ -62,12 +68,15 @@ export interface IChatErrorEvent {
     };
 }
 
+// Union of all messages the server can push to clients.
 export type TChatServerEvent =
     | IChatSystemEvent
     | IChatPresenceEvent
     | IChatMessageEvent
     | IChatJoinedEvent
     | IChatErrorEvent;
+
+// --- SSE observability event names (mirrors asyncapi.yaml channel names) ---
 
 export const OBSERVABILITY_SSE_EVENTS = {
     SNAPSHOT: 'metrics.snapshot',
@@ -78,6 +87,7 @@ export const OBSERVABILITY_SSE_EVENTS = {
 export type TObservabilitySseEventName =
     (typeof OBSERVABILITY_SSE_EVENTS)[keyof typeof OBSERVABILITY_SSE_EVENTS];
 
+// Payload shape for all three SSE event types (snapshot / update / heartbeat).
 export interface IObservabilityMetricsPayload {
     timestamp: string;
     uptimeSeconds: number;
@@ -95,4 +105,17 @@ export interface IObservabilityMetricsPayload {
         websocketConnections: number;
         sseClients: number;
     };
+}
+
+// --- Ecommerce domain events ---
+
+// Emitted after a successful cart checkout; matches the asyncapi.yaml CartCheckedOutEvent schema.
+export interface ICartCheckedOutEvent {
+    eventName: 'ecommerce.cart.checked_out';
+    eventId: string;
+    occurredAt: string;
+    cartId: string;
+    userId: string;
+    orderId: string;
+    itemCount: number;
 }
