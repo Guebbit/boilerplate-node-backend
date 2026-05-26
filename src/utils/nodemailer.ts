@@ -107,6 +107,6 @@ export const enqueueEmail = (
             // Fallback: queue publish failed, send directly.
             return nodemailer(request, templateName, data).then(() => {});
         }
-        logger.debug('Email job enqueued.', { to: request.to, template: templateName });
+        logger.debug({ message: 'Email job enqueued.', to: request.to, template: templateName });
     });
 };
