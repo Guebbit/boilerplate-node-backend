@@ -34,6 +34,7 @@ export default withMermaid(
                             { text: 'Security', link: '/tools/security' },
                             { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
                             { text: 'Redis Cache', link: '/tools/redis-cache' },
+                            { text: 'RabbitMQ', link: '/tools/rabbitmq' },
                             { text: 'Email & PDF Rendering', link: '/tools/email-and-rendering' },
                             { text: 'WebSockets', link: '/tools/websockets' },
                             { text: 'Winston & Audit Logs', link: '/tools/winston' },

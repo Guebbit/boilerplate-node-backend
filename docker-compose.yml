@@ -29,6 +29,7 @@ services:
             MONGODB_URI: 'mongodb://database:27017/${DB_NAME:-boilerplate_mongodb}' # Mongodb connection string. "database" is the service name of the database service.
             NODE_ENV: 'development' # Node environment (production or development)
             NODE_REDIS_URL: 'redis://redis:6379'
+            NODE_RABBITMQ_URL: '******rabbitmq:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
             # Observability: send traces to Tempo over OTLP/HTTP.
             OTEL_EXPORTER_OTLP_ENDPOINT: 'http://tempo:4318'
@@ -63,6 +64,7 @@ services:
         depends_on:
             - database
             - redis
+            - rabbitmq
             - tempo
 
         # Health check to verify the container is ready to accept traffic
@@ -113,6 +115,19 @@ services:
         ports:
             - '${NODE_REDIS_PORT:-6379}:6379'
 
+    # RabbitMQ: message broker for async tasks (email, PDF generation, etc.).
+    rabbitmq:
+        image: rabbitmq:3-management
+        restart: unless-stopped
+        environment:
+            RABBITMQ_DEFAULT_USER: guest
+            RABBITMQ_DEFAULT_PASS: guest
+        ports:
+            - '5672:5672' # AMQP protocol
+            - '15672:15672' # Management UI
+        volumes:
+            - rabbitmq_volume:/var/lib/rabbitmq
+
     # Tempo: stores OpenTelemetry traces emitted by the app. Receives OTLP/HTTP on :4318.
     tempo:
         image: grafana/tempo:latest
@@ -144,6 +159,7 @@ services:
 volumes:
     boilerplate_mongodb_volume:
     tempo_volume:
+    rabbitmq_volume:
 
 # Commands:
 # podman ps: list running containers (-a for all)

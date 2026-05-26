@@ -16,6 +16,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { start, stopDatabase } from '@utils/database';
 import { startCache, stopCache } from '@utils/cache';
+import { startQueue, stopQueue } from '@utils/queue';
 import { logger, auditLogger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { requestLogger } from '@middlewares/request-logger';
@@ -103,6 +104,7 @@ export const startServer = () => {
         .then(() => validateRequiredEnvironment())
         .then(() => start())
         .then(() => startCache())
+        .then(() => startQueue())
         .then(() =>
             i18next.init({
                 lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
@@ -140,6 +142,7 @@ export const stopServer = () => {
             return closeServer(server);
         })
         .then(() => stopCache())
+        .then(() => stopQueue())
         .then(() => stopDatabase())
         .then(() => shutdownAnalytics())
         .then(() => shutdownTracing())
