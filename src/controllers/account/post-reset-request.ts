@@ -4,7 +4,7 @@ import { userService } from '@services/users';
 import { userRepository } from '@repositories/users';
 import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
-import { nodemailer } from '@utils/nodemailer';
+import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
@@ -38,7 +38,7 @@ export const postResetRequest = (
             })
             .then((data) => {
                 if (data?.token)
-                    void nodemailer(
+                    void enqueueEmail(
                         {
                             to: email,
                             subject: 'Password reset'

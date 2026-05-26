@@ -3,7 +3,7 @@ import { t } from 'i18next';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
-import { nodemailer } from '@utils/nodemailer';
+import { enqueueEmail } from '@utils/nodemailer';
 import { orderCreatedTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -36,7 +36,7 @@ export const postOrders = (
             return;
         }
 
-        void nodemailer(
+        void enqueueEmail(
             {
                 to: request.user!.email,
                 subject: 'Order confirmed'
