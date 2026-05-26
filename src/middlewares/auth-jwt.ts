@@ -48,23 +48,23 @@ const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
     switch (remember) {
         // eslint-disable-next-line unicorn/switch-case-braces
         case ERefreshTokenExpiryTime.SHORT:
-            return process.env.NODE_REFRESH_TOKEN_SECRET_TIME_SHORT
-                ? Number.parseInt(process.env.NODE_REFRESH_TOKEN_SECRET_TIME_SHORT)
+            return process.env.NODE_TOKEN_REFRESH_TIME_SHORT
+                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_SHORT)
                 : 0;
         // eslint-disable-next-line unicorn/switch-case-braces
         case ERefreshTokenExpiryTime.MEDIUM:
-            return process.env.NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM
-                ? Number.parseInt(process.env.NODE_REFRESH_TOKEN_SECRET_TIME_MEDIUM)
+            return process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM
+                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM)
                 : 0;
         // eslint-disable-next-line unicorn/switch-case-braces
         case ERefreshTokenExpiryTime.LONG:
-            return process.env.NODE_REFRESH_TOKEN_SECRET_TIME_LONG
-                ? Number.parseInt(process.env.NODE_REFRESH_TOKEN_SECRET_TIME_LONG)
+            return process.env.NODE_TOKEN_REFRESH_TIME_LONG
+                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_LONG)
                 : 0;
     }
     // if undefined or none of the above: access time
-    return process.env.NODE_ACCESS_TOKEN_SECRET_TIME
-        ? Number.parseInt(process.env.NODE_ACCESS_TOKEN_SECRET_TIME)
+    return process.env.NODE_TOKEN_ACCESS_TIME
+        ? Number.parseInt(process.env.NODE_TOKEN_ACCESS_TIME)
         : 0;
 };
 
@@ -90,7 +90,7 @@ export const getTokenData = (token: string) => decode(token);
  */
 export const verifyAccessToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
-        verify(token, process.env.NODE_ACCESS_TOKEN_SECRET ?? '', (error, data) => {
+        verify(token, process.env.NODE_TOKEN_ACCESS ?? '', (error, data) => {
             if (error) return reject(error);
             resolve(data as ITokenData);
         });
@@ -103,7 +103,7 @@ export const verifyAccessToken = (token: string): Promise<ITokenData> =>
  */
 export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
-        verify(token, process.env.NODE_REFRESH_TOKEN_SECRET ?? '', (error, data) => {
+        verify(token, process.env.NODE_TOKEN_REFRESH ?? '', (error, data) => {
             // check if token is not invalid by itself
             if (error) {
                 reject(error);
@@ -148,7 +148,7 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
                 {
                     id
                 } as ITokenData,
-                process.env.NODE_REFRESH_TOKEN_SECRET ?? '',
+                process.env.NODE_TOKEN_REFRESH ?? '',
                 {
                     expiresIn: getExpiryTime(remember),
                     algorithm: 'HS256'
@@ -237,11 +237,11 @@ export const createAccessToken = (refreshToken: string) =>
             {
                 id
             } as ITokenData,
-            process.env.NODE_ACCESS_TOKEN_SECRET ?? '',
+            process.env.NODE_TOKEN_ACCESS ?? '',
             {
                 // 600 = 10 minutes
-                expiresIn: process.env.NODE_ACCESS_TOKEN_SECRET_TIME
-                    ? Number.parseInt(process.env.NODE_ACCESS_TOKEN_SECRET_TIME)
+                expiresIn: process.env.NODE_TOKEN_ACCESS_TIME
+                    ? Number.parseInt(process.env.NODE_TOKEN_ACCESS_TIME)
                     : 0,
                 algorithm: 'HS256'
             }

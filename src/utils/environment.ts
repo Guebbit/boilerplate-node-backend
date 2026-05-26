@@ -1,4 +1,4 @@
-const REQUIRED_ENV_KEYS = ['NODE_ACCESS_TOKEN_SECRET', 'NODE_REFRESH_TOKEN_SECRET'] as const;
+const REQUIRED_ENV_KEYS = ['NODE_TOKEN_ACCESS', 'NODE_TOKEN_REFRESH'] as const;
 
 /**
  * Fail fast on missing mandatory configuration so runtime errors do not appear only after serving traffic.

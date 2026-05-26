@@ -25,8 +25,8 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 2. Create env file:
     - `cp .env-example .env`
 3. Set required environment variables in `.env`:
-    - `NODE_ACCESS_TOKEN_SECRET`
-    - `NODE_REFRESH_TOKEN_SECRET`
+    - `NODE_TOKEN_ACCESS`
+    - `NODE_TOKEN_REFRESH`
     - Database config:
         - Preferred: `NODE_DB_URI`
         - Or fallback: `NODE_MONGODB_HOST` + `NODE_MONGODB_PORT` (+ optional `NODE_MONGODB_NAME`)

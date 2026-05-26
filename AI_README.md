@@ -32,5 +32,5 @@ Single package. REST API. Express. MongoDB. Mongoose.
 
 - Boilerplate is example, not product lore.
 - Change little, but keep flow complete.
-- Do not break contract without updating `openapi.yaml`.
+- Do not break contract without updating `openapi.yaml` (API the source of truth).
 - Keep observability and security wiring intact.
