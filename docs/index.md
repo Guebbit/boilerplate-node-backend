@@ -22,7 +22,7 @@ features:
     - title: Tooling is part of the boilerplate
       details: Security, Redis cache hooks, Prometheus, OpenTelemetry, Grafana dashboards, logging, and PostHog are all examples already wired in.
     - title: Contract-first workflow
-      details: openapi.yaml stays the source of truth for API shape, generated types, mocks, and implementation alignment.
+      details: openapi.yaml covers REST contracts and asyncapi.yaml covers realtime/event contracts.
 ---
 
 ## What this docs site is for
@@ -55,7 +55,7 @@ flowchart TD
 - **Observability**: [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
 - **Real-time / outbound**: [WebSockets](./tools/websockets.md) and [email + PDF rendering](./tools/email-and-rendering.md).
 - **Process model**: [Clustering & graceful shutdown](./theory/clustering.md).
-- **Contract**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth).
+- **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
 - **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
 
 ## Three sections, three jobs
@@ -70,13 +70,14 @@ Dependency-focused pages: runtime, security, database, cache, logs, metrics, tra
 
 ### [API](./api/)
 
-Contract-first workflow: OpenAPI, REST style, codegen, mocks, and implementation alignment.
+Contract-first workflow: OpenAPI + AsyncAPI, REST style, codegen, mocks, and implementation alignment.
 
 ## Quick visual of the current repo
 
 ```mermaid
 flowchart LR
-    Spec[openapi.yaml] --> Routes[Routes + middlewares]
+    OpenSpec[openapi.yaml] --> Routes[Routes + middlewares]
+    AsyncSpec[asyncapi.yaml] --> Realtime[WebSocket + SSE contracts]
     Routes --> Controllers[Controllers]
     Controllers --> Services[Services]
     Services --> Repositories[Repositories]
@@ -86,7 +87,7 @@ flowchart LR
     Routes --> Obs[Logs + metrics + traces]
     Controllers --> Cache[Redis cache hooks]
     Obs --> Grafana[Grafana dashboards]
-    Spec --> Types[Generated API types]
+    OpenSpec --> Types[Generated API types]
 ```
 
 ## Good starting points

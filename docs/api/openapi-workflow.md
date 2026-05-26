@@ -17,6 +17,12 @@ flowchart LR
 If the contract changes, start with the contract.
 That keeps backend, generated types, and consumers in sync.
 
+## OpenAPI vs AsyncAPI in this repository
+
+- Use OpenAPI for REST endpoint contracts.
+- Use AsyncAPI (`asyncapi.yaml`) for WebSocket/SSE/event-driven contracts.
+- Kafka transport/runtime integration is planned for a separate future PR.
+
 ## Tools around the contract
 
 | Tool                                                                                       | Job                                                |

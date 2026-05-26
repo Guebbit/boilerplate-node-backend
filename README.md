@@ -149,6 +149,21 @@ Quick check:
 curl -N http://localhost:3000/observability/events
 ```
 
+## AsyncAPI (async/event contracts)
+
+- Async contract source of truth: `asyncapi.yaml`
+- OpenAPI + AsyncAPI split in this repo:
+    - `openapi.yaml` documents REST endpoints and request/response contracts
+    - `asyncapi.yaml` documents event-driven contracts (WebSocket + SSE + future event examples)
+- Kafka is intentionally **not** implemented in this PR/runtime. The AsyncAPI file includes future-ready channel naming and ecommerce example events for later Kafka/RabbitMQ adoption.
+
+### Validate / view AsyncAPI
+
+- Validate spec:
+    - `npm run lint:asyncapi`
+- Open AsyncAPI Studio locally:
+    - `npm run docs:asyncapi`
+
 ## Scripts
 
 - `npm run dev` - run API in watch mode
@@ -156,6 +171,7 @@ curl -N http://localhost:3000/observability/events
 - `npm run dev:docker:cluster` - docker/podman clustered dev mode
 - `npm run ts-check` - TypeScript type-check
 - `npm run lint` - lint checks
+- `npm run lint:asyncapi` - validate AsyncAPI contract
 - `npm run prettier:check` - prettier non-mutating formatting check
 - `npm run test` - unit + integration tests
 - `npm run test:unit` - unit tests
@@ -197,6 +213,14 @@ npm ci
     - `npm run genapi`
 
 Use the generated `api/` output as derived artifacts from `openapi.yaml`.
+
+## AsyncAPI workflow
+
+- Source of truth for async contracts: `asyncapi.yaml`
+- This contract currently documents:
+    - implemented WebSocket chat contracts
+    - implemented SSE observability contracts
+    - future ecommerce example events (documented only)
 
 ## Frontend/backend tandem sync discipline
 
