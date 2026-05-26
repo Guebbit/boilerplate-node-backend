@@ -8,6 +8,8 @@ import {
 import { getDirname } from './helpers-filesystem';
 import { logger } from '@utils/winston';
 import { withSpan } from '@utils/tracer';
+import { isQueueEnabled, publishToQueue } from '@utils/queue';
+import { EMAIL_QUEUE } from '../workers/email.worker';
 
 // Create a transporter object using the default SMTP transport
 export const transporter = createTransport({
@@ -81,5 +83,30 @@ export const nodemailer = (
                     return info;
                 })
         );
+    });
+};
+
+/**
+ * Queue-aware email dispatch.
+ * When RabbitMQ is available the job is published for async processing;
+ * otherwise it falls back to sending the email directly (same as before).
+ */
+export const enqueueEmail = (
+    request: SendMailOptions,
+    templateName: string,
+    data: Data
+): Promise<void> => {
+    if (!isQueueEnabled())
+        return nodemailer(request, templateName, data).then(() => {});
+
+    return publishToQueue({
+        queue: EMAIL_QUEUE,
+        payload: { request, templateName, data }
+    }).then((published) => {
+        if (!published) {
+            // Fallback: queue publish failed, send directly.
+            return nodemailer(request, templateName, data).then(() => {});
+        }
+        logger.debug('Email job enqueued.', { to: request.to, template: templateName });
     });
 };

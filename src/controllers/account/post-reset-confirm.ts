@@ -5,7 +5,7 @@ import { userRepository } from '@repositories/users';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetConfirmRequest } from '@types';
-import { nodemailer } from '@utils/nodemailer';
+import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
@@ -66,7 +66,7 @@ export const postResetConfirm = (
                 user.tokens = user.tokens.filter((tk) => tk.token !== token);
                 return userRepository.save(user).then(() => {
                     // send confirmation email (no need to wait)
-                    void nodemailer(
+                    void enqueueEmail(
                         {
                             to: user.email,
                             subject: 'Password change confirmed'

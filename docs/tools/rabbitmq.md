@@ -12,11 +12,15 @@
 
 ## Where the code lives
 
-| Concern              | File                        |
-| -------------------- | --------------------------- |
-| Connection & helpers | `src/utils/queue.ts`        |
-| Startup hook         | `src/app.ts` → `startQueue` |
-| Shutdown hook        | `src/app.ts` → `stopQueue`  |
+| Concern              | File                              |
+| -------------------- | --------------------------------- |
+| Connection & helpers | `src/utils/queue.ts`              |
+| Queue-aware dispatch | `src/utils/nodemailer.ts` → `enqueueEmail()` |
+| Email worker         | `src/workers/email.worker.ts`     |
+| PDF worker           | `src/workers/pdf.worker.ts`       |
+| Worker registration  | `src/workers/index.ts`            |
+| Startup hook         | `src/app.ts` → `startQueue` + `registerWorkers` |
+| Shutdown hook        | `src/app.ts` → `stopQueue`        |
 
 ## Architecture
 
@@ -27,6 +31,25 @@ flowchart LR
     Worker --> SMTP[Send email]
     Worker --> PDF[Generate PDF]
 ```
+
+## How it's used
+
+### Emails (fire-and-forget)
+
+All controllers that send emails use `enqueueEmail()` from `src/utils/nodemailer.ts`:
+
+- **Queue enabled** → the email job is published to the `emails` queue. The `email.worker.ts` consumer picks it up and calls `nodemailer()` in the background.
+- **Queue disabled** → falls back to calling `nodemailer()` directly (same behavior as before).
+
+Controllers using it:
+- `post-reset-request.ts` — password reset email
+- `post-reset-confirm.ts` — password change confirmation
+- `post-orders.ts` — order confirmation email
+- `post-feedback-contact.ts` — contact form notification
+
+### PDF generation (async)
+
+The `pdf.worker.ts` consumer handles async PDF generation jobs (e.g. batch invoices, reports). The synchronous invoice endpoint (`GET /orders/:id/invoice`) still renders PDFs inline since it must return the file directly to the client.
 
 ## Configuration
 

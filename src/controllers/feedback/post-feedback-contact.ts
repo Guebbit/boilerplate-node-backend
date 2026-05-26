@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { successResponse, rejectResponse } from '@utils/response';
-import { nodemailer } from '@utils/nodemailer';
+import { enqueueEmail } from '@utils/nodemailer';
 import { logger } from '@utils/winston';
 import type { CreateFeedbackRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
@@ -34,7 +34,7 @@ export const postFeedbackContact = (
                 process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';
 
             if (notifyEmail)
-                void nodemailer(
+                void enqueueEmail(
                     {
                         to: notifyEmail,
                         subject: `New contact request: ${createdFeedbackRequest.subject}`
