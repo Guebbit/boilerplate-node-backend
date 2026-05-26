@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events';
 import { logger } from '@utils/winston';
 import type { ICartCheckedOutEvent } from '@utils/realtime-contracts';
 
