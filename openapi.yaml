@@ -1269,6 +1269,22 @@ paths:
                             schema:
                                 type: string
 
+    /observability/events:
+        get:
+            tags: [Admin]
+            summary: Observability SSE stream
+            description: |
+                Live Server-Sent Events stream for demo dashboards.
+                Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
+            operationId: getObservabilityEvents
+            responses:
+                '200':
+                    description: Server-Sent Events stream
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+
     # --------- Admin — observability & dashboard ---------
     /admin/health:
         get:

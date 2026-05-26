@@ -38,6 +38,20 @@ export class AdminService {
         });
     }
     /**
+     * Observability SSE stream
+     * Live Server-Sent Events stream for demo dashboards.
+     * Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
+     *
+     * @returns string Server-Sent Events stream
+     * @throws ApiError
+     */
+    public static getObservabilityEvents(): CancelablePromise<string> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/observability/events',
+        });
+    }
+    /**
      * Admin health summary
      * Full JSON health snapshot for the admin dashboard.
      * Includes uptime, database status, memory, integrations, and system info.

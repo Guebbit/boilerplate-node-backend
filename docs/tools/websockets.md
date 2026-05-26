@@ -8,8 +8,9 @@ It is **opt-in** scaffolding, not a production messaging stack.
 | Concern                  | File                                          |
 | ------------------------ | --------------------------------------------- |
 | Server setup + lifecycle | `src/utils/helpers-websockets.ts`             |
-| Demo route               | `src/routes/websocket.ts`                     |
-| Demo client (dev only)   | `src/controllers/_development/get-websocket-test.ts` |
+| Chat lifecycle + state   | `src/utils/realtime-chat.ts`                  |
+| Event contracts          | `src/utils/realtime-contracts.ts`             |
+| Upgrade handler          | `src/routes/websocket.ts`                     |
 
 The implementation is built on the [`ws`](https://github.com/websockets/ws) library — the same one most Node WebSocket frameworks build on top of.
 
@@ -32,7 +33,24 @@ sequenceDiagram
     W->>W: onClose handler
 ```
 
-`setupWebSocketServer` accepts `connectionCallback`, `onMessage`, and `onClose` so the route file only describes what it wants to happen at each step. The demo route broadcasts the server time every 10 seconds to every connected client.
+`setupWebSocketServer` accepts `connectionCallback`, `onMessage`, and `onClose` so the route file only describes what it wants to happen at each step.
+
+## Chat example contract (`/ws/chat`)
+
+Client -> server events:
+
+- `chat:join` `{ username, room?: "general" }`
+- `chat:message:send` `{ message }`
+
+Server -> client events:
+
+- `chat:joined` `{ username, room }`
+- `chat:message` `{ id, username, room, message, timestamp }`
+- `chat:presence` `{ room, users }`
+- `chat:system` `{ message, room, timestamp }`
+- `chat:error` `{ message }`
+
+The room is in-memory only and defaults to `general`.
 
 ## Production notes
 

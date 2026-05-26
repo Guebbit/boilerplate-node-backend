@@ -116,4 +116,19 @@ describe('System routes', () => {
         expect(body).toContain('http_requests_total');
         expect(body).toContain('process_uptime_seconds');
     });
+
+    it('GET /observability/events returns an SSE snapshot', async () => {
+        const response = await fetch(`${baseUrl}/observability/events`);
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+        const reader = response.body?.getReader();
+        expect(reader).toBeDefined();
+        const firstChunk = await reader?.read();
+        const text = new TextDecoder().decode(firstChunk?.value);
+        await reader?.cancel();
+
+        expect(text).toContain('event: metrics.snapshot');
+        expect(text).toContain('data: ');
+    });
 });
