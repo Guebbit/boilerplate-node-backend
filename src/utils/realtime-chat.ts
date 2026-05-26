@@ -13,6 +13,7 @@ interface IChatClientState {
 }
 
 const chatClients = new Map<WebSocket, IChatClientState>();
+/** Keep demo payloads bounded so malformed clients cannot flood memory. */
 const MAX_USERNAME_LENGTH = 32;
 const MAX_MESSAGE_LENGTH = 500;
 
@@ -51,6 +52,7 @@ const emitPresence = (room: TChatRoom) =>
     });
 
 const toClientEvent = (rawMessage: RawData): TChatClientEvent | undefined => {
+    /** Parse unknown websocket payloads defensively before narrowing by event type. */
     const parsed = safeJsonParse(
         rawMessage instanceof Buffer ? rawMessage.toString('utf8') : String(rawMessage)
     ) as Partial<TChatClientEvent> | undefined;

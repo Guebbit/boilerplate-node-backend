@@ -133,7 +133,8 @@ curl http://localhost:3000/metrics
 
 Contracts are defined in:
 
-- `src/utils/realtime-contracts.ts`
+- `asyncapi.yaml` (source of truth)
+- `src/utils/realtime-contracts.generated.ts` (generated via `npm run gen:asyncapi-types`)
 
 ### SSE live metrics (`/observability/events`)
 
@@ -156,11 +157,14 @@ curl -N http://localhost:3000/observability/events
     - `openapi.yaml` documents REST endpoints and request/response contracts
     - `asyncapi.yaml` documents event-driven contracts (WebSocket + SSE + future event examples)
 - Kafka is intentionally **not** implemented in this PR/runtime. The AsyncAPI file includes future-ready channel naming and ecommerce example events for later Kafka/RabbitMQ adoption.
+- Runtime validation for websocket/SSE payloads stays lightweight in this boilerplate; TypeScript contracts are generated from AsyncAPI and used as the primary compile-time contract layer.
 
 ### Validate / view AsyncAPI
 
 - Validate spec:
     - `npm run lint:asyncapi`
+- Generate runtime TypeScript contracts:
+    - `npm run gen:asyncapi-types`
 - Open AsyncAPI Studio locally:
     - `npm run docs:asyncapi`
 
@@ -172,6 +176,7 @@ curl -N http://localhost:3000/observability/events
 - `npm run ts-check` - TypeScript type-check
 - `npm run lint` - lint checks
 - `npm run lint:asyncapi` - validate AsyncAPI contract
+- `npm run gen:asyncapi-types` - regenerate realtime TypeScript contracts from `asyncapi.yaml`
 - `npm run prettier:check` - prettier non-mutating formatting check
 - `npm run test` - unit + integration tests
 - `npm run test:unit` - unit tests

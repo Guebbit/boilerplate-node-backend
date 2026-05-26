@@ -16,7 +16,7 @@
         "lint:fix": "eslint --fix",
         "lint:openapi": "spectral lint openapi.yaml",
         "lint:openapi:fix": "spectral lint openapi.yaml --format stylish",
-        "lint:asyncapi": "npx @asyncapi/cli validate asyncapi.yaml",
+        "lint:asyncapi": "asyncapi validate asyncapi.yaml",
         "prettier": "npx prettier .",
         "prettier:check": "npx prettier . --check",
         "prettier:fix": "npx prettier . --write",
@@ -41,12 +41,14 @@
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",
-        "docs:asyncapi": "npx @asyncapi/cli start studio asyncapi.yaml",
+        "docs:asyncapi": "asyncapi start studio asyncapi.yaml",
+        "gen:asyncapi-types": "tsx scripts/generate-asyncapi-types.ts",
         "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",
         "complete:check": "npm run build && npm run test && npm run lint && npm run prettier:check",
         "publish:public": "npm publish --access public"
     },
     "devDependencies": {
+        "@asyncapi/cli": "^6.0.0",
         "@stoplight/prism-cli": "^5.14.2",
         "@stoplight/spectral-cli": "^6.15.0",
         "@stoplight/spectral-rulesets": "^1.22.0",
@@ -74,6 +76,7 @@
         "eslint-plugin-unicorn": "^63.0.0",
         "globals": "^17.4.0",
         "jest": "^30.3.0",
+        "json-schema-to-typescript": "^15.0.4",
         "jiti": "^2.6.1",
         "mermaid": "^11.14.0",
         "migrate-mongo": "^14.0.7",
@@ -86,7 +89,8 @@
         "typescript": "^5.9.3",
         "typescript-eslint": "^8.56.1",
         "vitepress": "^1.6.4",
-        "vitepress-plugin-mermaid": "^2.0.17"
+        "vitepress-plugin-mermaid": "^2.0.17",
+        "yaml": "^2.8.1"
     },
     "dependencies": {
         "@opentelemetry/api": "^1.9.1",

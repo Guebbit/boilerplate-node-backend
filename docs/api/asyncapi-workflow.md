@@ -16,13 +16,23 @@ Current scope of `asyncapi.yaml`:
   - ecommerce events (`order.created`, `payment.*`, `inventory.updated`, `cart.checked_out`)
 
 Kafka/RabbitMQ runtime wiring is intentionally out of scope for this PR.
+Those channels stay in the spec as documented future contracts and are not emitted by runtime code yet.
 
 ## Commands used in this repo
 
 ```bash
 npm run lint:asyncapi
+npm run gen:asyncapi-types
 npm run docs:asyncapi
 ```
+
+Generated realtime contracts are committed at:
+
+- `src/utils/realtime-contracts.generated.ts`
+
+Keep this file regenerated whenever `asyncapi.yaml` changes.
+
+Runtime validation is intentionally minimal in this boilerplate to keep setup small; AsyncAPI-generated TypeScript contracts are the primary contract safety layer.
 
 ## How this complements OpenAPI
 

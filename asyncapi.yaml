@@ -39,93 +39,99 @@ servers:
         description: Future example server for topic naming alignment (not implemented in this PR).
 channels:
     realtime.chat.command.join:
-        description: '[Implemented] Client command to join the default chat room.'
+        description: Client command to join the default chat room.
         publish:
             operationId: websocketChatJoin
             summary: Client sends a join command.
             message:
                 $ref: '#/components/messages/ChatJoinCommand'
     realtime.chat.command.message.send:
-        description: '[Implemented] Client command to send a chat message.'
+        description: Client command to send a chat message.
         publish:
             operationId: websocketChatSendMessage
             summary: Client sends a new chat message.
             message:
                 $ref: '#/components/messages/ChatMessageSendCommand'
     realtime.chat.event.user.joined:
-        description: '[Implemented] Broadcast when a user joins (maps to `chat:system`).'
+        description: Broadcast when a user joins (maps to `chat:system`).
         subscribe:
             operationId: websocketChatUserJoined
             message:
                 $ref: '#/components/messages/ChatSystemUserJoinedEvent'
     realtime.chat.event.user.left:
-        description: '[Implemented] Broadcast when a user leaves (maps to `chat:system`).'
+        description: Broadcast when a user leaves (maps to `chat:system`).
         subscribe:
             operationId: websocketChatUserLeft
             message:
                 $ref: '#/components/messages/ChatSystemUserLeftEvent'
+    realtime.chat.event.joined:
+        description: Confirmation event sent after a successful join command.
+        subscribe:
+            operationId: websocketChatJoined
+            message:
+                $ref: '#/components/messages/ChatJoinedEvent'
     realtime.chat.event.message.new:
-        description: '[Implemented] Broadcast when a new message is emitted.'
+        description: Broadcast when a new message is emitted.
         subscribe:
             operationId: websocketChatMessageNew
             message:
                 $ref: '#/components/messages/ChatMessageNewEvent'
     realtime.chat.event.presence.updated:
-        description: '[Implemented] Broadcast of chat room presence updates.'
+        description: Broadcast of chat room presence updates.
         subscribe:
             operationId: websocketChatPresenceUpdated
             message:
                 $ref: '#/components/messages/ChatPresenceUpdatedEvent'
     realtime.chat.event.error:
-        description: '[Implemented] Chat protocol validation/runtime error sent to a client.'
+        description: Chat protocol validation/runtime error sent to a client.
         subscribe:
             operationId: websocketChatError
             message:
                 $ref: '#/components/messages/ChatErrorEvent'
     observability.metrics.snapshot:
-        description: '[Implemented] Initial metrics snapshot sent on SSE connect.'
+        description: Initial metrics snapshot sent on SSE connect.
         subscribe:
             operationId: sseMetricsSnapshot
             message:
                 $ref: '#/components/messages/MetricsSnapshotEvent'
     observability.metrics.updated:
-        description: '[Implemented] Periodic SSE metrics update.'
+        description: Periodic SSE metrics update.
         subscribe:
             operationId: sseMetricsUpdated
             message:
                 $ref: '#/components/messages/MetricsUpdatedEvent'
     observability.heartbeat:
-        description: '[Implemented] SSE heartbeat event.'
+        description: SSE heartbeat event.
         subscribe:
             operationId: sseHeartbeat
             message:
                 $ref: '#/components/messages/HeartbeatEvent'
     ecommerce.order.created:
-        description: '[Future example] Order created domain event contract (not implemented).'
+        description: 'Order created domain event contract (documented for future Kafka/RabbitMQ runtime).'
         subscribe:
             operationId: ecommerceOrderCreated
             message:
                 $ref: '#/components/messages/OrderCreatedEvent'
     ecommerce.payment.succeeded:
-        description: '[Future example] Payment success domain event contract (not implemented).'
+        description: 'Payment success domain event contract (documented for future Kafka/RabbitMQ runtime).'
         subscribe:
             operationId: ecommercePaymentSucceeded
             message:
                 $ref: '#/components/messages/PaymentSucceededEvent'
     ecommerce.payment.failed:
-        description: '[Future example] Payment failure domain event contract (not implemented).'
+        description: 'Payment failure domain event contract (documented for future Kafka/RabbitMQ runtime).'
         subscribe:
             operationId: ecommercePaymentFailed
             message:
                 $ref: '#/components/messages/PaymentFailedEvent'
     ecommerce.inventory.updated:
-        description: '[Future example] Inventory update domain event contract (not implemented).'
+        description: 'Inventory update domain event contract (documented for future Kafka/RabbitMQ runtime).'
         subscribe:
             operationId: ecommerceInventoryUpdated
             message:
                 $ref: '#/components/messages/InventoryUpdatedEvent'
     ecommerce.cart.checked_out:
-        description: '[Future example] Cart checkout domain event contract (not implemented).'
+        description: 'Cart checkout domain event contract (documented for future Kafka/RabbitMQ runtime).'
         subscribe:
             operationId: ecommerceCartCheckedOut
             message:
@@ -224,6 +230,12 @@ components:
             title: Chat room presence event
             payload:
                 $ref: '#/components/schemas/ChatPresencePayload'
+        ChatJoinedEvent:
+            name: ChatJoinedEvent
+            messageId: realtime.chat.event.joined
+            title: Chat joined confirmation event
+            payload:
+                $ref: '#/components/schemas/ChatJoinedPayload'
         ChatErrorEvent:
             name: ChatErrorEvent
             messageId: realtime.chat.event.error
@@ -488,6 +500,30 @@ components:
                             type: array
                             items:
                                 type: string
+                    additionalProperties: false
+            additionalProperties: false
+        ChatJoinedPayload:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:joined
+                payload:
+                    type: object
+                    required:
+                        - username
+                        - room
+                    properties:
+                        username:
+                            type: string
+                        room:
+                            type: string
+                            enum:
+                                - general
                     additionalProperties: false
             additionalProperties: false
         ObservabilityMetricsPayload:

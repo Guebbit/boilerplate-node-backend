@@ -8,7 +8,9 @@ import { getHttpRequestCounters } from '@utils/observability';
 import { getActiveWebSocketConnections } from '@utils/realtime-chat';
 
 const sseClients = new Set<Response>();
+/** Short update cadence keeps dashboard cards reactive without noisy traffic. */
 const UPDATE_INTERVAL_MS = 5000;
+/** Heartbeat keeps EventSource connections warm in proxies/load balancers. */
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
 const writeEvent = (

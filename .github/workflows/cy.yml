@@ -42,13 +42,22 @@ jobs:
             - run: npm run ts-check
             - run: npm run lint
             - run: npm run lint:openapi
+            - run: npm run lint:asyncapi
             - run: npm run test:unit
             - run: npm run test:integration
             - run: npm run genapi
+            - run: npm run gen:asyncapi-types
             - name: Verify generated API artifacts are committed
               run: |
                   if [ -n "$(git status --porcelain -- api)" ]; then
                     echo "Generated api/ artifacts are stale. Run npm run genapi && npm run prettier:fix and commit api/ changes."
                     git status --short -- api
+                    exit 1
+                  fi
+            - name: Verify generated realtime contracts are committed
+              run: |
+                  if [ -n "$(git status --porcelain -- src/utils/realtime-contracts.generated.ts)" ]; then
+                    echo "Generated realtime contracts are stale. Run npm run gen:asyncapi-types && npm run prettier:fix and commit the generated file."
+                    git status --short -- src/utils/realtime-contracts.generated.ts
                     exit 1
                   fi
