@@ -99,5 +99,16 @@ export const decrementInflight = (): void => {
     httpInflightRequests.dec();
 };
 
+const sumMetricValues = (values: Array<{ value: number }>) =>
+    values.reduce((sum, value) => sum + value.value, 0);
+
+export const getHttpRequestCounters = () =>
+    Promise.all([httpRequestsTotal.get(), httpRequestErrorsTotal.get()]).then(
+        ([requestMetrics, errorMetrics]) => ({
+            totalRequests: sumMetricValues(requestMetrics.values),
+            totalErrors: sumMetricValues(errorMetrics.values)
+        })
+    );
+
 /** Serialize all registered metrics in Prometheus text format. */
 export const getPrometheusMetrics = (): Promise<string> => metricsRegistry.metrics();

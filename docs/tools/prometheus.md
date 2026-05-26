@@ -20,6 +20,18 @@ If you only care about traces, ignore this page and use [Tempo + Grafana](./temp
 
 Database query metrics are intentionally **not** Prometheus counters — Mongoose spans from OTel give richer per-query data in Tempo.
 
+## SSE metrics demo endpoint
+
+For a browser/live-dashboard demo, the boilerplate also exposes:
+
+- `GET /observability/events` (`text/event-stream`)
+
+It emits:
+
+- `metrics.snapshot` on connect
+- `metrics.updated` every 5s
+- `heartbeat` every 15s
+
 ## Add a Prometheus scrape later
 
 ```yaml

@@ -4,6 +4,7 @@ import { successResponse, rejectResponse } from '@utils/response';
 import { getHeavyLoad } from '@controllers/_development/get-heavy-load';
 import { getPrometheusMetrics, metricsRegistry } from '@utils/observability';
 import { pingCache } from '@utils/cache';
+import { streamObservabilityMetrics } from '@utils/realtime-observability';
 
 export const router = Router();
 
@@ -43,4 +44,9 @@ router.get('/metrics', (_request, response) => {
         .catch(() => {
             response.status(500).send('# metrics unavailable\n');
         });
+});
+
+/** SSE observability stream for live demos/dashboards. */
+router.get('/observability/events', (_request, response) => {
+    streamObservabilityMetrics(response);
 });

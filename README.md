@@ -121,6 +121,34 @@ curl -i \
 curl http://localhost:3000/metrics
 ```
 
+## Realtime examples
+
+### WebSocket chat (`/ws/chat`)
+
+- Connect to `ws://localhost:3000/ws/chat`
+- Join default room:
+    - `{"type":"chat:join","payload":{"username":"alice"}}`
+- Send a message:
+    - `{"type":"chat:message:send","payload":{"message":"hello"}}`
+
+Contracts are defined in:
+
+- `src/utils/realtime-contracts.ts`
+
+### SSE live metrics (`/observability/events`)
+
+- Endpoint: `GET /observability/events`
+- Event names:
+    - `metrics.snapshot` (first payload)
+    - `metrics.updated` (periodic updates)
+    - `heartbeat`
+
+Quick check:
+
+```bash
+curl -N http://localhost:3000/observability/events
+```
+
 ## Scripts
 
 - `npm run dev` - run API in watch mode

@@ -1,37 +1,32 @@
+import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { setupWebSocketServer } from '@utils/helpers-websockets';
-import { WebSocket } from 'ws';
-import { logger } from '@utils/winston';
+import { onChatConnected, onChatDisconnected, onChatMessage } from '@utils/realtime-chat';
 
-/**
- * Needed to later clear the interval
- */
-let broadcastTimeInterval: NodeJS.Timeout;
+export const CHAT_WEBSOCKET_PATH = '/ws/chat';
 
-/**
- *
- */
 export const wss = setupWebSocketServer({
-    connectionCallback: () => {
-        // Send time every 5 seconds
-        broadcastTimeInterval = setInterval(() => {
-            // Broadcast to all connected clients
-            for (const client of wss.clients)
-                if (client.readyState === WebSocket.OPEN)
-                    client.send('The time is now: ' + new Date().toISOString());
-        }, 10_000);
-    },
-    onMessage: (ws, message) => {
-        logger.info(
-            'SERVER: Client message received',
-            message instanceof Buffer ? message.toString() : message
-        );
-        ws.send('Thank you, we received your message!');
-    },
-    onClose: (ws, code, reason) => {
-        logger.info(
-            `SERVER: connection closed: ${code}`,
-            reason instanceof Buffer ? reason.toString() : reason
-        );
-        clearInterval(broadcastTimeInterval);
-    }
+    connectionCallback: (ws) => onChatConnected(ws),
+    onMessage: (ws, message) => onChatMessage(ws, message),
+    onClose: (ws) => onChatDisconnected(ws)
 });
+
+export const handleWebSocketUpgrade = (
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer
+) => {
+    const host = request.headers.host ?? 'localhost';
+    const pathname = new URL(request.url ?? '/', `http://${host}`).pathname;
+    if (pathname !== CHAT_WEBSOCKET_PATH) {
+        socket.write(
+            'HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nWebSocket endpoint not found'
+        );
+        socket.destroy();
+        return;
+    }
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+    });
+};
