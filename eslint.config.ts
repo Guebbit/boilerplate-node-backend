@@ -27,7 +27,8 @@ export default tseslint.config(
         'docs/**',
         'api',
         '.prism',
-        '.dev'
+        '.dev',
+        'scripts/**'
     ]),
 
     /**
@@ -80,6 +81,12 @@ export default tseslint.config(
                     format: ['camelCase', 'PascalCase'],
                     leadingUnderscore: 'allow',
                     trailingUnderscore: 'allow'
+                },
+                // Allow any format for identifiers that require quotes (e.g. dotted AsyncAPI channel names)
+                {
+                    selector: ['objectLiteralProperty', 'typeProperty'],
+                    modifiers: ['requiresQuotes'],
+                    format: null
                 },
                 {
                     selector: 'variable',

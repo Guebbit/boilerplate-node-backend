@@ -28,16 +28,16 @@ flowchart TD
 
 ## Read by intent
 
-| Need                                                             | Go to                                                                                                                                         |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Understand framework-level dependencies                          | [Runtime](./runtime.md)                                                                                                                       |
-| Understand security middleware and auth helpers                  | [Security](./security.md)                                                                                                                     |
-| Understand persistence and cache tools                           | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md)                                                               |
-| Understand transactional email and PDF generation                | [Email & PDF Rendering](./email-and-rendering.md)                                                                                             |
-| Understand real-time messaging scaffolding                       | [WebSockets](./websockets.md)                                                                                                                 |
+| Need                                                             | Go to                                                                                                                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Understand framework-level dependencies                          | [Runtime](./runtime.md)                                                                                                                                            |
+| Understand security middleware and auth helpers                  | [Security](./security.md)                                                                                                                                          |
+| Understand persistence and cache tools                           | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md)                                                                                    |
+| Understand transactional email and PDF generation                | [Email & PDF Rendering](./email-and-rendering.md)                                                                                                                  |
+| Understand real-time messaging scaffolding                       | [WebSockets](./websockets.md)                                                                                                                                      |
 | Understand logs, metrics, traces, dashboards, and analytics      | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Tempo](./tempo.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
-| Understand tests and docs tooling                                | [Testing & Docs](./testing-and-docs.md)                                                                                                       |
-| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                                                                                                                |
+| Understand tests and docs tooling                                | [Testing & Docs](./testing-and-docs.md)                                                                                                                            |
+| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                                                                                                                                     |
 
 ## Why this section is bigger now
 

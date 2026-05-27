@@ -2,10 +2,10 @@
 
 ## Two log streams
 
-| Stream | Purpose | Format |
-| --- | --- | --- |
-| `logger` | normal application logs (request access logs, errors, warnings) | JSON in production/test, pretty + colour in dev |
-| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON |
+| Stream        | Purpose                                                               | Format                                          |
+| ------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
+| `logger`      | normal application logs (request access logs, errors, warnings)       | JSON in production/test, pretty + colour in dev |
+| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                     |
 
 Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/utils/winston.ts`.
 
@@ -62,10 +62,10 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 ## Configuration
 
-| Env var | Effect |
-| --- | --- |
-| `NODE_LOG_LEVEL` | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
-| `NODE_SERVICE_NAME` | tag on every log entry. Useful when several services ship logs to the same aggregator. |
+| Env var             | Effect                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `NODE_LOG_LEVEL`    | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
+| `NODE_SERVICE_NAME` | tag on every log entry. Useful when several services ship logs to the same aggregator.                   |
 
 ## Redaction
 

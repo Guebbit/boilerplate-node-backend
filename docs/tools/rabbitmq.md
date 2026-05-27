@@ -4,23 +4,23 @@
 
 ## Why a queue?
 
-| Without queue                         | With queue                                     |
-| ------------------------------------- | ---------------------------------------------- |
-| Email sent inside the HTTP handler    | Message published → handler responds instantly |
-| Slow SMTP = slow API response         | Consumer retries independently                 |
-| Failure loses the job                 | Message is re-queued on failure                |
+| Without queue                      | With queue                                     |
+| ---------------------------------- | ---------------------------------------------- |
+| Email sent inside the HTTP handler | Message published → handler responds instantly |
+| Slow SMTP = slow API response      | Consumer retries independently                 |
+| Failure loses the job              | Message is re-queued on failure                |
 
 ## Where the code lives
 
-| Concern              | File                              |
-| -------------------- | --------------------------------- |
-| Connection & helpers | `src/utils/queue.ts`              |
-| Queue-aware dispatch | `src/utils/nodemailer.ts` → `enqueueEmail()` |
-| Email worker         | `src/workers/email.worker.ts`     |
-| PDF worker           | `src/workers/pdf.worker.ts`       |
-| Worker registration  | `src/workers/index.ts`            |
+| Concern              | File                                            |
+| -------------------- | ----------------------------------------------- |
+| Connection & helpers | `src/utils/queue.ts`                            |
+| Queue-aware dispatch | `src/utils/nodemailer.ts` → `enqueueEmail()`    |
+| Email worker         | `src/workers/email.worker.ts`                   |
+| PDF worker           | `src/workers/pdf.worker.ts`                     |
+| Worker registration  | `src/workers/index.ts`                          |
 | Startup hook         | `src/app.ts` → `startQueue` + `registerWorkers` |
-| Shutdown hook        | `src/app.ts` → `stopQueue`        |
+| Shutdown hook        | `src/app.ts` → `stopQueue`                      |
 
 ## Architecture
 
@@ -42,6 +42,7 @@ All controllers that send emails use `enqueueEmail()` from `src/utils/nodemailer
 - **Queue disabled** → falls back to calling `nodemailer()` directly (same behavior as before).
 
 Controllers using it:
+
 - `post-reset-request.ts` — password reset email
 - `post-reset-confirm.ts` — password change confirmation
 - `post-orders.ts` — order confirmation email
@@ -53,14 +54,14 @@ The `pdf.worker.ts` consumer handles async PDF generation jobs (e.g. batch invoi
 
 ## Configuration
 
-| Env var                 | Description                                                       |
-| ----------------------- | ----------------------------------------------------------------- |
+| Env var                 | Description                                               |
+| ----------------------- | --------------------------------------------------------- |
 | `NODE_RABBITMQ_URL`     | Full AMQP URI (preferred). Example: `******rabbitmq:5672` |
-| `NODE_RABBITMQ_HOST`    | Hostname fallback when URL is not set.                            |
-| `NODE_RABBITMQ_PORT`    | Port fallback (default `5672`).                                   |
-| `NODE_RABBITMQ_USER`    | Username fallback (default `guest`).                              |
-| `NODE_RABBITMQ_PASS`    | Password fallback (default `guest`).                              |
-| `NODE_RABBITMQ_ENABLED` | Set to `0` to disable even if URL is configured.                  |
+| `NODE_RABBITMQ_HOST`    | Hostname fallback when URL is not set.                    |
+| `NODE_RABBITMQ_PORT`    | Port fallback (default `5672`).                           |
+| `NODE_RABBITMQ_USER`    | Username fallback (default `guest`).                      |
+| `NODE_RABBITMQ_PASS`    | Password fallback (default `guest`).                      |
+| `NODE_RABBITMQ_ENABLED` | Set to `0` to disable even if URL is configured.          |
 
 When none of the vars are set, all queue operations silently no-op — the rest of the app works normally.
 
@@ -103,15 +104,15 @@ consumeFromQueue({
 
 ### Options
 
-| Publish option | Default | Description                        |
-| -------------- | ------- | ---------------------------------- |
-| `durable`      | `true`  | Queue survives broker restarts.    |
-| `persistent`   | `true`  | Message is written to disk.        |
+| Publish option | Default | Description                     |
+| -------------- | ------- | ------------------------------- |
+| `durable`      | `true`  | Queue survives broker restarts. |
+| `persistent`   | `true`  | Message is written to disk.     |
 
-| Consume option | Default | Description                                 |
-| -------------- | ------- | ------------------------------------------- |
-| `durable`      | `true`  | Queue survives broker restarts.             |
-| `prefetch`     | `1`     | Unacknowledged messages allowed at once.    |
+| Consume option | Default | Description                              |
+| -------------- | ------- | ---------------------------------------- |
+| `durable`      | `true`  | Queue survives broker restarts.          |
+| `prefetch`     | `1`     | Unacknowledged messages allowed at once. |
 
 ## Graceful shutdown
 

@@ -11,6 +11,7 @@
 
     "moduleNameMapper": {
         "^@api/(.*)$": "<rootDir>/api/$1",
+        "^@types$": "<rootDir>/src/types",
         "^@controllers/(.*)$": "<rootDir>/src/controllers/$1",
         "^@services/(.*)$": "<rootDir>/src/services/$1",
         "^@repositories/(.*)$": "<rootDir>/src/repositories/$1",

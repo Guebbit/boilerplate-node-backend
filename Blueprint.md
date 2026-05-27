@@ -498,9 +498,9 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 
 ### Required
 
-| Variable                    | Description                      |
-| --------------------------- | -------------------------------- |
-| `NODE_DB_URI`               | MongoDB connection string        |
+| Variable             | Description                      |
+| -------------------- | -------------------------------- |
+| `NODE_DB_URI`        | MongoDB connection string        |
 | `NODE_TOKEN_ACCESS`  | JWT access token signing secret  |
 | `NODE_TOKEN_REFRESH` | JWT refresh token signing secret |
 
@@ -548,8 +548,8 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 
 ### JWT expiry
 
-| Variable                                | Description                     |
-| --------------------------------------- | ------------------------------- |
+| Variable                         | Description                     |
+| -------------------------------- | ------------------------------- |
 | `NODE_TOKEN_ACCESS_TIME`         | Access token lifetime (seconds) |
 | `NODE_TOKEN_REFRESH_TIME_SHORT`  | Short refresh token (7 days)    |
 | `NODE_TOKEN_REFRESH_TIME_MEDIUM` | Medium refresh token (30 days)  |

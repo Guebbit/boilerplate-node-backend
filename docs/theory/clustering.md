@@ -22,15 +22,15 @@ flowchart TD
 
 ## Configuration
 
-| Env var                                  | Effect                                                                              |
-| ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| `NODE_ENABLE_CLUSTERING`                 | `1` enables the primary/worker mode. Anything else loads `src/app.ts` directly.     |
-| `NODE_CLUSTER_WORKERS`                   | Number of workers (default: CPU count, minimum 1).                                  |
-| `NODE_CLUSTER_CRASH_WINDOW_MS`           | Sliding window for counting crashes (default 60 000 ms).                            |
-| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS`     | Base delay before respawning after a crash (default 500 ms, doubled per crash).      |
-| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`      | Maximum respawn delay (default 30 000 ms).                                          |
-| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`       | Hard kill timeout during shutdown (default 15 000 ms).                              |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`      | Worker-side hard exit timeout used by `src/app.ts`.                                 |
+| Env var                              | Effect                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `NODE_ENABLE_CLUSTERING`             | `1` enables the primary/worker mode. Anything else loads `src/app.ts` directly. |
+| `NODE_CLUSTER_WORKERS`               | Number of workers (default: CPU count, minimum 1).                              |
+| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                        |
+| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash). |
+| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                      |
+| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                          |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout used by `src/app.ts`.                             |
 
 ## Crash backoff
 

@@ -2,13 +2,13 @@
 
 ## Quality tools
 
-| Tool                                                                                          | Why it is here                          |
-| --------------------------------------------------------------------------------------------- | --------------------------------------- |
-| [Jest](https://jestjs.io/) (+ [ts-jest](https://kulshekhar.github.io/ts-jest/))               | unit and integration tests              |
-| [mongodb-memory-server](https://nodkz.github.io/mongodb-memory-server/)                       | in-memory MongoDB for tests             |
-| [ESLint](https://eslint.org/)                                                                 | code consistency and correctness checks |
-| [Prettier](https://prettier.io/)                                                              | predictable formatting                  |
-| [VitePress](https://vitepress.dev/)                                                           | documentation site                      |
+| Tool                                                                                                                        | Why it is here                          |
+| --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| [Jest](https://jestjs.io/) (+ [ts-jest](https://kulshekhar.github.io/ts-jest/))                                             | unit and integration tests              |
+| [mongodb-memory-server](https://nodkz.github.io/mongodb-memory-server/)                                                     | in-memory MongoDB for tests             |
+| [ESLint](https://eslint.org/)                                                                                               | code consistency and correctness checks |
+| [Prettier](https://prettier.io/)                                                                                            | predictable formatting                  |
+| [VitePress](https://vitepress.dev/)                                                                                         | documentation site                      |
 | [Mermaid](https://mermaid.js.org/) + [vitepress-plugin-mermaid](https://emersonbottero.github.io/vitepress-plugin-mermaid/) | ADHD-friendly visual diagrams           |
 
 ## Maintenance flow

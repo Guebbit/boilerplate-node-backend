@@ -10,22 +10,22 @@ We use OTel **auto-instrumentation**: there is no per-request code to write.
 
 ## What is instrumented out of the box
 
-| Library | Source | Spans you get |
-| --- | --- | --- |
-| HTTP server | [`@opentelemetry/instrumentation-http`](https://www.npmjs.com/package/@opentelemetry/instrumentation-http) | one root span per incoming request |
-| Express | [`@opentelemetry/instrumentation-express`](https://www.npmjs.com/package/@opentelemetry/instrumentation-express) | one child span per route handler/middleware |
-| Mongoose | [`@opentelemetry/instrumentation-mongoose`](https://www.npmjs.com/package/@opentelemetry/instrumentation-mongoose) | one child span per query (`find`, `save`, …) |
-| Redis | [`@opentelemetry/instrumentation-redis`](https://www.npmjs.com/package/@opentelemetry/instrumentation-redis) | one child span per Redis command |
+| Library     | Source                                                                                                             | Spans you get                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- |
+| HTTP server | [`@opentelemetry/instrumentation-http`](https://www.npmjs.com/package/@opentelemetry/instrumentation-http)         | one root span per incoming request           |
+| Express     | [`@opentelemetry/instrumentation-express`](https://www.npmjs.com/package/@opentelemetry/instrumentation-express)   | one child span per route handler/middleware  |
+| Mongoose    | [`@opentelemetry/instrumentation-mongoose`](https://www.npmjs.com/package/@opentelemetry/instrumentation-mongoose) | one child span per query (`find`, `save`, …) |
+| Redis       | [`@opentelemetry/instrumentation-redis`](https://www.npmjs.com/package/@opentelemetry/instrumentation-redis)       | one child span per Redis command             |
 
 All of this is wired in `src/utils/tracing.ts`.
 
 ## Configuration
 
-| Env var | Effect |
-| --- | --- |
+| Env var                       | Effect                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the collector (Tempo). When unset, traces are simply not exported. |
-| `OTEL_EXPORTER_OTLP_HEADERS` | Optional `key=value,key=value` for auth/tenant headers. |
-| `NODE_SERVICE_NAME` | The `service.name` resource attribute used by Tempo/Grafana (default `api`). |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers.                                  |
+| `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).             |
 
 Local docker-compose sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` automatically.
 

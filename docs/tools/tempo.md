@@ -9,11 +9,11 @@ You query it from Grafana — you do not query Tempo directly.
 
 ## Why Tempo (not Prometheus, not Loki)
 
-| Tool | Stores | Used here? |
-| --- | --- | --- |
-| Prometheus | numeric time-series (metrics) | optional — `/metrics` is exposed |
-| Loki | log lines | not bundled — `docker logs` is enough until you outgrow it |
-| **Tempo** | **traces (spans)** | **yes — this is the wired-up signal** |
+| Tool       | Stores                        | Used here?                                                 |
+| ---------- | ----------------------------- | ---------------------------------------------------------- |
+| Prometheus | numeric time-series (metrics) | optional — `/metrics` is exposed                           |
+| Loki       | log lines                     | not bundled — `docker logs` is enough until you outgrow it |
+| **Tempo**  | **traces (spans)**            | **yes — this is the wired-up signal**                      |
 
 A single trace is much more useful than a fat log object when something breaks: you see the full request timeline, every DB query, every Redis call, with timings and error attributes attached.
 

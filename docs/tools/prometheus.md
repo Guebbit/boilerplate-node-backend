@@ -9,14 +9,14 @@ If you only care about traces, ignore this page and use [Tempo + Grafana](./temp
 
 ## What `/metrics` exposes
 
-| Metric | Why it is here |
-| --- | --- |
-| `http_requests_total` | request rate, split by method/route/status |
-| `http_request_duration_milliseconds` | latency histogram for p50/p95/p99 |
-| `http_request_errors_total` | 4xx/5xx counts |
-| `http_requests_in_flight` | concurrency at a glance |
-| `auth_login_total` / `auth_signup_total` / `cart_checkout_total` / `order_created_total` / … | business counters that you cannot derive from traces |
-| `process_*` and `nodejs_*` | default `prom-client` runtime metrics (CPU, memory, event-loop, GC) |
+| Metric                                                                                       | Why it is here                                                      |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `http_requests_total`                                                                        | request rate, split by method/route/status                          |
+| `http_request_duration_milliseconds`                                                         | latency histogram for p50/p95/p99                                   |
+| `http_request_errors_total`                                                                  | 4xx/5xx counts                                                      |
+| `http_requests_in_flight`                                                                    | concurrency at a glance                                             |
+| `auth_login_total` / `auth_signup_total` / `cart_checkout_total` / `order_created_total` / … | business counters that you cannot derive from traces                |
+| `process_*` and `nodejs_*`                                                                   | default `prom-client` runtime metrics (CPU, memory, event-loop, GC) |
 
 Database query metrics are intentionally **not** Prometheus counters — Mongoose spans from OTel give richer per-query data in Tempo.
 

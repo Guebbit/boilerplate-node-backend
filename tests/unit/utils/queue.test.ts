@@ -1,12 +1,20 @@
-import { isQueueEnabled, publishToQueue, consumeFromQueue, startQueue, stopQueue } from '@utils/queue';
+import {
+    isQueueEnabled,
+    publishToQueue,
+    consumeFromQueue,
+    startQueue,
+    stopQueue
+} from '@utils/queue';
 
 // ─── Mock amqplib ─────────────────────────────────────────────────────────────
 
 const mockAck = jest.fn();
 const mockNack = jest.fn();
 const mockSendToQueue = jest.fn().mockReturnValue(true);
-const mockAssertQueue = jest.fn().mockResolvedValue({ queue: 'test', messageCount: 0, consumerCount: 0 });
-const mockPrefetch = jest.fn().mockResolvedValue(undefined);
+const mockAssertQueue = jest
+    .fn()
+    .mockResolvedValue({ queue: 'test', messageCount: 0, consumerCount: 0 });
+const mockPrefetch = jest.fn().mockImplementation(() => Promise.resolve());
 const mockConsume = jest.fn().mockResolvedValue({ consumerTag: 'tag-1' });
 const mockCreateChannel = jest.fn().mockResolvedValue({
     assertQueue: mockAssertQueue,
@@ -16,7 +24,7 @@ const mockCreateChannel = jest.fn().mockResolvedValue({
     ack: mockAck,
     nack: mockNack
 });
-const mockClose = jest.fn().mockResolvedValue(undefined);
+const mockClose = jest.fn().mockImplementation(() => Promise.resolve());
 const mockOn = jest.fn();
 const mockConnect = jest.fn().mockResolvedValue({
     createChannel: mockCreateChannel,
@@ -85,11 +93,9 @@ describe('publishToQueue()', () => {
         const result = await publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
         expect(result).toBe(true);
         expect(mockAssertQueue).toHaveBeenCalledWith('emails', { durable: true });
-        expect(mockSendToQueue).toHaveBeenCalledWith(
-            'emails',
-            expect.any(Buffer),
-            { persistent: true }
-        );
+        expect(mockSendToQueue).toHaveBeenCalledWith('emails', expect.any(Buffer), {
+            persistent: true
+        });
     });
 });
 

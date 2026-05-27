@@ -16,11 +16,7 @@ export const wss = setupWebSocketServer({
 
 // Handles HTTP → WebSocket upgrade requests. Rejects unknown paths with 404
 // to prevent unintended WebSocket access on other routes.
-export const handleWebSocketUpgrade = (
-    request: IncomingMessage,
-    socket: Duplex,
-    head: Buffer
-) => {
+export const handleWebSocketUpgrade = (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     const host = request.headers.host ?? 'localhost';
     const pathname = new URL(request.url ?? '/', `http://${host}`).pathname;
     if (pathname !== CHAT_WEBSOCKET_PATH) {
