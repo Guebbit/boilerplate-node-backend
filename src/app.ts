@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-/** OTel must initialize before express/http/mongoose are imported. */
+// OTel must initialize before express/http/mongoose are imported.
 import { startTracing } from '@utils/tracing';
 startTracing();
 
@@ -46,20 +46,24 @@ import { MulterError } from 'multer';
 import { ExtendedError } from '@utils/helpers-errors';
 
 /**
- * Main Express application — infrastructure setup, middleware stack, route mounting.
+ * Server start
  */
 export const app = express();
 const DEFAULT_PORT = 3000;
 let activeServer: Server | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
-/** Parse port from env with fallback to default. */
+/*
+ * Parse port from env with fallback to default
+ */
 const getPort = () => {
     const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
     return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
 };
 
-/** Boot sequence: validate env → connect infra → mount i18n → listen. */
+/*
+ * Boot sequence: validate env → connect infra → mount i18n → listen
+ */
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
@@ -97,7 +101,9 @@ export const startServer = () => {
         );
 };
 
-/** Graceful shutdown wrapper — ensures single execution. */
+/*
+ * Graceful shutdown wrapper — ensures single execution
+ */
 export const stopServer = () => {
     if (shutdownPromise) return shutdownPromise;
 
@@ -110,15 +116,21 @@ export const stopServer = () => {
 };
 
 /**
- * Strong ETags ensure clients receive updates when content changes.
- * Weak ETags (Express default) can serve stale data with 304 responses.
+ * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
+ * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
+ * which can lead to stale data being served.
+ * By using strong ETags, we ensure that clients receive updated content when it changes.
  */
 app.set('etag', 'strong');
 
-/** Apply helmet for security headers (CSP, HSTS, etc). */
+/**
+ * Secure headers
+ */
 app.use(helmet());
 
-/** Parse comma-separated allowed origins from env. */
+/**
+ * Allowed origins, separated by comma if multiple
+ */
 const allowedOrigins = new Set(
     (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
         .split(',')
@@ -126,11 +138,13 @@ const allowedOrigins = new Set(
         .filter(Boolean)
 );
 
-/** CORS: whitelist origins, allow credentials, expose trace headers. */
+/**
+ * Strict CORS
+ */
 app.use(
     cors({
         origin(origin, callback) {
-            /** Allow non-browser requests (no Origin header), like curl/healthchecks. */
+            // Allow non-browser requests (no Origin header), like curl/healthchecks
             // eslint-disable-next-line unicorn/no-null
             if (!origin) return callback(null, true);
             // eslint-disable-next-line unicorn/no-null
@@ -150,7 +164,6 @@ app.use(
     })
 );
 
-/** Parse URL-encoded and JSON bodies. */
 app.use(
     express.urlencoded({
         extended: true
@@ -159,10 +172,8 @@ app.use(
 
 app.use(express.json());
 
-/** Parse cookies for JWT refresh token. */
 app.use(cookieParser());
 
-/** Rate limiting to prevent abuse. */
 app.use(rateLimiter);
 
 /** Request ID middleware — reuse client ID or generate new UUID. */

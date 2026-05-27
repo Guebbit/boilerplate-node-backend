@@ -14,8 +14,9 @@ type CacheOptions = {
  * This avoids serving one user's private data to another user.
  */
 const getCacheScope = (request: Request) => {
-    if (!request.user?._id) return 'guest';
-    return `user:${request.user._id instanceof Types.ObjectId ? request.user._id.toString() : String(request.user._id)}`;
+    const userId = request.user?._id;
+    if (!userId) return 'guest';
+    return `user:${userId instanceof Types.ObjectId ? userId.toString() : String(userId)}`;
 };
 
 /**
