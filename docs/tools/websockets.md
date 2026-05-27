@@ -9,7 +9,7 @@ It is **opt-in** scaffolding, not a production messaging stack.
 | ------------------------ | --------------------------------- |
 | Server setup + lifecycle | `src/utils/helpers-websockets.ts` |
 | Chat lifecycle + state   | `src/utils/realtime-chat.ts`      |
-| Event contracts          | `src/utils/realtime-contracts.ts` |
+| Event contracts          | `src/types/asyncapi.ts`           |
 | Upgrade handler          | `src/routes/websocket.ts`         |
 
 The implementation is built on the [`ws`](https://github.com/websockets/ws) library — the same one most Node WebSocket frameworks build on top of.
