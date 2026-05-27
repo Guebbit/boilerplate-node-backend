@@ -1,14 +1,34 @@
 import { WebSocketServer, WebSocket, type RawData, type MessageEvent, type ErrorEvent } from 'ws';
 
 /**
- *
+ * ISP: separate interfaces for each callback concern.
+ * Consumers implement only the callbacks they need.
  */
-export interface IWebSocketServerCallbacks {
-    port?: number;
+export interface IWebSocketConnectionCallback {
     connectionCallback: (ws: WebSocket) => void;
+}
+
+export interface IWebSocketMessageCallback {
     onMessage: (ws: WebSocket, message: RawData) => void;
+}
+
+export interface IWebSocketErrorCallback {
     onError: (ws: WebSocket, error: Error) => void;
+}
+
+export interface IWebSocketCloseCallback {
     onClose: (ws: WebSocket, code: number, reason: Buffer) => void;
+}
+
+/**
+ * Aggregate interface (backward compat) composed from focused interfaces.
+ */
+export interface IWebSocketServerCallbacks
+    extends IWebSocketConnectionCallback,
+        IWebSocketMessageCallback,
+        IWebSocketErrorCallback,
+        IWebSocketCloseCallback {
+    port?: number;
 }
 
 /**

@@ -30,7 +30,17 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
     verifyAccessToken(token)
         .then(({ id }) => Users.findById(id))
         .then((user) => {
-            if (user) request.user = user;
+            if (user) {
+                request.user = user;
+                // DIP: populate transport-safe auth context DTO
+                request.authContext = {
+                    id: user.id,
+                    email: user.email,
+                    username: user.username,
+                    admin: user.admin ?? false,
+                    imageUrl: user.imageUrl
+                };
+            }
         })
         .catch(() => {
             // Invalid or expired token — proceed without authenticated user

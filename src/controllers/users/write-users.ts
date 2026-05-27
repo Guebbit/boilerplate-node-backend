@@ -101,7 +101,11 @@ export const writeUsers = (
      */
     return userService
         .adminUpdate(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
-        .then((user) => {
+        .then((result) => {
+            if (!result.success)
+                return deleteUpload().then(() => {
+                    rejectResponse(response, result.status, result.message, result.errors);
+                });
             emitAuditEvent({
                 action: AuditAction.ADMIN_USER_UPDATED,
                 actor_user_id: request.user?.id ?? 'unknown',
@@ -111,13 +115,6 @@ export const writeUsers = (
                 target_id: id,
                 ...extractRequestContext(request)
             });
-            successResponse(response, user.toObject());
-        })
-        .catch((error: Error) =>
-            deleteUpload().then(() => {
-                if (error.message === '404')
-                    rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
-                else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
-            })
-        );
+            successResponse(response, result.data);
+        });
 };

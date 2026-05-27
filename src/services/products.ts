@@ -9,10 +9,15 @@ import {
     type IResponseSuccess
 } from '@utils/response';
 import { deleteFile } from '@utils/helpers-filesystem';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
+import {
+    normalizePagination,
+    buildPaginatedMeta,
+    addTextFilter
+} from '@utils/search-helpers';
 
 /**
  * Product Service
@@ -53,27 +58,13 @@ export const search = (
     items: IProductDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }> => {
-    // Pagination
-    const page = Math.max(1, Number(filters.page ?? 1) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
-    const skip = (page - 1) * pageSize;
-
-    // Query builder
+    const pagination = normalizePagination(filters);
     const where: QueryFilter<IProductDocument> = {};
 
-    // Filter by ID
     if (filters.id && String(filters.id).trim() !== '')
         where._id = new Types.ObjectId(String(filters.id));
 
-    // Filter by text (search in title and description)
-    if (filters.text && String(filters.text).trim() !== '') {
-        const text = String(filters.text).trim();
-        // Simple, effective search across title/description (case-insensitive)
-        where.$or = [
-            { title: { $regex: text, $options: 'i' } },
-            { description: { $regex: text, $options: 'i' } }
-        ];
-    }
+    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, ['title', 'description']);
 
     // Filter by categories/tags
     if (filters.category && String(filters.category).trim() !== '')
@@ -99,28 +90,21 @@ export const search = (
         priceConditions.$lte = Number(filters.maxPrice);
     if (Object.keys(priceConditions).length > 0) where.price = priceConditions;
 
-    // If not admin, filter out inactive and (soft) deleted products
     if (!admin) {
         where.active = true;
         where.deletedAt = { $exists: false };
     }
 
-    // First count the total number of products matching the query
     return productRepository.count(where).then((totalItems) =>
         productRepository
             .findAll(where, {
                 sort: { createdAt: -1 },
-                skip,
-                limit: pageSize
+                skip: pagination.skip,
+                limit: pagination.pageSize
             })
             .then((items) => ({
                 items,
-                meta: {
-                    page,
-                    pageSize,
-                    totalItems,
-                    totalPages: Math.ceil(totalItems / pageSize)
-                }
+                meta: buildPaginatedMeta(pagination, totalItems)
             }))
     );
 };
@@ -215,12 +199,11 @@ export const remove = (
     hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
     return productRepository.findById(id).then((product) => {
-        // not found, something happened
         if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
 
         // HARD delete
         if (hardDelete)
-            return userService
+            return cartService
                 .productRemoveFromCartsById((product._id as Types.ObjectId).toString())
                 .then(() => productRepository.deleteOne(product))
                 .then(() =>
@@ -232,7 +215,7 @@ export const remove = (
         product.deletedAt = product.deletedAt ? undefined : new Date();
 
         // SOFT delete (or restore)
-        return userService
+        return cartService
             .productRemoveFromCartsById((product._id as Types.ObjectId).toString())
             .then(() => productRepository.save(product))
             .then((savedProduct) =>

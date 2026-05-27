@@ -24,9 +24,8 @@ export const putFeedbackStatus = (
 
     return feedbackRequestService
         .updateStatus(request.params.id, parseResult.data)
-        .then((feedbackRequest) => successResponse(response, feedbackRequest.toObject()))
-        .catch((error: Error) => {
-            if (error.message === '404') return rejectResponse(response, 404, 'Not Found');
-            return rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+        .then((result) => {
+            if (!result.success) return rejectResponse(response, result.status, result.message, result.errors);
+            return successResponse(response, result.data);
         });
 };
