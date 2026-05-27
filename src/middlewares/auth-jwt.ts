@@ -111,7 +111,6 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
             }
             // Check if token is still valid database-wise
             Users.findOne({
-                // eslint-disable-next-line @typescript-eslint/naming-convention
                 'tokens.token': token
             })
                 .then((user) => {

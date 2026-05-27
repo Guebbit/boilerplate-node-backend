@@ -131,17 +131,15 @@ curl http://localhost:3000/metrics
 - Send a message:
     - `{"type":"chat:message:send","payload":{"message":"hello"}}`
 
-Contracts are defined in:
-
-- `src/utils/realtime-contracts.ts`
+Contracts are defined as AsyncAPI channels in `asyncapi.yaml` and generated into `src/types/asyncapi.ts`.
 
 ### SSE live metrics (`/observability/events`)
 
 - Endpoint: `GET /observability/events`
 - Event names:
-    - `metrics.snapshot` (first payload)
-    - `metrics.updated` (periodic updates)
-    - `heartbeat`
+    - `observability.metrics.snapshot` (first payload)
+    - `observability.metrics.updated` (periodic updates)
+    - `observability.heartbeat`
 
 Quick check:
 
@@ -216,11 +214,15 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
 
 ## AsyncAPI workflow
 
-- Source of truth for async contracts: `asyncapi.yaml`
-- This contract currently documents:
-    - implemented WebSocket chat contracts
-    - implemented SSE observability contracts
-    - future ecommerce example events (documented only)
+- Source of truth for async/realtime contracts: `asyncapi.yaml`
+- Generated TypeScript types live in `src/types/asyncapi.ts` and are re-exported from `src/types/`
+- Regenerate types after editing `asyncapi.yaml`:
+    - `npm run gen:asyncapi-types`
+- This contract documents:
+    - WebSocket chat channels (`realtime.chat.*`)
+    - SSE observability channels (`observability.*`)
+    - Ecommerce cart checkout events (`ecommerce.cart.checked_out`)
+- All WebSocket/SSE/domain-event code imports types and channel-name constants from `src/types`
 
 ## Frontend/backend tandem sync discipline
 

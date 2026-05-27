@@ -5,7 +5,7 @@ import {
     type TChatClientEvent,
     type TChatServerEvent,
     type TChatRoom
-} from '@utils/realtime-contracts';
+} from '@types';
 
 // Per-connection state: username (set after join) and current room.
 interface IChatClientState {

@@ -128,7 +128,7 @@ describe('System routes', () => {
         const text = new TextDecoder().decode(firstChunk?.value);
         await reader?.cancel();
 
-        expect(text).toContain('event: metrics.snapshot');
+        expect(text).toContain('event: observability.metrics.snapshot');
         expect(text).toContain('data: ');
     });
 });

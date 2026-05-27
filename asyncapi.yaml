@@ -68,6 +68,12 @@ channels:
             operationId: websocketChatPresenceUpdated
             message:
                 $ref: '#/components/messages/ChatPresenceUpdatedEvent'
+    realtime.chat.event.joined:
+        description: Private acknowledgment sent to the joining client only (not broadcast).
+        subscribe:
+            operationId: websocketChatJoined
+            message:
+                $ref: '#/components/messages/ChatJoinedEvent'
     realtime.chat.event.error:
         description: Chat protocol validation/runtime error sent to a client.
         subscribe:
@@ -213,6 +219,34 @@ components:
                         properties:
                             message:
                                 type: string
+                        additionalProperties: false
+                additionalProperties: false
+        ChatJoinedEvent:
+            name: ChatJoinedEvent
+            messageId: realtime.chat.event.joined
+            title: Private join acknowledgment
+            payload:
+                type: object
+                required:
+                    - type
+                    - payload
+                properties:
+                    type:
+                        type: string
+                        enum:
+                            - chat:joined
+                    payload:
+                        type: object
+                        required:
+                            - username
+                            - room
+                        properties:
+                            username:
+                                type: string
+                            room:
+                                type: string
+                                enum:
+                                    - general
                         additionalProperties: false
                 additionalProperties: false
         MetricsSnapshotEvent:

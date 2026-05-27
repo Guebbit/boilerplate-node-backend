@@ -2,16 +2,16 @@
 
 ## Main security tools
 
-| Tool                                                                                | Why it is here                              |
-| ----------------------------------------------------------------------------------- | ------------------------------------------- |
-| [Helmet](https://helmetjs.github.io/)                                               | safe default HTTP headers                   |
-| [cors](https://github.com/expressjs/cors#readme)                                    | origin allowlist and browser access control |
-| [express-rate-limit](https://express-rate-limit.mintlify.app/)                      | basic abuse protection at the edge          |
-| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken#readme)                   | access and refresh token flows              |
-| [cookie-parser](https://github.com/expressjs/cookie-parser#readme)                  | cookie access in Express                    |
+| Tool                                                                                                                                 | Why it is here                              |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| [Helmet](https://helmetjs.github.io/)                                                                                                | safe default HTTP headers                   |
+| [cors](https://github.com/expressjs/cors#readme)                                                                                     | origin allowlist and browser access control |
+| [express-rate-limit](https://express-rate-limit.mintlify.app/)                                                                       | basic abuse protection at the edge          |
+| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken#readme)                                                                    | access and refresh token flows              |
+| [cookie-parser](https://github.com/expressjs/cookie-parser#readme)                                                                   | cookie access in Express                    |
 | [express-session](https://github.com/expressjs/session#readme) + [connect-mongo](https://github.com/jdesboeufs/connect-mongo#readme) | stateful session support when needed        |
-| [csrf-sync](https://github.com/Psifi-Solutions/csrf-sync#readme)                    | CSRF protection for cookie/session flows    |
-| [bcrypt](https://github.com/kelektiv/node.bcrypt.js#readme)                         | password hashing                            |
+| [csrf-sync](https://github.com/Psifi-Solutions/csrf-sync#readme)                                                                     | CSRF protection for cookie/session flows    |
+| [bcrypt](https://github.com/kelektiv/node.bcrypt.js#readme)                                                                          | password hashing                            |
 
 ## Security flow
 

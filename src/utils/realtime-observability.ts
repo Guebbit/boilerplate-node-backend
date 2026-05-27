@@ -1,9 +1,9 @@
 import type { Response } from 'express';
 import {
-    OBSERVABILITY_SSE_EVENTS,
+    OBSERVABILITY_CHANNELS,
     type IObservabilityMetricsPayload,
-    type TObservabilitySseEventName
-} from '@utils/realtime-contracts';
+    type TObservabilityChannel
+} from '@types';
 import { getHttpRequestCounters } from '@utils/observability';
 import { getActiveWebSocketConnections } from '@utils/realtime-chat';
 
@@ -19,7 +19,7 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
 // Writes a single SSE frame (event + data) to the response stream.
 const writeEvent = (
     response: Response,
-    event: TObservabilitySseEventName,
+    event: TObservabilityChannel,
     payload: IObservabilityMetricsPayload
 ) => {
     response.write(`event: ${event}\n`);
@@ -53,7 +53,7 @@ export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayloa
 };
 
 // Fires-and-forgets a metrics event — errors are silently swallowed to avoid crashing the stream.
-const writeMetricsEvent = (response: Response, eventName: TObservabilitySseEventName) => {
+const writeMetricsEvent = (response: Response, eventName: TObservabilityChannel) => {
     void buildObservabilityPayload()
         .then((payload) => writeEvent(response, eventName, payload))
         .catch(() => {});
@@ -70,14 +70,14 @@ export const streamObservabilityMetrics = (response: Response) => {
 
     sseClients.add(response);
     // Send the first payload immediately so the client has data before the first interval fires.
-    writeMetricsEvent(response, OBSERVABILITY_SSE_EVENTS.SNAPSHOT);
+    writeMetricsEvent(response, OBSERVABILITY_CHANNELS.METRICS_SNAPSHOT);
 
     const updatesInterval = setInterval(() => {
-        writeMetricsEvent(response, OBSERVABILITY_SSE_EVENTS.UPDATE);
+        writeMetricsEvent(response, OBSERVABILITY_CHANNELS.METRICS_UPDATED);
     }, UPDATE_INTERVAL_MS);
 
     const heartbeatInterval = setInterval(() => {
-        writeMetricsEvent(response, OBSERVABILITY_SSE_EVENTS.HEARTBEAT);
+        writeMetricsEvent(response, OBSERVABILITY_CHANNELS.HEARTBEAT);
     }, HEARTBEAT_INTERVAL_MS);
 
     // Cleanup when the client disconnects to avoid memory leaks and stale intervals.

@@ -35,7 +35,7 @@ export const postCheckout = (request: Request, response: Response) => {
             properties: { order_id: orderId }
         });
         // Emit the domain event matching the asyncapi.yaml CartCheckedOutEvent schema.
-        emitDomainEvent('cartCheckedOut', {
+        emitDomainEvent('ecommerce.cart.checked_out', {
             eventName: 'ecommerce.cart.checked_out',
             eventId: crypto.randomUUID(),
             occurredAt: new Date().toISOString(),

@@ -51,7 +51,6 @@ export const nodemailer = (
             [SEMATTRS_MESSAGING_SYSTEM]: 'smtp',
             [SEMATTRS_MESSAGING_DESTINATION]: String(request.to ?? ''),
             // Custom attribute: email template used to render the body.
-            // eslint-disable-next-line @typescript-eslint/naming-convention
             'email.template': templateName
         });
 
@@ -96,8 +95,7 @@ export const enqueueEmail = (
     templateName: string,
     data: Data
 ): Promise<void> => {
-    if (!isQueueEnabled())
-        return nodemailer(request, templateName, data).then(() => {});
+    if (!isQueueEnabled()) return nodemailer(request, templateName, data).then(() => {});
 
     return publishToQueue({
         queue: EMAIL_QUEUE,

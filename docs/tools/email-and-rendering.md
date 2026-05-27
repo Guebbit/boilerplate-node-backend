@@ -9,12 +9,12 @@ Both are optional: they only activate when the relevant env vars / browser binar
 
 ## Where the code lives
 
-| Concern        | File                                                              |
-| -------------- | ----------------------------------------------------------------- |
-| SMTP transport | `src/utils/nodemailer.ts`                                         |
-| Email triggers | `src/controllers/account/post-reset-request.ts` (password reset)  |
-| HTML templates | `views/*.ejs`                                                     |
-| PDF rendering  | `src/controllers/orders/get-order-invoice.ts`                     |
+| Concern        | File                                                             |
+| -------------- | ---------------------------------------------------------------- |
+| SMTP transport | `src/utils/nodemailer.ts`                                        |
+| Email triggers | `src/controllers/account/post-reset-request.ts` (password reset) |
+| HTML templates | `views/*.ejs`                                                    |
+| PDF rendering  | `src/controllers/orders/get-order-invoice.ts`                    |
 
 ## Email pipeline
 
@@ -28,13 +28,13 @@ flowchart LR
 
 ### SMTP configuration
 
-| Env var          | Meaning                                                    |
-| ---------------- | ---------------------------------------------------------- |
-| `NODE_SMTP_HOST` | SMTP server hostname.                                      |
-| `NODE_SMTP_PORT` | Defaults to `587` (STARTTLS). `465` enables implicit TLS.  |
-| `NODE_SMTP_USER` | SMTP username.                                             |
-| `NODE_SMTP_PASS` | SMTP password / app password.                              |
-| `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                 |
+| Env var          | Meaning                                                   |
+| ---------------- | --------------------------------------------------------- |
+| `NODE_SMTP_HOST` | SMTP server hostname.                                     |
+| `NODE_SMTP_PORT` | Defaults to `587` (STARTTLS). `465` enables implicit TLS. |
+| `NODE_SMTP_USER` | SMTP username.                                            |
+| `NODE_SMTP_PASS` | SMTP password / app password.                             |
+| `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                |
 
 Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo](./tempo.md) alongside the request that triggered them.
 

@@ -9,16 +9,33 @@ For this boilerplate, keep REST and async contracts separate:
 
 Current scope of `asyncapi.yaml`:
 
-- WebSocket chat contracts (`/ws/chat`)
-- SSE observability contracts (`/observability/events`)
+- WebSocket chat channels (`realtime.chat.*`)
+- SSE observability channels (`observability.*`)
 - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
+
+## Generated TypeScript types
+
+Types are generated from `asyncapi.yaml` into `src/types/asyncapi.ts` by a custom script (`scripts/gen-asyncapi-types.ts`).  
+They are re-exported from `src/types/index.ts` so all app code can import them consistently:
+
+```ts
+import type { IChatMessageSentEvent, OBSERVABILITY_CHANNELS } from '@types';
+```
+
+Regenerate types after editing `asyncapi.yaml`:
+
+```bash
+npm run gen:asyncapi-types
+```
+
+The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `js-yaml`, converts each `components.schemas` entry into a TypeScript interface, and writes the result to `src/types/asyncapi.ts`.
 
 ## Commands used in this repo
 
 ```bash
-npm run lint:asyncapi
-npm run gen:asyncapi-types
-npm run docs:asyncapi
+npm run lint:asyncapi       # validate asyncapi.yaml
+npm run gen:asyncapi-types  # regenerate src/types/asyncapi.ts
+npm run docs:asyncapi       # open AsyncAPI Studio in browser
 ```
 
 ## How this complements OpenAPI
@@ -30,3 +47,8 @@ npm run docs:asyncapi
 ## Naming convention
 
 Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`) so the same contracts can map naturally to Kafka topics in a future PR.
+
+## Realtime event names
+
+All SSE and WebSocket event names used at runtime come from the `CHAT_CHANNELS`, `OBSERVABILITY_CHANNELS`, and `ECOMMERCE_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
+There are no handwritten duplicate string constants — `asyncapi.yaml` is the single source of truth.

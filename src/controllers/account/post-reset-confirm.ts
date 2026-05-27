@@ -27,9 +27,7 @@ export const postResetConfirm = (
      */
     return userRepository
         .findOne({
-            // eslint-disable-next-line @typescript-eslint/naming-convention
             'tokens.token': token,
-            // eslint-disable-next-line @typescript-eslint/naming-convention
             'tokens.type': 'password'
         })
         .then((user) => {

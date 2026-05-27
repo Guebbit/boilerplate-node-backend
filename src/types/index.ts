@@ -9,6 +9,9 @@ import type {
 } from '@api/index';
 export * from '@api/index';
 
+// Re-export generated AsyncAPI types so consumers use a single import path.
+export * from './asyncapi';
+
 // Generic helper
 export type WithFileUpload<T, K extends string = 'imageUpload'> = T & {
     [P in K]?: File | Buffer;

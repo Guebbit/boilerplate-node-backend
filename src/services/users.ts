@@ -508,20 +508,17 @@ export const productRemoveFromCartsById = (
     userRepository
         .updateMany(
             {
-                // eslint-disable-next-line @typescript-eslint/naming-convention
                 'cart.items.product': id
             },
             {
                 // Remove the product from their cart
                 $pull: {
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
                     'cart.items': {
                         product: id
                     }
                 },
                 // Update the cart's updatedAt timestamp
                 $set: {
-                    // eslint-disable-next-line @typescript-eslint/naming-convention
                     'cart.updatedAt': new Date()
                 }
             }

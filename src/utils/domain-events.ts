@@ -1,29 +1,23 @@
 import { logger } from '@utils/winston';
-import type { ICartCheckedOutEvent } from '@utils/realtime-contracts';
+import type { ICartCheckedOutEvent } from '@types';
 
-// Registry of domain event names and their payload types.
-// Each entry maps a canonical event name (used by the emitter) to its payload interface.
+// Maps canonical AsyncAPI channel names (dot-notation) to their payload types.
+// The event name IS the AsyncAPI channel name — no separate camelCase alias needed.
 export type TDomainEventPayloadMap = {
-    readonly cartCheckedOut: ICartCheckedOutEvent;
+    readonly 'ecommerce.cart.checked_out': ICartCheckedOutEvent;
 };
 
 export type TDomainEventName = keyof TDomainEventPayloadMap;
-
-// Dot-notation channel names as used in asyncapi.yaml — keyed by the camelCase event name.
-export const DOMAIN_EVENT_CHANNELS: Record<TDomainEventName, string> = {
-    cartCheckedOut: 'ecommerce.cart.checked_out'
-};
 
 // Shared in-process event target. Future Kafka/broker adapters can subscribe here
 // and forward events to the message bus without changing call-sites.
 export const domainEvents = new EventTarget();
 
-// Emits a typed domain event: logs it for observability and dispatches it in-process.
+// Emits a typed domain event using its canonical AsyncAPI channel name.
 export const emitDomainEvent = <K extends TDomainEventName>(
     eventName: K,
     payload: TDomainEventPayloadMap[K]
 ): void => {
-    const channel = DOMAIN_EVENT_CHANNELS[eventName];
-    logger.info('domain_event', { event: channel, payload });
-    domainEvents.dispatchEvent(new CustomEvent(channel, { detail: payload }));
+    logger.info('domain_event', { event: eventName, payload });
+    domainEvents.dispatchEvent(new CustomEvent(eventName, { detail: payload }));
 };
