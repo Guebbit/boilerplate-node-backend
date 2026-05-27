@@ -51,7 +51,6 @@ export const nodemailer = (
             [SEMATTRS_MESSAGING_SYSTEM]: 'smtp',
             [SEMATTRS_MESSAGING_DESTINATION]: String(request.to ?? ''),
             // Custom attribute: email template used to render the body.
-
             'email.template': templateName
         });
 

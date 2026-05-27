@@ -28,7 +28,6 @@ export const postResetConfirm = (
     return userRepository
         .findOne({
             'tokens.token': token,
-
             'tokens.type': 'password'
         })
         .then((user) => {
