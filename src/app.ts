@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// OTel must initialize before express/http/mongoose are imported.
+/** OTel must initialize before express/http/mongoose are imported. */
 import { startTracing } from '@utils/tracing';
 startTracing();
 
@@ -46,18 +46,20 @@ import { MulterError } from 'multer';
 import { ExtendedError } from '@utils/helpers-errors';
 
 /**
- * Server start
+ * Main Express application — infrastructure setup, middleware stack, route mounting.
  */
 export const app = express();
 const DEFAULT_PORT = 3000;
 let activeServer: Server | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
+/** Parse port from env with fallback to default. */
 const getPort = () => {
     const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
     return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
 };
 
+/** Boot sequence: validate env → connect infra → mount i18n → listen. */
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
@@ -95,6 +97,7 @@ export const startServer = () => {
         );
 };
 
+/** Graceful shutdown wrapper — ensures single execution. */
 export const stopServer = () => {
     if (shutdownPromise) return shutdownPromise;
 
@@ -107,21 +110,15 @@ export const stopServer = () => {
 };
 
 /**
- * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
- * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
- * which can lead to stale data being served.
- * By using strong ETags, we ensure that clients receive updated content when it changes.
+ * Strong ETags ensure clients receive updates when content changes.
+ * Weak ETags (Express default) can serve stale data with 304 responses.
  */
 app.set('etag', 'strong');
 
-/**
- * Secure headers
- */
+/** Apply helmet for security headers (CSP, HSTS, etc). */
 app.use(helmet());
 
-/**
- * Allowed origins, separated by comma if multiple
- */
+/** Parse comma-separated allowed origins from env. */
 const allowedOrigins = new Set(
     (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
         .split(',')
@@ -129,13 +126,11 @@ const allowedOrigins = new Set(
         .filter(Boolean)
 );
 
-/**
- * Strict CORS
- */
+/** CORS: whitelist origins, allow credentials, expose trace headers. */
 app.use(
     cors({
         origin(origin, callback) {
-            // Allow non-browser requests (no Origin header), like curl/healthchecks
+            /** Allow non-browser requests (no Origin header), like curl/healthchecks. */
             // eslint-disable-next-line unicorn/no-null
             if (!origin) return callback(null, true);
             // eslint-disable-next-line unicorn/no-null
@@ -155,6 +150,7 @@ app.use(
     })
 );
 
+/** Parse URL-encoded and JSON bodies. */
 app.use(
     express.urlencoded({
         extended: true
@@ -163,11 +159,13 @@ app.use(
 
 app.use(express.json());
 
+/** Parse cookies for JWT refresh token. */
 app.use(cookieParser());
 
+/** Rate limiting to prevent abuse. */
 app.use(rateLimiter);
 
-/** Attach or reuse x-request-id for client/server log correlation. */
+/** Request ID middleware — reuse client ID or generate new UUID. */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
     request.requestId = requestId;
@@ -175,9 +173,10 @@ app.use((request, response, next) => {
     next();
 });
 
-/** Slim access log + Prometheus HTTP metrics. */
+/** Winston access log + OpenTelemetry trace injection. */
 app.use(requestLogger);
 
+/** Prometheus HTTP metrics — track latency and in-flight requests. */
 app.use((request, response, next) => {
     incrementInflight();
     const startTime = process.hrtime.bigint();
@@ -195,7 +194,7 @@ app.use((request, response, next) => {
 });
 
 /**
- * REST API routes
+ * REST API routes — domain-driven routing.
  */
 app.use('/account', authRoutes);
 app.use('/products', productRoutes);
@@ -207,14 +206,14 @@ app.use('/feedback', feedbackRoutes);
 app.use('/', systemRoutes);
 
 /**
- * 404 handler — catch all unmatched routes
+ * 404 handler — unmatched routes.
  */
 app.use((request: Request, response: Response) => {
     rejectResponse(response, 404, 'Not Found');
 });
 
 /**
- * Global JSON error handler. One log line per error; the stack lives on the OTel span.
+ * Global error handler — log once, stack in OTel span.
  */
 app.use((error: Error, request: Request, response: Response, _next: NextFunction) => {
     if (response.headersSent) return;
@@ -237,7 +236,7 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     rejectResponse(response, 500, 'Internal Server Error', [error.message]);
 });
 
-/** Last-resort process error handlers (audit stream). */
+/** Process-level error handlers — audit unhandled rejections/exceptions. */
 const unhandledRejections = new Map();
 process
     .on('unhandledRejection', (reason, promise) => {
@@ -252,6 +251,7 @@ process
     })
     .on('rejectionHandled', (promise) => unhandledRejections.delete(promise))
     .on('uncaughtException', (error, origin) => {
+        /** In production, exit immediately to trigger orchestrator restart. */
         if (process.env.NODE_ENV !== 'production') return;
         auditLogger.error('process.uncaughtException', {
             action: 'process.uncaughtException',
@@ -262,6 +262,7 @@ process
         process.exit(1);
     });
 
+/** Auto-start in non-test environments. */
 if (process.env.NODE_ENV !== 'test') {
     registerSignalHandlers(stopServer);
     void startServer().catch((error: Error) =>

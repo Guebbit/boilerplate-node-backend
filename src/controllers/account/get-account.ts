@@ -11,7 +11,6 @@ export const getAccount = (request: Request, response: Response): void => {
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
-    // Prefer transport-safe DTO over Mongoose document method
-    const userData = request.authContext ?? request.user.toObject();
-    successResponse(response, userData);
+    /** Prefer transport-safe DTO over Mongoose document method. */
+    successResponse(response, request.authContext ?? request.user.toObject());
 };
