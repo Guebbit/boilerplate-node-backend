@@ -501,8 +501,9 @@ describe('userService.adminUpdate', () => {
         });
 
         expect(result.success).toBe(true);
-        expect((result as { data: { username: string; admin: boolean } }).data.username).toBe('new-name');
-        expect((result as { data: { username: string; admin: boolean } }).data.admin).toBe(true);
+        const updated = (result as { data: IUserDocument }).data;
+        expect(updated.username).toBe('new-name');
+        expect(updated.admin).toBe(true);
     });
 
     it('changes the password when a non-empty password is supplied', async () => {
