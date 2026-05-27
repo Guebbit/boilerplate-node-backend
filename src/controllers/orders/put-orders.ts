@@ -2,18 +2,17 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
+import type { UpdateOrderByIdRequest } from '@types';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
- * PUT /orders — update an order by id in the request body (admin).
  * PUT /orders/:id — update an order by path id (admin).
  */
 export const putOrders = (
-    request: Request<{ id?: string }, unknown, UpdateOrderRequest | UpdateOrderByIdRequest>,
+    request: Request<{ id?: string }, unknown, UpdateOrderByIdRequest>,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as UpdateOrderRequest).id;
+    const id = request.params.id;
 
     if (!id) {
         rejectResponse(response, 422, 'updateOrder - missing id', [

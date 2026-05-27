@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import { cartCheckoutTotal } from '@utils/domain-metrics';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -14,7 +14,7 @@ import { emitDomainEvent } from '@utils/domain-events';
  */
 export const postCheckout = (request: Request, response: Response) => {
     const user = request.user!;
-    return userService.orderConfirm(user).then((result) => {
+    return cartService.orderConfirm(user).then((result) => {
         if (!result.success) {
             cartCheckoutTotal.inc({ status: 'failure' });
             emitAnalyticsEvent({

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -26,7 +26,7 @@ export const putCartItem = (
 
     return userService
         .cartItemSetById(user, productId, request.body.quantity)
-        .then(() => userService.cartGetWithSummary(user))
+        .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {
             emitAnalyticsEvent({
                 distinctId: user.id,

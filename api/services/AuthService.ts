@@ -99,7 +99,7 @@ export class AuthService {
     }
     /**
      * Refresh access token
-     * Creates a new short-lived access token using a refresh token. The refresh token can be provided as a query parameter, path parameter, or retrieved from the `jwt` cookie.
+     * Creates a new short-lived access token using a refresh token retrieved from the `jwt` cookie.
      * @returns RefreshTokenEnvelope New access token
      * @throws ApiError
      */
@@ -107,28 +107,6 @@ export class AuthService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/account/refresh',
-            errors: {
-                401: `Unauthorized`,
-                500: `Internal server error`,
-            },
-        });
-    }
-    /**
-     * Refresh access token with token in path
-     * Creates a new short-lived access token using a refresh token provided in the URL path.
-     * @param token Refresh token
-     * @returns RefreshTokenEnvelope New access token
-     * @throws ApiError
-     */
-    public static refreshTokenWithPath(
-        token: string,
-    ): CancelablePromise<RefreshTokenEnvelope> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/account/refresh/{token}',
-            path: {
-                'token': token,
-            },
             errors: {
                 401: `Unauthorized`,
                 500: `Internal server error`,

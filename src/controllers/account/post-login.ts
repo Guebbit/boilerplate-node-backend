@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { userService } from '@services/users';
+import { login } from '@services/auth';
 import {
     createRefreshToken,
     createRefreshCookie,
@@ -34,7 +34,7 @@ export const postLogin = (
      * Run token cleanup as a background pre-flight step, then authenticate.
      */
     return runTokenCleanup()
-        .then(() => userService.login(email, password))
+        .then(() => login(email, password))
         .then((result) => {
             if (!result.success) {
                 // Record failed login before responding

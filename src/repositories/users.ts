@@ -18,24 +18,8 @@ export const deleteOne = (user: IUserDocument): Promise<void> => base.deleteOne(
 
 /**
  * Persist changes to a user document.
- * LSP: accepts only Mongoose documents with a .save() method.
- * If you have a lean/plain object, use findByIdAndUpdate directly.
  */
-export const save = (user: IUserDocument): Promise<IUserDocument> => {
-    if (typeof user.save === 'function') return user.save();
-
-    // Fallback for edge cases where a populated/transformed doc lost its prototype.
-    // This is explicitly documented as a degraded path.
-    const id = user._id?.toString() ?? user.id;
-    if (!id) throw new Error('Cannot save user: missing _id or id');
-
-    return userModel
-        .findByIdAndUpdate(id, user, { new: true, runValidators: true })
-        .then((savedUser) => {
-            if (!savedUser) throw new Error('User not found during save');
-            return savedUser;
-        });
-};
+export const save = (user: IUserDocument): Promise<IUserDocument> => user.save();
 
 /**
  * Update multiple user documents matching the filter.

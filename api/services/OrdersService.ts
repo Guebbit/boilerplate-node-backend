@@ -5,7 +5,6 @@
 import type { CheckoutRequest } from '../models/CheckoutRequest';
 import type { CheckoutResponseEnvelope } from '../models/CheckoutResponseEnvelope';
 import type { CreateOrderRequest } from '../models/CreateOrderRequest';
-import type { DeleteOrderRequest } from '../models/DeleteOrderRequest';
 import type { Email } from '../models/Email';
 import type { Id } from '../models/Id';
 import type { MessageResponse } from '../models/MessageResponse';
@@ -15,7 +14,6 @@ import type { Page } from '../models/Page';
 import type { PageSize } from '../models/PageSize';
 import type { SearchOrdersRequest } from '../models/SearchOrdersRequest';
 import type { UpdateOrderByIdRequest } from '../models/UpdateOrderByIdRequest';
-import type { UpdateOrderRequest } from '../models/UpdateOrderRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -99,53 +97,6 @@ export class OrdersService {
                 403: `Forbidden`,
                 404: `Resource not found`,
                 422: `Validation failed`,
-                500: `Internal server error`,
-            },
-        });
-    }
-    /**
-     * Update order
-     * Updates an existing order identified by id in the request body.
-     * @param requestBody
-     * @returns OrderEnvelope Updated order
-     * @throws ApiError
-     */
-    public static updateOrder(
-        requestBody: UpdateOrderRequest,
-    ): CancelablePromise<OrderEnvelope> {
-        return __request(OpenAPI, {
-            method: 'PUT',
-            url: '/orders',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                401: `Unauthorized`,
-                403: `Forbidden`,
-                404: `Resource not found`,
-                422: `Validation failed`,
-                500: `Internal server error`,
-            },
-        });
-    }
-    /**
-     * Delete order
-     * Permanently removes the order identified by id.
-     * @param requestBody
-     * @returns MessageResponse Success
-     * @throws ApiError
-     */
-    public static deleteOrder(
-        requestBody: DeleteOrderRequest,
-    ): CancelablePromise<MessageResponse> {
-        return __request(OpenAPI, {
-            method: 'DELETE',
-            url: '/orders',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                401: `Unauthorized`,
-                403: `Forbidden`,
-                404: `Resource not found`,
                 500: `Internal server error`,
             },
         });

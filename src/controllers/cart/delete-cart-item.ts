@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -26,7 +26,7 @@ export const deleteCartItem = (
 
     return userService
         .cartItemRemoveById(user, productId)
-        .then(() => userService.cartGetWithSummary(user))
+        .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {
             emitAnalyticsEvent({
                 distinctId: user.id,

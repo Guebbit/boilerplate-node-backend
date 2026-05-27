@@ -34,3 +34,14 @@ Single package. REST API. Express. MongoDB. Mongoose.
 - Change little, but keep flow complete.
 - Do not break contract without updating `openapi.yaml` (API the source of truth).
 - Keep observability and security wiring intact.
+
+## No legacy / backward-compat code
+
+This is alpha. No shims, no dual routes, no fallback configs.
+
+- One route per action. Always use `/:id` path params, never body-based IDs.
+- One config path per service. Require full URIs (e.g. `NODE_DB_URI`, `NODE_REDIS_URL`). No host/port fragment fallbacks.
+- No re-exports added "for backward compatibility". Consumers update their imports.
+- No plain-object fallback paths in repositories. Always operate on real Mongoose documents.
+- No dual token sources (cookie AND path). Pick one and enforce it.
+- When you remove a feature, delete it completely. Do not leave dead code or "transitional" adapters.

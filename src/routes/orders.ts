@@ -22,12 +22,6 @@ router.get('/', setCache(3600, { tags: ['orders'] }), getOrders);
 // POST /orders — admin creates order directly
 router.post('/', isAdmin, invalidateCache(['orders']), postOrders);
 
-// PUT /orders — admin, id in body (update)
-router.put('/', isAdmin, invalidateCache(['orders']), putOrders);
-
-// DELETE /orders — admin, id in body
-router.delete('/', isAdmin, invalidateCache(['orders']), deleteOrders);
-
 // GET /orders/:id/invoice — must come before /:id
 router.get('/:id/invoice', setCache(3600, { tags: ['orders'] }), getOrderInvoice);
 

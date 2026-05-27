@@ -17,38 +17,6 @@ import {
     addTextFilter,
     addRegexFilter
 } from '@utils/search-helpers';
-import {
-    cartGet,
-    cartGetWithSummary,
-    cartItemSetById,
-    cartItemSet,
-    cartItemAddById,
-    cartItemAdd,
-    cartItemRemoveById,
-    cartItemRemove,
-    cartRemove,
-    orderConfirm,
-    productRemoveFromCartsById
-} from './cart';
-import { tokenAdd, passwordChange, signup, login } from './auth';
-
-// Re-export split services for backward compatibility (ISP: consumers can import the focused service directly)
-export { cartService } from './cart';
-export {
-    cartGet,
-    cartGetWithSummary,
-    cartItemSetById,
-    cartItemSet,
-    cartItemAddById,
-    cartItemAdd,
-    cartItemRemoveById,
-    cartItemRemove,
-    cartRemove,
-    orderConfirm,
-    productRemoveFromCartsById
-} from './cart';
-export { authService } from './auth';
-export { tokenAdd, passwordChange, signup, login } from './auth';
 
 /**
  * User Admin Service
@@ -176,25 +144,9 @@ export const remove = (
 };
 
 /**
- * Backward-compatible aggregate export.
- * Prefer importing the focused cartService or authService directly.
+ * User Admin Service aggregate.
  */
 export const userService = {
-    cartGet,
-    cartGetWithSummary,
-    cartItemSetById,
-    cartItemSet,
-    cartItemAddById,
-    cartItemAdd,
-    cartItemRemoveById,
-    cartItemRemove,
-    cartRemove,
-    orderConfirm,
-    productRemoveFromCartsById,
-    tokenAdd,
-    passwordChange,
-    signup,
-    login,
     validateData,
     search,
     getById,

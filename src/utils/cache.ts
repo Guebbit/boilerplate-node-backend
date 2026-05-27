@@ -17,15 +17,9 @@ type CacheValue = {
 const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-backend';
 
 /**
- * Support both a full Redis URI and host/port fragments so deployment config can stay flexible.
+ * Returns NODE_REDIS_URL, or undefined if not set.
  */
-const getRedisUrl = (): string | undefined => {
-    if (process.env.NODE_REDIS_URL) return process.env.NODE_REDIS_URL;
-    if (!process.env.NODE_REDIS_PORT) return;
-
-    const host = process.env.NODE_REDIS_HOST ?? '127.0.0.1';
-    return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
-};
+const getRedisUrl = (): string | undefined => process.env.NODE_REDIS_URL;
 
 /**
  * Hold the shared Redis client instance.

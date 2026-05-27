@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { tokenAdd } from '@services/auth';
 import { userRepository } from '@repositories/users';
 import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
@@ -22,7 +22,7 @@ export const postResetRequest = (
             email
                 ? userRepository.findOne({ email }).then((user) =>
                       user
-                          ? userService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
+                          ? tokenAdd(user, 'password', 3_600_000).then((token) => ({
                                 username: user.username,
                                 token
                             }))

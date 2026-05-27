@@ -3,15 +3,17 @@ import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import * as userService from '@services/users';
+import * as authService from '@services/auth';
+import * as cartService from '@services/cart';
 import * as userRepository from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@utils/response';
 import type { IUserDocument } from '@models/users';
 
 setupTestDb();
 
-describe('userService.signup', () => {
+describe('authService.signup', () => {
     it('creates a new user and returns a success response', async () => {
-        const result = await userService.signup(
+        const result = await authService.signup(
             'new@example.com',
             'newuser',
             'Password1!',
@@ -23,7 +25,7 @@ describe('userService.signup', () => {
     });
 
     it('rejects when passwords do not match', async () => {
-        const result = await userService.signup(
+        const result = await authService.signup(
             'new@example.com',
             'newuser',
             'Password1!',
@@ -37,7 +39,7 @@ describe('userService.signup', () => {
     it('rejects with 409 when the email is already registered', async () => {
         await createUser({ email: 'taken@example.com' });
 
-        const result = await userService.signup(
+        const result = await authService.signup(
             'taken@example.com',
             'anotheruser',
             'Password1!',
@@ -49,25 +51,25 @@ describe('userService.signup', () => {
     });
 
     it('rejects with 400 when the email format is invalid', async () => {
-        const result = await userService.signup('not-an-email', 'user', 'Password1!', 'Password1!');
+        const result = await authService.signup('not-an-email', 'user', 'Password1!', 'Password1!');
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(400);
     });
 
     it('rejects with 400 when the password is too short', async () => {
-        const result = await userService.signup('short@example.com', 'shortpwd', 'abc', 'abc');
+        const result = await authService.signup('short@example.com', 'shortpwd', 'abc', 'abc');
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(400);
     });
 });
 
-describe('userService.login', () => {
+describe('authService.login', () => {
     it('returns a success response with correct credentials', async () => {
         await createUser({ email: 'login@example.com' });
 
-        const result = await userService.login('login@example.com', PLAIN_PASSWORD);
+        const result = await authService.login('login@example.com', PLAIN_PASSWORD);
 
         expect(result.success).toBe(true);
         expect((result as IResponseSuccess<IUserDocument>).data!.email).toBe('login@example.com');
@@ -76,14 +78,14 @@ describe('userService.login', () => {
     it('rejects with 401 for the wrong password', async () => {
         await createUser({ email: 'login@example.com' });
 
-        const result = await userService.login('login@example.com', 'WrongPassword!');
+        const result = await authService.login('login@example.com', 'WrongPassword!');
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(401);
     });
 
     it('rejects with 401 for a non-existent email', async () => {
-        const result = await userService.login('nobody@example.com', PLAIN_PASSWORD);
+        const result = await authService.login('nobody@example.com', PLAIN_PASSWORD);
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(401);
@@ -92,20 +94,20 @@ describe('userService.login', () => {
     it('rejects soft-deleted users', async () => {
         await createUser({ email: 'deleted@example.com', deletedAt: new Date() });
 
-        const result = await userService.login('deleted@example.com', PLAIN_PASSWORD);
+        const result = await authService.login('deleted@example.com', PLAIN_PASSWORD);
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(401);
     });
 });
 
-describe('userService cart operations', () => {
+describe('cartService cart operations', () => {
     it('cartItemSetById adds a new product to an empty cart', async () => {
         const user = await createUser();
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
 
-        const result = await userService.cartItemSetById(user, pid, 3);
+        const result = await cartService.cartItemSetById(user, pid, 3);
 
         expect(result.success).toBe(true);
         expect((result as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
@@ -117,10 +119,9 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
 
-        const firstResult = await userService.cartItemSetById(user, pid, 2);
-        const updatedUser = (firstResult as IResponseSuccess<IUserDocument>).data!;
+        await cartService.cartItemSetById(user, pid, 2);
 
-        const secondResult = await userService.cartItemSetById(updatedUser, pid, 7);
+        const secondResult = await cartService.cartItemSetById(user, pid, 7);
 
         expect((secondResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
         expect((secondResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(
@@ -133,10 +134,9 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
 
-        const setResult = await userService.cartItemSetById(user, pid, 2);
-        const userAfterSet = (setResult as IResponseSuccess<IUserDocument>).data!;
+        await cartService.cartItemSetById(user, pid, 2);
 
-        const addResult = await userService.cartItemAddById(userAfterSet, pid, 3);
+        const addResult = await cartService.cartItemAddById(user, pid, 3);
 
         expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(5);
     });
@@ -146,10 +146,9 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 1);
-        const userWithItem = (addResult as IResponseSuccess<IUserDocument>).data!;
+        await cartService.cartItemSetById(user, pid, 1);
 
-        const removeResult = await userService.cartItemRemoveById(userWithItem, pid);
+        const removeResult = await cartService.cartItemRemoveById(user, pid);
 
         expect((removeResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
     });
@@ -159,10 +158,9 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 5);
-        const userWithCart = (addResult as IResponseSuccess<IUserDocument>).data!;
+        await cartService.cartItemSetById(user, pid, 5);
 
-        const clearResult = await userService.cartRemove(userWithCart);
+        const clearResult = await cartService.cartRemove(user);
 
         expect((clearResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
     });
@@ -172,10 +170,10 @@ describe('userService cart operations', () => {
         const product = await createProduct({ title: 'Visible Product' });
         const pid = (product._id as Types.ObjectId).toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 2);
+        const addResult = await cartService.cartItemSetById(user, pid, 2);
         const userLoaded = (addResult as IResponseSuccess<IUserDocument>).data!;
 
-        const items = await userService.cartGet(userLoaded);
+        const items = await cartService.cartGet(userLoaded);
 
         expect(items).toHaveLength(1);
         expect(items[0].quantity).toBe(2);
@@ -185,7 +183,7 @@ describe('userService cart operations', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await userService.cartItemSet(user, product, 4);
+        const result = await cartService.cartItemSet(user, product, 4);
 
         expect(result.success).toBe(true);
         expect((result as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(4);
@@ -196,10 +194,9 @@ describe('userService cart operations', () => {
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
 
-        const setResult = await userService.cartItemSetById(user, pid, 1);
-        const userLoaded = (setResult as IResponseSuccess<IUserDocument>).data!;
+        await cartService.cartItemSetById(user, pid, 1);
 
-        const addResult = await userService.cartItemAdd(userLoaded, product, 9);
+        const addResult = await cartService.cartItemAdd(user, product, 9);
 
         expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(
             10
@@ -210,25 +207,23 @@ describe('userService cart operations', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const addResult = await userService.cartItemSet(user, product, 1);
-        const userLoaded = (addResult as IResponseSuccess<IUserDocument>).data!;
+        await cartService.cartItemSet(user, product, 1);
 
-        const removeResult = await userService.cartItemRemove(userLoaded, product);
+        const removeResult = await cartService.cartItemRemove(user, product);
 
         expect((removeResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
     });
 });
 
-describe('userService.orderConfirm', () => {
+describe('cartService.orderConfirm', () => {
     it('creates an order from the cart and empties the cart afterwards', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 20 });
         const pid = (product._id as Types.ObjectId).toString();
 
-        const addResult = await userService.cartItemSetById(user, pid, 2);
-        const userWithCart = (addResult as IResponseSuccess<IUserDocument>).data!;
+        await cartService.cartItemSetById(user, pid, 2);
 
-        const orderResult = await userService.orderConfirm(userWithCart);
+        const orderResult = await cartService.orderConfirm(user);
 
         expect(orderResult.success).toBe(true);
 
@@ -238,17 +233,17 @@ describe('userService.orderConfirm', () => {
 
     it('rejects with 409 when the cart is empty', async () => {
         const user = await createUser();
-        const result = await userService.orderConfirm(user);
+        const result = await cartService.orderConfirm(user);
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(409);
     });
 });
 
-describe('userService.tokenAdd', () => {
+describe('authService.tokenAdd', () => {
     it('adds a token to the user and returns the token string', async () => {
         const user = await createUser();
-        const token = await userService.tokenAdd(user, 'password-reset', 3_600_000);
+        const token = await authService.tokenAdd(user, 'password-reset', 3_600_000);
 
         expect(typeof token).toBe('string');
         expect(token).toHaveLength(32);
@@ -258,7 +253,7 @@ describe('userService.tokenAdd', () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
-        await userService.tokenAdd(user, 'email-verify');
+        await authService.tokenAdd(user, 'email-verify');
 
         const refreshed = await userRepository.findById(id);
         expect(refreshed!.tokens).toHaveLength(1);
@@ -270,7 +265,7 @@ describe('userService.tokenAdd', () => {
         const id = (user._id as Types.ObjectId).toString();
         const now = Date.now();
 
-        await userService.tokenAdd(user, 'reset', 3_600_000);
+        await authService.tokenAdd(user, 'reset', 3_600_000);
 
         const refreshed = await userRepository.findById(id);
         const expiration = refreshed!.tokens[0].expiration!;
@@ -278,17 +273,17 @@ describe('userService.tokenAdd', () => {
     });
 });
 
-describe('userService.passwordChange', () => {
+describe('authService.passwordChange', () => {
     it('changes the password when both fields match and meet requirements', async () => {
         const user = await createUser();
-        const result = await userService.passwordChange(user, 'NewPassword1!', 'NewPassword1!');
+        const result = await authService.passwordChange(user, 'NewPassword1!', 'NewPassword1!');
 
         expect(result.success).toBe(true);
     });
 
     it('rejects when passwords do not match', async () => {
         const user = await createUser();
-        const result = await userService.passwordChange(user, 'NewPassword1!', 'Different1!');
+        const result = await authService.passwordChange(user, 'NewPassword1!', 'Different1!');
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(400);
@@ -296,7 +291,7 @@ describe('userService.passwordChange', () => {
 
     it('rejects when the new password is too short', async () => {
         const user = await createUser();
-        const result = await userService.passwordChange(user, 'abc', 'abc');
+        const result = await authService.passwordChange(user, 'abc', 'abc');
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(400);
@@ -306,10 +301,10 @@ describe('userService.passwordChange', () => {
         const user = await createUser({ email: 'pwdchange@example.com' });
         const id = (user._id as Types.ObjectId).toString();
 
-        await userService.passwordChange(user, 'BrandNew1!', 'BrandNew1!');
+        await authService.passwordChange(user, 'BrandNew1!', 'BrandNew1!');
 
         const refreshed = await userRepository.findById(id);
-        const loginResult = await userService.login('pwdchange@example.com', 'BrandNew1!');
+        const loginResult = await authService.login('pwdchange@example.com', 'BrandNew1!');
         expect(loginResult.success).toBe(true);
         expect(refreshed).not.toBeNull();
     });
@@ -574,7 +569,7 @@ describe('userService.remove', () => {
     });
 });
 
-describe('userService.productRemoveFromCartsById', () => {
+describe('cartService.productRemoveFromCartsById', () => {
     it('removes a product from every user cart that contains it', async () => {
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
@@ -582,8 +577,8 @@ describe('userService.productRemoveFromCartsById', () => {
         const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
         const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
 
-        const addResult1 = await userService.cartItemSetById(user1, pid, 1);
-        const addResult2 = await userService.cartItemSetById(user2, pid, 2);
+        const addResult1 = await cartService.cartItemSetById(user1, pid, 1);
+        const addResult2 = await cartService.cartItemSetById(user2, pid, 2);
         const id1 = (
             (addResult1 as IResponseSuccess<IUserDocument>).data!._id as Types.ObjectId
         ).toString();
@@ -591,7 +586,7 @@ describe('userService.productRemoveFromCartsById', () => {
             (addResult2 as IResponseSuccess<IUserDocument>).data!._id as Types.ObjectId
         ).toString();
 
-        const result = await userService.productRemoveFromCartsById(pid);
+        const result = await cartService.productRemoveFromCartsById(pid);
 
         expect(result.success).toBe(true);
 
@@ -605,7 +600,7 @@ describe('userService.productRemoveFromCartsById', () => {
         const product = await createProduct();
         const pid = (product._id as Types.ObjectId).toString();
 
-        const result = await userService.productRemoveFromCartsById(pid);
+        const result = await cartService.productRemoveFromCartsById(pid);
 
         expect(result.success).toBe(true);
     });

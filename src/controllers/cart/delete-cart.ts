@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -20,9 +20,9 @@ export const deleteCart = (
 
     // Remove specific item or entire cart
     return (
-        productId ? userService.cartItemRemoveById(user, productId) : userService.cartRemove(user)
+        productId ? cartService.cartItemRemoveById(user, productId) : cartService.cartRemove(user)
     )
-        .then(() => userService.cartGetWithSummary(user))
+        .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {
             emitAnalyticsEvent({
                 distinctId: user.id,

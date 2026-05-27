@@ -76,7 +76,7 @@ export const extractRequestPagination = (
 };
 
 /**
- * Validate a MongoDB ObjectId from request params/body.
+ * Validate a MongoDB ObjectId from request params.
  * Returns the id or sends a 422 response and returns undefined.
  */
 export const extractAndValidateId = (
@@ -84,7 +84,7 @@ export const extractAndValidateId = (
     response: Response,
     entityLabel: string
 ): string | undefined => {
-    const rawId = request.params.id ?? (request.body as { id?: string }).id;
+    const rawId = request.params.id;
     const id = Array.isArray(rawId) ? rawId[0] : rawId;
     if (!id || !Types.ObjectId.isValid(id)) {
         rejectResponse(response, 422, `${entityLabel} - missing id`, [

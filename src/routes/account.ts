@@ -39,9 +39,6 @@ router.post('/reset-confirm', invalidateCache(['users', 'account']), postResetCo
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
 
-// GET /account/refresh/:token — create a new access token from the path token
-router.get('/refresh/:token', getRefreshToken);
-
 // POST /account/logout-all — revoke all refresh tokens (requires auth)
 router.post('/logout-all', isAuth, invalidateCache(['account']), postLogoutEverywhere);
 

@@ -21,12 +21,6 @@ router.get('/', setCache(3600, { tags: ['users'] }), getUsers);
 // POST /users (create)
 router.post('/', invalidateCache(['users', 'account']), upload.single('imageUpload'), writeUsers);
 
-// PUT /users — id in body (update)
-router.put('/', invalidateCache(['users', 'account']), upload.single('imageUpload'), writeUsers);
-
-// DELETE /users — id in body
-router.delete('/', invalidateCache(['users', 'account']), deleteUsers);
-
 // GET /users/:id
 router.get('/:id', setCache(3600, { tags: ['users'] }), getUserItem);
 

@@ -3,7 +3,6 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { CreateUserRequestMultipart } from '../models/CreateUserRequestMultipart';
-import type { DeleteUserRequest } from '../models/DeleteUserRequest';
 import type { Email } from '../models/Email';
 import type { Id } from '../models/Id';
 import type { MessageResponse } from '../models/MessageResponse';
@@ -12,7 +11,6 @@ import type { PageSize } from '../models/PageSize';
 import type { SearchUsersRequest } from '../models/SearchUsersRequest';
 import type { Text } from '../models/Text';
 import type { UpdateUserByIdRequestMultipart } from '../models/UpdateUserByIdRequestMultipart';
-import type { UpdateUserRequestMultipart } from '../models/UpdateUserRequestMultipart';
 import type { UserEnvelope } from '../models/UserEnvelope';
 import type { UsersResponseEnvelope } from '../models/UsersResponseEnvelope';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -79,52 +77,6 @@ export class UsersService {
                 401: `Unauthorized`,
                 403: `Forbidden`,
                 422: `Validation failed`,
-                500: `Internal server error`,
-            },
-        });
-    }
-    /**
-     * Edit user
-     * Updates an existing user's email or password. Optional image can be uploaded.
-     * @param formData
-     * @returns UserEnvelope Updated user
-     * @throws ApiError
-     */
-    public static updateUser(
-        formData: UpdateUserRequestMultipart,
-    ): CancelablePromise<UserEnvelope> {
-        return __request(OpenAPI, {
-            method: 'PUT',
-            url: '/users',
-            formData: formData,
-            mediaType: 'multipart/form-data',
-            errors: {
-                401: `Unauthorized`,
-                403: `Forbidden`,
-                422: `Validation failed`,
-                500: `Internal server error`,
-            },
-        });
-    }
-    /**
-     * Delete user
-     * Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record.
-     * @param requestBody
-     * @returns MessageResponse Success
-     * @throws ApiError
-     */
-    public static deleteUser(
-        requestBody: DeleteUserRequest,
-    ): CancelablePromise<MessageResponse> {
-        return __request(OpenAPI, {
-            method: 'DELETE',
-            url: '/users',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                401: `Unauthorized`,
-                403: `Forbidden`,
-                404: `Resource not found`,
                 500: `Internal server error`,
             },
         });

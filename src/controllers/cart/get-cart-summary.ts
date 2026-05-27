@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse } from '@utils/response';
 
 /**
@@ -7,6 +7,6 @@ import { successResponse } from '@utils/response';
  * Returns a lightweight summary of the authenticated user's cart.
  */
 export const getCartSummary = (request: Request, response: Response) =>
-    userService.cartGetWithSummary(request.user!).then((cart) => {
+    cartService.cartGetWithSummary(request.user!).then((cart) => {
         successResponse(response, cart.summary);
     });

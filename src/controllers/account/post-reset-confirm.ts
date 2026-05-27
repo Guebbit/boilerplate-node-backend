@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { passwordChange } from '@services/auth';
 import { userRepository } from '@repositories/users';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
@@ -52,7 +52,7 @@ export const postResetConfirm = (
             /**
              * Change password
              */
-            return userService.passwordChange(user, password, passwordConfirm).then((result) => {
+            return passwordChange(user, password, passwordConfirm).then((result) => {
                 if (!result.success) {
                     rejectResponse(response, result.status, result.message, result.errors);
                     return;

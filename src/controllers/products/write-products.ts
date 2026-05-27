@@ -8,8 +8,6 @@ import { extractStringList } from '@utils/helpers-request';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
-    UpdateProductRequest,
-    UpdateProductRequestMultipart,
     UpdateProductByIdRequest,
     UpdateProductByIdRequestMultipart
 } from '@types';
@@ -17,10 +15,9 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
 
 /**
  * POST /products — create a new product (admin).
- * PUT /products — update a product by id in the request body (admin).
  * PUT /products/:id — update a product by path id (admin).
  *
- * Behaviour: if an id is found (path param or body), the product is updated;
+ * Behaviour: if an id is found (path param), the product is updated;
  * otherwise a new product is created (POST only — PUT without id returns 422).
  */
 export const writeProducts = (
@@ -29,14 +26,12 @@ export const writeProducts = (
         unknown,
         | CreateProductRequest
         | CreateProductRequestMultipart
-        | UpdateProductRequest
-        | UpdateProductRequestMultipart
         | UpdateProductByIdRequest
         | UpdateProductByIdRequestMultipart
     >,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as { id?: string }).id;
+    const id = request.params.id;
 
     /**
      * Uploaded file takes priority over body imageUrl

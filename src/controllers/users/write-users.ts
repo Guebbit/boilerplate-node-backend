@@ -7,21 +7,17 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import {
     CreateUserRequest,
     CreateUserRequestMultipart,
-    UpdateUserRequest,
-    UpdateUserRequestMultipart,
     UpdateUserByIdRequest,
-    UpdateUserByIdRequestMultipart,
-    User
+    UpdateUserByIdRequestMultipart
 } from '@types';
 import type { IUser } from '@models/users';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * POST /users — create a new user (admin).
- * PUT /users — update a user by id in the request body (admin).
  * PUT /users/:id — update a user by path id (admin).
  *
- * Behaviour: if an id is found (path param or body), the user is updated;
+ * Behaviour: if an id is found (path param), the user is updated;
  * otherwise a new user is created (POST only — PUT without id returns 422).
  */
 export const writeUsers = (
@@ -30,14 +26,12 @@ export const writeUsers = (
         unknown,
         | CreateUserRequest
         | CreateUserRequestMultipart
-        | UpdateUserRequest
-        | UpdateUserRequestMultipart
         | UpdateUserByIdRequest
         | UpdateUserByIdRequestMultipart
     >,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as { id?: string }).id;
+    const id = request.params.id;
 
     /**
      * Uploaded file takes priority over body imageUrl

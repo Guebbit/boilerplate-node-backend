@@ -1,6 +1,6 @@
 import { postLogin } from '@controllers/account/post-login';
 import { getRefreshToken } from '@controllers/account/get-refresh-token';
-import { userService } from '@services/users';
+import { login } from '@services/auth';
 import { runTokenCleanup } from '@utils/token-cleanup';
 import { createAccessToken } from '@middlewares/auth-jwt';
 
@@ -10,12 +10,10 @@ jest.mock('@utils/token-cleanup', () => ({
     runTokenCleanup: jest.fn()
 }));
 
-jest.mock('@services/users', () => ({
+jest.mock('@services/auth', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
-    userService: {
-        login: jest.fn()
-    }
+    login: jest.fn()
 }));
 
 jest.mock('@middlewares/auth-jwt', () => ({
@@ -35,7 +33,7 @@ jest.mock('@utils/response', () => ({
 }));
 
 const mockRunTokenCleanup = runTokenCleanup as jest.MockedFunction<typeof runTokenCleanup>;
-const mockLogin = userService.login as jest.MockedFunction<typeof userService.login>;
+const mockLogin = login as jest.MockedFunction<typeof login>;
 const mockCreateAccessToken = createAccessToken as jest.MockedFunction<typeof createAccessToken>;
 
 describe('Auth controllers token cleanup trigger', () => {

@@ -28,19 +28,6 @@ router.post(
     writeProducts
 );
 
-// PUT /products — admin only, id in body (update)
-router.put(
-    '/',
-    isAuth,
-    isAdmin,
-    invalidateCache(['products']),
-    upload.single('imageUpload'),
-    writeProducts
-);
-
-// DELETE /products — admin only, id in body
-router.delete('/', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
-
 // GET /products/:id — public
 router.get('/:id', setCache(3600, { tags: ['products'] }), getProductItem);
 
