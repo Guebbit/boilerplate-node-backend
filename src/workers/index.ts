@@ -19,5 +19,6 @@ export const registerWorkers = (): Promise<void> => {
         : Promise.resolve();
 
     if (isQueueEnabled()) logger.info('Registering queue workers...');
+    // Worker registration only needs completion side effects.
     return Promise.all([queueWorkers, registerKafkaWorkers()]).then(() => {});
 };
