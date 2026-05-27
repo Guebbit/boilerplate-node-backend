@@ -22,10 +22,11 @@ export const handlePdfJob = (message: unknown): Promise<boolean> => {
         return Promise.resolve(false);
     }
 
-    const resolvedTemplate = path.resolve(job.templatePath);
-
+    /**
+     * Create PDF file using the invoice EJS template
+     */
     return ejs
-        .renderFile(resolvedTemplate, job.templateData ?? {})
+        .renderFile(path.resolve(job.templatePath), job.templateData ?? {})
         .then((html) => renderHtmlToPdf(html, { format: 'A4', path: job.outputPath }))
         .then(() => {
             logger.info({ message: 'PDF generated.', outputPath: job.outputPath });

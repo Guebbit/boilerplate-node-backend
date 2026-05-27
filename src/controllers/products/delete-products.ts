@@ -23,6 +23,7 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
     );
 
     return productService
+        // true = hard-delete; false (default) = soft-delete (sets deletedAt)
         .remove(id, hardDelete)
         .then((result) => {
             if (!result.success) {

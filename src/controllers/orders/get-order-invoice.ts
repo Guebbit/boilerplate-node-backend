@@ -24,10 +24,11 @@ export const getOrderInvoice = (request: Request, response: Response) =>
                 return;
             }
 
-            const templatePath = path.resolve('views', 'templates-files', 'invoice-order-file.ejs');
-
+            /**
+             * Create PDF file using the invoice EJS template
+             */
             return ejs
-                .renderFile(templatePath, {
+                .renderFile(path.resolve('views', 'templates-files', 'invoice-order-file.ejs'), {
                     order,
                     pageMetaTitle: `Invoice - Order ${String(order._id)}`
                 })
