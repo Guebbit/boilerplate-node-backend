@@ -47,7 +47,7 @@ npm run docs:asyncapi       # open AsyncAPI Studio in browser
 
 ## Naming convention
 
-Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`), and Kafka publishes those exact channel names as topic names (or prefixed topic names when `NODE_KAFKA_TOPIC_PREFIX` is set).
+Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`). These names are used as event identifiers at runtime (SSE event names, WebSocket event types, domain event names).
 
 ## Realtime event names
 
