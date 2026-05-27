@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
-import type { SearchOrdersRequest, CartItem } from '@types';
+import type { SearchOrdersRequest, CartItem, PaginationMeta } from '@types';
 import type { IOrderDocument, IOrderDocumentItem } from '@models/orders';
 import { EOrderStatus } from '@models/orders';
 import {
@@ -75,7 +75,7 @@ export const search = (
     scope?: Record<string, unknown>
 ): Promise<{
     items: IOrderDocument[];
-    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    meta: PaginationMeta;
 }> => {
     const page = Math.max(1, Number(search.page ?? 1) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));

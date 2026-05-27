@@ -9,7 +9,7 @@ import {
 } from '@utils/response';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, IUser } from '@models/users';
-import type { SearchUsersRequest } from '@types';
+import type { SearchUsersRequest, PaginationMeta } from '@types';
 import { userRepository } from '@repositories/users';
 import {
     normalizePagination,
@@ -50,7 +50,7 @@ export const search = (
     filters: SearchUsersRequest = {}
 ): Promise<{
     items: IUserDocument[];
-    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    meta: PaginationMeta;
 }> => {
     const pagination = normalizePagination(filters);
     const where: QueryFilter<IUserDocument> = {};

@@ -7,12 +7,13 @@ import { cartCheckoutTotal } from '@utils/domain-metrics';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 import { getActiveSpanContext } from '@utils/tracer';
 import { emitDomainEvent } from '@utils/domain-events';
+import type { CheckoutRequest } from '@types';
 
 /**
  * POST /cart/checkout
  * Converts the cart into an order and clears the cart.
  */
-export const postCheckout = (request: Request, response: Response) => {
+export const postCheckout = (request: Request<unknown, unknown, CheckoutRequest>, response: Response) => {
     const user = request.user!;
     return cartService.orderConfirm(user).then((result) => {
         if (!result.success) {

@@ -10,6 +10,7 @@ import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import type { IOrderDocument } from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
+import type { CartSummaryResponse } from '@types';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
 
@@ -69,7 +70,7 @@ export const cartGetWithSummary = (
     user: IUserDocument
 ): Promise<{
     items: ICartItem[];
-    summary: { itemsCount: number; totalQuantity: number; total: number };
+    summary: CartSummaryResponse;
 }> =>
     cartGet(user).then((items) => {
         let totalQuantity = 0;

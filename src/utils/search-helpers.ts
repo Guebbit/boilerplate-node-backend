@@ -1,3 +1,5 @@
+import type { PaginationMeta } from '@types';
+
 /**
  * Shared pagination/filter helpers.
  * Extracts common search logic to satisfy OCP — new filter conventions
@@ -15,13 +17,6 @@ export interface IPaginationResult {
     skip: number;
 }
 
-export interface IPaginatedMeta {
-    page: number;
-    pageSize: number;
-    totalItems: number;
-    totalPages: number;
-}
-
 /**
  * Normalize pagination parameters with safe defaults and bounds.
  */
@@ -37,7 +32,7 @@ export const normalizePagination = (input: IPaginationInput = {}): IPaginationRe
 export const buildPaginatedMeta = (
     pagination: IPaginationResult,
     totalItems: number
-): IPaginatedMeta => ({
+): PaginationMeta => ({
     page: pagination.page,
     pageSize: pagination.pageSize,
     totalItems,

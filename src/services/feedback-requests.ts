@@ -2,7 +2,8 @@ import type { QueryFilter } from 'mongoose';
 import {
     type SearchFeedbackRequestsRequest,
     type UpdateFeedbackRequestStatusRequest,
-    type CreateFeedbackRequest
+    type CreateFeedbackRequest,
+    type PaginationMeta
 } from '@types';
 import { EFeedbackStatus, type IFeedbackRequestDocument } from '@models/feedback-requests';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
@@ -49,7 +50,7 @@ export const search = (
     filters: Omit<SearchFeedbackRequestsRequest, 'status'> & { status?: string } = {}
 ): Promise<{
     items: IFeedbackRequestDocument[];
-    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    meta: PaginationMeta;
 }> => {
     const pagination = normalizePagination(filters);
     const where: QueryFilter<IFeedbackRequestDocument> = {};

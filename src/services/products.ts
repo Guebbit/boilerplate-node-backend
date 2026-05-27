@@ -1,7 +1,7 @@
 import { Types } from 'mongoose';
 import { t } from 'i18next';
 import type { QueryFilter } from 'mongoose';
-import type { SearchProductsRequest, Product } from '@types';
+import type { SearchProductsRequest, Product, PaginationMeta } from '@types';
 import {
     generateReject,
     generateSuccess,
@@ -56,7 +56,7 @@ export const search = (
     admin = false
 ): Promise<{
     items: IProductDocument[];
-    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    meta: PaginationMeta;
 }> => {
     const pagination = normalizePagination(filters);
     const where: QueryFilter<IProductDocument> = {};
