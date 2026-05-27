@@ -10,23 +10,47 @@ import { auditLogger, logger } from '@utils/winston';
 // Demo consumers: useful as starter templates for analytics/audit pipelines.
 const KAFKA_AUDIT_GROUP = process.env.NODE_KAFKA_AUDIT_GROUP ?? 'boilerplate-audit-group';
 
+const isChatMessagePayload = (payload: unknown): payload is IChatMessagePayload => {
+    const value = payload as IChatMessagePayload | undefined;
+    return Boolean(value?.payload?.username && value.payload.room);
+};
+
+const isCartCheckedOutEvent = (payload: unknown): payload is ICartCheckedOutEvent => {
+    const value = payload as ICartCheckedOutEvent | undefined;
+    return Boolean(value?.eventId && value.userId && value.orderId);
+};
+
 const handleChatMessageAudit = (payload: unknown): Promise<void> => {
-    const chatMessage = payload as IChatMessagePayload;
+    if (!isChatMessagePayload(payload)) {
+        logger.warn({
+            message: 'Kafka chat message payload is invalid; skipping audit log.'
+        });
+        return Promise.resolve();
+    }
+
+    const chatMessage = payload;
     auditLogger.info('kafka.chat.message', {
         action: CHAT_CHANNELS.EVENT_MESSAGE_NEW,
-        username: chatMessage?.payload?.username,
-        room: chatMessage?.payload?.room
+        username: chatMessage.payload.username,
+        room: chatMessage.payload.room
     });
     return Promise.resolve();
 };
 
 const handleCartCheckoutAudit = (payload: unknown): Promise<void> => {
-    const checkout = payload as ICartCheckedOutEvent;
+    if (!isCartCheckedOutEvent(payload)) {
+        logger.warn({
+            message: 'Kafka cart checkout payload is invalid; skipping audit log.'
+        });
+        return Promise.resolve();
+    }
+
+    const checkout = payload;
     auditLogger.info('kafka.cart.checked_out', {
         action: ECOMMERCE_CHANNELS.CART_CHECKED_OUT,
-        eventId: checkout?.eventId,
-        userId: checkout?.userId,
-        orderId: checkout?.orderId
+        eventId: checkout.eventId,
+        userId: checkout.userId,
+        orderId: checkout.orderId
     });
     return Promise.resolve();
 };

@@ -15,8 +15,10 @@ const getKafkaBrokers = (): string[] => {
     return [`${host}:${process.env.NODE_KAFKA_PORT}`];
 };
 
-export const isKafkaEnabled = (): boolean =>
-    getKafkaBrokers().length > 0 && process.env.NODE_KAFKA_ENABLED !== '0';
+export const isKafkaEnabled = (): boolean => {
+    logHostWithoutPortWarning();
+    return getKafkaBrokers().length > 0 && process.env.NODE_KAFKA_ENABLED !== '0';
+};
 
 const getKafkaClientId = () => process.env.NODE_KAFKA_CLIENT_ID ?? 'boilerplate-node-backend';
 const getKafkaTopicPrefix = () => process.env.NODE_KAFKA_TOPIC_PREFIX?.trim() ?? '';
@@ -27,6 +29,7 @@ let kafkaClient: Kafka | undefined;
 let producer: Producer | undefined;
 let producerConnectPromise: Promise<Producer | void> | undefined;
 let connectionWarningLogged = false;
+let hostWithoutPortWarningLogged = false;
 const activeConsumers = new Set<Consumer>();
 
 const getClient = (): Kafka | undefined => {
@@ -39,6 +42,17 @@ const getClient = (): Kafka | undefined => {
         });
     }
     return kafkaClient;
+};
+
+const logHostWithoutPortWarning = () => {
+    if (hostWithoutPortWarningLogged) return;
+    if (process.env.NODE_KAFKA_BROKERS?.trim()) return;
+    if (!process.env.NODE_KAFKA_HOST?.trim() || process.env.NODE_KAFKA_PORT?.trim()) return;
+    logger.warn({
+        message: 'Kafka host is configured without NODE_KAFKA_PORT; Kafka is disabled.',
+        host: process.env.NODE_KAFKA_HOST
+    });
+    hostWithoutPortWarningLogged = true;
 };
 
 const logConnectionWarning = (error: unknown) => {
