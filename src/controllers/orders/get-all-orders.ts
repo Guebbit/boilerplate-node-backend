@@ -1,7 +1,6 @@
 import type { Request, Response } from 'express';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@utils/response';
-import type { CastError } from 'mongoose';
 
 /**
  * GET /admin/orders
@@ -13,7 +12,7 @@ export const getAllOrders = (_request: Request, response: Response) => {
         .then((orders) => {
             successResponse(response, orders);
         })
-        .catch((error: CastError) => {
-            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+        .catch((error: Error) => {
+            rejectResponse(response, 500, 'Failed to retrieve orders', [error.message]);
         });
 };
