@@ -2,9 +2,7 @@ import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from 'i18next';
 import { Types } from 'mongoose';
-import type { CastError } from 'mongoose';
-import { rejectResponse, successResponse } from './response';
-import { emitAuditEvent, extractRequestContext, AuditAction } from './audit';
+import { rejectResponse } from './response';
 
 /**
  * Normalize pagination parameters from a pre-merged source object.
@@ -96,61 +94,3 @@ export const extractAndValidateId = (
     }
     return id;
 };
-
-/**
- * Options for the generic delete controller factory.
- */
-export interface IDeleteControllerOptions {
-    /** Label used in log messages (e.g. "deleteProduct") */
-    entityLabel: string;
-    /** i18n key for the "not found" message */
-    notFoundKey: string;
-    /** Audit action enum value */
-    auditAction: AuditAction;
-    /** Target type for audit events (e.g. "product", "user") */
-    targetType: string;
-    /** Service remove function */
-    remove: (id: string, hardDelete?: boolean) => Promise<{ success: boolean; status: number; message: string; errors?: string[] }>;
-    /** Whether hardDelete is supported (extracted from query or body) */
-    supportsHardDelete?: boolean;
-}
-
-/**
- * Factory for delete controllers. Eliminates duplicated id-validation, service call, audit, and error handling.
- */
-export const createDeleteController = (options: IDeleteControllerOptions) =>
-    (request: Request<ParamsDictionary>, response: Response) => {
-        const id = extractAndValidateId(request, response, options.entityLabel);
-        if (!id) return Promise.resolve();
-
-        const hardDelete = options.supportsHardDelete
-            ? !!(request.query.hardDelete ?? request.params.hardDelete ?? (request.body as { hardDelete?: boolean }).hardDelete)
-            : undefined;
-
-        return options
-            .remove(id, hardDelete)
-            .then((result) => {
-                if (!result.success) {
-                    rejectResponse(response, result.status, result.message, result.errors);
-                    return;
-                }
-                emitAuditEvent({
-                    action: options.auditAction,
-                    actor_user_id: request.user?.id ?? 'unknown',
-                    actor_role: 'admin',
-                    outcome: 'success',
-                    target_type: options.targetType,
-                    target_id: id,
-                    ...extractRequestContext(request),
-                    ...(hardDelete === undefined ? {} : { metadata: { hardDelete } })
-                });
-                successResponse(response, undefined, 200, result.message);
-            })
-            .catch((error: CastError) => {
-                if (error.message == '404' || error.kind === 'ObjectId')
-                    return rejectResponse(response, 404, `${options.entityLabel} - not found`, [
-                        t(options.notFoundKey)
-                    ]);
-                rejectResponse(response, 500, 'Unknown Error', [error.message]);
-            });
-    };
