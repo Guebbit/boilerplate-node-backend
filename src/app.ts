@@ -176,7 +176,9 @@ app.use(cookieParser());
 
 app.use(rateLimiter);
 
-/** Request ID middleware — reuse client ID or generate new UUID. */
+/*
+ * Request ID middleware — reuse client ID or generate new UUID
+ */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
     request.requestId = requestId;
@@ -184,10 +186,14 @@ app.use((request, response, next) => {
     next();
 });
 
-/** Winston access log + OpenTelemetry trace injection. */
+/*
+ * Winston access log + OpenTelemetry trace injection
+ */
 app.use(requestLogger);
 
-/** Prometheus HTTP metrics — track latency and in-flight requests. */
+/*
+ * Prometheus HTTP metrics — track latency and in-flight requests
+ */
 app.use((request, response, next) => {
     incrementInflight();
     const startTime = process.hrtime.bigint();
@@ -247,7 +253,9 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     rejectResponse(response, 500, 'Internal Server Error', [error.message]);
 });
 
-/** Process-level error handlers — audit unhandled rejections/exceptions. */
+/*
+ * Process-level error handlers — audit unhandled rejections/exceptions
+ */
 const unhandledRejections = new Map();
 process
     .on('unhandledRejection', (reason, promise) => {
@@ -262,7 +270,9 @@ process
     })
     .on('rejectionHandled', (promise) => unhandledRejections.delete(promise))
     .on('uncaughtException', (error, origin) => {
-        /** In production, exit immediately to trigger orchestrator restart. */
+        /*
+         * In production, exit immediately to trigger orchestrator restart
+         */
         if (process.env.NODE_ENV !== 'production') return;
         auditLogger.error('process.uncaughtException', {
             action: 'process.uncaughtException',
@@ -273,7 +283,9 @@ process
         process.exit(1);
     });
 
-/** Auto-start in non-test environments. */
+/*
+ * Auto-start in non-test environments
+ */
 if (process.env.NODE_ENV !== 'test') {
     registerSignalHandlers(stopServer);
     void startServer().catch((error: Error) =>

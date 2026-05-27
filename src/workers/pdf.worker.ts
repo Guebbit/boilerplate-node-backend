@@ -4,10 +4,14 @@ import type { IPdfJobPayload } from '@types';
 import { logger } from '@utils/winston';
 import { renderHtmlToPdf } from '@utils/helpers-pdf';
 
-/** Queue name for PDF generation jobs. */
+/*
+ * Queue name for PDF generation jobs
+ */
 export const PDF_QUEUE = 'pdfs';
 
-/** Payload shape for PDF generation jobs (re-export from AsyncAPI contract). */
+/*
+ * Payload shape for PDF generation jobs (re-export from AsyncAPI contract)
+ */
 export type IPdfJob = IPdfJobPayload;
 
 /**

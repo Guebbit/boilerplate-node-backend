@@ -117,7 +117,9 @@ const getClient = (): Promise<RedisClientType | void> => {
  */
 export const startCache = () => getClient();
 
-/** Liveness ping for /readyz. Returns true only if Redis is reachable (or cache is disabled). */
+/*
+ * Liveness ping for /readyz. Returns true only if Redis is reachable (or cache is disabled)
+ */
 export const pingCache = (): Promise<boolean> => {
     if (!isCacheEnabled()) return Promise.resolve(true);
     return getClient()
@@ -248,13 +250,19 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
 
 // ─── Pub/Sub: cross-instance cache invalidation ───────────────────────────────
 
-/** Redis pub/sub channel name (matches asyncapi.yaml). */
+/*
+ * Redis pub/sub channel name (matches asyncapi.yaml)
+ */
 const CACHE_INVALIDATION_CHANNEL = 'cache.tags.invalidated';
 
-/** Unique instance ID to avoid processing own broadcasts. */
+/*
+ * Unique instance ID to avoid processing own broadcasts
+ */
 const INSTANCE_ID = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-/** Separate subscriber client (Redis requires a dedicated connection for subscriptions). */
+/*
+ * Separate subscriber client (Redis requires a dedicated connection for subscriptions)
+ */
 let subscriberClient: RedisClientType | undefined;
 
 /**
@@ -325,7 +333,9 @@ export const subscribeCacheInvalidation = (): Promise<void> => {
         });
 };
 
-/** Stop the subscriber client during graceful shutdown. */
+/*
+ * Stop the subscriber client during graceful shutdown
+ */
 export const stopCacheSubscriber = (): Promise<void> => {
     if (!subscriberClient?.isOpen) return Promise.resolve();
     return subscriberClient
