@@ -175,13 +175,13 @@ curl -N http://localhost:3000/observability/events
 - `npm run test:unit` - unit tests
 - `npm run test:integration` - HTTP integration tests
 - `npm run build` - type-check + lint
-- `npm run db:migrate` - apply pending migrations (TypeScript runtime)
+- `npm run db:migrate` - apply pending migrations
 - `npm run db:migrate:down` - rollback last migration
 - `npm run db:migrate:status` - list migration status
 - `npm run complete` - build + test + auto-fix lint/prettier
 - `npm run complete:check` - build + test + non-mutating lint/prettier checks
 
-Migrations run through a TypeScript-compatible runtime (`tsx`) so `db/migrations/*.ts` can import migration-safe helpers from `src/migrations/`.
+Migrations use [migrate-mongo](https://github.com/seppevs/migrate-mongo) with CommonJS `.js` files in `db/migrations/`.
 
 ## Port variables (quick map)
 

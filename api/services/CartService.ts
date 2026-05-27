@@ -2,8 +2,8 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { CartResponse } from '../models/CartResponse';
-import type { CartSummaryResponse } from '../models/CartSummaryResponse';
+import type { CartResponseEnvelope } from '../models/CartResponseEnvelope';
+import type { CartSummaryResponseEnvelope } from '../models/CartSummaryResponseEnvelope';
 import type { Id } from '../models/Id';
 import type { RemoveCartItemRequest } from '../models/RemoveCartItemRequest';
 import type { UpdateCartItemByIdRequest } from '../models/UpdateCartItemByIdRequest';
@@ -15,10 +15,10 @@ export class CartService {
     /**
      * Get cart
      * Returns all items currently in the authenticated user's cart along with a computed summary
-     * @returns CartResponse Cart items
+     * @returns CartResponseEnvelope Cart items
      * @throws ApiError
      */
-    public static getCart(): CancelablePromise<CartResponse> {
+    public static getCart(): CancelablePromise<CartResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/cart',
@@ -32,12 +32,12 @@ export class CartService {
      * Add/Edit cart item
      * Adds or edit a product to the authenticated user's cart. Returns the updated cart.
      * @param requestBody
-     * @returns CartResponse Add/Edit to cart
+     * @returns CartResponseEnvelope Add/Edit to cart
      * @throws ApiError
      */
     public static upsertCartItem(
         requestBody: UpsertCartItemRequest,
-    ): CancelablePromise<CartResponse> {
+    ): CancelablePromise<CartResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/cart',
@@ -54,12 +54,12 @@ export class CartService {
      * Empty cart or, if productId is set, remove target cart item
      * Clear cart or, ir productId is set, removes a specific product from the authenticated user's cart. Returns the updated cart (can be empty)
      * @param requestBody
-     * @returns CartResponse Cart cleared
+     * @returns CartResponseEnvelope Cart cleared
      * @throws ApiError
      */
     public static clearCart(
         requestBody?: RemoveCartItemRequest,
-    ): CancelablePromise<CartResponse> {
+    ): CancelablePromise<CartResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'DELETE',
             url: '/cart',
@@ -76,13 +76,13 @@ export class CartService {
      * Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
      * @param productId Product identifier
      * @param requestBody
-     * @returns CartResponse Updated cart
+     * @returns CartResponseEnvelope Updated cart
      * @throws ApiError
      */
     public static updateCartItemById(
         productId: Id,
         requestBody: UpdateCartItemByIdRequest,
-    ): CancelablePromise<CartResponse> {
+    ): CancelablePromise<CartResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'PUT',
             url: '/cart/{productId}',
@@ -103,12 +103,12 @@ export class CartService {
      * Remove item from cart
      * Removes the cart line for the product identified by `{productId}` in the path from the authenticated user's cart. Returns the updated cart.
      * @param productId Product identifier
-     * @returns CartResponse Updated cart
+     * @returns CartResponseEnvelope Updated cart
      * @throws ApiError
      */
     public static removeCartItem(
         productId: Id,
-    ): CancelablePromise<CartResponse> {
+    ): CancelablePromise<CartResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'DELETE',
             url: '/cart/{productId}',
@@ -125,10 +125,10 @@ export class CartService {
     /**
      * Get cart summary
      * Returns a lightweight summary of the authenticated user's cart.
-     * @returns CartSummaryResponse Cart summary
+     * @returns CartSummaryResponseEnvelope Cart summary
      * @throws ApiError
      */
-    public static getCartSummary(): CancelablePromise<CartSummaryResponse> {
+    public static getCartSummary(): CancelablePromise<CartSummaryResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/cart/summary',

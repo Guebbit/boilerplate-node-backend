@@ -93,6 +93,6 @@ export const postResetConfirm = (
             });
         })
         .catch(() => {
-            rejectResponse(response, 500, 'Internal Server Error');
+            rejectResponse(response, 500, 'Internal Server Error', []);
         });
 };
