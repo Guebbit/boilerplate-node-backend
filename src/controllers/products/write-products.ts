@@ -8,8 +8,8 @@ import { extractStringList } from '@utils/helpers-request';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
-    UpdateProductByIdRequest,
-    UpdateProductByIdRequestMultipart
+    UpdateProductRequest,
+    UpdateProductRequestMultipart
 } from '@types';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
@@ -26,8 +26,8 @@ export const writeProducts = (
         unknown,
         | CreateProductRequest
         | CreateProductRequestMultipart
-        | UpdateProductByIdRequest
-        | UpdateProductByIdRequestMultipart
+        | UpdateProductRequest
+        | UpdateProductRequestMultipart
     >,
     response: Response
 ) => {

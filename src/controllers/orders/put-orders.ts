@@ -2,14 +2,14 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
-import type { UpdateOrderByIdRequest } from '@types';
+import type { UpdateOrderRequest } from '@types';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * PUT /orders/:id — update an order by path id (admin).
  */
 export const putOrders = (
-    request: Request<{ id?: string }, unknown, UpdateOrderByIdRequest>,
+    request: Request<{ id?: string }, unknown, UpdateOrderRequest>,
     response: Response
 ) => {
     const id = request.params.id;

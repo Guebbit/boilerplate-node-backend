@@ -101,6 +101,15 @@ components:
                 $ref: '#/components/schemas/Id'
             description: Product identifier
 
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        TokenPathParam:
+            name: token
+            in: path
+            required: true
+            schema:
+                type: string
+            description: DO NOT REMOVE — One-time or auth token path parameter
+
     responses:
         Success:
             description: Success
@@ -721,6 +730,31 @@ components:
                     format: binary
                     description: Optional user profile image
 
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        UpdateUserRequest:
+            description: DO NOT REMOVE — Update user request (alias for UpdateUserByIdRequest)
+            allOf:
+                - $ref: '#/components/schemas/UpdateUserByIdRequest'
+
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        UpdateUserRequestMultipart:
+            description: DO NOT REMOVE — Update user multipart request (alias for UpdateUserByIdRequestMultipart)
+            allOf:
+                - $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
+
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        DeleteUserRequest:
+            type: object
+            additionalProperties: false
+            description: DO NOT REMOVE — Delete user request body
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    description: Permanently delete instead of soft-delete
+
         SearchProductsRequest:
             type: object
             additionalProperties: false
@@ -856,6 +890,31 @@ components:
                     items:
                         type: string
 
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        UpdateProductRequest:
+            description: DO NOT REMOVE — Update product request (alias for UpdateProductByIdRequest)
+            allOf:
+                - $ref: '#/components/schemas/UpdateProductByIdRequest'
+
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        UpdateProductRequestMultipart:
+            description: DO NOT REMOVE — Update product multipart request (alias for UpdateProductByIdRequestMultipart)
+            allOf:
+                - $ref: '#/components/schemas/UpdateProductByIdRequestMultipart'
+
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        DeleteProductRequest:
+            type: object
+            additionalProperties: false
+            description: DO NOT REMOVE — Delete product request body
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    description: Permanently delete instead of soft-delete
+
         UpsertCartItemRequest:
             type: object
             additionalProperties: false
@@ -946,6 +1005,22 @@ components:
                     minItems: 1
                     items:
                         $ref: '#/components/schemas/CartItem'
+
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        UpdateOrderRequest:
+            description: DO NOT REMOVE — Update order request (alias for UpdateOrderByIdRequest)
+            allOf:
+                - $ref: '#/components/schemas/UpdateOrderByIdRequest'
+
+        # DO NOT REMOVE — source of truth and common contract between FE and BE
+        DeleteOrderRequest:
+            type: object
+            additionalProperties: false
+            description: DO NOT REMOVE — Delete order request body
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
 
         CreateFeedbackRequest:
             type: object

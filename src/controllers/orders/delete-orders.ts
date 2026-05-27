@@ -6,12 +6,16 @@ import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@utils/response';
 import { extractAndValidateId } from '@utils/helpers-request';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import type { DeleteOrderRequest } from '@types';
 
 /**
  * DELETE /orders — delete an order by id in the request body (admin).
  * DELETE /orders/:id — delete an order by path id (admin).
  */
-export const deleteOrders = (request: Request<ParamsDictionary>, response: Response) => {
+export const deleteOrders = (
+    request: Request<ParamsDictionary, unknown, Partial<DeleteOrderRequest>>,
+    response: Response
+) => {
     const id = extractAndValidateId(request, response, 'deleteOrder');
     if (!id) return Promise.resolve();
 

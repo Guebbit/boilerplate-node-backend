@@ -6,20 +6,24 @@ import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@utils/response';
 import { extractAndValidateId } from '@utils/helpers-request';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import type { DeleteProductRequest } from '@types';
 
 /**
  * DELETE /products/:id
  * Delete a product by path id (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-export const deleteProducts = (request: Request<ParamsDictionary>, response: Response) => {
+export const deleteProducts = (
+    request: Request<ParamsDictionary, unknown, Partial<DeleteProductRequest>>,
+    response: Response
+) => {
     const id = extractAndValidateId(request, response, 'deleteProduct');
     if (!id) return Promise.resolve();
 
     const hardDelete = !!(
         request.query.hardDelete ??
         request.params.hardDelete ??
-        (request.body as { hardDelete?: boolean }).hardDelete
+        request.body.hardDelete
     );
 
     return productService

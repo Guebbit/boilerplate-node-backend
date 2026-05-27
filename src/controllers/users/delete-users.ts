@@ -6,6 +6,7 @@ import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@utils/response';
 import { extractAndValidateId } from '@utils/helpers-request';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import type { DeleteUserRequest } from '@types';
 
 /**
  * DELETE /users — delete a user by id in the request body (admin).
@@ -14,14 +15,17 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
  * Pass ?hardDelete=true (query) or { hardDelete: true } (body) to permanently
  * delete; otherwise the user is soft-deleted (sets deletedAt).
  */
-export const deleteUsers = (request: Request<ParamsDictionary>, response: Response) => {
+export const deleteUsers = (
+    request: Request<ParamsDictionary, unknown, Partial<DeleteUserRequest>>,
+    response: Response
+) => {
     const id = extractAndValidateId(request, response, 'deleteUser');
     if (!id) return Promise.resolve();
 
     const hardDelete = !!(
         request.query.hardDelete ??
         request.params.hardDelete ??
-        (request.body as { hardDelete?: boolean }).hardDelete
+        request.body.hardDelete
     );
 
     return userService

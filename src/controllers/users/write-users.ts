@@ -7,8 +7,8 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import {
     CreateUserRequest,
     CreateUserRequestMultipart,
-    UpdateUserByIdRequest,
-    UpdateUserByIdRequestMultipart
+    UpdateUserRequest,
+    UpdateUserRequestMultipart
 } from '@types';
 import type { IUser } from '@models/users';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
@@ -26,8 +26,8 @@ export const writeUsers = (
         unknown,
         | CreateUserRequest
         | CreateUserRequestMultipart
-        | UpdateUserByIdRequest
-        | UpdateUserByIdRequestMultipart
+        | UpdateUserRequest
+        | UpdateUserRequestMultipart
     >,
     response: Response
 ) => {
