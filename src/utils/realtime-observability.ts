@@ -1,5 +1,9 @@
 import type { Response } from 'express';
-import { OBSERVABILITY_CHANNELS, type IObservabilityMetricsPayload, type TObservabilityChannel } from '@types';
+import {
+    OBSERVABILITY_CHANNELS,
+    type IObservabilityMetricsPayload,
+    type TObservabilityChannel
+} from '@types';
 import { getHttpRequestCounters } from '@utils/observability';
 import { getActiveWebSocketConnections } from '@utils/realtime-chat';
 
