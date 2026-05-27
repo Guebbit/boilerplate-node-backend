@@ -91,6 +91,15 @@ describe('kafka utils', () => {
         });
     });
 
+    it('returns false when publishing while disabled', () =>
+        publishKafkaMessage({
+            channel: 'ecommerce.cart.checked_out',
+            payload: { id: '1' }
+        }).then((sent) => {
+            expect(sent).toBe(false);
+            expect(mockProducerSend).not.toHaveBeenCalled();
+        }));
+
     it('registers a consumer when enabled', () => {
         process.env.NODE_KAFKA_BROKERS = 'localhost:9092';
 
@@ -107,8 +116,26 @@ describe('kafka utils', () => {
         });
     });
 
+    it('does nothing when consuming while disabled', () =>
+        consumeKafkaMessage({
+            channel: 'realtime.chat.event.message.new',
+            groupId: 'audit',
+            handler: jest.fn().mockImplementation(() => Promise.resolve())
+        }).then(() => {
+            expect(mockConsumerConnect).not.toHaveBeenCalled();
+            expect(mockConsumerSubscribe).not.toHaveBeenCalled();
+            expect(mockConsumerRun).not.toHaveBeenCalled();
+        }));
+
     it('startKafka resolves when disabled', () =>
         startKafka().then(() => {
             expect(mockProducerConnect).not.toHaveBeenCalled();
         }));
+
+    it('startKafka connects producer when enabled', () => {
+        process.env.NODE_KAFKA_BROKERS = 'localhost:9092';
+        return startKafka().then(() => {
+            expect(mockProducerConnect).toHaveBeenCalled();
+        });
+    });
 });

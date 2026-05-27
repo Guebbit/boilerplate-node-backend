@@ -12,12 +12,28 @@ const KAFKA_AUDIT_GROUP = process.env.NODE_KAFKA_AUDIT_GROUP ?? 'boilerplate-aud
 
 const isChatMessagePayload = (payload: unknown): payload is IChatMessagePayload => {
     const value = payload as IChatMessagePayload | undefined;
-    return Boolean(value?.payload?.username && value.payload.room);
+    return Boolean(
+        value?.type === 'chat:message' &&
+        value.payload?.username &&
+        value.payload.room &&
+        value.payload.message &&
+        value.payload.id &&
+        value.payload.timestamp
+    );
 };
 
 const isCartCheckedOutEvent = (payload: unknown): payload is ICartCheckedOutEvent => {
     const value = payload as ICartCheckedOutEvent | undefined;
-    return Boolean(value?.eventId && value.userId && value.orderId);
+    return Boolean(
+        value?.eventName === ECOMMERCE_CHANNELS.CART_CHECKED_OUT &&
+        value.eventId &&
+        value.occurredAt &&
+        value.cartId &&
+        value.userId &&
+        value.orderId &&
+        Number.isInteger(value.itemCount) &&
+        value.itemCount > 0
+    );
 };
 
 const handleChatMessageAudit = (payload: unknown): Promise<void> => {
