@@ -47,7 +47,9 @@ const getClient = (): Kafka | undefined => {
 const logHostWithoutPortWarning = () => {
     if (hostWithoutPortWarningLogged) return;
     if (process.env.NODE_KAFKA_BROKERS?.trim()) return;
-    if (!process.env.NODE_KAFKA_HOST?.trim() || process.env.NODE_KAFKA_PORT?.trim()) return;
+    const hasHost = Boolean(process.env.NODE_KAFKA_HOST?.trim());
+    const hasPort = Boolean(process.env.NODE_KAFKA_PORT?.trim());
+    if (!hasHost || hasPort) return;
     logger.warn({
         message: 'Kafka host is configured without NODE_KAFKA_PORT; Kafka is disabled.',
         host: process.env.NODE_KAFKA_HOST

@@ -9,7 +9,6 @@ import {
     type TChatRoom
 } from '@types';
 import { publishKafkaMessage } from '@utils/kafka';
-import { logger } from '@utils/winston';
 
 // Per-connection state: username (set after join) and current room.
 interface IChatClientState {
@@ -30,11 +29,7 @@ const publishChatMessage = (
     payload: TChatClientEvent | TChatServerEvent | IChatErrorEvent,
     key?: string
 ) => {
-    void publishKafkaMessage({ channel, payload, key }).then((sent) => {
-        if (!sent && process.env.NODE_KAFKA_ENABLED === '1') {
-            logger.warn({ message: 'Kafka publish skipped for chat event.', channel });
-        }
-    });
+    void publishKafkaMessage({ channel, payload, key });
 };
 
 // Safe JSON parse — returns undefined on malformed input instead of throwing.
