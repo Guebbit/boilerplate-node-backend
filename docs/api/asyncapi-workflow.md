@@ -19,7 +19,8 @@ Types are generated from `asyncapi.yaml` into `src/types/asyncapi.ts` by a custo
 They are re-exported from `src/types/index.ts` so all app code can import them consistently:
 
 ```ts
-import type { IChatMessageSentEvent, OBSERVABILITY_CHANNELS } from '@types';
+import type { IChatMessagePayload } from '@types';
+import { OBSERVABILITY_CHANNELS } from '@types';
 ```
 
 Regenerate types after editing `asyncapi.yaml`:
@@ -46,7 +47,7 @@ npm run docs:asyncapi       # open AsyncAPI Studio in browser
 
 ## Naming convention
 
-Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`) so the same contracts can map naturally to Kafka topics in a future PR.
+Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`), and Kafka publishes those exact channel names as topic names (or prefixed topic names when `NODE_KAFKA_TOPIC_PREFIX` is set).
 
 ## Realtime event names
 

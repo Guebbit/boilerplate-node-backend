@@ -132,6 +132,7 @@ curl http://localhost:3000/metrics
     - `{"type":"chat:message:send","payload":{"message":"hello"}}`
 
 Contracts are defined as AsyncAPI channels in `asyncapi.yaml` and generated into `src/types/asyncapi.ts`.
+When Kafka is enabled, these same chat channels are also published as Kafka topics.
 
 ### SSE live metrics (`/observability/events`)
 
@@ -147,6 +148,12 @@ Quick check:
 curl -N http://localhost:3000/observability/events
 ```
 
+When Kafka is enabled, SSE payloads are also published to:
+
+- `observability.metrics.snapshot`
+- `observability.metrics.updated`
+- `observability.heartbeat`
+
 ## AsyncAPI (async/event contracts)
 
 - Async contract source of truth: `asyncapi.yaml`
@@ -160,6 +167,22 @@ curl -N http://localhost:3000/observability/events
     - `npm run lint:asyncapi`
 - Open AsyncAPI Studio locally:
     - `npm run docs:asyncapi`
+
+### Kafka + AsyncAPI mapping (opt-in)
+
+- Kafka uses AsyncAPI channel names as topic names (or `${NODE_KAFKA_TOPIC_PREFIX}.<channel>` when prefixed).
+- Enabled channels include:
+    - Chat commands/events (`realtime.chat.*`)
+    - SSE observability events (`observability.*`)
+    - Cart checkout domain events (`ecommerce.cart.checked_out`)
+- Kafka is optional. Without Kafka env vars, runtime behavior stays in-memory and unchanged.
+
+Local example:
+
+```bash
+docker compose up -d kafka
+NODE_KAFKA_BROKERS=localhost:19092 NODE_KAFKA_ENABLED=1 npm run dev
+```
 
 ## Scripts
 
@@ -223,6 +246,7 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
     - SSE observability channels (`observability.*`)
     - Ecommerce cart checkout events (`ecommerce.cart.checked_out`)
 - All WebSocket/SSE/domain-event code imports types and channel-name constants from `src/types`
+- Kafka publishing/consuming also uses these generated channel constants and payload types
 
 ## Frontend/backend tandem sync discipline
 
