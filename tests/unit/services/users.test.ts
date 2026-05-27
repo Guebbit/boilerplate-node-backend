@@ -495,11 +495,13 @@ describe('userService.adminUpdate', () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
-        const updated = await userService.adminUpdate(id, {
+        const result = await userService.adminUpdate(id, {
             username: 'new-name',
             admin: true
         });
 
+        expect(result.success).toBe(true);
+        const updated = (result as { data: IUserDocument }).data;
         expect(updated.username).toBe('new-name');
         expect(updated.admin).toBe(true);
     });
@@ -526,10 +528,10 @@ describe('userService.adminUpdate', () => {
         expect(refreshed!.password).toBe(originalHash);
     });
 
-    it('throws when the user does not exist', async () => {
-        await expect(
-            userService.adminUpdate('000000000000000000000000', { username: 'x' })
-        ).rejects.toThrow();
+    it('returns reject result when the user does not exist', async () => {
+        const result = await userService.adminUpdate('000000000000000000000000', { username: 'x' });
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
     });
 });
 

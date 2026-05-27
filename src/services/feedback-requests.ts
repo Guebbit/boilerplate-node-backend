@@ -1,45 +1,40 @@
 import type { QueryFilter } from 'mongoose';
 import {
-    SearchFeedbackRequestsRequest,
-    UpdateFeedbackRequestStatusRequest,
+    type SearchFeedbackRequestsRequest,
+    type UpdateFeedbackRequestStatusRequest,
     type CreateFeedbackRequest
 } from '@types';
 import { EFeedbackStatus, type IFeedbackRequestDocument } from '@models/feedback-requests';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
+import {
+    normalizePagination,
+    buildPaginatedMeta,
+    addTextFilter,
+    addRegexFilter
+} from '@utils/search-helpers';
+import {
+    generateReject,
+    generateSuccess,
+    type IResponseSuccess,
+    type IResponseReject
+} from '@utils/response';
 
-const toFeedbackStatus = (
-    status?:
-        | SearchFeedbackRequestsRequest.status
-        | UpdateFeedbackRequestStatusRequest.status
-        | EFeedbackStatus
-        | string
-): EFeedbackStatus | undefined => {
-    switch (status) {
-        case SearchFeedbackRequestsRequest.status.NEW:
-        case UpdateFeedbackRequestStatusRequest.status.NEW:
-        case EFeedbackStatus.NEW: {
-            return EFeedbackStatus.NEW;
-        }
-        case SearchFeedbackRequestsRequest.status.IN_PROGRESS:
-        case UpdateFeedbackRequestStatusRequest.status.IN_PROGRESS:
-        case EFeedbackStatus.IN_PROGRESS: {
-            return EFeedbackStatus.IN_PROGRESS;
-        }
-        case SearchFeedbackRequestsRequest.status.RESOLVED:
-        case UpdateFeedbackRequestStatusRequest.status.RESOLVED:
-        case EFeedbackStatus.RESOLVED: {
-            return EFeedbackStatus.RESOLVED;
-        }
-        case SearchFeedbackRequestsRequest.status.SPAM:
-        case UpdateFeedbackRequestStatusRequest.status.SPAM:
-        case EFeedbackStatus.SPAM: {
-            return EFeedbackStatus.SPAM;
-        }
-        default: {
-            return;
-        }
-    }
+/**
+ * OCP-compliant status mapping: adding a new status only requires adding one entry here.
+ */
+const STATUS_MAP: Record<string, EFeedbackStatus> = {
+    NEW: EFeedbackStatus.NEW,
+    new: EFeedbackStatus.NEW,
+    IN_PROGRESS: EFeedbackStatus.IN_PROGRESS,
+    in_progress: EFeedbackStatus.IN_PROGRESS,
+    RESOLVED: EFeedbackStatus.RESOLVED,
+    resolved: EFeedbackStatus.RESOLVED,
+    SPAM: EFeedbackStatus.SPAM,
+    spam: EFeedbackStatus.SPAM
 };
+
+const toFeedbackStatus = (status?: string): EFeedbackStatus | undefined =>
+    status ? STATUS_MAP[status] : undefined;
 
 export const create = (payload: CreateFeedbackRequest): Promise<IFeedbackRequestDocument> =>
     feedbackRequestRepository.create({
@@ -56,40 +51,23 @@ export const search = (
     items: IFeedbackRequestDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }> => {
-    const page = Math.max(1, Number(filters.page ?? 1) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize ?? 10) || 10));
-    const skip = (page - 1) * pageSize;
-
+    const pagination = normalizePagination(filters);
     const where: QueryFilter<IFeedbackRequestDocument> = {};
 
     if (filters.status) where.status = toFeedbackStatus(filters.status);
-    if (filters.email && String(filters.email).trim() !== '')
-        where.email = { $regex: String(filters.email).trim(), $options: 'i' };
-    if (filters.text && String(filters.text).trim() !== '') {
-        const text = String(filters.text).trim();
-        where.$or = [
-            { name: { $regex: text, $options: 'i' } },
-            { email: { $regex: text, $options: 'i' } },
-            { subject: { $regex: text, $options: 'i' } },
-            { message: { $regex: text, $options: 'i' } }
-        ];
-    }
+    addRegexFilter(where as Record<string, unknown>, 'email', filters.email);
+    addTextFilter(where as Record<string, unknown>, filters.text, ['name', 'email', 'subject', 'message']);
 
     return feedbackRequestRepository.count(where).then((totalItems) =>
         feedbackRequestRepository
             .findAll(where, {
                 sort: { createdAt: -1 },
-                skip,
-                limit: pageSize
+                skip: pagination.skip,
+                limit: pagination.pageSize
             })
             .then((items) => ({
                 items,
-                meta: {
-                    page,
-                    pageSize,
-                    totalItems,
-                    totalPages: Math.ceil(totalItems / pageSize)
-                }
+                meta: buildPaginatedMeta(pagination, totalItems)
             }))
     );
 };
@@ -97,15 +75,17 @@ export const search = (
 export const updateStatus = (
     id: string,
     payload: UpdateFeedbackRequestStatusRequest
-): Promise<IFeedbackRequestDocument> =>
+): Promise<IResponseSuccess<IFeedbackRequestDocument> | IResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
-        if (!feedback) throw new Error('404');
+        if (!feedback) return generateReject(404, '404', ['Feedback request not found']);
         const nextStatus = toFeedbackStatus(payload.status);
         if (nextStatus !== undefined) feedback.status = nextStatus;
         if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
         if (nextStatus === EFeedbackStatus.RESOLVED && !feedback.respondedAt)
             feedback.respondedAt = new Date();
-        return feedbackRequestRepository.save(feedback);
+        return feedbackRequestRepository.save(feedback).then((saved) =>
+            generateSuccess(saved)
+        );
     });
 
 export const feedbackRequestService = {

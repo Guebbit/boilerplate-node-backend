@@ -2,14 +2,18 @@ import { PostHog } from 'posthog-node';
 
 // ─── Configuration helpers ────────────────────────────────────────────────────
 
-/** Returns true only when both API key and host are set in the environment. */
+/*
+ * Returns true only when both API key and host are set in the environment
+ */
 export const isPostHogEnabled = (): boolean =>
     Boolean(process.env.NODE_POSTHOG_API_KEY && process.env.NODE_POSTHOG_HOST);
 
 // Lazily created so the client is never instantiated when analytics are disabled.
 let _client: PostHog | undefined;
 
-/** Returns the shared PostHog client, creating it on first call. */
+/*
+ * Returns the shared PostHog client, creating it on first call
+ */
 const getClient = (): PostHog => {
     if (!_client) {
         _client = new PostHog(process.env.NODE_POSTHOG_API_KEY!, {
@@ -22,7 +26,9 @@ const getClient = (): PostHog => {
     return _client;
 };
 
-/** Flush pending events and shut down the PostHog client on server stop. */
+/*
+ * Flush pending events and shut down the PostHog client on server stop
+ */
 export const shutdownAnalytics = async (): Promise<void> => {
     if (_client) {
         await _client.shutdown();
@@ -56,7 +62,9 @@ export enum AnalyticsEvent {
 
 // ─── Payload schema ───────────────────────────────────────────────────────────
 
-/** Core fields shared by every analytics event. */
+/*
+ * Core fields shared by every analytics event
+ */
 export interface IAnalyticsEvent {
     /** PostHog distinct_id: authenticated user ID or a session/anonymous ID. */
     distinctId: string;

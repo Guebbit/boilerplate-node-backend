@@ -10,18 +10,19 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
  * Remove jwt cookie and ALL refresh tokens in the DB.
  */
 export const postLogoutEverywhere = (request: Request, response: Response) => {
-    // remove refresh token from DB
+    // remove refresh token from DB (requires Mongoose document method)
     return (
         request.user ? request.user.tokenRemoveAll(ETokenType.REFRESH) : Promise.resolve()
     ).then(() => {
-        // and from local
         destroyRefreshCookie(response);
         destroyLoggedCookie(response);
 
+        // DIP: use authContext DTO for audit metadata
+        const auth = request.authContext;
         emitAuditEvent({
             action: AuditAction.AUTH_LOGOUT_ALL_SUCCEEDED,
-            actor_user_id: request.user?.id ?? 'anonymous',
-            actor_role: request.user?.admin ? 'admin' : 'user',
+            actor_user_id: auth?.id ?? 'anonymous',
+            actor_role: auth?.admin ? 'admin' : 'user',
             outcome: 'success',
             ...extractRequestContext(request)
         });
