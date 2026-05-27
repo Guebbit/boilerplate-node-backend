@@ -17,6 +17,7 @@
         "lint:openapi": "spectral lint openapi.yaml",
         "lint:openapi:fix": "spectral lint openapi.yaml --format stylish",
         "lint:asyncapi": "npx @asyncapi/cli validate asyncapi.yaml",
+    "gen:asyncapi-types": "npx @asyncapi/cli generate models typescript asyncapi.yaml --output src/types/ --no-interactive",
         "prettier": "npx prettier .",
         "prettier:check": "npx prettier . --check",
         "prettier:fix": "npx prettier . --write",

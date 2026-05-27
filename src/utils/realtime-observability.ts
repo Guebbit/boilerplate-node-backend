@@ -7,10 +7,16 @@ import {
 import { getHttpRequestCounters } from '@utils/observability';
 import { getActiveWebSocketConnections } from '@utils/realtime-chat';
 
+// In-memory set of active SSE response objects — one entry per connected client.
 const sseClients = new Set<Response>();
+
+// How often the server pushes a metrics delta to all connected SSE clients.
 const UPDATE_INTERVAL_MS = 5000;
+
+// Lightweight keep-alive ping to prevent proxies/load-balancers from closing idle SSE streams.
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
+// Writes a single SSE frame (event + data) to the response stream.
 const writeEvent = (
     response: Response,
     event: TObservabilitySseEventName,
@@ -20,8 +26,10 @@ const writeEvent = (
     response.write(`data: ${JSON.stringify(payload)}\n\n`);
 };
 
+// Returns the current number of open SSE connections (used by observability payload itself).
 export const getActiveSseClients = (): number => sseClients.size;
 
+// Builds a snapshot of current process/runtime metrics matching the asyncapi.yaml schema.
 export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayload> => {
     const memoryUsage = process.memoryUsage();
     return getHttpRequestCounters().then((counters) => ({
@@ -44,12 +52,15 @@ export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayloa
     }));
 };
 
+// Fires-and-forgets a metrics event — errors are silently swallowed to avoid crashing the stream.
 const writeMetricsEvent = (response: Response, eventName: TObservabilitySseEventName) => {
     void buildObservabilityPayload()
         .then((payload) => writeEvent(response, eventName, payload))
         .catch(() => {});
 };
 
+// Opens an SSE stream on the given response: sets headers, sends an immediate snapshot,
+// then schedules periodic updates and heartbeats, cleaning up all intervals on close.
 export const streamObservabilityMetrics = (response: Response) => {
     response.status(200);
     response.setHeader('Content-Type', 'text/event-stream');
@@ -58,6 +69,7 @@ export const streamObservabilityMetrics = (response: Response) => {
     response.flushHeaders();
 
     sseClients.add(response);
+    // Send the first payload immediately so the client has data before the first interval fires.
     writeMetricsEvent(response, OBSERVABILITY_SSE_EVENTS.SNAPSHOT);
 
     const updatesInterval = setInterval(() => {
@@ -68,6 +80,7 @@ export const streamObservabilityMetrics = (response: Response) => {
         writeMetricsEvent(response, OBSERVABILITY_SSE_EVENTS.HEARTBEAT);
     }, HEARTBEAT_INTERVAL_MS);
 
+    // Cleanup when the client disconnects to avoid memory leaks and stale intervals.
     const teardown = () => {
         clearInterval(updatesInterval);
         clearInterval(heartbeatInterval);

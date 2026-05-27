@@ -154,8 +154,7 @@ curl -N http://localhost:3000/observability/events
 - Async contract source of truth: `asyncapi.yaml`
 - OpenAPI + AsyncAPI split in this repo:
     - `openapi.yaml` documents REST endpoints and request/response contracts
-    - `asyncapi.yaml` documents event-driven contracts (WebSocket + SSE + future event examples)
-- Kafka is intentionally **not** implemented in this PR/runtime. The AsyncAPI file includes future-ready channel naming and ecommerce example events for later Kafka/RabbitMQ adoption.
+    - `asyncapi.yaml` documents event-driven contracts (WebSocket + SSE + ecommerce cart checkout)
 
 ### Validate / view AsyncAPI
 
@@ -172,6 +171,7 @@ curl -N http://localhost:3000/observability/events
 - `npm run ts-check` - TypeScript type-check
 - `npm run lint` - lint checks
 - `npm run lint:asyncapi` - validate AsyncAPI contract
+- `npm run gen:asyncapi-types` - generate TypeScript types from asyncapi.yaml into `src/types/`
 - `npm run prettier:check` - prettier non-mutating formatting check
 - `npm run test` - unit + integration tests
 - `npm run test:unit` - unit tests

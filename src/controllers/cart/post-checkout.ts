@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { userService } from '@services/users';
@@ -5,6 +6,7 @@ import { successResponse, rejectResponse } from '@utils/response';
 import { cartCheckoutTotal } from '@utils/domain-metrics';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 import { getActiveSpanContext } from '@utils/tracer';
+import { emitDomainEvent } from '@utils/domain-events';
 
 /**
  * POST /cart/checkout
@@ -31,6 +33,16 @@ export const postCheckout = (request: Request, response: Response) => {
             event: AnalyticsEvent.CHECKOUT_COMPLETED,
             traceId: getActiveSpanContext().traceId,
             properties: { order_id: orderId }
+        });
+        // Emit the domain event matching the asyncapi.yaml CartCheckedOutEvent schema.
+        emitDomainEvent('cartCheckedOut', {
+            eventName: 'ecommerce.cart.checked_out',
+            eventId: crypto.randomUUID(),
+            occurredAt: new Date().toISOString(),
+            cartId: `cart_${user.id}`,
+            userId: user.id,
+            orderId,
+            itemCount: result.data?.items?.length ?? 0
         });
         successResponse(
             response,

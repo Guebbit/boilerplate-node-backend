@@ -12,18 +12,14 @@ info:
     description: |
         AsyncAPI contract for real-time/event-driven flows in this boilerplate.
 
-        Implemented now:
+        Implemented:
         - WebSocket chat events over `/ws/chat`
         - SSE observability events over `/observability/events`
-
-        Future examples (documented-only):
-        - Ecommerce domain events that can later map to Kafka/RabbitMQ topics.
+        - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
 defaultContentType: application/json
 tags:
     - name: implemented
       description: Contracts already implemented in the backend runtime.
-    - name: future-example
-      description: Contracts documented for future evolution only.
 servers:
     websocketLocal:
         url: localhost:3000
@@ -33,99 +29,71 @@ servers:
         url: localhost:3000
         protocol: http
         description: Local HTTP server for SSE (`/observability/events`).
-    kafkaFutureExample:
-        url: localhost:9092
-        protocol: kafka
-        description: Future example server for topic naming alignment (not implemented in this PR).
 channels:
     realtime.chat.command.join:
-        description: '[Implemented] Client command to join the default chat room.'
+        description: Client command to join the default chat room.
         publish:
             operationId: websocketChatJoin
             summary: Client sends a join command.
             message:
                 $ref: '#/components/messages/ChatJoinCommand'
     realtime.chat.command.message.send:
-        description: '[Implemented] Client command to send a chat message.'
+        description: Client command to send a chat message.
         publish:
             operationId: websocketChatSendMessage
             summary: Client sends a new chat message.
             message:
                 $ref: '#/components/messages/ChatMessageSendCommand'
     realtime.chat.event.user.joined:
-        description: '[Implemented] Broadcast when a user joins (maps to `chat:system`).'
+        description: Broadcast when a user joins (maps to `chat:system`).
         subscribe:
             operationId: websocketChatUserJoined
             message:
                 $ref: '#/components/messages/ChatSystemUserJoinedEvent'
     realtime.chat.event.user.left:
-        description: '[Implemented] Broadcast when a user leaves (maps to `chat:system`).'
+        description: Broadcast when a user leaves (maps to `chat:system`).
         subscribe:
             operationId: websocketChatUserLeft
             message:
                 $ref: '#/components/messages/ChatSystemUserLeftEvent'
     realtime.chat.event.message.new:
-        description: '[Implemented] Broadcast when a new message is emitted.'
+        description: Broadcast when a new message is emitted.
         subscribe:
             operationId: websocketChatMessageNew
             message:
                 $ref: '#/components/messages/ChatMessageNewEvent'
     realtime.chat.event.presence.updated:
-        description: '[Implemented] Broadcast of chat room presence updates.'
+        description: Broadcast of chat room presence updates.
         subscribe:
             operationId: websocketChatPresenceUpdated
             message:
                 $ref: '#/components/messages/ChatPresenceUpdatedEvent'
     realtime.chat.event.error:
-        description: '[Implemented] Chat protocol validation/runtime error sent to a client.'
+        description: Chat protocol validation/runtime error sent to a client.
         subscribe:
             operationId: websocketChatError
             message:
                 $ref: '#/components/messages/ChatErrorEvent'
     observability.metrics.snapshot:
-        description: '[Implemented] Initial metrics snapshot sent on SSE connect.'
+        description: Initial metrics snapshot sent on SSE connect.
         subscribe:
             operationId: sseMetricsSnapshot
             message:
                 $ref: '#/components/messages/MetricsSnapshotEvent'
     observability.metrics.updated:
-        description: '[Implemented] Periodic SSE metrics update.'
+        description: Periodic SSE metrics update.
         subscribe:
             operationId: sseMetricsUpdated
             message:
                 $ref: '#/components/messages/MetricsUpdatedEvent'
     observability.heartbeat:
-        description: '[Implemented] SSE heartbeat event.'
+        description: SSE heartbeat event.
         subscribe:
             operationId: sseHeartbeat
             message:
                 $ref: '#/components/messages/HeartbeatEvent'
-    ecommerce.order.created:
-        description: '[Future example] Order created domain event contract (not implemented).'
-        subscribe:
-            operationId: ecommerceOrderCreated
-            message:
-                $ref: '#/components/messages/OrderCreatedEvent'
-    ecommerce.payment.succeeded:
-        description: '[Future example] Payment success domain event contract (not implemented).'
-        subscribe:
-            operationId: ecommercePaymentSucceeded
-            message:
-                $ref: '#/components/messages/PaymentSucceededEvent'
-    ecommerce.payment.failed:
-        description: '[Future example] Payment failure domain event contract (not implemented).'
-        subscribe:
-            operationId: ecommercePaymentFailed
-            message:
-                $ref: '#/components/messages/PaymentFailedEvent'
-    ecommerce.inventory.updated:
-        description: '[Future example] Inventory update domain event contract (not implemented).'
-        subscribe:
-            operationId: ecommerceInventoryUpdated
-            message:
-                $ref: '#/components/messages/InventoryUpdatedEvent'
     ecommerce.cart.checked_out:
-        description: '[Future example] Cart checkout domain event contract (not implemented).'
+        description: Cart checkout domain event emitted after a successful order creation.
         subscribe:
             operationId: ecommerceCartCheckedOut
             message:
@@ -265,107 +233,6 @@ components:
             title: Observability heartbeat
             payload:
                 $ref: '#/components/schemas/ObservabilityMetricsPayload'
-        OrderCreatedEvent:
-            name: OrderCreatedEvent
-            messageId: ecommerce.order.created
-            title: Ecommerce example - order created
-            payload:
-                type: object
-                required:
-                    - eventName
-                    - eventId
-                    - occurredAt
-                    - orderId
-                    - userId
-                    - totalAmount
-                    - currency
-                properties:
-                    eventName:
-                        type: string
-                        enum:
-                            - ecommerce.order.created
-                    eventId:
-                        type: string
-                        format: uuid
-                    occurredAt:
-                        type: string
-                        format: date-time
-                    orderId:
-                        type: string
-                    userId:
-                        type: string
-                    totalAmount:
-                        type: number
-                    currency:
-                        type: string
-                        minLength: 3
-                        maxLength: 3
-                additionalProperties: false
-        PaymentSucceededEvent:
-            name: PaymentSucceededEvent
-            messageId: ecommerce.payment.succeeded
-            title: Ecommerce example - payment succeeded
-            payload:
-                $ref: '#/components/schemas/PaymentEventBase'
-            examples:
-                - payload:
-                      eventName: ecommerce.payment.succeeded
-                      eventId: d6f58c4a-a6e9-4ac8-83d9-093ff79df57d
-                      occurredAt: '2026-01-01T13:00:00.000Z'
-                      orderId: ord_1001
-                      paymentId: pay_9001
-                      amount: 59.9
-                      currency: EUR
-        PaymentFailedEvent:
-            name: PaymentFailedEvent
-            messageId: ecommerce.payment.failed
-            title: Ecommerce example - payment failed
-            payload:
-                allOf:
-                    - $ref: '#/components/schemas/PaymentEventBase'
-                    - type: object
-                      required:
-                          - failureReason
-                      properties:
-                          eventName:
-                              type: string
-                              enum:
-                                  - ecommerce.payment.failed
-                          failureReason:
-                              type: string
-                              minLength: 1
-        InventoryUpdatedEvent:
-            name: InventoryUpdatedEvent
-            messageId: ecommerce.inventory.updated
-            title: Ecommerce example - inventory updated
-            payload:
-                type: object
-                required:
-                    - eventName
-                    - eventId
-                    - occurredAt
-                    - productId
-                    - delta
-                    - availableStock
-                properties:
-                    eventName:
-                        type: string
-                        enum:
-                            - ecommerce.inventory.updated
-                    eventId:
-                        type: string
-                        format: uuid
-                    occurredAt:
-                        type: string
-                        format: date-time
-                    productId:
-                        type: string
-                    delta:
-                        type: integer
-                    availableStock:
-                        type: integer
-                        minimum: 0
-                additionalProperties: false
         CartCheckedOutEvent:
             name: CartCheckedOutEvent
             messageId: ecommerce.cart.checked_out
@@ -552,37 +419,4 @@ components:
                             type: integer
                             minimum: 0
                     additionalProperties: false
-            additionalProperties: false
-        PaymentEventBase:
-            type: object
-            required:
-                - eventName
-                - eventId
-                - occurredAt
-                - orderId
-                - paymentId
-                - amount
-                - currency
-            properties:
-                eventName:
-                    type: string
-                    enum:
-                        - ecommerce.payment.succeeded
-                        - ecommerce.payment.failed
-                eventId:
-                    type: string
-                    format: uuid
-                occurredAt:
-                    type: string
-                    format: date-time
-                orderId:
-                    type: string
-                paymentId:
-                    type: string
-                amount:
-                    type: number
-                currency:
-                    type: string
-                    minLength: 3
-                    maxLength: 3
             additionalProperties: false
