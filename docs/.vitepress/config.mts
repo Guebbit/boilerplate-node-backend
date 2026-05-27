@@ -35,6 +35,7 @@ export default withMermaid(
                             { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
                             { text: 'Redis Cache', link: '/tools/redis-cache' },
                             { text: 'RabbitMQ', link: '/tools/rabbitmq' },
+                            { text: 'Kafka', link: '/tools/kafka' },
                             { text: 'Email & PDF Rendering', link: '/tools/email-and-rendering' },
                             { text: 'WebSockets', link: '/tools/websockets' },
                             { text: 'Winston & Audit Logs', link: '/tools/winston' },

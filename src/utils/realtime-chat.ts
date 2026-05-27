@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
 import { WebSocket, type RawData } from 'ws';
 import {
+    CHAT_CHANNELS,
     DEFAULT_CHAT_ROOM,
     type TChatClientEvent,
+    type IChatErrorEvent,
     type TChatServerEvent,
     type TChatRoom
 } from '@types';
+import { publishKafkaMessage } from '@utils/kafka';
 
 // Per-connection state: username (set after join) and current room.
 interface IChatClientState {
@@ -19,6 +22,15 @@ const chatClients = new Map<WebSocket, IChatClientState>();
 // Limits enforced server-side, mirroring asyncapi.yaml schema constraints.
 const MAX_USERNAME_LENGTH = 32;
 const MAX_MESSAGE_LENGTH = 500;
+type TChatKafkaChannel = (typeof CHAT_CHANNELS)[keyof typeof CHAT_CHANNELS];
+
+const publishChatMessage = (
+    channel: TChatKafkaChannel,
+    payload: TChatClientEvent | TChatServerEvent | IChatErrorEvent,
+    key?: string
+) => {
+    void publishKafkaMessage({ channel, payload, key });
+};
 
 // Safe JSON parse — returns undefined on malformed input instead of throwing.
 const safeJsonParse = (input: string): unknown => {
@@ -50,14 +62,17 @@ const broadcastToRoom = (room: TChatRoom, event: TChatServerEvent) => {
 };
 
 // Broadcasts the current user-list for a room so all clients stay in sync.
-const emitPresence = (room: TChatRoom) =>
-    broadcastToRoom(room, {
+const emitPresence = (room: TChatRoom) => {
+    const event: TChatServerEvent = {
         type: 'chat:presence',
         payload: {
             room,
             users: getActiveUsernames(room)
         }
-    });
+    };
+    broadcastToRoom(room, event);
+    publishChatMessage(CHAT_CHANNELS.EVENT_PRESENCE_UPDATED, event, room);
+};
 
 // Parses and validates a raw WebSocket message into a typed client event.
 const toClientEvent = (rawMessage: RawData): TChatClientEvent | undefined => {
@@ -66,15 +81,25 @@ const toClientEvent = (rawMessage: RawData): TChatClientEvent | undefined => {
     ) as Partial<TChatClientEvent> | undefined;
     if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') return;
     if (parsed.type !== 'chat:join' && parsed.type !== 'chat:message:send') return;
-    return parsed as TChatClientEvent;
+    const event = parsed as TChatClientEvent;
+    publishChatMessage(
+        event.type === 'chat:join'
+            ? CHAT_CHANNELS.COMMAND_JOIN
+            : CHAT_CHANNELS.COMMAND_MESSAGE_SEND,
+        event
+    );
+    return event;
 };
 
 // Sends a chat:error event back to the offending client.
-const emitError = (ws: WebSocket, message: string) =>
-    sendEvent(ws, {
+const emitError = (ws: WebSocket, message: string) => {
+    const event: TChatServerEvent = {
         type: 'chat:error',
         payload: { message }
-    });
+    };
+    sendEvent(ws, event);
+    publishChatMessage(CHAT_CHANNELS.EVENT_ERROR, event);
+};
 
 // Called on new WebSocket connection — registers the client in the default room.
 export const onChatConnected = (ws: WebSocket) => {
@@ -89,14 +114,16 @@ export const onChatDisconnected = (ws: WebSocket) => {
     if (!state.username) return;
 
     const timestamp = new Date().toISOString();
-    broadcastToRoom(state.room, {
+    const event = {
         type: 'chat:system',
         payload: {
             room: state.room,
             message: `${state.username} left ${state.room}`,
             timestamp
         }
-    });
+    } as const;
+    broadcastToRoom(state.room, event);
+    publishChatMessage(CHAT_CHANNELS.EVENT_USER_LEFT, event, state.username);
     emitPresence(state.room);
 };
 
@@ -127,23 +154,27 @@ export const onChatMessage = (ws: WebSocket, rawMessage: RawData) => {
 
         state.username = username;
         // Acknowledge the join to the joining client only.
-        sendEvent(ws, {
+        const joinedEvent = {
             type: 'chat:joined',
             payload: {
                 username,
                 room: DEFAULT_CHAT_ROOM
             }
-        });
+        } as const;
+        sendEvent(ws, joinedEvent);
+        publishChatMessage(CHAT_CHANNELS.EVENT_JOINED, joinedEvent, username);
 
         const timestamp = new Date().toISOString();
-        broadcastToRoom(DEFAULT_CHAT_ROOM, {
+        const userJoinedEvent = {
             type: 'chat:system',
             payload: {
                 room: DEFAULT_CHAT_ROOM,
                 message: `${username} joined ${DEFAULT_CHAT_ROOM}`,
                 timestamp
             }
-        });
+        } as const;
+        broadcastToRoom(DEFAULT_CHAT_ROOM, userJoinedEvent);
+        publishChatMessage(CHAT_CHANNELS.EVENT_USER_JOINED, userJoinedEvent, username);
         emitPresence(DEFAULT_CHAT_ROOM);
         return;
     }
@@ -165,7 +196,7 @@ export const onChatMessage = (ws: WebSocket, rawMessage: RawData) => {
     }
 
     // Broadcast the new message to everyone in the room with a stable UUID.
-    broadcastToRoom(state.room, {
+    const messageEvent = {
         type: 'chat:message',
         payload: {
             id: crypto.randomUUID(),
@@ -174,7 +205,9 @@ export const onChatMessage = (ws: WebSocket, rawMessage: RawData) => {
             message,
             timestamp: new Date().toISOString()
         }
-    });
+    } as const;
+    broadcastToRoom(state.room, messageEvent);
+    publishChatMessage(CHAT_CHANNELS.EVENT_MESSAGE_NEW, messageEvent, state.username);
 };
 
 // Returns the total number of open WebSocket connections (used by observability).

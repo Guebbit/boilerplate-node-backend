@@ -6,6 +6,13 @@ import {
     onChatDisconnected,
     onChatMessage
 } from '@utils/realtime-chat';
+import { CHAT_CHANNELS } from '@types';
+
+const mockPublishKafkaMessage = jest.fn().mockResolvedValue(true);
+
+jest.mock('@utils/kafka', () => ({
+    publishKafkaMessage: (...arguments_: unknown[]) => mockPublishKafkaMessage(...arguments_)
+}));
 
 interface IMockSocket {
     readyState: number;
@@ -25,6 +32,7 @@ const createMockSocket = (): IMockSocket => ({
 describe('realtime chat', () => {
     beforeEach(() => {
         clearRealtimeChatState();
+        jest.clearAllMocks();
     });
 
     it('requires join before sending messages', () => {
@@ -66,6 +74,9 @@ describe('realtime chat', () => {
         const events = getSentEvents(socket);
         expect(events.map((event) => event.type)).toEqual(
             expect.arrayContaining(['chat:joined', 'chat:system', 'chat:presence', 'chat:message'])
+        );
+        expect(mockPublishKafkaMessage).toHaveBeenCalledWith(
+            expect.objectContaining({ channel: CHAT_CHANNELS.EVENT_MESSAGE_NEW })
         );
     });
 

@@ -6,6 +6,7 @@ import {
 } from '@types';
 import { getHttpRequestCounters } from '@utils/observability';
 import { getActiveWebSocketConnections } from '@utils/realtime-chat';
+import { publishKafkaMessage } from '@utils/kafka';
 
 // In-memory set of active SSE response objects — one entry per connected client.
 const sseClients = new Set<Response>();
@@ -55,7 +56,10 @@ export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayloa
 // Fires-and-forgets a metrics event — errors are silently swallowed to avoid crashing the stream.
 const writeMetricsEvent = (response: Response, eventName: TObservabilityChannel) => {
     void buildObservabilityPayload()
-        .then((payload) => writeEvent(response, eventName, payload))
+        .then((payload) => {
+            writeEvent(response, eventName, payload);
+            return publishKafkaMessage({ channel: eventName, payload });
+        })
         .catch(() => {});
 };
 

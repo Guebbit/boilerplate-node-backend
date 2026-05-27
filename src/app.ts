@@ -17,6 +17,11 @@ import cookieParser from 'cookie-parser';
 import { start, stopDatabase } from '@utils/database';
 import { startCache, stopCache } from '@utils/cache';
 import { startQueue, stopQueue } from '@utils/queue';
+import { startKafka, stopKafka } from '@utils/kafka';
+import {
+    registerDomainEventsKafkaBridge,
+    unregisterDomainEventsKafkaBridge
+} from '@utils/domain-events-kafka';
 import { registerWorkers } from './workers';
 import { logger, auditLogger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
@@ -106,6 +111,8 @@ export const startServer = () => {
         .then(() => start())
         .then(() => startCache())
         .then(() => startQueue())
+        .then(() => startKafka())
+        .then(() => registerDomainEventsKafkaBridge())
         .then(() => registerWorkers())
         .then(() =>
             i18next.init({
@@ -145,6 +152,8 @@ export const stopServer = () => {
         })
         .then(() => stopCache())
         .then(() => stopQueue())
+        .then(() => stopKafka())
+        .then(() => unregisterDomainEventsKafkaBridge())
         .then(() => stopDatabase())
         .then(() => shutdownAnalytics())
         .then(() => shutdownTracing())
