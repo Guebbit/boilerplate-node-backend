@@ -66,11 +66,16 @@ export const mergeBodyQuery = <T extends Record<string, unknown>>(
  */
 export const extractRequestPagination = (
     request: Request<ParamsDictionary>
-): { page: number | undefined; pageSize: number | undefined } =>
-    extractPagination({
-        page: (request.body as Record<string, unknown>)?.page as string | undefined ?? (request.query as Record<string, string>).page,
-        pageSize: (request.body as Record<string, unknown>)?.pageSize as string | undefined ?? (request.query as Record<string, string>).pageSize
+): { page: number | undefined; pageSize: number | undefined } => {
+    const merged = mergeBodyQuery(
+        request.body as Record<string, unknown> | undefined,
+        request.query as Record<string, string> | undefined
+    );
+    return extractPagination({
+        page: merged.page as string | undefined,
+        pageSize: merged.pageSize as string | undefined
     });
+};
 
 /**
  * Validate a MongoDB ObjectId from request params/body.
@@ -143,7 +148,7 @@ export const createDeleteController = (options: IDeleteControllerOptions) =>
             })
             .catch((error: CastError) => {
                 if (error.message == '404' || error.kind === 'ObjectId')
-                    rejectResponse(response, 404, `${options.entityLabel} - not found`, [
+                    return rejectResponse(response, 404, `${options.entityLabel} - not found`, [
                         t(options.notFoundKey)
                     ]);
                 rejectResponse(response, 500, 'Unknown Error', [error.message]);
