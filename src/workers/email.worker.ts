@@ -1,17 +1,13 @@
 import type { SendMailOptions } from 'nodemailer';
-import type { Data } from 'ejs';
+import type { IEmailJobPayload } from '@types';
 import { nodemailer } from '@utils/nodemailer';
 import { logger } from '@utils/winston';
 
 /** Queue name for email jobs. */
 export const EMAIL_QUEUE = 'emails';
 
-/** Payload shape for email jobs pushed into the queue. */
-export interface IEmailJob {
-    request: SendMailOptions;
-    templateName: string;
-    data: Data;
-}
+/** Payload shape for email jobs pushed into the queue (re-export from AsyncAPI contract). */
+export type IEmailJob = IEmailJobPayload & { request: SendMailOptions };
 
 /**
  * Process a single email job from the queue.

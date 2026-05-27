@@ -1,17 +1,14 @@
 import path from 'node:path';
 import ejs from 'ejs';
 import puppeteer from 'puppeteer-core';
+import type { IPdfJobPayload } from '@types';
 import { logger } from '@utils/winston';
 
 /** Queue name for PDF generation jobs. */
 export const PDF_QUEUE = 'pdfs';
 
-/** Payload shape for PDF generation jobs. */
-export interface IPdfJob {
-    templatePath: string;
-    templateData: Record<string, unknown>;
-    outputPath: string;
-}
+/** Payload shape for PDF generation jobs (re-export from AsyncAPI contract). */
+export type IPdfJob = IPdfJobPayload;
 
 /**
  * Process a single PDF generation job from the queue.

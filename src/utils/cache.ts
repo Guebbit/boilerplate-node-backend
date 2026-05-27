@@ -1,4 +1,5 @@
 import { createClient, type RedisClientType } from 'redis';
+import type { ICacheTagsInvalidatedPayload } from '@types';
 import { logger } from './winston';
 
 /**
@@ -242,5 +243,96 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
                 tags: cacheTags,
                 error: error instanceof Error ? error.message : String(error)
             });
+        });
+};
+
+// ─── Pub/Sub: cross-instance cache invalidation ───────────────────────────────
+
+/** Redis pub/sub channel name (matches asyncapi.yaml). */
+const CACHE_INVALIDATION_CHANNEL = 'cache.tags.invalidated';
+
+/** Unique instance ID to avoid processing own broadcasts. */
+const INSTANCE_ID = `${process.pid}-${Date.now()}`;
+
+/** Separate subscriber client (Redis requires a dedicated connection for subscriptions). */
+let subscriberClient: RedisClientType | undefined;
+
+/**
+ * Publish a cache invalidation event so other app instances can evict stale entries.
+ */
+export const broadcastCacheInvalidation = (tags: string[]): Promise<void> => {
+    if (!isCacheEnabled() || tags.length === 0) return Promise.resolve();
+
+    const payload: ICacheTagsInvalidatedPayload = {
+        tags,
+        origin: INSTANCE_ID,
+        timestamp: new Date().toISOString()
+    };
+
+    return getClient()
+        .then((redisClient) => {
+            if (!redisClient) return;
+            return redisClient.publish(CACHE_INVALIDATION_CHANNEL, JSON.stringify(payload));
+        })
+        .then(() => {})
+        .catch((error) => {
+            logger.warn({
+                message: 'Redis cache invalidation broadcast failed.',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        });
+};
+
+/**
+ * Subscribe to cache invalidation broadcasts from other instances.
+ * Call once during app startup.
+ */
+export const subscribeCacheInvalidation = (): Promise<void> => {
+    if (!isCacheEnabled()) return Promise.resolve();
+
+    const redisUrl = getRedisUrl();
+    if (!redisUrl) return Promise.resolve();
+
+    subscriberClient = createClient({
+        url: redisUrl,
+        socket: { connectTimeout: 1000, reconnectStrategy: false }
+    });
+
+    subscriberClient.on('error', () => {});
+
+    return subscriberClient
+        .connect()
+        .then(() =>
+            subscriberClient!.subscribe(CACHE_INVALIDATION_CHANNEL, (message) => {
+                try {
+                    const payload = JSON.parse(message) as ICacheTagsInvalidatedPayload;
+                    // Skip events from this instance (already applied locally).
+                    if (payload.origin === INSTANCE_ID) return;
+                    void invalidateCacheTags(payload.tags);
+                } catch {
+                    // Malformed message, ignore.
+                }
+            })
+        )
+        .then(() => {
+            logger.info('Redis cache invalidation subscriber active.');
+        })
+        .catch((error) => {
+            logger.warn({
+                message: 'Redis cache invalidation subscriber failed.',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        });
+};
+
+/** Stop the subscriber client during graceful shutdown. */
+export const stopCacheSubscriber = (): Promise<void> => {
+    if (!subscriberClient?.isOpen) return Promise.resolve();
+    return subscriberClient
+        .quit()
+        .then(() => {})
+        .catch(() => subscriberClient!.disconnect())
+        .finally(() => {
+            subscriberClient = undefined;
         });
 };
