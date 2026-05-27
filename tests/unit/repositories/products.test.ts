@@ -1,11 +1,9 @@
-import { connect, disconnect, clearAll } from '../../helpers/database';
+import { setupTestDb } from '../../helpers/setup-test-db';
 import { makeProduct, createProduct } from '../../helpers/factories/products';
 import * as productRepository from '@repositories/products';
 import { Types } from 'mongoose';
 
-beforeAll(connect);
-afterAll(disconnect);
-beforeEach(clearAll);
+setupTestDb();
 
 describe('productRepository', () => {
     describe('create', () => {

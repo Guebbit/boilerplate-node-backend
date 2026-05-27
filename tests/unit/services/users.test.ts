@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { connect, disconnect, clearAll } from '../../helpers/database';
+import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import * as userService from '@services/users';
@@ -7,9 +7,7 @@ import * as userRepository from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@utils/response';
 import type { IUserDocument } from '@models/users';
 
-beforeAll(connect);
-afterAll(disconnect);
-beforeEach(clearAll);
+setupTestDb();
 
 describe('userService.signup', () => {
     it('creates a new user and returns a success response', async () => {

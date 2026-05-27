@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { connect, disconnect, clearAll } from '../../helpers/database';
+import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct, makeProduct } from '../../helpers/factories/products';
 import * as productService from '@services/products';
@@ -14,9 +14,7 @@ jest.mock('@utils/helpers-filesystem', () => ({
     fileToBase64: jest.fn().mockResolvedValue('')
 }));
 
-beforeAll(connect);
-afterAll(disconnect);
-beforeEach(clearAll);
+setupTestDb();
 
 describe('productService.validateData', () => {
     it('returns an empty array for valid product data', () => {

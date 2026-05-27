@@ -1,20 +1,18 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import type { CastError } from 'mongoose';
 import type { SearchFeedbackRequestsRequest } from '@types';
-import { extractPagination } from '@utils/helpers-request';
+import { extractRequestPagination } from '@utils/helpers-request';
 import { rejectResponse, successResponse } from '@utils/response';
 import { feedbackRequestService } from '@services/feedback-requests';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 
 export const getFeedback = (
-    request: Request<unknown, unknown, SearchFeedbackRequestsRequest, FeedbackQuery>,
+    request: Request<ParamsDictionary, unknown, SearchFeedbackRequestsRequest, FeedbackQuery>,
     response: Response
 ) => {
-    const { page, pageSize } = extractPagination({
-        page: request.body?.page ?? request.query.page,
-        pageSize: request.body?.pageSize ?? request.query.pageSize
-    });
+    const { page, pageSize } = extractRequestPagination(request);
 
     const statusRaw = request.body?.status ?? request.query.status;
     // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping

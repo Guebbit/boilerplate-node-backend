@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, extractPagination } from '@utils/helpers-request';
+import { extractId, extractRequestPagination } from '@utils/helpers-request';
 import type { SearchOrdersRequest } from '@types';
 import { userScope } from '@utils/helpers-scopes';
 import type { CastError } from 'mongoose';
@@ -20,10 +20,7 @@ export const getOrders = (
     request: Request<{ id?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
 ) => {
-    const { page, pageSize } = extractPagination({
-        page: request.body?.page ?? request.query.page,
-        pageSize: request.body?.pageSize ?? request.query.pageSize
-    });
+    const { page, pageSize } = extractRequestPagination(request);
 
     return orderService
         .search(

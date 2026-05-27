@@ -1,34 +1,19 @@
-import type { QueryOptions } from 'mongoose';
 import { feedbackRequestModel } from '@models/feedback-requests';
-import type {
-    IFeedbackRequestDocument,
-    IFeedbackRequestQueryFilter
-} from '@models/feedback-requests';
+import type { IFeedbackRequestDocument } from '@models/feedback-requests';
+import type { QueryFilter } from 'mongoose';
+import { createBaseRepository, type IFindAllOptions } from './base';
 
-export const findById = (id: string): Promise<IFeedbackRequestDocument | null> =>
-    feedbackRequestModel.findById(id);
+/**
+ * Feedback Request Repository
+ * Standard CRUD via base factory.
+ */
+const base = createBaseRepository<IFeedbackRequestDocument>(feedbackRequestModel);
 
-export const findAll = (
-    filter: IFeedbackRequestQueryFilter = {},
-    options: QueryOptions<IFeedbackRequestDocument> = {}
-) =>
-    feedbackRequestModel
-        .find({ ...filter })
-        .lean()
-        // eslint-disable-next-line unicorn/no-array-sort
-        .sort((options.sort as Record<string, 1 | -1>) ?? { createdAt: -1 })
-        .skip(options.skip ?? 0)
-        .limit(options.limit ?? 10);
-
-export const count = (where: IFeedbackRequestQueryFilter = {}): Promise<number> =>
-    feedbackRequestModel.countDocuments(where);
-
-export const create = (
-    data: Partial<IFeedbackRequestDocument>
-): Promise<IFeedbackRequestDocument> => feedbackRequestModel.create(data);
-
-export const save = (feedback: IFeedbackRequestDocument): Promise<IFeedbackRequestDocument> =>
-    feedback.save();
+export const findById = (id: string) => base.findById(id);
+export const findAll = (where: QueryFilter<IFeedbackRequestDocument> = {}, options: IFindAllOptions = {}) => base.findAll(where, options);
+export const count = (where: QueryFilter<IFeedbackRequestDocument> = {}): Promise<number> => base.count(where);
+export const create = (data: Partial<IFeedbackRequestDocument>): Promise<IFeedbackRequestDocument> => base.create(data);
+export const save = (feedback: IFeedbackRequestDocument): Promise<IFeedbackRequestDocument> => base.save(feedback);
 
 export const feedbackRequestRepository = {
     findById,
