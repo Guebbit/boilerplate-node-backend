@@ -17,7 +17,7 @@ We use OTel **auto-instrumentation**: there is no per-request code to write.
 | Mongoose    | [`@opentelemetry/instrumentation-mongoose`](https://www.npmjs.com/package/@opentelemetry/instrumentation-mongoose) | one child span per query (`find`, `save`, …) |
 | Redis       | [`@opentelemetry/instrumentation-redis`](https://www.npmjs.com/package/@opentelemetry/instrumentation-redis)       | one child span per Redis command             |
 
-All of this is wired in `src/utils/tracing.ts`.
+All of this is wired in `src/utils/tracing.ts`. `startTracing()` is called at the very top of `src/app.ts`, before Express and any instrumented libraries are imported — this is required for auto-instrumentation to work.
 
 ## Configuration
 

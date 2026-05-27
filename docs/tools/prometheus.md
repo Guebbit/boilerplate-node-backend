@@ -7,6 +7,23 @@ The app, however, exposes a `/metrics` endpoint in the standard Prometheus expos
 
 If you only care about traces, ignore this page and use [Tempo + Grafana](./tempo.md).
 
+## Health-check routes
+
+These are public, unauthenticated routes used by orchestrators (k8s, Docker healthchecks, load balancers):
+
+| Route       | Purpose                                                                 | Success |
+| ----------- | ----------------------------------------------------------------------- | ------- |
+| `GET /healthz` | **Liveness** — always 200 while the process is up                   | `200 ok` |
+| `GET /readyz`  | **Readiness** — 200 only when both MongoDB and Redis are reachable   | `200 ready` / `503 not ready` |
+
+`/readyz` response body:
+
+```json
+{ "mongo": "up", "redis": "up" }
+```
+
+If either is down the status is `"down"` and the HTTP status is `503`.
+
 ## What `/metrics` exposes
 
 | Metric                                                                                       | Why it is here                                                      |
@@ -20,17 +37,54 @@ If you only care about traces, ignore this page and use [Tempo + Grafana](./temp
 
 Database query metrics are intentionally **not** Prometheus counters — Mongoose spans from OTel give richer per-query data in Tempo.
 
-## SSE metrics demo endpoint
+## Admin observability endpoints
+
+Three additional endpoints sit behind the `/admin` router and require a valid **admin** JWT:
+
+| Route                       | Returns                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `GET /admin/health`         | Full health snapshot: DB status, memory, CPU, integration flags, uptime                    |
+| `GET /admin/metrics/summary`| KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters  |
+| `GET /admin/audit`          | Recent audit events from the in-memory ring buffer (max 200); filterable by query params   |
+
+`/admin/audit` accepts optional query params: `actor`, `action`, `outcome` (`success`/`failure`), `since` (ISO-8601), `limit` (default 50, max 200).
+
+## SSE metrics stream
 
 For a browser/live-dashboard demo, the boilerplate also exposes:
 
-- `GET /observability/events` (`text/event-stream`)
+- `GET /observability/events` (`text/event-stream`, public, no auth)
 
-It emits:
+It emits these SSE event types:
 
-- `metrics.snapshot` on connect
-- `metrics.updated` every 5s
-- `heartbeat` every 15s
+| Event              | When                      |
+| ------------------ | ------------------------- |
+| `metrics.snapshot` | immediately on connect    |
+| `metrics.updated`  | every 5 s                 |
+| `heartbeat`        | every 15 s (keep-alive)   |
+
+Every event carries the same JSON payload:
+
+```json
+{
+    "timestamp": "2024-01-01T00:00:00.000Z",
+    "uptimeSeconds": 3600,
+    "memory": {
+        "rss": 62914560,
+        "heapUsed": 28311552,
+        "heapTotal": 41943040,
+        "external": 1234567
+    },
+    "http": {
+        "totalRequests": 142,
+        "totalErrors": 3
+    },
+    "realtime": {
+        "websocketConnections": 2,
+        "sseClients": 1
+    }
+}
+```
 
 ## Add a Prometheus scrape later
 
