@@ -29,12 +29,29 @@ export const ECOMMERCE_CHANNELS = {
     CART_CHECKED_OUT: 'ecommerce.cart.checked_out'
 } as const;
 
+/** RabbitMQ worker queue channel names */
+export const WORKER_CHANNELS = {
+    EMAIL_SEND: 'worker.email.send',
+    PDF_GENERATE: 'worker.pdf.generate'
+} as const;
+
+/** Redis pub/sub cache channel names */
+export const CACHE_CHANNELS = {
+    TAGS_INVALIDATED: 'cache.tags.invalidated'
+} as const;
+
 /** Union of all SSE observability channel names. */
 export type TObservabilityChannel =
     (typeof OBSERVABILITY_CHANNELS)[keyof typeof OBSERVABILITY_CHANNELS];
 
 /** Union of all ecommerce channel names. */
 export type TEcommerceChannel = (typeof ECOMMERCE_CHANNELS)[keyof typeof ECOMMERCE_CHANNELS];
+
+/** Union of all worker queue channel names. */
+export type TWorkerChannel = (typeof WORKER_CHANNELS)[keyof typeof WORKER_CHANNELS];
+
+/** Union of all cache pub/sub channel names. */
+export type TCacheChannel = (typeof CACHE_CHANNELS)[keyof typeof CACHE_CHANNELS];
 
 // ---------------------------------------------------------------------------
 // Component schemas
@@ -82,6 +99,27 @@ export interface IObservabilityMetricsPayload {
         websocketConnections: number;
         sseClients: number;
     };
+}
+export interface IEmailJobPayload {
+    request: {
+        to: string;
+        subject?: string;
+        text?: string;
+        html?: string;
+    };
+    from?: string;
+    templateName: string;
+    data: unknown;
+}
+export interface IPdfJobPayload {
+    templatePath: string;
+    templateData: unknown;
+    outputPath: string;
+}
+export interface ICacheTagsInvalidatedPayload {
+    tags: string[];
+    origin: string;
+    timestamp: string;
 }
 
 // ---------------------------------------------------------------------------

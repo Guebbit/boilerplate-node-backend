@@ -123,6 +123,8 @@ const channelKeys = Object.keys(doc.channels);
 const chatChannels = channelKeys.filter((k) => k.startsWith('realtime.chat.'));
 const observabilityChannels = channelKeys.filter((k) => k.startsWith('observability.'));
 const ecommerceChannels = channelKeys.filter((k) => k.startsWith('ecommerce.'));
+const workerChannels = channelKeys.filter((k) => k.startsWith('worker.'));
+const cacheChannels = channelKeys.filter((k) => k.startsWith('cache.'));
 
 /** 'realtime.chat.event.user.joined' → 'EVENT_USER_JOINED' */
 const toConstKey = (channelName: string, prefix: string): string =>
@@ -168,6 +170,18 @@ const parts: string[] = [
         'ecommerce.',
         'Ecommerce domain event channel names'
     ),
+    renderConstGroup(
+        'WORKER_CHANNELS',
+        workerChannels,
+        'worker.',
+        'RabbitMQ worker queue channel names'
+    ),
+    renderConstGroup(
+        'CACHE_CHANNELS',
+        cacheChannels,
+        'cache.',
+        'Redis pub/sub cache channel names'
+    ),
     '/** Union of all SSE observability channel names. */',
     'export type TObservabilityChannel =',
     '    (typeof OBSERVABILITY_CHANNELS)[keyof typeof OBSERVABILITY_CHANNELS];',
@@ -175,6 +189,12 @@ const parts: string[] = [
     '/** Union of all ecommerce channel names. */',
     'export type TEcommerceChannel =',
     '    (typeof ECOMMERCE_CHANNELS)[keyof typeof ECOMMERCE_CHANNELS];',
+    '',
+    '/** Union of all worker queue channel names. */',
+    'export type TWorkerChannel = (typeof WORKER_CHANNELS)[keyof typeof WORKER_CHANNELS];',
+    '',
+    '/** Union of all cache pub/sub channel names. */',
+    'export type TCacheChannel = (typeof CACHE_CHANNELS)[keyof typeof CACHE_CHANNELS];',
     '',
     '// ---------------------------------------------------------------------------',
     '// Component schemas',

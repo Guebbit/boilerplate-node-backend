@@ -42,6 +42,7 @@ jobs:
             - run: npm run ts-check
             - run: npm run lint
             - run: npm run lint:openapi
+            - run: npm run lint:asyncapi
             - run: npm run test:unit
             - run: npm run test:integration
             - run: npm run genapi
@@ -50,5 +51,13 @@ jobs:
                   if [ -n "$(git status --porcelain -- api)" ]; then
                     echo "Generated api/ artifacts are stale. Run npm run genapi && npm run prettier:fix and commit api/ changes."
                     git status --short -- api
+                    exit 1
+                  fi
+            - run: npm run gen:asyncapi-types
+            - name: Verify generated AsyncAPI types are committed
+              run: |
+                  if [ -n "$(git status --porcelain -- src/types/asyncapi.ts)" ]; then
+                    echo "Generated src/types/asyncapi.ts is stale. Run npm run gen:asyncapi-types && npm run prettier:fix and commit."
+                    git diff -- src/types/asyncapi.ts
                     exit 1
                   fi
