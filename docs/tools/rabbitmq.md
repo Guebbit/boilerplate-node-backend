@@ -1,6 +1,22 @@
 # RabbitMQ
 
-[RabbitMQ](https://www.rabbitmq.com/) is used as a message broker to offload heavy or unreliable work (emails, PDF generation, webhooks, etc.) from the request/response cycle into background queues.
+## What it is
+
+RabbitMQ is a **message broker**: it sits between your app and background workers, accepting jobs from the API and handing them to a worker that runs them in the background.
+
+Your HTTP handler says _"here's a job"_, RabbitMQ holds it, and a worker picks it up whenever it's ready. If the worker crashes, RabbitMQ re-queues the message.
+
+## When to use it
+
+| Situation                        | Use RabbitMQ? |
+| -------------------------------- | ------------- |
+| Fire-and-forget (email, PDF)     | ✅ Yes         |
+| Slow external service (SMTP)     | ✅ Yes         |
+| Retry on failure                 | ✅ Yes         |
+| Event streaming / replay         | ❌ No — use Kafka |
+| Simple in-process domain events  | ❌ No — use `EventTarget` |
+
+**In short**: use RabbitMQ for background tasks. See [Kafka](./kafka.md) for event streaming.
 
 ## Why a queue?
 

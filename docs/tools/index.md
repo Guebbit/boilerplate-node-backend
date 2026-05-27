@@ -24,6 +24,8 @@ flowchart TD
 
     G --> G1[Email & PDF]
     G --> G2[WebSockets]
+    G --> G3[RabbitMQ]
+    G --> G4[Kafka]
 ```
 
 ## Read by intent
@@ -35,6 +37,8 @@ flowchart TD
 | Understand persistence and cache tools                           | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md)                                                                                    |
 | Understand transactional email and PDF generation                | [Email & PDF Rendering](./email-and-rendering.md)                                                                                                                  |
 | Understand real-time messaging scaffolding                       | [WebSockets](./websockets.md)                                                                                                                                      |
+| Understand background task queues                                | [RabbitMQ](./rabbitmq.md)                                                                                                                                          |
+| Understand event streaming / Kafka                               | [Kafka](./kafka.md)                                                                                                                                                |
 | Understand logs, metrics, traces, dashboards, and analytics      | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Tempo](./tempo.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
 | Understand tests and docs tooling                                | [Testing & Docs](./testing-and-docs.md)                                                                                                                            |
 | Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                                                                                                                                     |

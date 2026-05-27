@@ -1,8 +1,6 @@
 import { WebSocketServer, WebSocket, type RawData, type MessageEvent, type ErrorEvent } from 'ws';
 
-/**
- *
- */
+// Lifecycle callbacks for a WebSocket server — all optional except connectionCallback.
 export interface IWebSocketServerCallbacks {
     port?: number;
     connectionCallback: (ws: WebSocket) => void;
@@ -11,16 +9,8 @@ export interface IWebSocketServerCallbacks {
     onClose: (ws: WebSocket, code: number, reason: Buffer) => void;
 }
 
-/**
- * Create a WebSocket server.
- *
- * @param port
- * @param connectionCallback
- * @param onMessage
- * @param onError
- * @param onClose
- * @returns {WebSocketServer} The WebSocket client instance.
- */
+// Creates and wires a WebSocket server. Pass no port to run in noServer mode
+// (attach to an existing HTTP server via handleUpgrade instead).
 export const setupWebSocketServer = ({
     port,
     connectionCallback,
@@ -29,107 +19,36 @@ export const setupWebSocketServer = ({
     onClose
 }: Partial<IWebSocketServerCallbacks> = {}): WebSocketServer => {
     const wss = new WebSocketServer({
-        /**
-         * This sets the WebSocket server to listen on a port
-         * (if specified)
-         */
+        // When port is omitted the server expects manual HTTP upgrade delegation.
         port,
-
-        /**
-         * If no port is specified, noServer will be true
-         * Necessary for "upgrading" a route to WebSocket
-         */
         noServer: !port,
 
-        /**
-         * This option enables the Per-Message Deflate extension,
-         * which allows WebSocket messages to be compressed using zlib before being sent.
-         * It improves performance and reduces bandwidth usage, especially for large payloads.
-         * Configures various compression options.
-         */
+        // Per-Message Deflate: compress frames with zlib to reduce bandwidth.
+        // context takeover disabled to trade memory reuse for security isolation.
         perMessageDeflate: {
-            /**
-             * These options control how deflation (compression) is handled.
-             */
-            zlibDeflateOptions: {
-                // The size of chunks when decompressing data (default is 16384 in zlib).
-                chunkSize: 1024,
-                // Controls how much memory is allocated for compression (range: 1-9, default is 8).
-                memLevel: 7,
-                //  The compression level (range: 0-9, where 0 is no compression and 9 is max compression).
-                level: 3
-            },
-
-            /**
-             * These options control how inflation (decompression) is handled.
-             */
-            zlibInflateOptions: {
-                // chunkSize: 16384
-            },
-
-            /**
-             * Prevents clients from reusing compression context.
-             * Each WebSocket message will have a new compression state.
-             * Improves security but increases compression overhead.
-             */
+            zlibDeflateOptions: { chunkSize: 1024, memLevel: 7, level: 3 },
+            zlibInflateOptions: {},
             clientNoContextTakeover: true,
-
-            /**
-             * Prevents the server from reusing compression context.
-             * Each WebSocket message will have a new compression state.
-             * Reduces memory usage at the cost of efficiency.
-             */
             serverNoContextTakeover: true,
-
-            /**
-             * This controls the maximum size of the sliding window used for compression.
-             * Lower values reduce memory usage but may decrease compression efficiency.
-             * Default is negotiated between client and server.
-             */
             serverMaxWindowBits: 10,
-
-            /**
-             * Limits the number of simultaneous zlib compression processes.
-             * Helps prevent performance issues caused by too many concurrent compression operations.
-             */
             concurrencyLimit: 10,
-
-            /**
-             * Messages smaller than {threshold} bytes will NOT be compressed if context takeover is disabled.
-             * Avoids unnecessary compression for small messages, which might not benefit much.
-             */
+            // Skip compression for small frames — overhead would outweigh benefit.
             threshold: 1024
         }
     });
 
-    /**
-     * Fired when a NEW client connects to the server.
-     */
+    // Wire per-connection event handlers.
     wss.on('connection', (ws) => {
         if (connectionCallback) connectionCallback(ws);
-
-        /**
-         * Fired when a message is received from a client.
-         */
         ws.on('message', (message) => onMessage && onMessage(ws, message));
-
-        /**
-         * Fired when an error occurs.
-         */
         ws.on('error', (error) => onError && onError(ws, error));
-
-        /**
-         * Fired when the connection is closed.
-         */
         ws.on('close', (code, reason) => onClose && onClose(ws, code, reason));
     });
 
     return wss;
 };
 
-/**
- *
- */
+// Lifecycle callbacks for a WebSocket client.
 export interface IWebSocketClientCallbacks {
     onOpen?: (ws: WebSocket) => void;
     onMessage?: (ws: WebSocket, message: MessageEvent) => void;
@@ -137,41 +56,15 @@ export interface IWebSocketClientCallbacks {
     onClose?: (ws: WebSocket, code: number, reason: string) => void;
 }
 
-/**
- * Create a WebSocket client
- *
- * @param url - The WebSocket server URL.
- * @param onOpen - Called when the connection is successfully established.
- * @param onMessage - Called when a message is received.
- * @param onError - Called when an error occurs.
- * @param onClose - Called when the connection is closed.
- * @returns {WebSocket} The WebSocket client instance.
- */
+// Creates a WebSocket client connected to url, wiring optional event listeners.
 export const setupWebSocketClient = (
     url: string,
     { onOpen, onMessage, onError, onClose }: Partial<IWebSocketClientCallbacks> = {}
 ): WebSocket => {
     const ws = new WebSocket(url);
-
-    /**
-     * Fired when the connection is successfully established.
-     */
     ws.addEventListener('open', () => onOpen && onOpen(ws));
-
-    /**
-     * Fired when a message is received from the server.
-     */
     ws.addEventListener('message', (message) => onMessage && onMessage(ws, message));
-
-    /**
-     * Fired when an error occurs.
-     */
     ws.addEventListener('error', (error) => onError && onError(ws, error));
-
-    /**
-     * Fired when the connection is closed.
-     */
     ws.addEventListener('close', (event) => onClose && onClose(ws, event.code, event.reason));
-
     return ws;
 };
