@@ -38,6 +38,6 @@ export const getOrders = (
             successResponse(response, result);
         })
         .catch((error: CastError) => {
-            rejectResponse(response, 500, 'Unknown Error', [error.message]);
+            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
         });
 };
