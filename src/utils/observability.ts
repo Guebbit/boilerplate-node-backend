@@ -121,7 +121,8 @@ export const getLatencyPercentiles = (): Promise<{ p50: number; p95: number }> =
         let grandTotal = 0;
 
         for (const { value, labels, metricName } of values) {
-            /* Skip _count / _sum entries; only process bucket entries. */
+            /* prom-client sets metricName on _count/_sum aggregates; bucket entries leave it undefined.
+               Skip the aggregates and only process the per-bucket cumulative counts. */
             if (metricName) continue;
             const le = (labels as Record<string, string | number | undefined>).le;
             if (le === undefined) continue;

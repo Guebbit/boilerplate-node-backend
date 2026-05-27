@@ -10,7 +10,7 @@ import { getAuditBuffer } from '@utils/audit';
 export const getAdminAuditLogs = (request: Request, response: Response) => {
     const { actor, action, outcome, since, limit } = request.query as Record<string, string>;
 
-    const limitNum = Math.min(parseInt(limit ?? '50', 10) || 50, 200);
+    const limitNum = Math.min(parseInt(limit ?? '50', 10), 200);
     const sinceDate = since ? new Date(since) : null;
 
     if (sinceDate !== null && isNaN(sinceDate.getTime()))

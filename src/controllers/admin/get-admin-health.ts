@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import os from 'os';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse } from '@utils/response';
 
 /* Map mongoose readyState integer to the spec enum values. */
 const dbStatusMap: Record<number, 'connected' | 'connecting' | 'disconnected'> = {
@@ -45,8 +45,6 @@ export const getAdminHealth = (_request: Request, response: Response) => {
         },
         timestamp: new Date().toISOString()
     });
-
-    return response;
 };
 
 export default getAdminHealth;
