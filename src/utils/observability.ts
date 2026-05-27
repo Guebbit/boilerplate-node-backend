@@ -112,3 +112,42 @@ export const getHttpRequestCounters = () =>
 
 /** Serialize all registered metrics in Prometheus text format. */
 export const getPrometheusMetrics = (): Promise<string> => metricsRegistry.metrics();
+
+/** Estimate p50 and p95 latency (ms) from the request-duration histogram buckets. */
+export const getLatencyPercentiles = (): Promise<{ p50: number; p95: number }> =>
+    httpRequestDuration.get().then(({ values }) => {
+        /* Aggregate bucket counts across all label combos into a sorted list. */
+        const totals = new Map<number, number>();
+        let grandTotal = 0;
+
+        for (const { value, labels, metricName } of values) {
+            /* Skip _count / _sum entries; only process bucket entries. */
+            if (metricName) continue;
+            const le = (labels as Record<string, string | number | undefined>).le;
+            if (le === undefined) continue;
+            if (le === '+Inf') {
+                grandTotal += value;
+                continue;
+            }
+            const boundary = Number(le);
+            totals.set(boundary, (totals.get(boundary) ?? 0) + value);
+        }
+
+        if (grandTotal === 0) return { p50: 0, p95: 0 };
+
+        const sorted = Array.from(totals.entries()).sort(([a], [b]) => a - b);
+
+        /* Walk buckets in ascending order; return upper bound of first bucket that
+           covers the requested percentile. */
+        const pick = (fraction: number): number => {
+            const threshold = grandTotal * fraction;
+            let cumulative = 0;
+            for (const [bound, count] of sorted) {
+                cumulative += count;
+                if (cumulative >= threshold) return bound;
+            }
+            return sorted.at(-1)?.[0] ?? 0;
+        };
+
+        return { p50: pick(0.5), p95: pick(0.95) };
+    });

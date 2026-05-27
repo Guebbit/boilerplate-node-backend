@@ -53,11 +53,28 @@ export interface IAuditEvent {
     metadata?: Record<string, unknown>;
 }
 
+/** Stored audit event — IAuditEvent enriched with timestamp and log level. */
+export interface IAuditBufferEntry extends IAuditEvent {
+    timestamp: string;
+    level: 'info' | 'warn';
+}
+
+/* In-memory ring buffer — max 200 entries, oldest evicted first. */
+const AUDIT_BUFFER_MAX = 200;
+const auditBuffer: IAuditBufferEntry[] = [];
+
 /** Emit a structured audit event. Failures use 'warn'; successes use 'info'. */
 export const emitAuditEvent = (event: IAuditEvent): void => {
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
     auditLogger.log(level, event.action, event);
+
+    const entry: IAuditBufferEntry = { ...event, timestamp: new Date().toISOString(), level };
+    if (auditBuffer.length >= AUDIT_BUFFER_MAX) auditBuffer.shift();
+    auditBuffer.push(entry);
 };
+
+/** Return a snapshot of the ring buffer (most-recent-first). */
+export const getAuditBuffer = (): Readonly<IAuditBufferEntry[]> => [...auditBuffer].reverse();
 
 /** Extract common request fields for audit events. */
 export const extractRequestContext = (request: {
