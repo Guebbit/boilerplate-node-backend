@@ -14,7 +14,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { start } from '@utils/database';
-import { startCache } from '@utils/cache';
+import { startCache, subscribeCacheInvalidation } from '@utils/cache';
 import { startQueue } from '@utils/queue';
 import { registerWorkers } from './workers';
 import { logger, auditLogger } from '@utils/winston';
@@ -71,6 +71,7 @@ export const startServer = () => {
         .then(() => validateRequiredEnvironment())
         .then(() => start())
         .then(() => startCache())
+        .then(() => subscribeCacheInvalidation())
         .then(() => startQueue())
         .then(() => registerWorkers())
         .then(() =>

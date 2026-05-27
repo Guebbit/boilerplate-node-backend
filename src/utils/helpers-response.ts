@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { getCacheValue, invalidateCacheTags, setCacheValue } from './cache';
+import { getCacheValue, invalidateCacheTags, setCacheValue, broadcastCacheInvalidation } from './cache';
 
 /**
  * Extra cache metadata for middleware users.
@@ -84,7 +84,7 @@ export const invalidateCache =
         response.on('finish', () => {
             // Only clear cache after a successful write; failed writes should not wipe valid cache.
             if (response.statusCode >= 200 && response.statusCode < 300)
-                void invalidateCacheTags(tags);
+                void invalidateCacheTags(tags).then(() => broadcastCacheInvalidation(tags));
         });
 
         next();
