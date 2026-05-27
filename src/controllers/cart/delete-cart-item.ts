@@ -24,7 +24,7 @@ export const deleteCartItem = (
         return Promise.resolve();
     }
 
-    return userService
+    return cartService
         .cartItemRemoveById(user, productId)
         .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {

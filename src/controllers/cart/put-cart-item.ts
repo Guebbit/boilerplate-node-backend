@@ -24,7 +24,7 @@ export const putCartItem = (
         return Promise.resolve();
     }
 
-    return userService
+    return cartService
         .cartItemSetById(user, productId, request.body.quantity)
         .then(() => cartService.cartGetWithSummary(user))
         .then((cart) => {

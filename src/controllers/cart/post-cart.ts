@@ -36,7 +36,7 @@ export const postCart = (
             return;
         }
 
-        return userService
+        return cartService
             .cartItemSetById(user, productId, quantity)
             .then(() => cartService.cartGetWithSummary(user))
             .then((cart) => {
