@@ -6,6 +6,7 @@ import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { authPasswordResetTotal } from '@utils/domain-metrics';
 
 /**
  * POST /account/reset-request
@@ -37,6 +38,8 @@ export const postResetRequest = (
                 return undefined;
             })
             .then((data) => {
+                authPasswordResetTotal.inc({ status: data?.token ? 'success' : 'failure' });
+
                 if (data?.token)
                     void enqueueEmail(
                         {
