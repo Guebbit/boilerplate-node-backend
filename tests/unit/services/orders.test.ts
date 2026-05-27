@@ -1,14 +1,12 @@
 import { Types } from 'mongoose';
-import { connect, disconnect, clearAll } from '../../helpers/database';
+import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import { createOrder, toOrderItem } from '../../helpers/factories/orders';
 import * as orderService from '@services/orders';
 import type { IOrderDocument } from '@models/orders';
 
-beforeAll(connect);
-afterAll(disconnect);
-beforeEach(clearAll);
+setupTestDb();
 
 type OrderWithTotals = IOrderDocument & {
     totalItems: number;

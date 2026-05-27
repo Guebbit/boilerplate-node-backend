@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from 'i18next';
-import { Types } from 'mongoose';
-import { productService } from '@services/products';
-import { successResponse, rejectResponse } from '@utils/response';
 import type { CastError } from 'mongoose';
-import type { DeleteProductRequest } from '@types';
+import { productService } from '@services/products';
+import { rejectResponse, successResponse } from '@utils/response';
+import { extractAndValidateId } from '@utils/helpers-request';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
@@ -12,22 +12,18 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
  * Delete a product by path id (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-export const deleteProducts = (
-    request: Request<{ id?: string }, unknown, DeleteProductRequest>,
-    response: Response
-) => {
-    const id = request.params.id ?? request.body.id;
+export const deleteProducts = (request: Request<ParamsDictionary>, response: Response) => {
+    const id = extractAndValidateId(request, response, 'deleteProduct');
+    if (!id) return Promise.resolve();
 
-    if (!id || !Types.ObjectId.isValid(id)) {
-        rejectResponse(response, 422, 'deleteProduct - missing id', [
-            t('generic.error-missing-data')
-        ]);
-        return Promise.resolve();
-    }
+    const hardDelete = !!(
+        request.query.hardDelete ??
+        request.params.hardDelete ??
+        (request.body as { hardDelete?: boolean }).hardDelete
+    );
 
-    // true = hard-delete; false (default) = soft-delete (sets deletedAt)
     return productService
-        .remove(id, !!request.query.hardDelete)
+        .remove(id, hardDelete)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.message, result.errors);
@@ -41,13 +37,13 @@ export const deleteProducts = (
                 target_type: 'product',
                 target_id: id,
                 ...extractRequestContext(request),
-                metadata: { hardDelete: !!request.query.hardDelete }
+                metadata: { hardDelete }
             });
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
-                rejectResponse(response, 404, 'deleteProduct - not found', [
+            if (error.message === '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'deleteProduct - not found', [
                     t('ecommerce.product-not-found')
                 ]);
             rejectResponse(response, 500, 'Unknown Error', [error.message]);

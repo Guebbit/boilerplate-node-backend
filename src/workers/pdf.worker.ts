@@ -1,8 +1,8 @@
 import path from 'node:path';
 import ejs from 'ejs';
-import puppeteer from 'puppeteer-core';
 import type { IPdfJobPayload } from '@types';
 import { logger } from '@utils/winston';
+import { renderHtmlToPdf } from '@utils/helpers-pdf';
 
 /** Queue name for PDF generation jobs. */
 export const PDF_QUEUE = 'pdfs';
@@ -26,24 +26,7 @@ export const handlePdfJob = (message: unknown): Promise<boolean> => {
 
     return ejs
         .renderFile(resolvedTemplate, job.templateData ?? {})
-        .then((html) =>
-            puppeteer
-                .launch({
-                    executablePath:
-                        process.env.PUPPETEER_EXECUTABLE_PATH ?? '/usr/bin/chromium-browser',
-                    args: ['--no-sandbox', '--disable-setuid-sandbox']
-                })
-                .then((browser) =>
-                    browser
-                        .newPage()
-                        .then((page) =>
-                            page
-                                .setContent(html, { waitUntil: 'networkidle0' })
-                                .then(() => page.pdf({ format: 'A4', path: job.outputPath }))
-                        )
-                        .finally(() => browser.close())
-                )
-        )
+        .then((html) => renderHtmlToPdf(html, { format: 'A4', path: job.outputPath }))
         .then(() => {
             logger.info({ message: 'PDF generated.', outputPath: job.outputPath });
             return true;

@@ -1,28 +1,19 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from 'i18next';
+import type { CastError } from 'mongoose';
 import { orderService } from '@services/orders';
-import { successResponse, rejectResponse } from '@utils/response';
-import type { DeleteOrderRequest } from '@types';
-import { type CastError, Types } from 'mongoose';
+import { rejectResponse, successResponse } from '@utils/response';
+import { extractAndValidateId } from '@utils/helpers-request';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
  * DELETE /orders — delete an order by id in the request body (admin).
  * DELETE /orders/:id — delete an order by path id (admin).
  */
-export const deleteOrders = (
-    request: Request<{ id?: string }, unknown, DeleteOrderRequest>,
-    response: Response
-) => {
-    const id = request.params.id ?? request.body.id;
-
-    // missing or not valid
-    if (!id || !Types.ObjectId.isValid(id)) {
-        rejectResponse(response, 422, 'deleteOrder - missing id', [
-            t('generic.error-missing-data')
-        ]);
-        return Promise.resolve();
-    }
+export const deleteOrders = (request: Request<ParamsDictionary>, response: Response) => {
+    const id = extractAndValidateId(request, response, 'deleteOrder');
+    if (!id) return Promise.resolve();
 
     return orderService
         .remove(id)
@@ -43,8 +34,8 @@ export const deleteOrders = (
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
-                rejectResponse(response, 404, 'deleteOrders - not found', [
+            if (error.message === '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'deleteOrder - not found', [
                     t('ecommerce.order-not-found')
                 ]);
             rejectResponse(response, 500, 'Unknown Error', [error.message]);

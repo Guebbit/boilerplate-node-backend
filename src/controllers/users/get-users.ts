@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, extractPagination } from '@utils/helpers-request';
+import { extractId, extractRequestPagination } from '@utils/helpers-request';
 import type { SearchUsersRequest } from '@types';
 import type { CastError } from 'mongoose';
 
@@ -18,10 +18,7 @@ export const getUsers = (
     request: Request<{ id?: string }, unknown, SearchUsersRequest, IGetUsersQuery>,
     response: Response
 ) => {
-    const { page, pageSize } = extractPagination({
-        page: request.body?.page ?? request.query.page,
-        pageSize: request.body?.pageSize ?? request.query.pageSize
-    });
+    const { page, pageSize } = extractRequestPagination(request);
 
     const activeRaw = request.body?.active ?? request.query.active;
 
