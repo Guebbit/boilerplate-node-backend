@@ -252,7 +252,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
 const CACHE_INVALIDATION_CHANNEL = 'cache.tags.invalidated';
 
 /** Unique instance ID to avoid processing own broadcasts. */
-const INSTANCE_ID = `${process.pid}-${Date.now()}`;
+const INSTANCE_ID = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 /** Separate subscriber client (Redis requires a dedicated connection for subscriptions). */
 let subscriberClient: RedisClientType | undefined;
@@ -310,7 +310,7 @@ export const subscribeCacheInvalidation = (): Promise<void> => {
                     if (payload.origin === INSTANCE_ID) return;
                     void invalidateCacheTags(payload.tags);
                 } catch {
-                    // Malformed message, ignore.
+                    logger.warn({ message: 'Malformed cache invalidation message received.' });
                 }
             })
         )

@@ -6,8 +6,10 @@ import { logger } from '@utils/winston';
 /** Queue name for email jobs. */
 export const EMAIL_QUEUE = 'emails';
 
-/** Payload shape for email jobs pushed into the queue (re-export from AsyncAPI contract). */
-export type IEmailJob = IEmailJobPayload & { request: SendMailOptions };
+/** Payload shape for email jobs — extends the AsyncAPI contract with full Nodemailer options. */
+export interface IEmailJob extends Omit<IEmailJobPayload, 'request'> {
+    request: SendMailOptions;
+}
 
 /**
  * Process a single email job from the queue.
