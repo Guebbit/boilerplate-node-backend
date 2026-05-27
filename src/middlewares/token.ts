@@ -1,4 +1,4 @@
-import { sign, verify, decode } from 'jsonwebtoken';
+import { sign, verify } from 'jsonwebtoken';
 import { userModel as Users, ETokenType } from '@models/users';
 import type { IToken } from '@models/users';
 import type { CastError } from 'mongoose';
@@ -50,11 +50,6 @@ export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
  */
 export const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
-
-/**
- * Decode token payload without verification.
- */
-export const getTokenData = (token: string) => decode(token);
 
 /**
  * Verify an access token (stateless).

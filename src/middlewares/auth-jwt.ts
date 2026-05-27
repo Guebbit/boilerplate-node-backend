@@ -9,7 +9,6 @@ export {
     ERefreshTokenExpiryTime,
     getExpiryTime,
     getExpiryTimeMilliseconds,
-    getTokenData,
     verifyAccessToken,
     verifyRefreshToken,
     createRefreshToken,

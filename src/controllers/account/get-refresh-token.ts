@@ -3,6 +3,7 @@ import { createAccessToken } from '@middlewares/auth-jwt';
 import { rejectResponse, successResponse } from '@utils/response';
 import { runTokenCleanup } from '@utils/token-cleanup';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { authRefreshTotal } from '@utils/domain-metrics';
 
 /**
  * GET /account/refresh
@@ -22,6 +23,7 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
      * Check if refresh token is missing
      */
     if (!refreshToken) {
+        authRefreshTotal.inc({ status: 'failure' });
         emitAuditEvent({
             action: AuditAction.AUTH_REFRESH_FAILED,
             actor_user_id: 'anonymous',
@@ -40,6 +42,7 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
     return runTokenCleanup().then(() =>
         createAccessToken(refreshToken)
             .then((token) => {
+                authRefreshTotal.inc({ status: 'success' });
                 emitAuditEvent({
                     action: AuditAction.AUTH_REFRESH_SUCCEEDED,
                     actor_user_id: request.user?.id ?? 'anonymous',
@@ -50,6 +53,7 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
                 successResponse(response, { token });
             })
             .catch(() => {
+                authRefreshTotal.inc({ status: 'failure' });
                 emitAuditEvent({
                     action: AuditAction.AUTH_REFRESH_FAILED,
                     actor_user_id: 'anonymous',

@@ -54,13 +54,3 @@ export function databaseErrorInterpreter(error: CastError | Error): [number, str
         return [Number.parseInt((error as CastError).message), (error as CastError).kind];
     return [500, error.message || 'Unknown error'];
 }
-
-/**
- * Interpret and convert mongoose operation error
- * @param error
- */
-export function databaseErrorConverter(error: CastError | Error) {
-    return Object.prototype.hasOwnProperty.call(error, 'kind')
-        ? new ExtendedError((error as CastError).kind, Number.parseInt(error.message))
-        : new ExtendedError((error as Error).message, 500);
-}
