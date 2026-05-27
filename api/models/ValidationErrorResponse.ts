@@ -2,13 +2,13 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { ErrorResponse } from './ErrorResponse';
-export type ValidationErrorResponse = (ErrorResponse & {
+export type ValidationErrorResponse = {
     success: boolean;
-    errors: Array<{
-        field: string;
-        message: string;
-        code?: string;
-    }>;
-});
+    status: number;
+    message: string;
+    /**
+     * Validation error messages
+     */
+    errors: Array<string>;
+};
 

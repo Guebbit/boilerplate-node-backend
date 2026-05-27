@@ -2,9 +2,9 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type ErrorDetail = {
-    code: string;
-    message?: string;
-    details?: Record<string, any>;
+export type SuccessEnvelope = {
+    success: boolean;
+    status: number;
+    message: string;
 };
 
