@@ -14,6 +14,7 @@ import { stopQueue } from '@utils/queue';
 
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 
+/** Read shutdown timeout from env, falling back to the default 15 s. */
 export const getShutdownTimeoutMs = () => {
     const parsedTimeout = Number.parseInt(
         process.env.NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS ?? String(DEFAULT_SHUTDOWN_TIMEOUT_MS),
@@ -22,6 +23,7 @@ export const getShutdownTimeoutMs = () => {
     return Number.isNaN(parsedTimeout) ? DEFAULT_SHUTDOWN_TIMEOUT_MS : parsedTimeout;
 };
 
+/** Promisify server.close() — resolves when all connections are drained. */
 export const closeServer = (server: Server) =>
     new Promise<void>((resolve, reject) => {
         server.close((error) => {

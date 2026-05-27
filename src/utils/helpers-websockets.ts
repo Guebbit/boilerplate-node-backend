@@ -147,9 +147,7 @@ export const setupWebSocketServer = ({
     return wss;
 };
 
-/**
- *
- */
+/** Callbacks for an outgoing WebSocket client connection. */
 export interface IWebSocketClientCallbacks {
     onOpen?: (ws: WebSocket) => void;
     onMessage?: (ws: WebSocket, message: MessageEvent) => void;

@@ -18,6 +18,7 @@ import { orderRepository } from '@repositories/orders';
  * Single responsibility: shopping cart operations on a user document.
  */
 
+/** Normalize any Mongoose/plain id shape to a plain string. */
 const toObjectIdString = (value: unknown): string => {
     if (value instanceof Types.ObjectId) return value.toString();
     if (typeof value === 'string') return value;
@@ -27,12 +28,15 @@ const toObjectIdString = (value: unknown): string => {
     return '';
 };
 
+/** Check if a cart item's product field matches the given string id. */
 const matchesProductId = (product: unknown, id: string): boolean =>
     toObjectIdString(product) === id;
 
+/** Resolve user id regardless of whether _id or id is populated. */
 const resolveUserId = (user: IUserDocument): string =>
     toObjectIdString(user._id) || toObjectIdString(user.id);
 
+/** Wrap saved user in a success response, ensuring _id is always present. */
 const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocument> => {
     const response = generateSuccess(user);
     const data = response.data as { _id?: unknown; id?: unknown };
