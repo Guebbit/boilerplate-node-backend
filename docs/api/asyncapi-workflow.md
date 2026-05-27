@@ -71,6 +71,8 @@ Both use the `IEmailJobPayload` / `IPdfJobPayload` interfaces generated from the
 
 Uses `ICacheTagsInvalidatedPayload` from the generated types. The publisher/subscriber logic lives in `src/utils/cache.ts`.
 
+The subscriber is started during app boot and stopped during graceful shutdown. The publisher is called by the `invalidateCache` middleware after every successful write. Both are no-ops when Redis is unavailable.
+
 ## Naming convention
 
 Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`). These names are used as event identifiers at runtime (SSE event names, WebSocket event types, domain event names).

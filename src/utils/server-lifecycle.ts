@@ -3,7 +3,7 @@ import { logger } from '@utils/winston';
 import { shutdownAnalytics } from '@utils/analytics';
 import { shutdownTracing } from '@utils/tracing';
 import { stopDatabase } from '@utils/database';
-import { stopCache } from '@utils/cache';
+import { stopCache, stopCacheSubscriber } from '@utils/cache';
 import { stopQueue } from '@utils/queue';
 
 /**
@@ -41,6 +41,7 @@ export const shutdownInfra = (server?: Server) =>
             if (!s?.listening) return;
             return closeServer(s);
         })
+        .then(() => stopCacheSubscriber())
         .then(() => stopCache())
         .then(() => stopQueue())
         .then(() => stopDatabase())
