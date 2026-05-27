@@ -9,8 +9,8 @@ export type TDomainEventPayloadMap = {
 
 export type TDomainEventName = keyof TDomainEventPayloadMap;
 
-// Shared in-process event target. Future Kafka/broker adapters can subscribe here
-// and forward events to the message bus without changing call-sites.
+// Shared in-process event target for domain events.
+// External adapters (e.g. message brokers) can subscribe here to forward events.
 export const domainEvents = new EventTarget();
 
 // Emits a typed domain event using its canonical AsyncAPI channel name.

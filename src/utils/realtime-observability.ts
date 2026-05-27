@@ -1,12 +1,7 @@
 import type { Response } from 'express';
-import {
-    OBSERVABILITY_CHANNELS,
-    type IObservabilityMetricsPayload,
-    type TObservabilityChannel
-} from '@types';
+import { OBSERVABILITY_CHANNELS, type IObservabilityMetricsPayload, type TObservabilityChannel } from '@types';
 import { getHttpRequestCounters } from '@utils/observability';
 import { getActiveWebSocketConnections } from '@utils/realtime-chat';
-import { publishKafkaMessage } from '@utils/kafka';
 
 // In-memory set of active SSE response objects — one entry per connected client.
 const sseClients = new Set<Response>();
@@ -58,7 +53,6 @@ const writeMetricsEvent = (response: Response, eventName: TObservabilityChannel)
     void buildObservabilityPayload()
         .then((payload) => {
             writeEvent(response, eventName, payload);
-            return publishKafkaMessage({ channel: eventName, payload });
         })
         .catch(() => {});
 };

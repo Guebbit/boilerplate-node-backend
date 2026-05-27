@@ -128,34 +128,6 @@ services:
         volumes:
             - rabbitmq_volume:/var/lib/rabbitmq
 
-    # Kafka (Redpanda): optional broker for AsyncAPI channel events.
-    kafka:
-        image: redpandadata/redpanda:v24.3.11
-        restart: unless-stopped
-        command:
-            [
-                'redpanda',
-                'start',
-                '--overprovisioned',
-                '--smp',
-                '1',
-                '--memory',
-                '1G',
-                '--reserve-memory',
-                '0M',
-                '--node-id',
-                '0',
-                '--check=false',
-                '--kafka-addr',
-                'internal://0.0.0.0:9092,external://0.0.0.0:19092',
-                '--advertise-kafka-addr',
-                'internal://kafka:9092,external://localhost:19092',
-                '--set',
-                'redpanda.auto_create_topics_enabled=true'
-            ]
-        ports:
-            - '19092:19092'
-
     # Tempo: stores OpenTelemetry traces emitted by the app. Receives OTLP/HTTP on :4318.
     tempo:
         image: grafana/tempo:latest
