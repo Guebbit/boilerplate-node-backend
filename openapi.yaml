@@ -753,6 +753,7 @@ components:
                     $ref: '#/components/schemas/Id'
                 hardDelete:
                     type: boolean
+                    default: false
                     description: Permanently delete instead of soft-delete
 
         SearchProductsRequest:
@@ -913,6 +914,7 @@ components:
                     $ref: '#/components/schemas/Id'
                 hardDelete:
                     type: boolean
+                    default: false
                     description: Permanently delete instead of soft-delete
 
         UpsertCartItemRequest:
