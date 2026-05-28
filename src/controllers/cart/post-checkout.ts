@@ -4,8 +4,7 @@ import { t } from 'i18next';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import { cartCheckoutTotal } from '@utils/domain-metrics';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 import { emitDomainEvent } from '@utils/domain-events';
 
 /**
@@ -18,9 +17,8 @@ export const postCheckout = (request: Request, response: Response) => {
         if (!result.success) {
             cartCheckoutTotal.inc({ status: 'failure' });
             emitAnalyticsEvent({
-                distinctId: userId,
+                ...buildAnalyticsBase(request),
                 event: AnalyticsEvent.CHECKOUT_FAILED,
-                traceId: getActiveSpanContext().traceId,
                 properties: { reason: result.message }
             });
             rejectResponse(response, result.status, result.message, result.errors);
@@ -29,9 +27,8 @@ export const postCheckout = (request: Request, response: Response) => {
         cartCheckoutTotal.inc({ status: 'success' });
         const orderId = result.data?._id?.toString() ?? '';
         emitAnalyticsEvent({
-            distinctId: userId,
+            ...buildAnalyticsBase(request),
             event: AnalyticsEvent.CHECKOUT_COMPLETED,
-            traceId: getActiveSpanContext().traceId,
             properties: { order_id: orderId }
         });
         emitDomainEvent('ecommerce.cart.checked_out', {

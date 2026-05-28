@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
 import { cartService } from '@services/cart';
 import { successResponse } from '@utils/response';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
  * GET /cart
@@ -12,9 +11,8 @@ import { getActiveSpanContext } from '@utils/tracer';
 export const getCart = (request: Request, response: Response) =>
     cartService.cartGetWithSummary(request.authContext!.id).then((cart) => {
         emitAnalyticsEvent({
-            distinctId: request.authContext!.id,
-            event: AnalyticsEvent.CART_VIEWED,
-            traceId: getActiveSpanContext().traceId
+            ...buildAnalyticsBase(request),
+            event: AnalyticsEvent.CART_VIEWED
         });
         successResponse(response, cart);
     });

@@ -6,7 +6,7 @@ import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt
 import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetConfirmRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
 /**
  * POST /account/reset-confirm
@@ -74,13 +74,12 @@ export const postResetConfirm = (
                         }
                     );
 
-                    emitAuditEvent({
+                    emitAuditEvent(buildAuditEvent(request, {
                         action: AuditAction.AUTH_PASSWORD_RESET_COMPLETED,
                         actor_user_id: String(user._id),
                         actor_role: user.admin ? 'admin' : 'user',
-                        outcome: 'success',
-                        ...extractRequestContext(request)
-                    });
+                        outcome: 'success'
+                    }));
 
                     destroyRefreshCookie(response);
                     destroyLoggedCookie(response);

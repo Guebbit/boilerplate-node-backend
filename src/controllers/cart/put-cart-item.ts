@@ -3,8 +3,7 @@ import { t } from 'i18next';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
  * PUT /cart/:productId
@@ -29,9 +28,8 @@ export const putCartItem = (
         .then(() => cartService.cartGetWithSummary(userId))
         .then((cart) => {
             emitAnalyticsEvent({
-                distinctId: userId,
+                ...buildAnalyticsBase(request),
                 event: AnalyticsEvent.CART_ITEM_UPDATED,
-                traceId: getActiveSpanContext().traceId,
                 properties: { product_id: productId, quantity: request.body.quantity }
             });
             successResponse(response, cart);

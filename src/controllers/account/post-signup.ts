@@ -7,9 +7,8 @@ import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { authSignupTotal } from '@utils/domain-metrics';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
  * POST /account/signup
@@ -41,30 +40,28 @@ export const postSignup = (
             if (!result.success)
                 return deleteUpload().then(() => {
                     authSignupTotal.inc({ status: 'failure' });
-                    emitAuditEvent({
+                    emitAuditEvent(buildAuditEvent(request, {
                         action: AuditAction.AUTH_SIGNUP_FAILED,
                         actor_user_id: 'anonymous',
                         actor_role: 'anonymous',
-                        outcome: 'failure',
-                        ...extractRequestContext(request)
-                    });
+                        outcome: 'failure'
+                    }));
                     rejectResponse(response, result.status, result.message, result.errors);
                 });
 
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
             const newUserId = result.data?.id ?? 'unknown';
-            emitAuditEvent({
+            emitAuditEvent(buildAuditEvent(request, {
                 action: AuditAction.AUTH_SIGNUP_SUCCEEDED,
                 actor_user_id: newUserId,
                 actor_role: 'user',
-                outcome: 'success',
-                ...extractRequestContext(request)
-            });
+                outcome: 'success'
+            }));
             emitAnalyticsEvent({
+                ...buildAnalyticsBase(request),
                 distinctId: newUserId,
-                event: AnalyticsEvent.USER_SIGNED_UP,
-                traceId: getActiveSpanContext().traceId
+                event: AnalyticsEvent.USER_SIGNED_UP
             });
             successResponse(response, result.data, 201);
         })

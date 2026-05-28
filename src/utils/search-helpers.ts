@@ -74,3 +74,31 @@ export const addRegexFilter = (
         $options: 'i'
     };
 };
+
+const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1 };
+
+/**
+ * Execute a paginated search: count + findAll + meta assembly.
+ * Centralizes the repeated count→findAll→buildPaginatedMeta pattern.
+ */
+export const paginatedSearch = <TDocument, TWhere = unknown>(
+    repository: {
+        count: (where: TWhere) => Promise<number>;
+        findAll: (where: TWhere, options: { sort: Record<string, 1 | -1>; skip: number; limit: number }) => Promise<TDocument[]> | PromiseLike<TDocument[]>;
+    },
+    where: TWhere,
+    pagination: IPaginationResult,
+    sort: Record<string, 1 | -1> = DEFAULT_SORT
+): Promise<{ items: TDocument[]; meta: IPaginatedMeta }> =>
+    repository.count(where).then((totalItems) =>
+        repository
+            .findAll(where, {
+                sort,
+                skip: pagination.skip,
+                limit: pagination.pageSize
+            })
+            .then((items) => ({
+                items,
+                meta: buildPaginatedMeta(pagination, totalItems)
+            }))
+    );

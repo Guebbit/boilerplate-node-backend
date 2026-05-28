@@ -8,9 +8,9 @@ import { EFeedbackStatus, type IFeedbackRequestDocument } from '@models/feedback
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
 import {
     normalizePagination,
-    buildPaginatedMeta,
     addTextFilter,
-    addRegexFilter
+    addRegexFilter,
+    paginatedSearch
 } from '@utils/search-helpers';
 import {
     generateReject,
@@ -58,18 +58,7 @@ export const search = (
     addRegexFilter(where as Record<string, unknown>, 'email', filters.email);
     addTextFilter(where as Record<string, unknown>, filters.text, ['name', 'email', 'subject', 'message']);
 
-    return feedbackRequestRepository.count(where).then((totalItems) =>
-        feedbackRequestRepository
-            .findAll(where, {
-                sort: { createdAt: -1 },
-                skip: pagination.skip,
-                limit: pagination.pageSize
-            })
-            .then((items) => ({
-                items,
-                meta: buildPaginatedMeta(pagination, totalItems)
-            }))
-    );
+    return paginatedSearch(feedbackRequestRepository, where, pagination);
 };
 
 export const updateStatus = (

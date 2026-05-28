@@ -5,9 +5,8 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
 import { orderCreatedTotal } from '@utils/domain-metrics';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
  * POST /orders
@@ -25,7 +24,6 @@ export const postOrders = (
         return Promise.resolve();
     }
 
-    const auth = request.authContext!;
     const { userId, email, items } = request.body;
 
     /* Create the order directly from the request body (bypasses cart). */
@@ -52,19 +50,15 @@ export const postOrders = (
 
         orderCreatedTotal.inc();
         const orderId = result.data?._id?.toString() ?? '';
-        emitAuditEvent({
+        emitAuditEvent(buildAuditEvent(request, {
             action: AuditAction.ADMIN_ORDER_CREATED,
-            actor_user_id: auth.id,
-            actor_role: auth.admin ? 'admin' : 'user',
             outcome: 'success',
             target_type: 'order',
-            target_id: orderId,
-            ...extractRequestContext(request)
-        });
+            target_id: orderId
+        }));
         emitAnalyticsEvent({
-            distinctId: auth.id,
+            ...buildAnalyticsBase(request),
             event: AnalyticsEvent.ORDER_CREATED,
-            traceId: getActiveSpanContext().traceId,
             properties: { order_id: orderId }
         });
         successResponse(response, result.data, 201);

@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@utils/response';
 import { ETokenType } from '@models/users';
 import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { authService } from '@services/auth';
 
 /**
@@ -18,13 +18,10 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
         destroyRefreshCookie(response);
         destroyLoggedCookie(response);
 
-        emitAuditEvent({
+        emitAuditEvent(buildAuditEvent(request, {
             action: AuditAction.AUTH_LOGOUT_ALL_SUCCEEDED,
-            actor_user_id: auth?.id ?? 'anonymous',
-            actor_role: auth?.admin ? 'admin' : 'user',
-            outcome: 'success',
-            ...extractRequestContext(request)
-        });
+            outcome: 'success'
+        }));
 
         successResponse(response, undefined, 200, 'Logged out from all devices');
     });

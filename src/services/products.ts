@@ -15,8 +15,8 @@ import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
 import {
     normalizePagination,
-    buildPaginatedMeta,
-    addTextFilter
+    addTextFilter,
+    paginatedSearch
 } from '@utils/search-helpers';
 
 /**
@@ -95,18 +95,7 @@ export const search = (
         where.deletedAt = { $exists: false };
     }
 
-    return productRepository.count(where).then((totalItems) =>
-        productRepository
-            .findAll(where, {
-                sort: { createdAt: -1 },
-                skip: pagination.skip,
-                limit: pagination.pageSize
-            })
-            .then((items) => ({
-                items,
-                meta: buildPaginatedMeta(pagination, totalItems)
-            }))
-    );
+    return paginatedSearch(productRepository, where, pagination);
 };
 
 /**

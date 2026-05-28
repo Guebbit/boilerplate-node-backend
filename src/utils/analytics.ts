@@ -1,4 +1,5 @@
 import { PostHog } from 'posthog-node';
+import { getActiveSpanContext } from './tracer';
 
 // ─── Configuration helpers ────────────────────────────────────────────────────
 
@@ -82,6 +83,17 @@ export interface IAnalyticsEvent {
 }
 
 // ─── Emit helper ─────────────────────────────────────────────────────────────
+
+/**
+ * Build common analytics fields from a request context.
+ * Reduces boilerplate in controllers that always pass distinctId + traceId.
+ */
+export const buildAnalyticsBase = (request: {
+    authContext?: { id?: string } | null;
+}): Pick<IAnalyticsEvent, 'distinctId' | 'traceId'> => ({
+    distinctId: request.authContext?.id ?? 'anonymous',
+    traceId: getActiveSpanContext().traceId
+});
 
 /**
  * Send one product analytics event to PostHog.

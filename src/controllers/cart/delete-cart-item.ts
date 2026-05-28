@@ -2,9 +2,8 @@ import type { Request, Response } from 'express';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
 /**
  * DELETE /cart/:productId
@@ -26,19 +25,17 @@ export const deleteCartItem = (
                 return;
             }
             return cartService.cartGetWithSummary(userId).then((cart) => {
-                emitAuditEvent({
+                emitAuditEvent(buildAuditEvent(request, {
                     action: AuditAction.USER_CART_ITEM_REMOVED,
                     actor_user_id: userId,
                     actor_role: 'user',
                     outcome: 'success',
                     target_type: 'product',
-                    target_id: productId,
-                    ...extractRequestContext(request)
-                });
+                    target_id: productId
+                }));
                 emitAnalyticsEvent({
-                    distinctId: userId,
+                    ...buildAnalyticsBase(request),
                     event: AnalyticsEvent.CART_ITEM_REMOVED,
-                    traceId: getActiveSpanContext().traceId,
                     properties: { product_id: productId }
                 });
                 successResponse(response, cart);

@@ -3,7 +3,7 @@ import type { CastError } from 'mongoose';
 import { rejectResponse, successResponse } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { userModel as Users } from '@models/users';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { authTokenCleanupTotal } from '@utils/domain-metrics';
 
 /**
@@ -19,13 +19,10 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
         .then(({ status, success }) => {
             if (!success) return rejectResponse(response, status);
             authTokenCleanupTotal.inc();
-            emitAuditEvent({
+            emitAuditEvent(buildAuditEvent(request, {
                 action: AuditAction.AUTH_TOKEN_EXPIRED_CLEANUP,
-                actor_user_id: request.authContext?.id ?? 'anonymous',
-                actor_role: 'admin',
-                outcome: 'success',
-                ...extractRequestContext(request)
-            });
+                outcome: 'success'
+            }));
             return successResponse(response, undefined, status);
         })
         .catch((error: CastError | Error) => {

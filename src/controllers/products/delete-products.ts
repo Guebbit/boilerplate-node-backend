@@ -4,8 +4,8 @@ import { t } from 'i18next';
 import type { CastError } from 'mongoose';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractAndValidateId } from '@utils/helpers-request';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { extractAndValidateId, extractHardDelete } from '@utils/helpers-request';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
 /**
  * DELETE /products/:id
@@ -16,11 +16,7 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
     const id = extractAndValidateId(request, response, 'deleteProduct');
     if (!id) return Promise.resolve();
 
-    const hardDelete = !!(
-        request.query.hardDelete ??
-        request.params.hardDelete ??
-        (request.body as { hardDelete?: boolean }).hardDelete
-    );
+    const hardDelete = extractHardDelete(request);
 
     return productService
         // true = hard-delete; false (default) = soft-delete (sets deletedAt)
@@ -30,16 +26,13 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
-            emitAuditEvent({
+            emitAuditEvent(buildAuditEvent(request, {
                 action: AuditAction.ADMIN_PRODUCT_DELETED,
-                actor_user_id: request.authContext?.id ?? 'unknown',
-                actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'product',
                 target_id: id,
-                ...extractRequestContext(request),
                 metadata: { hardDelete }
-            });
+            }));
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {

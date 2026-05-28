@@ -5,7 +5,7 @@ import { authService } from '@services/auth';
 import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { authPasswordResetTotal } from '@utils/domain-metrics';
 
 /**
@@ -56,14 +56,12 @@ export const postResetRequest = (
                         }
                     );
 
-                // Always log the request attempt (email obfuscated to protect privacy)
-                emitAuditEvent({
+                emitAuditEvent(buildAuditEvent(request, {
                     action: AuditAction.AUTH_PASSWORD_RESET_REQUESTED,
                     actor_user_id: 'anonymous',
                     actor_role: 'anonymous',
-                    outcome: 'success',
-                    ...extractRequestContext(request)
-                });
+                    outcome: 'success'
+                }));
 
                 successResponse(response, undefined, 200, t('reset.email-sent'));
             })
