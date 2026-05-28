@@ -20,6 +20,7 @@ import { registerWorkers } from './workers';
 import { logger, auditLogger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { requestLogger } from '@middlewares/request-logger';
+import { attachDeps } from '@middlewares/attach-deps';
 import { rejectResponse } from '@utils/response';
 import { validateRequiredEnvironment } from '@utils/environment';
 import {
@@ -210,6 +211,11 @@ app.use((request, response, next) => {
     });
     next();
 });
+
+/*
+ * Attach injectable cross-cutting dependencies to request (testability DIP)
+ */
+app.use(attachDeps);
 
 /**
  * REST API routes — domain-driven routing.

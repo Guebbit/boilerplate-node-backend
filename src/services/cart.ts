@@ -46,7 +46,7 @@ const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocumen
 /** Load user by ID or reject with 404. */
 const loadUser = (userId: string): Promise<IUserDocument> =>
     userRepository.findById(userId).then((user) => {
-        if (!user) return Promise.reject(new Error('User not found'));
+        if (!user) throw new Error('User not found');
         return user;
     });
 
