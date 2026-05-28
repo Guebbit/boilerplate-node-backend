@@ -43,12 +43,14 @@ export enum AnalyticsEvent {
     // Auth / onboarding
     USER_SIGNED_UP = 'user_signed_up',
     USER_LOGGED_IN = 'user_logged_in',
+    USER_PROFILE_VIEWED = 'user_profile_viewed',
 
     // Product discovery
     PRODUCTS_SEARCHED = 'products_searched',
     PRODUCT_VIEWED = 'product_viewed',
 
     // Cart
+    CART_VIEWED = 'cart_viewed',
     CART_ITEM_ADDED = 'cart_item_added',
     CART_ITEM_UPDATED = 'cart_item_updated',
     CART_ITEM_REMOVED = 'cart_item_removed',
@@ -57,7 +59,8 @@ export enum AnalyticsEvent {
     // Checkout / orders
     CHECKOUT_COMPLETED = 'checkout_completed',
     CHECKOUT_FAILED = 'checkout_failed',
-    ORDER_CREATED = 'order_created'
+    ORDER_CREATED = 'order_created',
+    ORDERS_VIEWED = 'orders_viewed'
 }
 
 // ─── Payload schema ───────────────────────────────────────────────────────────

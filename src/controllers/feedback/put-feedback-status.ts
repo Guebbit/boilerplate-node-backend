@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { rejectResponse, successResponse } from '@utils/response';
 import { UpdateFeedbackRequestStatusRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 const updateFeedbackStatusSchema = z.object({
     status: z.nativeEnum(UpdateFeedbackRequestStatusRequest.status).optional(),
@@ -26,6 +27,16 @@ export const putFeedbackStatus = (
         .updateStatusById(request.params.id, parseResult.data)
         .then((result) => {
             if (!result.success) return rejectResponse(response, result.status, result.message, result.errors);
+            emitAuditEvent({
+                action: AuditAction.ADMIN_FEEDBACK_STATUS_UPDATED,
+                actor_user_id: request.authContext?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                target_type: 'feedback',
+                target_id: request.params.id,
+                ...extractRequestContext(request),
+                metadata: { status: parseResult.data.status }
+            });
             return successResponse(response, result.data);
         });
 };

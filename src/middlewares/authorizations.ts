@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { userModel as Users, IToken } from '@models/users';
+import { userModel as Users, type IToken } from '@models/users';
 import { verifyAccessToken } from './auth-jwt';
 import { rejectResponse } from '@utils/response';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';

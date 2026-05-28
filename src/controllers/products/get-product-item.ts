@@ -29,7 +29,7 @@ export const getProductItem = (request: Request, response: Response) =>
             successResponse(response, product);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
+            if (error.message === '404' || error.kind === 'ObjectId')
                 return rejectResponse(response, 404, 'Not Found', [
                     t('ecommerce.product-not-found')
                 ]);

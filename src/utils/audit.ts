@@ -30,6 +30,13 @@ export enum AuditAction {
     ADMIN_ORDER_UPDATED = 'admin.order.updated',
     ADMIN_ORDER_DELETED = 'admin.order.deleted',
 
+    // Admin: feedback
+    ADMIN_FEEDBACK_VIEWED = 'admin.feedback.viewed',
+    ADMIN_FEEDBACK_STATUS_UPDATED = 'admin.feedback.status_updated',
+
+    // Cart (user-facing)
+    USER_CART_ITEM_REMOVED = 'user.cart.item_removed',
+
     // Security / access-control
     SECURITY_UNAUTHORIZED = 'security.unauthorized',
     SECURITY_FORBIDDEN = 'security.forbidden',

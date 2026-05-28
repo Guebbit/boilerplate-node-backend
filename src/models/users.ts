@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { logger } from '@utils/winston';
-import { User } from '@types';
+import { type User } from '@types';
 
 /**
  * Token types used in jwt-auth

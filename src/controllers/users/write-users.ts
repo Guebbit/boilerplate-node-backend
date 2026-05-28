@@ -4,7 +4,7 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
-import {
+import type {
     CreateUserRequest,
     CreateUserRequestMultipart,
     UpdateUserRequest,
@@ -87,7 +87,7 @@ export const writeUsers = (
                     target_id: String(user._id),
                     ...extractRequestContext(request)
                 });
-                successResponse(response, user.toObject(), 201);
+                successResponse(response, user, 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {

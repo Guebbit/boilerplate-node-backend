@@ -93,7 +93,7 @@ export const writeProducts = (
                     target_id: String(product._id),
                     ...extractRequestContext(request)
                 });
-                successResponse(response, product.toObject(), 201);
+                successResponse(response, product, 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
@@ -123,7 +123,7 @@ export const writeProducts = (
                 target_id: id,
                 ...extractRequestContext(request)
             });
-            successResponse(response, product.toObject());
+            successResponse(response, product);
         })
         .catch((error: Error) =>
             deleteUpload().then(() => {
