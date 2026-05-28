@@ -9,6 +9,7 @@ import { deleteCartItem } from '@controllers/cart/delete-cart-item';
 import { postCheckout } from '@controllers/cart/post-checkout';
 import { invalidateCache } from '@utils/helpers-response';
 
+/** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();
 
 // All cart routes require authentication

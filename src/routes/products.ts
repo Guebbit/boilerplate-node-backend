@@ -7,6 +7,7 @@ import { deleteProducts } from '@controllers/products/delete-products';
 import { getProductItem } from '@controllers/products/get-product-item';
 import { invalidateCache, setCache } from '@utils/helpers-response';
 
+/** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
 
 // Apply getAuth to all routes so admins get extra visibility

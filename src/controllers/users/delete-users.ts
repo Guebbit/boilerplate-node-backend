@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from 'i18next';
-import { Types } from 'mongoose';
-import { userService } from '@services/users';
-import { successResponse, rejectResponse } from '@utils/response';
-import type { DeleteUserRequest } from '@types';
 import type { CastError } from 'mongoose';
+import { userService } from '@services/users';
+import { rejectResponse, successResponse } from '@utils/response';
+import { extractAndValidateId } from '@utils/helpers-request';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 /**
@@ -14,21 +14,19 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
  * Pass ?hardDelete=true (query) or { hardDelete: true } (body) to permanently
  * delete; otherwise the user is soft-deleted (sets deletedAt).
  */
-export const deleteUsers = (
-    request: Request<{ id?: string; hardDelete?: boolean }, unknown, DeleteUserRequest>,
-    response: Response
-) => {
-    const id = request.params.id ?? request.body.id;
-    const hardDelete = !!(request.params.hardDelete ?? request.body.hardDelete);
+export const deleteUsers = (request: Request<ParamsDictionary>, response: Response) => {
+    const id = extractAndValidateId(request, response, 'deleteUser');
+    if (!id) return Promise.resolve();
 
-    if (!id || !Types.ObjectId.isValid(id)) {
-        rejectResponse(response, 422, 'deleteUser - missing id', [t('generic.error-missing-data')]);
-        return Promise.resolve();
-    }
+    const hardDelete = !!(
+        request.query.hardDelete ??
+        request.params.hardDelete ??
+        (request.body as { hardDelete?: boolean }).hardDelete
+    );
 
-    // Accept ?hardDelete=true query param (both routes) or body.hardDelete boolean (DELETE / only)
     return userService
-        .remove(id, hardDelete)
+        // true = hard-delete; false (default) = soft-delete (sets deletedAt)
+        .removeById(id, hardDelete)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.message, result.errors);
@@ -36,7 +34,7 @@ export const deleteUsers = (
             }
             emitAuditEvent({
                 action: AuditAction.ADMIN_USER_DELETED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'user',
@@ -47,11 +45,10 @@ export const deleteUsers = (
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
-                rejectResponse(response, 404, 'deleteUser - not found', [
+            if (error.message === '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'Not Found', [
                     t('ecommerce.user-not-found')
                 ]);
-
-            rejectResponse(response, 500, 'Unknown Error', [error.message]);
+            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
         });
 };

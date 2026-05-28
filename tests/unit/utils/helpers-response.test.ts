@@ -5,7 +5,8 @@ import * as cache from '@utils/cache';
 jest.mock('@utils/cache', () => ({
     getCacheValue: jest.fn(),
     setCacheValue: jest.fn(),
-    invalidateCacheTags: jest.fn()
+    invalidateCacheTags: jest.fn(),
+    broadcastCacheInvalidation: jest.fn()
 }));
 
 const mockedCache = jest.mocked(cache);
@@ -71,8 +72,8 @@ describe('setCache', () => {
         const request = {
             method: 'GET',
             originalUrl: '/products',
-            user: {
-                _id: '507f1f77bcf86cd799439011'
+            authContext: {
+                id: '507f1f77bcf86cd799439011'
             }
         } as unknown as Request;
 
@@ -99,9 +100,11 @@ describe('setCache', () => {
 describe('invalidateCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockedCache.invalidateCacheTags.mockResolvedValue();
+        mockedCache.broadcastCacheInvalidation.mockResolvedValue();
     });
 
-    it('invalidates tags after successful responses finish', () => {
+    it('invalidates tags and broadcasts after successful responses finish', async () => {
         const middleware = invalidateCache(['orders']);
         const { response, listeners } = createResponse();
         const next = jest.fn() as NextFunction;
@@ -113,7 +116,11 @@ describe('invalidateCache', () => {
         response.statusCode = 204;
         listeners.get('finish')?.();
 
+        // flush microtasks so .then() chain runs
+        await Promise.resolve();
+
         expect(mockedCache.invalidateCacheTags).toHaveBeenCalledWith(['orders']);
+        expect(mockedCache.broadcastCacheInvalidation).toHaveBeenCalledWith(['orders']);
     });
 
     it('skips invalidation for failed responses', () => {
@@ -126,5 +133,6 @@ describe('invalidateCache', () => {
         listeners.get('finish')?.();
 
         expect(mockedCache.invalidateCacheTags).not.toHaveBeenCalled();
+        expect(mockedCache.broadcastCacheInvalidation).not.toHaveBeenCalled();
     });
 });

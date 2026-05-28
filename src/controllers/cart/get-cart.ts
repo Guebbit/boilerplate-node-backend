@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse } from '@utils/response';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * GET /cart
@@ -8,6 +10,11 @@ import { successResponse } from '@utils/response';
  * Authentication check is done before entering the route.
  */
 export const getCart = (request: Request, response: Response) =>
-    userService.cartGetWithSummary(request.user!).then((cart) => {
+    cartService.cartGetWithSummary(request.authContext!.id).then((cart) => {
+        emitAnalyticsEvent({
+            distinctId: request.authContext!.id,
+            event: AnalyticsEvent.CART_VIEWED,
+            traceId: getActiveSpanContext().traceId
+        });
         successResponse(response, cart);
     });

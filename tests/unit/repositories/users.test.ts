@@ -1,12 +1,10 @@
-import { connect, disconnect, clearAll } from '../../helpers/database';
+import { setupTestDb } from '../../helpers/setup-test-db';
 import { makeUser, createUser } from '../../helpers/factories/users';
 import * as userRepository from '@repositories/users';
 import { userModel as Users, ETokenType, type IUserDocument } from '@models/users';
 import { Types } from 'mongoose';
 
-beforeAll(connect);
-afterAll(disconnect);
-beforeEach(clearAll);
+setupTestDb();
 
 describe('userRepository', () => {
     describe('create', () => {

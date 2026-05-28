@@ -2,13 +2,16 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { ErrorDetail } from './ErrorDetail';
 export type ErrorResponse = {
     success: boolean;
-    error: ErrorDetail;
+    status: number;
     /**
-     * Correlation ID for support/debugging
+     * Technical error code or description
      */
-    traceId?: string;
+    message: string;
+    /**
+     * User-friendly error messages
+     */
+    errors: Array<string>;
 };
 

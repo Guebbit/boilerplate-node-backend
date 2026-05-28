@@ -194,64 +194,214 @@ components:
 
         MessageResponse:
             type: object
-            required: [success, message]
+            required: [success, status, message]
             properties:
                 success:
                     type: boolean
                     enum: [true]
+                status:
+                    type: integer
                 message:
                     type: string
 
         ErrorResponse:
             type: object
-            required: [success, error]
+            required: [success, status, message, errors]
             properties:
                 success:
                     type: boolean
                     enum: [false]
-                error:
-                    $ref: '#/components/schemas/ErrorDetail'
-                traceId:
-                    type: string
-                    description: Correlation ID for support/debugging
-
-        ErrorDetail:
-            type: object
-            required: [code]
-            properties:
-                code:
-                    type: string
-                    # Example just for documentation purposes. Actual values are defined in the backend.
-                    example: AUTH_INVALID_TOKEN
+                status:
+                    type: integer
                 message:
                     type: string
-                details:
-                    type: object
-                    additionalProperties: true
+                    description: Technical error code or description
+                errors:
+                    type: array
+                    items:
+                        type: string
+                    description: User-friendly error messages
 
         ValidationErrorResponse:
-            allOf:
-                - $ref: '#/components/schemas/ErrorResponse'
-                - type: object
-                  required: [success, errors]
-                  properties:
-                      success:
-                          type: boolean
-                          enum: [false]
-                      errors:
-                          type: array
-                          items:
-                              type: object
-                              required: [field, message]
-                              properties:
-                                  field:
-                                      type: string
-                                  message:
-                                      type: string
-                                  code:
-                                      type: string
+            type: object
+            required: [success, status, message, errors]
+            properties:
+                success:
+                    type: boolean
+                    enum: [false]
+                status:
+                    type: integer
+                message:
+                    type: string
+                errors:
+                    type: array
+                    items:
+                        type: string
+                    description: Validation error messages
 
         # ---------- Domain ----------
+
+        # All success responses are wrapped in a standard envelope:
+        # { success: true, status: number, message: string, data: <payload> }
+        # The schemas below describe the "data" payload for each endpoint.
+        # Wrapped response schemas below combine the envelope with the domain payload.
+
+        SuccessEnvelope:
+            type: object
+            required: [success, status, message]
+            properties:
+                success:
+                    type: boolean
+                    enum: [true]
+                status:
+                    type: integer
+                message:
+                    type: string
+
+        AuthTokensEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/AuthTokens'
+
+        RefreshTokenEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/RefreshTokenResponse'
+
+        UserEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/User'
+
+        UsersResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/UsersResponse'
+
+        ProductEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/Product'
+
+        ProductsResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/ProductsResponse'
+
+        OrderEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/Order'
+
+        OrdersResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/OrdersResponse'
+
+        FeedbackRequestEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/FeedbackRequest'
+
+        FeedbackRequestsResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/FeedbackRequestsResponse'
+
+        CartResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/CartResponse'
+
+        CartSummaryResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/CheckoutResponse'
+
+        AdminHealthResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/AdminHealthResponse'
+
+        AdminMetricsSummaryResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/AdminMetricsSummaryResponse'
+
+        AuditLogsResponseEnvelope:
+            allOf:
+                - $ref: '#/components/schemas/SuccessEnvelope'
+                - type: object
+                  required: [data]
+                  properties:
+                      data:
+                          $ref: '#/components/schemas/AuditLogsResponse'
+
         AuthTokens:
             type: object
             required: [token]
@@ -1303,7 +1453,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AdminHealthResponse'
+                                $ref: '#/components/schemas/AdminHealthResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -1325,7 +1475,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AdminMetricsSummaryResponse'
+                                $ref: '#/components/schemas/AdminMetricsSummaryResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -1376,7 +1526,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuditLogsResponse'
+                                $ref: '#/components/schemas/AuditLogsResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1397,7 +1547,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/User'
+                                $ref: '#/components/schemas/UserEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
 
     /account/login:
@@ -1419,7 +1569,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuthTokens'
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -1434,6 +1584,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SignupRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/SignupRequestMultipart'
@@ -1443,7 +1596,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/User'
+                                $ref: '#/components/schemas/UserEnvelope'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1494,7 +1647,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RefreshTokenResponse'
+                                $ref: '#/components/schemas/RefreshTokenEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1513,7 +1666,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/RefreshTokenResponse'
+                                $ref: '#/components/schemas/RefreshTokenEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1576,7 +1729,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/UsersResponse'
+                                $ref: '#/components/schemas/UsersResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -1590,6 +1743,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateUserRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/CreateUserRequestMultipart'
@@ -1599,7 +1755,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/User'
+                                $ref: '#/components/schemas/UserEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1614,6 +1770,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateUserRequestMultipart'
@@ -1623,7 +1782,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/User'
+                                $ref: '#/components/schemas/UserEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1665,7 +1824,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/User'
+                                $ref: '#/components/schemas/UserEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
@@ -1682,6 +1841,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
@@ -1691,7 +1853,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/User'
+                                $ref: '#/components/schemas/UserEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1739,7 +1901,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/UsersResponse'
+                                $ref: '#/components/schemas/UsersResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1764,7 +1926,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/FeedbackRequest'
+                                $ref: '#/components/schemas/FeedbackRequestEnvelope'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1788,7 +1950,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/FeedbackRequestsResponse'
+                                $ref: '#/components/schemas/FeedbackRequestsResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -1815,7 +1977,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/FeedbackRequest'
+                                $ref: '#/components/schemas/FeedbackRequestEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
@@ -1855,7 +2017,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ProductsResponse'
+                                $ref: '#/components/schemas/ProductsResponseEnvelope'
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [Products]
@@ -1867,6 +2029,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateProductRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/CreateProductRequestMultipart'
@@ -1876,7 +2041,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Product'
+                                $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -1891,6 +2056,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateProductRequestMultipart'
@@ -1900,7 +2068,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Product'
+                                $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
@@ -1942,7 +2110,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Product'
+                                $ref: '#/components/schemas/ProductEnvelope'
                 '404': { $ref: '#/components/responses/NotFound' }
                 '500': { $ref: '#/components/responses/InternalError' }
         # Same as PUT /products
@@ -1958,6 +2126,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductByIdRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateProductByIdRequestMultipart'
@@ -1967,7 +2138,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Product'
+                                $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '404': { $ref: '#/components/responses/NotFound' }
@@ -2011,7 +2182,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ProductsResponse'
+                                $ref: '#/components/schemas/ProductsResponseEnvelope'
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -2029,7 +2200,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponse'
+                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
@@ -2051,7 +2222,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponse'
+                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -2073,7 +2244,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponse'
+                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -2100,7 +2271,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponse'
+                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -2120,7 +2291,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartResponse'
+                                $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -2139,7 +2310,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CartSummaryResponse'
+                                $ref: '#/components/schemas/CartSummaryResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -2163,7 +2334,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CheckoutResponse'
+                                $ref: '#/components/schemas/CheckoutResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -2192,7 +2363,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
@@ -2214,7 +2385,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Order'
+                                $ref: '#/components/schemas/OrderEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
@@ -2239,7 +2410,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Order'
+                                $ref: '#/components/schemas/OrderEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
@@ -2286,7 +2457,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/OrdersResponse'
+                                $ref: '#/components/schemas/OrdersResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
@@ -2309,7 +2480,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Order'
+                                $ref: '#/components/schemas/OrderEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
@@ -2335,7 +2506,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Order'
+                                $ref: '#/components/schemas/OrderEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }

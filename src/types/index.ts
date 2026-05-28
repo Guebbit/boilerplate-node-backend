@@ -12,6 +12,9 @@ export * from '@api/index';
 // Re-export generated AsyncAPI types so consumers use a single import path.
 export * from './asyncapi';
 
+// Auth context DTO (DIP: transport-safe user representation)
+export type { IAuthContext } from './auth-context';
+
 // Generic helper
 export type WithFileUpload<T, K extends string = 'imageUpload'> = T & {
     [P in K]?: File | Buffer;

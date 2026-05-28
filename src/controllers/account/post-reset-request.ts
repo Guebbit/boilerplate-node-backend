@@ -1,11 +1,12 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { userService } from '@services/users';
-import { userRepository } from '@repositories/users';
+import { authService } from '@services/auth';
 import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { authPasswordResetTotal } from '@utils/domain-metrics';
 
 /**
  * POST /account/reset-request
@@ -20,9 +21,9 @@ export const postResetRequest = (
     return (
         (
             email
-                ? userRepository.findOne({ email }).then((user) =>
+                ? userService.findByEmail(email).then((user) =>
                       user
-                          ? userService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
+                          ? authService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
                                 username: user.username,
                                 token
                             }))
@@ -37,6 +38,8 @@ export const postResetRequest = (
                 return undefined;
             })
             .then((data) => {
+                authPasswordResetTotal.inc({ status: data?.token ? 'success' : 'failure' });
+
                 if (data?.token)
                     void enqueueEmail(
                         {

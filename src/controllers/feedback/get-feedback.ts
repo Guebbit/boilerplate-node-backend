@@ -1,20 +1,23 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import type { CastError } from 'mongoose';
 import type { SearchFeedbackRequestsRequest } from '@types';
-import { extractPagination } from '@utils/helpers-request';
+import { extractRequestPagination } from '@utils/helpers-request';
 import { rejectResponse, successResponse } from '@utils/response';
 import { feedbackRequestService } from '@services/feedback-requests';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 
+/**
+ * GET /feedback (admin)
+ * Search and paginate feedback tickets by status, email, or text.
+ */
 export const getFeedback = (
-    request: Request<unknown, unknown, SearchFeedbackRequestsRequest, FeedbackQuery>,
+    request: Request<ParamsDictionary, unknown, SearchFeedbackRequestsRequest, FeedbackQuery>,
     response: Response
 ) => {
-    const { page, pageSize } = extractPagination({
-        page: request.body?.page ?? request.query.page,
-        pageSize: request.body?.pageSize ?? request.query.pageSize
-    });
+    const { page, pageSize } = extractRequestPagination(request);
 
     const statusRaw = request.body?.status ?? request.query.status;
     // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping
@@ -28,8 +31,17 @@ export const getFeedback = (
             email: request.body?.email ?? request.query.email,
             status
         })
-        .then((result) => successResponse(response, result))
+        .then((result) => {
+            emitAuditEvent({
+                action: AuditAction.ADMIN_FEEDBACK_VIEWED,
+                actor_user_id: request.authContext?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                ...extractRequestContext(request)
+            });
+            return successResponse(response, result);
+        })
         .catch((error: CastError) =>
-            rejectResponse(response, 500, 'Unknown Error', [error.message])
+            rejectResponse(response, 500, 'Internal Server Error', [error.message])
         );
 };

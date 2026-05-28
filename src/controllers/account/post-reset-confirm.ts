@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { userService } from '@services/users';
-import { userRepository } from '@repositories/users';
+import { authService } from '@services/auth';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetConfirmRequest } from '@types';
@@ -25,11 +25,8 @@ export const postResetConfirm = (
     /**
      * Search user by token
      */
-    return userRepository
-        .findOne({
-            'tokens.token': token,
-            'tokens.type': 'password'
-        })
+    return userService
+        .findByPasswordResetToken(token)
         .then((user) => {
             // Wrong token
             if (!user) {
@@ -52,7 +49,7 @@ export const postResetConfirm = (
             /**
              * Change password
              */
-            return userService.passwordChange(user, password, passwordConfirm).then((result) => {
+            return authService.passwordChange(user, password, passwordConfirm).then((result) => {
                 if (!result.success) {
                     rejectResponse(response, result.status, result.message, result.errors);
                     return;
@@ -61,8 +58,7 @@ export const postResetConfirm = (
                 /**
                  * Consume the token and save the user
                  */
-                user.tokens = user.tokens.filter((tk) => tk.token !== token);
-                return userRepository.save(user).then(() => {
+                return userService.consumeToken(user, token).then(() => {
                     // send confirmation email (no need to wait)
                     void enqueueEmail(
                         {
@@ -93,6 +89,6 @@ export const postResetConfirm = (
             });
         })
         .catch(() => {
-            rejectResponse(response, 500, 'Internal Server Error');
+            rejectResponse(response, 500, 'Internal Server Error', []);
         });
 };

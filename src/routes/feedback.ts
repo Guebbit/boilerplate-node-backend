@@ -5,6 +5,7 @@ import { getFeedback } from '@controllers/feedback/get-feedback';
 import { putFeedbackStatus } from '@controllers/feedback/put-feedback-status';
 import { invalidateCache, setCache } from '@utils/helpers-response';
 
+/** Express router for feedback/contact endpoints (public contact form; admin read/update). */
 export const router = Router();
 
 router.post('/contact', invalidateCache(['feedback']), postFeedbackContact);

@@ -30,6 +30,13 @@ export enum AuditAction {
     ADMIN_ORDER_UPDATED = 'admin.order.updated',
     ADMIN_ORDER_DELETED = 'admin.order.deleted',
 
+    // Admin: feedback
+    ADMIN_FEEDBACK_VIEWED = 'admin.feedback.viewed',
+    ADMIN_FEEDBACK_STATUS_UPDATED = 'admin.feedback.status_updated',
+
+    // Cart (user-facing)
+    USER_CART_ITEM_REMOVED = 'user.cart.item_removed',
+
     // Security / access-control
     SECURITY_UNAUTHORIZED = 'security.unauthorized',
     SECURITY_FORBIDDEN = 'security.forbidden',
@@ -53,22 +60,34 @@ export interface IAuditEvent {
     metadata?: Record<string, unknown>;
 }
 
+<<<<<<< HEAD
 /* Stored audit event — same as IAuditEvent plus a timestamp and log level. */
 export interface IAuditEventStored extends IAuditEvent {
+=======
+/** Stored audit event — IAuditEvent enriched with timestamp and log level. */
+export interface IAuditBufferEntry extends IAuditEvent {
+>>>>>>> origin/main
     timestamp: string;
     level: 'info' | 'warn';
 }
 
+<<<<<<< HEAD
 const RING_BUFFER_MAX = 200;
 
 /* In-memory ring buffer — newest events are prepended; oldest are dropped at max. */
 const auditRingBuffer: IAuditEventStored[] = [];
+=======
+/* In-memory ring buffer — max 200 entries, oldest evicted first. */
+const AUDIT_BUFFER_MAX = 200;
+const auditBuffer: IAuditBufferEntry[] = [];
+>>>>>>> origin/main
 
 /** Emit a structured audit event. Failures use 'warn'; successes use 'info'. */
 export const emitAuditEvent = (event: IAuditEvent): void => {
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
     auditLogger.log(level, event.action, event);
 
+<<<<<<< HEAD
     // Keep in ring buffer for the admin audit endpoint.
     const stored: IAuditEventStored = { ...event, timestamp: new Date().toISOString(), level };
     auditRingBuffer.unshift(stored);
@@ -95,7 +114,15 @@ export const getAuditEvents = (filters: {
             return true;
         })
         .slice(0, limit);
+=======
+    const entry: IAuditBufferEntry = { ...event, timestamp: new Date().toISOString(), level };
+    if (auditBuffer.length >= AUDIT_BUFFER_MAX) auditBuffer.shift();
+    auditBuffer.push(entry);
+>>>>>>> origin/main
 };
+
+/** Return a snapshot of the ring buffer (most-recent-first). */
+export const getAuditBuffer = (): Readonly<IAuditBufferEntry[]> => [...auditBuffer].toReversed();
 
 /** Extract common request fields for audit events. */
 export const extractRequestContext = (request: {

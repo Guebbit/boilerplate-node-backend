@@ -3,6 +3,7 @@ import { createAccessToken } from '@middlewares/auth-jwt';
 import { rejectResponse, successResponse } from '@utils/response';
 import { runTokenCleanup } from '@utils/token-cleanup';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { authRefreshTotal } from '@utils/domain-metrics';
 
 /**
  * GET /account/refresh
@@ -10,7 +11,7 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
  * Given the refreshToken from the URL or, if not, from the user cookies:
  * create a new short-lived access token for the following requests.
  */
-export const getRefreshToken = async (request: Request<{ token?: string }>, response: Response) => {
+export const getRefreshToken = (request: Request<{ token?: string }>, response: Response) => {
     /**
      * Get token
      * (name of the cookie decided in the post-login.ts controller)
@@ -22,6 +23,7 @@ export const getRefreshToken = async (request: Request<{ token?: string }>, resp
      * Check if refresh token is missing
      */
     if (!refreshToken) {
+        authRefreshTotal.inc({ status: 'failure' });
         emitAuditEvent({
             action: AuditAction.AUTH_REFRESH_FAILED,
             actor_user_id: 'anonymous',
@@ -37,27 +39,30 @@ export const getRefreshToken = async (request: Request<{ token?: string }>, resp
     /**
      * Create new access token using refresh token stored in the server
      */
-    await runTokenCleanup();
-
-    try {
-        const token = await createAccessToken(refreshToken);
-        emitAuditEvent({
-            action: AuditAction.AUTH_REFRESH_SUCCEEDED,
-            actor_user_id: request.user?.id ?? 'anonymous',
-            actor_role: request.user?.admin ? 'admin' : request.user ? 'user' : 'anonymous',
-            outcome: 'success',
-            ...extractRequestContext(request)
-        });
-        successResponse(response, { token });
-    } catch {
-        emitAuditEvent({
-            action: AuditAction.AUTH_REFRESH_FAILED,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            outcome: 'failure',
-            ...extractRequestContext(request),
-            metadata: { reason: 'invalid_token' }
-        });
-        rejectResponse(response, 401, 'Unauthorized');
-    }
+    return runTokenCleanup().then(() =>
+        createAccessToken(refreshToken)
+            .then((token) => {
+                authRefreshTotal.inc({ status: 'success' });
+                emitAuditEvent({
+                    action: AuditAction.AUTH_REFRESH_SUCCEEDED,
+                    actor_user_id: request.authContext?.id ?? 'anonymous',
+                    actor_role: request.authContext?.admin ? 'admin' : request.authContext ? 'user' : 'anonymous',
+                    outcome: 'success',
+                    ...extractRequestContext(request)
+                });
+                successResponse(response, { token });
+            })
+            .catch(() => {
+                authRefreshTotal.inc({ status: 'failure' });
+                emitAuditEvent({
+                    action: AuditAction.AUTH_REFRESH_FAILED,
+                    actor_user_id: 'anonymous',
+                    actor_role: 'anonymous',
+                    outcome: 'failure',
+                    ...extractRequestContext(request),
+                    metadata: { reason: 'invalid_token' }
+                });
+                rejectResponse(response, 401, 'Unauthorized');
+            })
+    );
 };

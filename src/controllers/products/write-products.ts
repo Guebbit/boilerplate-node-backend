@@ -86,14 +86,14 @@ export const writeProducts = (
             .then((product) => {
                 emitAuditEvent({
                     action: AuditAction.ADMIN_PRODUCT_CREATED,
-                    actor_user_id: request.user?.id ?? 'unknown',
+                    actor_user_id: request.authContext?.id ?? 'unknown',
                     actor_role: 'admin',
                     outcome: 'success',
                     target_type: 'product',
                     target_id: String(product._id),
                     ...extractRequestContext(request)
                 });
-                successResponse(response, product.toObject(), 201);
+                successResponse(response, product, 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
@@ -106,7 +106,7 @@ export const writeProducts = (
      * ID = edit product
      */
     return productService
-        .update(id, {
+        .updateById(id, {
             ...request.body,
             imageUrl,
             active: !!request.body.active,
@@ -116,14 +116,14 @@ export const writeProducts = (
         .then((product) => {
             emitAuditEvent({
                 action: AuditAction.ADMIN_PRODUCT_UPDATED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'product',
                 target_id: id,
                 ...extractRequestContext(request)
             });
-            successResponse(response, product.toObject());
+            successResponse(response, product);
         })
         .catch((error: Error) =>
             deleteUpload().then(() => {

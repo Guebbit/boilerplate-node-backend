@@ -1,4 +1,4 @@
-import { emitAuditEvent, extractRequestContext, AuditAction, IAuditEvent } from '@utils/audit';
+import { emitAuditEvent, extractRequestContext, AuditAction, type IAuditEvent } from '@utils/audit';
 import { auditLogger } from '@utils/winston';
 
 // Spy on auditLogger.log so we don't write to disk during tests.

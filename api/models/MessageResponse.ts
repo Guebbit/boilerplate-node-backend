@@ -4,6 +4,7 @@
 /* eslint-disable */
 export type MessageResponse = {
     success: boolean;
+    status: number;
     message: string;
 };
 

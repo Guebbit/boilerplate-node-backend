@@ -19,9 +19,9 @@ export const getUserItem = (request: Request, response: Response) =>
             successResponse(response, user);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
-                rejectResponse(response, 404, 'deleteUser - not found', [
+            if (error.message === '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'Not Found', [
                     t('ecommerce.user-not-found')
                 ]);
-            rejectResponse(response, 500, 'Unknown Error', [error.message]);
+            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
         });

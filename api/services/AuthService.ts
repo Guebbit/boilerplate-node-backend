@@ -2,14 +2,14 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { AuthTokens } from '../models/AuthTokens';
+import type { AuthTokensEnvelope } from '../models/AuthTokensEnvelope';
 import type { LoginRequest } from '../models/LoginRequest';
 import type { MessageResponse } from '../models/MessageResponse';
 import type { PasswordResetConfirmRequest } from '../models/PasswordResetConfirmRequest';
 import type { PasswordResetRequest } from '../models/PasswordResetRequest';
-import type { RefreshTokenResponse } from '../models/RefreshTokenResponse';
+import type { RefreshTokenEnvelope } from '../models/RefreshTokenEnvelope';
 import type { SignupRequestMultipart } from '../models/SignupRequestMultipart';
-import type { User } from '../models/User';
+import type { UserEnvelope } from '../models/UserEnvelope';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -18,12 +18,12 @@ export class AuthService {
      * Login
      * Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests.
      * @param requestBody
-     * @returns AuthTokens Auth tokens
+     * @returns AuthTokensEnvelope Auth tokens
      * @throws ApiError
      */
     public static login(
         requestBody: LoginRequest,
-    ): CancelablePromise<AuthTokens> {
+    ): CancelablePromise<AuthTokensEnvelope> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/account/login',
@@ -40,12 +40,12 @@ export class AuthService {
      * Signup
      * Registers a new user account with optional image upload. Returns the newly created user profile on success.
      * @param formData
-     * @returns User Created
+     * @returns UserEnvelope Created
      * @throws ApiError
      */
     public static signup(
         formData: SignupRequestMultipart,
-    ): CancelablePromise<User> {
+    ): CancelablePromise<UserEnvelope> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/account/signup',
@@ -100,10 +100,10 @@ export class AuthService {
     /**
      * Refresh access token
      * Creates a new short-lived access token using a refresh token. The refresh token can be provided as a query parameter, path parameter, or retrieved from the `jwt` cookie.
-     * @returns RefreshTokenResponse New access token
+     * @returns RefreshTokenEnvelope New access token
      * @throws ApiError
      */
-    public static refreshToken(): CancelablePromise<RefreshTokenResponse> {
+    public static refreshToken(): CancelablePromise<RefreshTokenEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/account/refresh',
@@ -117,12 +117,12 @@ export class AuthService {
      * Refresh access token with token in path
      * Creates a new short-lived access token using a refresh token provided in the URL path.
      * @param token Refresh token
-     * @returns RefreshTokenResponse New access token
+     * @returns RefreshTokenEnvelope New access token
      * @throws ApiError
      */
     public static refreshTokenWithPath(
         token: string,
-    ): CancelablePromise<RefreshTokenResponse> {
+    ): CancelablePromise<RefreshTokenEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/account/refresh/{token}',
