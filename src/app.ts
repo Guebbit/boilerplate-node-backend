@@ -20,6 +20,7 @@ import { registerWorkers } from './workers';
 import { logger, auditLogger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { requestLogger } from '@middlewares/request-logger';
+import { attachObservability } from '@middlewares/observability';
 import { rejectResponse } from '@utils/response';
 import { validateRequiredEnvironment } from '@utils/environment';
 import {
@@ -191,6 +192,11 @@ app.use((request, response, next) => {
  * Winston access log + OpenTelemetry trace injection
  */
 app.use(requestLogger);
+
+/*
+ * Attach observability context — controllers use request.obs instead of singletons
+ */
+app.use(attachObservability);
 
 /*
  * Prometheus HTTP metrics — track latency and in-flight requests

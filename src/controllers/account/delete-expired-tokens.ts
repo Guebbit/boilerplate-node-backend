@@ -21,7 +21,7 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
             authTokenCleanupTotal.inc();
             emitAuditEvent({
                 action: AuditAction.AUTH_TOKEN_EXPIRED_CLEANUP,
-                actor_user_id: request.user?.id ?? 'anonymous',
+                actor_user_id: request.authContext?.id ?? 'anonymous',
                 actor_role: 'admin',
                 outcome: 'success',
                 ...extractRequestContext(request)

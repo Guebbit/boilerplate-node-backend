@@ -45,8 +45,8 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
                 authRefreshTotal.inc({ status: 'success' });
                 emitAuditEvent({
                     action: AuditAction.AUTH_REFRESH_SUCCEEDED,
-                    actor_user_id: request.user?.id ?? 'anonymous',
-                    actor_role: request.user?.admin ? 'admin' : request.user ? 'user' : 'anonymous',
+                    actor_user_id: request.authContext?.id ?? 'anonymous',
+                    actor_role: request.authContext?.admin ? 'admin' : request.authContext ? 'user' : 'anonymous',
                     outcome: 'success',
                     ...extractRequestContext(request)
                 });

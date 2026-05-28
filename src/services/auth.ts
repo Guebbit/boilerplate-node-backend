@@ -11,6 +11,7 @@ import {
 } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { zodUserSchema } from '@models/users';
+import { ETokenType } from '@models/users';
 import type { IUserDocument } from '@models/users';
 import { userRepository } from '@repositories/users';
 
@@ -183,9 +184,27 @@ export const login = (
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 };
 
+/**
+ * Remove all tokens of a given type for the user identified by userId.
+ * Used by logout-everywhere flows.
+ */
+export const tokenRemoveAll = (
+    userId: string,
+    type: ETokenType
+): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+    userRepository
+        .findById(userId)
+        .then((user): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+            if (!user) return Promise.resolve(generateReject(404, 'tokenRemoveAll - user not found', []));
+            user.tokens = user.tokens.filter((t) => t.type !== type);
+            return userRepository.save(user).then((saved) => generateSuccess<IUserDocument>(saved));
+        })
+        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+
 export const authService = {
     tokenAdd,
     passwordChange,
     signup,
-    login
+    login,
+    tokenRemoveAll
 };

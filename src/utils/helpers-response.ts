@@ -1,5 +1,4 @@
 import type { NextFunction, Request, Response } from 'express';
-import { Types } from 'mongoose';
 import { getCacheValue, invalidateCacheTags, setCacheValue, broadcastCacheInvalidation } from './cache';
 
 /**
@@ -14,9 +13,9 @@ type CacheOptions = {
  * This avoids serving one user's private data to another user.
  */
 const getCacheScope = (request: Request) => {
-    const userId = request.user?._id;
+    const userId = request.authContext?.id;
     if (!userId) return 'guest';
-    return `user:${userId instanceof Types.ObjectId ? userId.toString() : String(userId)}`;
+    return `user:${userId}`;
 };
 
 /**
@@ -38,7 +37,7 @@ export const setCache =
     (seconds = 0, options: CacheOptions = {}) =>
     (request: Request, response: Response, next: NextFunction) => {
         // Keep browser/proxy cache headers aligned with the server-side Redis cache policy.
-        response.set('Cache-Control', `${request.user ? 'private' : 'public'}, max-age=${seconds}`);
+        response.set('Cache-Control', `${request.authContext ? 'private' : 'public'}, max-age=${seconds}`);
 
         if (request.method !== 'GET' || seconds <= 0) {
             next();

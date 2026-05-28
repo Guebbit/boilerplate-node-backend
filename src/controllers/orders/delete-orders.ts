@@ -24,7 +24,7 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
             }
             emitAuditEvent({
                 action: AuditAction.ADMIN_ORDER_DELETED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'order',

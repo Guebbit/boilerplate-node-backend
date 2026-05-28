@@ -80,7 +80,7 @@ export const writeUsers = (
             .then((user) => {
                 emitAuditEvent({
                     action: AuditAction.ADMIN_USER_CREATED,
-                    actor_user_id: request.user?.id ?? 'unknown',
+                    actor_user_id: request.authContext?.id ?? 'unknown',
                     actor_role: 'admin',
                     outcome: 'success',
                     target_type: 'user',
@@ -108,7 +108,7 @@ export const writeUsers = (
                 });
             emitAuditEvent({
                 action: AuditAction.ADMIN_USER_UPDATED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'user',

@@ -34,7 +34,7 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
             }
             emitAuditEvent({
                 action: AuditAction.ADMIN_USER_DELETED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'user',
