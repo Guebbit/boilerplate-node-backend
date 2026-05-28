@@ -97,3 +97,20 @@ export const extractRequestContext = (request: {
         trace_id: getActiveSpanContext().traceId
     };
 };
+
+/** Build a complete audit event from request context + action-specific fields. */
+export const buildAuditEvent = (
+    request: {
+        ip?: string;
+        headers?: Record<string, string | string[] | undefined>;
+        requestId?: string;
+        authContext?: { id?: string; admin?: boolean } | null;
+    },
+    fields: Pick<IAuditEvent, 'action' | 'outcome'> &
+        Partial<Pick<IAuditEvent, 'actor_user_id' | 'actor_role' | 'target_type' | 'target_id' | 'metadata'>>
+): IAuditEvent => ({
+    actor_user_id: fields.actor_user_id ?? request.authContext?.id ?? 'unknown',
+    actor_role: fields.actor_role ?? (request.authContext?.admin ? 'admin' : request.authContext ? 'user' : 'anonymous'),
+    ...fields,
+    ...extractRequestContext(request)
+});

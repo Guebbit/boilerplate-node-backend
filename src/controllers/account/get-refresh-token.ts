@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { createAccessToken } from '@middlewares/auth-jwt';
 import { rejectResponse, successResponse } from '@utils/response';
 import { runTokenCleanup } from '@utils/token-cleanup';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { authRefreshTotal } from '@utils/domain-metrics';
 
 /**
@@ -24,14 +24,13 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
      */
     if (!refreshToken) {
         authRefreshTotal.inc({ status: 'failure' });
-        emitAuditEvent({
+        emitAuditEvent(buildAuditEvent(request, {
             action: AuditAction.AUTH_REFRESH_FAILED,
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
             outcome: 'failure',
-            ...extractRequestContext(request),
             metadata: { reason: 'missing_token' }
-        });
+        }));
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
@@ -43,25 +42,21 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
         createAccessToken(refreshToken)
             .then((token) => {
                 authRefreshTotal.inc({ status: 'success' });
-                emitAuditEvent({
+                emitAuditEvent(buildAuditEvent(request, {
                     action: AuditAction.AUTH_REFRESH_SUCCEEDED,
-                    actor_user_id: request.authContext?.id ?? 'anonymous',
-                    actor_role: request.authContext?.admin ? 'admin' : request.authContext ? 'user' : 'anonymous',
-                    outcome: 'success',
-                    ...extractRequestContext(request)
-                });
+                    outcome: 'success'
+                }));
                 successResponse(response, { token });
             })
             .catch(() => {
                 authRefreshTotal.inc({ status: 'failure' });
-                emitAuditEvent({
+                emitAuditEvent(buildAuditEvent(request, {
                     action: AuditAction.AUTH_REFRESH_FAILED,
                     actor_user_id: 'anonymous',
                     actor_role: 'anonymous',
                     outcome: 'failure',
-                    ...extractRequestContext(request),
                     metadata: { reason: 'invalid_token' }
-                });
+                }));
                 rejectResponse(response, 401, 'Unauthorized');
             })
     );

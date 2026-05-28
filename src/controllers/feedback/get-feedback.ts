@@ -5,7 +5,7 @@ import type { SearchFeedbackRequestsRequest } from '@types';
 import { extractRequestPagination } from '@utils/helpers-request';
 import { rejectResponse, successResponse } from '@utils/response';
 import { feedbackRequestService } from '@services/feedback-requests';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 
@@ -32,13 +32,10 @@ export const getFeedback = (
             status
         })
         .then((result) => {
-            emitAuditEvent({
+            emitAuditEvent(buildAuditEvent(request, {
                 action: AuditAction.ADMIN_FEEDBACK_VIEWED,
-                actor_user_id: request.authContext?.id ?? 'unknown',
-                actor_role: 'admin',
-                outcome: 'success',
-                ...extractRequestContext(request)
-            });
+                outcome: 'success'
+            }));
             return successResponse(response, result);
         })
         .catch((error: CastError) =>

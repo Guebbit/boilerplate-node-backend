@@ -13,9 +13,9 @@ import type { SearchUsersRequest } from '@types';
 import { userRepository } from '@repositories/users';
 import {
     normalizePagination,
-    buildPaginatedMeta,
     addTextFilter,
-    addRegexFilter
+    addRegexFilter,
+    paginatedSearch
 } from '@utils/search-helpers';
 
 /**
@@ -66,18 +66,7 @@ export const search = (
     if (filters.active !== undefined && filters.active !== null)
         where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
 
-    return userRepository.count(where).then((totalItems) =>
-        userRepository
-            .findAll(where, {
-                sort: { createdAt: -1 },
-                skip: pagination.skip,
-                limit: pagination.pageSize
-            })
-            .then((items) => ({
-                items,
-                meta: buildPaginatedMeta(pagination, totalItems)
-            }))
-    );
+    return paginatedSearch(userRepository, where, pagination);
 };
 
 /**

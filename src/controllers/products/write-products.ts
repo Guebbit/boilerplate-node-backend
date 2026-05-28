@@ -13,7 +13,7 @@ import type {
     UpdateProductByIdRequest,
     UpdateProductByIdRequestMultipart
 } from '@types';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
 /**
  * POST /products — create a new product (admin).
@@ -84,15 +84,12 @@ export const writeProducts = (
                 tags
             })
             .then((product) => {
-                emitAuditEvent({
+                emitAuditEvent(buildAuditEvent(request, {
                     action: AuditAction.ADMIN_PRODUCT_CREATED,
-                    actor_user_id: request.authContext?.id ?? 'unknown',
-                    actor_role: 'admin',
                     outcome: 'success',
                     target_type: 'product',
-                    target_id: String(product._id),
-                    ...extractRequestContext(request)
-                });
+                    target_id: String(product._id)
+                }));
                 successResponse(response, product, 201);
             })
             .catch((error: Error) =>
@@ -114,15 +111,12 @@ export const writeProducts = (
             tags
         })
         .then((product) => {
-            emitAuditEvent({
+            emitAuditEvent(buildAuditEvent(request, {
                 action: AuditAction.ADMIN_PRODUCT_UPDATED,
-                actor_user_id: request.authContext?.id ?? 'unknown',
-                actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'product',
-                target_id: id,
-                ...extractRequestContext(request)
-            });
+                target_id: id
+            }));
             successResponse(response, product);
         })
         .catch((error: Error) =>

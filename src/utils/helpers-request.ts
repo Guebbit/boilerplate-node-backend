@@ -94,3 +94,14 @@ export const extractAndValidateId = (
     }
     return id;
 };
+
+/**
+ * Extract the hardDelete flag from query, params, or body.
+ * Used by delete controllers that support soft/hard delete.
+ */
+export const extractHardDelete = (request: Request<ParamsDictionary>): boolean =>
+    !!(
+        request.query.hardDelete ??
+        request.params.hardDelete ??
+        (request.body as { hardDelete?: boolean }).hardDelete
+    );

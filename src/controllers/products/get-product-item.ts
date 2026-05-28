@@ -3,8 +3,7 @@ import { t } from 'i18next';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CastError } from 'mongoose';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
  * GET /products/:id
@@ -21,9 +20,8 @@ export const getProductItem = (request: Request, response: Response) =>
                 return;
             }
             emitAnalyticsEvent({
-                distinctId: request.authContext?.id ?? 'anonymous',
+                ...buildAnalyticsBase(request),
                 event: AnalyticsEvent.PRODUCT_VIEWED,
-                traceId: getActiveSpanContext().traceId,
                 properties: { product_id: String(request.params.id) }
             });
             successResponse(response, product);

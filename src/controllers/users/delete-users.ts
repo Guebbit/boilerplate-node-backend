@@ -4,8 +4,8 @@ import { t } from 'i18next';
 import type { CastError } from 'mongoose';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractAndValidateId } from '@utils/helpers-request';
-import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { extractAndValidateId, extractHardDelete } from '@utils/helpers-request';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
 /**
  * DELETE /users — delete a user by id in the request body (admin).
@@ -18,11 +18,7 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
     const id = extractAndValidateId(request, response, 'deleteUser');
     if (!id) return Promise.resolve();
 
-    const hardDelete = !!(
-        request.query.hardDelete ??
-        request.params.hardDelete ??
-        (request.body as { hardDelete?: boolean }).hardDelete
-    );
+    const hardDelete = extractHardDelete(request);
 
     return userService
         // true = hard-delete; false (default) = soft-delete (sets deletedAt)
@@ -32,16 +28,13 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
-            emitAuditEvent({
+            emitAuditEvent(buildAuditEvent(request, {
                 action: AuditAction.ADMIN_USER_DELETED,
-                actor_user_id: request.authContext?.id ?? 'unknown',
-                actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'user',
                 target_id: id,
-                ...extractRequestContext(request),
                 metadata: { hardDelete }
-            });
+            }));
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {

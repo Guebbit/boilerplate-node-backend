@@ -4,8 +4,7 @@ import { cartService } from '@services/cart';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
  * POST /cart
@@ -37,9 +36,8 @@ export const postCart = (
             .then(() => cartService.cartGetWithSummary(userId))
             .then((cart) => {
                 emitAnalyticsEvent({
-                    distinctId: userId,
+                    ...buildAnalyticsBase(request),
                     event: AnalyticsEvent.CART_ITEM_ADDED,
-                    traceId: getActiveSpanContext().traceId,
                     properties: { product_id: productId, quantity }
                 });
                 successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));

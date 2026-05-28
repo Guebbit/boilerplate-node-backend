@@ -1,7 +1,6 @@
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@utils/response';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
-import { getActiveSpanContext } from '@utils/tracer';
+import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
  * GET /account
@@ -13,9 +12,8 @@ export const getAccount = (request: Request, response: Response): void => {
         return;
     }
     emitAnalyticsEvent({
-        distinctId: request.authContext.id,
-        event: AnalyticsEvent.USER_PROFILE_VIEWED,
-        traceId: getActiveSpanContext().traceId
+        ...buildAnalyticsBase(request),
+        event: AnalyticsEvent.USER_PROFILE_VIEWED
     });
     successResponse(response, request.authContext);
 };
