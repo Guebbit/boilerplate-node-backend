@@ -487,12 +487,12 @@ describe('userService.adminCreate', () => {
     });
 });
 
-describe('userService.adminUpdate', () => {
+describe('userService.adminUpdateById', () => {
     it('updates the username and admin flag of an existing user', async () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
-        const result = await userService.adminUpdate(id, {
+        const result = await userService.adminUpdateById(id, {
             username: 'new-name',
             admin: true
         });
@@ -508,7 +508,7 @@ describe('userService.adminUpdate', () => {
         const id = (user._id as Types.ObjectId).toString();
         const originalHash = user.password;
 
-        await userService.adminUpdate(id, { password: 'UpdatedPwd1!' });
+        await userService.adminUpdateById(id, { password: 'UpdatedPwd1!' });
 
         const refreshed = await userRepository.findById(id);
         expect(refreshed!.password).not.toBe(originalHash);
@@ -519,25 +519,36 @@ describe('userService.adminUpdate', () => {
         const id = (user._id as Types.ObjectId).toString();
         const originalHash = user.password;
 
-        await userService.adminUpdate(id, { password: '' });
+        await userService.adminUpdateById(id, { password: '' });
 
         const refreshed = await userRepository.findById(id);
         expect(refreshed!.password).toBe(originalHash);
     });
 
     it('returns reject result when the user does not exist', async () => {
-        const result = await userService.adminUpdate('000000000000000000000000', { username: 'x' });
+        const result = await userService.adminUpdateById('000000000000000000000000', { username: 'x' });
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
     });
 });
 
-describe('userService.remove', () => {
+describe('userService.adminUpdate', () => {
+    it('updates an existing user document directly', async () => {
+        const user = await createUser();
+
+        const result = await userService.adminUpdate(user, { username: 'direct-update' });
+
+        expect(result.success).toBe(true);
+        expect((result as IResponseSuccess<IUserDocument>).data!.username).toBe('direct-update');
+    });
+});
+
+describe('userService.removeById', () => {
     it('soft-deletes a user by setting deletedAt', async () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
-        const result = await userService.remove(id);
+        const result = await userService.removeById(id);
 
         expect(result.success).toBe(true);
         const updated = await userRepository.findById(id);
@@ -548,7 +559,7 @@ describe('userService.remove', () => {
         const user = await createUser({ deletedAt: new Date() });
         const id = (user._id as Types.ObjectId).toString();
 
-        await userService.remove(id);
+        await userService.removeById(id);
 
         const restored = await userRepository.findById(id);
         expect(restored!.deletedAt).toBeUndefined();
@@ -558,16 +569,38 @@ describe('userService.remove', () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
-        await userService.remove(id, true);
+        await userService.removeById(id, true);
 
         expect(await userRepository.findById(id)).toBeNull();
     });
 
     it('returns a 404 rejection when the user does not exist', async () => {
-        const result = await userService.remove('000000000000000000000000');
+        const result = await userService.removeById('000000000000000000000000');
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(404);
+    });
+});
+
+describe('userService.remove', () => {
+    it('soft-deletes a user document directly', async () => {
+        const user = await createUser();
+        const id = (user._id as Types.ObjectId).toString();
+
+        const result = await userService.remove(user);
+
+        expect(result.success).toBe(true);
+        const updated = await userRepository.findById(id);
+        expect(updated!.deletedAt).toBeDefined();
+    });
+
+    it('hard-deletes a user document directly', async () => {
+        const user = await createUser();
+        const id = (user._id as Types.ObjectId).toString();
+
+        await userService.remove(user, true);
+
+        expect(await userRepository.findById(id)).toBeNull();
     });
 });
 

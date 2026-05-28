@@ -16,7 +16,7 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
     if (!id) return Promise.resolve();
 
     return orderService
-        .remove(id)
+        .removeById(id)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.message, result.errors);

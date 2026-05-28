@@ -202,12 +202,12 @@ describe('productService.create', () => {
     });
 });
 
-describe('productService.update', () => {
+describe('productService.updateById', () => {
     it('updates title, price and description of an existing product', async () => {
         const product = await createProduct();
         const id = (product._id as Types.ObjectId).toString();
 
-        const updated = await productService.update(id, {
+        const updated = await productService.updateById(id, {
             title: 'Updated Title',
             price: 49.99,
             description: 'New description'
@@ -222,7 +222,7 @@ describe('productService.update', () => {
         const product = await createProduct({ active: true });
         const id = (product._id as Types.ObjectId).toString();
 
-        const updated = await productService.update(id, { active: false });
+        const updated = await productService.updateById(id, { active: false });
 
         expect(updated.active).toBe(false);
     });
@@ -235,7 +235,7 @@ describe('productService.update', () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id = (product._id as Types.ObjectId).toString();
 
-        await productService.update(id, { imageUrl: '/images/new.jpg' });
+        await productService.updateById(id, { imageUrl: '/images/new.jpg' });
 
         // The service should delete the OLD image after saving the new one
         expect(deleteFile).toHaveBeenCalledWith(expect.stringContaining('old.jpg'));
@@ -243,17 +243,31 @@ describe('productService.update', () => {
 
     it('throws when the product does not exist', async () => {
         await expect(
-            productService.update('000000000000000000000000', { title: 'X' })
+            productService.updateById('000000000000000000000000', { title: 'X' })
         ).rejects.toThrow();
     });
 });
 
-describe('productService.remove', () => {
+describe('productService.update', () => {
+    it('updates an existing product document directly', async () => {
+        const product = await createProduct();
+
+        const updated = await productService.update(product, {
+            title: 'Direct Update',
+            price: 99.99
+        });
+
+        expect(updated.title).toBe('Direct Update');
+        expect(updated.price).toBe(99.99);
+    });
+});
+
+describe('productService.removeById', () => {
     it('soft-deletes a product by setting deletedAt', async () => {
         const product = await createProduct({ active: true });
         const id = (product._id as Types.ObjectId).toString();
 
-        const result = await productService.remove(id, false);
+        const result = await productService.removeById(id, false);
 
         expect(result.success).toBe(true);
         const refreshed = await productRepository.findById(id);
@@ -264,7 +278,7 @@ describe('productService.remove', () => {
         const product = await createProduct({ deletedAt: new Date() });
         const id = (product._id as Types.ObjectId).toString();
 
-        await productService.remove(id, false);
+        await productService.removeById(id, false);
 
         const restored = await productRepository.findById(id);
         expect(restored!.deletedAt).toBeUndefined();
@@ -283,7 +297,7 @@ describe('productService.remove', () => {
         // Confirm the cart item was added
         expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
 
-        const result = await productService.remove(pid, true);
+        const result = await productService.removeById(pid, true);
 
         expect(result.success).toBe(true);
         // Product must be gone from DB
@@ -296,9 +310,32 @@ describe('productService.remove', () => {
     });
 
     it('returns a 404 rejection when the product does not exist', async () => {
-        const result = await productService.remove('000000000000000000000000', false);
+        const result = await productService.removeById('000000000000000000000000', false);
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(404);
+    });
+});
+
+describe('productService.remove', () => {
+    it('soft-deletes a product document directly', async () => {
+        const product = await createProduct({ active: true });
+        const id = (product._id as Types.ObjectId).toString();
+
+        const result = await productService.remove(product, false);
+
+        expect(result.success).toBe(true);
+        const refreshed = await productRepository.findById(id);
+        expect(refreshed!.deletedAt).toBeDefined();
+    });
+
+    it('hard-deletes a product document directly', async () => {
+        const product = await createProduct({ active: true });
+        const pid = (product._id as Types.ObjectId).toString();
+
+        const result = await productService.remove(product, true);
+
+        expect(result.success).toBe(true);
+        expect(await productRepository.findById(pid)).toBeNull();
     });
 });

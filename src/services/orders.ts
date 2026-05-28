@@ -198,14 +198,14 @@ export const create = (
 };
 
 /**
- * Update an existing order by ID (admin).
+ * Update an existing order document (admin).
  * Only updates the fields provided.
  *
- * @param id
+ * @param order
  * @param data
  */
 export const update = (
-    id: string,
+    order: IOrderDocument,
     data: {
         status?: string;
         email?: string;
@@ -213,56 +213,81 @@ export const update = (
         items?: CartItem[];
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
-    return orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+    if (data.status !== undefined) order.status = data.status as EOrderStatus;
+    if (data.email !== undefined) order.email = data.email;
+    if (data.userId !== undefined) order.userId = new Types.ObjectId(data.userId);
 
-        if (data.status !== undefined) order.status = data.status as EOrderStatus;
-        if (data.email !== undefined) order.email = data.email;
-        if (data.userId !== undefined) order.userId = new Types.ObjectId(data.userId);
+    const updateItemsPromise =
+        data.items && data.items.length > 0
+            ? Promise.all(
+                  data.items.map((item) =>
+                      productRepository
+                          .findById(item.productId)
+                          .lean()
+                          .then((product) => ({ item, product }))
+                  )
+              ).then((resolvedItems) => {
+                  const missingProduct = resolvedItems.some(({ product }) => !product);
+                  if (missingProduct)
+                      return generateReject(404, 'update order - product not found', [
+                          t('ecommerce.product-not-found')
+                      ]);
 
-        const updateItemsPromise =
-            data.items && data.items.length > 0
-                ? Promise.all(
-                      data.items.map((item) =>
-                          productRepository
-                              .findById(item.productId)
-                              .lean()
-                              .then((product) => ({ item, product }))
-                      )
-                  ).then((resolvedItems) => {
-                      const missingProduct = resolvedItems.some(({ product }) => !product);
-                      if (missingProduct)
-                          return generateReject(404, 'update order - product not found', [
-                              t('ecommerce.product-not-found')
-                          ]);
+                  order.items = resolvedItems.map(({ item, product }) => ({
+                      // lean() returns a plain object compatible with IProductDocument at runtime
+                      product: product! as IOrderDocumentItem['product'],
+                      quantity: item.quantity
+                  }));
+              })
+            : Promise.resolve();
 
-                      order.items = resolvedItems.map(({ item, product }) => ({
-                          // lean() returns a plain object compatible with IProductDocument at runtime
-                          product: product! as IOrderDocumentItem['product'],
-                          quantity: item.quantity
-                      }));
-                  })
-                : Promise.resolve();
-
-        return updateItemsPromise.then((earlyResult) => {
-            if (earlyResult) return earlyResult;
-            return orderRepository.save(order).then((saved) => generateSuccess(saved));
-        });
+    return updateItemsPromise.then((earlyResult) => {
+        if (earlyResult) return earlyResult;
+        return orderRepository.save(order).then((saved) => generateSuccess(saved));
     });
 };
 
 /**
+ * Update an existing order by ID (admin).
+ * Fetches the document then delegates to update().
+ *
+ * @param id
+ * @param data
+ */
+export const updateById = (
+    id: string,
+    data: {
+        status?: string;
+        email?: string;
+        userId?: string;
+        items?: CartItem[];
+    }
+): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
+    orderRepository.findById(id).then((order) => {
+        if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+        return update(order, data);
+    });
+
+/**
+ * Delete an order document (hard delete).
+ *
+ * @param order
+ */
+export const remove = (order: IOrderDocument): Promise<IResponseSuccess<undefined> | IResponseReject> =>
+    orderRepository
+        .deleteOne(order)
+        .then(() => generateSuccess(undefined, 200, t('ecommerce.order-deleted')));
+
+/**
  * Delete an order by ID (hard delete).
+ * Fetches the document then delegates to remove().
  *
  * @param id
  */
-export const remove = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> => {
-    return orderRepository.findById(id).then((order) => {
+export const removeById = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> =>
+    orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
-        return orderRepository
-            .deleteOne(order)
-            .then(() => generateSuccess(undefined, 200, t('ecommerce.order-deleted')));
+        return remove(order);
     });
-};
 
-export const orderService = { getAll, search, getById, create, update, remove };
+export const orderService = { getAll, search, getById, create, update, updateById, remove, removeById };
