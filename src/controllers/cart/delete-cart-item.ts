@@ -4,6 +4,7 @@ import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { extractAndValidateCustomId } from '@utils/helpers-request';
 
 /**
  * DELETE /cart/:productId
@@ -15,7 +16,12 @@ export const deleteCartItem = (
     response: Response
 ) => {
     const userId = request.authContext!.id;
-    const productId = String(request.params.productId ?? request.body.productId);
+    const productId = extractAndValidateCustomId(request, response, 'removeCartItem', {
+        param: 'productId',
+        body: 'productId'
+    });
+
+    if (!productId) return;
 
     return cartService
         .cartItemRemoveById(userId, productId)

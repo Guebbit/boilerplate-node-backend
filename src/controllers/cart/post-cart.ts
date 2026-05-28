@@ -5,6 +5,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import { extractAndValidateCustomId } from '@utils/helpers-request';
 
 /**
  * POST /cart
@@ -16,9 +17,14 @@ export const postCart = (
     response: Response
 ) => {
     const userId = request.authContext!.id;
-    const { productId, quantity } = request.body;
+    const productId = extractAndValidateCustomId(request as Request, response, 'upsertCartItem', {
+        body: 'productId'
+    });
+    const { quantity } = request.body;
 
-    if (!productId || !quantity || quantity < 1) {
+    if (!productId) return;
+
+    if (!quantity || quantity < 1) {
         rejectResponse(response, 422, 'upsertCartItem - invalid data', [
             t('generic.error-invalid-data')
         ]);

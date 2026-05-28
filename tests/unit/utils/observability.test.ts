@@ -3,7 +3,8 @@ import {
     recordRequestMetric,
     incrementInflight,
     decrementInflight,
-    getPrometheusMetrics
+    getPrometheusMetrics,
+    percentileFromHistogramBuckets
 } from '@utils/observability';
 
 describe('normalizeRoutePath', () => {
@@ -85,5 +86,22 @@ describe('getPrometheusMetrics — standard families', () => {
     it('includes nodejs_eventloop_lag_seconds (prom-client default)', async () => {
         const metrics = await getPrometheusMetrics();
         expect(metrics).toContain('nodejs_eventloop_lag_seconds');
+    });
+});
+
+describe('percentileFromHistogramBuckets', () => {
+    it('returns 0 for empty histograms', () => {
+        expect(percentileFromHistogramBuckets([], 0, 0.95)).toBe(0);
+    });
+
+    it('picks first bucket whose cumulative count reaches percentile threshold', () => {
+        const buckets = [
+            { upperBound: 10, cumulativeCount: 2 },
+            { upperBound: 25, cumulativeCount: 5 },
+            { upperBound: 50, cumulativeCount: 9 }
+        ];
+
+        expect(percentileFromHistogramBuckets(buckets, 10, 0.5)).toBe(25);
+        expect(percentileFromHistogramBuckets(buckets, 10, 0.95)).toBe(50);
     });
 });

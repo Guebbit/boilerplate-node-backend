@@ -96,6 +96,35 @@ export const extractAndValidateId = (
 };
 
 /**
+ * Validate a MongoDB ObjectId from explicit request fields.
+ * Returns normalized id or sends a 422 response and returns undefined.
+ */
+export const extractAndValidateCustomId = (
+    request: Request,
+    response: Response,
+    entityLabel: string,
+    fields: { param?: string; body?: string } = {}
+): string | undefined => {
+    const fromParameters = fields.param ? request.params[fields.param] : undefined;
+    const body = request.body as Record<string, unknown>;
+    const fromBody = fields.body ? body[fields.body] : undefined;
+    const rawId = extractId(
+        Array.isArray(fromParameters)
+            ? fromParameters[0]
+            : (fromParameters as string | undefined),
+        Array.isArray(fromBody) ? String(fromBody[0]) : (fromBody as string | undefined)
+    );
+
+    if (!rawId || !Types.ObjectId.isValid(rawId)) {
+        rejectResponse(response, 422, `${entityLabel} - missing id`, [
+            t('generic.error-missing-data')
+        ]);
+        return undefined;
+    }
+    return rawId;
+};
+
+/**
  * Extract the hardDelete flag from query, params, or body.
  * Used by delete controllers that support soft/hard delete.
  */

@@ -7,6 +7,7 @@ import * as authService from '@services/auth';
 import * as cartService from '@services/cart';
 import * as userRepository from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@utils/response';
+import type { IUserCartDto } from '@utils/dto-cart';
 import type { IUserDocument } from '@models/users';
 
 setupTestDb();
@@ -111,8 +112,8 @@ describe('cartService cart operations', () => {
         const result = await cartService.cartItemSetById(userId, pid, 3);
 
         expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
-        expect((result as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(3);
+        expect((result as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(1);
+        expect((result as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(3);
     });
 
     it('cartItemSetById overwrites the quantity when the product is already in the cart', async () => {
@@ -124,8 +125,8 @@ describe('cartService cart operations', () => {
         await cartService.cartItemSetById(userId, pid, 2);
         const secondResult = await cartService.cartItemSetById(userId, pid, 7);
 
-        expect((secondResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
-        expect((secondResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(
+        expect((secondResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(1);
+        expect((secondResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(
             7
         );
     });
@@ -139,7 +140,7 @@ describe('cartService cart operations', () => {
         await cartService.cartItemSetById(userId, pid, 2);
         const addResult = await cartService.cartItemAddById(userId, pid, 3);
 
-        expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(5);
+        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(5);
     });
 
     it('cartItemRemoveById removes the specified product from the cart', async () => {
@@ -151,7 +152,7 @@ describe('cartService cart operations', () => {
         await cartService.cartItemSetById(userId, pid, 1);
         const removeResult = await cartService.cartItemRemoveById(userId, pid);
 
-        expect((removeResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
+        expect((removeResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(0);
     });
 
     it('cartRemove empties the entire cart', async () => {
@@ -163,7 +164,7 @@ describe('cartService cart operations', () => {
         await cartService.cartItemSetById(userId, pid, 5);
         const clearResult = await cartService.cartRemove(userId);
 
-        expect((clearResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
+        expect((clearResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(0);
     });
 
     it('cartGet returns populated cart items with product details', async () => {
@@ -187,7 +188,7 @@ describe('cartService cart operations', () => {
         const result = await cartService.cartItemSet(userId, product, 4);
 
         expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(4);
+        expect((result as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(4);
     });
 
     it('cartItemAdd (by document) increases quantity', async () => {
@@ -199,7 +200,7 @@ describe('cartService cart operations', () => {
         await cartService.cartItemSetById(userId, pid, 1);
         const addResult = await cartService.cartItemAdd(userId, product, 9);
 
-        expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items[0].quantity).toBe(
+        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(
             10
         );
     });
@@ -212,7 +213,7 @@ describe('cartService cart operations', () => {
         await cartService.cartItemSet(userId, product, 1);
         const removeResult = await cartService.cartItemRemove(userId, product);
 
-        expect((removeResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(0);
+        expect((removeResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(0);
     });
 });
 
