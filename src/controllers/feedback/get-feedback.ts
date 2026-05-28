@@ -4,6 +4,7 @@ import type { SearchFeedbackRequestsRequest } from '@types';
 import { extractPagination } from '@utils/helpers-request';
 import { rejectResponse, successResponse } from '@utils/response';
 import { feedbackRequestService } from '@services/feedback-requests';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 
@@ -28,7 +29,16 @@ export const getFeedback = (
             email: request.body?.email ?? request.query.email,
             status
         })
-        .then((result) => successResponse(response, result))
+        .then((result) => {
+            emitAuditEvent({
+                action: AuditAction.ADMIN_FEEDBACK_VIEWED,
+                actor_user_id: request.user?.id ?? 'unknown',
+                actor_role: 'admin',
+                outcome: 'success',
+                ...extractRequestContext(request)
+            });
+            return successResponse(response, result);
+        })
         .catch((error: CastError) =>
             rejectResponse(response, 500, 'Unknown Error', [error.message])
         );

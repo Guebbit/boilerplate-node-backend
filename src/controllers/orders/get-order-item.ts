@@ -25,8 +25,8 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
             successResponse(response, order);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
-                rejectResponse(response, 404, 'getOrder - not found', [
+            if (error.message === '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'getOrder - not found', [
                     t('ecommerce.order-not-found')
                 ]);
             rejectResponse(response, 500, 'Unknown Error', [error.message]);

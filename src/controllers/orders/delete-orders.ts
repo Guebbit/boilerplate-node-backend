@@ -43,8 +43,8 @@ export const deleteOrders = (
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
-                rejectResponse(response, 404, 'deleteOrders - not found', [
+            if (error.message === '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'deleteOrders - not found', [
                     t('ecommerce.order-not-found')
                 ]);
             rejectResponse(response, 500, 'Unknown Error', [error.message]);

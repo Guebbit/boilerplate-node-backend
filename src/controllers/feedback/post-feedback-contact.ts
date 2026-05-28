@@ -57,7 +57,7 @@ export const postFeedbackContact = (
                     })
                 );
 
-            successResponse(response, createdFeedbackRequest.toObject(), 201);
+            successResponse(response, createdFeedbackRequest, 201);
         })
         .catch((error: Error) =>
             rejectResponse(response, 500, 'Internal Server Error', [error.message])

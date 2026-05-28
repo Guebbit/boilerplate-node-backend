@@ -713,6 +713,38 @@ export const remove = (
     });
 };
 
+/**
+ * Find a user by email address.
+ * Returns the document if found, or undefined if no match.
+ *
+ * @param email
+ */
+export const findByEmail = (email: string): Promise<IUserDocument | undefined | null> =>
+    userRepository.findOne({ email });
+
+/**
+ * Find a user that holds a password-reset token.
+ * Returns the document if found, or undefined/null if no match.
+ *
+ * @param token
+ */
+export const findByPasswordResetToken = (
+    token: string
+): Promise<IUserDocument | undefined | null> =>
+    userRepository.findOne({ 'tokens.token': token, 'tokens.type': 'password' });
+
+/**
+ * Remove the given token from the user document and persist it.
+ * Used to consume a one-time password-reset token after the reset completes.
+ *
+ * @param user
+ * @param token
+ */
+export const consumeToken = (user: IUserDocument, token: string): Promise<IUserDocument> => {
+    user.tokens = user.tokens.filter((tk) => tk.token !== token);
+    return userRepository.save(user);
+};
+
 export const userService = {
     cartGet,
     cartGetWithSummary,
@@ -734,5 +766,8 @@ export const userService = {
     getById,
     adminCreate,
     adminUpdate,
-    remove
+    remove,
+    findByEmail,
+    findByPasswordResetToken,
+    consumeToken
 };

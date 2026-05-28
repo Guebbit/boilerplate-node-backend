@@ -47,8 +47,8 @@ export const deleteUsers = (
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {
-            if (error.message == '404' || error.kind === 'ObjectId')
-                rejectResponse(response, 404, 'deleteUser - not found', [
+            if (error.message === '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'deleteUser - not found', [
                     t('ecommerce.user-not-found')
                 ]);
 

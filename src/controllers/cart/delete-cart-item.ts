@@ -4,6 +4,7 @@ import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
 import { getActiveSpanContext } from '@utils/tracer';
 
 /**
@@ -28,6 +29,15 @@ export const deleteCartItem = (
         .cartItemRemoveById(user, productId)
         .then(() => userService.cartGetWithSummary(user))
         .then((cart) => {
+            emitAuditEvent({
+                action: AuditAction.USER_CART_ITEM_REMOVED,
+                actor_user_id: user.id,
+                actor_role: user.admin ? 'admin' : 'user',
+                outcome: 'success',
+                target_type: 'product',
+                target_id: productId,
+                ...extractRequestContext(request)
+            });
             emitAnalyticsEvent({
                 distinctId: user.id,
                 event: AnalyticsEvent.CART_ITEM_REMOVED,

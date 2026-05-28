@@ -3,7 +3,7 @@ import {
     emitAnalyticsEvent,
     shutdownAnalytics,
     AnalyticsEvent,
-    IAnalyticsEvent
+    type IAnalyticsEvent
 } from '@utils/analytics';
 
 // ─── Mock posthog-node ────────────────────────────────────────────────────────
