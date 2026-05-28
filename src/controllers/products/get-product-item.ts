@@ -29,13 +29,8 @@ export const getProductItem = (request: Request, response: Response) =>
             successResponse(response, product);
         })
         .catch((error: CastError) => {
-<<<<<<< HEAD
             if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'getProduct - not found', [
-=======
-            if (error.message == '404' || error.kind === 'ObjectId')
                 return rejectResponse(response, 404, 'Not Found', [
->>>>>>> origin/main
                     t('ecommerce.product-not-found')
                 ]);
             rejectResponse(response, 500, 'Internal Server Error', [error.message]);

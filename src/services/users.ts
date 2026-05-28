@@ -150,8 +150,6 @@ export const remove = (
         .then((savedUser) => generateSuccess(savedUser, 200, t('ecommerce.user-soft-deleted')));
 };
 
-/**
-<<<<<<< HEAD
  * Find a user by email address.
  * Returns the document if found, or undefined if no match.
  *
@@ -182,7 +180,8 @@ export const consumeToken = (user: IUserDocument, token: string): Promise<IUserD
     user.tokens = user.tokens.filter((tk) => tk.token !== token);
     return userRepository.save(user);
 };
-=======
+
+/**
  * Remove a user by ID (soft or hard delete).
  * Fetches the document then delegates to remove().
  */
@@ -194,7 +193,6 @@ export const removeById = (
         if (!user) return generateReject(404, '404', [t('ecommerce.user-not-found')]);
         return remove(user, hardDelete);
     });
->>>>>>> origin/main
 
 export const userService = {
     validateData,
@@ -202,14 +200,10 @@ export const userService = {
     getById,
     adminCreate,
     adminUpdate,
-<<<<<<< HEAD
+    adminUpdateById,
     remove,
+    removeById,
     findByEmail,
     findByPasswordResetToken,
     consumeToken
-=======
-    adminUpdateById,
-    remove,
-    removeById
->>>>>>> origin/main
 };

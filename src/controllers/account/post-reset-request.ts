@@ -1,11 +1,7 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-<<<<<<< HEAD
 import { userService } from '@services/users';
-=======
 import { authService } from '@services/auth';
-import { userRepository } from '@repositories/users';
->>>>>>> origin/main
 import { successResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';

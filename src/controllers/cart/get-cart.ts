@@ -10,15 +10,11 @@ import { getActiveSpanContext } from '@utils/tracer';
  * Authentication check is done before entering the route.
  */
 export const getCart = (request: Request, response: Response) =>
-<<<<<<< HEAD
-    userService.cartGetWithSummary(request.user!).then((cart) => {
+    cartService.cartGetWithSummary(request.authContext!.id).then((cart) => {
         emitAnalyticsEvent({
-            distinctId: request.user!.id,
+            distinctId: request.authContext!.id,
             event: AnalyticsEvent.CART_VIEWED,
             traceId: getActiveSpanContext().traceId
         });
-=======
-    cartService.cartGetWithSummary(request.authContext!.id).then((cart) => {
->>>>>>> origin/main
         successResponse(response, cart);
     });

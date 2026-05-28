@@ -44,11 +44,7 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
         })
         .catch((error: CastError) => {
             if (error.message === '404' || error.kind === 'ObjectId')
-<<<<<<< HEAD
-                return rejectResponse(response, 404, 'deleteProduct - not found', [
-=======
                 return rejectResponse(response, 404, 'Not Found', [
->>>>>>> origin/main
                     t('ecommerce.product-not-found')
                 ]);
             rejectResponse(response, 500, 'Internal Server Error', [error.message]);

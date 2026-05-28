@@ -24,12 +24,12 @@ export const putFeedbackStatus = (
         );
 
     return feedbackRequestService
-<<<<<<< HEAD
-        .updateStatus(request.params.id, parseResult.data)
-        .then((feedbackRequest) => {
+        .updateStatusById(request.params.id, parseResult.data)
+        .then((result) => {
+            if (!result.success) return rejectResponse(response, result.status, result.message, result.errors);
             emitAuditEvent({
                 action: AuditAction.ADMIN_FEEDBACK_STATUS_UPDATED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'feedback',
@@ -37,16 +37,6 @@ export const putFeedbackStatus = (
                 ...extractRequestContext(request),
                 metadata: { status: parseResult.data.status }
             });
-            return successResponse(response, feedbackRequest);
-        })
-        .catch((error: Error) => {
-            if (error.message === '404') return rejectResponse(response, 404, 'Not Found');
-            return rejectResponse(response, 500, 'Internal Server Error', [error.message]);
-=======
-        .updateStatusById(request.params.id, parseResult.data)
-        .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.message, result.errors);
             return successResponse(response, result.data);
->>>>>>> origin/main
         });
 };

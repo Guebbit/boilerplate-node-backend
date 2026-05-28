@@ -115,18 +115,6 @@ export const writeUsers = (
                 target_id: id,
                 ...extractRequestContext(request)
             });
-<<<<<<< HEAD
-            successResponse(response, user);
-        })
-        .catch((error: Error) =>
-            deleteUpload().then(() => {
-                if (error.message === '404')
-                    rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
-                else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
-            })
-        );
-=======
             successResponse(response, result.data);
         });
->>>>>>> origin/main
 };

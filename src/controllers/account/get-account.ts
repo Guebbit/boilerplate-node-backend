@@ -12,14 +12,10 @@ export const getAccount = (request: Request, response: Response): void => {
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
-<<<<<<< HEAD
     emitAnalyticsEvent({
-        distinctId: request.user.id,
+        distinctId: request.authContext.id,
         event: AnalyticsEvent.USER_PROFILE_VIEWED,
         traceId: getActiveSpanContext().traceId
     });
-    successResponse(response, request.user);
-=======
     successResponse(response, request.authContext);
->>>>>>> origin/main
 };

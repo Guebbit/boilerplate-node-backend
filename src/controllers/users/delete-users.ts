@@ -46,11 +46,7 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
         })
         .catch((error: CastError) => {
             if (error.message === '404' || error.kind === 'ObjectId')
-<<<<<<< HEAD
-                return rejectResponse(response, 404, 'deleteUser - not found', [
-=======
                 return rejectResponse(response, 404, 'Not Found', [
->>>>>>> origin/main
                     t('ecommerce.user-not-found')
                 ]);
             rejectResponse(response, 500, 'Internal Server Error', [error.message]);
