@@ -101,48 +101,67 @@ export const adminCreate = (
 ): Promise<IUserDocument> => userRepository.create(data);
 
 /**
- * Update an existing user by ID (admin version).
+ * Update an existing user document (admin version).
  * Returns result union instead of throwing (LSP).
  */
 export const adminUpdate = (
+    user: IUserDocument,
+    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
+): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+    if (data.email !== undefined) user.email = data.email;
+    if (data.username !== undefined) user.username = data.username;
+    if (data.admin !== undefined) user.admin = data.admin;
+    if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
+    if (data.password && data.password.trim().length > 0) user.password = data.password;
+
+    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+};
+
+/**
+ * Update an existing user by ID (admin version).
+ * Fetches the document then delegates to adminUpdate().
+ */
+export const adminUpdateById = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, '404', [t('ecommerce.user-not-found')]);
-
-        if (data.email !== undefined) user.email = data.email;
-        if (data.username !== undefined) user.username = data.username;
-        if (data.admin !== undefined) user.admin = data.admin;
-        if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
-        if (data.password && data.password.trim().length > 0) user.password = data.password;
-
-        return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+        return adminUpdate(user, data);
     });
 
 /**
- * Remove a user by ID (soft or hard delete).
+ * Remove a user document (soft or hard delete).
  * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
  */
 export const remove = (
-    id: string,
+    user: IUserDocument,
     hardDelete = false
 ): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
-    return userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, '404', [t('ecommerce.user-not-found')]);
-
-        if (hardDelete)
-            return userRepository
-                .deleteOne(user)
-                .then(() => generateSuccess(undefined, 200, t('ecommerce.user-hard-deleted')));
-
-        user.deletedAt = user.deletedAt ? undefined : new Date();
-
+    if (hardDelete)
         return userRepository
-            .save(user)
-            .then((savedUser) => generateSuccess(savedUser, 200, t('ecommerce.user-soft-deleted')));
-    });
+            .deleteOne(user)
+            .then(() => generateSuccess(undefined, 200, t('ecommerce.user-hard-deleted')));
+
+    user.deletedAt = user.deletedAt ? undefined : new Date();
+
+    return userRepository
+        .save(user)
+        .then((savedUser) => generateSuccess(savedUser, 200, t('ecommerce.user-soft-deleted')));
 };
+
+/**
+ * Remove a user by ID (soft or hard delete).
+ * Fetches the document then delegates to remove().
+ */
+export const removeById = (
+    id: string,
+    hardDelete = false
+): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> =>
+    userRepository.findById(id).then((user) => {
+        if (!user) return generateReject(404, '404', [t('ecommerce.user-not-found')]);
+        return remove(user, hardDelete);
+    });
 
 export const userService = {
     validateData,
@@ -150,5 +169,7 @@ export const userService = {
     getById,
     adminCreate,
     adminUpdate,
-    remove
+    adminUpdateById,
+    remove,
+    removeById
 };

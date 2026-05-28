@@ -23,7 +23,7 @@ export const putOrders = (
     }
 
     return orderService
-        .update(id, {
+        .updateById(id, {
             ...request.body,
             status: request.body.status as string | undefined
         })

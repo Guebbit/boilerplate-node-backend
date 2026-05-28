@@ -146,82 +146,107 @@ export const create = (
     });
 
 /**
+ * Update an existing product document.
+ * If a new image URL differs from the old one, deletes the old image file after saving.
+ *
+ * @param product
+ * @param data
+ */
+export const update = (
+    product: IProductDocument,
+    data: Partial<Omit<Product, 'id'>>
+): Promise<IProductDocument> => {
+    // Apply incoming field changes
+    if (data.title !== undefined) product.title = data.title;
+    if (data.price !== undefined) product.price = data.price;
+    if (data.description !== undefined) product.description = data.description;
+    if (data.active !== undefined) product.active = data.active;
+    if (data.categories !== undefined)
+        product.categories = sanitizeStringArray(data.categories);
+    if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
+
+    // If a new image was uploaded, update the URL on the document
+    const oldImageUrl = product.imageUrl;
+    const newImageUrl = data.imageUrl ?? '';
+    if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
+
+    // Persist the updated document
+    return productRepository.save(product).then((updatedProduct) =>
+        // After saving the new image path, delete the old image file
+        (newImageUrl && oldImageUrl !== newImageUrl
+            ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
+            : Promise.resolve()
+        ).then(() => updatedProduct)
+    );
+};
+
+/**
  * Update an existing product by ID.
- * If a new image URL is provided via data.imageUrl and differs from the old one,
- * the old image file is deleted after the save succeeds.
+ * Fetches the document then delegates to update().
  *
  * @param id
  * @param data
  */
-export const update = (
+export const updateById = (
     id: string,
     data: Partial<Omit<Product, 'id'>>
-): Promise<IProductDocument> => {
-    return productRepository.findById(id).then((product) => {
+): Promise<IProductDocument> =>
+    productRepository.findById(id).then((product) => {
         if (!product) throw new Error('404');
-
-        // Apply incoming field changes
-        if (data.title !== undefined) product.title = data.title;
-        if (data.price !== undefined) product.price = data.price;
-        if (data.description !== undefined) product.description = data.description;
-        if (data.active !== undefined) product.active = data.active;
-        if (data.categories !== undefined)
-            product.categories = sanitizeStringArray(data.categories);
-        if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
-
-        // If a new image was uploaded, update the URL on the document
-        const oldImageUrl = product.imageUrl;
-        const newImageUrl = data.imageUrl ?? '';
-        if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
-
-        // Persist the updated document
-        return productRepository.save(product).then((updatedProduct) =>
-            // After saving the new image path, delete the old image file
-            (newImageUrl && oldImageUrl !== newImageUrl
-                ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
-                : Promise.resolve()
-            ).then(() => updatedProduct)
-        );
+        return update(product, data);
     });
-};
 
 /**
- * Remove a product by ID (soft or hard delete).
+ * Remove a product document (soft or hard delete).
  * Always removes the product from all user carts.
  * Hard delete additionally removes the image file from disk.
  * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
  *
- * @param id
+ * @param product
  * @param hardDelete
  */
 export const remove = (
-    id: string,
+    product: IProductDocument,
     hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
-    return productRepository.findById(id).then((product) => {
-        if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
+    const id = (product._id as Types.ObjectId).toString();
 
-        // HARD delete
-        if (hardDelete)
-            return cartService
-                .productRemoveFromCartsById((product._id as Types.ObjectId).toString())
-                .then(() => productRepository.deleteOne(product))
-                .then(() =>
-                    deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)
-                )
-                .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
-
-        // If deletedAt already present: it's soft-deleted → RESTORE
-        product.deletedAt = product.deletedAt ? undefined : new Date();
-
-        // SOFT delete (or restore)
+    // HARD delete
+    if (hardDelete)
         return cartService
-            .productRemoveFromCartsById((product._id as Types.ObjectId).toString())
-            .then(() => productRepository.save(product))
-            .then((savedProduct) =>
-                generateSuccess(savedProduct, 200, t('ecommerce.product-soft-deleted'))
-            );
-    });
+            .productRemoveFromCartsById(id)
+            .then(() => productRepository.deleteOne(product))
+            .then(() =>
+                deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)
+            )
+            .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
+
+    // If deletedAt already present: it's soft-deleted → RESTORE
+    product.deletedAt = product.deletedAt ? undefined : new Date();
+
+    // SOFT delete (or restore)
+    return cartService
+        .productRemoveFromCartsById(id)
+        .then(() => productRepository.save(product))
+        .then((savedProduct) =>
+            generateSuccess(savedProduct, 200, t('ecommerce.product-soft-deleted'))
+        );
 };
 
-export const productService = { validateData, search, getById, create, update, remove };
+/**
+ * Remove a product by ID (soft or hard delete).
+ * Fetches the document then delegates to remove().
+ *
+ * @param id
+ * @param hardDelete
+ */
+export const removeById = (
+    id: string,
+    hardDelete = false
+): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> =>
+    productRepository.findById(id).then((product) => {
+        if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
+        return remove(product, hardDelete);
+    });
+
+export const productService = { validateData, search, getById, create, update, updateById, remove, removeById };

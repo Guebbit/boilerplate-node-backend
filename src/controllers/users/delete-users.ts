@@ -26,7 +26,7 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
 
     return userService
         // true = hard-delete; false (default) = soft-delete (sets deletedAt)
-        .remove(id, hardDelete)
+        .removeById(id, hardDelete)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.message, result.errors);

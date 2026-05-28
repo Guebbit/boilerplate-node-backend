@@ -23,7 +23,7 @@ export const putFeedbackStatus = (
         );
 
     return feedbackRequestService
-        .updateStatus(request.params.id, parseResult.data)
+        .updateStatusById(request.params.id, parseResult.data)
         .then((result) => {
             if (!result.success) return rejectResponse(response, result.status, result.message, result.errors);
             return successResponse(response, result.data);

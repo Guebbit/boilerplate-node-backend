@@ -106,7 +106,7 @@ export const writeProducts = (
      * ID = edit product
      */
     return productService
-        .update(id, {
+        .updateById(id, {
             ...request.body,
             imageUrl,
             active: !!request.body.active,

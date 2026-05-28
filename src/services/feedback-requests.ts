@@ -73,23 +73,31 @@ export const search = (
 };
 
 export const updateStatus = (
+    feedback: IFeedbackRequestDocument,
+    payload: UpdateFeedbackRequestStatusRequest
+): Promise<IResponseSuccess<IFeedbackRequestDocument> | IResponseReject> => {
+    const nextStatus = toFeedbackStatus(payload.status);
+    if (nextStatus !== undefined) feedback.status = nextStatus;
+    if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
+    if (nextStatus === EFeedbackStatus.RESOLVED && !feedback.respondedAt)
+        feedback.respondedAt = new Date();
+    return feedbackRequestRepository.save(feedback).then((saved) =>
+        generateSuccess(saved)
+    );
+};
+
+export const updateStatusById = (
     id: string,
     payload: UpdateFeedbackRequestStatusRequest
 ): Promise<IResponseSuccess<IFeedbackRequestDocument> | IResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, '404', ['Feedback request not found']);
-        const nextStatus = toFeedbackStatus(payload.status);
-        if (nextStatus !== undefined) feedback.status = nextStatus;
-        if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
-        if (nextStatus === EFeedbackStatus.RESOLVED && !feedback.respondedAt)
-            feedback.respondedAt = new Date();
-        return feedbackRequestRepository.save(feedback).then((saved) =>
-            generateSuccess(saved)
-        );
+        return updateStatus(feedback, payload);
     });
 
 export const feedbackRequestService = {
     create,
     search,
-    updateStatus
+    updateStatus,
+    updateStatusById
 };

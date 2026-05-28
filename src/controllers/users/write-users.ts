@@ -100,7 +100,7 @@ export const writeUsers = (
      * ID = edit user
      */
     return userService
-        .adminUpdate(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
+        .adminUpdateById(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {
