@@ -49,6 +49,7 @@ export const postOrders = (
                 ...response.locals,
                 pageMetaTitle: 'Order confirmed',
                 pageMetaLinks: [],
+                // Admin-created orders only have email; username is not in the payload.
                 name: email
             }
         );

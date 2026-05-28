@@ -11,13 +11,13 @@ export const getAdminAudit = (request: Request, response: Response): void => {
     const { actor, action, outcome, since, limit } = request.query as Record<string, string>;
 
     if (outcome && outcome !== 'success' && outcome !== 'failure') {
-        rejectResponse(response, 422, 'invalid outcome filter');
+        rejectResponse(response, 422, 'invalid outcome — must be "success" or "failure"');
         return;
     }
 
     const parsedLimit = limit ? parseInt(limit, 10) : undefined;
     if (parsedLimit !== undefined && (isNaN(parsedLimit) || parsedLimit < 1)) {
-        rejectResponse(response, 422, 'invalid limit');
+        rejectResponse(response, 422, 'invalid limit — must be a positive integer');
         return;
     }
 
