@@ -1,10 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-<<<<<<< HEAD
 import { orderService } from '@services/orders';
-=======
-import { cartService } from '@services/cart';
->>>>>>> origin/main
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
@@ -22,12 +18,6 @@ export const postOrders = (
     request: Request<unknown, unknown, CreateOrderRequest>,
     response: Response
 ) => {
-<<<<<<< HEAD
-    /*
-     * Data validation
-     */
-=======
->>>>>>> origin/main
     if (!request.body.userId || !request.body.email || !request.body.items?.length) {
         rejectResponse(response, 422, 'createOrder - invalid data', [
             t('generic.error-missing-data')
@@ -35,18 +25,11 @@ export const postOrders = (
         return Promise.resolve();
     }
 
-<<<<<<< HEAD
+    const auth = request.authContext!;
     const { userId, email, items } = request.body;
 
-    /*
-     * Create the order directly from the request body.
-     */
+    /* Create the order directly from the request body (bypasses cart). */
     return orderService.create(userId, email, items).then((result) => {
-=======
-    const auth = request.authContext!;
-
-    return cartService.orderConfirm(auth.id).then((result) => {
->>>>>>> origin/main
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -54,11 +37,7 @@ export const postOrders = (
 
         void enqueueEmail(
             {
-<<<<<<< HEAD
                 to: email,
-=======
-                to: auth.email,
->>>>>>> origin/main
                 subject: 'Order confirmed'
             },
             'email-order-confirm.ejs',
@@ -66,12 +45,8 @@ export const postOrders = (
                 ...response.locals,
                 pageMetaTitle: 'Order confirmed',
                 pageMetaLinks: [],
-<<<<<<< HEAD
                 // Admin-created orders only have email; username is not in the payload.
                 name: email
-=======
-                name: auth.username
->>>>>>> origin/main
             }
         );
 

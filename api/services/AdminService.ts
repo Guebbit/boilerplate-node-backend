@@ -80,11 +80,7 @@ export class AdminService {
      * @returns AdminMetricsSummaryResponseEnvelope Metrics summary
      * @throws ApiError
      */
-<<<<<<< HEAD
-    public static getAdminMetrics(): CancelablePromise<AdminMetricsSummaryResponse> {
-=======
     public static getAdminMetricsSummary(): CancelablePromise<AdminMetricsSummaryResponseEnvelope> {
->>>>>>> origin/main
         return __request(OpenAPI, {
             method: 'GET',
             url: '/admin/metrics',

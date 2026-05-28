@@ -1,6 +1,10 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@utils/response';
-import { getHttpMetricsSummary } from '@utils/observability';
+import {
+    getHttpRequestCounters,
+    httpInflightRequests,
+    getLatencyPercentiles
+} from '@utils/observability';
 import {
     authLoginTotal,
     authSignupTotal,
@@ -10,7 +14,7 @@ import {
 
 /* Sum values for a specific label across a prom-client metric result. */
 const sumByLabel = (
-    values: Array<{ value: number; labels: Record<string, string> }>,
+    values: Array<{ value: number; labels: Record<string, string | number | undefined> }>,
     labelKey: string,
     labelValue: string
 ): number =>
@@ -24,17 +28,26 @@ const sumByLabel = (
  */
 export const getAdminMetrics = (_request: Request, response: Response) =>
     Promise.all([
-        getHttpMetricsSummary(),
+        getHttpRequestCounters(),
+        httpInflightRequests.get(),
+        getLatencyPercentiles(),
         authLoginTotal.get(),
         authSignupTotal.get(),
         cartCheckoutTotal.get(),
         orderCreatedTotal.get()
     ])
-        .then(([http, loginMetrics, signupMetrics, checkoutMetrics, orderMetrics]) => {
+        .then(([{ totalRequests, totalErrors }, inflightMetric, latency, loginMetrics, signupMetrics, checkoutMetrics, orderMetrics]) => {
             const mem = process.memoryUsage();
+            const inFlight = inflightMetric.values.reduce((s, v) => s + v.value, 0);
 
             const data = {
-                http,
+                http: {
+                    totalRequests,
+                    totalErrors,
+                    errorRate: totalRequests > 0 ? totalErrors / totalRequests : 0,
+                    inFlight,
+                    latencyMs: { p50: latency.p50, p95: latency.p95 }
+                },
                 auth: {
                     loginSuccess: sumByLabel(loginMetrics.values, 'status', 'success'),
                     loginFailure: sumByLabel(loginMetrics.values, 'status', 'failure'),
