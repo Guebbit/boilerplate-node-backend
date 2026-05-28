@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import { userService } from '@services/users';
-import { successResponse } from '@utils/response';
+import { cartService } from '@services/cart';
+import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 import { getActiveSpanContext } from '@utils/tracer';
@@ -14,22 +14,25 @@ export const deleteCart = (
     request: Request<unknown, unknown, RemoveCartItemRequest>,
     response: Response
 ) => {
-    // Authentication check is done before entering the route
-    const user = request.user!;
+    const userId = request.authContext!.id;
     const productId = String(request.body.productId);
 
-    // Remove specific item or entire cart
     return (
-        productId ? userService.cartItemRemoveById(user, productId) : userService.cartRemove(user)
+        productId ? cartService.cartItemRemoveById(userId, productId) : cartService.cartRemove(userId)
     )
-        .then(() => userService.cartGetWithSummary(user))
-        .then((cart) => {
-            emitAnalyticsEvent({
-                distinctId: user.id,
-                event: AnalyticsEvent.CART_CLEARED,
-                traceId: getActiveSpanContext().traceId,
-                properties: { ...(productId ? { product_id: productId } : {}) }
+        .then((result) => {
+            if (result && !result.success) {
+                rejectResponse(response, result.status, result.message, result.errors);
+                return;
+            }
+            return cartService.cartGetWithSummary(userId).then((cart) => {
+                emitAnalyticsEvent({
+                    distinctId: userId,
+                    event: AnalyticsEvent.CART_CLEARED,
+                    traceId: getActiveSpanContext().traceId,
+                    properties: { ...(productId ? { product_id: productId } : {}) }
+                });
+                successResponse(response, cart);
             });
-            successResponse(response, cart);
         });
 };

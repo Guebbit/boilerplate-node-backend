@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import { cartCheckoutTotal } from '@utils/domain-metrics';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -13,12 +13,12 @@ import { emitDomainEvent } from '@utils/domain-events';
  * Converts the cart into an order and clears the cart.
  */
 export const postCheckout = (request: Request, response: Response) => {
-    const user = request.user!;
-    return userService.orderConfirm(user).then((result) => {
+    const userId = request.authContext!.id;
+    return cartService.orderConfirm(userId).then((result) => {
         if (!result.success) {
             cartCheckoutTotal.inc({ status: 'failure' });
             emitAnalyticsEvent({
-                distinctId: user.id,
+                distinctId: userId,
                 event: AnalyticsEvent.CHECKOUT_FAILED,
                 traceId: getActiveSpanContext().traceId,
                 properties: { reason: result.message }
@@ -29,18 +29,17 @@ export const postCheckout = (request: Request, response: Response) => {
         cartCheckoutTotal.inc({ status: 'success' });
         const orderId = result.data?._id?.toString() ?? '';
         emitAnalyticsEvent({
-            distinctId: user.id,
+            distinctId: userId,
             event: AnalyticsEvent.CHECKOUT_COMPLETED,
             traceId: getActiveSpanContext().traceId,
             properties: { order_id: orderId }
         });
-        // Emit the domain event matching the asyncapi.yaml CartCheckedOutEvent schema.
         emitDomainEvent('ecommerce.cart.checked_out', {
             eventName: 'ecommerce.cart.checked_out',
             eventId: crypto.randomUUID(),
             occurredAt: new Date().toISOString(),
-            cartId: `cart_${user.id}`,
-            userId: user.id,
+            cartId: `cart_${userId}`,
+            userId,
             orderId,
             itemCount: result.data?.items?.length ?? 0
         });

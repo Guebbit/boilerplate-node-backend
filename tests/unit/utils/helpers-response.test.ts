@@ -72,8 +72,8 @@ describe('setCache', () => {
         const request = {
             method: 'GET',
             originalUrl: '/products',
-            user: {
-                _id: '507f1f77bcf86cd799439011'
+            authContext: {
+                id: '507f1f77bcf86cd799439011'
             }
         } as unknown as Request;
 

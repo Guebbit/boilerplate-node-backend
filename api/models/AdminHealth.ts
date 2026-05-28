@@ -1,3 +1,4 @@
+/* generated using openapi-typescript-codegen -- do not edit */
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
@@ -11,7 +12,7 @@ export type AdminHealth = {
     nodeVersion: string;
     uptimeSeconds: number;
     database: {
-        status: AdminHealth.databaseStatus;
+        status: AdminHealth.status;
     };
     integrations?: AdminHealthIntegrations;
     memory?: AdminHealthMemory;
@@ -23,9 +24,5 @@ export namespace AdminHealth {
         OK = 'ok',
         DEGRADED = 'degraded',
     }
-    export enum databaseStatus {
-        CONNECTED = 'connected',
-        CONNECTING = 'connecting',
-        DISCONNECTED = 'disconnected',
-    }
 }
+

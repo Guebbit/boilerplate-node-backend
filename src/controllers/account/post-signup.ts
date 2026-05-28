@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService } from '@services/users';
+import { authService } from '@services/auth';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
@@ -35,7 +35,7 @@ export const postSignup = (
     /**
      * Register
      */
-    return userService
+    return authService
         .signup(email, username, password, passwordConfirm, imageUrl ?? request.body.imageUrl)
         .then((result) => {
             if (!result.success)
