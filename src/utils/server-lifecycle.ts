@@ -51,21 +51,23 @@ export const shutdownInfra = (server?: Server) =>
 /**
  * Register process signal handlers for graceful shutdown.
  */
-export const registerSignalHandlers = (stopFn: () => Promise<void>) => {
+export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
     if (process.env.NODE_ENV === 'test') return;
 
     const onProcessSignal = (signal: NodeJS.Signals) => {
         logger.info(`Received ${signal}, starting graceful shutdown.`);
         const forcedExitTimer = setTimeout(() => {
             logger.error('Graceful shutdown timeout reached. Forcing process exit.');
+            // eslint-disable-next-line unicorn/no-process-exit
             process.exit(1);
         }, getShutdownTimeoutMs());
         forcedExitTimer.unref();
 
         void Promise.resolve()
-            .then(() => stopFn())
+            .then(() => stopFunction())
             .then(() => {
                 logger.info('Graceful shutdown completed.');
+                // eslint-disable-next-line unicorn/no-process-exit
                 process.exit(0);
             })
             .catch((error: unknown) => {
@@ -73,6 +75,7 @@ export const registerSignalHandlers = (stopFn: () => Promise<void>) => {
                     message: 'Graceful shutdown failed.',
                     error: error instanceof Error ? error.message : String(error)
                 });
+                // eslint-disable-next-line unicorn/no-process-exit
                 process.exit(1);
             });
     };

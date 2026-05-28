@@ -10,10 +10,10 @@ import { getAuditBuffer } from '@utils/audit';
 export const getAdminAuditLogs = (request: Request, response: Response) => {
     const { actor, action, outcome, since, limit } = request.query as Record<string, string>;
 
-    const limitNum = Math.min(parseInt(limit ?? '50', 10), 200);
-    const sinceDate = since ? new Date(since) : null;
+    const limitNumber = Math.min(Number.parseInt(limit ?? '50', 10), 200);
+    const sinceDate = since ? new Date(since) : undefined;
 
-    if (sinceDate !== null && isNaN(sinceDate.getTime()))
+    if (sinceDate !== undefined && Number.isNaN(sinceDate.getTime()))
         return rejectResponse(response, 422, 'Validation failed', [
             'since must be a valid ISO-8601 timestamp'
         ]);
@@ -26,7 +26,7 @@ export const getAdminAuditLogs = (request: Request, response: Response) => {
         items = items.filter((e) => e.outcome === outcome);
     if (sinceDate) items = items.filter((e) => new Date(e.timestamp) > sinceDate);
 
-    const limited = items.slice(0, limitNum);
+    const limited = items.slice(0, limitNumber);
 
     return successResponse(response, { items: limited, total: limited.length });
 };
