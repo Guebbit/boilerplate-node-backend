@@ -13,6 +13,10 @@ const createFeedbackSchema = z.object({
     message: z.string().trim().min(1).max(5000)
 });
 
+/**
+ * POST /feedback/contact (public)
+ * Create a feedback ticket and send an email notification to the configured contact mailbox.
+ */
 export const postFeedbackContact = (
     request: Request<unknown, unknown, CreateFeedbackRequest>,
     response: Response

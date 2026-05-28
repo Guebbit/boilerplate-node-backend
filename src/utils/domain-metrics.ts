@@ -1,10 +1,10 @@
 import { Counter } from 'prom-client';
 import { metricsRegistry } from './observability';
 
-// Business counters that you cannot derive from traces alone.
+/** Business counters that you cannot derive from traces alone. */
 // Database/HTTP/runtime metrics live elsewhere (OTel mongoose spans, observability.ts).
 
-/*
+/**
  * Login attempts split by outcome (success / failure)
  */
 export const authLoginTotal = new Counter({
@@ -14,7 +14,7 @@ export const authLoginTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-/*
+/**
  * Sign-up attempts split by outcome
  */
 export const authSignupTotal = new Counter({
@@ -24,7 +24,7 @@ export const authSignupTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-/*
+/**
  * Password-reset request attempts (initial request only)
  */
 export const authPasswordResetTotal = new Counter({
@@ -34,7 +34,7 @@ export const authPasswordResetTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-/*
+/**
  * Refresh-token operations
  */
 export const authRefreshTotal = new Counter({
@@ -44,7 +44,7 @@ export const authRefreshTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-/*
+/**
  * Expired-token cleanup runs (admin endpoint)
  */
 export const authTokenCleanupTotal = new Counter({
@@ -53,7 +53,7 @@ export const authTokenCleanupTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-/*
+/**
  * Checkout (cart → order) attempts
  */
 export const cartCheckoutTotal = new Counter({
@@ -63,7 +63,7 @@ export const cartCheckoutTotal = new Counter({
     registers: [metricsRegistry]
 });
 
-/*
+/**
  * Admin-created orders
  */
 export const orderCreatedTotal = new Counter({

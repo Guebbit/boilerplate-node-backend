@@ -1,6 +1,6 @@
 import winston from 'winston';
 
-// Field names that must never be logged in clear text.
+/** Field names that must never be logged in clear text. */
 const SENSITIVE_FIELDS = new Set([
     'password',
     'passwordhash',
@@ -26,7 +26,10 @@ const SENSITIVE_FIELDS = new Set([
 
 const REDACTED = '[REDACTED]';
 
-// Recursively redact sensitive fields from objects and arrays.
+/**
+ * Recursively redact sensitive fields from objects and arrays.
+ * Any key present in SENSITIVE_FIELDS is replaced with the literal `[REDACTED]`.
+ */
 export const redactSensitiveFields = (input: unknown): unknown => {
     if (Array.isArray(input)) return input.map((item) => redactSensitiveFields(item));
 
@@ -43,7 +46,10 @@ export const redactSensitiveFields = (input: unknown): unknown => {
     return input;
 };
 
-// Normalize unknown thrown values into log-safe objects.
+/**
+ * Normalize unknown thrown values into log-safe plain objects.
+ * Stack is omitted in production to avoid leaking internals.
+ */
 export const serializeError = (error: unknown): Record<string, unknown> => {
     if (error instanceof Error) {
         return {
@@ -55,7 +61,7 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
     return { raw: String(error) };
 };
 
-// Apply error serialization and redaction before transport output.
+/** Apply error serialization and redaction before transport output. */
 const redactFormat = winston.format((info) => {
     const { level, message, ...rest } = info;
 
@@ -67,20 +73,20 @@ const redactFormat = winston.format((info) => {
     return Object.assign(info, { level, message }, redacted);
 });
 
-// Resolve runtime log level with sensible defaults.
+/** Resolve runtime log level with sensible defaults per environment. */
 const resolveLogLevel = (): string => {
     if (process.env.NODE_LOG_LEVEL) return process.env.NODE_LOG_LEVEL;
     return process.env.NODE_ENV === 'production' ? 'info' : 'debug';
 };
 
-// Shared JSON format for production log shipping.
+/** Shared JSON format for production log shipping. */
 const baseFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
     redactFormat(),
     winston.format.json()
 );
 
-// Readable local format for non-production runs.
+/** Readable local format for non-production runs. */
 const prettyFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
     redactFormat(),
@@ -91,7 +97,7 @@ const prettyFormat = winston.format.combine(
     })
 );
 
-// Main application logger. JSON to stdout in prod/test; pretty in dev.
+/** Main application logger. JSON to stdout in prod/test; pretty in dev. */
 export const logger = winston.createLogger({
     level: resolveLogLevel(),
     format: baseFormat,
@@ -105,7 +111,7 @@ export const logger = winston.createLogger({
     ]
 });
 
-// Dedicated stream for security/audit events. Always JSON.
+/** Dedicated stream for security/audit events. Always JSON. */
 export const auditLogger = winston.createLogger({
     level: 'info',
     format: baseFormat,

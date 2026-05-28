@@ -8,6 +8,7 @@ import { getOrderItem } from '@controllers/orders/get-order-item';
 import { getOrderInvoice } from '@controllers/orders/get-order-invoice';
 import { invalidateCache, setCache } from '@utils/helpers-response';
 
+/** Express router for order management (authenticated; non-admin users see only their own orders). */
 export const router = Router();
 
 // All order routes require authentication

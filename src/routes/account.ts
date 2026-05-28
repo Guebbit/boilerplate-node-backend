@@ -11,9 +11,10 @@ import { postLogoutEverywhere } from '@controllers/account/post-logout-everywher
 import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
 import { invalidateCache, setCache } from '@utils/helpers-response';
 
+/** Express router for account/auth endpoints (login, signup, password reset, token refresh). */
 export const router = Router();
 
-// All routes apply getAuth so request.user is populated when a token is present
+// All routes apply getAuth so request.authContext is populated when a token is present
 router.use(getAuth);
 
 // GET /account — current user profile (requires auth)
