@@ -5,7 +5,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
-import { extractAndValidateCustomId } from '@utils/helpers-request';
+import { extractCustomId, isValidObjectId } from '@utils/helpers-request';
 
 /**
  * POST /cart
@@ -17,12 +17,15 @@ export const postCart = (
     response: Response
 ) => {
     const userId = request.authContext!.id;
-    const productId = extractAndValidateCustomId(request as Request, response, 'upsertCartItem', {
-        body: 'productId'
-    });
+    const productId = extractCustomId(request as Request, { body: 'productId' });
     const { quantity } = request.body;
 
-    if (!productId) return;
+    if (!isValidObjectId(productId)) {
+        rejectResponse(response, 422, 'upsertCartItem - missing id', [
+            t('generic.error-missing-data')
+        ]);
+        return;
+    }
 
     if (!quantity || quantity < 1) {
         rejectResponse(response, 422, 'upsertCartItem - invalid data', [

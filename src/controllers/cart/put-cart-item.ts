@@ -4,7 +4,7 @@ import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
-import { extractAndValidateCustomId } from '@utils/helpers-request';
+import { extractCustomId, isValidObjectId } from '@utils/helpers-request';
 
 /**
  * PUT /cart/:productId
@@ -15,12 +15,14 @@ export const putCartItem = (
     response: Response
 ) => {
     const userId = request.authContext!.id;
-    const productId = extractAndValidateCustomId(request, response, 'updateCartItemById', {
-        param: 'productId',
-        body: 'productId'
-    });
+    const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
 
-    if (!productId) return;
+    if (!isValidObjectId(productId)) {
+        rejectResponse(response, 422, 'updateCartItemById - missing id', [
+            t('generic.error-missing-data')
+        ]);
+        return;
+    }
 
     if (!request.body.quantity || request.body.quantity < 1) {
         rejectResponse(response, 422, 'updateCartItemById - invalid quantity', [

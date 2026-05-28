@@ -1,10 +1,11 @@
 import type { Request, Response } from 'express';
+import { t } from 'i18next';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { extractAndValidateCustomId } from '@utils/helpers-request';
+import { extractCustomId, isValidObjectId } from '@utils/helpers-request';
 
 /**
  * DELETE /cart/:productId
@@ -16,12 +17,14 @@ export const deleteCartItem = (
     response: Response
 ) => {
     const userId = request.authContext!.id;
-    const productId = extractAndValidateCustomId(request, response, 'removeCartItem', {
-        param: 'productId',
-        body: 'productId'
-    });
+    const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
 
-    if (!productId) return;
+    if (!isValidObjectId(productId)) {
+        rejectResponse(response, 422, 'removeCartItem - missing id', [
+            t('generic.error-missing-data')
+        ]);
+        return;
+    }
 
     return cartService
         .cartItemRemoveById(userId, productId)

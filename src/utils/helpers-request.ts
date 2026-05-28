@@ -96,33 +96,30 @@ export const extractAndValidateId = (
 };
 
 /**
- * Validate a MongoDB ObjectId from explicit request fields.
- * Returns normalized id or sends a 422 response and returns undefined.
+ * Extract an ID from explicit request fields (param or body).
+ * Pure extraction only — no validation or response handling.
  */
-export const extractAndValidateCustomId = (
+export const extractCustomId = (
     request: Request,
-    response: Response,
-    entityLabel: string,
     fields: { param?: string; body?: string } = {}
 ): string | undefined => {
     const fromParameters = fields.param ? request.params[fields.param] : undefined;
     const body = request.body as Record<string, unknown>;
     const fromBody = fields.body ? body[fields.body] : undefined;
-    const rawId = extractId(
+    return extractId(
         Array.isArray(fromParameters)
             ? fromParameters[0]
             : (fromParameters as string | undefined),
         Array.isArray(fromBody) ? String(fromBody[0]) : (fromBody as string | undefined)
     );
-
-    if (!rawId || !Types.ObjectId.isValid(rawId)) {
-        rejectResponse(response, 422, `${entityLabel} - missing id`, [
-            t('generic.error-missing-data')
-        ]);
-        return undefined;
-    }
-    return rawId;
 };
+
+/**
+ * Check if a value is a valid MongoDB ObjectId.
+ * Thin wrapper around Mongoose's ObjectId.isValid for readability.
+ */
+export const isValidObjectId = (id: string | undefined): id is string =>
+    !!id && Types.ObjectId.isValid(id);
 
 /**
  * Extract the hardDelete flag from query, params, or body.
