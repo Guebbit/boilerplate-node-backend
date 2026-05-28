@@ -1259,7 +1259,7 @@ paths:
             description: |
                 Raw Prometheus text (exposition format 0.0.4).
                 Intended for Prometheus scraping, not for browser clients.
-                Use `GET /admin/metrics/summary` for a JSON summary suitable for dashboards.
+                Use `GET /admin/metrics` for a JSON summary suitable for dashboards.
             operationId: getPrometheusMetrics
             responses:
                 '200':
@@ -1308,7 +1308,7 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
-    /admin/metrics/summary:
+    /admin/metrics:
         get:
             tags: [Admin]
             summary: Metrics summary (JSON)
@@ -1316,7 +1316,7 @@ paths:
                 Key operational metrics derived from Prometheus counters/histograms,
                 returned as structured JSON for dashboard KPI cards and charts.
                 Requires admin role.
-            operationId: getAdminMetricsSummary
+            operationId: getAdminMetrics
             security:
                 - bearerAuth: []
             responses:

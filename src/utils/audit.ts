@@ -53,10 +53,48 @@ export interface IAuditEvent {
     metadata?: Record<string, unknown>;
 }
 
+/* Stored audit event — same as IAuditEvent plus a timestamp and log level. */
+export interface IAuditEventStored extends IAuditEvent {
+    timestamp: string;
+    level: 'info' | 'warn';
+}
+
+const RING_BUFFER_MAX = 200;
+
+/* In-memory ring buffer — newest events are prepended; oldest are dropped at max. */
+const auditRingBuffer: IAuditEventStored[] = [];
+
 /** Emit a structured audit event. Failures use 'warn'; successes use 'info'. */
 export const emitAuditEvent = (event: IAuditEvent): void => {
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
     auditLogger.log(level, event.action, event);
+
+    // Keep in ring buffer for the admin audit endpoint.
+    const stored: IAuditEventStored = { ...event, timestamp: new Date().toISOString(), level };
+    auditRingBuffer.unshift(stored);
+    if (auditRingBuffer.length > RING_BUFFER_MAX) auditRingBuffer.pop();
+};
+
+/** Return the most recent stored audit events with optional filters. */
+export const getAuditEvents = (filters: {
+    actor?: string;
+    action?: string;
+    outcome?: 'success' | 'failure';
+    since?: string;
+    limit?: number;
+}): IAuditEventStored[] => {
+    const limit = Math.min(filters.limit ?? 50, RING_BUFFER_MAX);
+    const sinceDate = filters.since ? new Date(filters.since) : null;
+
+    return auditRingBuffer
+        .filter((e) => {
+            if (filters.actor && e.actor_user_id !== filters.actor) return false;
+            if (filters.action && e.action !== filters.action) return false;
+            if (filters.outcome && e.outcome !== filters.outcome) return false;
+            if (sinceDate && new Date(e.timestamp) <= sinceDate) return false;
+            return true;
+        })
+        .slice(0, limit);
 };
 
 /** Extract common request fields for audit events. */

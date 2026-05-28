@@ -112,3 +112,74 @@ export const getHttpRequestCounters = () =>
 
 /** Serialize all registered metrics in Prometheus text format. */
 export const getPrometheusMetrics = (): Promise<string> => metricsRegistry.metrics();
+
+/*
+ * Compute approximate latency percentiles from cumulative histogram bucket data.
+ * Uses linear interpolation between bucket boundaries.
+ */
+const estimatePercentile = (
+    buckets: Array<{ value: number; labels: Record<string, string> }>,
+    count: number,
+    p: number
+): number => {
+    if (count === 0) return 0;
+    const target = count * p;
+    const leBuckets = buckets
+        .filter((b) => b.labels['le'] && b.labels['le'] !== '+Inf')
+        .sort((a, b) => Number(a.labels['le']) - Number(b.labels['le']));
+
+    let prev = 0;
+    let prevLe = 0;
+    for (const bucket of leBuckets) {
+        const le = Number(bucket.labels['le']);
+        if (bucket.value >= target) {
+            if (bucket.value === prev) return le;
+            const fraction = (target - prev) / (bucket.value - prev);
+            return prevLe + fraction * (le - prevLe);
+        }
+        prev = bucket.value;
+        prevLe = le;
+    }
+    return prevLe;
+};
+
+/** Collect HTTP request counters + latency percentiles (p50, p95). */
+export const getHttpMetricsSummary = () =>
+    Promise.all([
+        httpRequestsTotal.get(),
+        httpRequestErrorsTotal.get(),
+        httpRequestDuration.get(),
+        httpInflightRequests.get()
+    ]).then(([requestMetrics, errorMetrics, durationMetrics, inflightMetrics]) => {
+        const totalRequests = sumMetricValues(requestMetrics.values);
+        const totalErrors = sumMetricValues(errorMetrics.values);
+        const inFlight = sumMetricValues(inflightMetrics.values);
+
+        // Sum histogram across all labels to get overall count and bucket cumulative values.
+        const bucketMap = new Map<string, number>();
+        let totalCount = 0;
+        for (const v of durationMetrics.values) {
+            if (v.metricName === 'http_request_duration_milliseconds_count') {
+                totalCount += v.value;
+            } else if (v.metricName === 'http_request_duration_milliseconds_bucket') {
+                // prom-client adds 'le' internally; cast to access it.
+                const le = (v.labels as Record<string, string>)['le'];
+                if (le) bucketMap.set(le, (bucketMap.get(le) ?? 0) + v.value);
+            }
+        }
+        const aggregatedBuckets = Array.from(bucketMap.entries()).map(([le, value]) => ({
+            value,
+            labels: { le }
+        }));
+
+        return {
+            totalRequests,
+            totalErrors,
+            errorRate: totalRequests > 0 ? totalErrors / totalRequests : 0,
+            inFlight,
+            latencyMs: {
+                p50: Math.round(estimatePercentile(aggregatedBuckets, totalCount, 0.5)),
+                p95: Math.round(estimatePercentile(aggregatedBuckets, totalCount, 0.95))
+            }
+        };
+    });

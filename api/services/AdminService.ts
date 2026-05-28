@@ -26,7 +26,7 @@ export class AdminService {
      * Prometheus metrics
      * Raw Prometheus text (exposition format 0.0.4).
      * Intended for Prometheus scraping, not for browser clients.
-     * Use `GET /admin/metrics/summary` for a JSON summary suitable for dashboards.
+     * Use `GET /admin/metrics` for a JSON summary suitable for dashboards.
      *
      * @returns string Prometheus exposition text
      * @throws ApiError
@@ -80,10 +80,10 @@ export class AdminService {
      * @returns AdminMetricsSummaryResponse Metrics summary
      * @throws ApiError
      */
-    public static getAdminMetricsSummary(): CancelablePromise<AdminMetricsSummaryResponse> {
+    public static getAdminMetrics(): CancelablePromise<AdminMetricsSummaryResponse> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/admin/metrics/summary',
+            url: '/admin/metrics',
             errors: {
                 401: `Unauthorized`,
                 403: `Forbidden`,

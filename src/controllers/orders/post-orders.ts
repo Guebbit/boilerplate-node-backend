@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
@@ -11,13 +11,14 @@ import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * POST /orders
- * Create a new order from a payload (admin).
+ * Create a new order from an explicit payload (admin).
+ * Bypasses the user cart — items are taken directly from the request body.
  */
 export const postOrders = (
     request: Request<unknown, unknown, CreateOrderRequest>,
     response: Response
 ) => {
-    /**
+    /*
      * Data validation
      */
     if (!request.body.userId || !request.body.email || !request.body.items?.length) {
@@ -27,10 +28,12 @@ export const postOrders = (
         return Promise.resolve();
     }
 
-    /**
-     * Create a new order
+    const { userId, email, items } = request.body;
+
+    /*
+     * Create the order directly from the request body.
      */
-    return userService.orderConfirm(request.user!).then((result) => {
+    return orderService.create(userId, email, items).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -38,7 +41,7 @@ export const postOrders = (
 
         void enqueueEmail(
             {
-                to: request.user!.email,
+                to: email,
                 subject: 'Order confirmed'
             },
             'email-order-confirm.ejs',
@@ -46,7 +49,7 @@ export const postOrders = (
                 ...response.locals,
                 pageMetaTitle: 'Order confirmed',
                 pageMetaLinks: [],
-                name: request.user!.username
+                name: email
             }
         );
 
