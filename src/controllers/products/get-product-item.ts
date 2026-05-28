@@ -14,14 +14,14 @@ import { getActiveSpanContext } from '@utils/tracer';
 export const getProductItem = (request: Request, response: Response) =>
     // Admin can search inactive or deleted products; non-admin sees only active ones
     productService
-        .getById(String(request.params.id), request.user?.admin === true)
+        .getById(String(request.params.id), request.authContext?.admin === true)
         .then((product) => {
             if (!product) {
                 rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
                 return;
             }
             emitAnalyticsEvent({
-                distinctId: request.user?.id ?? 'anonymous',
+                distinctId: request.authContext?.id ?? 'anonymous',
                 event: AnalyticsEvent.PRODUCT_VIEWED,
                 traceId: getActiveSpanContext().traceId,
                 properties: { product_id: String(request.params.id) }
@@ -29,9 +29,14 @@ export const getProductItem = (request: Request, response: Response) =>
             successResponse(response, product);
         })
         .catch((error: CastError) => {
+<<<<<<< HEAD
             if (error.message === '404' || error.kind === 'ObjectId')
                 return rejectResponse(response, 404, 'getProduct - not found', [
+=======
+            if (error.message == '404' || error.kind === 'ObjectId')
+                return rejectResponse(response, 404, 'Not Found', [
+>>>>>>> origin/main
                     t('ecommerce.product-not-found')
                 ]);
-            rejectResponse(response, 500, 'Unknown Error', [error.message]);
+            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
         });

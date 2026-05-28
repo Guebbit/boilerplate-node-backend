@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, extractPagination, extractStringList } from '@utils/helpers-request';
+import { extractId, extractRequestPagination, extractStringList } from '@utils/helpers-request';
 import type { SearchProductsRequest } from '@types';
 import type { CastError } from 'mongoose';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -22,10 +22,7 @@ export const getProducts = (
     request: Request<{ id?: string }, unknown, SearchProductsRequest, IGetProductsQuery>,
     response: Response
 ) => {
-    const { page, pageSize } = extractPagination({
-        page: request.body?.page ?? request.query.page,
-        pageSize: request.body?.pageSize ?? request.query.pageSize
-    });
+    const { page, pageSize } = extractRequestPagination(request);
 
     const minPriceRaw = request.body?.minPrice ?? request.query.minPrice;
     const maxPriceRaw = request.body?.maxPrice ?? request.query.maxPrice;
@@ -47,11 +44,11 @@ export const getProducts = (
                 category,
                 tag
             },
-            request.user?.admin === true
+            request.authContext?.admin === true
         )
         .then((result) => {
             emitAnalyticsEvent({
-                distinctId: request.user?.id ?? 'anonymous',
+                distinctId: request.authContext?.id ?? 'anonymous',
                 event: AnalyticsEvent.PRODUCTS_SEARCHED,
                 traceId: getActiveSpanContext().traceId,
                 properties: {
@@ -64,6 +61,6 @@ export const getProducts = (
             successResponse(response, result);
         })
         .catch((error: CastError) => {
-            rejectResponse(response, 500, 'Unknown Error', [error.message]);
+            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
         });
 };

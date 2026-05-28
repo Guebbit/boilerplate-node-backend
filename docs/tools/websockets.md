@@ -52,6 +52,66 @@ Server -> client events:
 
 The room is in-memory only and defaults to `general`.
 
+## Quick standalone test example
+
+Below is a self-contained example that spins up a WebSocket server and client in the same process.
+It was formerly shipped as a dev-only controller (`GET /websocket-test`) but belongs here as a learning reference.
+
+```typescript
+import type { Request, Response } from 'express';
+import { setupWebSocketServer, setupWebSocketClient } from '@utils/helpers-websockets';
+import { logger } from '@utils/winston';
+
+export const getWebsocketTest = (request: Request, response: Response) => {
+    const port = process.env.WEBSOCKET_PORT ? Number.parseInt(process.env.WEBSOCKET_PORT) : 3001;
+    const url = `ws://localhost:${port}`;
+
+    // Create a WebSocket server
+    const wss = setupWebSocketServer({
+        port,
+        connectionCallback: () => logger.info('SERVER: created'),
+        onMessage: (ws, message) => {
+            logger.info(
+                'SERVER: Client message received',
+                message instanceof Buffer ? message.toString() : message
+            );
+            ws.send('We received your message!');
+        },
+        onClose: (ws, code, reason) =>
+            logger.info(
+                `SERVER: connection closed: ${code}`,
+                reason instanceof Buffer ? reason.toString() : reason
+            )
+    });
+
+    logger.info(`SERVER: running on ${url}`);
+
+    // Create a WebSocket client after 1 second (to ensure that server started)
+    setTimeout(() => {
+        const ws = setupWebSocketClient(url, {
+            onOpen: (ws) => {
+                logger.info('CLIENT: connected to server');
+                ws.send('Hello Server!');
+            },
+            onMessage: (ws, message) =>
+                logger.info('CLIENT: Server message received', message.data),
+            onClose: (ws, code, reason) =>
+                logger.info(`CLIENT: connection closed: ${code}`, reason)
+        });
+
+        // Close the client after 2 seconds
+        setTimeout(() => ws.close(1000, 'Test complete'), 2000);
+    }, 1000);
+
+    setTimeout(() => wss.close(() => logger.info('SERVER: closed')), 4000);
+
+    response.status(200).json({
+        success: true,
+        message: 'Websocket test initiated'
+    });
+};
+```
+
 ## Production notes
 
 - **Clustering**: WebSocket connections are sticky to the worker that accepted them. If you run with `NODE_ENABLE_CLUSTERING=1` you need a sticky-session reverse proxy (NGINX, HAProxy, Envoy) or a pub/sub backplane (Redis pub/sub, NATS, …) to fan out messages between workers.

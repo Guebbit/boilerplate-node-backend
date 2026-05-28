@@ -4,6 +4,7 @@ import { rejectResponse, successResponse } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { userModel as Users } from '@models/users';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { authTokenCleanupTotal } from '@utils/domain-metrics';
 
 /**
  * DELETE /account/tokens/expired
@@ -17,9 +18,10 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
     return Users.tokenRemoveExpired()
         .then(({ status, success }) => {
             if (!success) return rejectResponse(response, status);
+            authTokenCleanupTotal.inc();
             emitAuditEvent({
                 action: AuditAction.AUTH_TOKEN_EXPIRED_CLEANUP,
-                actor_user_id: request.user?.id ?? 'anonymous',
+                actor_user_id: request.authContext?.id ?? 'anonymous',
                 actor_role: 'admin',
                 outcome: 'success',
                 ...extractRequestContext(request)

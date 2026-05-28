@@ -3,6 +3,7 @@ import { successResponse } from '@utils/response';
 import { ETokenType } from '@models/users';
 import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt';
 import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit';
+import { authService } from '@services/auth';
 
 /**
  * POST /account/logout-all
@@ -10,18 +11,17 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
  * Remove jwt cookie and ALL refresh tokens in the DB.
  */
 export const postLogoutEverywhere = (request: Request, response: Response) => {
-    // remove refresh token from DB
+    const auth = request.authContext;
     return (
-        request.user ? request.user.tokenRemoveAll(ETokenType.REFRESH) : Promise.resolve()
+        auth ? authService.tokenRemoveAll(auth.id, ETokenType.REFRESH) : Promise.resolve()
     ).then(() => {
-        // and from local
         destroyRefreshCookie(response);
         destroyLoggedCookie(response);
 
         emitAuditEvent({
             action: AuditAction.AUTH_LOGOUT_ALL_SUCCEEDED,
-            actor_user_id: request.user?.id ?? 'anonymous',
-            actor_role: request.user?.admin ? 'admin' : 'user',
+            actor_user_id: auth?.id ?? 'anonymous',
+            actor_role: auth?.admin ? 'admin' : 'user',
             outcome: 'success',
             ...extractRequestContext(request)
         });

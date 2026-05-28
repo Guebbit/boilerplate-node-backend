@@ -1,6 +1,11 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+<<<<<<< HEAD
 import { userService } from '@services/users';
+=======
+import { authService } from '@services/auth';
+import { userRepository } from '@repositories/users';
+>>>>>>> origin/main
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetConfirmRequest } from '@types';
@@ -48,7 +53,7 @@ export const postResetConfirm = (
             /**
              * Change password
              */
-            return userService.passwordChange(user, password, passwordConfirm).then((result) => {
+            return authService.passwordChange(user, password, passwordConfirm).then((result) => {
                 if (!result.success) {
                     rejectResponse(response, result.status, result.message, result.errors);
                     return;
@@ -88,6 +93,6 @@ export const postResetConfirm = (
             });
         })
         .catch(() => {
-            rejectResponse(response, 500, 'Internal Server Error');
+            rejectResponse(response, 500, 'Internal Server Error', []);
         });
 };

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
@@ -16,8 +16,7 @@ export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
 ) => {
-    // Authentication check is done before entering the route
-    const user = request.user!;
+    const userId = request.authContext!.id;
     const { productId, quantity } = request.body;
 
     if (!productId || !quantity || quantity < 1) {
@@ -27,21 +26,18 @@ export const postCart = (
         return Promise.resolve();
     }
 
-    /**
-     * Find product (active and not soft-deleted)
-     */
     return productService.getById(productId).then((product) => {
         if (!product) {
             rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
             return;
         }
 
-        return userService
-            .cartItemSetById(user, productId, quantity)
-            .then(() => userService.cartGetWithSummary(user))
+        return cartService
+            .cartItemSetById(userId, productId, quantity)
+            .then(() => cartService.cartGetWithSummary(userId))
             .then((cart) => {
                 emitAnalyticsEvent({
-                    distinctId: user.id,
+                    distinctId: userId,
                     event: AnalyticsEvent.CART_ITEM_ADDED,
                     traceId: getActiveSpanContext().traceId,
                     properties: { product_id: productId, quantity }

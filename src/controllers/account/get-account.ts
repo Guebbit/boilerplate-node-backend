@@ -8,14 +8,18 @@ import { getActiveSpanContext } from '@utils/tracer';
  * Returns the full profile of the authenticated user.
  */
 export const getAccount = (request: Request, response: Response): void => {
-    if (!request.user) {
+    if (!request.authContext) {
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
+<<<<<<< HEAD
     emitAnalyticsEvent({
         distinctId: request.user.id,
         event: AnalyticsEvent.USER_PROFILE_VIEWED,
         traceId: getActiveSpanContext().traceId
     });
     successResponse(response, request.user);
+=======
+    successResponse(response, request.authContext);
+>>>>>>> origin/main
 };

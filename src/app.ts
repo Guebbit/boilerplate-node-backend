@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 // OTel must initialize before express/http/mongoose are imported.
-import { startTracing, shutdownTracing } from '@utils/tracing';
-import { shutdownAnalytics } from '@utils/analytics';
+import { startTracing } from '@utils/tracing';
 startTracing();
 
 import 'dotenv/config';
@@ -14,13 +13,14 @@ import i18next from 'i18next';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { start, stopDatabase } from '@utils/database';
-import { startCache, stopCache } from '@utils/cache';
-import { startQueue, stopQueue } from '@utils/queue';
+import { start } from '@utils/database';
+import { startCache, subscribeCacheInvalidation } from '@utils/cache';
+import { startQueue } from '@utils/queue';
 import { registerWorkers } from './workers';
 import { logger, auditLogger } from '@utils/winston';
 import { rateLimiter } from '@middlewares/security';
 import { requestLogger } from '@middlewares/request-logger';
+import { attachObservability } from '@middlewares/observability';
 import { rejectResponse } from '@utils/response';
 import { validateRequiredEnvironment } from '@utils/environment';
 import {
@@ -30,6 +30,7 @@ import {
     decrementInflight
 } from '@utils/observability';
 import { getActiveSpanContext, recordErrorOnActiveSpan } from '@utils/tracer';
+import { shutdownInfra, registerSignalHandlers } from '@utils/server-lifecycle';
 import enTranslation from './locales/en.json';
 
 import { router as productRoutes } from './routes/products';
@@ -50,54 +51,20 @@ import { ExtendedError } from '@utils/helpers-errors';
  */
 export const app = express();
 const DEFAULT_PORT = 3000;
-const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 let activeServer: Server | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
+/*
+ * Parse port from env with fallback to default
+ */
 const getPort = () => {
     const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
     return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
 };
 
-const getShutdownTimeoutMs = () => {
-    const parsedTimeout = Number.parseInt(
-        process.env.NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS ?? String(DEFAULT_SHUTDOWN_TIMEOUT_MS),
-        10
-    );
-    return Number.isNaN(parsedTimeout) ? DEFAULT_SHUTDOWN_TIMEOUT_MS : parsedTimeout;
-};
-
-const closeServer = (server: Server) =>
-    new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-            if (error) return reject(error);
-            resolve();
-        });
-    });
-
-const onProcessSignal = (signal: NodeJS.Signals) => {
-    logger.info(`Received ${signal}, starting graceful shutdown.`);
-    const forcedExitTimer = setTimeout(() => {
-        logger.error('Graceful shutdown timeout reached. Forcing process exit.');
-        process.exit(1);
-    }, getShutdownTimeoutMs());
-    forcedExitTimer.unref();
-
-    void Promise.resolve()
-        .then(() => stopServer())
-        .then(() => {
-            logger.info('Graceful shutdown completed.');
-            process.exit(0);
-        })
-        .catch((error: unknown) => {
-            logger.error({
-                message: 'Graceful shutdown failed.',
-                error: error instanceof Error ? error.message : String(error)
-            });
-            process.exit(1);
-        });
-};
-
+/*
+ * Boot sequence: validate env → connect infra → mount i18n → listen
+ */
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
@@ -105,6 +72,7 @@ export const startServer = () => {
         .then(() => validateRequiredEnvironment())
         .then(() => start())
         .then(() => startCache())
+        .then(() => subscribeCacheInvalidation())
         .then(() => startQueue())
         .then(() => registerWorkers())
         .then(() =>
@@ -135,31 +103,18 @@ export const startServer = () => {
         );
 };
 
+/*
+ * Graceful shutdown wrapper — ensures single execution
+ */
 export const stopServer = () => {
     if (shutdownPromise) return shutdownPromise;
 
-    shutdownPromise = Promise.resolve(activeServer)
-        .then((server) => {
-            if (!server?.listening) return;
-            return closeServer(server);
-        })
-        .then(() => stopCache())
-        .then(() => stopQueue())
-        .then(() => stopDatabase())
-        .then(() => shutdownAnalytics())
-        .then(() => shutdownTracing())
-        .finally(() => {
-            activeServer = undefined;
-            shutdownPromise = undefined;
-        });
+    shutdownPromise = shutdownInfra(activeServer).finally(() => {
+        activeServer = undefined;
+        shutdownPromise = undefined;
+    });
 
     return shutdownPromise;
-};
-
-const registerSignalHandlers = () => {
-    if (process.env.NODE_ENV === 'test') return;
-    process.on('SIGTERM', () => onProcessSignal('SIGTERM'));
-    process.on('SIGINT', () => onProcessSignal('SIGINT'));
 };
 
 /**
@@ -223,7 +178,9 @@ app.use(cookieParser());
 
 app.use(rateLimiter);
 
-/** Attach or reuse x-request-id for client/server log correlation. */
+/*
+ * Request ID middleware — reuse client ID or generate new UUID
+ */
 app.use((request, response, next) => {
     const requestId = request.get('x-request-id') ?? crypto.randomUUID();
     request.requestId = requestId;
@@ -231,9 +188,19 @@ app.use((request, response, next) => {
     next();
 });
 
-/** Slim access log + Prometheus HTTP metrics. */
+/*
+ * Winston access log + OpenTelemetry trace injection
+ */
 app.use(requestLogger);
 
+/*
+ * Attach observability context — controllers use request.obs instead of singletons
+ */
+app.use(attachObservability);
+
+/*
+ * Prometheus HTTP metrics — track latency and in-flight requests
+ */
 app.use((request, response, next) => {
     incrementInflight();
     const startTime = process.hrtime.bigint();
@@ -251,7 +218,7 @@ app.use((request, response, next) => {
 });
 
 /**
- * REST API routes
+ * REST API routes — domain-driven routing.
  */
 app.use('/account', authRoutes);
 app.use('/products', productRoutes);
@@ -263,14 +230,14 @@ app.use('/feedback', feedbackRoutes);
 app.use('/', systemRoutes);
 
 /**
- * 404 handler — catch all unmatched routes
+ * 404 handler — unmatched routes.
  */
 app.use((request: Request, response: Response) => {
     rejectResponse(response, 404, 'Not Found');
 });
 
 /**
- * Global JSON error handler. One log line per error; the stack lives on the OTel span.
+ * Global error handler — log once, stack in OTel span.
  */
 app.use((error: Error, request: Request, response: Response, _next: NextFunction) => {
     if (response.headersSent) return;
@@ -293,7 +260,9 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     rejectResponse(response, 500, 'Internal Server Error', [error.message]);
 });
 
-/** Last-resort process error handlers (audit stream). */
+/*
+ * Process-level error handlers — audit unhandled rejections/exceptions
+ */
 const unhandledRejections = new Map();
 process
     .on('unhandledRejection', (reason, promise) => {
@@ -308,6 +277,9 @@ process
     })
     .on('rejectionHandled', (promise) => unhandledRejections.delete(promise))
     .on('uncaughtException', (error, origin) => {
+        /*
+         * In production, exit immediately to trigger orchestrator restart
+         */
         if (process.env.NODE_ENV !== 'production') return;
         auditLogger.error('process.uncaughtException', {
             action: 'process.uncaughtException',
@@ -318,8 +290,11 @@ process
         process.exit(1);
     });
 
+/*
+ * Auto-start in non-test environments
+ */
 if (process.env.NODE_ENV !== 'test') {
-    registerSignalHandlers();
+    registerSignalHandlers(stopServer);
     void startServer().catch((error: Error) =>
         logger.error('------------- SERVER ERROR -------------', error)
     );

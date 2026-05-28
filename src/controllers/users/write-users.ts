@@ -80,7 +80,7 @@ export const writeUsers = (
             .then((user) => {
                 emitAuditEvent({
                     action: AuditAction.ADMIN_USER_CREATED,
-                    actor_user_id: request.user?.id ?? 'unknown',
+                    actor_user_id: request.authContext?.id ?? 'unknown',
                     actor_role: 'admin',
                     outcome: 'success',
                     target_type: 'user',
@@ -100,17 +100,22 @@ export const writeUsers = (
      * ID = edit user
      */
     return userService
-        .adminUpdate(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
-        .then((user) => {
+        .adminUpdateById(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
+        .then((result) => {
+            if (!result.success)
+                return deleteUpload().then(() => {
+                    rejectResponse(response, result.status, result.message, result.errors);
+                });
             emitAuditEvent({
                 action: AuditAction.ADMIN_USER_UPDATED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'user',
                 target_id: id,
                 ...extractRequestContext(request)
             });
+<<<<<<< HEAD
             successResponse(response, user);
         })
         .catch((error: Error) =>
@@ -120,4 +125,8 @@ export const writeUsers = (
                 else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
             })
         );
+=======
+            successResponse(response, result.data);
+        });
+>>>>>>> origin/main
 };

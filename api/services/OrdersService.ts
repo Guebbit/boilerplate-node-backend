@@ -3,14 +3,14 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { CheckoutRequest } from '../models/CheckoutRequest';
-import type { CheckoutResponse } from '../models/CheckoutResponse';
+import type { CheckoutResponseEnvelope } from '../models/CheckoutResponseEnvelope';
 import type { CreateOrderRequest } from '../models/CreateOrderRequest';
 import type { DeleteOrderRequest } from '../models/DeleteOrderRequest';
 import type { Email } from '../models/Email';
 import type { Id } from '../models/Id';
 import type { MessageResponse } from '../models/MessageResponse';
-import type { Order } from '../models/Order';
-import type { OrdersResponse } from '../models/OrdersResponse';
+import type { OrderEnvelope } from '../models/OrderEnvelope';
+import type { OrdersResponseEnvelope } from '../models/OrdersResponseEnvelope';
 import type { Page } from '../models/Page';
 import type { PageSize } from '../models/PageSize';
 import type { SearchOrdersRequest } from '../models/SearchOrdersRequest';
@@ -24,12 +24,12 @@ export class OrdersService {
      * Checkout (place order from cart)
      * Converts the authenticated user's current cart into a new order. The cart is cleared upon success. An optional email address and order notes can be supplied in the request body. Returns the created order.
      * @param requestBody
-     * @returns CheckoutResponse Order created
+     * @returns CheckoutResponseEnvelope Order created
      * @throws ApiError
      */
     public static checkout(
         requestBody?: CheckoutRequest,
-    ): CancelablePromise<CheckoutResponse> {
+    ): CancelablePromise<CheckoutResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/cart/checkout',
@@ -51,7 +51,7 @@ export class OrdersService {
      * @param userId
      * @param productId
      * @param email
-     * @returns OrdersResponse Orders page
+     * @returns OrdersResponseEnvelope Orders page
      * @throws ApiError
      */
     public static listOrders(
@@ -61,7 +61,7 @@ export class OrdersService {
         userId?: Id,
         productId?: Id,
         email?: Email,
-    ): CancelablePromise<OrdersResponse> {
+    ): CancelablePromise<OrdersResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/orders',
@@ -83,12 +83,12 @@ export class OrdersService {
      * Create order
      * Creates a new order directly from the supplied payload.
      * @param requestBody
-     * @returns Order Created order
+     * @returns OrderEnvelope Created order
      * @throws ApiError
      */
     public static createOrder(
         requestBody: CreateOrderRequest,
-    ): CancelablePromise<Order> {
+    ): CancelablePromise<OrderEnvelope> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/orders',
@@ -107,12 +107,12 @@ export class OrdersService {
      * Update order
      * Updates an existing order identified by id in the request body.
      * @param requestBody
-     * @returns Order Updated order
+     * @returns OrderEnvelope Updated order
      * @throws ApiError
      */
     public static updateOrder(
         requestBody: UpdateOrderRequest,
-    ): CancelablePromise<Order> {
+    ): CancelablePromise<OrderEnvelope> {
         return __request(OpenAPI, {
             method: 'PUT',
             url: '/orders',
@@ -154,12 +154,12 @@ export class OrdersService {
      * Search orders (DTO-friendly)
      * Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
      * @param requestBody
-     * @returns OrdersResponse Orders search results
+     * @returns OrdersResponseEnvelope Orders search results
      * @throws ApiError
      */
     public static searchOrders(
         requestBody: SearchOrdersRequest,
-    ): CancelablePromise<OrdersResponse> {
+    ): CancelablePromise<OrdersResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/orders/search',
@@ -177,12 +177,12 @@ export class OrdersService {
      * Order details
      * Returns the full details of the order identified by `{id}`. Functionally equivalent to `GET /orders?id={id}`.
      * @param id Resource identifier
-     * @returns Order Order
+     * @returns OrderEnvelope Order
      * @throws ApiError
      */
     public static getOrderById(
         id: Id,
-    ): CancelablePromise<Order> {
+    ): CancelablePromise<OrderEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/orders/{id}',
@@ -202,13 +202,13 @@ export class OrdersService {
      * Updates the order identified by `{id}` in the path.
      * @param id Resource identifier
      * @param requestBody
-     * @returns Order Updated order
+     * @returns OrderEnvelope Updated order
      * @throws ApiError
      */
     public static updateOrderById(
         id: Id,
         requestBody: UpdateOrderByIdRequest,
-    ): CancelablePromise<Order> {
+    ): CancelablePromise<OrderEnvelope> {
         return __request(OpenAPI, {
             method: 'PUT',
             url: '/orders/{id}',

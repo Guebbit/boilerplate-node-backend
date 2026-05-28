@@ -23,7 +23,7 @@ export const putOrders = (
     }
 
     return orderService
-        .update(id, {
+        .updateById(id, {
             ...request.body,
             status: request.body.status as string | undefined
         })
@@ -35,7 +35,7 @@ export const putOrders = (
 
             emitAuditEvent({
                 action: AuditAction.ADMIN_ORDER_UPDATED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'order',

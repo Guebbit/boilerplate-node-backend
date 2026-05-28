@@ -34,3 +34,4 @@ Single package. REST API. Express. MongoDB. Mongoose.
 - Change little, but keep flow complete.
 - Do not break contract without updating `openapi.yaml` (API the source of truth).
 - Keep observability and security wiring intact.
+- **Never** create backward-compatibility shims, legacy aliases, or transitional code unless explicitly requested. Fix forward; remove old code immediately.

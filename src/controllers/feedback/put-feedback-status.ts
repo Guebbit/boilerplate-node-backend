@@ -24,6 +24,7 @@ export const putFeedbackStatus = (
         );
 
     return feedbackRequestService
+<<<<<<< HEAD
         .updateStatus(request.params.id, parseResult.data)
         .then((feedbackRequest) => {
             emitAuditEvent({
@@ -41,5 +42,11 @@ export const putFeedbackStatus = (
         .catch((error: Error) => {
             if (error.message === '404') return rejectResponse(response, 404, 'Not Found');
             return rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+=======
+        .updateStatusById(request.params.id, parseResult.data)
+        .then((result) => {
+            if (!result.success) return rejectResponse(response, result.status, result.message, result.errors);
+            return successResponse(response, result.data);
+>>>>>>> origin/main
         });
 };

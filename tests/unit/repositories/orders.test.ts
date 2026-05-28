@@ -1,14 +1,12 @@
 import { Types } from 'mongoose';
-import { connect, disconnect, clearAll } from '../../helpers/database';
+import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import { createOrder, makeOrder, toOrderItem } from '../../helpers/factories/orders';
 import type { IProductDocument } from '@models/products';
 import * as orderRepository from '@repositories/orders';
 
-beforeAll(connect);
-afterAll(disconnect);
-beforeEach(clearAll);
+setupTestDb();
 
 describe('orderRepository', () => {
     describe('create', () => {
