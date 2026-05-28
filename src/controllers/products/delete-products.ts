@@ -32,7 +32,7 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
             }
             emitAuditEvent({
                 action: AuditAction.ADMIN_PRODUCT_DELETED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'product',

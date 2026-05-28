@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
@@ -27,10 +27,12 @@ export const postOrders = (
         return Promise.resolve();
     }
 
+    const auth = request.authContext!;
+
     /**
      * Create a new order
      */
-    return userService.orderConfirm(request.user!).then((result) => {
+    return cartService.orderConfirm(auth.id).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -38,7 +40,7 @@ export const postOrders = (
 
         void enqueueEmail(
             {
-                to: request.user!.email,
+                to: auth.email,
                 subject: 'Order confirmed'
             },
             'email-order-confirm.ejs',
@@ -46,7 +48,7 @@ export const postOrders = (
                 ...response.locals,
                 pageMetaTitle: 'Order confirmed',
                 pageMetaLinks: [],
-                name: request.user!.username
+                name: auth.username
             }
         );
 
@@ -54,15 +56,15 @@ export const postOrders = (
         const orderId = result.data?._id?.toString() ?? '';
         emitAuditEvent({
             action: AuditAction.ADMIN_ORDER_CREATED,
-            actor_user_id: request.user?.id ?? 'unknown',
-            actor_role: request.user?.admin ? 'admin' : 'user',
+            actor_user_id: auth.id,
+            actor_role: auth.admin ? 'admin' : 'user',
             outcome: 'success',
             target_type: 'order',
             target_id: orderId,
             ...extractRequestContext(request)
         });
         emitAnalyticsEvent({
-            distinctId: request.user?.id ?? 'unknown',
+            distinctId: auth.id,
             event: AnalyticsEvent.ORDER_CREATED,
             traceId: getActiveSpanContext().traceId,
             properties: { order_id: orderId }

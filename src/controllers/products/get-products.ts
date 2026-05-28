@@ -44,11 +44,11 @@ export const getProducts = (
                 category,
                 tag
             },
-            request.user?.admin === true
+            request.authContext?.admin === true
         )
         .then((result) => {
             emitAnalyticsEvent({
-                distinctId: request.user?.id ?? 'anonymous',
+                distinctId: request.authContext?.id ?? 'anonymous',
                 event: AnalyticsEvent.PRODUCTS_SEARCHED,
                 traceId: getActiveSpanContext().traceId,
                 properties: {

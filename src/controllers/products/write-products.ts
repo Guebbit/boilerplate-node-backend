@@ -86,7 +86,7 @@ export const writeProducts = (
             .then((product) => {
                 emitAuditEvent({
                     action: AuditAction.ADMIN_PRODUCT_CREATED,
-                    actor_user_id: request.user?.id ?? 'unknown',
+                    actor_user_id: request.authContext?.id ?? 'unknown',
                     actor_role: 'admin',
                     outcome: 'success',
                     target_type: 'product',
@@ -116,7 +116,7 @@ export const writeProducts = (
         .then((product) => {
             emitAuditEvent({
                 action: AuditAction.ADMIN_PRODUCT_UPDATED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 target_type: 'product',

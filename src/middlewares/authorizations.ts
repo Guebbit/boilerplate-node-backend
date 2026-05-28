@@ -57,7 +57,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
 
-    if (!request.user || !token) {
+    if (!request.authContext || !token) {
         emitAuditEvent({
             action: AuditAction.SECURITY_UNAUTHORIZED,
             actor_user_id: 'anonymous',
@@ -81,7 +81,7 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * @param next
  */
 export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
-    if (!request.user) {
+    if (!request.authContext) {
         emitAuditEvent({
             action: AuditAction.SECURITY_FORBIDDEN,
             actor_user_id: 'anonymous',
@@ -93,10 +93,10 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
         rejectResponse(response, 403, 'Forbidden: Access denied.');
         return;
     }
-    if (!request.user.admin) {
+    if (!request.authContext.admin) {
         emitAuditEvent({
             action: AuditAction.SECURITY_FORBIDDEN,
-            actor_user_id: request.user.id,
+            actor_user_id: request.authContext.id,
             actor_role: 'user',
             outcome: 'failure',
             ...extractRequestContext(request),

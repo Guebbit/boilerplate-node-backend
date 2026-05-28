@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
@@ -16,8 +16,7 @@ export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
 ) => {
-    // Authentication check is done before entering the route
-    const user = request.user!;
+    const auth = request.authContext!;
     const { productId, quantity } = request.body;
 
     if (!productId || !quantity || quantity < 1) {
@@ -36,12 +35,12 @@ export const postCart = (
             return;
         }
 
-        return userService
-            .cartItemSetById(user, productId, quantity)
-            .then(() => userService.cartGetWithSummary(user))
+        return cartService
+            .cartItemSetById(auth.id, productId, quantity)
+            .then(() => cartService.cartGetWithSummary(auth.id))
             .then((cart) => {
                 emitAnalyticsEvent({
-                    distinctId: user.id,
+                    distinctId: auth.id,
                     event: AnalyticsEvent.CART_ITEM_ADDED,
                     traceId: getActiveSpanContext().traceId,
                     properties: { product_id: productId, quantity }

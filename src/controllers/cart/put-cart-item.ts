@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -14,7 +14,7 @@ export const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
     response: Response
 ) => {
-    const user = request.user!;
+    const auth = request.authContext!;
     const productId = String(request.params.productId ?? request.body.productId);
 
     if (!request.body.quantity || request.body.quantity < 1) {
@@ -24,12 +24,12 @@ export const putCartItem = (
         return Promise.resolve();
     }
 
-    return userService
-        .cartItemSetById(user, productId, request.body.quantity)
-        .then(() => userService.cartGetWithSummary(user))
+    return cartService
+        .cartItemSetById(auth.id, productId, request.body.quantity)
+        .then(() => cartService.cartGetWithSummary(auth.id))
         .then((cart) => {
             emitAnalyticsEvent({
-                distinctId: user.id,
+                distinctId: auth.id,
                 event: AnalyticsEvent.CART_ITEM_UPDATED,
                 traceId: getActiveSpanContext().traceId,
                 properties: { product_id: productId, quantity: request.body.quantity }

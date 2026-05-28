@@ -11,7 +11,8 @@ import {
 } from '@utils/response';
 import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { zodUserSchema } from '@models/users';
-import type { IUserDocument } from '@models/users';
+import type { IUserDocument, IToken } from '@models/users';
+import { ETokenType } from '@models/users';
 import { userRepository } from '@repositories/users';
 
 /**
@@ -36,6 +37,17 @@ export const tokenAdd = (
     });
     return userRepository.save(user).then(() => token);
 };
+
+/**
+ * Remove all tokens of a given type for a user (by userId).
+ * Decouples from Mongoose document method.
+ */
+export const removeAllTokens = (userId: string, type: ETokenType): Promise<void> =>
+    userRepository.findById(userId).then((user) => {
+        if (!user) return;
+        user.tokens = user.tokens.filter((t: IToken) => t.type !== type);
+        return userRepository.save(user).then(() => {});
+    });
 
 /**
  * Change user password with validation.
@@ -185,6 +197,7 @@ export const login = (
 
 export const authService = {
     tokenAdd,
+    removeAllTokens,
     passwordChange,
     signup,
     login

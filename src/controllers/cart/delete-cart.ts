@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { userService } from '@services/users';
+import { cartService } from '@services/cart';
 import { successResponse } from '@utils/response';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
@@ -14,18 +14,19 @@ export const deleteCart = (
     request: Request<unknown, unknown, RemoveCartItemRequest>,
     response: Response
 ) => {
-    // Authentication check is done before entering the route
-    const user = request.user!;
+    const auth = request.authContext!;
     const productId = String(request.body.productId);
 
     // Remove specific item or entire cart
     return (
-        productId ? userService.cartItemRemoveById(user, productId) : userService.cartRemove(user)
+        productId
+            ? cartService.cartItemRemoveById(auth.id, productId)
+            : cartService.cartRemove(auth.id)
     )
-        .then(() => userService.cartGetWithSummary(user))
+        .then(() => cartService.cartGetWithSummary(auth.id))
         .then((cart) => {
             emitAnalyticsEvent({
-                distinctId: user.id,
+                distinctId: auth.id,
                 event: AnalyticsEvent.CART_CLEARED,
                 traceId: getActiveSpanContext().traceId,
                 properties: { ...(productId ? { product_id: productId } : {}) }

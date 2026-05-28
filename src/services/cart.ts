@@ -15,7 +15,8 @@ import { orderRepository } from '@repositories/orders';
 
 /**
  * Cart Service
- * Single responsibility: shopping cart operations on a user document.
+ * Single responsibility: shopping cart operations.
+ * Accepts userId (string) to decouple controllers from Mongoose documents.
  */
 
 /** Normalize any Mongoose/plain id shape to a plain string. */
@@ -32,10 +33,6 @@ const toObjectIdString = (value: unknown): string => {
 const matchesProductId = (product: unknown, id: string): boolean =>
     toObjectIdString(product) === id;
 
-/** Resolve user id regardless of whether _id or id is populated. */
-const resolveUserId = (user: IUserDocument): string =>
-    toObjectIdString(user._id) || toObjectIdString(user.id);
-
 /** Wrap saved user in a success response, ensuring _id is always present. */
 const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocument> => {
     const response = generateSuccess(user);
@@ -46,32 +43,31 @@ const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocumen
     return response;
 };
 
+/** Load user by ID or reject with 404. */
+const loadUser = (userId: string): Promise<IUserDocument> =>
+    userRepository.findById(userId).then((user) => {
+        if (!user) return Promise.reject(new Error('User not found'));
+        return user;
+    });
+
 /**
  * Get user cart populated with product details.
  */
-export const cartGet = (user: IUserDocument): Promise<ICartItem[]> => {
-    if (typeof user.populate === 'function')
-        return user.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
-
-    const userId = resolveUserId(user);
-    if (!userId) return Promise.resolve(user.cart.items ?? []);
-
-    return userRepository.findById(userId).then((freshUser) => {
-        if (!freshUser) return user.cart.items ?? [];
-        return freshUser.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
-    });
-};
+export const cartGet = (userId: string): Promise<ICartItem[]> =>
+    loadUser(userId).then((user) =>
+        user.populate('cart.items.product').then(({ cart: { items = [] } }) => items)
+    );
 
 /**
  * Get user cart with computed summary (item count, total quantity, total price).
  */
 export const cartGetWithSummary = (
-    user: IUserDocument
+    userId: string
 ): Promise<{
     items: ICartItem[];
     summary: { itemsCount: number; totalQuantity: number; total: number };
 }> =>
-    cartGet(user).then((items) => {
+    cartGet(userId).then((items) => {
         let totalQuantity = 0;
         let total = 0;
         for (const item of items) {
@@ -90,127 +86,133 @@ export const cartGetWithSummary = (
     });
 
 /**
- * Set quantity of target product in cart (by ID).
+ * Set quantity of target product in cart (by product ID).
  */
 export const cartItemSetById = (
-    user: IUserDocument,
-    id: string,
+    userId: string,
+    productId: string,
     quantity = 1
-): Promise<IResponseSuccess<IUserDocument>> => {
-    const cartProductIndex = user.cart.items.findIndex((item) =>
-        matchesProductId(item.product, id)
-    );
+): Promise<IResponseSuccess<IUserDocument>> =>
+    loadUser(userId).then((user) => {
+        const cartProductIndex = user.cart.items.findIndex((item) =>
+            matchesProductId(item.product, productId)
+        );
 
-    if (cartProductIndex === -1)
-        user.cart.items.push({
-            product: new Types.ObjectId(id),
-            quantity
-        });
-    else user.cart.items[cartProductIndex].quantity = quantity;
+        if (cartProductIndex === -1)
+            user.cart.items.push({
+                product: new Types.ObjectId(productId),
+                quantity
+            });
+        else user.cart.items[cartProductIndex].quantity = quantity;
 
-    user.cart.updatedAt = new Date();
-    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
-};
+        user.cart.updatedAt = new Date();
+        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
+    });
 
 /**
  * Set quantity of target product in cart (by product document).
  */
 export const cartItemSet = (
-    user: IUserDocument,
+    userId: string,
     product: IProductDocument,
     quantity = 1
 ): Promise<IResponseSuccess<IUserDocument>> =>
-    cartItemSetById(user, (product._id as Types.ObjectId).toString(), quantity);
+    cartItemSetById(userId, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
  * Add quantity of target product to existing quantity in cart.
  */
 export const cartItemAddById = (
-    user: IUserDocument,
-    id: string,
+    userId: string,
+    productId: string,
     quantity = 1
-): Promise<IResponseSuccess<IUserDocument>> => {
-    const cartProductIndex = user.cart.items.findIndex((item) =>
-        matchesProductId(item.product, id)
-    );
+): Promise<IResponseSuccess<IUserDocument>> =>
+    loadUser(userId).then((user) => {
+        const cartProductIndex = user.cart.items.findIndex((item) =>
+            matchesProductId(item.product, productId)
+        );
 
-    if (cartProductIndex === -1)
-        user.cart.items.push({
-            product: new Types.ObjectId(id),
-            quantity
-        });
-    else
-        user.cart.items[cartProductIndex].quantity =
-            user.cart.items[cartProductIndex].quantity + quantity;
+        if (cartProductIndex === -1)
+            user.cart.items.push({
+                product: new Types.ObjectId(productId),
+                quantity
+            });
+        else
+            user.cart.items[cartProductIndex].quantity =
+                user.cart.items[cartProductIndex].quantity + quantity;
 
-    user.cart.updatedAt = new Date();
-    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
-};
+        user.cart.updatedAt = new Date();
+        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
+    });
 
 /**
  * Add quantity of target product to cart (by product document).
  */
 export const cartItemAdd = (
-    user: IUserDocument,
+    userId: string,
     product: IProductDocument,
     quantity = 1
 ): Promise<IResponseSuccess<IUserDocument>> =>
-    cartItemAddById(user, (product._id as Types.ObjectId).toString(), quantity);
+    cartItemAddById(userId, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
- * Remove target product from cart (by ID).
+ * Remove target product from cart (by product ID).
  */
 export const cartItemRemoveById = (
-    user: IUserDocument,
-    id: string
-): Promise<IResponseSuccess<IUserDocument>> => {
-    user.cart.items = user.cart.items.filter(
-        ({ product }: ICartItem) => !matchesProductId(product, id)
-    );
-    user.cart.updatedAt = new Date();
-    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
-};
+    userId: string,
+    productId: string
+): Promise<IResponseSuccess<IUserDocument>> =>
+    loadUser(userId).then((user) => {
+        user.cart.items = user.cart.items.filter(
+            ({ product }: ICartItem) => !matchesProductId(product, productId)
+        );
+        user.cart.updatedAt = new Date();
+        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
+    });
 
 /**
  * Remove target product from cart (by product document).
  */
 export const cartItemRemove = (
-    user: IUserDocument,
+    userId: string,
     product: IProductDocument
 ): Promise<IResponseSuccess<IUserDocument>> =>
-    cartItemRemoveById(user, (product._id as Types.ObjectId).toString());
+    cartItemRemoveById(userId, (product._id as Types.ObjectId).toString());
 
 /**
  * Remove all products from cart.
  */
-export const cartRemove = (user: IUserDocument): Promise<IResponseSuccess<IUserDocument>> => {
-    user.cart = {
-        items: [],
-        updatedAt: new Date()
-    };
-    return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
-};
+export const cartRemove = (userId: string): Promise<IResponseSuccess<IUserDocument>> =>
+    loadUser(userId).then((user) => {
+        user.cart = {
+            items: [],
+            updatedAt: new Date()
+        };
+        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
+    });
 
 /**
  * Create order from current user cart and empty the cart.
  */
 export const orderConfirm = (
-    user: IUserDocument
+    userId: string
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
-    cartGet(user)
-        .then<IResponseSuccess<IOrderDocument> | IResponseReject>((products) => {
-            if (products.length === 0)
-                return generateReject(409, 'empty cart', ['Cart is empty']);
-            return orderRepository
-                .create({
-                    userId: new Types.ObjectId(resolveUserId(user)),
-                    email: user.email,
-                    items: products as IOrderDocument['items']
-                } as Partial<IOrderDocument>)
-                .then((order) =>
-                    cartRemove(user).then(() => generateSuccess<IOrderDocument>(order))
-                );
-        })
+    loadUser(userId)
+        .then((user) =>
+            cartGet(userId).then<IResponseSuccess<IOrderDocument> | IResponseReject>((products) => {
+                if (products.length === 0)
+                    return generateReject(409, 'empty cart', ['Cart is empty']);
+                return orderRepository
+                    .create({
+                        userId: new Types.ObjectId(userId),
+                        email: user.email,
+                        items: products as IOrderDocument['items']
+                    } as Partial<IOrderDocument>)
+                    .then((order) =>
+                        cartRemove(userId).then(() => generateSuccess<IOrderDocument>(order))
+                    );
+            })
+        )
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 
 /**
