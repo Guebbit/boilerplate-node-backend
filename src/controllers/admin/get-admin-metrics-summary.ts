@@ -14,14 +14,14 @@ import {
 
 /* Sum all label-value pairs for a counter. */
 const sumValues = (values: Array<{ value: number }>) =>
-    values.reduce((acc, v) => acc + v.value, 0);
+    values.reduce((accumulator, v) => accumulator + v.value, 0);
 
 /* Sum only entries whose label matches the given key/value pair. */
 const sumByLabel = (
     values: Array<{ value: number; labels: Record<string, string | number | undefined> }>,
     labelKey: string,
     labelValue: string
-) => values.filter((v) => v.labels[labelKey] === labelValue).reduce((acc, v) => acc + v.value, 0);
+) => values.filter((v) => v.labels[labelKey] === labelValue).reduce((accumulator, v) => accumulator + v.value, 0);
 
 /**
  * GET /admin/metrics/summary

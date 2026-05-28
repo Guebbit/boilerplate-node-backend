@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import os from 'os';
+import os from 'node:os';
 import { successResponse } from '@utils/response';
 
 /* Map mongoose readyState integer to the spec enum values. */
-const dbStatusMap: Record<number, 'connected' | 'connecting' | 'disconnected'> = {
+const databaseStatusMap: Record<number, 'connected' | 'connecting' | 'disconnected'> = {
     0: 'disconnected',
     1: 'connected',
     2: 'connecting',
@@ -17,9 +17,9 @@ const dbStatusMap: Record<number, 'connected' | 'connecting' | 'disconnected'> =
  */
 export const getAdminHealth = (_request: Request, response: Response) => {
     const mem = process.memoryUsage();
-    const dbReadyState = mongoose.connection.readyState;
-    const dbStatus = dbStatusMap[dbReadyState] ?? 'disconnected';
-    const overallStatus = dbStatus === 'connected' ? 'ok' : 'degraded';
+    const databaseReadyState = mongoose.connection.readyState;
+    const databaseStatus = databaseStatusMap[databaseReadyState] ?? 'disconnected';
+    const overallStatus = databaseStatus === 'connected' ? 'ok' : 'degraded';
 
     successResponse(response, {
         status: overallStatus,
@@ -27,7 +27,7 @@ export const getAdminHealth = (_request: Request, response: Response) => {
         service: process.env.NODE_SERVICE_NAME ?? 'boilerplate-node-backend',
         nodeVersion: process.version,
         uptimeSeconds: Math.floor(process.uptime()),
-        database: { status: dbStatus },
+        database: { status: databaseStatus },
         integrations: {
             loki: Boolean(process.env.NODE_LOKI_HOST),
             posthog: Boolean(process.env.NODE_POSTHOG_API_KEY),

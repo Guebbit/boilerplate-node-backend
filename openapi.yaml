@@ -1584,6 +1584,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SignupRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/SignupRequestMultipart'
@@ -1740,6 +1743,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateUserRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/CreateUserRequestMultipart'
@@ -1764,6 +1770,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateUserRequestMultipart'
@@ -1832,6 +1841,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
@@ -2017,6 +2029,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateProductRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/CreateProductRequestMultipart'
@@ -2041,6 +2056,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateProductRequestMultipart'
@@ -2108,6 +2126,9 @@ paths:
             requestBody:
                 required: true
                 content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductByIdRequest'
                     multipart/form-data:
                         schema:
                             $ref: '#/components/schemas/UpdateProductByIdRequestMultipart'

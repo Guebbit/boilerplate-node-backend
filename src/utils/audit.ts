@@ -74,7 +74,7 @@ export const emitAuditEvent = (event: IAuditEvent): void => {
 };
 
 /** Return a snapshot of the ring buffer (most-recent-first). */
-export const getAuditBuffer = (): Readonly<IAuditBufferEntry[]> => [...auditBuffer].reverse();
+export const getAuditBuffer = (): Readonly<IAuditBufferEntry[]> => [...auditBuffer].toReversed();
 
 /** Extract common request fields for audit events. */
 export const extractRequestContext = (request: {

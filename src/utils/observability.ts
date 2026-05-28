@@ -136,7 +136,7 @@ export const getLatencyPercentiles = (): Promise<{ p50: number; p95: number }> =
 
         if (grandTotal === 0) return { p50: 0, p95: 0 };
 
-        const sorted = Array.from(totals.entries()).sort(([a], [b]) => a - b);
+        const sorted = [...totals.entries()].toSorted(([a], [b]) => a - b);
 
         /* Walk buckets in ascending order; return upper bound of first bucket that
            covers the requested percentile. */

@@ -100,8 +100,8 @@ describe('setCache', () => {
 describe('invalidateCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockedCache.invalidateCacheTags.mockResolvedValue(undefined);
-        mockedCache.broadcastCacheInvalidation.mockResolvedValue(undefined);
+        mockedCache.invalidateCacheTags.mockResolvedValue();
+        mockedCache.broadcastCacheInvalidation.mockResolvedValue();
     });
 
     it('invalidates tags and broadcasts after successful responses finish', async () => {

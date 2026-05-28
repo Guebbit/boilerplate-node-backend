@@ -125,7 +125,7 @@ channels:
             operationId: workerEmailConsume
             summary: Email worker picks up and sends the email.
             message:
-                $ref: '#/components/messages/EmailJobMessage'
+                $ref: '#/components/messages/EmailJobConsumeMessage'
     worker.pdf.generate:
         description: PDF generation job queue — producers enqueue render requests, the PDF worker consumes them.
         servers:
@@ -139,7 +139,7 @@ channels:
             operationId: workerPdfConsume
             summary: PDF worker renders template to PDF.
             message:
-                $ref: '#/components/messages/PdfJobMessage'
+                $ref: '#/components/messages/PdfJobConsumeMessage'
     cache.tags.invalidated:
         description: Redis pub/sub channel for broadcasting cache tag invalidations across app instances.
         servers:
@@ -153,7 +153,7 @@ channels:
             operationId: cacheTagsInvalidatedConsume
             summary: Other instances receive and apply the invalidation locally.
             message:
-                $ref: '#/components/messages/CacheTagsInvalidatedMessage'
+                $ref: '#/components/messages/CacheTagsInvalidatedConsumeMessage'
 components:
     messages:
         ChatJoinCommand:
@@ -368,6 +368,24 @@ components:
             name: CacheTagsInvalidatedMessage
             messageId: cache.tags.invalidated
             title: Cache tags invalidation broadcast
+            payload:
+                $ref: '#/components/schemas/CacheTagsInvalidatedPayload'
+        EmailJobConsumeMessage:
+            name: EmailJobConsumeMessage
+            messageId: worker.email.job.consume
+            title: Email delivery job (worker consume)
+            payload:
+                $ref: '#/components/schemas/EmailJobPayload'
+        PdfJobConsumeMessage:
+            name: PdfJobConsumeMessage
+            messageId: worker.pdf.job.consume
+            title: PDF generation job (worker consume)
+            payload:
+                $ref: '#/components/schemas/PdfJobPayload'
+        CacheTagsInvalidatedConsumeMessage:
+            name: CacheTagsInvalidatedConsumeMessage
+            messageId: cache.invalidation.broadcast.consume
+            title: Cache tags invalidation broadcast (consumer)
             payload:
                 $ref: '#/components/schemas/CacheTagsInvalidatedPayload'
     schemas:
