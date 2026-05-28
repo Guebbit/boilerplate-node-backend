@@ -17,7 +17,7 @@ export const deleteCartItem = (
     const auth = request.authContext!;
     const productId = String(request.params.productId ?? request.body.productId);
 
-    // Attempt removal — service returns success regardless (idempotent)
+    // Attempt removal — service filters by product ID (no-op if not in cart)
     return cartService
         .cartItemRemoveById(auth.id, productId)
         .then(() => cartService.cartGetWithSummary(auth.id))

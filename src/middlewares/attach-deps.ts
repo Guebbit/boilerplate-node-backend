@@ -9,7 +9,7 @@ import type { IRequestDeps } from '../types/request-deps';
  * Controllers can use request.deps.* instead of direct imports,
  * making them trivially testable by swapping this middleware with stubs.
  */
-export const attachDeps = (_request: Request, _response: Response, next: NextFunction): void => {
+export const attachDeps = (request: Request, _response: Response, next: NextFunction): void => {
     const deps: IRequestDeps = {
         emitAudit: emitAuditEvent,
         emitAnalytics: emitAnalyticsEvent,
@@ -19,6 +19,6 @@ export const attachDeps = (_request: Request, _response: Response, next: NextFun
             error: (message: string, meta?: Record<string, unknown>) => logger.error(message, meta)
         }
     };
-    _request.deps = deps;
+    request.deps = deps;
     next();
 };
