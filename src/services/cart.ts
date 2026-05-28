@@ -53,6 +53,11 @@ const requireUser = (userId: string): Promise<IUserDocument | IResponseReject> =
 const populateCartItems = (user: IUserDocument): Promise<ICartItem[]> =>
     user.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
 
+/** Mutate user document to clear the cart in place. */
+const clearCartItems = (user: IUserDocument): void => {
+    user.cart = { items: [], updatedAt: new Date() };
+};
+
 /**
  * Get user cart populated with product details.
  */
@@ -165,13 +170,11 @@ export const cartItemRemoveById = (
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
-        const exists = user.cart.items.some(({ product }: ICartItem) =>
-            matchesProductId(product, id)
-        );
-        if (!exists) return generateReject(404, 'cart - item not found', []);
+        const before = user.cart.items.length;
         user.cart.items = user.cart.items.filter(
             ({ product }: ICartItem) => !matchesProductId(product, id)
         );
+        if (user.cart.items.length === before) return generateReject(404, 'cart - item not found', []);
         user.cart.updatedAt = new Date();
         return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
     });
@@ -194,7 +197,7 @@ export const cartRemove = (
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
-        user.cart = { items: [], updatedAt: new Date() };
+        clearCartItems(user);
         return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
     });
 
@@ -219,7 +222,7 @@ export const orderConfirm = (
                             items: products as IOrderDocument['items']
                         } as Partial<IOrderDocument>)
                         .then((order) => {
-                            user.cart = { items: [], updatedAt: new Date() };
+                            clearCartItems(user);
                             return userRepository
                                 .save(user)
                                 .then(() => generateSuccess<IOrderDocument>(order));
