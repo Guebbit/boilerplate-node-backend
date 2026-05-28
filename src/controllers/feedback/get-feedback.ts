@@ -9,6 +9,10 @@ import { emitAuditEvent, extractRequestContext, AuditAction } from '@utils/audit
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 
+/**
+ * GET /feedback (admin)
+ * Search and paginate feedback tickets by status, email, or text.
+ */
 export const getFeedback = (
     request: Request<ParamsDictionary, unknown, SearchFeedbackRequestsRequest, FeedbackQuery>,
     response: Response
@@ -30,7 +34,7 @@ export const getFeedback = (
         .then((result) => {
             emitAuditEvent({
                 action: AuditAction.ADMIN_FEEDBACK_VIEWED,
-                actor_user_id: request.user?.id ?? 'unknown',
+                actor_user_id: request.authContext?.id ?? 'unknown',
                 actor_role: 'admin',
                 outcome: 'success',
                 ...extractRequestContext(request)

@@ -5,6 +5,7 @@ import { getAdminHealth } from '@controllers/admin/get-admin-health';
 import { getAdminMetricsSummary } from '@controllers/admin/get-admin-metrics-summary';
 import { getAdminAuditLogs } from '@controllers/admin/get-admin-audit';
 
+/** Express router for privileged admin endpoints (health, metrics summary, audit log, all orders). */
 export const router = Router();
 
 router.use(getAuth, isAuth, isAdmin);

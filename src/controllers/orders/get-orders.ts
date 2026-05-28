@@ -38,7 +38,7 @@ export const getOrders = (
         )
         .then((result) => {
             emitAnalyticsEvent({
-                distinctId: request.user?.id ?? 'anonymous',
+                distinctId: request.authContext?.id ?? 'anonymous',
                 event: AnalyticsEvent.ORDERS_VIEWED,
                 traceId: getActiveSpanContext().traceId
             });

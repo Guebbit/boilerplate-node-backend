@@ -10,6 +10,10 @@ const updateFeedbackStatusSchema = z.object({
     adminNotes: z.string().max(5000).optional()
 });
 
+/**
+ * PUT /feedback/:id (admin)
+ * Update the status and/or admin notes on a feedback ticket.
+ */
 export const putFeedbackStatus = (
     request: Request<{ id: string }, unknown, UpdateFeedbackRequestStatusRequest>,
     response: Response

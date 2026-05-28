@@ -1,7 +1,7 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, QueryFilter } from 'mongoose';
 
-// Feedback status used by support workflow.
+/** Feedback status used by the support workflow. */
 export enum EFeedbackStatus {
     NEW = 'new',
     IN_PROGRESS = 'in_progress',
@@ -9,7 +9,7 @@ export enum EFeedbackStatus {
     SPAM = 'spam'
 }
 
-// Feedback ticket payload stored in MongoDB.
+/** Feedback ticket payload stored in MongoDB. */
 export interface IFeedbackRequest {
     name?: string;
     email: string;
@@ -22,14 +22,15 @@ export interface IFeedbackRequest {
     updatedAt?: Date;
 }
 
-// Mongoose document type for feedback tickets.
+/** Mongoose document type for feedback tickets. */
 export interface IFeedbackRequestDocument extends IFeedbackRequest, Document {}
 
-// Mongoose model + query helper types.
+/** Mongoose model + query helper types. */
 export type IFeedbackRequestModel = Model<IFeedbackRequestDocument>;
+/** Shorthand type for Mongoose query filters on the feedback collection. */
 export type IFeedbackRequestQueryFilter = QueryFilter<IFeedbackRequestDocument>;
 
-// Feedback collection schema.
+/** Feedback collection schema. */
 export const feedbackRequestSchema = new Schema<IFeedbackRequestDocument, IFeedbackRequestModel>(
     {
         name: {
@@ -64,11 +65,11 @@ export const feedbackRequestSchema = new Schema<IFeedbackRequestDocument, IFeedb
     }
 );
 
-// Indexes for admin list/search queries.
+/** Indexes for admin list/search queries. */
 feedbackRequestSchema.index({ status: 1, createdAt: -1 });
 feedbackRequestSchema.index({ email: 1, createdAt: -1 });
 
-// Feedback model entrypoint.
+/** Feedback model entrypoint. */
 export const feedbackRequestModel = model<IFeedbackRequestDocument, IFeedbackRequestModel>(
     'FeedbackRequest',
     feedbackRequestSchema

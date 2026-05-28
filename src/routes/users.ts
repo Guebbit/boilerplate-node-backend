@@ -7,6 +7,7 @@ import { deleteUsers } from '@controllers/users/delete-users';
 import { getUserItem } from '@controllers/users/get-user-item';
 import { invalidateCache, setCache } from '@utils/helpers-response';
 
+/** Express router for user management (admin only). */
 export const router = Router();
 
 // All routes require authentication + admin role

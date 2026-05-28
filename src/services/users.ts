@@ -150,6 +150,7 @@ export const remove = (
         .then((savedUser) => generateSuccess(savedUser, 200, t('ecommerce.user-soft-deleted')));
 };
 
+/**
  * Find a user by email address.
  * Returns the document if found, or undefined if no match.
  *

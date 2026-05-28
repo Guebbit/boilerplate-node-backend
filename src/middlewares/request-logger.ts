@@ -3,7 +3,10 @@ import { logger } from '@utils/winston';
 import { getRouteLabel } from '@utils/observability';
 import { getActiveSpanContext } from '@utils/tracer';
 
-// One slim access log per request. Anything richer lives in Tempo (traces).
+/**
+ * Express middleware that emits one access-log entry per request.
+ * Uses hrtime for sub-millisecond duration, logs WARN for 4xx, ERROR for 5xx.
+ */
 export const requestLogger = (request: Request, response: Response, next: NextFunction): void => {
     const startTime = process.hrtime.bigint();
 

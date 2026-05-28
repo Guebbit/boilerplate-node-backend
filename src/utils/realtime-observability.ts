@@ -7,16 +7,16 @@ import {
 import { getHttpRequestCounters } from '@utils/observability';
 import { getActiveWebSocketConnections } from '@utils/realtime-chat';
 
-// In-memory set of active SSE response objects — one entry per connected client.
+/** In-memory set of active SSE response objects — one entry per connected client. */
 const sseClients = new Set<Response>();
 
-// How often the server pushes a metrics delta to all connected SSE clients.
+/** How often the server pushes a metrics delta to all connected SSE clients. */
 const UPDATE_INTERVAL_MS = 5000;
 
-// Lightweight keep-alive ping to prevent proxies/load-balancers from closing idle SSE streams.
+/** Lightweight keep-alive ping to prevent proxies/load-balancers from closing idle SSE streams. */
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
-// Writes a single SSE frame (event + data) to the response stream.
+/** Writes a single SSE frame (event + data) to the response stream. */
 const writeEvent = (
     response: Response,
     event: TObservabilityChannel,
@@ -26,10 +26,13 @@ const writeEvent = (
     response.write(`data: ${JSON.stringify(payload)}\n\n`);
 };
 
-// Returns the current number of open SSE connections (used by observability payload itself).
+/** Returns the current number of open SSE connections (used by observability payload itself). */
 export const getActiveSseClients = (): number => sseClients.size;
 
-// Builds a snapshot of current process/runtime metrics matching the asyncapi.yaml schema.
+/**
+ * Builds a snapshot of current process/runtime metrics matching the asyncapi.yaml schema.
+ * Merges Node.js memory stats with HTTP counters and realtime connection counts.
+ */
 export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayload> => {
     const memoryUsage = process.memoryUsage();
     return getHttpRequestCounters().then((counters) => ({
@@ -52,7 +55,7 @@ export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayloa
     }));
 };
 
-// Fires-and-forgets a metrics event — errors are silently swallowed to avoid crashing the stream.
+/** Fires-and-forgets a metrics event — errors are silently swallowed to avoid crashing the stream. */
 const writeMetricsEvent = (response: Response, eventName: TObservabilityChannel) => {
     void buildObservabilityPayload()
         .then((payload) => {
@@ -61,8 +64,10 @@ const writeMetricsEvent = (response: Response, eventName: TObservabilityChannel)
         .catch(() => {});
 };
 
-// Opens an SSE stream on the given response: sets headers, sends an immediate snapshot,
-// then schedules periodic updates and heartbeats, cleaning up all intervals on close.
+/**
+ * Opens an SSE stream on the given response: sets headers, sends an immediate snapshot,
+ * then schedules periodic updates and heartbeats, cleaning up all intervals on close.
+ */
 export const streamObservabilityMetrics = (response: Response) => {
     response.status(200);
     response.setHeader('Content-Type', 'text/event-stream');
