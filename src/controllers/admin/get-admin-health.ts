@@ -31,7 +31,7 @@ export const getAdminHealth = (_request: Request, response: Response) => {
         integrations: {
             loki: Boolean(process.env.NODE_LOKI_HOST),
             posthog: Boolean(process.env.NODE_POSTHOG_API_KEY),
-            otelEnabled: process.env.OTEL_ENABLED === 'true'
+            otelEnabled: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
         },
         memory: {
             heapUsedMb: Math.round(mem.heapUsed / 1_048_576),

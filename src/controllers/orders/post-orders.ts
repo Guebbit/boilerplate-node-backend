@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { cartService } from '@services/cart';
+import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
@@ -11,7 +11,8 @@ import { getActiveSpanContext } from '@utils/tracer';
 
 /**
  * POST /orders
- * Create a new order from a payload (admin).
+ * Create a new order from an explicit payload (admin).
+ * Bypasses the user cart — items are taken directly from the request body.
  */
 export const postOrders = (
     request: Request<unknown, unknown, CreateOrderRequest>,
@@ -25,8 +26,10 @@ export const postOrders = (
     }
 
     const auth = request.authContext!;
+    const { userId, email, items } = request.body;
 
-    return cartService.orderConfirm(auth.id).then((result) => {
+    /* Create the order directly from the request body (bypasses cart). */
+    return orderService.create(userId, email, items).then((result) => {
         if (!result.success) {
             rejectResponse(response, result.status, result.message, result.errors);
             return;
@@ -34,7 +37,7 @@ export const postOrders = (
 
         void enqueueEmail(
             {
-                to: auth.email,
+                to: email,
                 subject: 'Order confirmed'
             },
             'email-order-confirm.ejs',
@@ -42,7 +45,8 @@ export const postOrders = (
                 ...response.locals,
                 pageMetaTitle: 'Order confirmed',
                 pageMetaLinks: [],
-                name: auth.username
+                // Admin-created orders only have email; username is not in the payload.
+                name: email
             }
         );
 

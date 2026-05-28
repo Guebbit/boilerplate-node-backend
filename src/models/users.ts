@@ -114,19 +114,23 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
         },
         cart: {
             // sub documents always have _id
-            items: [
-                {
-                    product: {
-                        type: Schema.Types.ObjectId,
-                        ref: 'Product',
-                        required: true
-                    },
-                    quantity: {
-                        type: Number,
-                        required: true
+            items: {
+                type: [
+                    {
+                        product: {
+                            type: Schema.Types.ObjectId,
+                            ref: 'Product',
+                            required: true
+                        },
+                        quantity: {
+                            type: Number,
+                            required: true
+                        }
                     }
-                }
-            ],
+                ],
+                // Guarantee every new user starts with an empty cart.
+                default: []
+            },
             deletedAt: Date
         },
         // sub documents always have _id
