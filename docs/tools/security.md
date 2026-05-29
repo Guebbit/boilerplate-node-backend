@@ -11,23 +11,56 @@
 | [cookie-parser](https://github.com/expressjs/cookie-parser#readme) | cookie access in Express                    |
 | [bcrypt](https://github.com/kelektiv/node.bcrypt.js#readme)        | password hashing                            |
 
-## Security flow
+## Auth architecture (current backend pattern)
+
+This backend uses a **split-token model**:
+
+- **Access token**: short-lived JWT returned by `POST /account/login` and sent on API calls in the `Authorization` header with the Bearer scheme.
+- **Refresh token**: longer-lived JWT stored in the HTTP-only `jwt` cookie and used only to mint a new access token (`GET /account/refresh`).
+
+This keeps normal authenticated requests explicit (client-attached Bearer token), while keeping the refresh token out of JavaScript access (HTTP-only cookie).
+
+## Where token verification happens
+
+- **Access token verification**: `getAuth` middleware reads the Bearer token from `Authorization` and verifies JWT signature/expiry with `verifyAccessToken`.
+- **Refresh token verification**: `createAccessToken` calls `verifyRefreshToken`, which checks both:
+    1. JWT signature/expiry with the refresh secret.
+    2. token presence in the server-side token store (`users.tokens`) to reject revoked/unknown refresh tokens.
+
+If access-token verification fails, protected routes return `401`. The client can then call refresh and retry with the new access token.
+
+## Security properties provided
+
+- **JWT signing (HS256 + secret)**: prevents token tampering and enforces expiry validation.
+- **Bearer transport**: token is not auto-attached by browsers; requests must include it explicitly.
+- **Refresh cookie flags** (`httpOnly`, `sameSite=lax`, `secure` in production):
+    - `httpOnly` blocks JavaScript reads of the refresh token.
+    - `sameSite=lax` reduces cross-site cookie sending in common CSRF scenarios.
+    - `secure` (production) limits cookie transport to HTTPS.
+- **Server-side refresh-token check**: refresh is accepted only if the signed token is still present in DB, enabling revocation/logout-all behavior.
+
+## Login → auth → refresh request flow
+
+1. User logs in (`POST /account/login`).
+2. Server returns a short-lived access token and sets `jwt` refresh cookie.
+3. Client calls protected APIs with the Bearer token in `Authorization`.
+4. If access token is expired/invalid, API responds `401 Unauthorized`.
+5. Client calls `GET /account/refresh`; browser sends `jwt` cookie automatically.
+6. Server validates refresh token signature **and** DB presence, then returns a new access token.
+7. Client retries protected request with the new access token.
 
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
 flowchart LR
-    Request --> Helmet
-    Helmet --> CORS
-    CORS --> RateLimit
-    RateLimit --> Auth
-    Auth --> Controller
-
-    classDef edge fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef guard fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
-    class Request edge;
-    class Helmet,CORS,RateLimit,Auth guard;
-    class Controller app;
+    A[Login\nPOST /account/login] --> B[Access token in response]
+    A --> C[Refresh token in\nHttpOnly jwt cookie]
+    B --> D[Protected API call\nAuthorization Bearer]
+    D --> E{Access token valid?}
+    E -- Yes --> F[Controller executes]
+    E -- No (401) --> G[GET /account/refresh\nwith jwt cookie]
+    G --> H{Refresh JWT valid\nand stored in DB?}
+    H -- Yes --> I[New access token]
+    I --> D
+    H -- No --> J[401 Unauthorized]
 ```
 
 ## Strategy
