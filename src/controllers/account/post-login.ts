@@ -15,7 +15,7 @@ import { authLoginTotal } from '@utils/domain-metrics';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
-/*
+/**
  * Emit login failure observability (metrics + audit).
  */
 const recordLoginFailure = (request: Request) => {
@@ -30,7 +30,7 @@ const recordLoginFailure = (request: Request) => {
     );
 };
 
-/*
+/**
  * Emit login success observability (metrics + audit + analytics).
  */
 const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) => {
