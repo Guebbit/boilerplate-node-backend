@@ -91,14 +91,17 @@ export const recordRequestMetric = ({
     if (statusCode >= 400) httpRequestErrorsTotal.inc(labels);
 };
 
+/** Increment the in-flight request gauge when a request starts. */
 export const incrementInflight = (): void => {
     httpInflightRequests.inc();
 };
 
+/** Decrement the in-flight request gauge when a request finishes. */
 export const decrementInflight = (): void => {
     httpInflightRequests.dec();
 };
 
+/** Sum raw metric sample values from a prom-client get() result. */
 const sumMetricValues = (values: Array<{ value: number }>) =>
     values.reduce((sum, value) => sum + value.value, 0);
 
@@ -107,6 +110,11 @@ interface ILatencyBucket {
     cumulativeCount: number;
 }
 
+/*
+ * Collapse histogram values into per-boundary bucket totals.
+ * prom-client histogram get() mixes _sum/_count rows (metricName set) with bucket rows — skip the former.
+ * The +Inf bucket gives the total request count.
+ */
 const aggregateLatencyBuckets = (
     values: Array<{
         value: number;
@@ -118,7 +126,7 @@ const aggregateLatencyBuckets = (
     let totalCount = 0;
 
     for (const { value, labels, metricName } of values) {
-        if (metricName) continue;
+        if (metricName) continue; // skip _sum / _count rows
         const le = labels.le;
         if (le === undefined) continue;
         if (le === '+Inf') {
@@ -152,6 +160,7 @@ export const percentileFromHistogramBuckets = (
     return buckets.at(-1)?.upperBound ?? 0;
 };
 
+/** Read total request and error counters from prom-client in one call. */
 export const getHttpRequestCounters = () =>
     Promise.all([httpRequestsTotal.get(), httpRequestErrorsTotal.get()]).then(
         ([requestMetrics, errorMetrics]) => ({

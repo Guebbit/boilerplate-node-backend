@@ -15,7 +15,7 @@ import { orderRepository } from '@repositories/orders';
 import {
     toUserCartDto,
     toCartItemDto,
-    toCartIdString,
+    toIdString,
     type ICartItemDto,
     type IUserCartDto
 } from '@utils/dto-cart';
@@ -26,7 +26,7 @@ import {
  */
 
 /** Check if a cart item's product field matches the given string id. */
-const matchesProductId = (product: unknown, id: string): boolean => toCartIdString(product) === id;
+const matchesProductId = (product: unknown, id: string): boolean => toIdString(product) === id;
 
 /** Wrap saved user in a success response with an explicit DTO payload. */
 const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserCartDto> =>
