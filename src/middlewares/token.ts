@@ -11,59 +11,16 @@ import {
 } from '@utils/token-config';
 import type { ERefreshTokenExpiryTime } from '@utils/token-config';
 
-<<<<<<< HEAD
 /*
  * Token Service — JWT creation and verification only.
- * Cookie/transport handling belongs to the calling layer.
-=======
-/**
- * Token Service
- * Single responsibility: JWT token creation and verification.
  * Config (secrets, TTLs) is delegated to token-config.
->>>>>>> origin/main
  */
 
 export interface ITokenData {
     id: string;
 }
 
-<<<<<<< HEAD
-export enum ERefreshTokenExpiryTime {
-    SHORT = 'short',
-    MEDIUM = 'medium',
-    LONG = 'long'
-}
-
-/* Map each token tier to its corresponding env var name. */
-const TOKEN_EXPIRY_ENV: Record<ERefreshTokenExpiryTime | 'default', string> = {
-    [ERefreshTokenExpiryTime.SHORT]: 'NODE_TOKEN_REFRESH_TIME_SHORT',
-    [ERefreshTokenExpiryTime.MEDIUM]: 'NODE_TOKEN_REFRESH_TIME_MEDIUM',
-    [ERefreshTokenExpiryTime.LONG]: 'NODE_TOKEN_REFRESH_TIME_LONG',
-    default: 'NODE_TOKEN_ACCESS_TIME'
-};
-
-/*
- * Get expiry time in seconds for the given token duration tier.
- * Falls back to NODE_TOKEN_ACCESS_TIME when no tier is given.
- * @param remember - optional tier (short/medium/long)
- * @returns seconds as integer, 0 if env var is unset
- */
-export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
-    const envKey = TOKEN_EXPIRY_ENV[remember ?? 'default'];
-    const value = process.env[envKey];
-    return value ? Number.parseInt(value, 10) : 0;
-};
-
-/*
- * Millisecond wrapper around getExpiryTime.
- * @param remember - optional tier
- * @returns expiry in ms
- */
-export const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
-    getExpiryTime(remember) * 1000;
-=======
 export { ERefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from '@utils/token-config';
->>>>>>> origin/main
 
 /*
  * Verify an access token (stateless JWT check only).
