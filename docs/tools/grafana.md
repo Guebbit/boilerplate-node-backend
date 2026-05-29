@@ -47,6 +47,20 @@ flowchart TD
 | Promtail      | Log shipper (Docker → Loki)      | —                            | `grafana/promtail:3.3.2`                   |
 | Grafana       | Unified UI                       | `http://localhost:3001`      | `grafana/grafana:11.4.0`                   |
 
+## Admin API vs Grafana
+
+`GET /admin/*` endpoints return **the same underlying numbers you see in Grafana, but as a JSON snapshot** instead of a time-series graph.
+
+| Admin endpoint | Grafana equivalent | Notes |
+| --- | --- | --- |
+| `GET /admin/metrics/summary` | Grafana KPI panels (requests, errors, latency, auth, business) | Reads the same prom-client counters/histograms that Prometheus scrapes. Identical numbers, no time axis. |
+| `GET /admin/health` | Grafana health/uptime panels | Overlaps with Prometheus data (uptime, memory, DB status) but also adds info Prometheus doesn't track (Node version, OS info, integration flags). |
+| `GET /admin/audit` | Loki log search | **Not** a Prometheus metric. Reads from an in-memory ring buffer of security/access events. You'd find the same data in Loki, not in a Grafana metric panel. |
+
+**When to use which:**
+- **Grafana** — historical time-series, trends, alerts, operator/SRE workflows.
+- **`/admin/*`** — current point-in-time snapshot; useful for a custom product dashboard or lightweight health check without needing the full Grafana stack running.
+
 ## Custom app endpoints
 
 These are separate from Grafana and serve a custom frontend or product UI:
