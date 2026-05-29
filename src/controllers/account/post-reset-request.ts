@@ -45,7 +45,7 @@ export const postResetRequest = (
     return (
         lookupResetData(email)
             // Fail closed and keep the public response identical to protect account privacy.
-            .catch(() => {})
+            .catch(() => { /* error discarded intentionally — response stays 200 to prevent user enumeration */ })
             .then((data) => {
                 authPasswordResetTotal.inc({ status: data?.token ? 'success' : 'failure' });
 
