@@ -49,30 +49,9 @@ flowchart TD
 
 ## Admin API vs Grafana
 
-`GET /admin/*` endpoints return **the same underlying numbers you see in Grafana, but as a JSON snapshot** instead of a time-series graph.
+The `/admin/*` endpoints expose the same metrics as Grafana but as a **point-in-time JSON snapshot** — no time axis, no historical trend. Use Grafana for SRE workflows; use the admin API as a data layer for a custom dashboard.
 
-| Admin endpoint | Grafana equivalent | Notes |
-| --- | --- | --- |
-| `GET /admin/metrics` | Grafana KPI panels (requests, errors, latency, auth, business) | Reads the same prom-client counters/histograms that Prometheus scrapes. Identical numbers, no time axis. |
-| `GET /admin/health` | Grafana health/uptime panels | Overlaps with Prometheus data (uptime, memory, DB status) but also adds info Prometheus doesn't track (Node version, OS info, integration flags). |
-| `GET /admin/audit` | Loki log search | **Not** a Prometheus metric. Reads from an in-memory ring buffer of security/access events. You'd find the same data in Loki, not in a Grafana metric panel. |
-
-**When to use which:**
-- **Grafana** — historical time-series, trends, alerts, operator/SRE workflows.
-- **`/admin/*`** — current point-in-time snapshot; useful for a custom product dashboard or lightweight health check without needing the full Grafana stack running.
-
-## Custom app endpoints
-
-These are separate from Grafana and serve a custom frontend or product UI:
-
-| Endpoint                    | Auth     | Description                                       |
-| --------------------------- | -------- | ------------------------------------------------- |
-| `GET /metrics`              | public   | Prometheus exposition format — scraped by Prometheus |
-| `GET /admin/metrics`        | admin JWT| Curated KPI snapshot for a custom dashboard       |
-| `GET /admin/health`         | admin JWT| Full health: DB, Redis, integrations, memory      |
-| `GET /observability/events` | public   | SSE stream: live metrics snapshot every 5 s       |
-
-Use **Grafana** for operator/SRE workflows. Use **your backend endpoints** as the data layer for a custom product UI.
+→ Full details: [Admin Endpoints](../api/admin.md)
 
 ## Useful links
 
