@@ -11,9 +11,8 @@ import {
 } from '@utils/token-config';
 import type { ERefreshTokenExpiryTime } from '@utils/token-config';
 
-/**
- * Token Service
- * Single responsibility: JWT token creation and verification.
+/*
+ * Token Service — JWT creation and verification only.
  * Config (secrets, TTLs) is delegated to token-config.
  */
 
@@ -23,8 +22,10 @@ export interface ITokenData {
 
 export { ERefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from '@utils/token-config';
 
-/**
- * Verify an access token (stateless).
+/*
+ * Verify an access token (stateless JWT check only).
+ * @param token - signed JWT string
+ * @returns decoded payload
  */
 export const verifyAccessToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
@@ -34,8 +35,11 @@ export const verifyAccessToken = (token: string): Promise<ITokenData> =>
         });
     });
 
-/**
- * Verify a refresh token (stateful — checks DB revocation).
+/*
+ * Verify a refresh token — JWT check + DB revocation lookup.
+ * Rejects with 'Forbidden' if the token is not in the user document.
+ * @param token - refresh JWT string
+ * @returns decoded payload
  */
 export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
@@ -58,8 +62,11 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
         });
     });
 
-/**
- * Create a refresh token and persist it on the user document.
+/*
+ * Create a refresh token, sign it, and persist it on the user document.
+ * @param id - user ID
+ * @param remember - optional expiry tier
+ * @returns updated user document
  */
 export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTime) =>
     Users.findById(id)
@@ -77,8 +84,10 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
             return user.tokenAdd(ETokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
-/**
- * Create an access token from a valid refresh token.
+/*
+ * Exchange a valid refresh token for a short-lived access token.
+ * @param refreshToken - previously issued refresh JWT
+ * @returns signed access JWT string
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id }) =>
