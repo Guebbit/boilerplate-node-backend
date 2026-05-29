@@ -12,7 +12,7 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
-import { productRepository } from '@repositories/products';
+import * as productRepository from '@repositories/products';
 import {
     normalizePagination,
     addTextFilter,
@@ -109,15 +109,14 @@ export const search = (
 export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
-    if (admin) return productRepository.findById(id).lean().exec();
+    if (admin) return productRepository.findById(id).lean();
     return productRepository
         .findOne({
             _id: id,
             active: true,
             deletedAt: { $exists: false }
         })
-        .lean()
-        .exec();
+        .lean();
 };
 
 /**

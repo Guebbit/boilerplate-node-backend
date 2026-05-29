@@ -10,7 +10,7 @@ import {
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, IUser } from '@models/users';
 import type { SearchUsersRequest } from '@types';
-import { userRepository } from '@repositories/users';
+import * as userRepository from '@repositories/users';
 import {
     normalizePagination,
     addTextFilter,

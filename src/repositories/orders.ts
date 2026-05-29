@@ -1,7 +1,7 @@
 import { orderModel } from '@models/orders';
 import type { IOrderDocument } from '@models/orders';
 import type { PipelineStage, QueryFilter } from 'mongoose';
-import { createBaseRepository, type IFindAllOptions } from './base';
+import { createBaseRepository } from './base';
 
 /**
  * Order Repository
@@ -21,5 +21,3 @@ export const deleteOne = (order: IOrderDocument): Promise<void> => base.deleteOn
  */
 export const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =>
     orderModel.aggregate<T>(pipeline);
-
-export const orderRepository = { aggregate, findById, findOne, count, create, save, deleteOne };

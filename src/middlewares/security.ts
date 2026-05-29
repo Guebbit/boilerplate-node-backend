@@ -1,12 +1,12 @@
 import { rateLimit } from 'express-rate-limit';
 
-/**
- * Global IP-based rate limiter: max 100 requests per 15-minute window.
- * Adds standard RateLimit headers (draft-7) and rejects excess requests with HTTP 429.
+/*
+ * Global IP-based rate limiter.
+ * Configurable via NODE_RATE_LIMIT_WINDOW_MS and NODE_RATE_LIMIT_MAX env vars.
  */
 export const rateLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes).
-    standardHeaders: 'draft-7', // draft-6: `RateLimit-*` headers; draft-7: combined `RateLimit` header
-    legacyHeaders: false // Disable the `X-RateLimit-*` headers.
+    windowMs: Number(process.env.NODE_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    limit: Number(process.env.NODE_RATE_LIMIT_MAX) || 100,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false
 });

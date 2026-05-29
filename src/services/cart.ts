@@ -10,8 +10,8 @@ import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import type { IOrderDocument } from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import { userRepository } from '@repositories/users';
-import { orderRepository } from '@repositories/orders';
+import * as userRepository from '@repositories/users';
+import * as orderRepository from '@repositories/orders';
 import {
     toUserCartDto,
     toCartItemDto,
@@ -86,13 +86,12 @@ export const cartGetWithSummary = (
         };
     });
 
-/**
- * Set quantity of target product in cart (by ID).
- */
-export const cartItemSetById = (
+/** Shared logic for adding/setting a cart item quantity. */
+const upsertCartItem = (
     userId: string,
     id: string,
-    quantity = 1
+    quantity: number,
+    mode: 'set' | 'add'
 ): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
@@ -102,10 +101,22 @@ export const cartItemSetById = (
         );
         if (cartProductIndex === -1)
             user.cart.items.push({ product: new Types.ObjectId(id), quantity });
-        else user.cart.items[cartProductIndex].quantity = quantity;
+        else
+            user.cart.items[cartProductIndex].quantity =
+                mode === 'set' ? quantity : user.cart.items[cartProductIndex].quantity + quantity;
         user.cart.updatedAt = new Date();
         return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
     });
+
+/**
+ * Set quantity of target product in cart (by ID).
+ */
+export const cartItemSetById = (
+    userId: string,
+    id: string,
+    quantity = 1
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+    upsertCartItem(userId, id, quantity, 'set');
 
 /**
  * Set quantity of target product in cart (by product document).
@@ -125,20 +136,7 @@ export const cartItemAddById = (
     id: string,
     quantity = 1
 ): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
-    requireUser(userId).then((result) => {
-        if (!('cart' in result)) return result as IResponseReject;
-        const user = result as IUserDocument;
-        const cartProductIndex = user.cart.items.findIndex((item) =>
-            matchesProductId(item.product, id)
-        );
-        if (cartProductIndex === -1)
-            user.cart.items.push({ product: new Types.ObjectId(id), quantity });
-        else
-            user.cart.items[cartProductIndex].quantity =
-                user.cart.items[cartProductIndex].quantity + quantity;
-        user.cart.updatedAt = new Date();
-        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
-    });
+    upsertCartItem(userId, id, quantity, 'add');
 
 /**
  * Add quantity of target product to cart (by product document).

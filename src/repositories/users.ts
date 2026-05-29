@@ -44,14 +44,3 @@ export const updateMany = (
     filter: QueryFilter<IUserDocument>,
     update: UpdateQuery<IUserDocument>
 ) => userModel.updateMany(filter, update);
-
-export const userRepository = {
-    findById,
-    findOne,
-    findAll,
-    count,
-    create,
-    save,
-    deleteOne,
-    updateMany
-};

@@ -13,7 +13,7 @@ import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import { zodUserSchema } from '@models/users';
 import { ETokenType } from '@models/users';
 import type { IUserDocument } from '@models/users';
-import { userRepository } from '@repositories/users';
+import * as userRepository from '@repositories/users';
 
 /**
  * Auth Service

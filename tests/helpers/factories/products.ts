@@ -14,7 +14,7 @@
  */
 
 import type { IProductDocument } from '@models/products';
-import { productRepository } from '@repositories/products';
+import * as productRepository from '@repositories/products';
 
 /**
  * Build a valid product payload.

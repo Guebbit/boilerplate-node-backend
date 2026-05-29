@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import { Types } from 'mongoose';
 import { start, connection } from '@utils/database';
-import { userRepository } from '@repositories/users';
-import { productRepository } from '@repositories/products';
-import { orderRepository } from '@repositories/orders';
+import * as userRepository from '@repositories/users';
+import * as productRepository from '@repositories/products';
+import * as orderRepository from '@repositories/orders';
 import type { IOrderDocument } from '@models/orders';
 import { logger } from '@utils/winston';
 

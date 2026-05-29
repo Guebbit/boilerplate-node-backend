@@ -16,5 +16,3 @@ export const count = (where: QueryFilter<IProductDocument> = {}): Promise<number
 export const create = (data: Partial<IProductDocument>): Promise<IProductDocument> => base.create(data);
 export const save = (product: IProductDocument): Promise<IProductDocument> => base.save(product);
 export const deleteOne = (product: IProductDocument): Promise<void> => base.deleteOne(product);
-
-export const productRepository = { findById, findOne, findAll, count, create, save, deleteOne };

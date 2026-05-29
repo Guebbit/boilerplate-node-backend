@@ -10,8 +10,8 @@ import {
     type IResponseReject,
     type IResponseSuccess
 } from '@utils/response';
-import { productRepository } from '@repositories/products';
-import { orderRepository } from '@repositories/orders';
+import * as productRepository from '@repositories/products';
+import * as orderRepository from '@repositories/orders';
 
 /**
  * Order Service
