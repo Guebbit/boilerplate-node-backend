@@ -9,6 +9,8 @@ import { postResetConfirm } from '@controllers/account/post-reset-confirm';
 import { getRefreshToken } from '@controllers/account/get-refresh-token';
 import { postLogoutEverywhere } from '@controllers/account/post-logout-everywhere';
 import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
+import { deleteAccountRequest } from '@controllers/account/delete-account-request';
+import { deleteAccountConfirm } from '@controllers/account/delete-account-confirm';
 import { invalidateCache, setCache } from '@utils/helpers-response';
 
 /** Express router for account/auth endpoints (login, signup, password reset, token refresh). */
@@ -19,6 +21,12 @@ router.use(getAuth);
 
 // GET /account — current user profile (requires auth)
 router.get('/', setCache(3600, { tags: ['account'] }), isAuth, getAccount);
+
+// DELETE /account — request account deletion (requires auth)
+router.delete('/', isAuth, deleteAccountRequest);
+
+// DELETE /account/delete-confirm — confirm account deletion with token
+router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAccountConfirm);
 
 // POST /account/login — authenticate and get tokens
 router.post('/login', postLogin);

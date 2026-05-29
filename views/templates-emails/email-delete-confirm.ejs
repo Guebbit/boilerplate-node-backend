@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+<%- include("../layouts/email-template-head.ejs"); %>
+<body>
+    <main class="centered">
+        <h1>Hello, <%= name %>!</h1>
+        <p>Your account has been permanently deleted.</p>
+        <p>We're sorry to see you go. If this was a mistake, please contact support.</p>
+    </main>
+    <%- include("../layouts/default-footer.ejs"); %>
+</body>
+</html>

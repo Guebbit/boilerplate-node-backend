@@ -54,6 +54,16 @@ export const authTokenCleanupTotal = new Counter({
 });
 
 /**
+ * Account deletion request attempts
+ */
+export const authAccountDeleteTotal = new Counter({
+    name: 'auth_account_delete_total',
+    help: 'Total account-deletion request attempts.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
  * Checkout (cart → order) attempts
  */
 export const cartCheckoutTotal = new Counter({

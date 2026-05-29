@@ -10,6 +10,8 @@ export enum AuditAction {
     AUTH_SIGNUP_FAILED = 'auth.signup.failed',
     AUTH_PASSWORD_RESET_REQUESTED = 'auth.password_reset.requested',
     AUTH_PASSWORD_RESET_COMPLETED = 'auth.password_reset.completed',
+    AUTH_ACCOUNT_DELETE_REQUESTED = 'auth.account_delete.requested',
+    AUTH_ACCOUNT_DELETE_COMPLETED = 'auth.account_delete.completed',
     AUTH_REFRESH_SUCCEEDED = 'auth.refresh.succeeded',
     AUTH_REFRESH_FAILED = 'auth.refresh.failed',
     AUTH_LOGOUT_ALL_SUCCEEDED = 'auth.logout_all.succeeded',

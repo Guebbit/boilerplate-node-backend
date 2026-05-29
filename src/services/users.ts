@@ -167,6 +167,17 @@ export const findByPasswordResetToken = (
     userRepository.findOne({ 'tokens.token': token, 'tokens.type': 'password' });
 
 /**
+ * Find a user that holds an account-deletion token.
+ * Returns the document if found, or undefined/null if no match.
+ *
+ * @param token
+ */
+export const findByAccountDeleteToken = (
+    token: string
+): Promise<IUserDocument | undefined | null> =>
+    userRepository.findOne({ 'tokens.token': token, 'tokens.type': 'delete' });
+
+/**
  * Remove the given token from the user document and persist it.
  * Used to consume a one-time password-reset token after the reset completes.
  *
@@ -202,5 +213,6 @@ export const userService = {
     removeById,
     findByEmail,
     findByPasswordResetToken,
+    findByAccountDeleteToken,
     consumeToken
 };
