@@ -42,6 +42,7 @@ export default withMermaid(
                             { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
                             { text: 'Tempo', link: '/tools/tempo' },
                             { text: 'Grafana', link: '/tools/grafana' },
+                            { text: 'Loki', link: '/tools/loki' },
                             { text: 'PostHog', link: '/tools/posthog' },
                             { text: 'Testing & Docs', link: '/tools/testing-and-docs' }
                         ]

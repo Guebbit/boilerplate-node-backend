@@ -4,7 +4,6 @@
 
 OpenTelemetry (OTel) is the **trace** layer of this boilerplate.
 A trace is the timeline of a single request: HTTP in, every Mongoose query, every Redis call, the response out.
-When something is slow or breaks, a trace tells you _what happened and where_ — much more than a log line can.
 
 We use OTel **auto-instrumentation**: there is no per-request code to write.
 
@@ -21,15 +20,15 @@ All of this is wired in `src/utils/tracing.ts`. `startTracing()` is called at th
 
 ## Configuration
 
-| Env var                       | Effect                                                                                   |
-| ----------------------------- | ---------------------------------------------------------------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the collector (Tempo). When unset, traces are simply not exported. |
-| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers.                                  |
-| `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).             |
+| Env var                       | Effect                                                                                        |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the **OTel Collector**. When unset, traces are simply not exported.    |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers.                                       |
+| `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).                  |
 
-Local docker-compose sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` automatically.
+Local docker-compose sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` automatically.
 
-## Trace flow
+## Trace flow (with OTel Collector)
 
 ```mermaid
 flowchart LR
@@ -38,24 +37,34 @@ flowchart LR
     SDK --> Express[Express handler]
     SDK --> DB[Mongoose query]
     SDK --> Redis[Redis command]
-    SDK --> Tempo[Tempo via OTLP]
+    SDK --> Collector[OTel Collector]
+    Collector --> Tempo[Tempo]
     Tempo --> Grafana[Grafana trace view]
 ```
+
+The **OTel Collector** decouples the app from backend choices. You can add exporters (Jaeger, OTLP/cloud) in the collector config without touching app code.
+
+## OTel Collector config
+
+The collector config lives at `.docker/observability/otel-collector-config.yaml`.
+
+It currently:
+- Receives OTLP/HTTP on `:4318` and OTLP/gRPC on `:4317`
+- Batches spans via the `batch` processor
+- Exports traces to Tempo via OTLP/gRPC
 
 ## How logs and traces correlate
 
 Every slim access log and every error log carries a `trace_id` field.
 Copy that ID into Grafana → Explore → Tempo to jump straight to the trace for that request.
+In Loki, filter by `{service="api"} | json | trace_id="<id>"`.
 
 ## Useful links
 
 - [OpenTelemetry concepts](https://opentelemetry.io/docs/concepts/)
-- [Traces & spans](https://opentelemetry.io/docs/concepts/signals/traces/)
 - [JavaScript SDK getting started](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)
-- [Node SDK reference](https://opentelemetry.io/docs/languages/js/instrumentation/)
+- [OTel Collector documentation](https://opentelemetry.io/docs/collector/)
 - [OTLP/HTTP protocol](https://opentelemetry.io/docs/specs/otlp/#otlphttp)
-- [Semantic conventions](https://opentelemetry.io/docs/specs/semconv/)
-- [Auto-instrumentation packages list](https://github.com/open-telemetry/opentelemetry-js-contrib/tree/main/plugins/node)
 
 ## Related pages
 

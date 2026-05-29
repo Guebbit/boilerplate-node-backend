@@ -1,108 +1,80 @@
-# Prometheus (opt-in)
+# Prometheus
 
-## Status in this repo
+## What it is
 
-Prometheus is **not** wired up by default — the boilerplate does not ship a Prometheus container.
-The app, however, exposes a `/metrics` endpoint in the standard Prometheus exposition format, so adding a scrape later is a one-line config change.
+Prometheus is the **metrics backend** of this boilerplate.
+It scrapes the app's `/metrics` endpoint every 15 s, stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
 
-If you only care about traces, ignore this page and use [Tempo + Grafana](./tempo.md).
+Grafana reads Prometheus for all metric charts and dashboards.
+
+## Where to find it
+
+- Prometheus UI: `http://localhost:9090`
+- Alertmanager UI: `http://localhost:9093`
 
 ## Health-check routes
 
-These are public, unauthenticated routes used by orchestrators (k8s, Docker healthchecks, load balancers):
+Public, unauthenticated routes for orchestrators and load balancers:
 
-| Route       | Purpose                                                                 | Success |
-| ----------- | ----------------------------------------------------------------------- | ------- |
-| `GET /healthz` | **Liveness** — always 200 while the process is up                   | `200 ok` |
-| `GET /readyz`  | **Readiness** — 200 only when both MongoDB and Redis are reachable   | `200 ready` / `503 not ready` |
-
-`/readyz` response body:
-
-```json
-{ "mongo": "up", "redis": "up" }
-```
-
-If either is down the status is `"down"` and the HTTP status is `503`.
+| Route          | Purpose                                                   | Success      |
+| -------------- | --------------------------------------------------------- | ------------ |
+| `GET /healthz` | **Liveness** — always 200 while the process is up         | `200 ok`     |
+| `GET /readyz`  | **Readiness** — 200 only when MongoDB and Redis are up    | `200 ready`  |
 
 ## What `/metrics` exposes
 
-| Metric                                                                                       | Why it is here                                                      |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `http_requests_total`                                                                        | request rate, split by method/route/status                          |
-| `http_request_duration_milliseconds`                                                         | latency histogram for p50/p95/p99                                   |
-| `http_request_errors_total`                                                                  | 4xx/5xx counts                                                      |
-| `http_requests_in_flight`                                                                    | concurrency at a glance                                             |
-| `auth_login_total` / `auth_signup_total` / `cart_checkout_total` / `order_created_total` / … | business counters that you cannot derive from traces                |
-| `process_*` and `nodejs_*`                                                                   | default `prom-client` runtime metrics (CPU, memory, event-loop, GC) |
+| Metric                                                     | Why it is here                                    |
+| ---------------------------------------------------------- | ------------------------------------------------- |
+| `http_requests_total`                                      | request rate, split by method/route/status        |
+| `http_request_duration_milliseconds`                       | latency histogram for p50/p95/p99                 |
+| `http_request_errors_total`                                | 4xx/5xx counts                                    |
+| `http_requests_in_flight`                                  | concurrency at a glance                           |
+| `auth_login_total`, `cart_checkout_total`, …               | business counters                                 |
+| `process_*` and `nodejs_*`                                 | default `prom-client` runtime metrics             |
 
-Database query metrics are intentionally **not** Prometheus counters — Mongoose spans from OTel give richer per-query data in Tempo.
+## Alert rules
+
+Baseline alert rules live in `.docker/observability/prometheus/rules/alerts.yml`:
+
+| Alert              | Condition                            | Severity |
+| ------------------ | ------------------------------------ | -------- |
+| `ApiDown`          | `/metrics` unreachable for > 1 min   | critical |
+| `HighErrorRate`    | error rate > 5 % over 5 min          | warning  |
+| `HighP95Latency`   | p95 latency > 2 s over 5 min         | warning  |
+| `HighInFlightRequests` | > 100 concurrent requests for 2 min | warning |
+| `HighHeapUsage`    | heap > 90 % for 5 min                | warning  |
+
+## Alertmanager
+
+Alertmanager config lives at `.docker/observability/alertmanager/alertmanager.yml`.
+In local dev it uses a `null` receiver (logs only). Replace it with Slack, PagerDuty, or email for production.
 
 ## Admin observability endpoints
 
-Three additional endpoints sit behind the `/admin` router and require a valid **admin** JWT:
+These sit behind the `/admin` router and require a valid **admin** JWT:
 
-| Route                       | Returns                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------ |
-| `GET /admin/health`         | Full health snapshot: DB status, memory, CPU, integration flags, uptime                    |
-| `GET /admin/metrics/summary`| KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters  |
-| `GET /admin/audit`          | Recent audit events from the in-memory ring buffer (max 200); filterable by query params   |
+| Route                        | Returns                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `GET /admin/health`          | Full health snapshot: DB status, memory, CPU, integration flags, uptime           |
+| `GET /admin/metrics/summary` | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
+| `GET /admin/audit`           | Recent audit events from the in-memory ring buffer (max 200)                      |
 
-`/admin/audit` accepts optional query params: `actor`, `action`, `outcome` (`success`/`failure`), `since` (ISO-8601), `limit` (default 50, max 200).
+These endpoints return **curated, domain-shaped summaries** — they are the data layer for a custom frontend, not raw Prometheus query results.
 
 ## SSE metrics stream
 
-For a browser/live-dashboard demo, the boilerplate also exposes:
-
 - `GET /observability/events` (`text/event-stream`, public, no auth)
 
-It emits these SSE event types:
+Emits `metrics.snapshot` immediately on connect, then `metrics.updated` every 5 s and a `heartbeat` every 15 s.
 
-| Event              | When                      |
-| ------------------ | ------------------------- |
-| `metrics.snapshot` | immediately on connect    |
-| `metrics.updated`  | every 5 s                 |
-| `heartbeat`        | every 15 s (keep-alive)   |
-
-Every event carries the same JSON payload:
-
-```json
-{
-    "timestamp": "2024-01-01T00:00:00.000Z",
-    "uptimeSeconds": 3600,
-    "memory": {
-        "rss": 62914560,
-        "heapUsed": 28311552,
-        "heapTotal": 41943040,
-        "external": 1234567
-    },
-    "http": {
-        "totalRequests": 142,
-        "totalErrors": 3
-    },
-    "realtime": {
-        "websocketConnections": 2,
-        "sseClients": 1
-    }
-}
-```
-
-## Add a Prometheus scrape later
-
-```yaml
-scrape_configs:
-    - job_name: api
-      metrics_path: /metrics
-      static_configs:
-          - targets: ['app:3000']
-```
+Use this for live widgets in a custom UI. For historical charts, query your backend (which can read Prometheus), not process-local memory.
 
 ## Useful links
 
 - [Prometheus docs](https://prometheus.io/docs/introduction/overview/)
-- [Prometheus exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/)
+- [Alertmanager docs](https://prometheus.io/docs/alerting/latest/alertmanager/)
 - [prom-client (Node.js client)](https://github.com/siimon/prom-client#readme)
-- [Metric & label naming](https://prometheus.io/docs/practices/naming/)
-- [Histogram vs Summary](https://prometheus.io/docs/practices/histograms/)
+- [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/)
 
 ## Related pages
 

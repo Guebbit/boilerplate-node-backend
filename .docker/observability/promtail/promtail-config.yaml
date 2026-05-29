@@ -1,0 +1,46 @@
+# Promtail config — ships all Docker container logs to Loki.
+# Reads from the Docker journal/log files and adds container metadata as labels.
+
+server:
+    http_listen_port: 9080
+    grpc_listen_port: 0
+
+positions:
+    filename: /tmp/positions.yaml
+
+clients:
+    - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+    # Read logs from all Docker containers via /var/lib/docker/containers.
+    - job_name: docker-containers
+      static_configs:
+          - targets: ['localhost']
+            labels:
+                job: docker
+                __path__: /var/lib/docker/containers/*/*-json.log
+
+      pipeline_stages:
+          # Parse Docker's JSON log wrapper (time, stream, log fields).
+          - json:
+                expressions:
+                    log: log
+                    stream: stream
+                    time: time
+
+          # Promote the inner log field to the log line.
+          - output:
+                source: log
+
+          # Attempt to parse JSON log lines (Winston structured output).
+          - json:
+                expressions:
+                    level: level
+                    service: service
+                    trace_id: trace_id
+
+          # Promote parsed fields to Loki labels for fast filtering.
+          - labels:
+                stream:
+                level:
+                service:

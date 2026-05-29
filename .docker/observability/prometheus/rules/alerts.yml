@@ -1,0 +1,68 @@
+# Prometheus alert rules — baseline set for this Node.js API.
+#
+# Covers four golden signals: latency, error rate, saturation, availability.
+
+groups:
+    - name: api.rules
+      rules:
+          # ── Availability ────────────────────────────────────────────────────
+          - alert: ApiDown
+            expr: up{job="api"} == 0
+            for: 1m
+            labels:
+                severity: critical
+            annotations:
+                summary: "API instance is down"
+                description: "Prometheus cannot reach the /metrics endpoint of the API for > 1 min."
+
+          # ── Error rate ──────────────────────────────────────────────────────
+          - alert: HighErrorRate
+            expr: |
+                (
+                    rate(http_request_errors_total[5m])
+                    /
+                    rate(http_requests_total[5m])
+                ) > 0.05
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: "High HTTP error rate (> 5 %)"
+                description: "More than 5 % of requests are returning 4xx/5xx over the last 5 minutes."
+
+          # ── Latency (p95) ───────────────────────────────────────────────────
+          - alert: HighP95Latency
+            expr: |
+                histogram_quantile(
+                    0.95,
+                    rate(http_request_duration_milliseconds_bucket[5m])
+                ) > 2000
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: "p95 latency > 2 s"
+                description: "The 95th-percentile request duration has exceeded 2 000 ms for 5 minutes."
+
+          # ── Saturation (in-flight) ──────────────────────────────────────────
+          - alert: HighInFlightRequests
+            expr: http_requests_in_flight > 100
+            for: 2m
+            labels:
+                severity: warning
+            annotations:
+                summary: "Too many in-flight requests (> 100)"
+                description: "More than 100 requests are being processed simultaneously for 2 minutes."
+
+          # ── Memory ──────────────────────────────────────────────────────────
+          - alert: HighHeapUsage
+            expr: |
+                nodejs_heap_size_used_bytes
+                /
+                nodejs_heap_size_total_bytes > 0.90
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: "Node.js heap usage above 90 %"
+                description: "The heap is more than 90 % full; OOM risk if left unaddressed."

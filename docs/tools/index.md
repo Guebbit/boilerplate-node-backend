@@ -20,7 +20,8 @@ flowchart TD
     E --> E3[OpenTelemetry]
     E --> E4[Tempo]
     E --> E5[Grafana]
-    E --> E6[PostHog]
+    E --> E6[Loki]
+    E --> E7[PostHog]
 
     G --> G1[Email & PDF]
     G --> G2[WebSockets]
@@ -37,7 +38,7 @@ flowchart TD
 | Understand transactional email and PDF generation                | [Email & PDF Rendering](./email-and-rendering.md)                                                                                                                  |
 | Understand message queue patterns                                | [RabbitMQ](./rabbitmq.md)                                                                                                                                          |
 | Understand real-time messaging scaffolding                       | [WebSockets](./websockets.md)                                                                                                                                      |
-| Understand logs, metrics, traces, dashboards, and analytics      | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Tempo](./tempo.md), [Grafana](./grafana.md), [PostHog](./posthog.md) |
+| Understand logs, metrics, traces, dashboards, and analytics      | [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Tempo](./tempo.md), [Grafana](./grafana.md), [Loki](./loki.md), [PostHog](./posthog.md) |
 | Understand tests and docs tooling                                | [Testing & Docs](./testing-and-docs.md)                                                                                                                            |
 | Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                                                                                                                                     |
 

@@ -31,8 +31,8 @@ services:
             NODE_REDIS_URL: 'redis://redis:6379'
             NODE_RABBITMQ_URL: '******rabbitmq:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
-            # Observability: send traces to Tempo over OTLP/HTTP.
-            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://tempo:4318'
+            # Observability: send traces to OTel Collector, which fans out to backends.
+            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
 
         # Persist data.
@@ -65,7 +65,7 @@ services:
             - database
             - redis
             - rabbitmq
-            - tempo
+            - otel-collector
 
         # Health check to verify the container is ready to accept traffic
         # Inspect with "podman ps" or "podman inspect <container name>"
@@ -128,20 +128,82 @@ services:
         volumes:
             - rabbitmq_volume:/var/lib/rabbitmq
 
-    # Tempo: stores OpenTelemetry traces emitted by the app. Receives OTLP/HTTP on :4318.
+    # Tempo: stores OpenTelemetry traces. Receives OTLP/gRPC from the OTel Collector.
     tempo:
-        image: grafana/tempo:latest
+        image: grafana/tempo:2.6.1
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
         volumes:
             - ./.docker/observability/tempo.yaml:/etc/tempo/tempo.yaml:Z
             - tempo_volume:/var/tempo
+        # Port 4318 is no longer exposed to the host — the collector talks to Tempo internally.
+
+    # OTel Collector: single ingestion point for all telemetry signals from the app.
+    # Receives OTLP/HTTP on :4318 and OTLP/gRPC on :4317, then fans out to Tempo.
+    otel-collector:
+        image: otel/opentelemetry-collector-contrib:0.114.0
+        restart: unless-stopped
+        command: ['--config=/etc/otel-collector-config.yaml']
+        volumes:
+            - ./.docker/observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:Z
         ports:
             - '4318:4318' # OTLP/HTTP (used by the app)
+            - '4317:4317' # OTLP/gRPC (optional direct use)
+        depends_on:
+            - tempo
 
-    # Grafana: single UI to read Tempo traces. Default datasource is auto-provisioned.
+    # Prometheus: scrapes /metrics from the app and stores numeric time-series.
+    prometheus:
+        image: prom/prometheus:v2.55.1
+        restart: unless-stopped
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.retention.time=7d'
+        volumes:
+            - ./.docker/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:Z
+            - ./.docker/observability/prometheus/rules:/etc/prometheus/rules:Z
+            - prometheus_volume:/prometheus
+        ports:
+            - '9090:9090'
+        depends_on:
+            - alertmanager
+
+    # Alertmanager: receives firing alerts from Prometheus and routes notifications.
+    alertmanager:
+        image: prom/alertmanager:v0.27.0
+        restart: unless-stopped
+        command: ['--config.file=/etc/alertmanager/alertmanager.yml']
+        volumes:
+            - ./.docker/observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:Z
+        ports:
+            - '9093:9093'
+
+    # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
+    loki:
+        image: grafana/loki:3.3.2
+        restart: unless-stopped
+        command: ['-config.file=/etc/loki/loki-config.yaml']
+        volumes:
+            - ./.docker/observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:Z
+            - loki_volume:/var/loki
+        ports:
+            - '3100:3100'
+
+    # Promtail: tails Docker container log files and ships them to Loki.
+    promtail:
+        image: grafana/promtail:3.3.2
+        restart: unless-stopped
+        command: ['-config.file=/etc/promtail/promtail-config.yaml']
+        volumes:
+            - ./.docker/observability/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:Z
+            # Read Docker JSON log files directly from the host.
+            - /var/lib/docker/containers:/var/lib/docker/containers:ro
+        depends_on:
+            - loki
+
+    # Grafana: single UI to explore traces (Tempo), metrics (Prometheus), and logs (Loki).
     grafana:
-        image: grafana/grafana:latest
+        image: grafana/grafana:11.4.0
         restart: unless-stopped
         environment:
             GF_AUTH_ANONYMOUS_ENABLED: 'true'
@@ -154,12 +216,16 @@ services:
             - '3001:3000'
         depends_on:
             - tempo
+            - prometheus
+            - loki
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:
     boilerplate_mongodb_volume:
     tempo_volume:
     rabbitmq_volume:
+    prometheus_volume:
+    loki_volume:
 
 # Commands:
 # podman ps: list running containers (-a for all)
