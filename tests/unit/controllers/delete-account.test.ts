@@ -43,9 +43,7 @@ jest.mock('@utils/audit', () => ({
     __esModule: true,
     emitAuditEvent: jest.fn(),
     AuditAction: {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
         AUTH_ACCOUNT_DELETE_REQUESTED: 'auth.account_delete.requested',
-        // eslint-disable-next-line @typescript-eslint/naming-convention
         AUTH_ACCOUNT_DELETE_COMPLETED: 'auth.account_delete.completed'
     },
     buildAuditEvent: jest.fn().mockReturnValue({})
@@ -56,7 +54,6 @@ jest.mock('@utils/analytics', () => ({
     __esModule: true,
     emitAnalyticsEvent: jest.fn(),
     AnalyticsEvent: {
-        // eslint-disable-next-line @typescript-eslint/naming-convention
         ACCOUNT_DELETED: 'account_deleted'
     }
 }));
@@ -77,17 +74,16 @@ jest.mock('@middlewares/auth-jwt', () => ({
 const mockFindByEmail = userService.findByEmail as jest.MockedFunction<
     typeof userService.findByEmail
 >;
-const mockFindByAccountDeleteToken =
-    userService.findByAccountDeleteToken as jest.MockedFunction<
-        typeof userService.findByAccountDeleteToken
-    >;
+const mockFindByAccountDeleteToken = userService.findByAccountDeleteToken as jest.MockedFunction<
+    typeof userService.findByAccountDeleteToken
+>;
 const mockRemove = userService.remove as jest.MockedFunction<typeof userService.remove>;
 const mockTokenAdd = authService.tokenAdd as jest.MockedFunction<typeof authService.tokenAdd>;
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 const mockSuccessResponse = successResponse as jest.MockedFunction<typeof successResponse>;
 const mockRejectResponse = rejectResponse as jest.MockedFunction<typeof rejectResponse>;
 const mockEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAuditEvent>;
-const mockIncCounter = (authAccountDeleteTotal.inc as jest.MockedFunction<() => void>);
+const mockIncCounter = authAccountDeleteTotal.inc as jest.MockedFunction<() => void>;
 
 const makeResponse = () => ({ locals: {} }) as Parameters<typeof deleteAccountRequest>[1];
 
@@ -98,10 +94,15 @@ describe('DELETE /account — deleteAccountRequest', () => {
         const fakeUser = { email: 'user@example.com', username: 'testuser' };
         mockFindByEmail.mockResolvedValue(fakeUser as never);
         mockTokenAdd.mockResolvedValue('abc123');
-        mockEnqueueEmail.mockResolvedValue(undefined);
+        mockEnqueueEmail.mockResolvedValue();
 
         const req = {
-            authContext: { id: 'uid1', email: 'user@example.com', username: 'testuser', admin: false }
+            authContext: {
+                id: 'uid1',
+                email: 'user@example.com',
+                username: 'testuser',
+                admin: false
+            }
         };
         const res = makeResponse();
 
@@ -116,7 +117,8 @@ describe('DELETE /account — deleteAccountRequest', () => {
     });
 
     it('returns 200 silently when user is not found (enumeration prevention)', async () => {
-        mockFindByEmail.mockResolvedValue(null);
+        // eslint-disable-next-line unicorn/no-useless-undefined
+        mockFindByEmail.mockResolvedValue(undefined);
 
         const req = {
             authContext: { id: 'uid1', email: 'ghost@example.com', username: 'ghost', admin: false }
@@ -160,8 +162,13 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
     it('deletes account and returns 200 for valid token', async () => {
         mockFindByAccountDeleteToken.mockResolvedValue(fakeUser as never);
-        mockRemove.mockResolvedValue({ success: true, status: 200, message: '', data: undefined } as never);
-        mockEnqueueEmail.mockResolvedValue(undefined);
+        mockRemove.mockResolvedValue({
+            success: true,
+            status: 200,
+            message: '',
+            data: undefined
+        } as never);
+        mockEnqueueEmail.mockResolvedValue();
 
         const req = { body: { token: 'valid-token' } };
         const res = makeResponse();
@@ -176,7 +183,8 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
     });
 
     it('returns 422 when token is not found', async () => {
-        mockFindByAccountDeleteToken.mockResolvedValue(null);
+        // eslint-disable-next-line unicorn/no-useless-undefined
+        mockFindByAccountDeleteToken.mockResolvedValue(undefined);
 
         const req = { body: { token: 'bad-token' } };
         const res = makeResponse();

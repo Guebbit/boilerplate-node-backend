@@ -8,12 +8,12 @@ import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { authPasswordResetTotal } from '@utils/domain-metrics';
 
-/*
+/**
  * POST /account/reset-request
  * Indistinguishable response for valid and invalid emails — prevents user enumeration.
  */
 
-/*
+/**
  * Resolve reset token data only when both email and user exist.
  * Returns undefined silently to keep the public response identical.
  * @param email - address from request body
@@ -30,7 +30,7 @@ const lookupResetData = (email?: string) => {
     });
 };
 
-/*
+/**
  * Request handler — always resolves with 200 regardless of email validity.
  * Fires password-reset email only when a valid user + token pair was found.
  * @param request - Express request with PasswordResetRequest body

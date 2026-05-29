@@ -12,7 +12,9 @@ import {
     orderCreatedTotal
 } from '@utils/domain-metrics';
 
-/* Sum values for a specific label across a prom-client metric result. */
+/**
+ * Sum values for a specific label across a prom-client metric result.
+ */
 const sumByLabel = (
     values: Array<{ value: number; labels: Record<string, string | number | undefined> }>,
     labelKey: string,
@@ -20,7 +22,7 @@ const sumByLabel = (
 ): number =>
     values.filter((v) => v.labels[labelKey] === labelValue).reduce((sum, v) => sum + v.value, 0);
 
-/*
+/**
  * GET /admin/metrics
  * Structured JSON summary of key operational metrics.
  */

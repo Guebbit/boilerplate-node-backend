@@ -8,7 +8,7 @@ import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
 
-/*
+/**
  * DELETE /account/delete-confirm
  * Validate the one-time deletion token and permanently remove the account.
  */
@@ -28,9 +28,7 @@ export const deleteAccountConfirm = (
                 return;
             }
 
-            const tokenEntry = user.tokens.find(
-                (tk) => tk.token === token && tk.type === 'delete'
-            );
+            const tokenEntry = user.tokens.find((tk) => tk.token === token && tk.type === 'delete');
             if (!tokenEntry || (tokenEntry.expiration && tokenEntry.expiration < new Date())) {
                 rejectResponse(response, 422, 'deleteAccountConfirm - expired token', [
                     t('delete.token-not-found')
@@ -38,7 +36,7 @@ export const deleteAccountConfirm = (
                 return;
             }
 
-            const { email, username } = user;
+            const { email, username, _id, admin } = user;
 
             /* Hard-delete the account */
             return userService.remove(user, true).then(() => {
@@ -60,14 +58,14 @@ export const deleteAccountConfirm = (
                 emitAuditEvent(
                     buildAuditEvent(request, {
                         action: AuditAction.AUTH_ACCOUNT_DELETE_COMPLETED,
-                        actor_user_id: String(user._id),
-                        actor_role: user.admin ? 'admin' : 'user',
+                        actor_user_id: String(_id),
+                        actor_role: admin ? 'admin' : 'user',
                         outcome: 'success'
                     })
                 );
 
                 emitAnalyticsEvent({
-                    distinctId: String(user._id),
+                    distinctId: String(_id),
                     event: AnalyticsEvent.ACCOUNT_DELETED
                 });
 

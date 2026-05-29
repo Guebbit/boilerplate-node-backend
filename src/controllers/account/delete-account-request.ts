@@ -7,12 +7,12 @@ import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 import { authAccountDeleteTotal } from '@utils/domain-metrics';
 
-/*
+/**
  * DELETE /account
  * Authenticated user requests account deletion — sends a confirmation email with a one-time token.
  */
 
-/*
+/**
  * Request handler — resolves with 200 after sending the confirmation email.
  * @param request - Express request with populated authContext (isAuth required)
  * @param response - Express response
