@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import type { Product, CartItem } from '@api/index';
+import type { Product, CartItem } from '@types';
 import type { ICartItem, IUserDocument } from '@models/users';
 
 /*
