@@ -15,6 +15,7 @@ Single package. REST API. Express. MongoDB. Mongoose.
 - Prefer promise chaining when readable.
 - Avoid big `async` / `await` + `try/catch` towers.
 - Comments short. ADHD friendly. Explain function/constant/block fast.
+- **All functions and important code blocks must have a JSDoc comment** using `/* * ... */` multi-line format (not `/** */`). Include `@param` and `@returns` where useful. One line per tag.
 - Do not dump long essays in code comments. Put detail in docs.
 
 ## Docs brain

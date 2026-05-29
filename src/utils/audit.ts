@@ -1,7 +1,7 @@
 import { auditLogger } from './winston';
 import { getActiveSpanContext } from './tracer';
 
-// Action constants — domain.resource.verb dot-notation.
+/* Action constants — domain.resource.verb dot-notation. */
 export enum AuditAction {
     // Auth
     AUTH_LOGIN_SUCCEEDED = 'auth.login.succeeded',
@@ -45,7 +45,7 @@ export enum AuditAction {
 
 export type AuditActionValue = AuditAction;
 
-// See docs/tools/winston.md for field descriptions and examples.
+/* See docs/tools/winston.md for field descriptions and examples. */
 export interface IAuditEvent {
     actor_user_id: string;
     actor_role: 'admin' | 'user' | 'anonymous';
@@ -60,7 +60,9 @@ export interface IAuditEvent {
     metadata?: Record<string, unknown>;
 }
 
-/** Stored audit event — IAuditEvent enriched with timestamp and log level. */
+/*
+ * Stored audit event — IAuditEvent enriched with timestamp and log level.
+ */
 export interface IAuditBufferEntry extends IAuditEvent {
     timestamp: string;
     level: 'info' | 'warn';
@@ -70,7 +72,11 @@ export interface IAuditBufferEntry extends IAuditEvent {
 const AUDIT_BUFFER_MAX = 200;
 const auditBuffer: IAuditBufferEntry[] = [];
 
-/** Emit a structured audit event. Failures use 'warn'; successes use 'info'. */
+/*
+ * Emit a structured audit event. Failures use 'warn'; successes use 'info'.
+ * Also appends to the in-memory ring buffer for admin inspection.
+ * @param event - fully populated audit event
+ */
 export const emitAuditEvent = (event: IAuditEvent): void => {
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
     auditLogger.log(level, event.action, event);
@@ -80,10 +86,17 @@ export const emitAuditEvent = (event: IAuditEvent): void => {
     auditBuffer.push(entry);
 };
 
-/** Return a snapshot of the ring buffer (most-recent-first). */
+/*
+ * Return a snapshot of the ring buffer, most-recent-first.
+ * @returns readonly array of buffered entries
+ */
 export const getAuditBuffer = (): Readonly<IAuditBufferEntry[]> => [...auditBuffer].toReversed();
 
-/** Extract common request fields for audit events. */
+/*
+ * Extract common request fields (ip, user-agent, request-id, trace-id) for audit events.
+ * @param request - minimal request shape
+ * @returns partial IAuditEvent with context fields
+ */
 export const extractRequestContext = (request: {
     ip?: string;
     headers?: Record<string, string | string[] | undefined>;
@@ -98,7 +111,12 @@ export const extractRequestContext = (request: {
     };
 };
 
-/** Resolve actor role from request auth context. */
+/*
+ * Resolve actor role from request auth context.
+ * Returns 'admin', 'user', or 'anonymous'.
+ * @param request - request with optional authContext
+ * @returns actor role string
+ */
 export const resolveActorRole = (request: {
     authContext?: { admin?: boolean } | null;
 }): IAuditEvent['actor_role'] => {
@@ -107,7 +125,13 @@ export const resolveActorRole = (request: {
     return 'anonymous';
 };
 
-/** Build a complete audit event from request context + action-specific fields. */
+/*
+ * Build a complete audit event from request context + action-specific fields.
+ * Caller-provided actor_user_id / actor_role override the derived defaults.
+ * @param request - Express-like request with auth context
+ * @param fields - action, outcome, and optional overrides
+ * @returns fully populated IAuditEvent
+ */
 export const buildAuditEvent = (
     request: {
         ip?: string;

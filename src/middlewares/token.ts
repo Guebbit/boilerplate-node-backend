@@ -3,10 +3,9 @@ import { userModel as Users, ETokenType } from '@models/users';
 import type { IToken } from '@models/users';
 import type { CastError } from 'mongoose';
 
-/**
- * Token Service
- * Single responsibility: JWT token creation and verification.
- * Decoupled from cookie/transport behavior.
+/*
+ * Token Service — JWT creation and verification only.
+ * Cookie/transport handling belongs to the calling layer.
  */
 
 export interface ITokenData {
@@ -27,8 +26,11 @@ const TOKEN_EXPIRY_ENV: Record<ERefreshTokenExpiryTime | 'default', string> = {
     default: 'NODE_TOKEN_ACCESS_TIME'
 };
 
-/**
+/*
  * Get expiry time in seconds for the given token duration tier.
+ * Falls back to NODE_TOKEN_ACCESS_TIME when no tier is given.
+ * @param remember - optional tier (short/medium/long)
+ * @returns seconds as integer, 0 if env var is unset
  */
 export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
     const envKey = TOKEN_EXPIRY_ENV[remember ?? 'default'];
@@ -36,14 +38,18 @@ export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
     return value ? Number.parseInt(value, 10) : 0;
 };
 
-/**
- * Convert token expiry from seconds to milliseconds.
+/*
+ * Millisecond wrapper around getExpiryTime.
+ * @param remember - optional tier
+ * @returns expiry in ms
  */
 export const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
 
-/**
- * Verify an access token (stateless).
+/*
+ * Verify an access token (stateless JWT check only).
+ * @param token - signed JWT string
+ * @returns decoded payload
  */
 export const verifyAccessToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
@@ -53,8 +59,11 @@ export const verifyAccessToken = (token: string): Promise<ITokenData> =>
         });
     });
 
-/**
- * Verify a refresh token (stateful — checks DB revocation).
+/*
+ * Verify a refresh token — JWT check + DB revocation lookup.
+ * Rejects with 'Forbidden' if the token is not in the user document.
+ * @param token - refresh JWT string
+ * @returns decoded payload
  */
 export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
@@ -77,8 +86,11 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
         });
     });
 
-/**
- * Create a refresh token and persist it on the user document.
+/*
+ * Create a refresh token, sign it, and persist it on the user document.
+ * @param id - user ID
+ * @param remember - optional expiry tier
+ * @returns updated user document
  */
 export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTime) =>
     Users.findById(id)
@@ -96,8 +108,10 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
             return user.tokenAdd(ETokenType.REFRESH, getExpiryTime(remember) * 1000, token);
         });
 
-/**
- * Create an access token from a valid refresh token.
+/*
+ * Exchange a valid refresh token for a short-lived access token.
+ * @param refreshToken - previously issued refresh JWT
+ * @returns signed access JWT string
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id }) =>
