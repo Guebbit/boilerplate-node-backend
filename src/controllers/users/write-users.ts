@@ -78,12 +78,14 @@ export const writeUsers = (
                 imageUrl
             })
             .then((user) => {
-                emitAuditEvent(buildAuditEvent(request, {
-                    action: AuditAction.ADMIN_USER_CREATED,
-                    outcome: 'success',
-                    target_type: 'user',
-                    target_id: String(user._id)
-                }));
+                emitAuditEvent(
+                    buildAuditEvent(request, {
+                        action: AuditAction.ADMIN_USER_CREATED,
+                        outcome: 'success',
+                        target_type: 'user',
+                        target_id: String(user._id)
+                    })
+                );
                 successResponse(response, user, 201);
             })
             .catch((error: Error) =>
@@ -103,12 +105,14 @@ export const writeUsers = (
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.message, result.errors);
                 });
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.ADMIN_USER_UPDATED,
-                outcome: 'success',
-                target_type: 'user',
-                target_id: id
-            }));
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.ADMIN_USER_UPDATED,
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: id
+                })
+            );
             successResponse(response, result.data);
         });
 };

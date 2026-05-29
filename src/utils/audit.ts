@@ -140,7 +140,12 @@ export const buildAuditEvent = (
         authContext?: { id?: string; admin?: boolean } | null;
     },
     fields: Pick<IAuditEvent, 'action' | 'outcome'> &
-        Partial<Pick<IAuditEvent, 'actor_user_id' | 'actor_role' | 'target_type' | 'target_id' | 'metadata'>>
+        Partial<
+            Pick<
+                IAuditEvent,
+                'actor_user_id' | 'actor_role' | 'target_type' | 'target_id' | 'metadata'
+            >
+        >
 ): IAuditEvent => ({
     actor_user_id: fields.actor_user_id ?? request.authContext?.id ?? 'unknown',
     actor_role: fields.actor_role ?? resolveActorRole(request),

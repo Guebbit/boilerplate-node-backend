@@ -56,7 +56,12 @@ export const search = (
 
     if (filters.status) where.status = toFeedbackStatus(filters.status);
     addRegexFilter(where as Record<string, unknown>, 'email', filters.email);
-    addTextFilter(where as Record<string, unknown>, filters.text, ['name', 'email', 'subject', 'message']);
+    addTextFilter(where as Record<string, unknown>, filters.text, [
+        'name',
+        'email',
+        'subject',
+        'message'
+    ]);
 
     return paginatedSearch(feedbackRequestRepository, where, pagination);
 };
@@ -70,9 +75,7 @@ export const updateStatus = (
     if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
     if (nextStatus === EFeedbackStatus.RESOLVED && !feedback.respondedAt)
         feedback.respondedAt = new Date();
-    return feedbackRequestRepository.save(feedback).then((saved) =>
-        generateSuccess(saved)
-    );
+    return feedbackRequestRepository.save(feedback).then((saved) => generateSuccess(saved));
 };
 
 export const updateStatusById = (

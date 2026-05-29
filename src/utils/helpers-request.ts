@@ -107,9 +107,7 @@ export const extractCustomId = (
     const body = request.body as Record<string, unknown>;
     const fromBody = fields.body ? body[fields.body] : undefined;
     return extractId(
-        Array.isArray(fromParameters)
-            ? fromParameters[0]
-            : (fromParameters as string | undefined),
+        Array.isArray(fromParameters) ? fromParameters[0] : (fromParameters as string | undefined),
         Array.isArray(fromBody) ? String(fromBody[0]) : (fromBody as string | undefined)
     );
 };

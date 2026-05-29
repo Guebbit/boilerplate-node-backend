@@ -84,7 +84,10 @@ const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1 };
 export const paginatedSearch = <TDocument, TWhere = unknown>(
     repository: {
         count: (where: TWhere) => Promise<number>;
-        findAll: (where: TWhere, options: { sort: Record<string, 1 | -1>; skip: number; limit: number }) => Promise<TDocument[]> | PromiseLike<TDocument[]>;
+        findAll: (
+            where: TWhere,
+            options: { sort: Record<string, 1 | -1>; skip: number; limit: number }
+        ) => Promise<TDocument[]> | PromiseLike<TDocument[]>;
     },
     where: TWhere,
     pagination: IPaginationResult,

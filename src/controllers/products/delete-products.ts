@@ -18,28 +18,32 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
 
     const hardDelete = extractHardDelete(request);
 
-    return productService
-        // true = hard-delete; false (default) = soft-delete (sets deletedAt)
-        .removeById(id, hardDelete)
-        .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.message, result.errors);
-                return;
-            }
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.ADMIN_PRODUCT_DELETED,
-                outcome: 'success',
-                target_type: 'product',
-                target_id: id,
-                metadata: { hardDelete }
-            }));
-            successResponse(response, undefined, 200, result.message);
-        })
-        .catch((error: CastError) => {
-            if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'deleteProduct - not found', [
-                    t('ecommerce.product-not-found')
-                ]);
-            rejectResponse(response, 500, 'deleteProduct', [error.message]);
-        });
+    return (
+        productService
+            // true = hard-delete; false (default) = soft-delete (sets deletedAt)
+            .removeById(id, hardDelete)
+            .then((result) => {
+                if (!result.success) {
+                    rejectResponse(response, result.status, result.message, result.errors);
+                    return;
+                }
+                emitAuditEvent(
+                    buildAuditEvent(request, {
+                        action: AuditAction.ADMIN_PRODUCT_DELETED,
+                        outcome: 'success',
+                        target_type: 'product',
+                        target_id: id,
+                        metadata: { hardDelete }
+                    })
+                );
+                successResponse(response, undefined, 200, result.message);
+            })
+            .catch((error: CastError) => {
+                if (error.message === '404' || error.kind === 'ObjectId')
+                    return rejectResponse(response, 404, 'deleteProduct - not found', [
+                        t('ecommerce.product-not-found')
+                    ]);
+                rejectResponse(response, 500, 'deleteProduct', [error.message]);
+            })
+    );
 };

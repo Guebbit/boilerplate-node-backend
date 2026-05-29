@@ -74,12 +74,14 @@ export const postResetConfirm = (
                         }
                     );
 
-                    emitAuditEvent(buildAuditEvent(request, {
-                        action: AuditAction.AUTH_PASSWORD_RESET_COMPLETED,
-                        actor_user_id: String(user._id),
-                        actor_role: user.admin ? 'admin' : 'user',
-                        outcome: 'success'
-                    }));
+                    emitAuditEvent(
+                        buildAuditEvent(request, {
+                            action: AuditAction.AUTH_PASSWORD_RESET_COMPLETED,
+                            actor_user_id: String(user._id),
+                            actor_role: user.admin ? 'admin' : 'user',
+                            outcome: 'success'
+                        })
+                    );
 
                     destroyRefreshCookie(response);
                     destroyLoggedCookie(response);

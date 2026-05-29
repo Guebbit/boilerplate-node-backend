@@ -84,12 +84,14 @@ export const writeProducts = (
                 tags
             })
             .then((product) => {
-                emitAuditEvent(buildAuditEvent(request, {
-                    action: AuditAction.ADMIN_PRODUCT_CREATED,
-                    outcome: 'success',
-                    target_type: 'product',
-                    target_id: String(product._id)
-                }));
+                emitAuditEvent(
+                    buildAuditEvent(request, {
+                        action: AuditAction.ADMIN_PRODUCT_CREATED,
+                        outcome: 'success',
+                        target_type: 'product',
+                        target_id: String(product._id)
+                    })
+                );
                 successResponse(response, product, 201);
             })
             .catch((error: Error) =>
@@ -111,18 +113,22 @@ export const writeProducts = (
             tags
         })
         .then((product) => {
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.ADMIN_PRODUCT_UPDATED,
-                outcome: 'success',
-                target_type: 'product',
-                target_id: id
-            }));
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.ADMIN_PRODUCT_UPDATED,
+                    outcome: 'success',
+                    target_type: 'product',
+                    target_id: id
+                })
+            );
             successResponse(response, product);
         })
         .catch((error: Error) =>
             deleteUpload().then(() => {
                 if (error.message === '404')
-                    rejectResponse(response, 404, 'updateProduct - not found', [t('ecommerce.product-not-found')]);
+                    rejectResponse(response, 404, 'updateProduct - not found', [
+                        t('ecommerce.product-not-found')
+                    ]);
                 else rejectResponse(response, 500, 'updateProduct', [error.message]);
             })
         );

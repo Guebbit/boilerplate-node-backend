@@ -24,7 +24,8 @@ export interface IWebSocketCloseCallback {
  * Aggregate interface (backward compat) composed from focused interfaces.
  */
 export interface IWebSocketServerCallbacks
-    extends IWebSocketConnectionCallback,
+    extends
+        IWebSocketConnectionCallback,
         IWebSocketMessageCallback,
         IWebSocketErrorCallback,
         IWebSocketCloseCallback {

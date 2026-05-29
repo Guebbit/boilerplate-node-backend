@@ -52,10 +52,10 @@ module.exports = {
 
 ### Commands
 
-| Script | What it does |
-|---|---|
-| `npm run db:migrate:up` | Apply all pending migrations |
-| `npm run db:migrate:down` | Roll back the last applied migration |
+| Script                      | What it does                            |
+| --------------------------- | --------------------------------------- |
+| `npm run db:migrate:up`     | Apply all pending migrations            |
+| `npm run db:migrate:down`   | Roll back the last applied migration    |
 | `npm run db:migrate:status` | Show which migrations have been applied |
 
 ### Writing a migration
@@ -84,10 +84,10 @@ The seed runner lives in `db/seeds/index.ts` and uses the Mongoose repository la
 
 ### Commands
 
-| Script | What it does |
-|---|---|
-| `npm run db:seed` | Insert seed documents (safe to run multiple times if IDs are fixed) |
-| `npm run db:seed:reset` | Drop the database first, then seed |
+| Script                  | What it does                                                        |
+| ----------------------- | ------------------------------------------------------------------- |
+| `npm run db:seed`       | Insert seed documents (safe to run multiple times if IDs are fixed) |
+| `npm run db:seed:reset` | Drop the database first, then seed                                  |
 
 ### What gets seeded
 

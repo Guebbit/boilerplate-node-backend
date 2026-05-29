@@ -1,5 +1,10 @@
 import type { NextFunction, Request, Response } from 'express';
-import { getCacheValue, invalidateCacheTags, setCacheValue, broadcastCacheInvalidation } from './cache';
+import {
+    getCacheValue,
+    invalidateCacheTags,
+    setCacheValue,
+    broadcastCacheInvalidation
+} from './cache';
 
 /**
  * Extra cache metadata for middleware users.
@@ -37,7 +42,10 @@ export const setCache =
     (seconds = 0, options: CacheOptions = {}) =>
     (request: Request, response: Response, next: NextFunction) => {
         // Keep browser/proxy cache headers aligned with the server-side Redis cache policy.
-        response.set('Cache-Control', `${request.authContext ? 'private' : 'public'}, max-age=${seconds}`);
+        response.set(
+            'Cache-Control',
+            `${request.authContext ? 'private' : 'public'}, max-age=${seconds}`
+        );
 
         if (request.method !== 'GET' || seconds <= 0) {
             next();

@@ -32,13 +32,13 @@ export const getFeedback = (
             status
         })
         .then((result) => {
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.ADMIN_FEEDBACK_VIEWED,
-                outcome: 'success'
-            }));
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.ADMIN_FEEDBACK_VIEWED,
+                    outcome: 'success'
+                })
+            );
             return successResponse(response, result);
         })
-        .catch((error: CastError) =>
-            rejectResponse(response, 500, 'getFeedback', [error.message])
-        );
+        .catch((error: CastError) => rejectResponse(response, 500, 'getFeedback', [error.message]));
 };

@@ -12,8 +12,8 @@ groups:
             labels:
                 severity: critical
             annotations:
-                summary: "API instance is down"
-                description: "Prometheus cannot reach the /metrics endpoint of the API for > 1 min."
+                summary: 'API instance is down'
+                description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
 
           # ── Error rate ──────────────────────────────────────────────────────
           - alert: HighErrorRate
@@ -27,8 +27,8 @@ groups:
             labels:
                 severity: warning
             annotations:
-                summary: "High HTTP error rate (> 5 %)"
-                description: "More than 5 % of requests are returning 4xx/5xx over the last 5 minutes."
+                summary: 'High HTTP error rate (> 5 %)'
+                description: 'More than 5 % of requests are returning 4xx/5xx over the last 5 minutes.'
 
           # ── Latency (p95) ───────────────────────────────────────────────────
           - alert: HighP95Latency
@@ -41,8 +41,8 @@ groups:
             labels:
                 severity: warning
             annotations:
-                summary: "p95 latency > 2 s"
-                description: "The 95th-percentile request duration has exceeded 2 000 ms for 5 minutes."
+                summary: 'p95 latency > 2 s'
+                description: 'The 95th-percentile request duration has exceeded 2 000 ms for 5 minutes.'
 
           # ── Saturation (in-flight) ──────────────────────────────────────────
           - alert: HighInFlightRequests
@@ -51,8 +51,8 @@ groups:
             labels:
                 severity: warning
             annotations:
-                summary: "Too many in-flight requests (> 100)"
-                description: "More than 100 requests are being processed simultaneously for 2 minutes."
+                summary: 'Too many in-flight requests (> 100)'
+                description: 'More than 100 requests are being processed simultaneously for 2 minutes.'
 
           # ── Memory ──────────────────────────────────────────────────────────
           - alert: HighHeapUsage
@@ -64,5 +64,5 @@ groups:
             labels:
                 severity: warning
             annotations:
-                summary: "Node.js heap usage above 90 %"
-                description: "The heap is more than 90 % full; OOM risk if left unaddressed."
+                summary: 'Node.js heap usage above 90 %'
+                description: 'The heap is more than 90 % full; OOM risk if left unaddressed.'

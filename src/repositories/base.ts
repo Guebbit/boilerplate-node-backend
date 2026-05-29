@@ -23,11 +23,7 @@ export function createBaseRepository<TDocument extends Document>(mongooseModel: 
     /** Fetch a filtered, sorted, paginated list as plain JS objects (lean). */
     const findAll = (
         where: QueryFilter<TDocument> = {},
-        {
-            sort = { createdAt: -1 as const },
-            skip = 0,
-            limit = 10
-        }: IFindAllOptions = {}
+        { sort = { createdAt: -1 as const }, skip = 0, limit = 10 }: IFindAllOptions = {}
     ) =>
         mongooseModel
             .find({ ...where })
@@ -42,8 +38,7 @@ export function createBaseRepository<TDocument extends Document>(mongooseModel: 
         mongooseModel.countDocuments(where);
 
     /** Insert a new document into the collection. */
-    const create = (data: Partial<TDocument>): Promise<TDocument> =>
-        mongooseModel.create(data);
+    const create = (data: Partial<TDocument>): Promise<TDocument> => mongooseModel.create(data);
 
     /** Persist in-memory changes made to an already-fetched document. */
     const save = (document: TDocument): Promise<TDocument> => document.save();

@@ -57,13 +57,15 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
     const token = getTokenBearer(request);
 
     if (!request.authContext || !token) {
-        emitAuditEvent(buildAuditEvent(request, {
-            action: AuditAction.SECURITY_UNAUTHORIZED,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            outcome: 'failure',
-            metadata: { route: request.path, method: request.method }
-        }));
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.SECURITY_UNAUTHORIZED,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'failure',
+                metadata: { route: request.path, method: request.method }
+            })
+        );
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
@@ -80,22 +82,30 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  */
 export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
     if (!request.authContext) {
-        emitAuditEvent(buildAuditEvent(request, {
-            action: AuditAction.SECURITY_FORBIDDEN,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            outcome: 'failure',
-            metadata: { route: request.path, method: request.method, reason: 'not_authenticated' }
-        }));
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.SECURITY_FORBIDDEN,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'failure',
+                metadata: {
+                    route: request.path,
+                    method: request.method,
+                    reason: 'not_authenticated'
+                }
+            })
+        );
         rejectResponse(response, 403, 'Forbidden: Access denied.');
         return;
     }
     if (!request.authContext.admin) {
-        emitAuditEvent(buildAuditEvent(request, {
-            action: AuditAction.SECURITY_FORBIDDEN,
-            outcome: 'failure',
-            metadata: { route: request.path, method: request.method, reason: 'not_admin' }
-        }));
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.SECURITY_FORBIDDEN,
+                outcome: 'failure',
+                metadata: { route: request.path, method: request.method, reason: 'not_admin' }
+            })
+        );
         rejectResponse(response, 403, "Forbidden: You don't have permission.");
         return;
     }

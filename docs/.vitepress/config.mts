@@ -31,9 +31,7 @@ export default withMermaid(
                 '/tools/': [
                     {
                         text: 'Overview',
-                        items: [
-                            { text: 'Overview', link: '/tools/' }
-                        ]
+                        items: [{ text: 'Overview', link: '/tools/' }]
                     },
                     {
                         text: 'Setup',

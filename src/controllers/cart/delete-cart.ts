@@ -7,30 +7,25 @@ import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/a
  * DELETE /cart
  * Remove ALL items in the user cart.
  */
-export const deleteCart = (
-    request: Request,
-    response: Response
-) => {
+export const deleteCart = (request: Request, response: Response) => {
     if (!request.authContext) {
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
     const userId = request.authContext.id;
 
-    return cartService
-        .cartRemove(userId)
-        .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.message, result.errors);
-                return;
-            }
-            return cartService.cartGetWithSummary(userId).then((cart) => {
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    event: AnalyticsEvent.CART_CLEARED,
-                    properties: {}
-                });
-                successResponse(response, cart);
+    return cartService.cartRemove(userId).then((result) => {
+        if (!result.success) {
+            rejectResponse(response, result.status, result.message, result.errors);
+            return;
+        }
+        return cartService.cartGetWithSummary(userId).then((cart) => {
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(request),
+                event: AnalyticsEvent.CART_CLEARED,
+                properties: {}
             });
+            successResponse(response, cart);
         });
+    });
 };

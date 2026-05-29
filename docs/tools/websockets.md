@@ -95,8 +95,7 @@ export const getWebsocketTest = (request: Request, response: Response) => {
             },
             onMessage: (ws, message) =>
                 logger.info('CLIENT: Server message received', message.data),
-            onClose: (ws, code, reason) =>
-                logger.info(`CLIENT: connection closed: ${code}`, reason)
+            onClose: (ws, code, reason) => logger.info(`CLIENT: connection closed: ${code}`, reason)
         });
 
         // Close the client after 2 seconds

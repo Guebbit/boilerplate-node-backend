@@ -20,9 +20,9 @@ import { authPasswordResetTotal } from '@utils/domain-metrics';
  * @returns token payload or undefined
  */
 const lookupResetData = (email?: string) => {
-    if (!email) return Promise.resolve(undefined);
+    if (!email) return Promise.resolve();
     return userService.findByEmail(email).then((user) => {
-        if (!user) return undefined;
+        if (!user) return;
         return authService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
             username: user.username,
             token
@@ -42,35 +42,39 @@ export const postResetRequest = (
 ) => {
     const { email } = request.body;
 
-    return lookupResetData(email)
-        // Fail closed and keep the public response identical to protect account privacy.
-        .catch(() => undefined)
-        .then((data) => {
-            authPasswordResetTotal.inc({ status: data?.token ? 'success' : 'failure' });
+    return (
+        lookupResetData(email)
+            // Fail closed and keep the public response identical to protect account privacy.
+            .catch(() => {})
+            .then((data) => {
+                authPasswordResetTotal.inc({ status: data?.token ? 'success' : 'failure' });
 
-            if (data?.token)
-                void enqueueEmail(
-                    {
-                        to: email,
-                        subject: 'Password reset'
-                    },
-                    'email-reset-request.ejs',
-                    {
-                        ...response.locals,
-                        pageMetaTitle: 'Password reset requested',
-                        pageMetaLinks: [],
-                        name: data.username,
-                        token: data.token
-                    }
+                if (data?.token)
+                    void enqueueEmail(
+                        {
+                            to: email,
+                            subject: 'Password reset'
+                        },
+                        'email-reset-request.ejs',
+                        {
+                            ...response.locals,
+                            pageMetaTitle: 'Password reset requested',
+                            pageMetaLinks: [],
+                            name: data.username,
+                            token: data.token
+                        }
+                    );
+
+                emitAuditEvent(
+                    buildAuditEvent(request, {
+                        action: AuditAction.AUTH_PASSWORD_RESET_REQUESTED,
+                        actor_user_id: 'anonymous',
+                        actor_role: 'anonymous',
+                        outcome: 'success'
+                    })
                 );
 
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.AUTH_PASSWORD_RESET_REQUESTED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
-                outcome: 'success'
-            }));
-
-            successResponse(response, undefined, 200, t('reset.email-sent'));
-        });
+                successResponse(response, undefined, 200, t('reset.email-sent'));
+            })
+    );
 };

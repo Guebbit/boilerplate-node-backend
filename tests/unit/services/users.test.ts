@@ -200,9 +200,7 @@ describe('cartService cart operations', () => {
         await cartService.cartItemSetById(userId, pid, 1);
         const addResult = await cartService.cartItemAdd(userId, product, 9);
 
-        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(
-            10
-        );
+        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(10);
     });
 
     it('cartItemRemove (by document) removes the product', async () => {
@@ -527,7 +525,9 @@ describe('userService.adminUpdateById', () => {
     });
 
     it('returns reject result when the user does not exist', async () => {
-        const result = await userService.adminUpdateById('000000000000000000000000', { username: 'x' });
+        const result = await userService.adminUpdateById('000000000000000000000000', {
+            username: 'x'
+        });
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
     });

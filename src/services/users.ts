@@ -59,9 +59,16 @@ export const search = (
     if (filters.id && String(filters.id).trim() !== '')
         where._id = new Types.ObjectId(String(filters.id));
 
-    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, ['email', 'username']);
+    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, [
+        'email',
+        'username'
+    ]);
     addRegexFilter(where as Record<string, unknown>, 'email', filters.email as string | undefined);
-    addRegexFilter(where as Record<string, unknown>, 'username', filters.username as string | undefined);
+    addRegexFilter(
+        where as Record<string, unknown>,
+        'username',
+        filters.username as string | undefined
+    );
 
     if (filters.active !== undefined && filters.active !== null)
         where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };

@@ -50,12 +50,14 @@ export const postOrders = (
 
         orderCreatedTotal.inc();
         const orderId = result.data?._id?.toString() ?? '';
-        emitAuditEvent(buildAuditEvent(request, {
-            action: AuditAction.ADMIN_ORDER_CREATED,
-            outcome: 'success',
-            target_type: 'order',
-            target_id: orderId
-        }));
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.ADMIN_ORDER_CREATED,
+                outcome: 'success',
+                target_type: 'order',
+                target_id: orderId
+            })
+        );
         emitAnalyticsEvent({
             ...buildAnalyticsBase(request),
             event: AnalyticsEvent.ORDER_CREATED,

@@ -30,28 +30,28 @@ export const deleteCartItem = (
         return;
     }
 
-    return cartService
-        .cartItemRemoveById(userId, productId)
-        .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.message, result.errors);
-                return;
-            }
-            return cartService.cartGetWithSummary(userId).then((cart) => {
-                emitAuditEvent(buildAuditEvent(request, {
+    return cartService.cartItemRemoveById(userId, productId).then((result) => {
+        if (!result.success) {
+            rejectResponse(response, result.status, result.message, result.errors);
+            return;
+        }
+        return cartService.cartGetWithSummary(userId).then((cart) => {
+            emitAuditEvent(
+                buildAuditEvent(request, {
                     action: AuditAction.USER_CART_ITEM_REMOVED,
                     actor_user_id: userId,
                     actor_role: 'user',
                     outcome: 'success',
                     target_type: 'product',
                     target_id: productId
-                }));
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    event: AnalyticsEvent.CART_ITEM_REMOVED,
-                    properties: { product_id: productId }
-                });
-                successResponse(response, cart);
+                })
+            );
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(request),
+                event: AnalyticsEvent.CART_ITEM_REMOVED,
+                properties: { product_id: productId }
             });
+            successResponse(response, cart);
         });
+    });
 };

@@ -11,7 +11,8 @@ const base = createBaseRepository<IOrderDocument>(orderModel);
 
 export const findById = (id: string) => base.findById(id);
 export const findOne = (where: QueryFilter<IOrderDocument>) => base.findOne(where);
-export const count = (where: QueryFilter<IOrderDocument> = {}): Promise<number> => base.count(where);
+export const count = (where: QueryFilter<IOrderDocument> = {}): Promise<number> =>
+    base.count(where);
 export const create = (data: Partial<IOrderDocument>): Promise<IOrderDocument> => base.create(data);
 export const save = (order: IOrderDocument): Promise<IOrderDocument> => base.save(order);
 export const deleteOne = (order: IOrderDocument): Promise<void> => base.deleteOne(order);
