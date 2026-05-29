@@ -32,7 +32,8 @@ const TOKEN_EXPIRY_ENV: Record<ERefreshTokenExpiryTime | 'default', string> = {
  */
 export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
     const envKey = TOKEN_EXPIRY_ENV[remember ?? 'default'];
-    return process.env[envKey] ? Number.parseInt(process.env[envKey]) : 0;
+    const value = process.env[envKey];
+    return value ? Number.parseInt(value, 10) : 0;
 };
 
 /**
