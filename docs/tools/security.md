@@ -2,24 +2,32 @@
 
 ## Main security tools
 
-| Tool                                                                                                                                 | Why it is here                              |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| [Helmet](https://helmetjs.github.io/)                                                                                                | safe default HTTP headers                   |
-| [cors](https://github.com/expressjs/cors#readme)                                                                                     | origin allowlist and browser access control |
-| [express-rate-limit](https://express-rate-limit.mintlify.app/)                                                                       | basic abuse protection at the edge          |
-| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken#readme)                                                                    | access and refresh token flows              |
-| [cookie-parser](https://github.com/expressjs/cookie-parser#readme)                                                                   | cookie access in Express                    |
-| [bcrypt](https://github.com/kelektiv/node.bcrypt.js#readme)                                                                          | password hashing                            |
+| Tool                                                               | Why it is here                              |
+| ------------------------------------------------------------------ | ------------------------------------------- |
+| [Helmet](https://helmetjs.github.io/)                              | safe default HTTP headers                   |
+| [cors](https://github.com/expressjs/cors#readme)                   | origin allowlist and browser access control |
+| [express-rate-limit](https://express-rate-limit.mintlify.app/)     | basic abuse protection at the edge          |
+| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken#readme)  | access and refresh token flows              |
+| [cookie-parser](https://github.com/expressjs/cookie-parser#readme) | cookie access in Express                    |
+| [bcrypt](https://github.com/kelektiv/node.bcrypt.js#readme)        | password hashing                            |
 
 ## Security flow
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
 flowchart LR
     Request --> Helmet
     Helmet --> CORS
     CORS --> RateLimit
     RateLimit --> Auth
     Auth --> Controller
+
+    classDef edge fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef guard fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class Request edge;
+    class Helmet,CORS,RateLimit,Auth guard;
+    class Controller app;
 ```
 
 ## Strategy
@@ -41,4 +49,4 @@ That is why auth, headers, origin checks, and rate limiting stay near routes and
 
 - [Request Flow](../theory/request-flow.md)
 - [Winston & Audit Logs](./winston.md)
-- [REST Style](../api/rest-style.md)
+- [API overview](../api/#rest-patterns-used-here)

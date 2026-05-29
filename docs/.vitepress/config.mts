@@ -6,6 +6,9 @@ export default withMermaid(
         title: 'Boilerplate Node Backend',
         description: 'ADHD-friendly docs for the Express + MongoDB + Mongoose REST boilerplate',
         themeConfig: {
+            search: {
+                provider: 'local'
+            },
             nav: [
                 { text: 'Home', link: '/' },
                 { text: 'Theory', link: '/theory/' },
@@ -30,6 +33,9 @@ export default withMermaid(
                         text: 'Tools',
                         items: [
                             { text: 'Overview', link: '/tools/' },
+                            { text: 'Package Dependencies', link: '/tools/package-dependencies' },
+                            { text: 'Package Scripts', link: '/tools/package-scripts' },
+                            { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Security', link: '/tools/security' },
                             { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
@@ -56,8 +62,7 @@ export default withMermaid(
                             { text: 'Endpoints', link: '/api/endpoints' },
                             { text: 'Admin Endpoints', link: '/api/admin' },
                             { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
-                            { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' },
-                            { text: 'REST Style', link: '/api/rest-style' }
+                            { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' }
                         ]
                     }
                 ]
@@ -73,12 +78,21 @@ export default withMermaid(
             theme: 'neutral',
             useMaxWidth: true,
             htmlLabels: true,
+            flowchart: {
+                nodeSpacing: 45,
+                rankSpacing: 70,
+                padding: 15
+            },
             themeVariables: {
-                primaryColor: '#ede9fe',
+                primaryColor: '#f5f3ff',
                 primaryBorderColor: '#7c3aed',
                 primaryTextColor: '#111827',
-                secondaryColor: '#dbeafe',
-                tertiaryColor: '#f8fafc',
+                secondaryColor: '#eff6ff',
+                secondaryBorderColor: '#2563eb',
+                tertiaryColor: '#ecfeff',
+                tertiaryBorderColor: '#0891b2',
+                clusterBkg: '#f8fafc',
+                clusterBorder: '#cbd5e1',
                 lineColor: '#64748b'
             }
         }

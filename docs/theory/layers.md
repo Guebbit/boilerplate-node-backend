@@ -1,11 +1,12 @@
 # Layers
 
-This page re-adds the app layers in a simple way.
-Use it when you want the **mental map of the folders** without reading every source file.
+This page is the **folder map**.
+Use it when you want the exact implementation path without reading every source file.
 
 ## Layer stack
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 65}}}%%
 flowchart TD
     A[src/routes] --> B[src/middlewares]
     B --> C[src/controllers]
@@ -13,6 +14,13 @@ flowchart TD
     D --> E[src/repositories]
     E --> F[src/models]
     F --> G[(MongoDB)]
+
+    classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef core fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef data fill:#fef3c7,stroke:#d97706,color:#111827;
+    class A,B entry;
+    class C,D core;
+    class E,F,G data;
 ```
 
 ## Quick map
@@ -30,11 +38,19 @@ flowchart TD
 ## How to read a feature
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 60}}}%%
 flowchart LR
     Route[Route file] --> Controller[Controller handler]
     Controller --> Service[Service method]
     Service --> Repository[Repository query]
     Repository --> Model[Mongoose model]
+
+    classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef core fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef data fill:#fef3c7,stroke:#d97706,color:#111827;
+    class Route,Controller entry;
+    class Service core;
+    class Repository,Model data;
 ```
 
 ### Example from this repo
@@ -80,4 +96,4 @@ When something breaks, the log line gives you a `trace_id`, you paste it in Graf
 - [Architecture](./architecture.md)
 - [Request Flow](./request-flow.md)
 - [Runtime](../tools/runtime.md)
-- [REST Style](../api/rest-style.md)
+- [API overview](../api/#rest-patterns-used-here)

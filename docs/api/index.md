@@ -5,12 +5,20 @@ This section explains the API contracts and the tools around them.
 ## API in one view
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart LR
     Spec[openapi.yaml] --> Lint[Spectral]
     Spec --> Mock[Prism / Bruno / Mockoon]
     Spec --> Types[OpenAPI Generator -> api/]
     Spec --> Impl[Routes + controllers + services]
     Impl --> Tests[Tests keep behavior honest]
+
+    classDef contract fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef tooling fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class Spec contract;
+    class Lint,Mock,Types tooling;
+    class Impl,Tests app;
 ```
 
 ## What matters most here
@@ -27,11 +35,14 @@ flowchart LR
 | --- | --- |
 | Change the contract and related tooling | [OpenAPI Workflow](./openapi-workflow.md) |
 | Change WebSocket/SSE/event contracts | [AsyncAPI Workflow](./asyncapi-workflow.md) |
-| Understand route style and response patterns | [REST Style](./rest-style.md) |
+| Understand route style and response patterns | [REST patterns used here](#rest-patterns-used-here) |
 | Understand the app layers behind the API | [Theory / Layers](../theory/layers.md) |
 | Understand runtime, cache, and observability tools around the API | [Tools](../tools/) |
 
-## Repo-specific reminder
+## REST patterns used here
 
-This repo is the **REST API** flavor of the boilerplate family.
-So this section focuses on contract-first backend work, not UI pages, monorepo boundaries, or deep domain rules.
+- Keep URLs resource-oriented (`/products`, `/products/:id`, `/orders/search`).
+- Keep controllers thin and move reusable rules into services.
+- Reuse shared schemas, parameters, and responses inside [`openapi.yaml`](./openapi-workflow.md#openapi-is-the-source-of-truth).
+- Keep response handling consistent so auth, caching, metrics, and tracing can plug into the same request path.
+- Treat the sample entities (`users`, `products`, `orders`, `cart`, `admin`) as examples of API patterns, not product law.

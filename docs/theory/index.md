@@ -6,11 +6,20 @@ It is about patterns and structure, not product details.
 ## Theory in one screen
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart LR
-    Contract[Contract-first] --> Layers[Layered code]
-    Layers --> Safety[Security + validation]
-    Safety --> Signals[Logs + metrics + traces]
-    Layers --> Extensibility[Easy to swap stack pieces later]
+    Contract[Contract-first] --> Architecture[Architecture]
+    Architecture --> Layers[Layers]
+    Layers --> Flow[Request flow]
+    Architecture --> Safety[Security + validation]
+    Architecture --> Signals[Logs + metrics + traces]
+
+    classDef contract fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef structure fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef ops fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class Contract contract;
+    class Architecture,Layers,Flow structure;
+    class Safety,Signals ops;
 ```
 
 ## Main strategies already present in the code
@@ -24,22 +33,11 @@ flowchart LR
 
 ## Where each topic lives
 
-| Need                                | Go to                                    |
-| ----------------------------------- | ---------------------------------------- |
-| Understand the code shape           | [Architecture](./architecture.md)        |
-| Read the layer-by-layer explanation | [Layers](./layers.md)                    |
-| Follow one request end-to-end       | [Request Flow](./request-flow.md)        |
-| Understand process model & shutdown | [Clustering & Shutdown](./clustering.md) |
-| Understand dependency choices       | [Tools](../tools/)                       |
-| Change contract, types, or mocks    | [API](../api/)                           |
-
-## Repo-specific reminder
-
-This repository is the **`api-mongodb-mongoose`** flavor of the family:
-
-- REST API
-- Express runtime
-- MongoDB + Mongoose persistence
-- one package, not a monorepo
-
-That is why the code and docs keep using these as examples.
+| Need                                     | Go to                                    |
+| ---------------------------------------- | ---------------------------------------- |
+| Understand the big blocks and boundaries | [Architecture](./architecture.md)        |
+| Read the folder-by-folder explanation    | [Layers](./layers.md)                    |
+| Follow one request end-to-end            | [Request Flow](./request-flow.md)        |
+| Understand process model & shutdown      | [Clustering & Shutdown](./clustering.md) |
+| Understand dependency choices            | [Tools](../tools/)                       |
+| Change contract, types, or mocks         | [API](../api/)                           |

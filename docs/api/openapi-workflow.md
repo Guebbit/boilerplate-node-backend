@@ -5,6 +5,7 @@
 For this boilerplate, the safest order is:
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart LR
     Idea[Need a new endpoint or payload] --> Spec[Edit openapi.yaml]
     Spec --> Lint[npm run lint:openapi]
@@ -12,6 +13,15 @@ flowchart LR
     Spec --> Generate[npm run genapi]
     Generate --> Implement[Align routes, services, and responses]
     Implement --> Test[npm run test]
+
+    classDef change fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef contract fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef tooling fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef app fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class Idea change;
+    class Spec contract;
+    class Lint,Mock,Generate tooling;
+    class Implement,Test app;
 ```
 
 If the contract changes, start with the contract.
@@ -44,7 +54,7 @@ npm run test:prism
 
 - [Theory / Layers](../theory/layers.md) explains where implementation code lands after the spec changes.
 - [Tools](../tools/) explains the non-OpenAPI dependencies around the API runtime.
-- [REST Style](./rest-style.md) explains the style choices used by the contract.
+- [API overview](./index.md#rest-patterns-used-here) summarizes the style choices used by the contract.
 
 ## What to document here
 
