@@ -6,7 +6,7 @@ import * as productService from '@services/products';
 import * as productRepository from '@repositories/products';
 import * as userRepository from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@utils/response';
-import type { IUserDocument } from '@models/users';
+import type { IUserCartDto } from '@utils/dto-cart';
 
 // Mock the filesystem helper so tests never touch the real disk.
 jest.mock('@utils/helpers-filesystem', () => ({
@@ -295,7 +295,7 @@ describe('productService.removeById', () => {
         const addResult = await (await import('@services/cart')).cartItemSetById(userId, pid, 1);
 
         // Confirm the cart item was added
-        expect((addResult as IResponseSuccess<IUserDocument>).data!.cart.items).toHaveLength(1);
+        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(1);
 
         const result = await productService.removeById(pid, true);
 

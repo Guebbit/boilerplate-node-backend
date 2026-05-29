@@ -12,35 +12,25 @@ import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
+import {
+    toUserCartDto,
+    toCartItemDto,
+    toIdString,
+    type ICartItemDto,
+    type IUserCartDto
+} from '@utils/dto-cart';
 
 /**
  * Cart Service
  * Single responsibility: shopping cart operations, identified by userId.
  */
 
-/** Normalize any Mongoose/plain id shape to a plain string. */
-const toObjectIdString = (value: unknown): string => {
-    if (value instanceof Types.ObjectId) return value.toString();
-    if (typeof value === 'string') return value;
-    if (typeof value === 'object' && value && 'id' in value && typeof value.id === 'string')
-        return value.id;
-    if (typeof value === 'object' && value && '_id' in value) return toObjectIdString(value._id);
-    return '';
-};
-
 /** Check if a cart item's product field matches the given string id. */
-const matchesProductId = (product: unknown, id: string): boolean =>
-    toObjectIdString(product) === id;
+const matchesProductId = (product: unknown, id: string): boolean => toIdString(product) === id;
 
-/** Wrap saved user in a success response, ensuring _id is always present. */
-const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserDocument> => {
-    const response = generateSuccess(user);
-    const data = response.data as { _id?: unknown; id?: unknown };
-    if (!data._id && typeof data.id === 'string') {
-        data._id = data.id;
-    }
-    return response;
-};
+/** Wrap saved user in a success response with an explicit DTO payload. */
+const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserCartDto> =>
+    generateSuccess(toUserCartDto(user));
 
 /** Fetch user by string id, resolving 404 as IResponseReject. */
 const requireUser = (userId: string): Promise<IUserDocument | IResponseReject> =>
@@ -61,12 +51,12 @@ const clearCartItems = (user: IUserDocument): void => {
 /**
  * Get user cart populated with product details.
  */
-export const cartGet = (userId: string): Promise<ICartItem[]> =>
+export const cartGet = (userId: string): Promise<ICartItemDto[]> =>
     userRepository
         .findById(userId)
         .then((user) => {
             if (!user) return [];
-            return populateCartItems(user);
+            return populateCartItems(user).then((items) => items.map((item) => toCartItemDto(item)));
         });
 
 /**
@@ -75,7 +65,7 @@ export const cartGet = (userId: string): Promise<ICartItem[]> =>
 export const cartGetWithSummary = (
     userId: string
 ): Promise<{
-    items: ICartItem[];
+    items: ICartItemDto[];
     summary: { itemsCount: number; totalQuantity: number; total: number };
 }> =>
     cartGet(userId).then((items) => {
@@ -103,7 +93,7 @@ export const cartItemSetById = (
     userId: string,
     id: string,
     quantity = 1
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
@@ -124,7 +114,7 @@ export const cartItemSet = (
     userId: string,
     product: IProductDocument,
     quantity = 1
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     cartItemSetById(userId, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
@@ -134,7 +124,7 @@ export const cartItemAddById = (
     userId: string,
     id: string,
     quantity = 1
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
@@ -157,7 +147,7 @@ export const cartItemAdd = (
     userId: string,
     product: IProductDocument,
     quantity = 1
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     cartItemAddById(userId, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
@@ -166,7 +156,7 @@ export const cartItemAdd = (
 export const cartItemRemoveById = (
     userId: string,
     id: string
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
@@ -185,7 +175,7 @@ export const cartItemRemoveById = (
 export const cartItemRemove = (
     userId: string,
     product: IProductDocument
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     cartItemRemoveById(userId, (product._id as Types.ObjectId).toString());
 
 /**
@@ -193,7 +183,7 @@ export const cartItemRemove = (
  */
 export const cartRemove = (
     userId: string
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
@@ -217,7 +207,7 @@ export const orderConfirm = (
                         return generateReject(409, 'empty cart', ['Cart is empty']);
                     return orderRepository
                         .create({
-                            userId: new Types.ObjectId(toObjectIdString(user._id)),
+                            userId: new Types.ObjectId(user.id),
                             email: user.email,
                             items: products as IOrderDocument['items']
                         } as Partial<IOrderDocument>)

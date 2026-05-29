@@ -91,17 +91,76 @@ export const recordRequestMetric = ({
     if (statusCode >= 400) httpRequestErrorsTotal.inc(labels);
 };
 
+/** Increment the in-flight request gauge when a request starts. */
 export const incrementInflight = (): void => {
     httpInflightRequests.inc();
 };
 
+/** Decrement the in-flight request gauge when a request finishes. */
 export const decrementInflight = (): void => {
     httpInflightRequests.dec();
 };
 
+/** Sum raw metric sample values from a prom-client get() result. */
 const sumMetricValues = (values: Array<{ value: number }>) =>
     values.reduce((sum, value) => sum + value.value, 0);
 
+interface ILatencyBucket {
+    upperBound: number;
+    cumulativeCount: number;
+}
+
+/*
+ * Collapse histogram values into per-boundary bucket totals.
+ * prom-client histogram get() mixes _sum/_count rows (metricName set) with bucket rows — skip the former.
+ * The +Inf bucket gives the total request count.
+ */
+const aggregateLatencyBuckets = (
+    values: Array<{
+        value: number;
+        labels: Record<string, string | number | undefined>;
+        metricName?: string;
+    }>
+): { buckets: ILatencyBucket[]; totalCount: number } => {
+    const totals = new Map<number, number>();
+    let totalCount = 0;
+
+    for (const { value, labels, metricName } of values) {
+        if (metricName) continue; // skip _sum / _count rows
+        const le = labels.le;
+        if (le === undefined) continue;
+        if (le === '+Inf') {
+            totalCount += value;
+            continue;
+        }
+
+        const boundary = Number(le);
+        totals.set(boundary, (totals.get(boundary) ?? 0) + value);
+    }
+
+    const buckets = [...totals.entries()]
+        .toSorted(([a], [b]) => a - b)
+        .map(([upperBound, cumulativeCount]) => ({ upperBound, cumulativeCount }));
+
+    return { buckets, totalCount };
+};
+
+export const percentileFromHistogramBuckets = (
+    buckets: ILatencyBucket[],
+    totalCount: number,
+    percentile: number
+): number => {
+    if (totalCount <= 0 || buckets.length === 0) return 0;
+
+    const threshold = totalCount * percentile;
+    for (const { upperBound, cumulativeCount } of buckets) {
+        if (cumulativeCount >= threshold) return upperBound;
+    }
+
+    return buckets.at(-1)?.upperBound ?? 0;
+};
+
+/** Read total request and error counters from prom-client in one call. */
 export const getHttpRequestCounters = () =>
     Promise.all([httpRequestsTotal.get(), httpRequestErrorsTotal.get()]).then(
         ([requestMetrics, errorMetrics]) => ({
@@ -116,39 +175,9 @@ export const getPrometheusMetrics = (): Promise<string> => metricsRegistry.metri
 /** Estimate p50 and p95 latency (ms) from the request-duration histogram buckets. */
 export const getLatencyPercentiles = (): Promise<{ p50: number; p95: number }> =>
     httpRequestDuration.get().then(({ values }) => {
-        /* Aggregate bucket counts across all label combos into a sorted list. */
-        const totals = new Map<number, number>();
-        let grandTotal = 0;
-
-        for (const { value, labels, metricName } of values) {
-            /* prom-client sets metricName on _count/_sum aggregates; bucket entries leave it undefined.
-               Skip the aggregates and only process the per-bucket cumulative counts. */
-            if (metricName) continue;
-            const le = (labels as Record<string, string | number | undefined>).le;
-            if (le === undefined) continue;
-            if (le === '+Inf') {
-                grandTotal += value;
-                continue;
-            }
-            const boundary = Number(le);
-            totals.set(boundary, (totals.get(boundary) ?? 0) + value);
-        }
-
-        if (grandTotal === 0) return { p50: 0, p95: 0 };
-
-        const sorted = [...totals.entries()].toSorted(([a], [b]) => a - b);
-
-        /* Walk buckets in ascending order; return upper bound of first bucket that
-           covers the requested percentile. */
-        const pick = (fraction: number): number => {
-            const threshold = grandTotal * fraction;
-            let cumulative = 0;
-            for (const [bound, count] of sorted) {
-                cumulative += count;
-                if (cumulative >= threshold) return bound;
-            }
-            return sorted.at(-1)?.[0] ?? 0;
+        const { buckets, totalCount } = aggregateLatencyBuckets(values);
+        return {
+            p50: percentileFromHistogramBuckets(buckets, totalCount, 0.5),
+            p95: percentileFromHistogramBuckets(buckets, totalCount, 0.95)
         };
-
-        return { p50: pick(0.5), p95: pick(0.95) };
     });

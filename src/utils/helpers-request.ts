@@ -96,6 +96,32 @@ export const extractAndValidateId = (
 };
 
 /**
+ * Extract an ID from explicit request fields (param or body).
+ * Pure extraction only — no validation or response handling.
+ */
+export const extractCustomId = (
+    request: Request,
+    fields: { param?: string; body?: string } = {}
+): string | undefined => {
+    const fromParameters = fields.param ? request.params[fields.param] : undefined;
+    const body = request.body as Record<string, unknown>;
+    const fromBody = fields.body ? body[fields.body] : undefined;
+    return extractId(
+        Array.isArray(fromParameters)
+            ? fromParameters[0]
+            : (fromParameters as string | undefined),
+        Array.isArray(fromBody) ? String(fromBody[0]) : (fromBody as string | undefined)
+    );
+};
+
+/**
+ * Check if a value is a valid MongoDB ObjectId.
+ * Thin wrapper around Mongoose's ObjectId.isValid for readability.
+ */
+export const isValidObjectId = (id: string | undefined): id is string =>
+    !!id && Types.ObjectId.isValid(id);
+
+/**
  * Extract the hardDelete flag from query, params, or body.
  * Used by delete controllers that support soft/hard delete.
  */
