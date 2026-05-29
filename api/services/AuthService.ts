@@ -8,7 +8,7 @@ import type { MessageResponse } from '../models/MessageResponse';
 import type { PasswordResetConfirmRequest } from '../models/PasswordResetConfirmRequest';
 import type { PasswordResetRequest } from '../models/PasswordResetRequest';
 import type { RefreshTokenEnvelope } from '../models/RefreshTokenEnvelope';
-import type { SignupRequestMultipart } from '../models/SignupRequestMultipart';
+import type { SignupRequest } from '../models/SignupRequest';
 import type { UserEnvelope } from '../models/UserEnvelope';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
@@ -39,18 +39,18 @@ export class AuthService {
     /**
      * Signup
      * Registers a new user account with optional image upload. Returns the newly created user profile on success.
-     * @param formData
+     * @param requestBody
      * @returns UserEnvelope Created
      * @throws ApiError
      */
     public static signup(
-        formData: SignupRequestMultipart,
+        requestBody: SignupRequest,
     ): CancelablePromise<UserEnvelope> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/account/signup',
-            formData: formData,
-            mediaType: 'multipart/form-data',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation failed`,
                 500: `Internal server error`,
