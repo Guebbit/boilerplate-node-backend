@@ -30,13 +30,13 @@ flowchart LR
 
 ## What each block owns
 
-| Block | Owns | Avoids |
-| ----- | ---- | ------ |
-| Contract layer | public request/event shapes and source-of-truth docs | hidden behavior drift |
-| Entry layer | routes, middlewares, protocol glue, auth gates | deep business decisions |
-| Business core | orchestration, validation, reusable rules | Express or AMQP details |
-| Persistence | query shape, schema mapping, storage access | HTTP response logic |
-| Cross-cutting tools | logs, traces, metrics, queues, cache hooks | owning product rules |
+| Block               | Owns                                                 | Avoids                  |
+| ------------------- | ---------------------------------------------------- | ----------------------- |
+| Contract layer      | public request/event shapes and source-of-truth docs | hidden behavior drift   |
+| Entry layer         | routes, middlewares, protocol glue, auth gates       | deep business decisions |
+| Business core       | orchestration, validation, reusable rules            | Express or AMQP details |
+| Persistence         | query shape, schema mapping, storage access          | HTTP response logic     |
+| Cross-cutting tools | logs, traces, metrics, queues, cache hooks           | owning product rules    |
 
 ## Why this page exists next to Layers
 

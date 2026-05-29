@@ -26,20 +26,20 @@ flowchart LR
 
 ## What is implemented
 
-| Area | Current implementation |
-| ---- | ---------------------- |
-| App image | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering |
-| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack |
-| Dev workflow | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands |
-| Podman support | `podman:restart`, `podman:rebuild`, and `podman:nuke` scripts wrap the same compose-oriented workflow |
+| Area                | Current implementation                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| App image           | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                            |
+| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                          |
+| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands |
+| Podman support      | `podman:restart`, `podman:rebuild`, and `podman:nuke` scripts wrap the same compose-oriented workflow                                 |
 
 ## Service groups
 
-| Group | Services | Why they are here |
-| ----- | -------- | ----------------- |
-| App runtime | `app` | runs the backend with container-friendly dev commands |
-| Core data | `database`, `redis`, `rabbitmq` | persistence, cache/pub-sub, and async jobs |
-| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana` | traces, metrics, logs, and dashboards |
+| Group         | Services                                                                               | Why they are here                                     |
+| ------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| App runtime   | `app`                                                                                  | runs the backend with container-friendly dev commands |
+| Core data     | `database`, `redis`, `rabbitmq`                                                        | persistence, cache/pub-sub, and async jobs            |
+| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana` | traces, metrics, logs, and dashboards                 |
 
 ## How to think about the setup
 
