@@ -5,7 +5,7 @@ import {
     type CreateFeedbackRequest
 } from '@types';
 import { EFeedbackStatus, type IFeedbackRequestDocument } from '@models/feedback-requests';
-import * as feedbackRequestRepository from '@repositories/feedback-requests';
+import { feedbackRequestRepository } from '@repositories/feedback-requests';
 import {
     normalizePagination,
     addTextFilter,

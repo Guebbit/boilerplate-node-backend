@@ -3,6 +3,7 @@ import { rateLimit } from 'express-rate-limit';
 /*
  * Global IP-based rate limiter.
  * Configurable via NODE_RATE_LIMIT_WINDOW_MS and NODE_RATE_LIMIT_MAX env vars.
+ * Adds standard RateLimit headers (draft-7) and rejects excess requests with HTTP 429.
  */
 export const rateLimiter = rateLimit({
     windowMs: Number(process.env.NODE_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,

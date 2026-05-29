@@ -12,7 +12,7 @@ import { deleteFile } from '@utils/helpers-filesystem';
 import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
-import * as productRepository from '@repositories/products';
+import { productRepository } from '@repositories/products';
 import {
     normalizePagination,
     addTextFilter,

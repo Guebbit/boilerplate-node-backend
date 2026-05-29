@@ -10,8 +10,8 @@ import { databaseErrorInterpreter } from '@utils/helpers-errors';
 import type { IOrderDocument } from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
-import * as userRepository from '@repositories/users';
-import * as orderRepository from '@repositories/orders';
+import { userRepository } from '@repositories/users';
+import { orderRepository } from '@repositories/orders';
 import {
     toUserCartDto,
     toCartItemDto,

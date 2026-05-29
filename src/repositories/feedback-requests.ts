@@ -14,3 +14,11 @@ export const findAll = (where: QueryFilter<IFeedbackRequestDocument> = {}, optio
 export const count = (where: QueryFilter<IFeedbackRequestDocument> = {}): Promise<number> => base.count(where);
 export const create = (data: Partial<IFeedbackRequestDocument>): Promise<IFeedbackRequestDocument> => base.create(data);
 export const save = (feedback: IFeedbackRequestDocument): Promise<IFeedbackRequestDocument> => base.save(feedback);
+
+export const feedbackRequestRepository = {
+    findById,
+    findAll,
+    count,
+    create,
+    save
+};

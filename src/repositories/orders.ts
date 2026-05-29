@@ -21,3 +21,5 @@ export const deleteOne = (order: IOrderDocument): Promise<void> => base.deleteOn
  */
 export const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =>
     orderModel.aggregate<T>(pipeline);
+
+export const orderRepository = { aggregate, findById, findOne, count, create, save, deleteOne };

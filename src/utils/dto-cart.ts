@@ -21,7 +21,8 @@ export interface IUserCartDto {
 }
 
 /*
- * Normalize any Mongoose/plain-object ID to a plain string.
+ * Normalize any Mongoose/plain-object ID representation to a plain string.
+ * Handles ObjectId instances, string ids, {id}, and {_id} shapes recursively.
  */
 export const toIdString = (value: unknown): string => {
     if (value instanceof Types.ObjectId) return value.toString();
@@ -35,8 +36,9 @@ export const toIdString = (value: unknown): string => {
 };
 
 /*
- * Map a populated product value to a Partial<Product> DTO.
- * Returns undefined when the value is a bare ObjectId/string reference.
+ * Map an unknown (possibly populated) product value to a Partial<Product> DTO.
+ * Returns undefined when the value is a bare ObjectId or string reference (not populated).
+ * Dates are serialized as ISO strings to match the API contract.
  */
 const toCartProductDto = (value: unknown): Partial<Product> | undefined => {
     if (!value || typeof value !== 'object' || value instanceof Types.ObjectId) return undefined;

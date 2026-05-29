@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import * as userRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 import type { IToken } from '@models/users';
 import { verifyAccessToken } from './auth-jwt';
 import { rejectResponse } from '@utils/response';
