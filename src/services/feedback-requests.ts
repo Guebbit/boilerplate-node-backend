@@ -80,7 +80,7 @@ export const updateStatusById = (
     payload: UpdateFeedbackRequestStatusRequest
 ): Promise<IResponseSuccess<IFeedbackRequestDocument> | IResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
-        if (!feedback) return generateReject(404, '404', ['Feedback request not found']);
+        if (!feedback) return generateReject(404, 'Not Found', ['Feedback request not found']);
         return updateStatus(feedback, payload);
     });
 

@@ -40,7 +40,6 @@ export const toIdString = (value: unknown): string => {
  */
 const toCartProductDto = (value: unknown): Partial<Product> | undefined => {
     if (!value || typeof value !== 'object' || value instanceof Types.ObjectId) return undefined;
-    if (typeof value === 'string') return undefined;
 
     const id = toIdString(value);
     if (!id) return undefined;

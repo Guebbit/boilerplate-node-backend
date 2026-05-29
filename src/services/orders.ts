@@ -265,7 +265,7 @@ export const updateById = (
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
     orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+        if (!order) return generateReject(404, 'Not Found', [t('ecommerce.order-not-found')]);
         return update(order, data);
     });
 
@@ -287,7 +287,7 @@ export const remove = (order: IOrderDocument): Promise<IResponseSuccess<undefine
  */
 export const removeById = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, '404', [t('ecommerce.order-not-found')]);
+        if (!order) return generateReject(404, 'Not Found', [t('ecommerce.order-not-found')]);
         return remove(order);
     });
 

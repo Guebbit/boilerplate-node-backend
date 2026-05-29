@@ -233,7 +233,7 @@ export const removeById = (
     hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> =>
     productRepository.findById(id).then((product) => {
-        if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
+        if (!product) return generateReject(404, 'Not Found', [t('ecommerce.product-not-found')]);
         return remove(product, hardDelete);
     });
 

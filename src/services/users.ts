@@ -115,7 +115,7 @@ export const adminUpdateById = (
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
     userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, '404', [t('ecommerce.user-not-found')]);
+        if (!user) return generateReject(404, 'Not Found', [t('ecommerce.user-not-found')]);
         return adminUpdate(user, data);
     });
 
@@ -180,7 +180,7 @@ export const removeById = (
     hardDelete = false
 ): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> =>
     userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, '404', [t('ecommerce.user-not-found')]);
+        if (!user) return generateReject(404, 'Not Found', [t('ecommerce.user-not-found')]);
         return remove(user, hardDelete);
     });
 
