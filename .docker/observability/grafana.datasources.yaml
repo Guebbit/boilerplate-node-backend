@@ -1,8 +1,11 @@
-# Auto-provisioned datasources so Grafana can query all backends on first start.
+# Grafana datasource provisioning.
+# Why this file exists: provisioning removes manual UI setup on every container restart.
+# Local goal: auto-connect Grafana to Tempo, Prometheus, and Loki out of the box.
+
 apiVersion: 1
 
 datasources:
-    # ── Traces (Tempo) ─────────────────────────────────────────────────────────
+    # Tempo datasource: trace queries.
     - name: Tempo
       type: tempo
       access: proxy
@@ -11,14 +14,16 @@ datasources:
       isDefault: true
       jsonData:
           httpMethod: GET
+          # Enables service graph links powered by Prometheus metrics.
           serviceMap:
               datasourceUid: prometheus
+          # Enables "view logs for this trace" jump into Loki.
           tracesToLogsV2:
               datasourceUid: loki
               filterByTraceID: true
               filterBySpanID: false
 
-    # ── Metrics (Prometheus) ───────────────────────────────────────────────────
+    # Prometheus datasource: metrics and alert rule visualizations.
     - name: Prometheus
       type: prometheus
       access: proxy
@@ -27,7 +32,7 @@ datasources:
       jsonData:
           httpMethod: GET
 
-    # ── Logs (Loki) ────────────────────────────────────────────────────────────
+    # Loki datasource: structured log search.
     - name: Loki
       type: loki
       access: proxy
@@ -35,7 +40,7 @@ datasources:
       uid: loki
       jsonData:
           derivedFields:
-              # Link trace_id in log lines directly to Tempo.
+              # Turn trace_id in log lines into a clickable Tempo link.
               - datasourceUid: tempo
                 matcherRegex: '"trace_id":"(\w+)"'
                 name: TraceID

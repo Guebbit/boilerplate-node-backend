@@ -1,0 +1,33 @@
+# OpenTelemetry Collector is the telemetry gateway between the app and backends.
+# Why this file exists: collector behavior is pipeline-based (receivers -> processors -> exporters).
+# Local goal: keep one trace pipeline that forwards app spans to Tempo.
+
+receivers:
+    otlp:
+        protocols:
+            # App sends traces here over HTTP.
+            http:
+                endpoint: 0.0.0.0:4318
+            # Optional gRPC ingest for compatible clients/tools.
+            grpc:
+                endpoint: 0.0.0.0:4317
+
+processors:
+    # Batch spans before export to reduce chattiness and improve throughput.
+    batch:
+
+exporters:
+    # Send traces to Tempo over the internal Docker network.
+    otlp/tempo:
+        endpoint: tempo:4317
+        tls:
+            # Internal local stack; no TLS termination between collector and Tempo.
+            insecure: true
+
+service:
+    pipelines:
+        # Trace pipeline: receive OTLP -> batch -> export to Tempo.
+        traces:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [otlp/tempo]

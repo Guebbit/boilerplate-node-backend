@@ -1,0 +1,16 @@
+# Grafana dashboard provider provisioning.
+# Why this file exists: tells Grafana where dashboard JSON files are mounted.
+# Local goal: auto-load repository dashboards with zero manual import steps.
+
+apiVersion: 1
+
+providers:
+    - name: default
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+          # This path is mounted from .docker/observability/grafana/dashboards.
+          path: /var/lib/grafana/dashboards

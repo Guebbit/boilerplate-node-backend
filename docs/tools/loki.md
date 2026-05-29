@@ -41,7 +41,7 @@ Because Winston logs include a `trace_id` field, you can:
 
 ## Local config
 
-Config file: `.docker/observability/loki/loki-config.yaml`
+Config file: `.docker/observability/loki.config.yaml`
 
 - Single-process mode, filesystem storage.
 - Log retention: 7 days.

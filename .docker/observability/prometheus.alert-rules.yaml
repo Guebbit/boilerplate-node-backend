@@ -1,11 +1,11 @@
-# Prometheus alert rules — baseline set for this Node.js API.
-#
-# Covers four golden signals: latency, error rate, saturation, availability.
+# Prometheus alert rules for the local API stack.
+# Why this file exists: dashboards are visual, but alerts define actionable SRE thresholds.
+# Local goal: starter coverage for availability, errors, latency, load, and memory.
 
 groups:
     - name: api.rules
       rules:
-          # ── Availability ────────────────────────────────────────────────────
+          # Availability: API metrics endpoint unreachable.
           - alert: ApiDown
             expr: up{job="api"} == 0
             for: 1m
@@ -15,7 +15,7 @@ groups:
                 summary: 'API instance is down'
                 description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
 
-          # ── Error rate ──────────────────────────────────────────────────────
+          # Error rate: failures are above normal baseline.
           - alert: HighErrorRate
             expr: |
                 (
@@ -30,7 +30,7 @@ groups:
                 summary: 'High HTTP error rate (> 5 %)'
                 description: 'More than 5 % of requests are returning 4xx/5xx over the last 5 minutes.'
 
-          # ── Latency (p95) ───────────────────────────────────────────────────
+          # Latency: user-perceived slowness at p95 percentile.
           - alert: HighP95Latency
             expr: |
                 histogram_quantile(
@@ -44,7 +44,7 @@ groups:
                 summary: 'p95 latency > 2 s'
                 description: 'The 95th-percentile request duration has exceeded 2 000 ms for 5 minutes.'
 
-          # ── Saturation (in-flight) ──────────────────────────────────────────
+          # Saturation: too many concurrent requests in-flight.
           - alert: HighInFlightRequests
             expr: http_requests_in_flight > 100
             for: 2m
@@ -54,7 +54,7 @@ groups:
                 summary: 'Too many in-flight requests (> 100)'
                 description: 'More than 100 requests are being processed simultaneously for 2 minutes.'
 
-          # ── Memory ──────────────────────────────────────────────────────────
+          # Memory pressure: Node.js heap close to exhaustion.
           - alert: HighHeapUsage
             expr: |
                 nodejs_heap_size_used_bytes

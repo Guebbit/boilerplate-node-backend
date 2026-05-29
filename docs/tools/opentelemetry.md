@@ -46,7 +46,7 @@ The **OTel Collector** decouples the app from backend choices. You can add expor
 
 ## OTel Collector config
 
-The collector config lives at `.docker/observability/otel-collector-config.yaml`.
+The collector config lives at `.docker/observability/otel-collector.config.yaml`.
 
 It currently:
 
