@@ -53,7 +53,7 @@ flowchart TD
 
 | Admin endpoint | Grafana equivalent | Notes |
 | --- | --- | --- |
-| `GET /admin/metrics/summary` | Grafana KPI panels (requests, errors, latency, auth, business) | Reads the same prom-client counters/histograms that Prometheus scrapes. Identical numbers, no time axis. |
+| `GET /admin/metrics` | Grafana KPI panels (requests, errors, latency, auth, business) | Reads the same prom-client counters/histograms that Prometheus scrapes. Identical numbers, no time axis. |
 | `GET /admin/health` | Grafana health/uptime panels | Overlaps with Prometheus data (uptime, memory, DB status) but also adds info Prometheus doesn't track (Node version, OS info, integration flags). |
 | `GET /admin/audit` | Loki log search | **Not** a Prometheus metric. Reads from an in-memory ring buffer of security/access events. You'd find the same data in Loki, not in a Grafana metric panel. |
 
@@ -68,7 +68,7 @@ These are separate from Grafana and serve a custom frontend or product UI:
 | Endpoint                    | Auth     | Description                                       |
 | --------------------------- | -------- | ------------------------------------------------- |
 | `GET /metrics`              | public   | Prometheus exposition format — scraped by Prometheus |
-| `GET /admin/metrics/summary`| admin JWT| Curated KPI snapshot for a custom dashboard       |
+| `GET /admin/metrics`        | admin JWT| Curated KPI snapshot for a custom dashboard       |
 | `GET /admin/health`         | admin JWT| Full health: DB, Redis, integrations, memory      |
 | `GET /observability/events` | public   | SSE stream: live metrics snapshot every 5 s       |
 

@@ -56,7 +56,7 @@ These sit behind the `/admin` router and require a valid **admin** JWT:
 | Route                        | Returns                                                                           |
 | ---------------------------- | --------------------------------------------------------------------------------- |
 | `GET /admin/health`          | Full health snapshot: DB status, memory, CPU, integration flags, uptime           |
-| `GET /admin/metrics/summary` | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
+| `GET /admin/metrics`         | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
 | `GET /admin/audit`           | Recent audit events from the in-memory ring buffer (max 200)                      |
 
 These endpoints return **curated, domain-shaped summaries** — they are the data layer for a custom frontend, not raw Prometheus query results.
