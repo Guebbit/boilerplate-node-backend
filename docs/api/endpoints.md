@@ -106,5 +106,5 @@ See the dedicated [Admin Endpoints](./admin.md) page for details, response shape
 ## Related pages
 
 - [Admin Endpoints](./admin.md)
-- [REST Style](./rest-style.md)
+- [API overview](./index.md#rest-patterns-used-here)
 - [OpenAPI Workflow](./openapi-workflow.md)

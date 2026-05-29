@@ -35,6 +35,7 @@ Use it to understand **what this boilerplate is**, **how the app layers fit toge
 ## Family map
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}}}%%
 flowchart TD
     A[Node backend boilerplate family] --> B[api-mongodb-mongoose\nthis repo]
     A --> C[mvc-mongodb-mongoose\nsame data stack, monorepo shape]
@@ -45,6 +46,13 @@ flowchart TD
     B --> T[Theory]
     B --> U[Tools]
     B --> V[API]
+
+    classDef family fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef current fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef docs fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class A,C,D,E,F family;
+    class B current;
+    class T,U,V docs;
 ```
 
 ## Read this repo as
@@ -66,15 +74,16 @@ Big picture: architecture, layers, and request flow.
 
 ### [Tools](./tools/)
 
-Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, Grafana, analytics, testing, and docs.
+Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, package groups, scripts, containers, analytics, testing, and docs.
 
 ### [API](./api/)
 
-Contract-first workflow: OpenAPI + AsyncAPI, REST style, codegen, mocks, and implementation alignment.
+Contract-first workflow: OpenAPI + AsyncAPI, codegen, mocks, and implementation alignment.
 
 ## Quick visual of the current repo
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}}}%%
 flowchart LR
     OpenSpec[openapi.yaml] --> Routes[Routes + middlewares]
     AsyncSpec[asyncapi.yaml] --> Realtime[WebSocket + SSE contracts]
@@ -88,11 +97,21 @@ flowchart LR
     Controllers --> Cache[Redis cache hooks]
     Obs --> Grafana[Grafana dashboards]
     OpenSpec --> Types[Generated API types]
+
+    classDef contract fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef data fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef ops fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class OpenSpec,AsyncSpec,Types contract;
+    class Routes,Realtime,Controllers,Services app;
+    class Repositories,Models,Mongo,Cache data;
+    class Obs,Grafana ops;
 ```
 
 ## Good starting points
 
 - Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
 - Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.
+- Want the `package.json` map? Read [Package Dependencies](./tools/package-dependencies.md) and [Package Scripts](./tools/package-scripts.md).
 - Want observability? Read [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
 - Want to change payloads or routes? Start in [API Overview](./api/) and keep [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) first.

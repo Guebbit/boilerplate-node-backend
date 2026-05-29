@@ -25,11 +25,21 @@
 ## Architecture
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 65}}}%%
 flowchart LR
     API[Express handler] -->|publish| RMQ[(RabbitMQ)]
     RMQ -->|consume| Worker[Consumer process]
     Worker --> SMTP[Send email]
     Worker --> PDF[Generate PDF]
+
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef queue fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef worker fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef outbound fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class API app;
+    class RMQ queue;
+    class Worker worker;
+    class SMTP,PDF outbound;
 ```
 
 ## How it's used
@@ -52,6 +62,28 @@ Controllers using it:
 
 The `pdf.worker.ts` consumer handles async PDF generation jobs (e.g. batch invoices, reports). The synchronous invoice endpoint (`GET /orders/:id/invoice`) still renders PDFs inline since it must return the file directly to the client.
 
+## Job lifecycle
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
+flowchart LR
+    Producer[Controller or service] --> Publish[enqueueEmail / publishToQueue]
+    Publish --> Queue[(emails or pdf jobs)]
+    Queue --> Consume[email.worker / pdf.worker]
+    Consume --> Ack[Ack on success]
+    Consume --> Retry[Requeue on transient failure]
+    Consume --> Drop[Reject malformed payload]
+
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef queue fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef worker fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef result fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class Producer,Publish app;
+    class Queue queue;
+    class Consume worker;
+    class Ack,Retry,Drop result;
+```
+
 ## Configuration
 
 | Env var                 | Description                                               |
@@ -70,7 +102,7 @@ When none of the vars are set, all queue operations silently no-op — the rest 
 The `docker-compose.yml` includes a `rabbitmq` service with the management plugin:
 
 - **AMQP port**: `5672`
-- **Management UI**: [http://localhost:15672](http://localhost:15672) (guest / guest)
+- **Management UI**: `http://localhost:15672` (guest / guest)
 
 ## Usage
 
@@ -128,4 +160,5 @@ consumeFromQueue({
 
 - [Email & PDF Rendering](./email-and-rendering.md) — primary queue use case
 - [Runtime](./runtime.md) — startup/shutdown lifecycle
+- [AsyncAPI Workflow](../api/asyncapi-workflow.md) — async contracts for worker queues
 - [Redis Cache](./redis-cache.md) — similar optional-infrastructure pattern

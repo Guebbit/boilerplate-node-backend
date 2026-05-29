@@ -16,12 +16,20 @@
 ## Runtime visual
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 60}}}%%
 flowchart LR
     Express --> Routes
     Routes --> Controllers
     Controllers --> Services
     Services --> Response[REST responses]
     Services --> Validation[Zod checks]
+
+    classDef transport fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef core fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef support fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class Express,Routes,Controllers transport;
+    class Services core;
+    class Response,Validation support;
 ```
 
 ## How to think about runtime here
@@ -45,6 +53,6 @@ flowchart LR
 - [Layers](../theory/layers.md)
 - [Clustering & graceful shutdown](../theory/clustering.md)
 - [Security](./security.md)
-- [REST Style](../api/rest-style.md)
+- [API overview](../api/#rest-patterns-used-here)
 - [Email & PDF rendering](./email-and-rendering.md)
 - [WebSockets](./websockets.md)
