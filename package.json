@@ -48,6 +48,7 @@
         "publish:public": "npm publish --access public"
     },
     "devDependencies": {
+        "@asyncapi/modelina": "^5.10.1",
         "@stoplight/prism-cli": "^5.14.2",
         "@stoplight/spectral-cli": "^6.15.0",
         "@stoplight/spectral-rulesets": "^1.22.0",
