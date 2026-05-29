@@ -11,6 +11,7 @@ export enum ERefreshTokenExpiryTime {
 
 /**
  * Get expiry time in seconds for the given token duration tier.
+ * Falls through to access token time when no tier is specified.
  */
 export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
     switch (remember) {
