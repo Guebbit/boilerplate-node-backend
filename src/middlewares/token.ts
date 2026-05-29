@@ -19,30 +19,20 @@ export enum ERefreshTokenExpiryTime {
     LONG = 'long'
 }
 
+/* Map each token tier to its corresponding env var name. */
+const TOKEN_EXPIRY_ENV: Record<ERefreshTokenExpiryTime | 'default', string> = {
+    [ERefreshTokenExpiryTime.SHORT]: 'NODE_TOKEN_REFRESH_TIME_SHORT',
+    [ERefreshTokenExpiryTime.MEDIUM]: 'NODE_TOKEN_REFRESH_TIME_MEDIUM',
+    [ERefreshTokenExpiryTime.LONG]: 'NODE_TOKEN_REFRESH_TIME_LONG',
+    default: 'NODE_TOKEN_ACCESS_TIME'
+};
+
 /**
  * Get expiry time in seconds for the given token duration tier.
  */
 export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
-    switch (remember) {
-        // eslint-disable-next-line unicorn/switch-case-braces
-        case ERefreshTokenExpiryTime.SHORT:
-            return process.env.NODE_TOKEN_REFRESH_TIME_SHORT
-                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_SHORT)
-                : 0;
-        // eslint-disable-next-line unicorn/switch-case-braces
-        case ERefreshTokenExpiryTime.MEDIUM:
-            return process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM
-                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM)
-                : 0;
-        // eslint-disable-next-line unicorn/switch-case-braces
-        case ERefreshTokenExpiryTime.LONG:
-            return process.env.NODE_TOKEN_REFRESH_TIME_LONG
-                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_LONG)
-                : 0;
-    }
-    return process.env.NODE_TOKEN_ACCESS_TIME
-        ? Number.parseInt(process.env.NODE_TOKEN_ACCESS_TIME)
-        : 0;
+    const envKey = TOKEN_EXPIRY_ENV[remember ?? 'default'];
+    return process.env[envKey] ? Number.parseInt(process.env[envKey]) : 0;
 };
 
 /**

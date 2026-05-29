@@ -98,6 +98,15 @@ export const extractRequestContext = (request: {
     };
 };
 
+/** Resolve actor role from request auth context. */
+export const resolveActorRole = (request: {
+    authContext?: { admin?: boolean } | null;
+}): IAuditEvent['actor_role'] => {
+    if (request.authContext?.admin) return 'admin';
+    if (request.authContext) return 'user';
+    return 'anonymous';
+};
+
 /** Build a complete audit event from request context + action-specific fields. */
 export const buildAuditEvent = (
     request: {
@@ -110,7 +119,7 @@ export const buildAuditEvent = (
         Partial<Pick<IAuditEvent, 'actor_user_id' | 'actor_role' | 'target_type' | 'target_id' | 'metadata'>>
 ): IAuditEvent => ({
     actor_user_id: fields.actor_user_id ?? request.authContext?.id ?? 'unknown',
-    actor_role: fields.actor_role ?? (request.authContext?.admin ? 'admin' : request.authContext ? 'user' : 'anonymous'),
+    actor_role: fields.actor_role ?? resolveActorRole(request),
     ...fields,
     ...extractRequestContext(request)
 });
