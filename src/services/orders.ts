@@ -274,7 +274,9 @@ export const updateById = (
  *
  * @param order
  */
-export const remove = (order: IOrderDocument): Promise<IResponseSuccess<undefined> | IResponseReject> =>
+export const remove = (
+    order: IOrderDocument
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     orderRepository
         .deleteOne(order)
         .then(() => generateSuccess(undefined, 200, t('ecommerce.order-deleted')));
@@ -291,4 +293,13 @@ export const removeById = (id: string): Promise<IResponseSuccess<undefined> | IR
         return remove(order);
     });
 
-export const orderService = { getAll, search, getById, create, update, updateById, remove, removeById };
+export const orderService = {
+    getAll,
+    search,
+    getById,
+    create,
+    update,
+    updateById,
+    remove,
+    removeById
+};

@@ -20,12 +20,14 @@ import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/a
  */
 const recordLoginFailure = (request: Request) => {
     authLoginTotal.inc({ status: 'failure' });
-    emitAuditEvent(buildAuditEvent(request, {
-        action: AuditAction.AUTH_LOGIN_FAILED,
-        actor_user_id: 'anonymous',
-        actor_role: 'anonymous',
-        outcome: 'failure'
-    }));
+    emitAuditEvent(
+        buildAuditEvent(request, {
+            action: AuditAction.AUTH_LOGIN_FAILED,
+            actor_user_id: 'anonymous',
+            actor_role: 'anonymous',
+            outcome: 'failure'
+        })
+    );
 };
 
 /*
@@ -34,12 +36,14 @@ const recordLoginFailure = (request: Request) => {
 const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) => {
     const role = isAdmin ? 'admin' : 'user';
     authLoginTotal.inc({ status: 'success' });
-    emitAuditEvent(buildAuditEvent(request, {
-        action: AuditAction.AUTH_LOGIN_SUCCEEDED,
-        actor_user_id: userId,
-        actor_role: role,
-        outcome: 'success'
-    }));
+    emitAuditEvent(
+        buildAuditEvent(request, {
+            action: AuditAction.AUTH_LOGIN_SUCCEEDED,
+            actor_user_id: userId,
+            actor_role: role,
+            outcome: 'success'
+        })
+    );
     emitAnalyticsEvent({
         ...buildAnalyticsBase(request),
         distinctId: userId,
@@ -54,7 +58,11 @@ const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) 
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
 export const postLogin = (
-    request: Request<Record<string, string>, unknown, LoginRequest & { remember?: ERefreshTokenExpiryTime }>,
+    request: Request<
+        Record<string, string>,
+        unknown,
+        LoginRequest & { remember?: ERefreshTokenExpiryTime }
+    >,
     response: Response
 ) => {
     /*

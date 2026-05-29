@@ -19,7 +19,9 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
         .getById(String(request.params.id), userScope(request))
         .then((order) => {
             if (!order) {
-                rejectResponse(response, 404, 'getOrderItem - not found', [t('ecommerce.order-not-found')]);
+                rejectResponse(response, 404, 'getOrderItem - not found', [
+                    t('ecommerce.order-not-found')
+                ]);
                 return;
             }
             successResponse(response, order);

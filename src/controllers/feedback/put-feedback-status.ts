@@ -30,14 +30,17 @@ export const putFeedbackStatus = (
     return feedbackRequestService
         .updateStatusById(request.params.id, parseResult.data)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.message, result.errors);
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.ADMIN_FEEDBACK_STATUS_UPDATED,
-                outcome: 'success',
-                target_type: 'feedback',
-                target_id: request.params.id,
-                metadata: { status: parseResult.data.status }
-            }));
+            if (!result.success)
+                return rejectResponse(response, result.status, result.message, result.errors);
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.ADMIN_FEEDBACK_STATUS_UPDATED,
+                    outcome: 'success',
+                    target_type: 'feedback',
+                    target_id: request.params.id,
+                    metadata: { status: parseResult.data.status }
+                })
+            );
             return successResponse(response, result.data);
         });
 };

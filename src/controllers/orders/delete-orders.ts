@@ -22,19 +22,19 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
                 rejectResponse(response, result.status, result.message, result.errors);
                 return;
             }
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.ADMIN_ORDER_DELETED,
-                outcome: 'success',
-                target_type: 'order',
-                target_id: id
-            }));
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.ADMIN_ORDER_DELETED,
+                    outcome: 'success',
+                    target_type: 'order',
+                    target_id: id
+                })
+            );
             successResponse(response, undefined, 200, result.message);
         })
         .catch((error: CastError) => {
             if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'Not Found', [
-                    t('ecommerce.order-not-found')
-                ]);
+                return rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
             rejectResponse(response, 500, 'deleteOrder', [error.message]);
         });
 };

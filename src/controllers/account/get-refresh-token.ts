@@ -24,13 +24,15 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
      */
     if (!refreshToken) {
         authRefreshTotal.inc({ status: 'failure' });
-        emitAuditEvent(buildAuditEvent(request, {
-            action: AuditAction.AUTH_REFRESH_FAILED,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            outcome: 'failure',
-            metadata: { reason: 'missing_token' }
-        }));
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.AUTH_REFRESH_FAILED,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'failure',
+                metadata: { reason: 'missing_token' }
+            })
+        );
         rejectResponse(response, 401, 'Unauthorized');
         return;
     }
@@ -42,21 +44,25 @@ export const getRefreshToken = (request: Request<{ token?: string }>, response: 
         createAccessToken(refreshToken)
             .then((token) => {
                 authRefreshTotal.inc({ status: 'success' });
-                emitAuditEvent(buildAuditEvent(request, {
-                    action: AuditAction.AUTH_REFRESH_SUCCEEDED,
-                    outcome: 'success'
-                }));
+                emitAuditEvent(
+                    buildAuditEvent(request, {
+                        action: AuditAction.AUTH_REFRESH_SUCCEEDED,
+                        outcome: 'success'
+                    })
+                );
                 successResponse(response, { token });
             })
             .catch(() => {
                 authRefreshTotal.inc({ status: 'failure' });
-                emitAuditEvent(buildAuditEvent(request, {
-                    action: AuditAction.AUTH_REFRESH_FAILED,
-                    actor_user_id: 'anonymous',
-                    actor_role: 'anonymous',
-                    outcome: 'failure',
-                    metadata: { reason: 'invalid_token' }
-                }));
+                emitAuditEvent(
+                    buildAuditEvent(request, {
+                        action: AuditAction.AUTH_REFRESH_FAILED,
+                        actor_user_id: 'anonymous',
+                        actor_role: 'anonymous',
+                        outcome: 'failure',
+                        metadata: { reason: 'invalid_token' }
+                    })
+                );
                 rejectResponse(response, 401, 'Unauthorized');
             })
     );

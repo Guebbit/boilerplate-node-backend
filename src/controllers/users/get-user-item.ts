@@ -20,8 +20,6 @@ export const getUserItem = (request: Request, response: Response) =>
         })
         .catch((error: CastError) => {
             if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'Not Found', [
-                    t('ecommerce.user-not-found')
-                ]);
+                return rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
             rejectResponse(response, 500, 'getUserItem', [error.message]);
         });

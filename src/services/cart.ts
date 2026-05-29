@@ -52,12 +52,10 @@ const clearCartItems = (user: IUserDocument): void => {
  * Get user cart populated with product details.
  */
 export const cartGet = (userId: string): Promise<ICartItemDto[]> =>
-    userRepository
-        .findById(userId)
-        .then((user) => {
-            if (!user) return [];
-            return populateCartItems(user).then((items) => items.map((item) => toCartItemDto(item)));
-        });
+    userRepository.findById(userId).then((user) => {
+        if (!user) return [];
+        return populateCartItems(user).then((items) => items.map((item) => toCartItemDto(item)));
+    });
 
 /**
  * Get user cart with computed summary (item count, total quantity, total price).
@@ -162,7 +160,8 @@ export const cartItemRemoveById = (
         user.cart.items = user.cart.items.filter(
             ({ product }: ICartItem) => !matchesProductId(product, id)
         );
-        if (user.cart.items.length === before) return generateReject(404, 'cart - item not found', []);
+        if (user.cart.items.length === before)
+            return generateReject(404, 'cart - item not found', []);
         user.cart.updatedAt = new Date();
         return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
     });

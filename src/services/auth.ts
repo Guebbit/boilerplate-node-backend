@@ -195,7 +195,9 @@ export const tokenRemoveAll = (
     userRepository
         .findById(userId)
         .then((user): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
-            if (!user) return Promise.resolve(generateReject(404, 'tokenRemoveAll - user not found', []));
+            // eslint-disable-next-line unicorn/no-useless-promise-resolve-reject
+            if (!user)
+                return Promise.resolve(generateReject(404, 'tokenRemoveAll - user not found', []));
             user.tokens = user.tokens.filter((t) => t.type !== type);
             return userRepository.save(user).then((saved) => generateSuccess<IUserDocument>(saved));
         })

@@ -19,10 +19,12 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
         .then(({ status, success }) => {
             if (!success) return rejectResponse(response, status);
             authTokenCleanupTotal.inc();
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.AUTH_TOKEN_EXPIRED_CLEANUP,
-                outcome: 'success'
-            }));
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.AUTH_TOKEN_EXPIRED_CLEANUP,
+                    outcome: 'success'
+                })
+            );
             return successResponse(response, undefined, status);
         })
         .catch((error: CastError | Error) => {

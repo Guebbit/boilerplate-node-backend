@@ -53,8 +53,12 @@ const toCartProductDto = (value: unknown): Partial<Product> | undefined => {
         ...(typeof p.price === 'number' && { price: p.price }),
         ...(typeof p.description === 'string' && { description: p.description }),
         ...(typeof p.imageUrl === 'string' && { imageUrl: p.imageUrl }),
-        ...(Array.isArray(p.categories) && { categories: p.categories.filter((c): c is string => typeof c === 'string') }),
-        ...(Array.isArray(p.tags) && { tags: p.tags.filter((t): t is string => typeof t === 'string') }),
+        ...(Array.isArray(p.categories) && {
+            categories: p.categories.filter((c): c is string => typeof c === 'string')
+        }),
+        ...(Array.isArray(p.tags) && {
+            tags: p.tags.filter((t): t is string => typeof t === 'string')
+        }),
         ...(typeof p.active === 'boolean' && { active: p.active }),
         ...(p.createdAt instanceof Date && { createdAt: p.createdAt.toISOString() }),
         ...(p.updatedAt instanceof Date && { updatedAt: p.updatedAt.toISOString() }),

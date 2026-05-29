@@ -18,10 +18,12 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
         destroyRefreshCookie(response);
         destroyLoggedCookie(response);
 
-        emitAuditEvent(buildAuditEvent(request, {
-            action: AuditAction.AUTH_LOGOUT_ALL_SUCCEEDED,
-            outcome: 'success'
-        }));
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.AUTH_LOGOUT_ALL_SUCCEEDED,
+                outcome: 'success'
+            })
+        );
 
         successResponse(response, undefined, 200, 'Logged out from all devices');
     });

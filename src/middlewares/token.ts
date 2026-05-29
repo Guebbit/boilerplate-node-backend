@@ -20,7 +20,11 @@ export interface ITokenData {
     id: string;
 }
 
-export { ERefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from '@utils/token-config';
+export {
+    ERefreshTokenExpiryTime,
+    getExpiryTime,
+    getExpiryTimeMilliseconds
+} from '@utils/token-config';
 
 /*
  * Verify an access token (stateless JWT check only).
@@ -73,14 +77,10 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
         .select('+tokens')
         .then((user) => {
             if (!user) throw new Error('User not found');
-            const token = sign(
-                { id } as ITokenData,
-                getRefreshTokenSecret(),
-                {
-                    expiresIn: getExpiryTime(remember),
-                    algorithm: 'HS256'
-                }
-            ) as IToken['token'];
+            const token = sign({ id } as ITokenData, getRefreshTokenSecret(), {
+                expiresIn: getExpiryTime(remember),
+                algorithm: 'HS256'
+            }) as IToken['token'];
             return user.tokenAdd(ETokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
@@ -91,12 +91,8 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id }) =>
-        sign(
-            { id } as ITokenData,
-            getAccessTokenSecret(),
-            {
-                expiresIn: getAccessTokenTTL(),
-                algorithm: 'HS256'
-            }
-        )
+        sign({ id } as ITokenData, getAccessTokenSecret(), {
+            expiresIn: getAccessTokenTTL(),
+            algorithm: 'HS256'
+        })
     );

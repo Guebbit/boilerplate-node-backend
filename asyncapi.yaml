@@ -161,55 +161,13 @@ components:
             messageId: realtime.chat.command.join
             title: Chat join command
             payload:
-                type: object
-                required:
-                    - type
-                    - payload
-                properties:
-                    type:
-                        type: string
-                        enum:
-                            - chat:join
-                    payload:
-                        type: object
-                        required:
-                            - username
-                        properties:
-                            username:
-                                type: string
-                                minLength: 1
-                                maxLength: 32
-                            room:
-                                type: string
-                                enum:
-                                    - general
-                        additionalProperties: false
-                additionalProperties: false
+                $ref: '#/components/schemas/ChatJoinCommand'
         ChatMessageSendCommand:
             name: ChatMessageSendCommand
             messageId: realtime.chat.command.message.send
             title: Chat message send command
             payload:
-                type: object
-                required:
-                    - type
-                    - payload
-                properties:
-                    type:
-                        type: string
-                        enum:
-                            - chat:message:send
-                    payload:
-                        type: object
-                        required:
-                            - message
-                        properties:
-                            message:
-                                type: string
-                                minLength: 1
-                                maxLength: 500
-                        additionalProperties: false
-                additionalProperties: false
+                $ref: '#/components/schemas/ChatMessageSendCommand'
         ChatSystemUserJoinedEvent:
             name: ChatSystemUserJoinedEvent
             messageId: realtime.chat.event.user.joined
@@ -253,52 +211,13 @@ components:
             messageId: realtime.chat.event.error
             title: Chat error event
             payload:
-                type: object
-                required:
-                    - type
-                    - payload
-                properties:
-                    type:
-                        type: string
-                        enum:
-                            - chat:error
-                    payload:
-                        type: object
-                        required:
-                            - message
-                        properties:
-                            message:
-                                type: string
-                        additionalProperties: false
-                additionalProperties: false
+                $ref: '#/components/schemas/ChatErrorEvent'
         ChatJoinedEvent:
             name: ChatJoinedEvent
             messageId: realtime.chat.event.joined
             title: Private join acknowledgment
             payload:
-                type: object
-                required:
-                    - type
-                    - payload
-                properties:
-                    type:
-                        type: string
-                        enum:
-                            - chat:joined
-                    payload:
-                        type: object
-                        required:
-                            - username
-                            - room
-                        properties:
-                            username:
-                                type: string
-                            room:
-                                type: string
-                                enum:
-                                    - general
-                        additionalProperties: false
-                additionalProperties: false
+                $ref: '#/components/schemas/ChatJoinedEvent'
         MetricsSnapshotEvent:
             name: MetricsSnapshotEvent
             messageId: observability.metrics.snapshot
@@ -322,36 +241,7 @@ components:
             messageId: ecommerce.cart.checked_out
             title: Ecommerce example - cart checked out
             payload:
-                type: object
-                required:
-                    - eventName
-                    - eventId
-                    - occurredAt
-                    - cartId
-                    - userId
-                    - orderId
-                    - itemCount
-                properties:
-                    eventName:
-                        type: string
-                        enum:
-                            - ecommerce.cart.checked_out
-                    eventId:
-                        type: string
-                        format: uuid
-                    occurredAt:
-                        type: string
-                        format: date-time
-                    cartId:
-                        type: string
-                    userId:
-                        type: string
-                    orderId:
-                        type: string
-                    itemCount:
-                        type: integer
-                        minimum: 1
-                additionalProperties: false
+                $ref: '#/components/schemas/CartCheckedOutEvent'
         EmailJobMessage:
             name: EmailJobMessage
             messageId: worker.email.send
@@ -608,4 +498,124 @@ components:
                     type: string
                     format: date-time
                     description: When the invalidation occurred.
+            additionalProperties: false
+        ChatJoinCommand:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:join
+                payload:
+                    type: object
+                    required:
+                        - username
+                    properties:
+                        username:
+                            type: string
+                            minLength: 1
+                            maxLength: 32
+                        room:
+                            type: string
+                            enum:
+                                - general
+                    additionalProperties: false
+            additionalProperties: false
+        ChatMessageSendCommand:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:message:send
+                payload:
+                    type: object
+                    required:
+                        - message
+                    properties:
+                        message:
+                            type: string
+                            minLength: 1
+                            maxLength: 500
+                    additionalProperties: false
+            additionalProperties: false
+        ChatJoinedEvent:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:joined
+                payload:
+                    type: object
+                    required:
+                        - username
+                        - room
+                    properties:
+                        username:
+                            type: string
+                        room:
+                            type: string
+                            enum:
+                                - general
+                    additionalProperties: false
+            additionalProperties: false
+        ChatErrorEvent:
+            type: object
+            required:
+                - type
+                - payload
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - chat:error
+                payload:
+                    type: object
+                    required:
+                        - message
+                    properties:
+                        message:
+                            type: string
+                    additionalProperties: false
+            additionalProperties: false
+        CartCheckedOutEvent:
+            type: object
+            required:
+                - eventName
+                - eventId
+                - occurredAt
+                - cartId
+                - userId
+                - orderId
+                - itemCount
+            properties:
+                eventName:
+                    type: string
+                    enum:
+                        - ecommerce.cart.checked_out
+                eventId:
+                    type: string
+                    format: uuid
+                occurredAt:
+                    type: string
+                    format: date-time
+                cartId:
+                    type: string
+                userId:
+                    type: string
+                orderId:
+                    type: string
+                itemCount:
+                    type: integer
+                    minimum: 1
             additionalProperties: false

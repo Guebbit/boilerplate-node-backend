@@ -20,11 +20,11 @@ All of this is wired in `src/utils/tracing.ts`. `startTracing()` is called at th
 
 ## Configuration
 
-| Env var                       | Effect                                                                                        |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the **OTel Collector**. When unset, traces are simply not exported.    |
-| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers.                                       |
-| `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).                  |
+| Env var                       | Effect                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the **OTel Collector**. When unset, traces are simply not exported. |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers.                                   |
+| `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).              |
 
 Local docker-compose sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` automatically.
 
@@ -49,6 +49,7 @@ The **OTel Collector** decouples the app from backend choices. You can add expor
 The collector config lives at `.docker/observability/otel-collector-config.yaml`.
 
 It currently:
+
 - Receives OTLP/HTTP on `:4318` and OTLP/gRPC on `:4317`
 - Batches spans via the `batch` processor
 - Exports traces to Tempo via OTLP/gRPC

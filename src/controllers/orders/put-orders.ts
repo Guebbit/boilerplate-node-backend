@@ -33,18 +33,22 @@ export const putOrders = (
                 return;
             }
 
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.ADMIN_ORDER_UPDATED,
-                outcome: 'success',
-                target_type: 'order',
-                target_id: id
-            }));
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.ADMIN_ORDER_UPDATED,
+                    outcome: 'success',
+                    target_type: 'order',
+                    target_id: id
+                })
+            );
 
             successResponse(response, result.data);
         })
         .catch((error: Error) => {
             if (error.message === '404')
-                rejectResponse(response, 404, 'updateOrder - not found', [t('ecommerce.order-not-found')]);
+                rejectResponse(response, 404, 'updateOrder - not found', [
+                    t('ecommerce.order-not-found')
+                ]);
             else rejectResponse(response, 500, 'updateOrder', [error.message]);
         });
 };

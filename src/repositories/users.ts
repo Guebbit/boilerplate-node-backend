@@ -11,7 +11,8 @@ const base = createBaseRepository<IUserDocument>(userModel);
 
 export const findById = (id: string) => base.findById(id);
 export const findOne = (where: QueryFilter<IUserDocument>) => base.findOne(where);
-export const findAll = (where: QueryFilter<IUserDocument> = {}, options: IFindAllOptions = {}) => base.findAll(where, options);
+export const findAll = (where: QueryFilter<IUserDocument> = {}, options: IFindAllOptions = {}) =>
+    base.findAll(where, options);
 export const count = (where: QueryFilter<IUserDocument> = {}): Promise<number> => base.count(where);
 export const create = (data: Partial<IUserDocument>): Promise<IUserDocument> => base.create(data);
 export const deleteOne = (user: IUserDocument): Promise<void> => base.deleteOne(user);

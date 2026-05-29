@@ -13,11 +13,7 @@ import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
-import {
-    normalizePagination,
-    addTextFilter,
-    paginatedSearch
-} from '@utils/search-helpers';
+import { normalizePagination, addTextFilter, paginatedSearch } from '@utils/search-helpers';
 
 /**
  * Product Service
@@ -64,7 +60,10 @@ export const search = (
     if (filters.id && String(filters.id).trim() !== '')
         where._id = new Types.ObjectId(String(filters.id));
 
-    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, ['title', 'description']);
+    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, [
+        'title',
+        'description'
+    ]);
 
     // Filter by categories/tags
     if (filters.category && String(filters.category).trim() !== '')
@@ -149,8 +148,7 @@ export const update = (
     if (data.price !== undefined) product.price = data.price;
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
-    if (data.categories !== undefined)
-        product.categories = sanitizeStringArray(data.categories);
+    if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
 
     // If a new image was uploaded, update the URL on the document
@@ -204,9 +202,7 @@ export const remove = (
         return cartService
             .productRemoveFromCartsById(id)
             .then(() => productRepository.deleteOne(product))
-            .then(() =>
-                deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl)
-            )
+            .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
 
     // If deletedAt already present: it's soft-deleted → RESTORE
@@ -237,4 +233,13 @@ export const removeById = (
         return remove(product, hardDelete);
     });
 
-export const productService = { validateData, search, getById, create, update, updateById, remove, removeById };
+export const productService = {
+    validateData,
+    search,
+    getById,
+    create,
+    update,
+    updateById,
+    remove,
+    removeById
+};

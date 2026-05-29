@@ -40,24 +40,28 @@ export const postSignup = (
             if (!result.success)
                 return deleteUpload().then(() => {
                     authSignupTotal.inc({ status: 'failure' });
-                    emitAuditEvent(buildAuditEvent(request, {
-                        action: AuditAction.AUTH_SIGNUP_FAILED,
-                        actor_user_id: 'anonymous',
-                        actor_role: 'anonymous',
-                        outcome: 'failure'
-                    }));
+                    emitAuditEvent(
+                        buildAuditEvent(request, {
+                            action: AuditAction.AUTH_SIGNUP_FAILED,
+                            actor_user_id: 'anonymous',
+                            actor_role: 'anonymous',
+                            outcome: 'failure'
+                        })
+                    );
                     rejectResponse(response, result.status, result.message, result.errors);
                 });
 
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
             const newUserId = result.data?.id ?? 'unknown';
-            emitAuditEvent(buildAuditEvent(request, {
-                action: AuditAction.AUTH_SIGNUP_SUCCEEDED,
-                actor_user_id: newUserId,
-                actor_role: 'user',
-                outcome: 'success'
-            }));
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.AUTH_SIGNUP_SUCCEEDED,
+                    actor_user_id: newUserId,
+                    actor_role: 'user',
+                    outcome: 'success'
+                })
+            );
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
                 distinctId: newUserId,
