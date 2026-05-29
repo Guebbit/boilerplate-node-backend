@@ -124,7 +124,7 @@ export const search = (
 
 /**
  * Get a single order by ID.
- * Returns undefined if id is falsy, or null if not found.
+ * Returns undefined if id is falsy or if not found.
  *
  * @param id
  * @param scope - Optional extra filter (e.g. restrict to a specific userId)
@@ -132,8 +132,9 @@ export const search = (
 export const getById = (
     id: string | undefined,
     scope?: Record<string, unknown>
-): Promise<IOrderDocument | null | void> => {
-    if (!id) return Promise.resolve();
+): Promise<IOrderDocument | undefined> => {
+    // eslint-disable-next-line unicorn/no-useless-undefined
+    if (!id) return Promise.resolve<IOrderDocument | undefined>(undefined);
     if (scope) {
         // Use aggregate so we can apply both _id and scope filters
         return orderRepository
@@ -146,7 +147,7 @@ export const getById = (
             ])
             .then(([result]) => result ?? undefined);
     }
-    return orderRepository.findById(id);
+    return orderRepository.findById(id).then((order) => order ?? undefined);
 };
 
 /**

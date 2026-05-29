@@ -1,10 +1,10 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { z } from 'zod';
 import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { logger } from '@utils/winston';
 import { type User } from '@types';
+export { zodUserSchema } from './user-validation';
 
 /**
  * Token types used in jwt-auth
@@ -158,37 +158,6 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
         timestamps: true
     }
 );
-
-/**
- * Zod validation schema
- */
-export const zodUserSchema = z.object({
-    id: z.number().nullish(),
-
-    email: z
-        .string()
-        .min(1, { message: t('signup.user-field-email-required') as string })
-        .email({ message: t('signup.user-field-email-invalid') as string }),
-
-    username: z
-        .string()
-        .min(1, { message: t('signup.user-field-username-required') as string })
-        .min(3, { message: t('signup.user-field-username-min') as string }),
-
-    password: z
-        .string()
-        .min(1, { message: t('signup.user-field-password-required') as string })
-        .min(8, { message: t('signup.user-field-password-min') as string }),
-
-    imageUrl: z.string().nullish(),
-
-    admin: z.boolean().nullish(),
-    active: z.boolean().nullish(),
-
-    createdAt: z.date().nullish(),
-    updatedAt: z.date().nullish(),
-    deletedAt: z.date().nullish()
-});
 
 /**
  * Hook to make edits pre saving

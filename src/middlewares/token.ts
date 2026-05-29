@@ -2,16 +2,32 @@ import { sign, verify } from 'jsonwebtoken';
 import { userModel as Users, ETokenType } from '@models/users';
 import type { IToken } from '@models/users';
 import type { CastError } from 'mongoose';
+import {
+    getAccessTokenSecret,
+    getRefreshTokenSecret,
+    getAccessTokenTTL,
+    getExpiryTime,
+    getExpiryTimeMilliseconds
+} from '@utils/token-config';
+import type { ERefreshTokenExpiryTime } from '@utils/token-config';
 
+<<<<<<< HEAD
 /*
  * Token Service — JWT creation and verification only.
  * Cookie/transport handling belongs to the calling layer.
+=======
+/**
+ * Token Service
+ * Single responsibility: JWT token creation and verification.
+ * Config (secrets, TTLs) is delegated to token-config.
+>>>>>>> origin/main
  */
 
 export interface ITokenData {
     id: string;
 }
 
+<<<<<<< HEAD
 export enum ERefreshTokenExpiryTime {
     SHORT = 'short',
     MEDIUM = 'medium',
@@ -45,6 +61,9 @@ export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
  */
 export const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
+=======
+export { ERefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from '@utils/token-config';
+>>>>>>> origin/main
 
 /*
  * Verify an access token (stateless JWT check only).
@@ -53,7 +72,7 @@ export const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
  */
 export const verifyAccessToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
-        verify(token, process.env.NODE_TOKEN_ACCESS ?? '', (error, data) => {
+        verify(token, getAccessTokenSecret(), (error, data) => {
             if (error) return reject(error);
             resolve(data as ITokenData);
         });
@@ -67,7 +86,7 @@ export const verifyAccessToken = (token: string): Promise<ITokenData> =>
  */
 export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
-        verify(token, process.env.NODE_TOKEN_REFRESH ?? '', (error, data) => {
+        verify(token, getRefreshTokenSecret(), (error, data) => {
             if (error) {
                 reject(error);
                 return;
@@ -99,13 +118,13 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
             if (!user) throw new Error('User not found');
             const token = sign(
                 { id } as ITokenData,
-                process.env.NODE_TOKEN_REFRESH ?? '',
+                getRefreshTokenSecret(),
                 {
                     expiresIn: getExpiryTime(remember),
                     algorithm: 'HS256'
                 }
             ) as IToken['token'];
-            return user.tokenAdd(ETokenType.REFRESH, getExpiryTime(remember) * 1000, token);
+            return user.tokenAdd(ETokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
 /*
@@ -117,11 +136,9 @@ export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id }) =>
         sign(
             { id } as ITokenData,
-            process.env.NODE_TOKEN_ACCESS ?? '',
+            getAccessTokenSecret(),
             {
-                expiresIn: process.env.NODE_TOKEN_ACCESS_TIME
-                    ? Number.parseInt(process.env.NODE_TOKEN_ACCESS_TIME)
-                    : 0,
+                expiresIn: getAccessTokenTTL(),
                 algorithm: 'HS256'
             }
         )

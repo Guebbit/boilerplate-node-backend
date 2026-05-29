@@ -12,7 +12,11 @@ import { emitDomainEvent } from '@utils/domain-events';
  * Converts the cart into an order and clears the cart.
  */
 export const postCheckout = (request: Request, response: Response) => {
-    const userId = request.authContext!.id;
+    if (!request.authContext) {
+        rejectResponse(response, 401, 'Unauthorized');
+        return;
+    }
+    const userId = request.authContext.id;
     return cartService.orderConfirm(userId).then((result) => {
         if (!result.success) {
             cartCheckoutTotal.inc({ status: 'failure' });
