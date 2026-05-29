@@ -30,25 +30,55 @@ export default withMermaid(
                 ],
                 '/tools/': [
                     {
-                        text: 'Tools',
+                        text: 'Overview',
                         items: [
-                            { text: 'Overview', link: '/tools/' },
+                            { text: 'Overview', link: '/tools/' }
+                        ]
+                    },
+                    {
+                        text: 'Setup',
+                        collapsed: false,
+                        items: [
                             { text: 'Package Dependencies', link: '/tools/package-dependencies' },
                             { text: 'Package Scripts', link: '/tools/package-scripts' },
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
                             { text: 'Runtime', link: '/tools/runtime' },
-                            { text: 'Security', link: '/tools/security' },
+                            { text: 'Security', link: '/tools/security' }
+                        ]
+                    },
+                    {
+                        text: 'Database',
+                        collapsed: false,
+                        items: [
                             { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
-                            { text: 'Redis Cache', link: '/tools/redis-cache' },
+                            { text: 'Redis Cache', link: '/tools/redis-cache' }
+                        ]
+                    },
+                    {
+                        text: 'Messaging',
+                        collapsed: false,
+                        items: [
                             { text: 'RabbitMQ', link: '/tools/rabbitmq' },
                             { text: 'Email & PDF Rendering', link: '/tools/email-and-rendering' },
-                            { text: 'WebSockets', link: '/tools/websockets' },
+                            { text: 'WebSockets', link: '/tools/websockets' }
+                        ]
+                    },
+                    {
+                        text: 'Observability',
+                        collapsed: false,
+                        items: [
                             { text: 'Winston & Audit Logs', link: '/tools/winston' },
                             { text: 'Prometheus', link: '/tools/prometheus' },
                             { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
                             { text: 'Tempo', link: '/tools/tempo' },
                             { text: 'Grafana', link: '/tools/grafana' },
-                            { text: 'Loki', link: '/tools/loki' },
+                            { text: 'Loki', link: '/tools/loki' }
+                        ]
+                    },
+                    {
+                        text: 'Analytics & QA',
+                        collapsed: false,
+                        items: [
                             { text: 'PostHog', link: '/tools/posthog' },
                             { text: 'Testing & Docs', link: '/tools/testing-and-docs' }
                         ]
