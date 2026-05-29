@@ -78,6 +78,7 @@ Use this for live widgets in a custom UI. For historical charts, query your back
 
 ## Related pages
 
+- [Observability Reference](./observability-reference.md)
 - [Grafana](./grafana.md)
 - [Tempo](./tempo.md)
 - [OpenTelemetry](./opentelemetry.md)

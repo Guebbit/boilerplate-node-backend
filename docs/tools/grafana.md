@@ -66,6 +66,7 @@ The `/admin/*` endpoints expose the same metrics as Grafana but as a **point-in-
 
 ## Related pages
 
+- [Observability Reference](./observability-reference.md)
 - [Tempo](./tempo.md)
 - [OpenTelemetry](./opentelemetry.md)
 - [Prometheus](./prometheus.md)

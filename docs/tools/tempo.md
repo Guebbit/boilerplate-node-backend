@@ -31,5 +31,6 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 
 ## Related pages
 
+- [Observability Reference](./observability-reference.md)
 - [OpenTelemetry](./opentelemetry.md)
 - [Grafana](./grafana.md)
