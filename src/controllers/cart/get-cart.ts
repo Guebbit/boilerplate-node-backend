@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { cartService } from '@services/cart';
-import { successResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@utils/response';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
 
 /**
@@ -8,11 +8,16 @@ import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/a
  * Get the cart of the current user.
  * Authentication check is done before entering the route.
  */
-export const getCart = (request: Request, response: Response) =>
-    cartService.cartGetWithSummary(request.authContext!.id).then((cart) => {
+export const getCart = (request: Request, response: Response) => {
+    if (!request.authContext) {
+        rejectResponse(response, 401, 'Unauthorized');
+        return;
+    }
+    return cartService.cartGetWithSummary(request.authContext.id).then((cart) => {
         emitAnalyticsEvent({
             ...buildAnalyticsBase(request),
             event: AnalyticsEvent.CART_VIEWED
         });
         successResponse(response, cart);
     });
+};

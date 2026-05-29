@@ -16,7 +16,11 @@ export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
 ) => {
-    const userId = request.authContext!.id;
+    if (!request.authContext) {
+        rejectResponse(response, 401, 'Unauthorized');
+        return;
+    }
+    const userId = request.authContext.id;
     const productId = extractCustomId(request as Request, { body: 'productId' });
     const { quantity } = request.body;
 
@@ -31,25 +35,32 @@ export const postCart = (
         rejectResponse(response, 422, 'upsertCartItem - invalid data', [
             t('generic.error-invalid-data')
         ]);
-        return Promise.resolve();
+        return;
     }
 
-    return productService.getById(productId).then((product) => {
-        if (!product) {
-            rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-            return;
-        }
+    return productService
+        .getById(productId)
+        .then((product) => {
+            if (!product) {
+                rejectResponse(response, 404, 'upsertCartItem - product not found', [
+                    t('ecommerce.product-not-found')
+                ]);
+                return;
+            }
 
-        return cartService
-            .cartItemSetById(userId, productId, quantity)
-            .then(() => cartService.cartGetWithSummary(userId))
-            .then((cart) => {
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    event: AnalyticsEvent.CART_ITEM_ADDED,
-                    properties: { product_id: productId, quantity }
+            return cartService
+                .cartItemSetById(userId, productId, quantity)
+                .then(() => cartService.cartGetWithSummary(userId))
+                .then((cart) => {
+                    emitAnalyticsEvent({
+                        ...buildAnalyticsBase(request),
+                        event: AnalyticsEvent.CART_ITEM_ADDED,
+                        properties: { product_id: productId, quantity }
+                    });
+                    successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
                 });
-                successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
-            });
-    });
+        })
+        .catch((error: Error) => {
+            rejectResponse(response, 500, 'upsertCartItem', [error.message]);
+        });
 };

@@ -94,7 +94,7 @@ export const writeProducts = (
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
-                    rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+                    rejectResponse(response, 500, 'createProduct', [error.message]);
                 })
             );
     }
@@ -122,8 +122,8 @@ export const writeProducts = (
         .catch((error: Error) =>
             deleteUpload().then(() => {
                 if (error.message === '404')
-                    rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
-                else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+                    rejectResponse(response, 404, 'updateProduct - not found', [t('ecommerce.product-not-found')]);
+                else rejectResponse(response, 500, 'updateProduct', [error.message]);
             })
         );
 };

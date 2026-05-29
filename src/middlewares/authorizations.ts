@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import { userModel as Users, type IToken } from '@models/users';
+import { userRepository } from '@repositories/users';
+import type { IToken } from '@models/users';
 import { verifyAccessToken } from './auth-jwt';
 import { rejectResponse } from '@utils/response';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
@@ -27,7 +28,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
     }
 
     verifyAccessToken(token)
-        .then(({ id }) => Users.findById(id))
+        .then(({ id }) => userRepository.findById(id))
         .then((user) => {
             if (user) {
                 request.authContext = {

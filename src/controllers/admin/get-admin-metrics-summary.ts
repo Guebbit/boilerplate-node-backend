@@ -75,4 +75,4 @@ export const getAdminMetricsSummary = (_request: Request, response: Response) =>
                 });
             }
         )
-        .catch(() => rejectResponse(response, 500, 'Internal Server Error'));
+        .catch(() => rejectResponse(response, 500, 'getMetricsSummary'));

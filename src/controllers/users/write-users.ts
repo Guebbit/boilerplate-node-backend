@@ -88,7 +88,7 @@ export const writeUsers = (
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
-                    rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+                    rejectResponse(response, 500, 'writeUser', [error.message]);
                 })
             );
     }

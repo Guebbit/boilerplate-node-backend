@@ -42,6 +42,6 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
                 return rejectResponse(response, 404, 'Not Found', [
                     t('ecommerce.user-not-found')
                 ]);
-            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+            rejectResponse(response, 500, 'deleteUser', [error.message]);
         });
 };

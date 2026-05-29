@@ -13,7 +13,11 @@ export const deleteCart = (
     request: Request<unknown, unknown, RemoveCartItemRequest>,
     response: Response
 ) => {
-    const userId = request.authContext!.id;
+    if (!request.authContext) {
+        rejectResponse(response, 401, 'Unauthorized');
+        return;
+    }
+    const userId = request.authContext.id;
     const productId = String(request.body.productId);
 
     return (
