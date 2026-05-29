@@ -27,9 +27,11 @@ export interface IUserCartDto {
 export const toIdString = (value: unknown): string => {
     if (value instanceof Types.ObjectId) return value.toString();
     if (typeof value === 'string') return value;
-    if (typeof value === 'object' && value && 'id' in value && typeof value.id === 'string')
-        return value.id;
-    if (typeof value === 'object' && value && '_id' in value) return toIdString(value._id);
+    if (typeof value === 'object' && value !== null) {
+        const record = value as Record<string, unknown>;
+        if (typeof record.id === 'string') return record.id;
+        if (record._id) return toIdString(record._id);
+    }
     return '';
 };
 
@@ -39,28 +41,24 @@ export const toIdString = (value: unknown): string => {
  * Dates are serialized as ISO strings to match the API contract.
  */
 const toCartProductDto = (value: unknown): Partial<Product> | undefined => {
-    if (value instanceof Types.ObjectId || typeof value === 'string') return undefined;
-    if (!value || typeof value !== 'object') return undefined;
+    if (!value || typeof value !== 'object' || value instanceof Types.ObjectId) return undefined;
+
     const id = toIdString(value);
     if (!id) return undefined;
 
-    const product = value as Record<string, unknown>;
+    const p = value as Record<string, unknown>;
     return {
         id,
-        title: typeof product.title === 'string' ? product.title : undefined,
-        price: typeof product.price === 'number' ? product.price : undefined,
-        description: typeof product.description === 'string' ? product.description : undefined,
-        imageUrl: typeof product.imageUrl === 'string' ? product.imageUrl : undefined,
-        categories: Array.isArray(product.categories)
-            ? product.categories.filter((category): category is string => typeof category === 'string')
-            : undefined,
-        tags: Array.isArray(product.tags)
-            ? product.tags.filter((tag): tag is string => typeof tag === 'string')
-            : undefined,
-        active: typeof product.active === 'boolean' ? product.active : undefined,
-        createdAt: product.createdAt instanceof Date ? product.createdAt.toISOString() : undefined,
-        updatedAt: product.updatedAt instanceof Date ? product.updatedAt.toISOString() : undefined,
-        deletedAt: product.deletedAt instanceof Date ? product.deletedAt.toISOString() : undefined
+        ...(typeof p.title === 'string' && { title: p.title }),
+        ...(typeof p.price === 'number' && { price: p.price }),
+        ...(typeof p.description === 'string' && { description: p.description }),
+        ...(typeof p.imageUrl === 'string' && { imageUrl: p.imageUrl }),
+        ...(Array.isArray(p.categories) && { categories: p.categories.filter((c): c is string => typeof c === 'string') }),
+        ...(Array.isArray(p.tags) && { tags: p.tags.filter((t): t is string => typeof t === 'string') }),
+        ...(typeof p.active === 'boolean' && { active: p.active }),
+        ...(p.createdAt instanceof Date && { createdAt: p.createdAt.toISOString() }),
+        ...(p.updatedAt instanceof Date && { updatedAt: p.updatedAt.toISOString() }),
+        ...(p.deletedAt instanceof Date && { deletedAt: p.deletedAt.toISOString() })
     };
 };
 

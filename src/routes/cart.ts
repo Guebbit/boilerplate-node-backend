@@ -15,7 +15,6 @@ export const router = Router();
 // All cart routes require authentication
 router.use(getAuth, isAuth);
 
-// Static sub-paths — must be declared before /:productId
 // GET /cart/summary
 router.get('/summary', getCartSummary);
 
@@ -28,11 +27,11 @@ router.get('/', getCart);
 // POST /cart — add/set item
 router.post('/', postCart);
 
-// DELETE /cart — clear cart or remove item via body { productId }
+// DELETE /cart — clear entire cart
 router.delete('/', deleteCart);
 
 // PUT /cart/:productId — set quantity
 router.put('/:productId', putCartItem);
 
-// DELETE /cart/:productId — remove item
+// DELETE /cart/:productId — remove single item
 router.delete('/:productId', deleteCartItem);

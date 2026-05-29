@@ -106,7 +106,7 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
         },
         imageUrl: {
             type: String,
-            default: 'https://placekitten.com/600/600'
+            default: process.env.NODE_DEFAULT_IMAGE_USER ?? 'https://placekitten.com/600/600'
         },
         admin: {
             type: Boolean,

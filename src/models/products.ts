@@ -74,7 +74,7 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
         },
         imageUrl: {
             type: String,
-            default: 'https://placekitten.com/400/400'
+            default: process.env.NODE_DEFAULT_IMAGE_PRODUCT ?? 'https://placekitten.com/400/400'
         },
         categories: {
             type: [String],

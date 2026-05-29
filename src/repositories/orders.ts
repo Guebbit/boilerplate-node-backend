@@ -1,7 +1,7 @@
 import { orderModel } from '@models/orders';
 import type { IOrderDocument } from '@models/orders';
 import type { PipelineStage, QueryFilter } from 'mongoose';
-import { createBaseRepository, type IFindAllOptions } from './base';
+import { createBaseRepository } from './base';
 
 /**
  * Order Repository

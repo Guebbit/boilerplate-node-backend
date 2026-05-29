@@ -109,15 +109,14 @@ export const search = (
 export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
-    if (admin) return productRepository.findById(id).lean().exec();
+    if (admin) return productRepository.findById(id).lean();
     return productRepository
         .findOne({
             _id: id,
             active: true,
             deletedAt: { $exists: false }
         })
-        .lean()
-        .exec();
+        .lean();
 };
 
 /**
@@ -234,7 +233,7 @@ export const removeById = (
     hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> =>
     productRepository.findById(id).then((product) => {
-        if (!product) return generateReject(404, '404', [t('ecommerce.product-not-found')]);
+        if (!product) return generateReject(404, 'Not Found', [t('ecommerce.product-not-found')]);
         return remove(product, hardDelete);
     });
 
