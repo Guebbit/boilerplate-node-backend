@@ -21,6 +21,11 @@
         "email-sent": "An email with a link was sent, click to reset password.",
         "success": "Password changed, login with the new password."
     },
+    "delete": {
+        "email-sent": "A confirmation email has been sent. Click the link to confirm account deletion.",
+        "token-not-found": "Invalid or expired token, please try again.",
+        "success": "Account permanently deleted."
+    },
     "ecommerce": {
         "product-not-found": "The requested product was not found.",
         "product-field-title-required": "Title is required",
