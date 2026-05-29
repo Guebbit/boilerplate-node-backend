@@ -194,13 +194,20 @@ export const tokenRemoveAll = (
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
     userRepository
         .findById(userId)
-        .then((user): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
-            // eslint-disable-next-line unicorn/no-useless-promise-resolve-reject
-            if (!user)
-                return Promise.resolve(generateReject(404, 'tokenRemoveAll - user not found', []));
-            user.tokens = user.tokens.filter((t) => t.type !== type);
-            return userRepository.save(user).then((saved) => generateSuccess<IUserDocument>(saved));
-        })
+        .then(
+            (
+                user
+            ):
+                | IResponseSuccess<IUserDocument>
+                | IResponseReject
+                | Promise<IResponseSuccess<IUserDocument>> => {
+                if (!user) return generateReject(404, 'tokenRemoveAll - user not found', []);
+                user.tokens = user.tokens.filter((t) => t.type !== type);
+                return userRepository
+                    .save(user)
+                    .then((saved) => generateSuccess<IUserDocument>(saved));
+            }
+        )
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 
 export const authService = {
