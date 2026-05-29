@@ -42,6 +42,7 @@ export default withMermaid(
                             { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
                             { text: 'Tempo', link: '/tools/tempo' },
                             { text: 'Grafana', link: '/tools/grafana' },
+                            { text: 'Loki', link: '/tools/loki' },
                             { text: 'PostHog', link: '/tools/posthog' },
                             { text: 'Testing & Docs', link: '/tools/testing-and-docs' }
                         ]
@@ -52,6 +53,8 @@ export default withMermaid(
                         text: 'API',
                         items: [
                             { text: 'Overview', link: '/api/' },
+                            { text: 'Endpoints', link: '/api/endpoints' },
+                            { text: 'Admin Endpoints', link: '/api/admin' },
                             { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
                             { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' },
                             { text: 'REST Style', link: '/api/rest-style' }
