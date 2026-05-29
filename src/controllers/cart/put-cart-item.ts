@@ -14,7 +14,11 @@ export const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
     response: Response
 ) => {
-    const userId = request.authContext!.id;
+    if (!request.authContext) {
+        rejectResponse(response, 401, 'Unauthorized');
+        return;
+    }
+    const userId = request.authContext.id;
     const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
 
     if (!isValidObjectId(productId)) {
@@ -28,7 +32,7 @@ export const putCartItem = (
         rejectResponse(response, 422, 'updateCartItemById - invalid quantity', [
             t('generic.error-invalid-data')
         ]);
-        return Promise.resolve();
+        return;
     }
 
     return cartService
@@ -41,5 +45,8 @@ export const putCartItem = (
                 properties: { product_id: productId, quantity: request.body.quantity }
             });
             successResponse(response, cart);
+        })
+        .catch((error: Error) => {
+            rejectResponse(response, 500, 'updateCartItemById', [error.message]);
         });
 };

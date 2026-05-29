@@ -35,6 +35,6 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
                 return rejectResponse(response, 404, 'Not Found', [
                     t('ecommerce.order-not-found')
                 ]);
-            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+            rejectResponse(response, 500, 'deleteOrder', [error.message]);
         });
 };

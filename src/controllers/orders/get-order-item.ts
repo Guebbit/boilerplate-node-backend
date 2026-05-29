@@ -19,15 +19,15 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
         .getById(String(request.params.id), userScope(request))
         .then((order) => {
             if (!order) {
-                rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
+                rejectResponse(response, 404, 'getOrderItem - not found', [t('ecommerce.order-not-found')]);
                 return;
             }
             successResponse(response, order);
         })
         .catch((error: CastError) => {
             if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'Not Found', [
+                return rejectResponse(response, 404, 'getOrderItem - not found', [
                     t('ecommerce.order-not-found')
                 ]);
-            rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+            rejectResponse(response, 500, 'getOrderItem', [error.message]);
         });

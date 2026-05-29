@@ -2,61 +2,33 @@ import { sign, verify } from 'jsonwebtoken';
 import { userModel as Users, ETokenType } from '@models/users';
 import type { IToken } from '@models/users';
 import type { CastError } from 'mongoose';
+import {
+    getAccessTokenSecret,
+    getRefreshTokenSecret,
+    getAccessTokenTTL,
+    getExpiryTime,
+    getExpiryTimeMilliseconds
+} from '@utils/token-config';
+import type { ERefreshTokenExpiryTime } from '@utils/token-config';
 
 /**
  * Token Service
  * Single responsibility: JWT token creation and verification.
- * Decoupled from cookie/transport behavior.
+ * Config (secrets, TTLs) is delegated to token-config.
  */
 
 export interface ITokenData {
     id: string;
 }
 
-export enum ERefreshTokenExpiryTime {
-    SHORT = 'short',
-    MEDIUM = 'medium',
-    LONG = 'long'
-}
-
-/**
- * Get expiry time in seconds for the given token duration tier.
- */
-export const getExpiryTime = (remember?: ERefreshTokenExpiryTime) => {
-    switch (remember) {
-        // eslint-disable-next-line unicorn/switch-case-braces
-        case ERefreshTokenExpiryTime.SHORT:
-            return process.env.NODE_TOKEN_REFRESH_TIME_SHORT
-                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_SHORT)
-                : 0;
-        // eslint-disable-next-line unicorn/switch-case-braces
-        case ERefreshTokenExpiryTime.MEDIUM:
-            return process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM
-                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM)
-                : 0;
-        // eslint-disable-next-line unicorn/switch-case-braces
-        case ERefreshTokenExpiryTime.LONG:
-            return process.env.NODE_TOKEN_REFRESH_TIME_LONG
-                ? Number.parseInt(process.env.NODE_TOKEN_REFRESH_TIME_LONG)
-                : 0;
-    }
-    return process.env.NODE_TOKEN_ACCESS_TIME
-        ? Number.parseInt(process.env.NODE_TOKEN_ACCESS_TIME)
-        : 0;
-};
-
-/**
- * Convert token expiry from seconds to milliseconds.
- */
-export const getExpiryTimeMilliseconds = (remember?: ERefreshTokenExpiryTime) =>
-    getExpiryTime(remember) * 1000;
+export { ERefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from '@utils/token-config';
 
 /**
  * Verify an access token (stateless).
  */
 export const verifyAccessToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
-        verify(token, process.env.NODE_TOKEN_ACCESS ?? '', (error, data) => {
+        verify(token, getAccessTokenSecret(), (error, data) => {
             if (error) return reject(error);
             resolve(data as ITokenData);
         });
@@ -67,7 +39,7 @@ export const verifyAccessToken = (token: string): Promise<ITokenData> =>
  */
 export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
     new Promise((resolve, reject) => {
-        verify(token, process.env.NODE_TOKEN_REFRESH ?? '', (error, data) => {
+        verify(token, getRefreshTokenSecret(), (error, data) => {
             if (error) {
                 reject(error);
                 return;
@@ -96,13 +68,13 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
             if (!user) throw new Error('User not found');
             const token = sign(
                 { id } as ITokenData,
-                process.env.NODE_TOKEN_REFRESH ?? '',
+                getRefreshTokenSecret(),
                 {
                     expiresIn: getExpiryTime(remember),
                     algorithm: 'HS256'
                 }
             ) as IToken['token'];
-            return user.tokenAdd(ETokenType.REFRESH, getExpiryTime(remember) * 1000, token);
+            return user.tokenAdd(ETokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
 /**
@@ -112,11 +84,9 @@ export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id }) =>
         sign(
             { id } as ITokenData,
-            process.env.NODE_TOKEN_ACCESS ?? '',
+            getAccessTokenSecret(),
             {
-                expiresIn: process.env.NODE_TOKEN_ACCESS_TIME
-                    ? Number.parseInt(process.env.NODE_TOKEN_ACCESS_TIME)
-                    : 0,
+                expiresIn: getAccessTokenTTL(),
                 algorithm: 'HS256'
             }
         )

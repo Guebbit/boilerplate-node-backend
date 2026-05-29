@@ -44,7 +44,7 @@ export const putOrders = (
         })
         .catch((error: Error) => {
             if (error.message === '404')
-                rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
-            else rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+                rejectResponse(response, 404, 'updateOrder - not found', [t('ecommerce.order-not-found')]);
+            else rejectResponse(response, 500, 'updateOrder', [error.message]);
         });
 };
