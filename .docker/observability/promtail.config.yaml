@@ -1,18 +1,23 @@
-# Promtail config — ships all Docker container logs to Loki.
-# Reads from the Docker journal/log files and adds container metadata as labels.
+# Promtail reads container logs and ships them to Loki.
+# Why this file exists: log shipping/parsing rules are defined by scrape + pipeline stages.
+# Local goal: parse Docker JSON logs, extract useful labels, keep correlation fields.
 
 server:
+    # Promtail debug/metrics HTTP endpoint.
     http_listen_port: 9080
+    # Disable gRPC server in this local setup.
     grpc_listen_port: 0
 
 positions:
+    # Tracks read offsets so restarts continue from the last processed line.
     filename: /tmp/positions.yaml
 
 clients:
+    # Loki push endpoint.
     - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-    # Read logs from all Docker containers via /var/lib/docker/containers.
+    # Read all Docker container json-file logs from the host bind mount.
     - job_name: docker-containers
       static_configs:
           - targets: ['localhost']
@@ -21,25 +26,25 @@ scrape_configs:
                 __path__: /var/lib/docker/containers/*/*-json.log
 
       pipeline_stages:
-          # Parse Docker's JSON log wrapper (time, stream, log fields).
+          # Stage 1: parse Docker outer JSON envelope.
           - json:
                 expressions:
                     log: log
                     stream: stream
                     time: time
 
-          # Promote the inner log field to the log line.
+          # Stage 2: replace line with inner log payload.
           - output:
                 source: log
 
-          # Attempt to parse JSON log lines (Winston structured output).
+          # Stage 3: parse app JSON log payload (Winston fields).
           - json:
                 expressions:
                     level: level
                     service: service
                     trace_id: trace_id
 
-          # Promote parsed fields to Loki labels for fast filtering.
+          # Stage 4: promote fields to labels for filtering in LogQL.
           - labels:
                 stream:
                 level:

@@ -1,0 +1,37 @@
+# Prometheus scrapes metrics and evaluates alert rules.
+# Why this file exists: Prometheus needs explicit scrape targets and alert wiring.
+# Local goal: scrape API + collector metrics and send alert results to Alertmanager.
+
+global:
+    # How often Prometheus pulls metrics from each target.
+    scrape_interval: 15s
+    # How often alert/recording rules are evaluated.
+    evaluation_interval: 15s
+
+# Load rule files mounted under /etc/prometheus/rules.
+rule_files:
+    - /etc/prometheus/rules/*.yml
+
+# Where firing alerts are sent after rule evaluation.
+alerting:
+    alertmanagers:
+        - static_configs:
+              - targets: ['alertmanager:9093']
+
+scrape_configs:
+    # Scrape app business + runtime metrics exposed on /metrics.
+    - job_name: api
+      metrics_path: /metrics
+      static_configs:
+          - targets: ['app:3000']
+      relabel_configs:
+          # Give a stable, human-readable instance label in dashboards/alerts.
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: api
+
+    # Scrape collector self-observability metrics (queue, exporter health, etc.).
+    - job_name: otel-collector
+      metrics_path: /metrics
+      static_configs:
+          - targets: ['otel-collector:8888']

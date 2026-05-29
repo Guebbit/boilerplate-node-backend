@@ -11,7 +11,11 @@ Grafana is the **single UI** for all observability signals: traces (Tempo), metr
 - Datasources: **Tempo**, **Prometheus**, **Loki** (all auto-provisioned)
 - Dashboards: **API Traces** (auto-provisioned)
 
-Container, dashboards, and datasource provisioning all live in `.docker/observability/grafana/`.
+Grafana dashboard JSON files live in `.docker/observability/grafana/dashboards/`.
+Provisioning files live at:
+
+- `.docker/observability/grafana.datasources.yaml`
+- `.docker/observability/grafana.dashboard-providers.yaml`
 
 ## Find a request that broke
 

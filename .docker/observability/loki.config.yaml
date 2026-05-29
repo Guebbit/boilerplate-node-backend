@@ -1,13 +1,17 @@
-# Loki config — single-process local dev mode.
-# Stores log chunks on the local filesystem (mounted as a named volume).
+# Loki stores logs indexed by labels.
+# Why this file exists: Loki needs explicit schema/storage setup even in local mode.
+# Local goal: single-process Loki with filesystem retention for quick debugging.
 
 auth_enabled: false
 
 server:
+    # HTTP API used by Grafana and Promtail.
     http_listen_port: 3100
+    # gRPC internal API.
     grpc_listen_port: 9096
 
 common:
+    # Single-node local setup, no distributed ring backend needed.
     instance_addr: 127.0.0.1
     path_prefix: /var/loki
     storage:
@@ -23,6 +27,7 @@ query_range:
     results_cache:
         cache:
             embedded_cache:
+                # Small in-process cache keeps repeated queries snappy in dev.
                 enabled: true
                 max_size_mb: 100
 
@@ -37,10 +42,11 @@ schema_config:
               period: 24h
 
 ruler:
+    # Enables Loki alerting rules to forward to Alertmanager when used.
     alertmanager_url: http://alertmanager:9093
 
 limits_config:
-    # Retain logs for 7 days in local dev.
+    # Keep one week of logs in local stack.
     retention_period: 168h
 
 compactor:

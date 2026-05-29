@@ -134,7 +134,7 @@ services:
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
         volumes:
-            - ./.docker/observability/tempo.yaml:/etc/tempo/tempo.yaml:Z
+            - ./.docker/observability/tempo.config.yaml:/etc/tempo/tempo.yaml:Z
             - tempo_volume:/var/tempo
         # Port 4318 is no longer exposed to the host — the collector talks to Tempo internally.
 
@@ -145,7 +145,7 @@ services:
         restart: unless-stopped
         command: ['--config=/etc/otel-collector-config.yaml']
         volumes:
-            - ./.docker/observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:Z
+            - ./.docker/observability/otel-collector.config.yaml:/etc/otel-collector-config.yaml:Z
         ports:
             - '4318:4318' # OTLP/HTTP (used by the app)
             - '4317:4317' # OTLP/gRPC (optional direct use)
@@ -160,8 +160,8 @@ services:
             - '--config.file=/etc/prometheus/prometheus.yml'
             - '--storage.tsdb.retention.time=7d'
         volumes:
-            - ./.docker/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:Z
-            - ./.docker/observability/prometheus/rules:/etc/prometheus/rules:Z
+            - ./.docker/observability/prometheus.config.yaml:/etc/prometheus/prometheus.yml:Z
+            - ./.docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:Z
             - prometheus_volume:/prometheus
         ports:
             - '9090:9090'
@@ -174,7 +174,7 @@ services:
         restart: unless-stopped
         command: ['--config.file=/etc/alertmanager/alertmanager.yml']
         volumes:
-            - ./.docker/observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:Z
+            - ./.docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:Z
         ports:
             - '9093:9093'
 
@@ -184,7 +184,7 @@ services:
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
         volumes:
-            - ./.docker/observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:Z
+            - ./.docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:Z
             - loki_volume:/var/loki
         ports:
             - '3100:3100'
@@ -195,7 +195,7 @@ services:
         restart: unless-stopped
         command: ['-config.file=/etc/promtail/promtail-config.yaml']
         volumes:
-            - ./.docker/observability/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:Z
+            - ./.docker/observability/promtail.config.yaml:/etc/promtail/promtail-config.yaml:Z
             # Read Docker JSON log files directly from the host.
             - /var/lib/docker/containers:/var/lib/docker/containers:ro
         depends_on:
@@ -210,7 +210,8 @@ services:
             GF_AUTH_ANONYMOUS_ORG_ROLE: 'Admin'
             GF_AUTH_DISABLE_LOGIN_FORM: 'true'
         volumes:
-            - ./.docker/observability/grafana/provisioning:/etc/grafana/provisioning:Z
+            - ./.docker/observability/grafana.datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:Z
+            - ./.docker/observability/grafana.dashboard-providers.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:Z
             - ./.docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:Z
         ports:
             - '3001:3000'

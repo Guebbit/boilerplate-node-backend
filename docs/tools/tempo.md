@@ -15,7 +15,7 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 
 - The app exports OTLP/HTTP to `http://otel-collector:4318` (set in `docker-compose.yml`).
 - The collector fans signals out to Tempo via internal gRPC.
-- Tempo runs in single-binary mode with local filesystem storage (`.docker/observability/tempo.yaml`).
+- Tempo runs in single-binary mode with local filesystem storage (`.docker/observability/tempo.config.yaml`).
 - Grafana auto-provisions Tempo as the default datasource.
 
 ## Where to look

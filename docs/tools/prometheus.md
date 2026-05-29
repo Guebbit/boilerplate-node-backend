@@ -34,7 +34,7 @@ Public, unauthenticated routes for orchestrators and load balancers:
 
 ## Alert rules
 
-Baseline alert rules live in `.docker/observability/prometheus/rules/alerts.yml`:
+Baseline alert rules live in `.docker/observability/prometheus.alert-rules.yaml`:
 
 | Alert                  | Condition                           | Severity |
 | ---------------------- | ----------------------------------- | -------- |
@@ -46,7 +46,7 @@ Baseline alert rules live in `.docker/observability/prometheus/rules/alerts.yml`
 
 ## Alertmanager
 
-Alertmanager config lives at `.docker/observability/alertmanager/alertmanager.yml`.
+Alertmanager config lives at `.docker/observability/alertmanager.config.yaml`.
 In local dev it uses a `null` receiver (logs only). Replace it with Slack, PagerDuty, or email for production.
 
 ## Admin observability endpoints
