@@ -1,12 +1,11 @@
 /**
  * Integration tests for /, /observability/*, and related system routes.
- * No DB or Redis is started; we mock mongoose.connection.readyState where needed.
+ * No DB or Redis is started; auth middleware responds with 401 for unauthenticated requests.
  */
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import crypto from 'node:crypto';
 import express from 'express';
-import mongoose from 'mongoose';
 
 import { router as systemRoutes } from '../../src/routes';
 import { router as observabilityRoutes } from '../../src/routes/observability';
@@ -105,18 +104,10 @@ describe('Observability routes', () => {
 
     it('GET /observability/health is reachable (auth middleware is active)', async () => {
         /*
-         * The 401 already confirmed auth is enforced. A full authenticated test
-         * would require a signed JWT and running Redis/DB infrastructure. Instead
-         * we just verify mongoose readyState is accessible and the 401 path is stable.
+         * Without valid credentials the route must return 401 — not 404 or 500.
+         * This confirms auth enforcement is wired correctly at this path.
          */
-        jest.spyOn(mongoose, 'connection', 'get').mockReturnValue({
-            readyState: 1
-        } as mongoose.Connection);
-
         const response = await fetch(`${baseUrl}/observability/health`);
-        jest.restoreAllMocks();
-
-        /* Without valid credentials the route must return 401 — not 404 or 500. */
         expect(response.status).toBe(401);
     });
 });

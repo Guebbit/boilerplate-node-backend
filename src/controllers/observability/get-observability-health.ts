@@ -3,12 +3,16 @@ import mongoose from 'mongoose';
 import os from 'node:os';
 import { successResponse } from '@utils/response';
 
-/* Map mongoose readyState integer to the spec enum values. */
+/*
+ * Map mongoose readyState integer to the spec enum values.
+ * readyState 3 = 'disconnecting' in Mongoose, but the OpenAPI spec only
+ * allows connected/connecting/disconnected, so we map it to 'disconnected'.
+ */
 const databaseStatusMap: Record<number, 'connected' | 'connecting' | 'disconnected'> = {
     0: 'disconnected',
     1: 'connected',
     2: 'connecting',
-    3: 'disconnected'
+    3: 'disconnected' /* disconnecting → treated as disconnected per spec */
 };
 
 /**

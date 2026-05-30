@@ -5,6 +5,7 @@ import { getObservabilityMetricsOverview } from '@controllers/observability/get-
 import { getObservabilityAuditLogs } from '@controllers/observability/get-observability-audit';
 import { getPrometheusMetrics, metricsRegistry } from '@utils/observability';
 import { streamObservabilityMetrics } from '@utils/realtime-observability';
+import { logger } from '@utils/winston';
 
 /** Express router for observability endpoints mounted at /observability. */
 export const router = Router();
@@ -20,7 +21,8 @@ router.get('/metrics', (_request, response) => {
             response.setHeader('Content-Type', metricsRegistry.contentType);
             response.send(metrics);
         })
-        .catch(() => {
+        .catch((error: Error) => {
+            logger.error('Failed to collect Prometheus metrics', { error: error.message });
             response.status(500).send('# metrics unavailable\n');
         });
 });
