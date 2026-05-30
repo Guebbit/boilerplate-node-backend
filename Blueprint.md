@@ -31,7 +31,8 @@
             ▼                          ▼
     ┌───────────────┐         ┌──────────────────┐
     │  Controllers  │         │  System / Health  │
-    └───────┬───────┘         │  /metrics  /health│
+    └───────┬───────┘         │  /observability/  │
+            │                 │  metrics  /health │
             │                 └──────────────────┘
             ▼
     ┌───────────────┐
@@ -98,7 +99,7 @@ What was already in place before the observability plan:
 - Winston logger (`src/utils/winston.ts`) — basic JSON format
 - Request correlation ID middleware in `app.ts`
 - W3C traceparent / trace context middleware in `app.ts`
-- Prometheus-style metrics endpoint (`GET /metrics`) via `src/utils/observability.ts`
+- Prometheus-style metrics endpoint (`GET /observability/metrics`) via `src/utils/observability.ts`
 - Global error handler logging errors with `logger.error`
 
 ### ✅ Phase 1 — Structured logging foundation
@@ -208,7 +209,7 @@ Also contains `mongooseMetricsPlugin` — a Mongoose schema plugin that wraps al
 - `mongoose.plugin(mongooseMetricsPlugin)` called at module load, before any schema is defined
 - Applies to every model automatically
 
-#### 4. Updated `/metrics` route (`src/routes/index.ts`)
+#### 4. Updated `/observability/metrics` route (`src/routes/observability.ts`)
 
 - Now async: `await getPrometheusMetrics()` with `metricsRegistry.contentType` header
 
@@ -462,35 +463,35 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 
 ---
 
-### ✅ Phase 8 — Admin dashboard contract (FE visualization)
+### ✅ Phase 8 — Observability dashboard contract (FE visualization)
 
 **Goal:** expose all observability data as structured JSON endpoints so the FE `Admin.vue` can visualize the backend without parsing Prometheus text or reading log files.
 
 **New files:**
 
-- `src/controllers/admin/get-health.ts` — JSON health summary (uptime, DB status, memory, integrations)
-- `src/controllers/admin/get-metrics-summary.ts` — parsed KPIs from prom-client (requests, error rate, latency p50/p95, auth/business/DB counters)
-- `src/controllers/admin/get-audit-logs.ts` — query audit ring buffer with filters
+- `src/controllers/observability/get-observability-health.ts` — JSON health summary (uptime, DB status, memory, integrations)
+- `src/controllers/observability/get-observability-metrics-overview.ts` — parsed KPIs from prom-client (requests, error rate, latency p50/p95, auth/business/DB counters)
+- `src/controllers/observability/get-observability-audit.ts` — query audit ring buffer with filters
 
 **Modified files:**
 
 - `src/utils/audit.ts` — in-memory ring buffer (200 events); `emitAuditEvent()` now also pushes to buffer; `getRecentAuditEvents()` exported for admin queries
-- `src/routes/admin.ts` — `GET /admin/health`, `GET /admin/metrics/summary`, `GET /admin/audit` wired behind `isAdmin` middleware
+- `src/routes/observability.ts` — `GET /observability/health`, `GET /observability/metrics/overview`, `GET /observability/audit` wired behind `isAdmin` middleware
 - `tsconfig.json` — added `"lib": ["ES2023"]` to enable `toSorted`, `toReversed`, `Array.at()` for Node 20+
-- `openapi.yaml` — new schemas: `AdminHealth`, `AdminHealthResponse`, `AdminMetricsSummary`, `AdminMetricsSummaryResponse`, `AuditEventItem`, `AuditLogsResponse`; new paths: `GET /`, `GET /metrics`, `GET /admin/health`, `GET /admin/metrics/summary`, `GET /admin/audit`
+- `openapi.yaml` — new schemas: `ObservabilityHealth`, `ObservabilityHealthResponse`, `ObservabilityMetricsOverview`, `ObservabilityMetricsOverviewResponse`, `AuditEventItem`, `AuditLogsResponse`; new paths: `GET /`, `GET /observability/metrics`, `GET /observability/health`, `GET /observability/metrics/overview`, `GET /observability/audit`
 
 **Docs added:**
 
-- `docs/guide/admin-dashboard.md` — endpoint descriptions, response shapes, dashboard use, FE integration hints, external observability links
-- `docs/index.md` — Admin Dashboard Contract feature card added
+- `docs/api/observability.md` — endpoint descriptions, response shapes, dashboard use, FE integration hints, external observability links
+- `docs/index.md` — Observability Dashboard Contract feature card added
 
-**Admin endpoint map:**
+**Observability endpoint map:**
 
-| Endpoint                     | Auth  | Description                                               |
-| ---------------------------- | ----- | --------------------------------------------------------- |
-| `GET /admin/health`          | admin | System health (DB, memory, integrations, uptime)          |
-| `GET /admin/metrics/summary` | admin | KPI metrics as JSON (error rate, latency, auth, business) |
-| `GET /admin/audit`           | admin | Recent audit events with filters                          |
+| Endpoint                              | Auth  | Description                                               |
+| ------------------------------------- | ----- | --------------------------------------------------------- |
+| `GET /observability/health`           | admin | System health (DB, memory, integrations, uptime)          |
+| `GET /observability/metrics/overview` | admin | KPI metrics as JSON (error rate, latency, auth, business) |
+| `GET /observability/audit`            | admin | Recent audit events with filters                          |
 
 ---
 

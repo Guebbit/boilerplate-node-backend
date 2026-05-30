@@ -88,7 +88,7 @@ You now get:
     - `x-trace-id`
     - `traceparent` (W3C format)
 - **Metrics endpoint**:
-    - `GET /metrics` (Prometheus text format)
+    - `GET /observability/metrics` (Prometheus text format)
 
 ### Quick visual
 
@@ -102,7 +102,7 @@ Client
   <- response with x-request-id + x-trace-id + traceparent
 
 Prometheus
-  -> GET /metrics
+  -> GET /observability/metrics
   <- http_requests_total, http_request_duration_milliseconds, process_* metrics
 ```
 
@@ -118,7 +118,7 @@ curl -i \
   http://localhost:3000/products
 
 # 3) Scrape metrics
-curl http://localhost:3000/metrics
+curl http://localhost:3000/observability/metrics
 ```
 
 ## Realtime examples
