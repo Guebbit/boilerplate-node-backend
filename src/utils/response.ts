@@ -19,9 +19,9 @@ export interface IResponseErrorItem {
 }
 
 export interface IResponseReject extends IResponseNeutral {
-    // reserved field to keep union access (`result.data`) type-safe for callers
+    // explicit undefined keeps `result.data` union-safe
     data: undefined;
-    // structured error list for machine and UI handling
+    // structured errors for machines and UIs
     errors: IResponseErrorItem[];
 }
 
@@ -47,6 +47,11 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
 /**
  * Build the canonical error envelope so clients can parse failures predictably.
  */
+/**
+ * Maps HTTP status codes to stable machine-readable error codes.
+ * @param status
+ * @returns
+ */
 const resolveErrorCode = (status: number) => {
     if (status === 400) return 'BAD_REQUEST';
     if (status === 401) return 'UNAUTHORIZED';
@@ -57,6 +62,13 @@ const resolveErrorCode = (status: number) => {
     return 'REQUEST_ERROR';
 };
 
+/**
+ * Normalizes mixed error inputs into the structured API error item shape.
+ * @param status
+ * @param message
+ * @param errors
+ * @returns
+ */
 const normalizeErrors = (
     status: number,
     message: string,
