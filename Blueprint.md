@@ -478,7 +478,7 @@ All audit events pass through the same `redactSensitiveFields()` pipeline as app
 - `src/utils/audit.ts` — in-memory ring buffer (200 events); `emitAuditEvent()` now also pushes to buffer; `getRecentAuditEvents()` exported for admin queries
 - `src/routes/observability.ts` — `GET /observability/health`, `GET /observability/metrics/overview`, `GET /observability/audit` wired behind `isAdmin` middleware
 - `tsconfig.json` — added `"lib": ["ES2023"]` to enable `toSorted`, `toReversed`, `Array.at()` for Node 20+
-- `openapi.yaml` — new schemas: `ObservabilityHealth`, `ObservabilityHealthResponse`, `ObservabilityMetricsOverview`, `ObservabilityMetricsOverviewResponse`, `AuditEventItem`, `AuditLogsResponse`; new paths: `GET /`, `GET /observability/metrics`, `GET /observability/health`, `GET /observability/metrics/overview`, `GET /observability/audit`
+- `openapi.yaml` — new schemas: `ObservabilityHealth`, `ObservabilityHealthResponse`, `ObservabilityMetricsSummary`, `ObservabilityMetricsSummaryResponse`, `AuditEventItem`, `AuditLogsResponse`; new paths: `GET /`, `GET /observability/metrics`, `GET /observability/health`, `GET /observability/metrics/overview`, `GET /observability/audit`
 
 **Docs added:**
 

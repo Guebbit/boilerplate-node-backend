@@ -2,8 +2,8 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { AdminMetricsLatency } from './AdminMetricsLatency';
-export type AdminMetricsSummary = {
+import type { ObservabilityMetricsLatency } from './ObservabilityMetricsLatency';
+export type ObservabilityMetricsSummary = {
     http: {
         totalRequests: number;
         totalErrors: number;
@@ -12,7 +12,7 @@ export type AdminMetricsSummary = {
          */
         errorRate: number;
         inFlight: number;
-        latencyMs: AdminMetricsLatency;
+        latencyMs: ObservabilityMetricsLatency;
     };
     auth: {
         loginSuccess?: number;

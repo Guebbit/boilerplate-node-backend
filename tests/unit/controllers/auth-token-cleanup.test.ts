@@ -49,7 +49,12 @@ describe('Auth controllers token cleanup trigger', () => {
             success: false,
             status: 401,
             message: 'Unauthorized',
-            errors: ['invalid credentials'],
+            errors: [
+                {
+                    code: 'UNAUTHORIZED',
+                    message: 'invalid credentials'
+                }
+            ],
             data: undefined as never
         });
 

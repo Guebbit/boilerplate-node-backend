@@ -53,7 +53,7 @@ jobs:
                     git status --short -- api
                     exit 1
                   fi
-            - run: npm run gen:asyncapi-types
+            - run: npm run genasyncapi
             - name: Verify generated AsyncAPI types are committed
               run: |
                   if [ -n "$(git status --porcelain -- src/types/asyncapi.ts)" ]; then

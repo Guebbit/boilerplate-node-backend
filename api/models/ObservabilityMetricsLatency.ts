@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type AdminMetricsLatency = {
+export type ObservabilityMetricsLatency = {
     /**
      * Median latency in ms
      */

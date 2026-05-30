@@ -2,9 +2,9 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { AdminMetricsSummaryResponse } from './AdminMetricsSummaryResponse';
+import type { ObservabilityHealthResponse } from './ObservabilityHealthResponse';
 import type { SuccessEnvelope } from './SuccessEnvelope';
-export type AdminMetricsSummaryResponseEnvelope = (SuccessEnvelope & {
-    data: AdminMetricsSummaryResponse;
+export type ObservabilityHealthResponseEnvelope = (SuccessEnvelope & {
+    data: ObservabilityHealthResponse;
 });
 

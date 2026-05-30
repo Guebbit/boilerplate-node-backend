@@ -2,9 +2,9 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type AdminHealthSystem = {
-    platform: string;
-    cpuCount: number;
-    loadAvg: Array<number>;
+export type ObservabilityHealthIntegrations = {
+    loki?: boolean;
+    posthog?: boolean;
+    otelEnabled?: boolean;
 };
 

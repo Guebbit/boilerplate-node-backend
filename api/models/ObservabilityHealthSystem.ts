@@ -2,9 +2,9 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type AdminHealthMemory = {
-    heapUsedMb: number;
-    heapTotalMb: number;
-    rssMb: number;
+export type ObservabilityHealthSystem = {
+    platform: string;
+    cpuCount: number;
+    loadAvg: Array<number>;
 };
 

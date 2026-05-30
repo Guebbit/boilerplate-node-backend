@@ -2,9 +2,9 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { AdminHealthResponseEnvelope } from '../models/AdminHealthResponseEnvelope';
-import type { AdminMetricsSummaryResponseEnvelope } from '../models/AdminMetricsSummaryResponseEnvelope';
 import type { AuditLogsResponseEnvelope } from '../models/AuditLogsResponseEnvelope';
+import type { ObservabilityHealthResponseEnvelope } from '../models/ObservabilityHealthResponseEnvelope';
+import type { ObservabilityMetricsSummaryResponseEnvelope } from '../models/ObservabilityMetricsSummaryResponseEnvelope';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -29,10 +29,10 @@ export class ObservabilityService {
      * Includes uptime, database status, memory, integrations, and system info.
      * Requires admin role.
      *
-     * @returns AdminHealthResponseEnvelope Health summary
+     * @returns ObservabilityHealthResponseEnvelope Health summary
      * @throws ApiError
      */
-    public static getObservabilityHealth(): CancelablePromise<AdminHealthResponseEnvelope> {
+    public static getObservabilityHealth(): CancelablePromise<ObservabilityHealthResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/observability/health',
@@ -64,10 +64,10 @@ export class ObservabilityService {
      * returned as structured JSON for dashboard KPI cards and charts.
      * Requires admin role.
      *
-     * @returns AdminMetricsSummaryResponseEnvelope Metrics overview
+     * @returns ObservabilityMetricsSummaryResponseEnvelope Metrics overview
      * @throws ApiError
      */
-    public static getObservabilityMetricsOverview(): CancelablePromise<AdminMetricsSummaryResponseEnvelope> {
+    public static getObservabilityMetricsOverview(): CancelablePromise<ObservabilityMetricsSummaryResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/observability/metrics/overview',

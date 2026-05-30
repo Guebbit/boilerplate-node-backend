@@ -2,16 +2,17 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { ErrorItem } from './ErrorItem';
 export type ErrorResponse = {
     success: boolean;
     status: number;
     /**
-     * Technical error code or description
+     * Human-readable summary for this failure
      */
     message: string;
     /**
-     * User-friendly error messages
+     * Structured machine-friendly errors
      */
-    errors: Array<string>;
+    errors: Array<ErrorItem>;
 };
 
