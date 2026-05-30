@@ -3,7 +3,7 @@
 ## What it is
 
 Prometheus is the **metrics backend** of this boilerplate.
-It scrapes the app's `/metrics` endpoint every 15 s, stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
+It scrapes the app's `/observability/metrics` endpoint every 15 s, stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
 
 Grafana reads Prometheus for all metric charts and dashboards.
 
@@ -12,16 +12,13 @@ Grafana reads Prometheus for all metric charts and dashboards.
 - Prometheus UI: `http://localhost:9090`
 - Alertmanager UI: `http://localhost:9093`
 
-## Health-check routes
+## System ping
 
-Public, unauthenticated routes for orchestrators and load balancers:
+| Route   | Purpose                                       | Success  |
+| ------- | --------------------------------------------- | -------- |
+| `GET /` | **Ping** — always 200 while the process is up | `200 ok` |
 
-| Route          | Purpose                                                | Success     |
-| -------------- | ------------------------------------------------------ | ----------- |
-| `GET /healthz` | **Liveness** — always 200 while the process is up      | `200 ok`    |
-| `GET /readyz`  | **Readiness** — 200 only when MongoDB and Redis are up | `200 ready` |
-
-## What `/metrics` exposes
+## What `/observability/metrics` exposes
 
 | Metric                                       | Why it is here                             |
 | -------------------------------------------- | ------------------------------------------ |
@@ -38,7 +35,7 @@ Baseline alert rules live in `.docker/observability/prometheus.alert-rules.yaml`
 
 | Alert                  | Condition                           | Severity |
 | ---------------------- | ----------------------------------- | -------- |
-| `ApiDown`              | `/metrics` unreachable for > 1 min  | critical |
+| `ApiDown`              | scrape target unreachable > 1 min   | critical |
 | `HighErrorRate`        | error rate > 5 % over 5 min         | warning  |
 | `HighP95Latency`       | p95 latency > 2 s over 5 min        | warning  |
 | `HighInFlightRequests` | > 100 concurrent requests for 2 min | warning  |
@@ -49,15 +46,16 @@ Baseline alert rules live in `.docker/observability/prometheus.alert-rules.yaml`
 Alertmanager config lives at `.docker/observability/alertmanager.config.yaml`.
 In local dev it uses a `null` receiver (logs only). Replace it with Slack, PagerDuty, or email for production.
 
-## Admin observability endpoints
+## Observability endpoints
 
-These sit behind the `/admin` router and require a valid **admin** JWT:
+See [Observability Endpoints](../api/observability.md) for the full list. Key routes:
 
-| Route                | Returns                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------- |
-| `GET /admin/health`  | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
-| `GET /admin/metrics` | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
-| `GET /admin/audit`   | Recent audit events from the in-memory ring buffer (max 200)                              |
+| Route                                 | Auth  | Returns                                                                                   |
+| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| `GET /observability/metrics`          | none  | Raw Prometheus exposition (text/plain) — scrape target                                    |
+| `GET /observability/health`           | admin | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
+| `GET /observability/metrics/overview` | admin | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
+| `GET /observability/audit`            | admin | Recent audit events from the in-memory ring buffer (max 200)                              |
 
 These endpoints return **curated, domain-shaped summaries** — they are the data layer for a custom frontend, not raw Prometheus query results.
 

@@ -15,13 +15,14 @@ export type IGetOrdersQuery = Partial<Record<keyof SearchOrdersRequest, string>>
 /**
  * GET /orders
  * List/search orders via query parameters or request body.
- * Non-admin users see only their own orders.
+ * Non-admin users are automatically scoped to their own orders; the userId filter is ignored for non-admin callers.
  */
 export const getOrders = (
     request: Request<{ id?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
 ) => {
     const { page, pageSize } = extractRequestPagination(request);
+    const isAdmin = Boolean(request.authContext?.admin);
 
     return orderService
         .search(
@@ -29,7 +30,8 @@ export const getOrders = (
                 id: extractId(request.params.id, request.body?.id, request.query.id),
                 page,
                 pageSize,
-                userId: request.body?.userId ?? request.query.userId,
+                /* Non-admin callers cannot filter by arbitrary userId; userScope enforces their own. */
+                userId: isAdmin ? (request.body?.userId ?? request.query.userId) : undefined,
                 productId: request.body?.productId ?? request.query.productId,
                 email: request.body?.email ?? request.query.email
             },

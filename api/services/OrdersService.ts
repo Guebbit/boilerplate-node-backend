@@ -45,6 +45,8 @@ export class OrdersService {
     /**
      * List orders (paginated)
      * Returns a paginated list of orders.
+     * Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+     *
      * @param page 1-based page index
      * @param pageSize
      * @param id
@@ -153,6 +155,8 @@ export class OrdersService {
     /**
      * Search orders (DTO-friendly)
      * Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
+     * Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+     *
      * @param requestBody
      * @returns OrdersResponseEnvelope Orders search results
      * @throws ApiError

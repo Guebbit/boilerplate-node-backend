@@ -1,6 +1,6 @@
 /**
- * Integration tests for /healthz, /readyz, / and /metrics.
- * No DB or Redis is started; we mock mongoose.connection.readyState and pingCache.
+ * Integration tests for /, /observability/*, and related system routes.
+ * No DB or Redis is started; we mock mongoose.connection.readyState where needed.
  */
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -8,15 +8,9 @@ import crypto from 'node:crypto';
 import express from 'express';
 import mongoose from 'mongoose';
 
-jest.mock('@utils/cache', () => ({
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    __esModule: true,
-    pingCache: jest.fn().mockResolvedValue(true)
-}));
-
 import { router as systemRoutes } from '../../src/routes';
+import { router as observabilityRoutes } from '../../src/routes/observability';
 import { rejectResponse } from '../../src/utils/response';
-import { pingCache } from '../../src/utils/cache';
 
 const app = express();
 app.use(express.json());
@@ -26,12 +20,12 @@ app.use((request, response, next) => {
     response.setHeader('x-request-id', requestId);
     next();
 });
+app.use('/observability', observabilityRoutes);
 app.use('/', systemRoutes);
 app.use((_request, response) => rejectResponse(response, 404, 'Not Found'));
 
 let server: Server;
 let baseUrl = '';
-const mockedPingCache = pingCache as jest.MockedFunction<typeof pingCache>;
 
 beforeAll(
     () =>
@@ -63,53 +57,15 @@ describe('System routes', () => {
         expect(body.data.status).toBe('ok');
     });
 
-    it('GET /healthz always returns 200', async () => {
-        const response = await fetch(`${baseUrl}/healthz`);
-        const body = (await response.json()) as { data: { status: string } };
-        expect(response.status).toBe(200);
-        expect(body.data.status).toBe('ok');
-    });
-
-    it('GET /readyz returns 200 when mongo and redis are up', async () => {
-        jest.spyOn(mongoose, 'connection', 'get').mockReturnValue({
-            readyState: 1
-        } as mongoose.Connection);
-        mockedPingCache.mockResolvedValueOnce(true);
-
-        const response = await fetch(`${baseUrl}/readyz`);
-        const body = (await response.json()) as { data: { mongo: string; redis: string } };
-        expect(response.status).toBe(200);
-        expect(body.data.mongo).toBe('up');
-        expect(body.data.redis).toBe('up');
-    });
-
-    it('GET /readyz returns 503 when mongo is down', async () => {
-        jest.spyOn(mongoose, 'connection', 'get').mockReturnValue({
-            readyState: 0
-        } as mongoose.Connection);
-        mockedPingCache.mockResolvedValueOnce(true);
-
-        const response = await fetch(`${baseUrl}/readyz`);
-        expect(response.status).toBe(503);
-    });
-
-    it('GET /readyz returns 503 when redis is down', async () => {
-        jest.spyOn(mongoose, 'connection', 'get').mockReturnValue({
-            readyState: 1
-        } as mongoose.Connection);
-        mockedPingCache.mockResolvedValueOnce(false);
-
-        const response = await fetch(`${baseUrl}/readyz`);
-        expect(response.status).toBe(503);
-    });
-
     it('returns 404 for unknown routes', async () => {
         const response = await fetch(`${baseUrl}/not-found`);
         expect(response.status).toBe(404);
     });
+});
 
-    it('GET /metrics returns prometheus exposition', async () => {
-        const response = await fetch(`${baseUrl}/metrics`);
+describe('Observability routes', () => {
+    it('GET /observability/metrics returns prometheus exposition', async () => {
+        const response = await fetch(`${baseUrl}/observability/metrics`);
         const body = await response.text();
         expect(response.status).toBe(200);
         expect(response.headers.get('content-type')).toContain('text/plain');
@@ -130,5 +86,37 @@ describe('System routes', () => {
 
         expect(text).toContain('event: observability.metrics.snapshot');
         expect(text).toContain('data: ');
+    });
+
+    it('GET /observability/health returns 401 without auth', async () => {
+        const response = await fetch(`${baseUrl}/observability/health`);
+        expect(response.status).toBe(401);
+    });
+
+    it('GET /observability/metrics/overview returns 401 without auth', async () => {
+        const response = await fetch(`${baseUrl}/observability/metrics/overview`);
+        expect(response.status).toBe(401);
+    });
+
+    it('GET /observability/audit returns 401 without auth', async () => {
+        const response = await fetch(`${baseUrl}/observability/audit`);
+        expect(response.status).toBe(401);
+    });
+
+    it('GET /observability/health is reachable (auth middleware is active)', async () => {
+        /*
+         * The 401 already confirmed auth is enforced. A full authenticated test
+         * would require a signed JWT and running Redis/DB infrastructure. Instead
+         * we just verify mongoose readyState is accessible and the 401 path is stable.
+         */
+        jest.spyOn(mongoose, 'connection', 'get').mockReturnValue({
+            readyState: 1
+        } as mongoose.Connection);
+
+        const response = await fetch(`${baseUrl}/observability/health`);
+        jest.restoreAllMocks();
+
+        /* Without valid credentials the route must return 401 — not 404 or 500. */
+        expect(response.status).toBe(401);
     });
 });

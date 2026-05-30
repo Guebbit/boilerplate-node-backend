@@ -12,10 +12,10 @@ const databaseStatusMap: Record<number, 'connected' | 'connecting' | 'disconnect
 };
 
 /**
- * GET /admin/health
- * Full JSON health snapshot for the admin dashboard.
+ * GET /observability/health
+ * Full JSON health snapshot for dashboard use.
  */
-export const getAdminHealth = (_request: Request, response: Response) => {
+export const getObservabilityHealth = (_request: Request, response: Response) => {
     const mem = process.memoryUsage();
     const databaseReadyState = mongoose.connection.readyState;
     const databaseStatus = databaseStatusMap[databaseReadyState] ?? 'disconnected';
@@ -47,4 +47,4 @@ export const getAdminHealth = (_request: Request, response: Response) => {
     });
 };
 
-export default getAdminHealth;
+export default getObservabilityHealth;

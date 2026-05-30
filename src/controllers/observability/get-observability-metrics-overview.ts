@@ -23,10 +23,10 @@ const sumByLabel = (
     values.filter((v) => v.labels[labelKey] === labelValue).reduce((sum, v) => sum + v.value, 0);
 
 /**
- * GET /admin/metrics
- * Structured JSON summary of key operational metrics.
+ * GET /observability/metrics/overview
+ * Structured JSON overview of key operational metrics.
  */
-export const getAdminMetrics = (_request: Request, response: Response) =>
+export const getObservabilityMetricsOverview = (_request: Request, response: Response) =>
     Promise.all([
         getHttpRequestCounters(),
         httpInflightRequests.get(),

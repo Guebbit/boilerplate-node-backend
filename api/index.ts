@@ -104,10 +104,11 @@ export type { UsersResponseEnvelope } from './models/UsersResponseEnvelope';
 export type { ValidationErrorResponse } from './models/ValidationErrorResponse';
 
 export { AccountService } from './services/AccountService';
-export { AdminService } from './services/AdminService';
 export { AuthService } from './services/AuthService';
 export { CartService } from './services/CartService';
 export { FeedbackService } from './services/FeedbackService';
+export { ObservabilityService } from './services/ObservabilityService';
 export { OrdersService } from './services/OrdersService';
 export { ProductsService } from './services/ProductsService';
+export { SystemService } from './services/SystemService';
 export { UsersService } from './services/UsersService';

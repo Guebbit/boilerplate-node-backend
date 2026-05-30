@@ -38,7 +38,7 @@ import { router as authRoutes } from './routes/account';
 import { router as orderRoutes } from './routes/orders';
 import { router as cartRoutes } from './routes/cart';
 import { router as userRoutes } from './routes/users';
-import { router as adminRoutes } from './routes/admin';
+import { router as observabilityRoutes } from './routes/observability';
 import { router as feedbackRoutes } from './routes/feedback';
 import { router as systemRoutes } from './routes';
 import { handleWebSocketUpgrade } from './routes/websocket';
@@ -225,7 +225,7 @@ app.use('/products', productRoutes);
 app.use('/orders', orderRoutes);
 app.use('/cart', cartRoutes);
 app.use('/users', userRoutes);
-app.use('/admin', adminRoutes);
+app.use('/observability', observabilityRoutes);
 app.use('/feedback', feedbackRoutes);
 app.use('/', systemRoutes);
 

@@ -92,7 +92,7 @@ export default withMermaid(
                         items: [
                             { text: 'Overview', link: '/api/' },
                             { text: 'Endpoints', link: '/api/endpoints' },
-                            { text: 'Admin Endpoints', link: '/api/admin' },
+                            { text: 'Observability Endpoints', link: '/api/observability' },
                             { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
                             { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' }
                         ]
