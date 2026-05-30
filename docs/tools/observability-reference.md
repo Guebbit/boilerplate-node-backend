@@ -35,12 +35,12 @@ flowchart LR
 
 Repo files: [`/.docker/observability/prometheus.config.yaml`](../../.docker/observability/prometheus.config.yaml), [`/.docker/observability/prometheus.alert-rules.yaml`](../../.docker/observability/prometheus.alert-rules.yaml)
 
-| Config section | What it does | Why local value | Common tweak | Dev vs prod |
-| --- | --- | --- | --- | --- |
-| `global.scrape_interval`, `evaluation_interval` | scrape/evaluate cadence | `15s` keeps feedback quick | increase to reduce laptop load | prod often 15-60s by target criticality |
-| `scrape_configs` | scrape targets (`app`, `otel-collector`) | static docker service names are simple locally | add more jobs/targets | prod usually uses service discovery |
-| `rule_files` | loads alert rules | keeps rules versioned in repo | split rules by domain | prod often adds recording rules |
-| `alerting.alertmanagers` | sends firing alerts | points to local Alertmanager | switch target/HA endpoints | prod commonly has multiple replicas |
+| Config section                                  | What it does                             | Why local value                                | Common tweak                   | Dev vs prod                             |
+| ----------------------------------------------- | ---------------------------------------- | ---------------------------------------------- | ------------------------------ | --------------------------------------- |
+| `global.scrape_interval`, `evaluation_interval` | scrape/evaluate cadence                  | `15s` keeps feedback quick                     | increase to reduce laptop load | prod often 15-60s by target criticality |
+| `scrape_configs`                                | scrape targets (`app`, `otel-collector`) | static docker service names are simple locally | add more jobs/targets          | prod usually uses service discovery     |
+| `rule_files`                                    | loads alert rules                        | keeps rules versioned in repo                  | split rules by domain          | prod often adds recording rules         |
+| `alerting.alertmanagers`                        | sends firing alerts                      | points to local Alertmanager                   | switch target/HA endpoints     | prod commonly has multiple replicas     |
 
 ### Alertmanager
 
@@ -48,11 +48,11 @@ Repo files: [`/.docker/observability/prometheus.config.yaml`](../../.docker/obse
 
 Repo file: [`/.docker/observability/alertmanager.config.yaml`](../../.docker/observability/alertmanager.config.yaml)
 
-| Config section | What it does | Why local value | Common tweak | Dev vs prod |
-| --- | --- | --- | --- | --- |
-| `route.group_by/group_wait/group_interval/repeat_interval` | groups and throttles notifications | avoids spam while testing | adjust batching cadence | prod tunes by team/on-call needs |
-| `route.receiver` + `receivers` | final notification destination | `null` receiver prevents accidental emails/Slack | add Slack/email/webhook receiver | prod uses real receivers + secrets |
-| `global.resolve_timeout` | resolve timeout behavior | safe default (`5m`) | tune for noisy alerts | prod often aligned with incident policy |
+| Config section                                             | What it does                       | Why local value                                  | Common tweak                     | Dev vs prod                             |
+| ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | -------------------------------- | --------------------------------------- |
+| `route.group_by/group_wait/group_interval/repeat_interval` | groups and throttles notifications | avoids spam while testing                        | adjust batching cadence          | prod tunes by team/on-call needs        |
+| `route.receiver` + `receivers`                             | final notification destination     | `null` receiver prevents accidental emails/Slack | add Slack/email/webhook receiver | prod uses real receivers + secrets      |
+| `global.resolve_timeout`                                   | resolve timeout behavior           | safe default (`5m`)                              | tune for noisy alerts            | prod often aligned with incident policy |
 
 ### Grafana
 
@@ -60,11 +60,11 @@ Repo file: [`/.docker/observability/alertmanager.config.yaml`](../../.docker/obs
 
 Repo files: [`/.docker/observability/grafana.datasources.yaml`](../../.docker/observability/grafana.datasources.yaml), [`/.docker/observability/grafana.dashboard-providers.yaml`](../../.docker/observability/grafana.dashboard-providers.yaml), [`/.docker/observability/grafana/dashboards/api-traces.json`](../../.docker/observability/grafana/dashboards/api-traces.json)
 
-| Config section | What it does | Why local value | Common tweak | Dev vs prod |
-| --- | --- | --- | --- | --- |
-| `datasources[]` | provisions Tempo/Prometheus/Loki at startup | no manual UI setup on each restart | add auth headers / extra datasources | prod often adds RBAC, auth, cloud backends |
-| `tracesToLogsV2`, `tracesToMetrics`, `derivedFields` | enables cross-signal jumps | fast local debugging workflow | map labels to your service naming | prod requires strict label consistency |
-| `providers[].options.path` | auto-loads dashboard JSON files | keeps dashboards in git | add folders/providers | prod may split folders/org permissions |
+| Config section                                       | What it does                                | Why local value                    | Common tweak                         | Dev vs prod                                |
+| ---------------------------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------ | ------------------------------------------ |
+| `datasources[]`                                      | provisions Tempo/Prometheus/Loki at startup | no manual UI setup on each restart | add auth headers / extra datasources | prod often adds RBAC, auth, cloud backends |
+| `tracesToLogsV2`, `tracesToMetrics`, `derivedFields` | enables cross-signal jumps                  | fast local debugging workflow      | map labels to your service naming    | prod requires strict label consistency     |
+| `providers[].options.path`                           | auto-loads dashboard JSON files             | keeps dashboards in git            | add folders/providers                | prod may split folders/org permissions     |
 
 ### Tempo
 
@@ -72,11 +72,11 @@ Repo files: [`/.docker/observability/grafana.datasources.yaml`](../../.docker/ob
 
 Repo file: [`/.docker/observability/tempo.config.yaml`](../../.docker/observability/tempo.config.yaml)
 
-| Config section | What it does | Why local value | Common tweak | Dev vs prod |
-| --- | --- | --- | --- | --- |
-| `distributor.receivers.otlp` | listens for OTLP ingest | accepts gRPC+HTTP locally | disable unused protocol | prod often fronted by gateway/load balancer |
-| `storage.trace.backend/local/wal` | trace persistence paths | simple local filesystem | move to bigger local volume | prod usually object storage (S3/GCS/etc.) |
-| `compactor.compaction.block_retention` | retention/compaction window | `24h` keeps disk usage small | increase for longer local analysis | prod often much longer retention |
+| Config section                         | What it does                | Why local value              | Common tweak                       | Dev vs prod                                 |
+| -------------------------------------- | --------------------------- | ---------------------------- | ---------------------------------- | ------------------------------------------- |
+| `distributor.receivers.otlp`           | listens for OTLP ingest     | accepts gRPC+HTTP locally    | disable unused protocol            | prod often fronted by gateway/load balancer |
+| `storage.trace.backend/local/wal`      | trace persistence paths     | simple local filesystem      | move to bigger local volume        | prod usually object storage (S3/GCS/etc.)   |
+| `compactor.compaction.block_retention` | retention/compaction window | `24h` keeps disk usage small | increase for longer local analysis | prod often much longer retention            |
 
 ### Loki
 
@@ -84,12 +84,12 @@ Repo file: [`/.docker/observability/tempo.config.yaml`](../../.docker/observabil
 
 Repo file: [`/.docker/observability/loki.config.yaml`](../../.docker/observability/loki.config.yaml)
 
-| Config section | What it does | Why local value | Common tweak | Dev vs prod |
-| --- | --- | --- | --- | --- |
-| `schema_config` | index/storage schema config | TSDB `v13` is current local baseline | update when upgrading Loki | prod changes need planned migrations |
-| `storage_config.filesystem` | where chunks/index are stored | low-friction local disk | mount persistent volume | prod usually object storage + index shipper |
-| `limits_config.retention_period` + `compactor.retention_enabled` | log retention enforcement | `168h` keeps one week logs | shorter retention if disk constrained | prod retention follows compliance/cost rules |
-| `ruler.alertmanager_url` | forwards Loki alerts | wired to local Alertmanager | add rule files and enable alerts | prod typically HA Alertmanager |
+| Config section                                                   | What it does                  | Why local value                      | Common tweak                          | Dev vs prod                                  |
+| ---------------------------------------------------------------- | ----------------------------- | ------------------------------------ | ------------------------------------- | -------------------------------------------- |
+| `schema_config`                                                  | index/storage schema config   | TSDB `v13` is current local baseline | update when upgrading Loki            | prod changes need planned migrations         |
+| `storage_config.filesystem`                                      | where chunks/index are stored | low-friction local disk              | mount persistent volume               | prod usually object storage + index shipper  |
+| `limits_config.retention_period` + `compactor.retention_enabled` | log retention enforcement     | `168h` keeps one week logs           | shorter retention if disk constrained | prod retention follows compliance/cost rules |
+| `ruler.alertmanager_url`                                         | forwards Loki alerts          | wired to local Alertmanager          | add rule files and enable alerts      | prod typically HA Alertmanager               |
 
 ### Promtail
 
@@ -97,11 +97,11 @@ Repo file: [`/.docker/observability/loki.config.yaml`](../../.docker/observabili
 
 Repo file: [`/.docker/observability/promtail.config.yaml`](../../.docker/observability/promtail.config.yaml)
 
-| Config section | What it does | Why local value | Common tweak | Dev vs prod |
-| --- | --- | --- | --- | --- |
-| `scrape_configs[].labels.__path__` | filesystem path to tail | Docker JSON log path works in local compose | add extra paths/jobs | prod often uses Kubernetes discovery |
-| `pipeline_stages` | transforms/parses entries before send | basic docker + regex pipeline | add json/timestamp/labels stages | prod pipelines are usually richer and normalized |
-| `positions.filename` | stores read offsets | avoids rereading on restart | change to persistent mount | prod keeps positions on durable storage |
+| Config section                     | What it does                          | Why local value                             | Common tweak                     | Dev vs prod                                      |
+| ---------------------------------- | ------------------------------------- | ------------------------------------------- | -------------------------------- | ------------------------------------------------ |
+| `scrape_configs[].labels.__path__` | filesystem path to tail               | Docker JSON log path works in local compose | add extra paths/jobs             | prod often uses Kubernetes discovery             |
+| `pipeline_stages`                  | transforms/parses entries before send | basic docker + regex pipeline               | add json/timestamp/labels stages | prod pipelines are usually richer and normalized |
+| `positions.filename`               | stores read offsets                   | avoids rereading on restart                 | change to persistent mount       | prod keeps positions on durable storage          |
 
 ### OpenTelemetry Collector
 
@@ -109,11 +109,11 @@ Repo file: [`/.docker/observability/promtail.config.yaml`](../../.docker/observa
 
 Repo file: [`/.docker/observability/otel-collector.config.yaml`](../../.docker/observability/otel-collector.config.yaml)
 
-| Config section | What it does | Why local value | Common tweak | Dev vs prod |
-| --- | --- | --- | --- | --- |
-| `receivers.otlp` | ingest endpoint from instrumented apps | gRPC+HTTP support for flexibility | keep only one protocol if desired | prod often receives from many services |
-| `processors.batch` | batches spans before export | better performance with low complexity | add memory/resource processors | prod commonly adds resource/attributes/tail sampling |
-| `exporters.otlp` + `service.pipelines.traces` | sends traces to Tempo and wires trace pipeline | direct local network path | add extra exporters (vendor/cloud) | prod often fans out to multiple backends |
+| Config section                                | What it does                                   | Why local value                        | Common tweak                       | Dev vs prod                                          |
+| --------------------------------------------- | ---------------------------------------------- | -------------------------------------- | ---------------------------------- | ---------------------------------------------------- |
+| `receivers.otlp`                              | ingest endpoint from instrumented apps         | gRPC+HTTP support for flexibility      | keep only one protocol if desired  | prod often receives from many services               |
+| `processors.batch`                            | batches spans before export                    | better performance with low complexity | add memory/resource processors     | prod commonly adds resource/attributes/tail sampling |
+| `exporters.otlp` + `service.pipelines.traces` | sends traces to Tempo and wires trace pipeline | direct local network path              | add extra exporters (vendor/cloud) | prod often fans out to multiple backends             |
 
 ## Common tasks
 
@@ -125,17 +125,17 @@ Repo file: [`/.docker/observability/otel-collector.config.yaml`](../../.docker/o
 ## FAQ / troubleshooting
 
 - **No traces visible in Grafana**
-  - Check app env `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318`.
-  - Check collector and tempo containers are running.
+    - Check app env `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318`.
+    - Check collector and tempo containers are running.
 - **No logs in Loki**
-  - Check Promtail can read `/var/lib/docker/containers/*/*-json.log`.
-  - Verify `clients.url` points to `http://loki:3100/loki/api/v1/push`.
+    - Check Promtail can read `/var/lib/docker/containers/*/*-json.log`.
+    - Verify `clients.url` points to `http://loki:3100/loki/api/v1/push`.
 - **Prometheus target is down**
-  - Open Prometheus → *Status > Targets* and verify `app:3000/metrics`.
-  - Confirm app container and `/metrics` endpoint are up.
+    - Open Prometheus → _Status > Targets_ and verify `app:3000/metrics`.
+    - Confirm app container and `/metrics` endpoint are up.
 - **Too much local alert noise**
-  - Increase alert `for:` windows and/or lower local scrape frequency.
-  - Keep Alertmanager on `null` receiver in local dev.
+    - Increase alert `for:` windows and/or lower local scrape frequency.
+    - Keep Alertmanager on `null` receiver in local dev.
 
 ## Related tool pages
 
