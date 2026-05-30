@@ -60,7 +60,7 @@ flowchart TD
 - **API**: REST API.
 - **Framework**: [Express](./tools/runtime.md).
 - **Database**: [MongoDB + Mongoose](./tools/mongodb-mongoose.md).
-- **Observability**: [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
+- **Observability**: [Observability Reference](./tools/observability-reference.md), [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
 - **Real-time / outbound**: [WebSockets](./tools/websockets.md) and [email + PDF rendering](./tools/email-and-rendering.md).
 - **Process model**: [Clustering & graceful shutdown](./theory/clustering.md).
 - **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
@@ -113,5 +113,5 @@ flowchart LR
 - Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
 - Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.
 - Want the `package.json` map? Read [Package Dependencies](./tools/package-dependencies.md) and [Package Scripts](./tools/package-scripts.md).
-- Want observability? Read [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
+- Want observability? Start with [Observability Reference](./tools/observability-reference.md), then jump to [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
 - Want to change payloads or routes? Start in [API Overview](./api/) and keep [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) first.

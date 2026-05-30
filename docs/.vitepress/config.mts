@@ -66,6 +66,7 @@ export default withMermaid(
                         collapsed: false,
                         items: [
                             { text: 'Winston & Audit Logs', link: '/tools/winston' },
+                            { text: 'Observability Reference', link: '/tools/observability-reference' },
                             { text: 'Prometheus', link: '/tools/prometheus' },
                             { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
                             { text: 'Tempo', link: '/tools/tempo' },

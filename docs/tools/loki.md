@@ -54,6 +54,7 @@ Config file: `.docker/observability/loki.config.yaml`
 
 ## Related pages
 
+- [Observability Reference](./observability-reference.md)
 - [Grafana](./grafana.md)
 - [Winston & Audit Logs](./winston.md)
 - [OpenTelemetry](./opentelemetry.md)

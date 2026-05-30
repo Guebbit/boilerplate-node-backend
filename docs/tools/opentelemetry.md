@@ -69,6 +69,7 @@ In Loki, filter by `{service="api"} | json | trace_id="<id>"`.
 
 ## Related pages
 
+- [Observability Reference](./observability-reference.md)
 - [Tempo](./tempo.md)
 - [Grafana](./grafana.md)
 - [Winston & Audit Logs](./winston.md)
