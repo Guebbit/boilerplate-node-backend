@@ -5,38 +5,10 @@
 import type { AdminHealthResponseEnvelope } from '../models/AdminHealthResponseEnvelope';
 import type { AdminMetricsSummaryResponseEnvelope } from '../models/AdminMetricsSummaryResponseEnvelope';
 import type { AuditLogsResponseEnvelope } from '../models/AuditLogsResponseEnvelope';
-import type { MessageResponse } from '../models/MessageResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
-export class AdminService {
-    /**
-     * API health check
-     * Returns a simple liveness indicator. Use `GET /admin/health` for the full admin health summary.
-     * @returns MessageResponse API is running
-     * @throws ApiError
-     */
-    public static getHealth(): CancelablePromise<MessageResponse> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/',
-        });
-    }
-    /**
-     * Prometheus metrics
-     * Raw Prometheus text (exposition format 0.0.4).
-     * Intended for Prometheus scraping, not for browser clients.
-     * Use `GET /admin/metrics` for a JSON summary suitable for dashboards.
-     *
-     * @returns string Prometheus exposition text
-     * @throws ApiError
-     */
-    public static getPrometheusMetrics(): CancelablePromise<string> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/metrics',
-        });
-    }
+export class ObservabilityService {
     /**
      * Observability SSE stream
      * Live Server-Sent Events stream for demo dashboards.
@@ -52,18 +24,18 @@ export class AdminService {
         });
     }
     /**
-     * Admin health summary
-     * Full JSON health snapshot for the admin dashboard.
+     * Health snapshot
+     * Full JSON health snapshot for dashboard use.
      * Includes uptime, database status, memory, integrations, and system info.
      * Requires admin role.
      *
      * @returns AdminHealthResponseEnvelope Health summary
      * @throws ApiError
      */
-    public static getAdminHealth(): CancelablePromise<AdminHealthResponseEnvelope> {
+    public static getObservabilityHealth(): CancelablePromise<AdminHealthResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/admin/health',
+            url: '/observability/health',
             errors: {
                 401: `Unauthorized`,
                 403: `Forbidden`,
@@ -72,18 +44,33 @@ export class AdminService {
         });
     }
     /**
-     * Metrics summary (JSON)
+     * Prometheus metrics
+     * Raw Prometheus text (exposition format 0.0.4).
+     * Intended for Prometheus scraping, not for browser clients.
+     * Use `GET /observability/metrics/overview` for a JSON summary suitable for dashboards.
+     *
+     * @returns string Prometheus exposition text
+     * @throws ApiError
+     */
+    public static getObservabilityMetrics(): CancelablePromise<string> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/observability/metrics',
+        });
+    }
+    /**
+     * Metrics overview (JSON)
      * Key operational metrics derived from Prometheus counters/histograms,
      * returned as structured JSON for dashboard KPI cards and charts.
      * Requires admin role.
      *
-     * @returns AdminMetricsSummaryResponseEnvelope Metrics summary
+     * @returns AdminMetricsSummaryResponseEnvelope Metrics overview
      * @throws ApiError
      */
-    public static getAdminMetrics(): CancelablePromise<AdminMetricsSummaryResponseEnvelope> {
+    public static getObservabilityMetricsOverview(): CancelablePromise<AdminMetricsSummaryResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/admin/metrics',
+            url: '/observability/metrics/overview',
             errors: {
                 401: `Unauthorized`,
                 403: `Forbidden`,
@@ -105,7 +92,7 @@ export class AdminService {
      * @returns AuditLogsResponseEnvelope Audit events
      * @throws ApiError
      */
-    public static getAdminAuditLogs(
+    public static getObservabilityAuditLogs(
         actor?: string,
         action?: string,
         outcome?: 'success' | 'failure',
@@ -114,7 +101,7 @@ export class AdminService {
     ): CancelablePromise<AuditLogsResponseEnvelope> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/admin/audit',
+            url: '/observability/audit',
             query: {
                 'actor': actor,
                 'action': action,

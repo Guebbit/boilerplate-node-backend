@@ -8,7 +8,7 @@ This page is the quick map of the boilerplate observability stack and the most c
 flowchart LR
     App[Node API app] -->|OTLP traces| OTel[OpenTelemetry Collector]
     OTel -->|traces| Tempo[Tempo]
-    App -->|/metrics| Prom[Prometheus]
+    App -->|/observability/metrics| Prom[Prometheus]
     Prom -->|alerts| Alert[Alertmanager]
     DockerLogs[Docker container logs] --> Promtail[Promtail]
     Promtail --> Loki[Loki]
@@ -131,8 +131,8 @@ Repo file: [`/.docker/observability/otel-collector.config.yaml`](../../.docker/o
     - Check Promtail can read `/var/lib/docker/containers/*/*-json.log`.
     - Verify `clients.url` points to `http://loki:3100/loki/api/v1/push`.
 - **Prometheus target is down**
-    - Open Prometheus → _Status > Targets_ and verify `app:3000/metrics`.
-    - Confirm app container and `/metrics` endpoint are up.
+    - Open Prometheus → _Status > Targets_ and verify `app:3000/observability/metrics`.
+    - Confirm app container and `/observability/metrics` endpoint are up.
 - **Too much local alert noise**
     - Increase alert `for:` windows and/or lower local scrape frequency.
     - Keep Alertmanager on `null` receiver in local dev.

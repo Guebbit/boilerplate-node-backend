@@ -21,8 +21,11 @@ tags:
     - name: Products
     - name: Cart
     - name: Orders
-    - name: Admin
     - name: Feedback
+    - name: System
+      description: Public system endpoints (ping, liveness).
+    - name: Observability
+      description: Operational observability endpoints (metrics, health, audit, events). Protected endpoints require admin role.
 
 # If set, by default all operation requires an authentication
 # security:
@@ -1399,9 +1402,9 @@ paths:
     # --------- System ---------
     /:
         get:
-            tags: [Admin]
+            tags: [System]
             summary: API health check
-            description: Returns a simple liveness indicator. Use `GET /admin/health` for the full admin health summary.
+            description: Public ping endpoint. Returns a simple liveness indicator confirming the API process is running.
             operationId: getHealth
             responses:
                 '200':
@@ -1411,26 +1414,10 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/MessageResponse'
 
-    /metrics:
-        get:
-            tags: [Admin]
-            summary: Prometheus metrics
-            description: |
-                Raw Prometheus text (exposition format 0.0.4).
-                Intended for Prometheus scraping, not for browser clients.
-                Use `GET /admin/metrics` for a JSON summary suitable for dashboards.
-            operationId: getPrometheusMetrics
-            responses:
-                '200':
-                    description: Prometheus exposition text
-                    content:
-                        text/plain:
-                            schema:
-                                type: string
-
+    # --------- Observability ---------
     /observability/events:
         get:
-            tags: [Admin]
+            tags: [Observability]
             summary: Observability SSE stream
             description: |
                 Live Server-Sent Events stream for demo dashboards.
@@ -1444,16 +1431,15 @@ paths:
                             schema:
                                 type: string
 
-    # --------- Admin — observability & dashboard ---------
-    /admin/health:
+    /observability/health:
         get:
-            tags: [Admin]
-            summary: Admin health summary
+            tags: [Observability]
+            summary: Health snapshot
             description: |
-                Full JSON health snapshot for the admin dashboard.
+                Full JSON health snapshot for dashboard use.
                 Includes uptime, database status, memory, integrations, and system info.
                 Requires admin role.
-            operationId: getAdminHealth
+            operationId: getObservabilityHealth
             security:
                 - bearerAuth: []
             responses:
@@ -1467,20 +1453,37 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
-    /admin/metrics:
+    /observability/metrics:
         get:
-            tags: [Admin]
-            summary: Metrics summary (JSON)
+            tags: [Observability]
+            summary: Prometheus metrics
+            description: |
+                Raw Prometheus text (exposition format 0.0.4).
+                Intended for Prometheus scraping, not for browser clients.
+                Use `GET /observability/metrics/overview` for a JSON summary suitable for dashboards.
+            operationId: getObservabilityMetrics
+            responses:
+                '200':
+                    description: Prometheus exposition text
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+
+    /observability/metrics/overview:
+        get:
+            tags: [Observability]
+            summary: Metrics overview (JSON)
             description: |
                 Key operational metrics derived from Prometheus counters/histograms,
                 returned as structured JSON for dashboard KPI cards and charts.
                 Requires admin role.
-            operationId: getAdminMetrics
+            operationId: getObservabilityMetricsOverview
             security:
                 - bearerAuth: []
             responses:
                 '200':
-                    description: Metrics summary
+                    description: Metrics overview
                     content:
                         application/json:
                             schema:
@@ -1489,15 +1492,15 @@ paths:
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
-    /admin/audit:
+    /observability/audit:
         get:
-            tags: [Admin]
+            tags: [Observability]
             summary: Recent audit events
             description: |
                 Returns the most recent audit events from the in-memory ring buffer (up to 200).
                 Events include auth flows, admin CRUD actions, and security blocks.
                 Requires admin role.
-            operationId: getAdminAuditLogs
+            operationId: getObservabilityAuditLogs
             security:
                 - bearerAuth: []
             parameters:
@@ -2381,7 +2384,9 @@ paths:
         get:
             tags: [Orders]
             summary: List orders (paginated)
-            description: Returns a paginated list of orders.
+            description: |
+                Returns a paginated list of orders.
+                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
             operationId: listOrders
             security:
                 - bearerAuth: []
@@ -2479,7 +2484,9 @@ paths:
         post:
             tags: [Orders]
             summary: Search orders (DTO-friendly)
-            description: Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
+            description: |
+                Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
+                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
             operationId: searchOrders
             security:
                 - bearerAuth: []

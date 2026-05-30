@@ -3,11 +3,11 @@ import { successResponse, rejectResponse } from '@utils/response';
 import { getAuditBuffer } from '@utils/audit';
 
 /**
- * GET /admin/audit
+ * GET /observability/audit
  * Recent audit events from the in-memory ring buffer.
  * Supports optional filtering by actor, action, outcome, since, and limit.
  */
-export const getAdminAuditLogs = (request: Request, response: Response) => {
+export const getObservabilityAuditLogs = (request: Request, response: Response) => {
     const { actor, action, outcome, since, limit } = request.query as Record<string, string>;
 
     const limitNumber = Math.min(Number.parseInt(limit ?? '50', 10), 200);
@@ -31,4 +31,4 @@ export const getAdminAuditLogs = (request: Request, response: Response) => {
     return successResponse(response, { items: limited, total: limited.length });
 };
 
-export default getAdminAuditLogs;
+export default getObservabilityAuditLogs;

@@ -30,7 +30,7 @@ Provisioning files live at:
 flowchart TD
     App -->|OTLP/HTTP| Collector[OTel Collector]
     Collector -->|OTLP/gRPC| Tempo
-    App -->|/metrics scrape| Prometheus
+    App -->|/observability/metrics scrape| Prometheus
     App -->|stdout JSON| Promtail
     Promtail --> Loki
     Prometheus -->|alerts| Alertmanager
@@ -53,9 +53,9 @@ flowchart TD
 
 ## Admin API vs Grafana
 
-The `/admin/*` endpoints expose the same metrics as Grafana but as a **point-in-time JSON snapshot** — no time axis, no historical trend. Use Grafana for SRE workflows; use the admin API as a data layer for a custom dashboard.
+The `/observability/*` endpoints expose the same metrics as Grafana but as a **point-in-time JSON snapshot** — no time axis, no historical trend. Use Grafana for SRE workflows; use the observability API as a data layer for a custom dashboard.
 
-→ Full details: [Admin Endpoints](../api/admin.md)
+→ Full details: [Observability Endpoints](../api/observability.md)
 
 ## Useful links
 
