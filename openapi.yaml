@@ -207,6 +207,23 @@ components:
                 message:
                     type: string
 
+        ErrorItem:
+            type: object
+            required: [code, message]
+            properties:
+                code:
+                    type: string
+                    description: Stable machine-readable error code
+                    example: VALIDATION_ERROR
+                message:
+                    type: string
+                    description: Human-readable error detail
+                    example: Field "email" is required
+                details:
+                    type: object
+                    additionalProperties: true
+                    description: Optional structured metadata for programmatic handling
+
         ErrorResponse:
             type: object
             required: [success, status, message, errors]
@@ -218,29 +235,22 @@ components:
                     type: integer
                 message:
                     type: string
-                    description: Technical error code or description
+                    description: Human-readable summary for this failure
                 errors:
                     type: array
+                    minItems: 1
                     items:
-                        type: string
-                    description: User-friendly error messages
+                        $ref: '#/components/schemas/ErrorItem'
+                    description: Structured machine-friendly errors
 
         ValidationErrorResponse:
-            type: object
-            required: [success, status, message, errors]
-            properties:
-                success:
-                    type: boolean
-                    enum: [false]
-                status:
-                    type: integer
-                message:
-                    type: string
-                errors:
-                    type: array
-                    items:
-                        type: string
-                    description: Validation error messages
+            allOf:
+                - $ref: '#/components/schemas/ErrorResponse'
+                - type: object
+                  properties:
+                      message:
+                          type: string
+                          example: Validation failed
 
         # ---------- Domain ----------
 
@@ -378,23 +388,23 @@ components:
                       data:
                           $ref: '#/components/schemas/CheckoutResponse'
 
-        AdminHealthResponseEnvelope:
+        ObservabilityHealthResponseEnvelope:
             allOf:
                 - $ref: '#/components/schemas/SuccessEnvelope'
                 - type: object
                   required: [data]
                   properties:
                       data:
-                          $ref: '#/components/schemas/AdminHealthResponse'
+                          $ref: '#/components/schemas/ObservabilityHealthResponse'
 
-        AdminMetricsSummaryResponseEnvelope:
+        ObservabilityMetricsSummaryResponseEnvelope:
             allOf:
                 - $ref: '#/components/schemas/SuccessEnvelope'
                 - type: object
                   required: [data]
                   properties:
                       data:
-                          $ref: '#/components/schemas/AdminMetricsSummaryResponse'
+                          $ref: '#/components/schemas/ObservabilityMetricsSummaryResponse'
 
         AuditLogsResponseEnvelope:
             allOf:
@@ -1242,16 +1252,16 @@ components:
                 message:
                     type: string
 
-        # ---------- Admin / Observability ----------
+        # ---------- Observability ----------
 
-        AdminHealthIntegrations:
+        ObservabilityHealthIntegrations:
             type: object
             properties:
                 loki: { type: boolean }
                 posthog: { type: boolean }
                 otelEnabled: { type: boolean }
 
-        AdminHealthMemory:
+        ObservabilityHealthMemory:
             type: object
             required: [heapUsedMb, heapTotalMb, rssMb]
             properties:
@@ -1259,7 +1269,7 @@ components:
                 heapTotalMb: { type: integer }
                 rssMb: { type: integer }
 
-        AdminHealthSystem:
+        ObservabilityHealthSystem:
             type: object
             required: [platform, cpuCount, loadAvg]
             properties:
@@ -1269,7 +1279,7 @@ components:
                     type: array
                     items: { type: number }
 
-        AdminHealth:
+        ObservabilityHealth:
             type: object
             required:
                 [status, environment, service, nodeVersion, uptimeSeconds, database, timestamp]
@@ -1288,26 +1298,26 @@ components:
                         status:
                             type: string
                             enum: [connected, connecting, disconnected]
-                integrations: { $ref: '#/components/schemas/AdminHealthIntegrations' }
-                memory: { $ref: '#/components/schemas/AdminHealthMemory' }
-                system: { $ref: '#/components/schemas/AdminHealthSystem' }
+                integrations: { $ref: '#/components/schemas/ObservabilityHealthIntegrations' }
+                memory: { $ref: '#/components/schemas/ObservabilityHealthMemory' }
+                system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
                 timestamp: { type: string, format: date-time }
 
-        AdminHealthResponse:
+        ObservabilityHealthResponse:
             type: object
             required: [success, data]
             properties:
                 success: { type: boolean, enum: [true] }
-                data: { $ref: '#/components/schemas/AdminHealth' }
+                data: { $ref: '#/components/schemas/ObservabilityHealth' }
 
-        AdminMetricsLatency:
+        ObservabilityMetricsLatency:
             type: object
             required: [p50, p95]
             properties:
                 p50: { type: number, description: Median latency in ms }
                 p95: { type: number, description: 95th-percentile latency in ms }
 
-        AdminMetricsSummary:
+        ObservabilityMetricsSummary:
             type: object
             required: [http, auth, business, database, process, timestamp]
             properties:
@@ -1323,7 +1333,7 @@ components:
                             maximum: 1
                             description: Fraction of requests that returned 4xx/5xx
                         inFlight: { type: integer, minimum: 0 }
-                        latencyMs: { $ref: '#/components/schemas/AdminMetricsLatency' }
+                        latencyMs: { $ref: '#/components/schemas/ObservabilityMetricsLatency' }
                 auth:
                     type: object
                     properties:
@@ -1347,12 +1357,12 @@ components:
                         heapUsedMb: { type: integer, minimum: 0 }
                 timestamp: { type: string, format: date-time }
 
-        AdminMetricsSummaryResponse:
+        ObservabilityMetricsSummaryResponse:
             type: object
             required: [success, data]
             properties:
                 success: { type: boolean, enum: [true] }
-                data: { $ref: '#/components/schemas/AdminMetricsSummary' }
+                data: { $ref: '#/components/schemas/ObservabilityMetricsSummary' }
 
         AuditEventItem:
             type: object
@@ -1448,7 +1458,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AdminHealthResponseEnvelope'
+                                $ref: '#/components/schemas/ObservabilityHealthResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -1487,7 +1497,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AdminMetricsSummaryResponseEnvelope'
+                                $ref: '#/components/schemas/ObservabilityMetricsSummaryResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }

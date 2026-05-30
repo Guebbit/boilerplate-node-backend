@@ -254,10 +254,20 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
     });
 
     if (error instanceof MulterError)
-        return rejectResponse(response, 400, error.message, [error.code]);
+        return rejectResponse(response, 400, error.message, [
+            {
+                code: error.code,
+                message: error.message
+            }
+        ]);
     if (error instanceof ExtendedError)
         return rejectResponse(response, error.httpCode, error.name, error.errors);
-    rejectResponse(response, 500, 'Internal Server Error', [error.message]);
+    rejectResponse(response, 500, 'Internal Server Error', [
+        {
+            code: 'INTERNAL_ERROR',
+            message: error.message || 'Internal Server Error'
+        }
+    ]);
 });
 
 /*

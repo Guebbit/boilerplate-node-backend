@@ -1,4 +1,4 @@
-import { generateSuccess } from '@utils/response';
+import { generateReject, generateSuccess } from '@utils/response';
 
 describe('generateSuccess', () => {
     it('returns plain objects unchanged (no implicit Mongo normalization)', () => {
@@ -7,6 +7,43 @@ describe('generateSuccess', () => {
         const response = generateSuccess(responseData);
 
         expect(response.data).toEqual(responseData);
+    });
+
+    describe('generateReject', () => {
+        it('builds structured error items from plain string errors', () => {
+            const response = generateReject(400, 'Bad Request', ['Field is required']);
+
+            expect(response).toEqual({
+                success: false,
+                status: 400,
+                message: 'Bad Request',
+                data: undefined,
+                errors: [
+                    {
+                        code: 'BAD_REQUEST',
+                        message: 'Field is required'
+                    }
+                ]
+            });
+        });
+
+        it('preserves provided structured error items', () => {
+            const response = generateReject(422, 'Validation failed', [
+                {
+                    code: 'VALIDATION_ERROR',
+                    message: 'Invalid email format',
+                    details: { field: 'email' }
+                }
+            ]);
+
+            expect(response.errors).toEqual([
+                {
+                    code: 'VALIDATION_ERROR',
+                    message: 'Invalid email format',
+                    details: { field: 'email' }
+                }
+            ]);
+        });
     });
 
     it('keeps primitives untouched', () => {

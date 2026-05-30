@@ -2,9 +2,9 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-import type { AdminMetricsSummary } from './AdminMetricsSummary';
-export type AdminMetricsSummaryResponse = {
+import type { ObservabilityHealth } from './ObservabilityHealth';
+export type ObservabilityHealthResponse = {
     success: boolean;
-    data: AdminMetricsSummary;
+    data: ObservabilityHealth;
 };
 

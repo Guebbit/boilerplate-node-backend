@@ -12,11 +12,17 @@ export interface IResponseSuccess<T> extends IResponseNeutral {
     errors: never;
 }
 
+export interface IResponseErrorItem {
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+}
+
 export interface IResponseReject extends IResponseNeutral {
-    // message: Technical error name or code
-    data: never;
-    // UI friendly error message
-    errors: string[];
+    // reserved field to keep union access (`result.data`) type-safe for callers
+    data: undefined;
+    // structured error list for machine and UI handling
+    errors: IResponseErrorItem[];
 }
 
 /**
@@ -41,12 +47,51 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
 /**
  * Build the canonical error envelope so clients can parse failures predictably.
  */
-export const generateReject = (status = 400, message = '', errors: string[] = []) =>
+const resolveErrorCode = (status: number) => {
+    if (status === 400) return 'BAD_REQUEST';
+    if (status === 401) return 'UNAUTHORIZED';
+    if (status === 403) return 'FORBIDDEN';
+    if (status === 404) return 'NOT_FOUND';
+    if (status === 409) return 'CONFLICT';
+    if (status >= 500) return 'INTERNAL_ERROR';
+    return 'REQUEST_ERROR';
+};
+
+const normalizeErrors = (
+    status: number,
+    message: string,
+    errors: Array<string | IResponseErrorItem>
+): IResponseErrorItem[] => {
+    const fallbackMessage = message || 'Request failed';
+    const inputErrors = errors.length > 0 ? errors : [fallbackMessage];
+
+    return inputErrors.map((error) => {
+        if (typeof error === 'string') {
+            return {
+                code: resolveErrorCode(status),
+                message: error
+            };
+        }
+
+        return {
+            code: error.code || resolveErrorCode(status),
+            message: error.message || fallbackMessage,
+            ...(error.details ? { details: error.details } : {})
+        };
+    });
+};
+
+export const generateReject = (
+    status = 400,
+    message = '',
+    errors: Array<string | IResponseErrorItem> = []
+) =>
     ({
         success: false,
         status,
         message,
-        errors
+        data: undefined,
+        errors: normalizeErrors(status, message, errors)
     }) as IResponseReject;
 
 /**
@@ -56,7 +101,7 @@ export const rejectResponse = (
     response: Response,
     status = 400,
     message = '',
-    errors: string[] = []
+    errors: Array<string | IResponseErrorItem> = []
 ) =>
     response
         .status(status)
