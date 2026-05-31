@@ -52,14 +52,17 @@ flowchart LR
 The main `docker-compose.yml` mounts `/var/lib/docker/containers` and uses Docker's `json-file` log format.
 Rootless Podman uses the `k8s-file` log driver (CRI format) and stores logs under a different host path.
 
-A dedicated override file, `docker-compose.podman.yml`, handles this difference:
+A dedicated override file, `docker-compose.podman.yml`, handles this difference. To activate it, add two lines to your `.env` (see `.env-example`):
 
-- It swaps in `.docker/observability/promtail.podman.config.yaml`, which has a CRI pipeline stage instead of a Docker JSON stage.
-- It mounts `$PODMAN_CONTAINERS_PATH` (default: `$HOME/.local/share/containers/storage/overlay-containers`) so Promtail can reach the Podman log files.
+```dotenv
+COMPOSE_FILE=docker-compose.yml:docker-compose.podman.yml
+PODMAN_CONTAINERS_PATH=/home/youruser/.local/share/containers/storage/overlay-containers
+```
 
-The `podman:restart` and `podman:rebuild` npm scripts already pass both files (`-f docker-compose.yml -f docker-compose.podman.yml`) and resolve the default path automatically. No extra configuration is required on a standard rootless Podman setup.
+`podman compose` reads `.env` automatically, so the `podman:restart` and `podman:rebuild` scripts stay simple and require no extra flags.
 
-If your Podman storage root is non-standard, set `PODMAN_CONTAINERS_PATH` in your shell or `.env` before running the scripts (see `.env-example` for details).
+- `COMPOSE_FILE` tells compose to merge the Podman override, which swaps in `.docker/observability/promtail.podman.config.yaml` (CRI pipeline).
+- `PODMAN_CONTAINERS_PATH` is the host path where rootless Podman stores container log files.
 
 ## When Kubernetes starts to make sense
 
