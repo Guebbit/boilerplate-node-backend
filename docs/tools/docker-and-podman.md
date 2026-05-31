@@ -47,6 +47,23 @@ flowchart LR
 - **The Dockerfile is intentionally simple**: install dependencies once, add Chromium for PDF support, then let compose decide runtime commands.
 - **Podman is treated as a compatible local engine**, not a separate architecture.
 
+## Podman and Promtail log collection
+
+The main `docker-compose.yml` mounts `/var/lib/docker/containers` and uses Docker's `json-file` log format.
+Rootless Podman uses the `k8s-file` log driver (CRI format) and stores logs under a different host path.
+
+A dedicated override file, `docker-compose.podman.yml`, handles this difference. To activate it, add two lines to your `.env` (see `.env-example`):
+
+```dotenv
+COMPOSE_FILE=docker-compose.yml:docker-compose.podman.yml
+PODMAN_CONTAINERS_PATH=/home/youruser/.local/share/containers/storage/overlay-containers
+```
+
+`podman compose` reads `.env` automatically, so the `podman:restart` and `podman:rebuild` scripts stay simple and require no extra flags.
+
+- `COMPOSE_FILE` tells compose to merge the Podman override, which swaps in `.docker/observability/promtail.podman.config.yaml` (CRI pipeline).
+- `PODMAN_CONTAINERS_PATH` is the host path where rootless Podman stores container log files.
+
 ## When Kubernetes starts to make sense
 
 You do **not** need Kubernetes for this boilerplate by default.

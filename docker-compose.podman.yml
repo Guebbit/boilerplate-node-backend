@@ -1,0 +1,12 @@
+# Compose override for Podman.
+# Swaps promtail to use the Podman CRI-format config and mounts the correct host log path.
+# Activated by setting COMPOSE_FILE=docker-compose.yml:docker-compose.podman.yml in .env (see .env-example).
+
+services:
+    promtail:
+        volumes:
+            # Swap in the Podman-specific Promtail config (CRI format, Podman paths).
+            - ./.docker/observability/promtail.podman.config.yaml:/etc/promtail/promtail-config.yaml:Z
+            # Mount the Podman container storage so Promtail can tail the log files.
+            # Set PODMAN_CONTAINERS_PATH in .env (see .env-example).
+            - ${PODMAN_CONTAINERS_PATH}:/var/lib/containers/overlay-containers:ro

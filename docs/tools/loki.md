@@ -7,14 +7,27 @@ It receives container logs shipped by **Promtail** and makes them searchable in 
 
 ## How it is wired
 
+**Docker**
+
 ```
 All containers → stdout → Docker JSON log files
 Docker JSON log files → Promtail → Loki → Grafana
 ```
 
 - Promtail reads `/var/lib/docker/containers/*/*-json.log` on the host.
-- It parses Winston's structured JSON fields (`level`, `service`, `trace_id`) as Loki labels.
-- Grafana auto-provisions Loki as a datasource with a `trace_id` derived field linking to Tempo.
+- It parses Docker's JSON envelope, then Winston's structured JSON fields (`level`, `service`, `trace_id`) as Loki labels.
+
+**Podman (rootless, k8s-file log driver)**
+
+```
+All containers → stdout → Podman k8s-file log files (CRI format)
+Podman log files → Promtail (CRI pipeline) → Loki → Grafana
+```
+
+- Promtail reads `$HOME/.local/share/containers/storage/overlay-containers/*/userdata/*.log` on the host.
+- Podman's default `k8s-file` driver uses CRI format, so a separate pipeline stage is used.
+- The `docker-compose.podman.yml` override wires the correct path and config automatically.
+- Run `npm run podman:rebuild` (or `podman:restart`) to use the Podman-ready stack.
 
 ## Querying logs in Grafana
 
