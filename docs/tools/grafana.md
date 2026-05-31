@@ -48,7 +48,7 @@ flowchart TD
 | Prometheus     | Metrics store / alert evaluation | `http://localhost:9090` | `prom/prometheus:v2.55.1`                      |
 | Alertmanager   | Alert routing                    | `http://localhost:9093` | `prom/alertmanager:v0.27.0`                    |
 | Loki           | Log store                        | `http://localhost:3100` | `grafana/loki:3.3.2`                           |
-| Promtail       | Log shipper (Docker → Loki)      | —                       | `grafana/promtail:3.3.2`                       |
+| Promtail       | Log shipper (Docker/Podman → Loki) | —                       | `grafana/promtail:3.3.2`                       |
 | Grafana        | Unified UI                       | `http://localhost:3001` | `grafana/grafana:11.4.0`                       |
 
 ## Admin API vs Grafana

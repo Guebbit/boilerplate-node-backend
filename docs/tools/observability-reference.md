@@ -95,13 +95,20 @@ Repo file: [`/.docker/observability/loki.config.yaml`](../../.docker/observabili
 
 **What it does:** tails log files and pushes entries to Loki.
 
-Repo file: [`/.docker/observability/promtail.config.yaml`](../../.docker/observability/promtail.config.yaml)
+Two config files ship with the repo — one per container runtime:
 
-| Config section                     | What it does                          | Why local value                             | Common tweak                     | Dev vs prod                                      |
-| ---------------------------------- | ------------------------------------- | ------------------------------------------- | -------------------------------- | ------------------------------------------------ |
-| `scrape_configs[].labels.__path__` | filesystem path to tail               | Docker JSON log path works in local compose | add extra paths/jobs             | prod often uses Kubernetes discovery             |
-| `pipeline_stages`                  | transforms/parses entries before send | basic docker + regex pipeline               | add json/timestamp/labels stages | prod pipelines are usually richer and normalized |
-| `positions.filename`               | stores read offsets                   | avoids rereading on restart                 | change to persistent mount       | prod keeps positions on durable storage          |
+| File | Runtime | Log format |
+| ---- | ------- | ---------- |
+| [`/.docker/observability/promtail.config.yaml`](../../.docker/observability/promtail.config.yaml) | Docker (`json-file` driver) | Docker JSON envelope |
+| [`/.docker/observability/promtail.podman.config.yaml`](../../.docker/observability/promtail.podman.config.yaml) | Podman (`k8s-file` driver, rootless) | CRI format |
+
+The `docker-compose.podman.yml` override selects `promtail.podman.config.yaml` and mounts the correct host log path automatically when running `npm run podman:*` scripts.
+
+| Config section                     | What it does                          | Why local value                                    | Common tweak                     | Dev vs prod                                      |
+| ---------------------------------- | ------------------------------------- | -------------------------------------------------- | -------------------------------- | ------------------------------------------------ |
+| `scrape_configs[].labels.__path__` | filesystem path to tail               | Docker or Podman log path depending on runtime     | add extra paths/jobs             | prod often uses Kubernetes discovery             |
+| `pipeline_stages`                  | transforms/parses entries before send | `json` stages for Docker; `cri` + `json` for Podman | add json/timestamp/labels stages | prod pipelines are usually richer and normalized |
+| `positions.filename`               | stores read offsets                   | avoids rereading on restart                        | change to persistent mount       | prod keeps positions on durable storage          |
 
 ### OpenTelemetry Collector
 

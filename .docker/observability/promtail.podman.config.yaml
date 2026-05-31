@@ -1,0 +1,52 @@
+# Promtail config for rootless Podman (default k8s-file log driver).
+# Why this file exists: Podman stores container logs in a different path and
+# uses CRI format instead of Docker JSON format, so a separate config is needed.
+#
+# Used by: docker-compose.podman.yml (compose override for Podman).
+# Docker equivalent: promtail.config.yaml (uses /var/lib/docker/containers).
+
+server:
+    # Promtail debug/metrics HTTP endpoint.
+    http_listen_port: 9080
+    # Disable gRPC server in this local setup.
+    grpc_listen_port: 0
+
+positions:
+    # Tracks read offsets so restarts continue from the last processed line.
+    filename: /tmp/positions.yaml
+
+clients:
+    # Loki push endpoint.
+    - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+    # Read all Podman container log files from the host bind mount.
+    # Podman's k8s-file driver writes one <container-id>.log per container under
+    # overlay-containers/<id>/userdata/. The host path is mounted at
+    # /var/lib/containers/overlay-containers inside this container.
+    - job_name: podman-containers
+      static_configs:
+          - targets: ['localhost']
+            labels:
+                job: podman
+                __path__: /var/lib/containers/overlay-containers/*/userdata/*.log
+
+      pipeline_stages:
+          # Stage 1: parse the CRI envelope written by Podman's k8s-file driver.
+          # Format: <RFC3339Nano> <stream> <flag> <message>
+          # Example: 2024-01-01T00:00:00.000Z stdout F {"level":"info",...}
+          # This stage extracts: timestamp, stream (stdout/stderr), and the log body.
+          - cri: {}
+
+          # Stage 2: parse app JSON log payload (Winston fields) from the log body.
+          - json:
+                expressions:
+                    level: level
+                    service: service
+                    trace_id: trace_id
+
+          # Stage 3: promote fields to Loki labels for filtering in LogQL.
+          - labels:
+                stream:
+                level:
+                service:
