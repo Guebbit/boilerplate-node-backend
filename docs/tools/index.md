@@ -7,87 +7,77 @@ This section explains **why dependencies exist** and where they fit in the app.
 ## Tool map
 
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 70, 'rankSpacing': 95}}}%%
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 75}}}%%
 flowchart LR
-    A[Boilerplate tools]
-
-    subgraph Core[Core stack]
-        Runtime[Runtime]
-        Security[Security]
+    subgraph Core["Core stack"]
+        Runtime[Runtime\nExpress · Node · Zod]
+        Security[Security\nHelmet · JWT · rate-limit]
         Mongo[MongoDB & Mongoose]
         Redis[Redis Cache]
     end
 
-    subgraph Async[Async + outbound]
-        Rabbit[RabbitMQ]
-        Mail[Email & PDF]
-        Ws[WebSockets]
+    subgraph Async["Async + outbound"]
+        Rabbit[RabbitMQ\nmessage queue]
+        Mail[Email & PDF\nnodemailer · Puppeteer]
+        Ws[WebSockets\nws + SSE]
     end
 
-    subgraph Observability[Observability]
-        Winston[Winston]
-        Prometheus[Prometheus]
-        OTel[OpenTelemetry]
-        Tempo[Tempo]
-        Grafana[Grafana]
-        Loki[Loki]
-        PostHog[PostHog]
+    subgraph Obs["Observability"]
+        Winston[Winston\nlogs]
+        Prometheus[Prometheus\nmetrics]
+        OTel[OpenTelemetry\ntraces]
+        Tempo[Tempo\ntrace storage]
+        Loki[Loki\nlog storage]
+        Grafana[Grafana\ndashboard UI]
+        PostHog[PostHog\nproduct analytics]
     end
 
-    subgraph Project[Project workflows]
+    subgraph Project["Project workflows"]
         Testing[Testing & Docs]
         Dependencies[Package dependencies]
         Scripts[Package scripts]
         Containers[Docker & Podman]
     end
 
-    A --> Runtime
-    A --> Security
-    A --> Mongo
-    A --> Redis
-    A --> Rabbit
-    A --> Mail
-    A --> Ws
-    A --> Winston
-    A --> Prometheus
-    A --> OTel
-    A --> Tempo
-    A --> Grafana
-    A --> Loki
-    A --> PostHog
-    A --> Testing
-    A --> Dependencies
-    A --> Scripts
-    A --> Containers
+    OTel --> Tempo --> Grafana
+    Winston --> Loki --> Grafana
+    Prometheus --> Grafana
 
-    classDef root fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef async fill:#dcfce7,stroke:#16a34a,color:#111827;
-    classDef observability fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef obs fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef project fill:#fce7f3,stroke:#db2777,color:#111827;
-    class A root;
     class Runtime,Security,Mongo,Redis core;
     class Rabbit,Mail,Ws async;
-    class Winston,Prometheus,OTel,Tempo,Grafana,Loki,PostHog observability;
+    class Winston,Prometheus,OTel,Tempo,Loki,Grafana,PostHog obs;
     class Testing,Dependencies,Scripts,Containers project;
 ```
 
 ## Read by intent
 
-| Need                                                             | Go to                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Understand framework-level dependencies                          | [Runtime](./runtime.md)                                                                                                                                                                                                                        |
-| Understand security middleware and auth helpers                  | [Security](./security.md)                                                                                                                                                                                                                      |
-| Understand persistence and cache tools                           | [MongoDB & Mongoose](./mongodb-mongoose.md) and [Redis Cache](./redis-cache.md)                                                                                                                                                                |
-| Understand transactional email and PDF generation                | [Email & PDF Rendering](./email-and-rendering.md)                                                                                                                                                                                              |
-| Understand message queue patterns                                | [RabbitMQ](./rabbitmq.md)                                                                                                                                                                                                                      |
-| Understand real-time messaging scaffolding                       | [WebSockets](./websockets.md)                                                                                                                                                                                                                  |
-| Understand logs, metrics, traces, dashboards, and analytics      | [Observability Reference](./observability-reference.md), [Winston](./winston.md), [Prometheus](./prometheus.md), [OpenTelemetry](./opentelemetry.md), [Tempo](./tempo.md), [Grafana](./grafana.md), [Loki](./loki.md), [PostHog](./posthog.md) |
-| Understand tests and docs tooling                                | [Testing & Docs](./testing-and-docs.md)                                                                                                                                                                                                        |
-| Understand `package.json` dependency groups                      | [Package Dependencies](./package-dependencies.md)                                                                                                                                                                                              |
-| Understand `package.json` scripts                                | [Package Scripts](./package-scripts.md)                                                                                                                                                                                                        |
-| Understand local container setup                                 | [Docker & Podman](./docker-and-podman.md)                                                                                                                                                                                                      |
-| Understand OpenAPI Generator, Spectral, Prism, Bruno, or Mockoon | [API](../api/)                                                                                                                                                                                                                                 |
+| Group         | Page                                                        | What you'll find                                                                                                              |
+| ------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Overview      | **[Tools Explained](./tools-explained.md)**                 | "What is X and why is it here?" for every tool: plain-English definition, problem it solves, and how it's wired in this repo. |
+| Core          | **[Runtime](./runtime.md)**                                 | Express 5, Zod, Multer, i18next, TypeScript, tsx: the framework-level packages that make the app run.                         |
+| Core          | **[Security](./security.md)**                               | Helmet, CORS, rate limiting, JWT split-token auth, bcrypt: every guardrail between the internet and your controllers.         |
+| Core          | **[MongoDB & Mongoose](./mongodb-mongoose.md)**             | Document store, schema/model layer, migrations, and seeds.                                                                    |
+| Core          | **[Redis Cache](./redis-cache.md)**                         | Optional in-memory response cache with tag-based invalidation and multi-instance pub/sub sync.                                |
+| Async         | **[Email & PDF Rendering](./email-and-rendering.md)**       | Nodemailer + EJS for transactional email; Puppeteer for async PDF generation (invoices).                                      |
+| Async         | **[RabbitMQ](./rabbitmq.md)**                               | Message queue for fire-and-forget jobs: controllers publish, background workers consume independently.                        |
+| Async         | **[WebSockets](./websockets.md)**                           | Real-time bidirectional messaging (ws) and one-way server-sent events (SSE) scaffolding.                                      |
+| Observability | **[Observability Reference](./observability-reference.md)** | Full picture of logs, metrics, traces, and dashboards as one system — start here.                                             |
+| Observability | **[Winston](./winston.md)**                                 | Structured request and app logs forwarded to Loki; `trace_id` injected per request.                                           |
+| Observability | **[Prometheus](./prometheus.md)**                           | Numeric time-series: request rates, latency histograms, business counters, alert rules.                                       |
+| Observability | **[OpenTelemetry](./opentelemetry.md)**                     | Distributed tracing: auto-instruments HTTP, Mongoose, Redis; exports spans to Tempo; injects `trace_id` into every log line.  |
+| Observability | **[Tempo](./tempo.md)**                                     | Stores and queries distributed traces; correlates with Loki logs via shared `trace_id`.                                       |
+| Observability | **[Loki](./loki.md)**                                       | Stores and queries log streams; links forward to Tempo traces via injected `trace_id`.                                        |
+| Observability | **[Grafana](./grafana.md)**                                 | Dashboard UI reading Prometheus, Tempo, and Loki in one place — the normal entry point for all observability work.            |
+| Observability | **[PostHog](./posthog.md)**                                 | Product analytics: event funnels, feature flags, session recording.                                                           |
+| Project       | **[Testing & Docs](./testing-and-docs.md)**                 | Vitest, Supertest, Bruno, and VitePress: how the repo tests itself and generates this docs site.                              |
+| Project       | **[Package Dependencies](./package-dependencies.md)**       | Guided tour of `package.json` grouped by concern (runtime, dev, optional, peer).                                              |
+| Project       | **[Package Scripts](./package-scripts.md)**                 | What every `npm run <script>` does and when to reach for it.                                                                  |
+| Project       | **[Docker & Podman](./docker-and-podman.md)**               | 11-container local stack: what each container is for and how to run it.                                                       |
+| API           | **[API](../api/)**                                          | OpenAPI Generator, Spectral, Prism, Bruno, Mockoon: contract-first API tooling.                                               |
 
 ## Why this section is bigger now
 

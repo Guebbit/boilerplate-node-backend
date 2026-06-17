@@ -67,12 +67,14 @@ Emits `metrics.snapshot` immediately on connect, then `metrics.updated` every 5 
 
 Use this for live widgets in a custom UI. For historical charts, query your backend (which can read Prometheus), not process-local memory.
 
-## Useful links
+## Works with
 
-- [Prometheus docs](https://prometheus.io/docs/introduction/overview/)
-- [Alertmanager docs](https://prometheus.io/docs/alerting/latest/alertmanager/)
-- [prom-client (Node.js client)](https://github.com/siimon/prom-client#readme)
-- [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/)
+- **[Grafana](./grafana.md)** — Grafana is the primary consumer of Prometheus data. Every metric chart and KPI panel in the dashboard reads from Prometheus. You rarely need to query Prometheus directly; Grafana's Explore view is the normal entry point. → [Works with Prometheus](./grafana.md#works-with)
+- **Alertmanager** — Prometheus evaluates the rules in `.docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. In local dev the receiver is `null` (no actual notifications). Swap it for Slack, PagerDuty, or email in production. Both share the same [Observability Reference](./observability-reference.md) config tables.
+
+## External references
+
+- [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) — needed to write queries in [Grafana](./grafana.md)'s Prometheus Explore view
 
 ## Related pages
 

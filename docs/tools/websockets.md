@@ -117,13 +117,10 @@ export const getWebsocketTest = (request: Request, response: Response) => {
 - **Auth**: the demo skips authentication. In real use, validate cookies/JWT during the HTTP upgrade.
 - **Backpressure**: check `client.readyState === WebSocket.OPEN` before sending (the demo does this) and consider `bufferedAmount` for high-throughput streams.
 
-## Useful links
+## External references
 
-- [`ws` documentation](https://github.com/websockets/ws#readme)
-- [`ws` API reference](https://github.com/websockets/ws/blob/master/doc/ws.md)
-- [MDN — WebSockets API](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
-- [RFC 6455 — The WebSocket Protocol](https://www.rfc-editor.org/rfc/rfc6455)
-- [Scaling WebSockets with Redis pub/sub](https://redis.io/docs/latest/develop/interact/pubsub/)
+- [`ws` API reference](https://github.com/websockets/ws/blob/master/doc/ws.md) — the client library used in `src/utils/helpers-websockets.ts`
+- [RFC 6455 — The WebSocket Protocol](https://www.rfc-editor.org/rfc/rfc6455) — useful when debugging handshake or framing issues
 
 ## Related pages
 

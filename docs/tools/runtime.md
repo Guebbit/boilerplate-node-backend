@@ -39,14 +39,10 @@ flowchart LR
 - Services do the meaningful work.
 - Validation should stay close to business intent.
 
-## Useful links
+## External references
 
-- [Express 5 migration guide](https://expressjs.com/en/guide/migrating-5.html)
-- [Express middleware reference](https://expressjs.com/en/resources/middleware.html)
+- [Node.js cluster module](https://nodejs.org/api/cluster.html) — used in `src/cluster.ts`; see also [Clustering & Shutdown](../theory/clustering.md)
 - [Zod schema basics](https://zod.dev/?id=basic-usage)
-- [Multer storage engines](https://github.com/expressjs/multer#storage)
-- [i18next getting started](https://www.i18next.com/overview/getting-started)
-- [Node.js cluster module](https://nodejs.org/api/cluster.html) — used in `src/cluster.ts`
 
 ## Related pages
 

@@ -25,8 +25,8 @@ flowchart LR
 ## Main strategies already present in the code
 
 - **Contract first**: the [API section](../api/) starts from [`openapi.yaml`](../api/openapi-workflow.md#openapi-is-the-source-of-truth).
-- **Layered backend**: routes -> middlewares -> controllers -> services -> repositories -> models.
-- **Database isolation**: Mongoose queries stay near repositories, not scattered through controllers.
+- **Layered backend**: routes → middlewares → controllers → services → repositories → models. See [Layers](./layers.md).
+- **Database isolation**: [Mongoose](../tools/mongodb-mongoose.md) queries stay near repositories, not scattered through controllers.
 - **Fail-open optional infrastructure**: [Redis](../tools/redis-cache.md), [Winston](../tools/winston.md), [Tempo](../tools/tempo.md), and [PostHog](../tools/posthog.md) improve behavior when configured, but the app keeps running when they are disabled.
 - **Promise-oriented style**: the codebase often prefers promise chaining over large `async` / `await` + `try/catch` blocks.
 - **Boilerplate over product detail**: examples are intentionally generic so the same shape can be reused in other variants.

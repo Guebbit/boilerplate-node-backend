@@ -68,15 +68,10 @@ flowchart LR
 Security concerns should happen **before** business logic reaches deep layers.
 That is why auth, headers, origin checks, and rate limiting stay near routes and middlewares.
 
-## Useful links
+## External references
 
 - [OWASP REST Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html)
 - [OWASP JWT Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html)
-- [Helmet content security policy](https://helmetjs.github.io/#content-security-policy)
-- [MDN — CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS)
-- [express-rate-limit configuration](https://express-rate-limit.mintlify.app/reference/configuration)
-- [jsonwebtoken algorithms](https://github.com/auth0/node-jsonwebtoken#algorithms-supported)
-- [bcrypt cost factor guidance](https://github.com/kelektiv/node.bcrypt.js#a-note-on-rounds)
 
 ## Related pages
 

@@ -101,12 +101,12 @@ Fixed `ObjectId` values are used so the data is repeatable and predictable acros
 
 ---
 
-## Useful links
+## Works with
 
-- [MongoDB CRUD operations](https://www.mongodb.com/docs/manual/crud/)
-- [MongoDB indexes](https://www.mongodb.com/docs/manual/indexes/)
-- [Mongoose schema guide](https://mongoosejs.com/docs/guide.html)
-- [Mongoose queries](https://mongoosejs.com/docs/queries.html)
+- **[OpenTelemetry](./opentelemetry.md)** — every Mongoose query (`find`, `save`, `aggregate`, …) is automatically wrapped as a child span in the active request trace. No code changes needed. Slow queries show up in Grafana → Tempo as wide bars in the span tree, sitting visually under the HTTP span that triggered them. → [What is instrumented out of the box](./opentelemetry.md#what-is-instrumented-out-of-the-box)
+
+## External references
+
 - [Mongoose plugins](https://mongoosejs.com/docs/plugins.html) — used in `src/utils/database.ts` for query metrics
 - [migrate-mongo usage](https://github.com/seppevs/migrate-mongo#usage)
 

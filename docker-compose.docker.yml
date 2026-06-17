@@ -1,0 +1,9 @@
+# Compose override for Docker.
+# Mounts the Docker host log path so Promtail can tail container log files.
+# Activated by setting COMPOSE_FILE=docker-compose.yml:docker-compose.docker.yml in .env (see .env-example).
+
+services:
+    promtail:
+        volumes:
+            # Mount the Docker container log directory so Promtail can tail JSON log files.
+            - /var/lib/docker/containers:/var/lib/docker/containers:ro

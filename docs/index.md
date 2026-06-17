@@ -75,6 +75,7 @@ Big picture: architecture, layers, and request flow.
 ### [Tools](./tools/)
 
 Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, package groups, scripts, containers, analytics, testing, and docs.
+New to the stack? Start at [Tools Explained](./tools/tools-explained.md) for a plain-English "what is X and why is it here" summary of every tool.
 
 ### [API](./api/)
 
@@ -92,20 +93,27 @@ flowchart LR
     Services --> Repositories[Repositories]
     Repositories --> Models[Models]
     Models --> Mongo[(MongoDB)]
+    Services --> Queue[(RabbitMQ\nasync jobs)]
 
-    Routes --> Obs[Logs + metrics + traces]
-    Controllers --> Cache[Redis cache hooks]
+    Routes --> Obs[Traces · metrics · logs]
+    Controllers --> Cache[(Redis\ncache hooks)]
     Obs --> Grafana[Grafana dashboards]
     OpenSpec --> Types[Generated API types]
 
     classDef contract fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef data fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef cache fill:#ffedd5,stroke:#ea580c,color:#111827;
+    classDef queue fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef ops fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef ui fill:#fce7f3,stroke:#db2777,color:#111827;
     class OpenSpec,AsyncSpec,Types contract;
     class Routes,Realtime,Controllers,Services app;
-    class Repositories,Models,Mongo,Cache data;
-    class Obs,Grafana ops;
+    class Repositories,Models,Mongo data;
+    class Cache cache;
+    class Queue queue;
+    class Obs ops;
+    class Grafana ui;
 ```
 
 ## Good starting points

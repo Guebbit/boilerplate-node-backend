@@ -59,11 +59,15 @@ Config file: `.docker/observability/loki.config.yaml`
 - Single-process mode, filesystem storage.
 - Log retention: 7 days.
 
-## Useful links
+## Works with
 
-- [Loki documentation](https://grafana.com/docs/loki/latest/)
-- [LogQL query language](https://grafana.com/docs/loki/latest/query/)
-- [Promtail documentation](https://grafana.com/docs/loki/latest/send-data/promtail/)
+- **[Winston](./winston.md)** — Winston writes structured JSON to stdout; Promtail tails those container log files and ships them here. Without Winston's `trace_id` field there would be no link between log lines and traces.
+- **[Tempo](./tempo.md)** — log lines carry `trace_id`; Grafana uses it to jump from a Loki log entry to the Tempo trace for that request, and back. → [Trace ↔ log correlation](#trace--log-correlation)
+- **[Grafana](./grafana.md)** — Loki is queried exclusively through Grafana's Explore view. Grafana also reads the `trace_id` derived field to render the clickable Tempo link next to each log line.
+
+## External references
+
+- [LogQL query language](https://grafana.com/docs/loki/latest/query/) — needed to write log queries in [Grafana](./grafana.md) Explore beyond the examples above
 
 ## Related pages
 

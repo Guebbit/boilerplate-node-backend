@@ -4,13 +4,15 @@ All available HTTP endpoints grouped by category. Auth column indicates the mini
 
 ## System (public)
 
+A minimal root endpoint used to verify the process is alive.
+
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/` | none | Public ping — always 200 if process is running |
 
 ## Observability
 
-See the dedicated [Observability Endpoints](./observability.md) page for details, response shapes, and links to related observability tools.
+Endpoints for health checks, metrics, and audit logs. The two public routes feed external scrapers (Prometheus) and the live dashboard (SSE). The three admin routes are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
@@ -21,6 +23,8 @@ See the dedicated [Observability Endpoints](./observability.md) page for details
 | GET | `/observability/audit` | admin | Recent audit events |
 
 ## Account & Auth
+
+JWT-based authentication. Login returns an `accessToken` (short-lived) and a `refreshToken` (long-lived, stored in a cookie). The refresh endpoints issue a new access token without re-authenticating. Password reset is a two-step flow: request sends an email with a signed link, confirm validates it and updates the password.
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
@@ -36,6 +40,8 @@ See the dedicated [Observability Endpoints](./observability.md) page for details
 
 ## Products
 
+Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints (create, update, delete) are admin-only and invalidate the cache on change. Both single-item and bulk operations are supported.
+
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/products` | none | List products (cached) |
@@ -49,6 +55,8 @@ See the dedicated [Observability Endpoints](./observability.md) page for details
 
 ## Cart
 
+Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart/checkout` converts the cart into an order, clears the cart, and fires a RabbitMQ event for downstream processing.
+
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/cart` | user | Get current cart |
@@ -60,6 +68,8 @@ See the dedicated [Observability Endpoints](./observability.md) page for details
 | POST | `/cart/checkout` | user | Checkout → create order |
 
 ## Orders
+
+Orders are normally created via checkout but can also be created manually by an admin. Each order has a PDF invoice available for download. Read endpoints for regular users are scoped to their own orders only; admins can reach all orders through the write endpoints.
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
@@ -75,6 +85,8 @@ See the dedicated [Observability Endpoints](./observability.md) page for details
 
 ## Users (admin)
 
+Full user management, admin-only. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.
+
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/users` | admin | List all users |
@@ -88,6 +100,8 @@ See the dedicated [Observability Endpoints](./observability.md) page for details
 
 ## Feedback
 
+Contact form submissions from anonymous or authenticated users. Admins can list all submissions and update their status (e.g. mark as resolved). Submitting a contact form also triggers a confirmation email via the mail worker.
+
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | POST | `/feedback/contact` | none | Submit a contact form |
@@ -96,9 +110,30 @@ See the dedicated [Observability Endpoints](./observability.md) page for details
 
 ## WebSocket
 
-| Endpoint | Auth | Description |
+A demo real-time chat backed by the `ws` library. The upgrade happens at the HTTP server level (not Express), so standard REST middleware does not apply.
+
+**Connection:** `ws://<host>/ws/chat`
+
+All messages are JSON. The client sends commands; the server pushes events.
+
+**Client → Server**
+
+| `type` | Payload | When |
 | --- | --- | --- |
-| `/ws/chat` | none | Demo WebSocket chat |
+| `chat:join` | `{ username: string }` | First message after connect — required before sending |
+| `chat:message:send` | `{ message: string }` | Send a message (max 500 chars) |
+
+**Server → Client**
+
+| `type` | Payload | When |
+| --- | --- | --- |
+| `chat:joined` | `{ username, room }` | Sent back to the joining client only |
+| `chat:message` | `{ id, username, room, message, timestamp }` | Broadcast to all clients in the room |
+| `chat:system` | `{ room, message, timestamp }` | Join / leave announcements |
+| `chat:presence` | `{ room, users: string[] }` | Full user list, sent after any join or disconnect |
+| `chat:error` | `{ message }` | Validation failure (username missing, not joined yet, etc.) |
+
+There is only one room (`general`). State is in-memory and resets on server restart.
 
 ## Related pages
 

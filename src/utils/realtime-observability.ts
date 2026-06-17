@@ -22,8 +22,7 @@ const writeEvent = (
     event: TObservabilityChannel,
     payload: IObservabilityMetricsPayload
 ) => {
-    response.write(`event: ${event}\n`);
-    response.write(`data: ${JSON.stringify(payload)}\n\n`);
+    response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
 };
 
 /** Returns the current number of open SSE connections (used by observability payload itself). */

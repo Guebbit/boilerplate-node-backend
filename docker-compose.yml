@@ -196,8 +196,6 @@ services:
         command: ['-config.file=/etc/promtail/promtail-config.yaml']
         volumes:
             - ./.docker/observability/promtail.config.yaml:/etc/promtail/promtail-config.yaml:Z
-            # Read Docker JSON log files directly from the host.
-            - /var/lib/docker/containers:/var/lib/docker/containers:ro
         depends_on:
             - loki
 

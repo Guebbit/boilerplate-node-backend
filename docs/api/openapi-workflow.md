@@ -34,21 +34,61 @@ That keeps backend, generated types, and consumers in sync.
 
 ## Tools around the contract
 
-| Tool                                                                                       | Job                                                |
-| ------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| [`openapi.yaml`](https://spec.openapis.org/oas/latest.html)                                | single contract file (OpenAPI 3.x specification)   |
-| [Spectral](https://stoplight.io/open-source/spectral)                                      | lint the spec                                      |
-| [openapi-typescript-codegen](https://github.com/ferdikoomen/openapi-typescript-codegen)    | generate the `api/` client and types               |
-| [Prism](https://stoplight.io/open-source/prism)                                            | mock the API from the spec                         |
-| [Bruno](https://www.usebruno.com/) / [Mockoon](https://mockoon.com/) / [Insomnia](https://insomnia.rest/) assets | explore or fake the API during development         |
+| Tool | Job |
+| --- | --- |
+| [`openapi.yaml`](https://spec.openapis.org/oas/latest.html) | single contract file (OpenAPI 3.x specification) |
+| [Spectral](https://stoplight.io/open-source/spectral) | lint the spec against `spectral.yaml` rules |
+| [orval](https://orval.dev) | generate `api/` types and fetch clients from the spec |
+| [Prism](https://stoplight.io/open-source/prism) | mock the API from the spec |
+| [Bruno](https://www.usebruno.com/) / [Mockoon](https://mockoon.com/) / [Insomnia](https://insomnia.rest/) | explore or fake the API during development |
+
+## Generated output (`api/`)
+
+Running `npm run genapi` regenerates the entire `api/` directory. **Never edit files inside `api/` manually** — changes will be overwritten.
+
+```
+api/
+├── index.ts          ← fetch client functions (one per operation)
+└── models/
+    ├── index.ts      ← barrel re-export of all types and enum consts
+    └── *.ts          ← one file per schema or enum
+```
+
+**Importing generated types** — always go through the `@types` alias, which re-exports everything from `@api/models`:
+
+```typescript
+import type { CreateProductRequest, Product } from '@types';
+```
+
+**Importing enum const objects** — orval generates enums as `as const` objects (not TypeScript enum declarations). Import the const object to use it with `z.nativeEnum()` or for runtime value checks:
+
+```typescript
+import { UpdateFeedbackRequestStatusRequestStatus } from '@types';
+
+z.nativeEnum(UpdateFeedbackRequestStatusRequestStatus)
+```
+
+The enum naming convention is: schema name + property name, PascalCase. For example, `UpdateFeedbackRequestStatusRequest.status` → `UpdateFeedbackRequestStatusRequestStatus`.
 
 ## Commands used in this repo
 
 ```bash
-npm run lint:openapi
-npm run genapi
-npm run test:prism
+npm run lint:openapi      # lint openapi.yaml with Spectral
+npm run genapi            # regenerate api/ from openapi.yaml via orval
+npm run test:prism        # smoke-test Prism mock server against the spec
 ```
+
+## Orval configuration
+
+`orval.config.ts` at the project root controls code generation:
+
+- `input.target` — source spec (`./openapi.yaml`)
+- `output.target` — generated fetch client (`./api/index.ts`)
+- `output.schemas` — generated types (`./api/models/`)
+- `output.client` — generator mode (`fetch`)
+- `output.mode` — `single` (one client file, all operations)
+
+Changing the mode to `tags-split` generates one file per OpenAPI tag instead.
 
 ## How this connects to the rest of the docs
 
@@ -75,4 +115,5 @@ Those belong in the spec itself.
 - [OpenAPI Initiative on GitHub](https://github.com/OAI/OpenAPI-Specification)
 - [Spectral rulesets](https://docs.stoplight.io/docs/spectral/01baf06bdd05a-rulesets) — basis for `spectral.yaml`
 - [Prism mock options](https://docs.stoplight.io/docs/prism/83dbbd75532cf-http-mocking)
-- [openapi-typescript-codegen options](https://github.com/ferdikoomen/openapi-typescript-codegen#usage)
+- [orval documentation](https://orval.dev/guides/overview)
+- [orval configuration reference](https://orval.dev/reference/configuration/overview)

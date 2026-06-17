@@ -21,6 +21,7 @@ export default tseslint.config(
         '**/docs/**',
         '**/node_modules/**',
         '**/eslint.config.ts',
+        '**/orval.config.ts',
         '**/migrate-mongo-config.ts',
         '**/migrate-mongo-config.js',
         'db/migrations/**/*.js',

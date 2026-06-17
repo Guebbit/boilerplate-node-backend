@@ -25,15 +25,15 @@ flowchart TD
 
 ## Quick map
 
-| Layer        | Folder             | Main job                                             |
-| ------------ | ------------------ | ---------------------------------------------------- |
-| Routes       | `src/routes`       | match URLs and attach middleware                     |
-| Middlewares  | `src/middlewares`  | auth, authorization, rate limit, request guards      |
-| Controllers  | `src/controllers`  | parse request, call services, send response          |
-| Services     | `src/services`     | business rules and orchestration                     |
-| Repositories | `src/repositories` | persistence queries                                  |
-| Models       | `src/models`       | Mongoose schema/types                                |
-| Utils        | `src/utils`        | shared helpers such as cache, logs, metrics, tracing |
+| Layer        | Folder             | Main job                                                                                                                                               |
+| ------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Routes       | `src/routes`       | match URLs and attach middleware                                                                                                                       |
+| Middlewares  | `src/middlewares`  | auth, authorization, rate limit, request guards                                                                                                        |
+| Controllers  | `src/controllers`  | parse request, call services, send response                                                                                                            |
+| Services     | `src/services`     | business rules and orchestration                                                                                                                       |
+| Repositories | `src/repositories` | persistence queries                                                                                                                                    |
+| Models       | `src/models`       | [Mongoose](../tools/mongodb-mongoose.md) schema/types                                                                                                  |
+| Utils        | `src/utils`        | shared helpers: [cache](../tools/redis-cache.md), [logs](../tools/winston.md), [metrics](../tools/prometheus.md), [tracing](../tools/opentelemetry.md) |
 
 ## How to read a feature
 
@@ -85,11 +85,11 @@ The entity names are examples.
 
 Three signals, only one wired end-to-end by default:
 
-- **Traces** (Tempo, via OpenTelemetry) — the timeline of one request, every DB and Redis call, every error.
-- **Logs** (Winston → stdout) — slim per-request access logs and error logs, each carrying the `trace_id` that links back to a trace.
-- **Metrics** (`/observability/metrics`, opt-in) — Prometheus exposition for HTTP rates/latency and a few business counters.
+- **Traces** ([Tempo](../tools/tempo.md), via [OpenTelemetry](../tools/opentelemetry.md)) — the timeline of one request, every DB and Redis call, every error.
+- **Logs** ([Winston](../tools/winston.md) → stdout) — slim per-request access logs and error logs, each carrying the `trace_id` that links back to a trace.
+- **Metrics** (`/observability/metrics`, opt-in) — [Prometheus](../tools/prometheus.md) exposition for HTTP rates/latency and a few business counters.
 
-When something breaks, the log line gives you a `trace_id`, you paste it in Grafana → Tempo, and you get the full picture.
+When something breaks, the log line gives you a `trace_id`, you paste it in [Grafana](../tools/grafana.md) → Tempo, and you get the full picture.
 
 ## Related pages
 

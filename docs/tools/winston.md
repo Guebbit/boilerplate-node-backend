@@ -71,13 +71,15 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 `redactSensitiveFields` replaces values of well-known sensitive keys (`password`, `token`, `cookie`, `authorization`, …) with `[REDACTED]` before logging. It runs on every log entry and on every audit event.
 
-## Useful links
+## Works with
 
-- [Winston docs](https://github.com/winstonjs/winston#readme)
-- [Winston transports](https://github.com/winstonjs/winston/blob/master/docs/transports.md)
-- [Winston-Loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you later want to ship logs to Loki
-- [Grafana Loki overview](https://grafana.com/docs/loki/latest/get-started/overview/)
-- [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for audit/security logs
+- **[OpenTelemetry](./opentelemetry.md)** — the OTel SDK automatically injects the active `trace_id` into Winston's logging context on every request. You write nothing; every log line just has it. → full explanation: [How logs and traces correlate](./opentelemetry.md#how-logs-and-traces-correlate)
+- **[Loki](./loki.md)** — Winston writes JSON to stdout; Promtail tails those lines and ships them to Loki. The `trace_id` on each line is what enables jumping from a log entry straight to a Tempo trace. → [Trace ↔ log correlation](./loki.md#trace--log-correlation)
+
+## External references
+
+- [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for what audit/security logs should capture
+- [winston-loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you want to push logs directly to [Loki](./loki.md) instead of via Promtail
 
 ## Related pages
 

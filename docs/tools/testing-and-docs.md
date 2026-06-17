@@ -37,16 +37,10 @@ flowchart LR
 - avoid a page for every tiny request/response,
 - keep code comments brief and move long explanation here.
 
-## Useful links
+## External references
 
-- [Jest CLI options](https://jestjs.io/docs/cli)
-- [Jest matchers](https://jestjs.io/docs/expect)
-- [ts-jest configuration](https://kulshekhar.github.io/ts-jest/docs/getting-started/options/)
-- [ESLint flat config](https://eslint.org/docs/latest/use/configure/configuration-files)
-- [typescript-eslint rules](https://typescript-eslint.io/rules/)
-- [Prettier configuration](https://prettier.io/docs/en/configuration.html)
-- [VitePress configuration reference](https://vitepress.dev/reference/site-config)
-- [Mermaid diagram syntax](https://mermaid.js.org/intro/syntax-reference.html)
+- [Jest matchers](https://jestjs.io/docs/expect) — assertion reference for writing new tests
+- [Mermaid diagram syntax](https://mermaid.js.org/intro/syntax-reference.html) — needed when adding new diagrams to these docs
 
 ## Related pages
 

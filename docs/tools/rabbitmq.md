@@ -150,11 +150,14 @@ consumeFromQueue({
 
 `stopQueue()` is called during the app's graceful shutdown sequence (after the HTTP server closes). It closes the AMQP connection cleanly so in-flight messages are not lost.
 
-## Useful links
+## Works with
 
-- [RabbitMQ documentation](https://www.rabbitmq.com/docs)
-- [amqplib API reference](https://amqp-node.github.io/amqplib/channel_api.html)
-- [RabbitMQ tutorials (Node.js)](https://www.rabbitmq.com/tutorials)
+- **[Email & PDF Rendering](./email-and-rendering.md)** — the primary use case for this queue. Controllers publish email jobs instead of calling Nodemailer directly; the `email.worker.ts` consumer sends the email independently. PDF generation follows the same pattern via `pdf.worker.ts`. → [How it's used](./rabbitmq.md#how-its-used)
+
+## External references
+
+- [amqplib channel API](https://amqp-node.github.io/amqplib/channel_api.html) — the client library used in `src/utils/queue.ts`
+- [RabbitMQ tutorials (Node.js)](https://www.rabbitmq.com/tutorials) — queue patterns with code examples
 
 ## Related pages
 

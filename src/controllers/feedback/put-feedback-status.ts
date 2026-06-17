@@ -1,12 +1,13 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { rejectResponse, successResponse } from '@utils/response';
-import { UpdateFeedbackRequestStatusRequest } from '@types';
+import type { UpdateFeedbackRequestStatusRequest } from '@types';
+import { UpdateFeedbackRequestStatusRequestStatus } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
 const updateFeedbackStatusSchema = z.object({
-    status: z.nativeEnum(UpdateFeedbackRequestStatusRequest.status).optional(),
+    status: z.nativeEnum(UpdateFeedbackRequestStatusRequestStatus).optional(),
     adminNotes: z.string().max(5000).optional()
 });
 

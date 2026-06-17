@@ -6,8 +6,8 @@ import type {
     CreateProductRequest,
     UpdateProductRequest,
     UpdateProductByIdRequest
-} from '@api/index';
-export * from '@api/index';
+} from '@api/models';
+export * from '@api/models';
 
 // Re-export generated AsyncAPI types so consumers use a single import path.
 export * from './asyncapi';

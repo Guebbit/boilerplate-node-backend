@@ -50,15 +50,14 @@ flowchart LR
 
 `puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable the invoice endpoint will error out at request time, not at boot — by design, so the rest of the API keeps running.
 
-## Useful links
+## Works with
 
-- [Nodemailer docs](https://nodemailer.com/about/)
-- [Nodemailer SMTP options](https://nodemailer.com/smtp/)
-- [Nodemailer message structure](https://nodemailer.com/message/)
-- [EJS syntax reference](https://ejs.co/#docs)
-- [Puppeteer API](https://pptr.dev/api)
-- [puppeteer-core vs puppeteer](https://pptr.dev/guides/configuration#puppeteer-vs-puppeteer-core)
-- [Chromium download channels](https://www.chromium.org/getting-involved/download-chromium/)
+- **[RabbitMQ](./rabbitmq.md)** — email jobs are normally not sent synchronously. The controller calls `enqueueEmail()`, which publishes to the RabbitMQ `emails` queue and returns immediately. The `email.worker.ts` consumer picks up the job and calls Nodemailer in the background — so the HTTP response doesn't wait for SMTP. Falls back to direct Nodemailer if RabbitMQ is not configured. → [How it's used — emails](./rabbitmq.md#how-its-used)
+
+## External references
+
+- [Nodemailer SMTP options](https://nodemailer.com/smtp/) — transport config reference (TLS, auth, pool settings)
+- [Puppeteer API](https://pptr.dev/api) — needed when extending the PDF generation beyond the invoice example
 
 ## Related pages
 

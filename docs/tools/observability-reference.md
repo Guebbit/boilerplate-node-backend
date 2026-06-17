@@ -5,27 +5,59 @@ This page is the quick map of the boilerplate observability stack and the most c
 ## Architecture at a glance
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 75}}}%%
 flowchart LR
-    App[Node API app] -->|OTLP traces| OTel[OpenTelemetry Collector]
-    OTel -->|traces| Tempo[Tempo]
-    App -->|/observability/metrics| Prom[Prometheus]
-    Prom -->|alerts| Alert[Alertmanager]
-    DockerLogs[Docker container logs] --> Promtail[Promtail]
-    Promtail --> Loki[Loki]
-    Tempo --> Grafana[Grafana]
+    App["Node API app\n:3000"]
+
+    subgraph Traces["Traces"]
+        OTel["OTel Collector\n:4318 HTTP · :4317 gRPC"]
+        Tempo["Tempo\ntrace storage"]
+        OTel --> Tempo
+    end
+
+    subgraph Metrics["Metrics"]
+        Prom["Prometheus\n:9090"]
+        Alert["Alertmanager\n:9093"]
+        Prom -->|"firing alerts"| Alert
+    end
+
+    subgraph Logs["Logs"]
+        Stdout["stdout\n(container log file)"]
+        Promtail["Promtail\nlog shipper"]
+        Loki["Loki\n:3100"]
+        Stdout --> Promtail --> Loki
+    end
+
+    Grafana["Grafana\n:3001"]
+
+    App -->|"OTLP/HTTP traces"| OTel
+    App -->|"Winston → stdout"| Stdout
+    Prom -->|"scrape /observability/metrics"| App
+    Tempo --> Grafana
     Prom --> Grafana
     Loki --> Grafana
+
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef traces fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef metrics fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef logs fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef ui fill:#fce7f3,stroke:#db2777,color:#111827;
+
+    class App app;
+    class OTel,Tempo traces;
+    class Prom,Alert metrics;
+    class Stdout,Promtail,Loki logs;
+    class Grafana ui;
 ```
 
-## Official docs (quick links)
+### Signal roles at a glance
 
-- Prometheus: [overview](https://prometheus.io/docs/introduction/overview/), [scraping](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config), [alerting rules](https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/), [PromQL](https://prometheus.io/docs/prometheus/latest/querying/basics/)
-- Alertmanager: [overview](https://prometheus.io/docs/alerting/latest/alertmanager/), [routing](https://prometheus.io/docs/alerting/latest/configuration/#route), [grouping](https://prometheus.io/docs/alerting/latest/configuration/#route), [receivers](https://prometheus.io/docs/alerting/latest/configuration/#receiver)
-- Grafana: [docs](https://grafana.com/docs/grafana/latest/), [datasources](https://grafana.com/docs/grafana/latest/datasources/), [provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/), [dashboards](https://grafana.com/docs/grafana/latest/dashboards/)
-- Tempo: [docs](https://grafana.com/docs/tempo/latest/), [receivers](https://grafana.com/docs/tempo/latest/configuration/), [storage](https://grafana.com/docs/tempo/latest/configuration/#storage), [retention](https://grafana.com/docs/tempo/latest/configuration/#compactor)
-- Loki: [docs](https://grafana.com/docs/loki/latest/), [ingestion](https://grafana.com/docs/loki/latest/get-started/architecture/), [schema](https://grafana.com/docs/loki/latest/operations/storage/schema/), [retention](https://grafana.com/docs/loki/latest/operations/storage/retention/)
-- Promtail: [docs](https://grafana.com/docs/loki/latest/send-data/promtail/), [scrape configs](https://grafana.com/docs/loki/latest/send-data/promtail/configuration/#scrape_configs), [pipeline stages](https://grafana.com/docs/loki/latest/send-data/promtail/stages/)
-- OpenTelemetry Collector: [docs](https://opentelemetry.io/docs/collector/), [receivers](https://opentelemetry.io/docs/collector/configuration/#receivers), [processors](https://opentelemetry.io/docs/collector/configuration/#processors), [exporters](https://opentelemetry.io/docs/collector/configuration/#exporters)
+| Signal      | Path                                                        | Storage                 | Query UI                                                  | Dedicated page                                            |
+| ----------- | ----------------------------------------------------------- | ----------------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| **Traces**  | App → OTel Collector → Tempo                                | Tempo volume            | Grafana → Explore → Tempo                                 | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md) |
+| **Metrics** | Prometheus scrapes `/observability/metrics` → Prometheus DB | Prometheus volume (7 d) | Grafana → Explore → Prometheus or `http://localhost:9090` | [Prometheus](./prometheus.md)                             |
+| **Logs**    | Winston → stdout → Promtail → Loki                          | Loki volume (7 d)       | Grafana → Explore → Loki                                  | [Winston](./winston.md) · [Loki](./loki.md)               |
+| **Alerts**  | Prometheus evaluates rules → Alertmanager                   | in-memory               | `http://localhost:9093`                                   | [Prometheus](./prometheus.md)                             |
 
 ## Tool-by-tool config reference
 
@@ -97,18 +129,18 @@ Repo file: [`/.docker/observability/loki.config.yaml`](../../.docker/observabili
 
 Two config files ship with the repo — one per container runtime:
 
-| File | Runtime | Log format |
-| ---- | ------- | ---------- |
-| [`/.docker/observability/promtail.config.yaml`](../../.docker/observability/promtail.config.yaml) | Docker (`json-file` driver) | Docker JSON envelope |
-| [`/.docker/observability/promtail.podman.config.yaml`](../../.docker/observability/promtail.podman.config.yaml) | Podman (`k8s-file` driver, rootless) | CRI format |
+| File                                                                                                            | Runtime                              | Log format           |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------------------- |
+| [`/.docker/observability/promtail.config.yaml`](../../.docker/observability/promtail.config.yaml)               | Docker (`json-file` driver)          | Docker JSON envelope |
+| [`/.docker/observability/promtail.podman.config.yaml`](../../.docker/observability/promtail.podman.config.yaml) | Podman (`k8s-file` driver, rootless) | CRI format           |
 
 The `docker-compose.podman.yml` override selects `promtail.podman.config.yaml` and mounts the correct host log path automatically when running `npm run podman:*` scripts.
 
-| Config section                     | What it does                          | Why local value                                    | Common tweak                     | Dev vs prod                                      |
-| ---------------------------------- | ------------------------------------- | -------------------------------------------------- | -------------------------------- | ------------------------------------------------ |
-| `scrape_configs[].labels.__path__` | filesystem path to tail               | Docker or Podman log path depending on runtime     | add extra paths/jobs             | prod often uses Kubernetes discovery             |
+| Config section                     | What it does                          | Why local value                                     | Common tweak                     | Dev vs prod                                      |
+| ---------------------------------- | ------------------------------------- | --------------------------------------------------- | -------------------------------- | ------------------------------------------------ |
+| `scrape_configs[].labels.__path__` | filesystem path to tail               | Docker or Podman log path depending on runtime      | add extra paths/jobs             | prod often uses Kubernetes discovery             |
 | `pipeline_stages`                  | transforms/parses entries before send | `json` stages for Docker; `cri` + `json` for Podman | add json/timestamp/labels stages | prod pipelines are usually richer and normalized |
-| `positions.filename`               | stores read offsets                   | avoids rereading on restart                        | change to persistent mount       | prod keeps positions on durable storage          |
+| `positions.filename`               | stores read offsets                   | avoids rereading on restart                         | change to persistent mount       | prod keeps positions on durable storage          |
 
 ### OpenTelemetry Collector
 
@@ -124,10 +156,10 @@ Repo file: [`/.docker/observability/otel-collector.config.yaml`](../../.docker/o
 
 ## Common tasks
 
-- **View traces:** Grafana → Explore → Tempo → query `service.name="api"` (related: [Tempo](./tempo.md)).
-- **Query metrics:** Grafana Explore (Prometheus) or Prometheus UI (`http://localhost:9090`) with `up{job="api"}`.
-- **Filter logs:** Grafana Explore (Loki) with `{job="containerlogs"} |= "error"`.
-- **Create alerts:** add/modify rules in [`prometheus.alert-rules.yaml`](../../.docker/observability/prometheus.alert-rules.yaml), then reload/restart Prometheus and verify in Alertmanager UI (`http://localhost:9093`).
+- **View traces:** [Grafana](./grafana.md) → Explore → [Tempo](./tempo.md) → query `service.name="api"`. See [TraceQL](https://grafana.com/docs/tempo/latest/traceql/) for advanced queries.
+- **Query metrics:** Grafana Explore ([Prometheus](./prometheus.md)) or `http://localhost:9090` with `up{job="api"}`. See [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) for query syntax.
+- **Filter logs:** Grafana Explore ([Loki](./loki.md)) with `{job="containerlogs"} |= "error"`. See [LogQL](https://grafana.com/docs/loki/latest/query/) for query syntax.
+- **Create alerts:** add/modify rules in [`prometheus.alert-rules.yaml`](../../.docker/observability/prometheus.alert-rules.yaml), then reload/restart [Prometheus](./prometheus.md) and verify in Alertmanager UI (`http://localhost:9093`).
 
 ## FAQ / troubleshooting
 

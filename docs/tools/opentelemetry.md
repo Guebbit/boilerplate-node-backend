@@ -56,16 +56,29 @@ It currently:
 
 ## How logs and traces correlate
 
-Every slim access log and every error log carries a `trace_id` field.
-Copy that ID into Grafana → Explore → Tempo to jump straight to the trace for that request.
-In Loki, filter by `{service="api"} | json | trace_id="<id>"`.
+The OTel SDK maintains a **trace context** for the duration of each request. [Winston](./winston.md) reads that context automatically and stamps `trace_id` on every log line it writes — no manual code needed in routes or controllers.
 
-## Useful links
+This means the three signals stay linked without extra effort:
 
-- [OpenTelemetry concepts](https://opentelemetry.io/docs/concepts/)
-- [JavaScript SDK getting started](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)
-- [OTel Collector documentation](https://opentelemetry.io/docs/collector/)
-- [OTLP/HTTP protocol](https://opentelemetry.io/docs/specs/otlp/#otlphttp)
+1. A request comes in → OTel opens a root span and sets the active `trace_id`.
+2. Winston picks up the active context → every log line for this request gets `trace_id=abc123`.
+3. Mongoose queries and Redis commands fire → OTel wraps each as a child span under the same trace.
+4. The request ends → all spans are flushed to the OTel Collector → Tempo.
+5. [Loki](./loki.md) has the log lines. [Tempo](./tempo.md) has the span tree. Both share the same `trace_id`.
+
+In [Grafana](./grafana.md): find the log line in Loki Explore → click the `trace_id` link → land on the exact Tempo trace. Or go the other way: find a slow Tempo span → click "Loki logs" → see the surrounding log lines. → [Trace ↔ log correlation](./loki.md#trace--log-correlation)
+
+## Works with
+
+- **[Winston](./winston.md)** — OTel injects `trace_id` into Winston's context automatically. Every log line carries the trace ID for free. → [How logs and traces correlate](#how-logs-and-traces-correlate)
+- **[MongoDB & Mongoose](./mongodb-mongoose.md)** — every `find`, `save`, `aggregate` call becomes a child span with DB name, collection, and operation. Slow queries appear as wide bars in the Tempo trace tree, immediately visible alongside the HTTP span.
+- **[Redis Cache](./redis-cache.md)** — every Redis command (`GET` for cache reads, `SET` for writes, `DEL` for invalidations) becomes a child span. A cache hit appears as a short Redis span with no following Mongoose span — the trace makes the cache benefit visible.
+- **[Tempo](./tempo.md)** — spans are batched by the OTel Collector and written to Tempo. Tempo is the storage backend; Grafana is the query UI.
+
+## External references
+
+- [OpenTelemetry concepts](https://opentelemetry.io/docs/concepts/) — signals, spans, context propagation
+- [OTel Collector configuration](https://opentelemetry.io/docs/collector/configuration/) — receivers, processors, exporters reference
 
 ## Related pages
 

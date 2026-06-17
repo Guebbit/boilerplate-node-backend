@@ -53,13 +53,13 @@ The publisher (`broadcastCacheInvalidation`) and subscriber (`subscribeCacheInva
 - The publisher is called automatically by the `invalidateCache` middleware after every successful write.
 - Both are no-ops when Redis is unavailable — the app keeps going.
 
-## Useful links
+## Works with
 
-- [Redis data types](https://redis.io/docs/latest/develop/data-types/)
-- [Redis TTL / expiration](https://redis.io/docs/latest/develop/use/keyspace/#key-expiration)
-- [Redis pub/sub](https://redis.io/docs/latest/develop/interact/pubsub/)
-- [node-redis client guide](https://github.com/redis/node-redis#usage)
-- [Cache-aside pattern (Microsoft)](https://learn.microsoft.com/azure/architecture/patterns/cache-aside)
+- **[OpenTelemetry](./opentelemetry.md)** — every Redis command (`GET` for cache reads, `SET` for writes, `DEL` for tag invalidations) is automatically wrapped as a child span. In Grafana → Tempo a cache hit looks like a short Redis span with no following Mongoose span — the span tree makes the cache benefit immediately visible. A cache miss shows Redis then Mongoose back to back. → [What is instrumented out of the box](./opentelemetry.md#what-is-instrumented-out-of-the-box)
+
+## External references
+
+- [Redis pub/sub](https://redis.io/docs/latest/develop/interact/pubsub/) — the mechanism behind multi-instance cache invalidation described above
 
 ## Related pages
 
