@@ -43,7 +43,7 @@ export const writeUsers = (
      * Uploaded file takes priority over body imageUrl
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
-    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
@@ -52,7 +52,7 @@ export const writeUsers = (
      */
     const errors = userService.validateData({
         ...request.body,
-        imageUrl: imageUrl ?? request.body.imageUrl
+        imageUrl
     });
     if (errors.length > 0)
         return deleteUpload().then(() => {
@@ -98,21 +98,19 @@ export const writeUsers = (
     /**
      * ID = edit user
      */
-    return userService
-        .adminUpdateById(id, { ...request.body, imageUrl: imageUrl ?? request.body.imageUrl })
-        .then((result) => {
-            if (!result.success)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, result.status, result.message, result.errors);
-                });
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: AuditAction.ADMIN_USER_UPDATED,
-                    outcome: 'success',
-                    target_type: 'user',
-                    target_id: id
-                })
-            );
-            successResponse(response, result.data);
-        });
+    return userService.adminUpdateById(id, { ...request.body, imageUrl }).then((result) => {
+        if (!result.success)
+            return deleteUpload().then(() => {
+                rejectResponse(response, result.status, result.message, result.errors);
+            });
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.ADMIN_USER_UPDATED,
+                outcome: 'success',
+                target_type: 'user',
+                target_id: id
+            })
+        );
+        successResponse(response, result.data);
+    });
 };

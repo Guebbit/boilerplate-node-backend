@@ -123,8 +123,8 @@ services:
             RABBITMQ_DEFAULT_USER: guest
             RABBITMQ_DEFAULT_PASS: guest
         ports:
-            - '5672:5672' # AMQP protocol
-            - '15672:15672' # Management UI
+            - '${RABBITMQ_AMQP_PORT:-5672}:5672' # AMQP protocol
+            - '${RABBITMQ_MANAGEMENT_PORT:-15672}:15672' # Management UI
         volumes:
             - rabbitmq_volume:/var/lib/rabbitmq
 
@@ -147,8 +147,8 @@ services:
         volumes:
             - ./.docker/observability/otel-collector.config.yaml:/etc/otel-collector-config.yaml:Z
         ports:
-            - '4318:4318' # OTLP/HTTP (used by the app)
-            - '4317:4317' # OTLP/gRPC (optional direct use)
+            - '${OTEL_OTLP_HTTP_PORT:-4318}:4318' # OTLP/HTTP (used by the app)
+            - '${OTEL_OTLP_GRPC_PORT:-4317}:4317' # OTLP/gRPC (optional direct use)
         depends_on:
             - tempo
 
@@ -164,7 +164,7 @@ services:
             - ./.docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:Z
             - prometheus_volume:/prometheus
         ports:
-            - '9090:9090'
+            - '${PROMETHEUS_PORT:-9090}:9090'
         depends_on:
             - alertmanager
 
@@ -176,7 +176,7 @@ services:
         volumes:
             - ./.docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:Z
         ports:
-            - '9093:9093'
+            - '${ALERTMANAGER_PORT:-9093}:9093'
 
     # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
     loki:
@@ -187,7 +187,7 @@ services:
             - ./.docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:Z
             - loki_volume:/var/loki
         ports:
-            - '3100:3100'
+            - '${LOKI_PORT:-3100}:3100'
 
     # Promtail: tails Docker container log files and ships them to Loki.
     promtail:
@@ -212,11 +212,20 @@ services:
             - ./.docker/observability/grafana.dashboard-providers.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:Z
             - ./.docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:Z
         ports:
-            - '3001:3000'
+            - '${GRAFANA_PORT:-3001}:3000'
         depends_on:
             - tempo
             - prometheus
             - loki
+
+    # Docs: VitePress static site served by Nginx.
+    docs:
+        build:
+            context: .
+            dockerfile: .docker/Dockerfile.docs
+        restart: unless-stopped
+        ports:
+            - '${DOCS_PORT:-4173}:80'
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:

@@ -1,6 +1,20 @@
+# Dependencies (installed inside the container)
 node_modules
+
+# Version control
 .git
+
+# Secrets
 .env
+
+# IDE
 .idea
+
+# App build output
 dist
+
+# VitePress build output (rebuilt inside the docs container)
+docs/.vitepress/dist
+
+# Logs
 *.log

@@ -268,6 +268,96 @@ Use `openapi.yaml` with Mockoon to generate a fake backend that returns mock res
 
 Tip: enrich generated routes with realistic status codes (`200`, `400`, `401`, `404`, `500`) to test client error handling.
 
+## How to expose services to local Wi-Fi (Podman)
+
+### 1. Bind containers to LAN
+
+Make sure ports are published to all interfaces:
+
+```bash
+podman run -p <host_port>:<container_port> IMAGE
+```
+
+Example:
+
+```bash
+podman run -p 3000:3000 my-app
+```
+
+Check running mappings:
+
+```bash
+podman ps
+```
+
+You should see:
+
+```
+0.0.0.0:3000->3000/tcp
+```
+
+---
+
+### 2. Find your local IP
+
+**Linux (Manjaro):**
+
+```bash
+hostname -I
+```
+
+**Windows:**
+
+```cmd
+ipconfig
+```
+
+Look for something like:
+
+```
+192.168.x.x
+```
+
+---
+
+### 3. Access from other devices
+
+Use:
+
+```
+http://<YOUR_LAN_IP>:<PORT>
+```
+
+Example:
+
+```
+http://192.168.1.50:3000
+```
+
+---
+
+### 4. Firewall (if needed)
+
+**Linux (ufw):**
+
+```bash
+sudo ufw allow <port>/tcp
+```
+
+**Windows:**
+
+* Windows Defender Firewall → Advanced settings
+* Inbound Rules → New Rule → Port → TCP → allow `<port>`
+
+---
+
+### 5. Notes
+
+* No router port forwarding needed (LAN only)
+* Use `127.0.0.1` for local-only access
+* Use `0.0.0.0` binding via Podman port mapping (default behavior when using `-p`)
+
+
 # TODO
 
 - Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))

@@ -11,7 +11,11 @@ export default defineConfig({
             client: 'fetch',
             mode: 'single',
             override: {
-                enumSuffix: ''
+                enumSuffix: '',
+                mutator: {
+                    path: './src/api-mutator.ts',
+                    name: 'customFetch'
+                }
             }
         }
     }

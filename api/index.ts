@@ -73,6 +73,7 @@ import type {
   ValidationErrorResponse
 } from './models';
 
+import { customFetch } from '../src/api-mutator';
 export type getHealthResponse200 = {
   data: MessageResponse
   status: 200
@@ -99,21 +100,14 @@ export const getGetHealthUrl = () => {
  */
 export const getHealth = async ( options?: RequestInit): Promise<getHealthResponse> => {
 
-  const res = await fetch(getGetHealthUrl(),
+  return customFetch<getHealthResponse>(getGetHealthUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getHealthResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getHealthResponse
-}
+);}
 
 
 
@@ -144,21 +138,14 @@ export const getGetObservabilityEventsUrl = () => {
  */
 export const getObservabilityEvents = async ( options?: RequestInit): Promise<getObservabilityEventsResponse> => {
 
-  const res = await fetch(getGetObservabilityEventsUrl(),
+  return customFetch<getObservabilityEventsResponse>(getGetObservabilityEventsUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getObservabilityEventsResponse['data'] = body !== null ? body : ''
-  return { data, status: res.status, headers: res.headers } as getObservabilityEventsResponse
-}
+);}
 
 
 
@@ -207,21 +194,14 @@ export const getGetObservabilityHealthUrl = () => {
  */
 export const getObservabilityHealth = async ( options?: RequestInit): Promise<getObservabilityHealthResponse> => {
 
-  const res = await fetch(getGetObservabilityHealthUrl(),
+  return customFetch<getObservabilityHealthResponse>(getGetObservabilityHealthUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getObservabilityHealthResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getObservabilityHealthResponse
-}
+);}
 
 
 
@@ -253,21 +233,14 @@ export const getGetObservabilityMetricsUrl = () => {
  */
 export const getObservabilityMetrics = async ( options?: RequestInit): Promise<getObservabilityMetricsResponse> => {
 
-  const res = await fetch(getGetObservabilityMetricsUrl(),
+  return customFetch<getObservabilityMetricsResponse>(getGetObservabilityMetricsUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getObservabilityMetricsResponse['data'] = body !== null ? body : ''
-  return { data, status: res.status, headers: res.headers } as getObservabilityMetricsResponse
-}
+);}
 
 
 
@@ -316,21 +289,14 @@ export const getGetObservabilityMetricsOverviewUrl = () => {
  */
 export const getObservabilityMetricsOverview = async ( options?: RequestInit): Promise<getObservabilityMetricsOverviewResponse> => {
 
-  const res = await fetch(getGetObservabilityMetricsOverviewUrl(),
+  return customFetch<getObservabilityMetricsOverviewResponse>(getGetObservabilityMetricsOverviewUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getObservabilityMetricsOverviewResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getObservabilityMetricsOverviewResponse
-}
+);}
 
 
 
@@ -391,21 +357,14 @@ export const getGetObservabilityAuditLogsUrl = (params?: GetObservabilityAuditLo
  */
 export const getObservabilityAuditLogs = async (params?: GetObservabilityAuditLogsParams, options?: RequestInit): Promise<getObservabilityAuditLogsResponse> => {
 
-  const res = await fetch(getGetObservabilityAuditLogsUrl(params),
+  return customFetch<getObservabilityAuditLogsResponse>(getGetObservabilityAuditLogsUrl(params),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getObservabilityAuditLogsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getObservabilityAuditLogsResponse
-}
+);}
 
 
 
@@ -442,21 +401,14 @@ export const getGetAccountUrl = () => {
  */
 export const getAccount = async ( options?: RequestInit): Promise<getAccountResponse> => {
 
-  const res = await fetch(getGetAccountUrl(),
+  return customFetch<getAccountResponse>(getGetAccountUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getAccountResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAccountResponse
-}
+);}
 
 
 
@@ -498,21 +450,14 @@ export const getRequestAccountDeleteUrl = () => {
  */
 export const requestAccountDelete = async ( options?: RequestInit): Promise<requestAccountDeleteResponse> => {
 
-  const res = await fetch(getRequestAccountDeleteUrl(),
+  return customFetch<requestAccountDeleteResponse>(getRequestAccountDeleteUrl(),
   {
     ...options,
     method: 'DELETE'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: requestAccountDeleteResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as requestAccountDeleteResponse
-}
+);}
 
 
 
@@ -554,21 +499,14 @@ export const getConfirmAccountDeleteUrl = () => {
  */
 export const confirmAccountDelete = async (accountDeleteConfirmRequest: AccountDeleteConfirmRequest, options?: RequestInit): Promise<confirmAccountDeleteResponse> => {
 
-  const res = await fetch(getConfirmAccountDeleteUrl(),
+  return customFetch<confirmAccountDeleteResponse>(getConfirmAccountDeleteUrl(),
   {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(accountDeleteConfirmRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: confirmAccountDeleteResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as confirmAccountDeleteResponse
-}
+);}
 
 
 
@@ -615,21 +553,14 @@ export const getLoginUrl = () => {
  */
 export const login = async (loginRequest: LoginRequest, options?: RequestInit): Promise<loginResponse> => {
 
-  const res = await fetch(getLoginUrl(),
+  return customFetch<loginResponse>(getLoginUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(loginRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: loginResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as loginResponse
-}
+);}
 
 
 
@@ -671,21 +602,14 @@ export const getSignupUrl = () => {
  */
 export const signup = async (signupBody: SignupRequest | SignupRequestMultipart, options?: RequestInit): Promise<signupResponse> => {
 
-  const res = await fetch(getSignupUrl(),
+  return customFetch<signupResponse>(getSignupUrl(),
   {
     ...options,
     method: 'POST'
     ,
     body: JSON.stringify(signupBody)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: signupResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as signupResponse
-}
+);}
 
 
 
@@ -726,21 +650,14 @@ export const getRequestPasswordResetUrl = () => {
  */
 export const requestPasswordReset = async (passwordResetRequest: PasswordResetRequest, options?: RequestInit): Promise<requestPasswordResetResponse> => {
 
-  const res = await fetch(getRequestPasswordResetUrl(),
+  return customFetch<requestPasswordResetResponse>(getRequestPasswordResetUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(passwordResetRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: requestPasswordResetResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as requestPasswordResetResponse
-}
+);}
 
 
 
@@ -781,21 +698,14 @@ export const getConfirmPasswordResetUrl = () => {
  */
 export const confirmPasswordReset = async (passwordResetConfirmRequest: PasswordResetConfirmRequest, options?: RequestInit): Promise<confirmPasswordResetResponse> => {
 
-  const res = await fetch(getConfirmPasswordResetUrl(),
+  return customFetch<confirmPasswordResetResponse>(getConfirmPasswordResetUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(passwordResetConfirmRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: confirmPasswordResetResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as confirmPasswordResetResponse
-}
+);}
 
 
 
@@ -837,21 +747,14 @@ export const getRefreshTokenUrl = () => {
  */
 export const refreshToken = async ( options?: RequestInit): Promise<refreshTokenResponse> => {
 
-  const res = await fetch(getRefreshTokenUrl(),
+  return customFetch<refreshTokenResponse>(getRefreshTokenUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: refreshTokenResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as refreshTokenResponse
-}
+);}
 
 
 
@@ -893,21 +796,14 @@ export const getRefreshTokenWithPathUrl = (token: string,) => {
  */
 export const refreshTokenWithPath = async (token: string, options?: RequestInit): Promise<refreshTokenWithPathResponse> => {
 
-  const res = await fetch(getRefreshTokenWithPathUrl(token),
+  return customFetch<refreshTokenWithPathResponse>(getRefreshTokenWithPathUrl(token),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: refreshTokenWithPathResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as refreshTokenWithPathResponse
-}
+);}
 
 
 
@@ -949,21 +845,14 @@ export const getLogoutAllUrl = () => {
  */
 export const logoutAll = async ( options?: RequestInit): Promise<logoutAllResponse> => {
 
-  const res = await fetch(getLogoutAllUrl(),
+  return customFetch<logoutAllResponse>(getLogoutAllUrl(),
   {
     ...options,
     method: 'POST'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: logoutAllResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as logoutAllResponse
-}
+);}
 
 
 
@@ -1010,21 +899,14 @@ export const getDeleteExpiredTokensUrl = () => {
  */
 export const deleteExpiredTokens = async ( options?: RequestInit): Promise<deleteExpiredTokensResponse> => {
 
-  const res = await fetch(getDeleteExpiredTokensUrl(),
+  return customFetch<deleteExpiredTokensResponse>(getDeleteExpiredTokensUrl(),
   {
     ...options,
     method: 'DELETE'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteExpiredTokensResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteExpiredTokensResponse
-}
+);}
 
 
 
@@ -1078,21 +960,14 @@ export const getListUsersUrl = (params?: ListUsersParams,) => {
  */
 export const listUsers = async (params?: ListUsersParams, options?: RequestInit): Promise<listUsersResponse> => {
 
-  const res = await fetch(getListUsersUrl(params),
+  return customFetch<listUsersResponse>(getListUsersUrl(params),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listUsersResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listUsersResponse
-}
+);}
 
 
 
@@ -1144,21 +1019,14 @@ export const getCreateUserUrl = () => {
  */
 export const createUser = async (createUserBody: CreateUserRequest | CreateUserRequestMultipart, options?: RequestInit): Promise<createUserResponse> => {
 
-  const res = await fetch(getCreateUserUrl(),
+  return customFetch<createUserResponse>(getCreateUserUrl(),
   {
     ...options,
     method: 'POST'
     ,
     body: JSON.stringify(createUserBody)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createUserResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createUserResponse
-}
+);}
 
 
 
@@ -1210,21 +1078,14 @@ export const getUpdateUserUrl = () => {
  */
 export const updateUser = async (updateUserBody: UpdateUserRequest | UpdateUserRequestMultipart, options?: RequestInit): Promise<updateUserResponse> => {
 
-  const res = await fetch(getUpdateUserUrl(),
+  return customFetch<updateUserResponse>(getUpdateUserUrl(),
   {
     ...options,
     method: 'PUT'
     ,
     body: JSON.stringify(updateUserBody)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateUserResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateUserResponse
-}
+);}
 
 
 
@@ -1276,21 +1137,14 @@ export const getDeleteUserUrl = () => {
  */
 export const deleteUser = async (deleteUserRequest: DeleteUserRequest, options?: RequestInit): Promise<deleteUserResponse> => {
 
-  const res = await fetch(getDeleteUserUrl(),
+  return customFetch<deleteUserResponse>(getDeleteUserUrl(),
   {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(deleteUserRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteUserResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteUserResponse
-}
+);}
 
 
 
@@ -1342,21 +1196,14 @@ export const getGetUserByIdUrl = (id: string,) => {
  */
 export const getUserById = async (id: string, options?: RequestInit): Promise<getUserByIdResponse> => {
 
-  const res = await fetch(getGetUserByIdUrl(id),
+  return customFetch<getUserByIdResponse>(getGetUserByIdUrl(id),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getUserByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getUserByIdResponse
-}
+);}
 
 
 
@@ -1414,21 +1261,14 @@ export const getUpdateUserByIdUrl = (id: string,) => {
 export const updateUserById = async (id: string,
     updateUserByIdBody: UpdateUserByIdRequest | UpdateUserByIdRequestMultipart, options?: RequestInit): Promise<updateUserByIdResponse> => {
 
-  const res = await fetch(getUpdateUserByIdUrl(id),
+  return customFetch<updateUserByIdResponse>(getUpdateUserByIdUrl(id),
   {
     ...options,
     method: 'PUT'
     ,
     body: JSON.stringify(updateUserByIdBody)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateUserByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateUserByIdResponse
-}
+);}
 
 
 
@@ -1489,21 +1329,14 @@ export const getDeleteUserByIdUrl = (id: string,
 export const deleteUserById = async (id: string,
     params?: DeleteUserByIdParams, options?: RequestInit): Promise<deleteUserByIdResponse> => {
 
-  const res = await fetch(getDeleteUserByIdUrl(id,params),
+  return customFetch<deleteUserByIdResponse>(getDeleteUserByIdUrl(id,params),
   {
     ...options,
     method: 'DELETE'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteUserByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteUserByIdResponse
-}
+);}
 
 
 
@@ -1555,21 +1388,14 @@ export const getSearchUsersUrl = () => {
  */
 export const searchUsers = async (searchUsersRequest: SearchUsersRequest, options?: RequestInit): Promise<searchUsersResponse> => {
 
-  const res = await fetch(getSearchUsersUrl(),
+  return customFetch<searchUsersResponse>(getSearchUsersUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(searchUsersRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: searchUsersResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as searchUsersResponse
-}
+);}
 
 
 
@@ -1611,21 +1437,14 @@ export const getCreateFeedbackRequestUrl = () => {
  */
 export const createFeedbackRequest = async (createFeedbackRequest: CreateFeedbackRequest, options?: RequestInit): Promise<createFeedbackRequestResponse> => {
 
-  const res = await fetch(getCreateFeedbackRequestUrl(),
+  return customFetch<createFeedbackRequestResponse>(getCreateFeedbackRequestUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createFeedbackRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createFeedbackRequestResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createFeedbackRequestResponse
-}
+);}
 
 
 
@@ -1672,21 +1491,14 @@ export const getListFeedbackRequestsUrl = () => {
  */
 export const listFeedbackRequests = async (searchFeedbackRequestsRequest?: SearchFeedbackRequestsRequest, options?: RequestInit): Promise<listFeedbackRequestsResponse> => {
 
-  const res = await fetch(getListFeedbackRequestsUrl(),
+  return customFetch<listFeedbackRequestsResponse>(getListFeedbackRequestsUrl(),
   {
     ...options,
     method: 'GET',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(searchFeedbackRequestsRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listFeedbackRequestsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listFeedbackRequestsResponse
-}
+);}
 
 
 
@@ -1744,21 +1556,14 @@ export const getUpdateFeedbackRequestStatusUrl = (id: string,) => {
 export const updateFeedbackRequestStatus = async (id: string,
     updateFeedbackRequestStatusRequest: UpdateFeedbackRequestStatusRequest, options?: RequestInit): Promise<updateFeedbackRequestStatusResponse> => {
 
-  const res = await fetch(getUpdateFeedbackRequestStatusUrl(id),
+  return customFetch<updateFeedbackRequestStatusResponse>(getUpdateFeedbackRequestStatusUrl(id),
   {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(updateFeedbackRequestStatusRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateFeedbackRequestStatusResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateFeedbackRequestStatusResponse
-}
+);}
 
 
 
@@ -1802,21 +1607,14 @@ export const getListProductsUrl = (params?: ListProductsParams,) => {
  */
 export const listProducts = async (params?: ListProductsParams, options?: RequestInit): Promise<listProductsResponse> => {
 
-  const res = await fetch(getListProductsUrl(params),
+  return customFetch<listProductsResponse>(getListProductsUrl(params),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listProductsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listProductsResponse
-}
+);}
 
 
 
@@ -1868,21 +1666,14 @@ export const getCreateProductUrl = () => {
  */
 export const createProduct = async (createProductBody: CreateProductRequest | CreateProductRequestMultipart, options?: RequestInit): Promise<createProductResponse> => {
 
-  const res = await fetch(getCreateProductUrl(),
+  return customFetch<createProductResponse>(getCreateProductUrl(),
   {
     ...options,
     method: 'POST'
     ,
     body: JSON.stringify(createProductBody)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createProductResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createProductResponse
-}
+);}
 
 
 
@@ -1939,21 +1730,14 @@ export const getUpdateProductUrl = () => {
  */
 export const updateProduct = async (updateProductBody: UpdateProductRequest | UpdateProductRequestMultipart, options?: RequestInit): Promise<updateProductResponse> => {
 
-  const res = await fetch(getUpdateProductUrl(),
+  return customFetch<updateProductResponse>(getUpdateProductUrl(),
   {
     ...options,
     method: 'PUT'
     ,
     body: JSON.stringify(updateProductBody)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateProductResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateProductResponse
-}
+);}
 
 
 
@@ -2010,21 +1794,14 @@ export const getDeleteProductUrl = () => {
  */
 export const deleteProduct = async (deleteProductRequest: DeleteProductRequest, options?: RequestInit): Promise<deleteProductResponse> => {
 
-  const res = await fetch(getDeleteProductUrl(),
+  return customFetch<deleteProductResponse>(getDeleteProductUrl(),
   {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(deleteProductRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteProductResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteProductResponse
-}
+);}
 
 
 
@@ -2066,21 +1843,14 @@ export const getGetProductByIdUrl = (id: string,) => {
  */
 export const getProductById = async (id: string, options?: RequestInit): Promise<getProductByIdResponse> => {
 
-  const res = await fetch(getGetProductByIdUrl(id),
+  return customFetch<getProductByIdResponse>(getGetProductByIdUrl(id),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getProductByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getProductByIdResponse
-}
+);}
 
 
 
@@ -2133,21 +1903,14 @@ export const getUpdateProductByIdUrl = (id: string,) => {
 export const updateProductById = async (id: string,
     updateProductByIdBody: UpdateProductByIdRequest | UpdateProductByIdRequestMultipart, options?: RequestInit): Promise<updateProductByIdResponse> => {
 
-  const res = await fetch(getUpdateProductByIdUrl(id),
+  return customFetch<updateProductByIdResponse>(getUpdateProductByIdUrl(id),
   {
     ...options,
     method: 'PUT'
     ,
     body: JSON.stringify(updateProductByIdBody)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateProductByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateProductByIdResponse
-}
+);}
 
 
 
@@ -2203,21 +1966,14 @@ export const getDeleteProductByIdUrl = (id: string,
 export const deleteProductById = async (id: string,
     params?: DeleteProductByIdParams, options?: RequestInit): Promise<deleteProductByIdResponse> => {
 
-  const res = await fetch(getDeleteProductByIdUrl(id,params),
+  return customFetch<deleteProductByIdResponse>(getDeleteProductByIdUrl(id,params),
   {
     ...options,
     method: 'DELETE'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteProductByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteProductByIdResponse
-}
+);}
 
 
 
@@ -2259,21 +2015,14 @@ export const getSearchProductsUrl = () => {
  */
 export const searchProducts = async (searchProductsRequest: SearchProductsRequest, options?: RequestInit): Promise<searchProductsResponse> => {
 
-  const res = await fetch(getSearchProductsUrl(),
+  return customFetch<searchProductsResponse>(getSearchProductsUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(searchProductsRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: searchProductsResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as searchProductsResponse
-}
+);}
 
 
 
@@ -2315,21 +2064,14 @@ export const getGetCartUrl = () => {
  */
 export const getCart = async ( options?: RequestInit): Promise<getCartResponse> => {
 
-  const res = await fetch(getGetCartUrl(),
+  return customFetch<getCartResponse>(getGetCartUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getCartResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getCartResponse
-}
+);}
 
 
 
@@ -2376,21 +2118,14 @@ export const getUpsertCartItemUrl = () => {
  */
 export const upsertCartItem = async (upsertCartItemRequest: UpsertCartItemRequest, options?: RequestInit): Promise<upsertCartItemResponse> => {
 
-  const res = await fetch(getUpsertCartItemUrl(),
+  return customFetch<upsertCartItemResponse>(getUpsertCartItemUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(upsertCartItemRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: upsertCartItemResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as upsertCartItemResponse
-}
+);}
 
 
 
@@ -2432,21 +2167,14 @@ export const getClearCartUrl = () => {
  */
 export const clearCart = async (removeCartItemRequest?: RemoveCartItemRequest, options?: RequestInit): Promise<clearCartResponse> => {
 
-  const res = await fetch(getClearCartUrl(),
+  return customFetch<clearCartResponse>(getClearCartUrl(),
   {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(removeCartItemRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: clearCartResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as clearCartResponse
-}
+);}
 
 
 
@@ -2499,21 +2227,14 @@ export const getUpdateCartItemByIdUrl = (productId: string,) => {
 export const updateCartItemById = async (productId: string,
     updateCartItemByIdRequest: UpdateCartItemByIdRequest, options?: RequestInit): Promise<updateCartItemByIdResponse> => {
 
-  const res = await fetch(getUpdateCartItemByIdUrl(productId),
+  return customFetch<updateCartItemByIdResponse>(getUpdateCartItemByIdUrl(productId),
   {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(updateCartItemByIdRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateCartItemByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateCartItemByIdResponse
-}
+);}
 
 
 
@@ -2560,21 +2281,14 @@ export const getRemoveCartItemUrl = (productId: string,) => {
  */
 export const removeCartItem = async (productId: string, options?: RequestInit): Promise<removeCartItemResponse> => {
 
-  const res = await fetch(getRemoveCartItemUrl(productId),
+  return customFetch<removeCartItemResponse>(getRemoveCartItemUrl(productId),
   {
     ...options,
     method: 'DELETE'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: removeCartItemResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as removeCartItemResponse
-}
+);}
 
 
 
@@ -2616,21 +2330,14 @@ export const getGetCartSummaryUrl = () => {
  */
 export const getCartSummary = async ( options?: RequestInit): Promise<getCartSummaryResponse> => {
 
-  const res = await fetch(getGetCartSummaryUrl(),
+  return customFetch<getCartSummaryResponse>(getGetCartSummaryUrl(),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getCartSummaryResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getCartSummaryResponse
-}
+);}
 
 
 
@@ -2677,21 +2384,14 @@ export const getCheckoutUrl = () => {
  */
 export const checkout = async (checkoutRequest?: CheckoutRequest, options?: RequestInit): Promise<checkoutResponse> => {
 
-  const res = await fetch(getCheckoutUrl(),
+  return customFetch<checkoutResponse>(getCheckoutUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(checkoutRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: checkoutResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as checkoutResponse
-}
+);}
 
 
 
@@ -2741,21 +2441,14 @@ export const getListOrdersUrl = (params?: ListOrdersParams,) => {
  */
 export const listOrders = async (params?: ListOrdersParams, options?: RequestInit): Promise<listOrdersResponse> => {
 
-  const res = await fetch(getListOrdersUrl(params),
+  return customFetch<listOrdersResponse>(getListOrdersUrl(params),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: listOrdersResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as listOrdersResponse
-}
+);}
 
 
 
@@ -2812,21 +2505,14 @@ export const getCreateOrderUrl = () => {
  */
 export const createOrder = async (createOrderRequest: CreateOrderRequest, options?: RequestInit): Promise<createOrderResponse> => {
 
-  const res = await fetch(getCreateOrderUrl(),
+  return customFetch<createOrderResponse>(getCreateOrderUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(createOrderRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createOrderResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as createOrderResponse
-}
+);}
 
 
 
@@ -2883,21 +2569,14 @@ export const getUpdateOrderUrl = () => {
  */
 export const updateOrder = async (updateOrderRequest: UpdateOrderRequest, options?: RequestInit): Promise<updateOrderResponse> => {
 
-  const res = await fetch(getUpdateOrderUrl(),
+  return customFetch<updateOrderResponse>(getUpdateOrderUrl(),
   {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(updateOrderRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateOrderResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateOrderResponse
-}
+);}
 
 
 
@@ -2949,21 +2628,14 @@ export const getDeleteOrderUrl = () => {
  */
 export const deleteOrder = async (deleteOrderRequest: DeleteOrderRequest, options?: RequestInit): Promise<deleteOrderResponse> => {
 
-  const res = await fetch(getDeleteOrderUrl(),
+  return customFetch<deleteOrderResponse>(getDeleteOrderUrl(),
   {
     ...options,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(deleteOrderRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteOrderResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteOrderResponse
-}
+);}
 
 
 
@@ -3016,21 +2688,14 @@ export const getSearchOrdersUrl = () => {
  */
 export const searchOrders = async (searchOrdersRequest: SearchOrdersRequest, options?: RequestInit): Promise<searchOrdersResponse> => {
 
-  const res = await fetch(getSearchOrdersUrl(),
+  return customFetch<searchOrdersResponse>(getSearchOrdersUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(searchOrdersRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: searchOrdersResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as searchOrdersResponse
-}
+);}
 
 
 
@@ -3082,21 +2747,14 @@ export const getGetOrderByIdUrl = (id: string,) => {
  */
 export const getOrderById = async (id: string, options?: RequestInit): Promise<getOrderByIdResponse> => {
 
-  const res = await fetch(getGetOrderByIdUrl(id),
+  return customFetch<getOrderByIdResponse>(getGetOrderByIdUrl(id),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getOrderByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getOrderByIdResponse
-}
+);}
 
 
 
@@ -3154,21 +2812,14 @@ export const getUpdateOrderByIdUrl = (id: string,) => {
 export const updateOrderById = async (id: string,
     updateOrderByIdRequest: UpdateOrderByIdRequest, options?: RequestInit): Promise<updateOrderByIdResponse> => {
 
-  const res = await fetch(getUpdateOrderByIdUrl(id),
+  return customFetch<updateOrderByIdResponse>(getUpdateOrderByIdUrl(id),
   {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(updateOrderByIdRequest)
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: updateOrderByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as updateOrderByIdResponse
-}
+);}
 
 
 
@@ -3220,21 +2871,14 @@ export const getDeleteOrderByIdUrl = (id: string,) => {
  */
 export const deleteOrderById = async (id: string, options?: RequestInit): Promise<deleteOrderByIdResponse> => {
 
-  const res = await fetch(getDeleteOrderByIdUrl(id),
+  return customFetch<deleteOrderByIdResponse>(getDeleteOrderByIdUrl(id),
   {
     ...options,
     method: 'DELETE'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deleteOrderByIdResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteOrderByIdResponse
-}
+);}
 
 
 
@@ -3281,17 +2925,11 @@ export const getGetOrderInvoiceUrl = (id: string,) => {
  */
 export const getOrderInvoice = async (id: string, options?: RequestInit): Promise<getOrderInvoiceResponse> => {
 
-  const res = await fetch(getGetOrderInvoiceUrl(id),
+  return customFetch<getOrderInvoiceResponse>(getGetOrderInvoiceUrl(id),
   {
     ...options,
     method: 'GET'
 
 
   }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.blob();
-  const data: getOrderInvoiceResponse['data'] = body as getOrderInvoiceResponse['data']
-  return { data, status: res.status, headers: res.headers } as getOrderInvoiceResponse
-}
+);}

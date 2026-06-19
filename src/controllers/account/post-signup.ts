@@ -27,7 +27,7 @@ export const postSignup = (
      * Uploaded file takes priority over body imageUrl
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
-    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
@@ -35,7 +35,7 @@ export const postSignup = (
      * Register
      */
     return authService
-        .signup(email, username, password, passwordConfirm, imageUrl ?? request.body.imageUrl)
+        .signup(email, username, password, passwordConfirm, imageUrl)
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {

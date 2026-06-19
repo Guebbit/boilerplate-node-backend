@@ -42,7 +42,7 @@ export const writeProducts = (
      * Uploaded file takes priority over body imageUrl
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
-    const imageUrl = imageUrlFile ?? request.body.imageUrl ?? '';
+    const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
     const categories = extractStringList((request.body as { categories?: unknown }).categories);
     const tags = extractStringList((request.body as { tags?: unknown }).tags);
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
