@@ -121,5 +121,14 @@
         "winston": "^3.19.0",
         "ws": "^8.20.0",
         "zod": "^4.3.6"
+    },
+    "allowScripts": {
+        "protobufjs@7.5.6": true,
+        "protobufjs@8.0.1": true,
+        "bcrypt@6.0.0": true,
+        "esbuild@0.27.3": true,
+        "esbuild@0.21.5": true,
+        "mongodb-memory-server@11.0.1": true,
+        "unrs-resolver@1.11.1": true
     }
 }
