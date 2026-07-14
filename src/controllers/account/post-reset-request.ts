@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { RequestPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
-import { successResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@utils/response';
 import type { PasswordResetRequest } from '@types';
 import { enqueueEmail } from '@utils/nodemailer';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
@@ -40,7 +41,17 @@ export const postResetRequest = (
     request: Request<unknown, unknown, PasswordResetRequest>,
     response: Response
 ) => {
-    const { email } = request.body;
+    // Shape validation only — existence of the account is never revealed (see below).
+    const parseResult = RequestPasswordResetBody.safeParse(request.body);
+    if (!parseResult.success)
+        return rejectResponse(
+            response,
+            422,
+            'reset-request - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
+
+    const { email } = parseResult.data;
 
     return (
         lookupResetData(email)

@@ -1,13 +1,17 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import { UpdateFeedbackRequestStatusBody } from '@api/schemas.zod';
 import { rejectResponse, successResponse } from '@utils/response';
 import type { UpdateFeedbackRequestStatusRequest } from '@types';
-import { UpdateFeedbackRequestStatusRequestStatus } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
 
-const updateFeedbackStatusSchema = z.object({
-    status: z.nativeEnum(UpdateFeedbackRequestStatusRequestStatus).optional(),
+/**
+ * Built on the orval-generated UpdateFeedbackRequestStatusBody (kept in sync
+ * with openapi.yaml); adminNotes gets a length cap not expressed in the
+ * OpenAPI schema.
+ */
+const updateFeedbackStatusSchema = UpdateFeedbackRequestStatusBody.extend({
     adminNotes: z.string().max(5000).optional()
 });
 

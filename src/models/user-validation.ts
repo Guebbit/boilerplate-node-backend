@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { t } from 'i18next';
+import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
 
 /**
  * Zod validation schema for user data.
- * Single responsibility: input validation rules.
+ * Built on the orval-generated CreateUserBody (kept in sync with openapi.yaml)
+ * so only fields needing custom i18n messages or looser rules are overridden.
+ * imageUrl is a relative upload path (see resolveImageUrl), not an absolute
+ * URL, so it can't use the generated `.url()` field as-is.
  */
-export const zodUserSchema = z.object({
-    id: z.number().nullish(),
-
+export const zodUserSchema = CreateUserBody.extend({
     email: z
         .string()
         .min(1, { message: t('signup.user-field-email-required') as string })
@@ -21,14 +23,7 @@ export const zodUserSchema = z.object({
     password: z
         .string()
         .min(1, { message: t('signup.user-field-password-required') as string })
-        .min(8, { message: t('signup.user-field-password-min') as string }),
+        .min(createUserBodyPasswordMin, { message: t('signup.user-field-password-min') as string }),
 
-    imageUrl: z.string().nullish(),
-
-    admin: z.boolean().nullish(),
-    active: z.boolean().nullish(),
-
-    createdAt: z.date().nullish(),
-    updatedAt: z.date().nullish(),
-    deletedAt: z.date().nullish()
+    imageUrl: z.string().nullish()
 });

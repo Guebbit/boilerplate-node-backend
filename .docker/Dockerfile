@@ -1,6 +1,6 @@
 # Base image layer. This defines the OS and preinstalled node (+ npm)
 # Offcial node 20 built on Alpine Linux (small).
-FROM node:25-alpine
+FROM docker.io/library/node:25-alpine
 
 # Sets the working directory inside the image to /app in the container
 WORKDIR /app

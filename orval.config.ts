@@ -11,12 +11,20 @@ export default defineConfig({
             client: 'fetch',
             mode: 'single',
             override: {
-                enumSuffix: '',
                 mutator: {
                     path: './src/api-mutator.ts',
                     name: 'customFetch'
                 }
             }
+        }
+    },
+
+    zodSchemas: {
+        input: './openapi.yaml',
+        output: {
+            mode: 'single',
+            target: './api/schemas.zod.ts',
+            client: 'zod'
         }
     }
 });

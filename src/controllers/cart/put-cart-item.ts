@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateCartItemByIdRequest } from '@types';
@@ -19,6 +20,18 @@ export const putCartItem = (
         return;
     }
     const userId = request.authContext.id;
+
+    const parseResult = UpdateCartItemByIdBody.safeParse(request.body);
+    if (!parseResult.success)
+        return rejectResponse(
+            response,
+            422,
+            'updateCartItemById - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
+
+    const { quantity } = parseResult.data;
+    // productId travels via path param or body; body shape is already validated above.
     const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
 
     if (!isValidObjectId(productId)) {
@@ -28,21 +41,14 @@ export const putCartItem = (
         return;
     }
 
-    if (!request.body.quantity || request.body.quantity < 1) {
-        rejectResponse(response, 422, 'updateCartItemById - invalid quantity', [
-            t('generic.error-invalid-data')
-        ]);
-        return;
-    }
-
     return cartService
-        .cartItemSetById(userId, productId, request.body.quantity)
+        .cartItemSetById(userId, productId, quantity)
         .then(() => cartService.cartGetWithSummary(userId))
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
                 event: AnalyticsEvent.CART_ITEM_UPDATED,
-                properties: { product_id: productId, quantity: request.body.quantity }
+                properties: { product_id: productId, quantity }
             });
             successResponse(response, cart);
         })

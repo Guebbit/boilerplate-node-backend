@@ -12,4 +12,6 @@ export interface ObservabilityHealthIntegrations {
   loki?: boolean;
   posthog?: boolean;
   otelEnabled?: boolean;
+  umami?: boolean;
+  faro?: boolean;
 }

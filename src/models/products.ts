@@ -2,6 +2,7 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { z } from 'zod';
 import { t } from 'i18next';
+import { CreateProductBody } from '@api/schemas.zod';
 import type { Product } from '@types';
 
 /**
@@ -29,11 +30,12 @@ export type IProductModel = Model<IProductDocument, unknown, IProductMethods>;
 
 /**
  * Zod Schema for product data validation.
+ * Built on the orval-generated CreateProductBody (kept in sync with
+ * openapi.yaml); imageUrl is overridden back to a plain string since it
+ * holds a relative upload path (see resolveImageUrl), not an absolute URL.
  * Used by the service layer to validate incoming product data.
  */
-export const zodProductSchema = z.object({
-    id: z.number().nullable().optional(),
-
+export const zodProductSchema = CreateProductBody.extend({
     title: z
         .string()
         .min(1, { error: t('ecommerce.product-invalid-title-required') })
@@ -45,14 +47,7 @@ export const zodProductSchema = z.object({
             error: t('ecommerce.product-invalid-price-required')
         }),
 
-    imageUrl: z.string(),
-    categories: z.array(z.string()).nullish(),
-    tags: z.array(z.string()).nullish(),
-
-    active: z.boolean().nullable().optional(),
-    createdAt: z.date().nullable().optional(),
-    updatedAt: z.date().nullable().optional(),
-    deletedAt: z.date().nullable().optional()
+    imageUrl: z.string()
 });
 
 /**

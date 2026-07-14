@@ -218,6 +218,80 @@ services:
             - prometheus
             - loki
 
+    # Alloy: browser-facing collector for the frontend (Grafana Faro Web SDK).
+    # Receives errors/logs/web-vitals/traces from the browser on the Faro port, then fans
+    # them into Loki (logs) and the OTel Collector -> Tempo (traces). See the config for wiring.
+    alloy:
+        image: grafana/alloy:v1.5.1
+        restart: unless-stopped
+        command:
+            - 'run'
+            - '--server.http.listen-addr=0.0.0.0:12345'
+            - '--storage.path=/tmp/alloy'
+            - '/etc/alloy/config.alloy'
+        volumes:
+            - ./.docker/observability/alloy.config.alloy:/etc/alloy/config.alloy:Z
+        ports:
+            - '${ALLOY_FARO_PORT:-12347}:12347' # Faro receiver — the frontend posts telemetry here
+            - '${ALLOY_UI_PORT:-12345}:12345' # Alloy UI — inspect the ingest pipeline while debugging
+        depends_on:
+            - loki
+            - otel-collector
+
+    # Umami: self-hosted product analytics (pageviews + custom events) — replaces PostHog cloud.
+    # The frontend loads its tracking script from this origin; events land in umami-db.
+    umami:
+        image: ghcr.io/umami-software/umami:postgresql-v2.14.0
+        restart: unless-stopped
+        environment:
+            DATABASE_TYPE: 'postgresql'
+            DATABASE_URL: 'postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/${UMAMI_DB_NAME:-umami}'
+            # Salt used to hash session IDs. Change this to any random string.
+            APP_SECRET: '${UMAMI_APP_SECRET:-change-me-please}'
+        ports:
+            - '${UMAMI_PORT:-8090}:3000'
+        depends_on:
+            umami-db:
+                condition: service_healthy
+
+    # Postgres backing store for Umami (kept separate from the app's MongoDB).
+    umami-db:
+        image: postgres:16-alpine
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: '${UMAMI_DB_NAME:-umami}'
+            POSTGRES_USER: '${UMAMI_DB_USER:-umami}'
+            POSTGRES_PASSWORD: '${UMAMI_DB_PASSWORD:-umami}'
+        volumes:
+            - umami_db_volume:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U ${UMAMI_DB_USER:-umami} -d ${UMAMI_DB_NAME:-umami}']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # Umami init: one-shot job that stamps the admin username/password from .env onto
+    # Umami's default seeded account, so the stack comes up ready to log in (no manual step).
+    umami-init:
+        image: postgres:16-alpine
+        restart: 'no'
+        entrypoint: ['/bin/sh', '/umami-init.sh']
+        environment:
+            DATABASE_URL: 'postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/${UMAMI_DB_NAME:-umami}'
+            UMAMI_ADMIN_USER: '${UMAMI_ADMIN_USER:-admin}'
+            UMAMI_ADMIN_PASSWORD: '${UMAMI_ADMIN_PASSWORD:-umami}'
+            # Fixed website id so the frontend's data-website-id is known up front.
+            UMAMI_WEBSITE_ID: '${UMAMI_WEBSITE_ID:-00000000-0000-4000-8000-000000000001}'
+            UMAMI_WEBSITE_NAME: '${UMAMI_WEBSITE_NAME:-Frontend}'
+            UMAMI_WEBSITE_DOMAIN: '${UMAMI_WEBSITE_DOMAIN:-localhost}'
+        volumes:
+            - ./.docker/observability/umami-init.sh:/umami-init.sh:ro,Z
+        depends_on:
+            umami-db:
+                condition: service_healthy
+            umami:
+                condition: service_started
+
     # Docs: VitePress static site served by Nginx.
     docs:
         build:
@@ -234,6 +308,7 @@ volumes:
     rabbitmq_volume:
     prometheus_volume:
     loki_volume:
+    umami_db_volume:
 
 # Commands:
 # podman ps: list running containers (-a for all)

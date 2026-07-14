@@ -1,0 +1,47 @@
+// Grafana Alloy — browser-facing collector for the frontend (Grafana Faro Web SDK).
+// Why this file exists: browsers must not talk to Loki/Tempo/the OTel Collector directly.
+// Alloy exposes ONE endpoint the browser posts to, then fans the signals into the existing
+// backends already running in this repo:
+//   - errors / logs / web-vitals (measurements)  -> Loki
+//   - frontend traces                             -> OTel Collector -> Tempo
+//
+// The frontend points the Faro SDK at:  http://localhost:${ALLOY_FARO_PORT}/collect
+
+// Faro receiver: single ingest endpoint for the browser SDK.
+faro.receiver "frontend" {
+    server {
+        listen_address = "0.0.0.0"
+        // Container-internal port. The host mapping is set in docker-compose.yml
+        // via ${ALLOY_FARO_PORT}. The path the SDK posts to is "/collect".
+        listen_port = 12347
+        // Local dev: accept the browser from any origin. Tighten in production.
+        cors_allowed_origins = ["*"]
+    }
+
+    output {
+        // Errors, console logs and web-vitals measurements become log lines in Loki.
+        logs = [loki.write.default.receiver]
+        // Frontend spans are forwarded as OTLP into the existing trace pipeline.
+        traces = [otelcol.exporter.otlp.tempo.input]
+    }
+}
+
+// Ship Faro logs/errors/measurements to the existing Loki instance.
+loki.write "default" {
+    endpoint {
+        url = "http://loki:3100/loki/api/v1/push"
+    }
+}
+
+// Forward Faro traces to the existing OTel Collector, which already fans out to Tempo.
+// Reusing the collector keeps a single trace pipeline, so frontend spans stitch onto
+// backend spans via the shared W3C traceparent / trace_id.
+otelcol.exporter.otlp "tempo" {
+    client {
+        endpoint = "otel-collector:4317"
+        tls {
+            // Internal local network; no TLS between Alloy and the collector.
+            insecure = true
+        }
+    }
+}

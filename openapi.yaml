@@ -1260,6 +1260,8 @@ components:
                 loki: { type: boolean }
                 posthog: { type: boolean }
                 otelEnabled: { type: boolean }
+                umami: { type: boolean }
+                faro: { type: boolean }
 
         ObservabilityHealthMemory:
             type: object

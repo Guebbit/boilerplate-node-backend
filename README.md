@@ -346,17 +346,16 @@ sudo ufw allow <port>/tcp
 
 **Windows:**
 
-* Windows Defender Firewall → Advanced settings
-* Inbound Rules → New Rule → Port → TCP → allow `<port>`
+- Windows Defender Firewall → Advanced settings
+- Inbound Rules → New Rule → Port → TCP → allow `<port>`
 
 ---
 
 ### 5. Notes
 
-* No router port forwarding needed (LAN only)
-* Use `127.0.0.1` for local-only access
-* Use `0.0.0.0` binding via Podman port mapping (default behavior when using `-p`)
-
+- No router port forwarding needed (LAN only)
+- Use `127.0.0.1` for local-only access
+- Use `0.0.0.0` binding via Podman port mapping (default behavior when using `-p`)
 
 # TODO
 

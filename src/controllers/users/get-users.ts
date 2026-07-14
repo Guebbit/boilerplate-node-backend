@@ -1,7 +1,14 @@
 import type { Request, Response } from 'express';
+import { z } from 'zod';
+import {
+    SearchUsersBody,
+    searchUsersBodyPageDefault,
+    searchUsersBodyPageSizeDefault,
+    searchUsersBodyPageSizeMax
+} from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, extractRequestPagination } from '@utils/helpers-request';
+import { extractId, mergeBodyQuery } from '@utils/helpers-request';
 import type { SearchUsersRequest } from '@types';
 import type { CastError } from 'mongoose';
 
@@ -11,6 +18,32 @@ import type { CastError } from 'mongoose';
 export type IGetUsersQuery = Partial<Record<keyof SearchUsersRequest, string>>;
 
 /**
+ * Built on the orval-generated SearchUsersBody (kept in sync with
+ * openapi.yaml); page/pageSize/active are coerced from strings since GET
+ * requests carry them as query-string text, not JSON numbers/booleans.
+ */
+const searchUsersQuerySchema = SearchUsersBody.extend({
+    page: z.preprocess(
+        (value) =>
+            value === '' || value === null || value === undefined
+                ? searchUsersBodyPageDefault
+                : value,
+        z.coerce.number().min(1)
+    ),
+    pageSize: z.preprocess(
+        (value) =>
+            value === '' || value === null || value === undefined
+                ? searchUsersBodyPageSizeDefault
+                : value,
+        z.coerce.number().min(1).max(searchUsersBodyPageSizeMax)
+    ),
+    active: z.preprocess(
+        (value) => (typeof value === 'string' ? value === 'true' : value),
+        z.boolean().optional()
+    )
+});
+
+/**
  * GET /users
  * List/search users via query parameters (admin only).
  */
@@ -18,20 +51,23 @@ export const getUsers = (
     request: Request<{ id?: string }, unknown, SearchUsersRequest, IGetUsersQuery>,
     response: Response
 ) => {
-    const { page, pageSize } = extractRequestPagination(request);
+    const merged = mergeBodyQuery(
+        request.body as Record<string, unknown> | undefined,
+        request.query as Record<string, string> | undefined
+    );
+    const id = extractId(request.params.id, merged.id as string | undefined);
 
-    const activeRaw = request.body?.active ?? request.query.active;
+    const parseResult = searchUsersQuerySchema.safeParse({ ...merged, id });
+    if (!parseResult.success)
+        return rejectResponse(
+            response,
+            422,
+            'getUsers - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
 
     return userService
-        .search({
-            id: extractId(request.params.id, request.body?.id, request.query.id),
-            text: request.body?.text ?? request.query.text,
-            email: request.body?.email ?? request.query.email,
-            username: request.body?.username ?? request.query.username,
-            page,
-            pageSize,
-            active: activeRaw === undefined ? undefined : activeRaw === 'true'
-        })
+        .search(parseResult.data)
         .then((result) => {
             successResponse(response, result);
         })

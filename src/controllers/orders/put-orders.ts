@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
@@ -13,8 +14,20 @@ export const putOrders = (
     request: Request<{ id?: string }, unknown, UpdateOrderRequest | UpdateOrderByIdRequest>,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as UpdateOrderRequest).id;
+    // UpdateOrderBody requires `id` in the body; UpdateOrderByIdBody takes it from the path instead.
+    const schema = request.params.id ? UpdateOrderByIdBody : UpdateOrderBody;
+    const parseResult = schema.safeParse(request.body);
+    if (!parseResult.success) {
+        rejectResponse(
+            response,
+            422,
+            'updateOrder - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
+        return Promise.resolve();
+    }
 
+    const id = request.params.id ?? (parseResult.data as UpdateOrderRequest).id;
     if (!id) {
         rejectResponse(response, 422, 'updateOrder - missing id', [
             t('generic.error-missing-data')
@@ -23,10 +36,7 @@ export const putOrders = (
     }
 
     return orderService
-        .updateById(id, {
-            ...request.body,
-            status: request.body.status as string | undefined
-        })
+        .updateById(id, parseResult.data)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.message, result.errors);

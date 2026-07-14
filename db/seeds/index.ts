@@ -94,7 +94,7 @@ async function seed() {
             _id: new Types.ObjectId('65de73a69ca05739be2b5e85'),
             userId: new Types.ObjectId('65dd2bdb923652b7800fe180'),
             email: 'oldpsw@root.it',
-            products: [
+            items: [
                 {
                     product: {
                         _id: new Types.ObjectId('65dc8a99604c307b702b5ccc'),
@@ -119,12 +119,12 @@ async function seed() {
                     quantity: 10
                 }
             ]
-        } as unknown as Partial<IOrderDocument>),
+        } as Partial<IOrderDocument>),
         orderRepository.create({
             _id: new Types.ObjectId('661c795a9e22bcbef63a5832'),
             userId: new Types.ObjectId('65dd2bdb923652b7800fe180'),
             email: 'root@root.it',
-            products: [
+            items: [
                 {
                     product: {
                         _id: new Types.ObjectId('65dcdec2b18ad5e4bd597f0f'),
@@ -138,7 +138,7 @@ async function seed() {
                     quantity: 20
                 }
             ]
-        } as unknown as Partial<IOrderDocument>)
+        } as Partial<IOrderDocument>)
     ]);
 
     await connection.close();

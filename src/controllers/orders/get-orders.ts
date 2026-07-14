@@ -1,7 +1,14 @@
 import type { Request, Response } from 'express';
+import { z } from 'zod';
+import {
+    SearchOrdersBody,
+    searchOrdersBodyPageDefault,
+    searchOrdersBodyPageSizeDefault,
+    searchOrdersBodyPageSizeMax
+} from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, extractRequestPagination } from '@utils/helpers-request';
+import { extractId, mergeBodyQuery } from '@utils/helpers-request';
 import type { SearchOrdersRequest } from '@types';
 import { userScope } from '@utils/helpers-scopes';
 import type { CastError } from 'mongoose';
@@ -13,6 +20,28 @@ import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/a
 export type IGetOrdersQuery = Partial<Record<keyof SearchOrdersRequest, string>>;
 
 /**
+ * Built on the orval-generated SearchOrdersBody (kept in sync with
+ * openapi.yaml); page/pageSize are coerced from strings since GET requests
+ * carry them as query-string text, not JSON numbers.
+ */
+const searchOrdersQuerySchema = SearchOrdersBody.extend({
+    page: z.preprocess(
+        (value) =>
+            value === '' || value === null || value === undefined
+                ? searchOrdersBodyPageDefault
+                : value,
+        z.coerce.number().min(1)
+    ),
+    pageSize: z.preprocess(
+        (value) =>
+            value === '' || value === null || value === undefined
+                ? searchOrdersBodyPageSizeDefault
+                : value,
+        z.coerce.number().min(1).max(searchOrdersBodyPageSizeMax)
+    )
+});
+
+/**
  * GET /orders
  * List/search orders via query parameters or request body.
  * Non-admin users are automatically scoped to their own orders; the userId filter is ignored for non-admin callers.
@@ -21,22 +50,26 @@ export const getOrders = (
     request: Request<{ id?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
 ) => {
-    const { page, pageSize } = extractRequestPagination(request);
     const isAdmin = Boolean(request.authContext?.admin);
+    const merged = mergeBodyQuery(
+        request.body as Record<string, unknown> | undefined,
+        request.query as Record<string, string> | undefined
+    );
+    const id = extractId(request.params.id, merged.id as string | undefined);
+    /* Non-admin callers cannot filter by arbitrary userId; userScope enforces their own. */
+    const userId = isAdmin ? (merged.userId as string | undefined) : undefined;
+
+    const parseResult = searchOrdersQuerySchema.safeParse({ ...merged, id, userId });
+    if (!parseResult.success)
+        return rejectResponse(
+            response,
+            422,
+            'getOrders - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
 
     return orderService
-        .search(
-            {
-                id: extractId(request.params.id, request.body?.id, request.query.id),
-                page,
-                pageSize,
-                /* Non-admin callers cannot filter by arbitrary userId; userScope enforces their own. */
-                userId: isAdmin ? (request.body?.userId ?? request.query.userId) : undefined,
-                productId: request.body?.productId ?? request.query.productId,
-                email: request.body?.email ?? request.query.email
-            },
-            userScope(request)
-        )
+        .search(parseResult.data, userScope(request))
         .then((result) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),

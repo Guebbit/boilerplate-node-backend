@@ -1,29 +1,16 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, QueryFilter } from 'mongoose';
+import { FeedbackRequestStatus } from '@types';
+import type { FeedbackRequest } from '@types';
 
-/** Feedback status used by the support workflow. */
-export enum EFeedbackStatus {
-    NEW = 'new',
-    IN_PROGRESS = 'in_progress',
-    RESOLVED = 'resolved',
-    SPAM = 'spam'
-}
-
-/** Feedback ticket payload stored in MongoDB. */
-export interface IFeedbackRequest {
-    name?: string;
-    email: string;
-    subject: string;
-    message: string;
-    status: EFeedbackStatus;
-    adminNotes?: string;
+/** Mongoose document type for feedback tickets. Overrides the API-generated
+ * FeedbackRequest's 'respondedAt'/'createdAt'/'updatedAt' (string vs Date). */
+export interface IFeedbackRequestDocument
+    extends Omit<FeedbackRequest, 'id' | 'respondedAt' | 'createdAt' | 'updatedAt'>, Document {
     respondedAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
 }
-
-/** Mongoose document type for feedback tickets. */
-export interface IFeedbackRequestDocument extends IFeedbackRequest, Document {}
 
 /** Mongoose model + query helper types. */
 export type IFeedbackRequestModel = Model<IFeedbackRequestDocument>;
@@ -50,8 +37,8 @@ export const feedbackRequestSchema = new Schema<IFeedbackRequestDocument, IFeedb
         },
         status: {
             type: String,
-            enum: Object.values(EFeedbackStatus),
-            default: EFeedbackStatus.NEW
+            enum: Object.values(FeedbackRequestStatus),
+            default: FeedbackRequestStatus.new
         },
         adminNotes: {
             type: String

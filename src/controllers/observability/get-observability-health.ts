@@ -35,7 +35,10 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
         integrations: {
             loki: Boolean(process.env.NODE_LOKI_HOST),
             posthog: Boolean(process.env.NODE_POSTHOG_API_KEY),
-            otelEnabled: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
+            otelEnabled: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT),
+            /* Frontend observability: self-hosted Umami analytics + Grafana Faro collector. */
+            umami: Boolean(process.env.NODE_UMAMI_HOST),
+            faro: Boolean(process.env.NODE_FARO_COLLECTOR_URL)
         },
         memory: {
             heapUsedMb: Math.round(mem.heapUsed / 1_048_576),

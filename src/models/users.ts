@@ -1,6 +1,5 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { logger } from '@utils/winston';
 import { type User } from '@types';
@@ -131,7 +130,10 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
                 // Guarantee every new user starts with an empty cart.
                 default: []
             },
-            deletedAt: Date
+            updatedAt: {
+                type: Date,
+                default: Date.now
+            }
         },
         // sub documents always have _id
         tokens: [

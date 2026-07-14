@@ -1,11 +1,12 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { UpsertCartItemRequest } from '@types';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
-import { extractCustomId, isValidObjectId } from '@utils/helpers-request';
+import { isValidObjectId } from '@utils/helpers-request';
 
 /**
  * POST /cart
@@ -21,19 +22,22 @@ export const postCart = (
         return;
     }
     const userId = request.authContext.id;
-    const productId = extractCustomId(request as Request, { body: 'productId' });
-    const { quantity } = request.body;
 
+    const parseResult = UpsertCartItemBody.safeParse(request.body);
+    if (!parseResult.success)
+        return rejectResponse(
+            response,
+            422,
+            'upsertCartItem - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
+
+    const { productId, quantity } = parseResult.data;
+
+    // OpenAPI models Id as a plain string; Mongo-specific ObjectId format still needs its own check.
     if (!isValidObjectId(productId)) {
         rejectResponse(response, 422, 'upsertCartItem - missing id', [
             t('generic.error-missing-data')
-        ]);
-        return;
-    }
-
-    if (!quantity || quantity < 1) {
-        rejectResponse(response, 422, 'upsertCartItem - invalid data', [
-            t('generic.error-invalid-data')
         ]);
         return;
     }

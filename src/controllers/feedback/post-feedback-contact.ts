@@ -1,14 +1,20 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import { CreateFeedbackRequestBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@utils/response';
 import { enqueueEmail } from '@utils/nodemailer';
 import { logger } from '@utils/winston';
 import type { CreateFeedbackRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
 
-const createFeedbackSchema = z.object({
+/**
+ * Built on the orval-generated CreateFeedbackRequestBody (kept in sync with
+ * openapi.yaml); fields are overridden to add trimming and length limits not
+ * expressed in the OpenAPI schema.
+ */
+const createFeedbackSchema = CreateFeedbackRequestBody.extend({
     name: z.string().trim().max(120).optional(),
-    email: z.string().email(),
+    email: z.string().trim().email(),
     subject: z.string().trim().min(1).max(200),
     message: z.string().trim().min(1).max(5000)
 });

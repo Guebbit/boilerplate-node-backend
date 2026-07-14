@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@utils/response';
@@ -16,7 +17,16 @@ export const deleteAccountConfirm = (
     request: Request<unknown, unknown, AccountDeleteConfirmRequest>,
     response: Response
 ) => {
-    const { token } = request.body;
+    const parseResult = ConfirmAccountDeleteBody.safeParse(request.body);
+    if (!parseResult.success)
+        return rejectResponse(
+            response,
+            422,
+            'deleteAccountConfirm - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
+
+    const { token } = parseResult.data;
 
     return userService
         .findByAccountDeleteToken(token)

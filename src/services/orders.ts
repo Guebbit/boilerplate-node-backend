@@ -1,9 +1,8 @@
 import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
-import type { SearchOrdersRequest, CartItem } from '@types';
+import type { SearchOrdersRequest, CartItem, OrderStatus } from '@types';
 import type { IOrderDocument, IOrderDocumentItem } from '@models/orders';
-import { EOrderStatus } from '@models/orders';
 import {
     generateReject,
     generateSuccess,
@@ -214,7 +213,7 @@ export const update = (
         items?: CartItem[];
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
-    if (data.status !== undefined) order.status = data.status as EOrderStatus;
+    if (data.status !== undefined) order.status = data.status as OrderStatus;
     if (data.email !== undefined) order.email = data.email;
     if (data.userId !== undefined) order.userId = new Types.ObjectId(data.userId);
 

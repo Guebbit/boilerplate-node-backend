@@ -3,6 +3,7 @@ import { t } from 'i18next';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import type { CastError } from 'mongoose';
+import { LoginBody } from '@api/schemas.zod';
 import {
     generateSuccess,
     generateReject,
@@ -146,17 +147,10 @@ export const login = (
     email?: string,
     password?: string
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
-    const parseResult = zodUserSchema
-        .pick({
-            email: true
-        })
-        .extend({
-            password: z.string()
-        })
-        .safeParse({
-            email,
-            password
-        });
+    const parseResult = LoginBody.safeParse({
+        email,
+        password
+    });
 
     if (!parseResult.success)
         return Promise.resolve(

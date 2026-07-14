@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { ConfirmPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
@@ -17,10 +18,16 @@ export const postResetConfirm = (
     request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>,
     response: Response
 ) => {
-    /**
-     * Post Data
-     */
-    const { token, password, passwordConfirm } = request.body;
+    const parseResult = ConfirmPasswordResetBody.safeParse(request.body);
+    if (!parseResult.success)
+        return rejectResponse(
+            response,
+            422,
+            'reset-confirm - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
+
+    const { token, password, passwordConfirm } = parseResult.data;
 
     /**
      * Search user by token

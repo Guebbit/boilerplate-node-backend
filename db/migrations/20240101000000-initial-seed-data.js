@@ -98,7 +98,7 @@ module.exports = {
                 _id: new ObjectId('65de73a69ca05739be2b5e85'),
                 userId: new ObjectId('65dd2bdb923652b7800fe180'),
                 email: 'oldpsw@root.it',
-                products: [
+                items: [
                     {
                         product: {
                             _id: new ObjectId('65dc8a99604c307b702b5ccc'),
@@ -128,7 +128,7 @@ module.exports = {
                 _id: new ObjectId('661c795a9e22bcbef63a5832'),
                 userId: new ObjectId('65dd2bdb923652b7800fe180'),
                 email: 'root@root.it',
-                products: [
+                items: [
                     {
                         product: {
                             _id: new ObjectId('65dcdec2b18ad5e4bd597f0f'),

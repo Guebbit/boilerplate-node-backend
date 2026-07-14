@@ -1,10 +1,11 @@
 import type { QueryFilter } from 'mongoose';
 import {
+    FeedbackRequestStatus,
     type SearchFeedbackRequestsRequest,
     type UpdateFeedbackRequestStatusRequest,
     type CreateFeedbackRequest
 } from '@types';
-import { EFeedbackStatus, type IFeedbackRequestDocument } from '@models/feedback-requests';
+import type { IFeedbackRequestDocument } from '@models/feedback-requests';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
 import {
     normalizePagination,
@@ -21,19 +22,20 @@ import {
 
 /**
  * OCP-compliant status mapping: adding a new status only requires adding one entry here.
+ * Also accepts legacy uppercase status values from older clients.
  */
-const STATUS_MAP: Record<string, EFeedbackStatus> = {
-    NEW: EFeedbackStatus.NEW,
-    new: EFeedbackStatus.NEW,
-    IN_PROGRESS: EFeedbackStatus.IN_PROGRESS,
-    in_progress: EFeedbackStatus.IN_PROGRESS,
-    RESOLVED: EFeedbackStatus.RESOLVED,
-    resolved: EFeedbackStatus.RESOLVED,
-    SPAM: EFeedbackStatus.SPAM,
-    spam: EFeedbackStatus.SPAM
+const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
+    NEW: FeedbackRequestStatus.new,
+    new: FeedbackRequestStatus.new,
+    IN_PROGRESS: FeedbackRequestStatus.in_progress,
+    in_progress: FeedbackRequestStatus.in_progress,
+    RESOLVED: FeedbackRequestStatus.resolved,
+    resolved: FeedbackRequestStatus.resolved,
+    SPAM: FeedbackRequestStatus.spam,
+    spam: FeedbackRequestStatus.spam
 };
 
-const toFeedbackStatus = (status?: string): EFeedbackStatus | undefined =>
+const toFeedbackStatus = (status?: string): FeedbackRequestStatus | undefined =>
     status ? STATUS_MAP[status] : undefined;
 
 export const create = (payload: CreateFeedbackRequest): Promise<IFeedbackRequestDocument> =>
@@ -42,7 +44,7 @@ export const create = (payload: CreateFeedbackRequest): Promise<IFeedbackRequest
         email: payload.email.trim().toLowerCase(),
         subject: payload.subject.trim(),
         message: payload.message.trim(),
-        status: EFeedbackStatus.NEW
+        status: FeedbackRequestStatus.new
     });
 
 export const search = (
@@ -73,7 +75,7 @@ export const updateStatus = (
     const nextStatus = toFeedbackStatus(payload.status);
     if (nextStatus !== undefined) feedback.status = nextStatus;
     if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
-    if (nextStatus === EFeedbackStatus.RESOLVED && !feedback.respondedAt)
+    if (nextStatus === FeedbackRequestStatus.resolved && !feedback.respondedAt)
         feedback.respondedAt = new Date();
     return feedbackRequestRepository.save(feedback).then((saved) => generateSuccess(saved));
 };

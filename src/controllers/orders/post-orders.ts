@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { CreateOrderBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@utils/response';
 import type { CreateOrderRequest } from '@types';
@@ -17,14 +17,18 @@ export const postOrders = (
     request: Request<unknown, unknown, CreateOrderRequest>,
     response: Response
 ) => {
-    if (!request.body.userId || !request.body.email || !request.body.items?.length) {
-        rejectResponse(response, 422, 'createOrder - invalid data', [
-            t('generic.error-missing-data')
-        ]);
+    const parseResult = CreateOrderBody.safeParse(request.body);
+    if (!parseResult.success) {
+        rejectResponse(
+            response,
+            422,
+            'createOrder - invalid data',
+            parseResult.error.issues.map(({ message }) => message)
+        );
         return Promise.resolve();
     }
 
-    const { userId, email, items } = request.body;
+    const { userId, email, items } = parseResult.data;
 
     /* Create the order directly from the request body (bypasses cart). */
     return orderService.create(userId, email, items).then((result) => {

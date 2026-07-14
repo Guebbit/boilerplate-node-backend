@@ -2,19 +2,8 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema } from './products';
 import type { IProductDocument } from './products';
+import { OrderStatus } from '@types';
 import type { Order } from '@types';
-
-/**
- * Valid order status values (mirrors the OpenAPI enum).
- */
-export enum EOrderStatus {
-    PENDING = 'pending',
-    PAID = 'paid',
-    PROCESSING = 'processing',
-    SHIPPED = 'shipped',
-    DELIVERED = 'delivered',
-    CANCELLED = 'cancelled'
-}
 
 /**
  * A single item stored inside an order document.
@@ -36,7 +25,7 @@ export interface IOrderDocument
         Omit<Order, 'id' | 'userId' | 'status' | 'total' | 'items' | 'createdAt' | 'updatedAt'>,
         Document {
     userId: Types.ObjectId;
-    status: EOrderStatus;
+    status: OrderStatus;
     notes?: string;
     items: IOrderDocumentItem[];
     createdAt?: Date;
@@ -75,8 +64,8 @@ export const orderSchema = new Schema<IOrderDocument>(
         ],
         status: {
             type: String,
-            enum: Object.values(EOrderStatus),
-            default: EOrderStatus.PENDING
+            enum: Object.values(OrderStatus),
+            default: OrderStatus.pending
         },
         notes: {
             type: String
