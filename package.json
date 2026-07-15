@@ -97,7 +97,7 @@
     "dependencies": {
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.220.0",
-        "@opentelemetry/instrumentation-express": "^0.64.0",
+        "@opentelemetry/instrumentation-express": "^0.68.0",
         "@opentelemetry/instrumentation-http": "^0.220.0",
         "@opentelemetry/instrumentation-mongoose": "^0.63.0",
         "@opentelemetry/instrumentation-redis": "^0.65.0",
