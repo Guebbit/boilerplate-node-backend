@@ -1,0 +1,339 @@
+name: CI
+
+on:
+    # Run on every PR and on direct pushes to main.
+    # This gives fast feedback for feature branches and protects main.
+    pull_request:
+    push:
+        branches:
+            - main
+
+concurrency:
+    # Cancel stale runs for the same branch/PR when newer commits arrive.
+    group: ci-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    NODE_VERSION: 22
+
+jobs:
+    commitlint:
+        # Lint commit messages against the conventional-commit rules in commitlint.config.cjs.
+        # Runs on PRs (gates the merge) and on push to main (backstop for commits made
+        # with --no-verify or on a machine where the Husky hook never installed).
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  # Need full history to walk the commit range.
+                  fetch-depth: 0
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint commit messages (PR)
+              if: github.event_name == 'pull_request'
+              run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+            - name: Lint commit messages (push)
+              if: github.event_name == 'push'
+              run: npx commitlint --from ${{ github.event.before }} --to ${{ github.event.after }} --verbose
+
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint
+              run: npm run lint
+
+    prettier:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Check formatting
+              run: npm run prettier:check
+
+    lint-openapi:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint OpenAPI spec
+              run: npm run lint:openapi
+
+    lint-asyncapi:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Lint AsyncAPI spec
+              run: npm run lint:asyncapi
+
+    asyncapi-types-freshness:
+        # Verify the committed generated AsyncAPI types are up-to-date with asyncapi.yaml.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Check generated AsyncAPI types are fresh
+              run: |
+                  npm run genasyncapi
+                  npx prettier --write src/types/asyncapi.ts
+                  if ! git diff --exit-code -- src/types/asyncapi.ts; then
+                      echo "Generated src/types/asyncapi.ts is stale. Run 'npm run genasyncapi && npm run prettier:fix' and commit the changes."
+                      exit 1
+                  fi
+
+    api-freshness:
+        # Verify the committed generated API client is up-to-date with openapi.yaml.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Check generated API client is fresh
+              run: |
+                  npm run genapi
+                  if ! git diff --exit-code -- api/; then
+                      echo "Generated api/ is stale. Run 'npm run genapi' and commit the changes."
+                      exit 1
+                  fi
+
+    typecheck:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Type check
+              run: npm run ts-check
+
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Build
+              run: npm run build-only
+
+    test-unit:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run unit tests
+              run: npm run test:unit
+
+    test-integration:
+        # No Mongo/Redis service is started here: today's integration suite only
+        # exercises an in-process Express app (see tests/integration/app-health.test.ts).
+        # Add service containers here if a future test needs a real database/cache.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run integration tests
+              run: npm run test:integration
+
+    audit:
+        # Fail on known high/critical severity vulnerabilities in production dependencies.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Audit dependencies
+              run: npm audit --omit=dev --audit-level=high
+
+    ci:
+        # Single status check to require in branch protection, so adding/renaming
+        # jobs above doesn't require updating the required-checks list every time.
+        if: always()
+        needs:
+            - commitlint
+            - lint
+            - prettier
+            - lint-openapi
+            - lint-asyncapi
+            - asyncapi-types-freshness
+            - api-freshness
+            - typecheck
+            - build
+            - test-unit
+            - test-integration
+            - audit
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+        steps:
+            - name: Check all jobs succeeded
+              run: |
+                  if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+                      echo "One or more required jobs failed."
+                      exit 1
+                  fi
