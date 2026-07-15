@@ -75,7 +75,7 @@
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-oxlint": "~1.56.0",
         "eslint-plugin-prettier": "^5.5.5",
-        "eslint-plugin-unicorn": "^63.0.0",
+        "eslint-plugin-unicorn": "^72.0.0",
         "globals": "^17.4.0",
         "jest": "^30.3.0",
         "jiti": "^2.6.1",
