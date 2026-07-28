@@ -30,7 +30,7 @@ That keeps backend, generated types, and consumers in sync.
 ## OpenAPI vs AsyncAPI in this repository
 
 - Use OpenAPI for REST endpoint contracts.
-- Use AsyncAPI (`asyncapi.yaml`) for WebSocket/SSE/event-driven contracts.
+- Use AsyncAPI (`asyncapi.yaml`) for SSE/event-driven/queue contracts.
 
 ## Tools around the contract
 

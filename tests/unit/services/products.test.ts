@@ -10,8 +10,7 @@ import type { IUserCartDto } from '@utils/dto-cart';
 
 // Mock the filesystem helper so tests never touch the real disk.
 jest.mock('@utils/helpers-filesystem', () => ({
-    deleteFile: jest.fn().mockResolvedValue(true),
-    fileToBase64: jest.fn().mockResolvedValue('')
+    deleteFile: jest.fn().mockResolvedValue(true)
 }));
 
 setupTestDb();

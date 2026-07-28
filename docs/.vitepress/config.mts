@@ -60,8 +60,7 @@ export default withMermaid(
                         collapsed: false,
                         items: [
                             { text: 'RabbitMQ', link: '/tools/rabbitmq' },
-                            { text: 'Email & PDF Rendering', link: '/tools/email-and-rendering' },
-                            { text: 'WebSockets', link: '/tools/websockets' }
+                            { text: 'Email & PDF Rendering', link: '/tools/email-and-rendering' }
                         ]
                     },
                     {

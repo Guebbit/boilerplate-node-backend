@@ -12,7 +12,7 @@ A minimal root endpoint used to verify the process is alive.
 
 ## Observability
 
-Endpoints for health checks, metrics, and audit logs. The two public routes feed external scrapers (Prometheus) and the live dashboard (SSE). The three admin routes are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
+Endpoints for health checks, metrics, and audit logs. The two public routes feed external scrapers (Prometheus) and the live dashboard (SSE). The admin routes are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
@@ -21,6 +21,7 @@ Endpoints for health checks, metrics, and audit logs. The two public routes feed
 | GET | `/observability/health` | admin | Full health snapshot |
 | GET | `/observability/metrics/overview` | admin | Curated KPI JSON |
 | GET | `/observability/audit` | admin | Recent audit events |
+| GET | `/observability/load-test` | admin, dev/staging only | Synthetic CPU load generator for exercising dashboards/log pipelines |
 
 ## Account & Auth
 
@@ -108,32 +109,11 @@ Contact form submissions from anonymous or authenticated users. Admins can list 
 | GET | `/feedback` | admin | List all feedback (cached) |
 | PUT | `/feedback/:id` | admin | Update feedback status |
 
-## WebSocket
+## Realtime
 
-A demo real-time chat backed by the `ws` library. The upgrade happens at the HTTP server level (not Express), so standard REST middleware does not apply.
+Realtime is server → client only, via Server-Sent Events on `GET /observability/events` — an ordinary Express route, so all the usual middleware applies. Event names and payload shapes come from `asyncapi.yaml`; see [Observability Endpoints](./observability.md).
 
-**Connection:** `ws://<host>/ws/chat`
-
-All messages are JSON. The client sends commands; the server pushes events.
-
-**Client → Server**
-
-| `type` | Payload | When |
-| --- | --- | --- |
-| `chat:join` | `{ username: string }` | First message after connect — required before sending |
-| `chat:message:send` | `{ message: string }` | Send a message (max 500 chars) |
-
-**Server → Client**
-
-| `type` | Payload | When |
-| --- | --- | --- |
-| `chat:joined` | `{ username, room }` | Sent back to the joining client only |
-| `chat:message` | `{ id, username, room, message, timestamp }` | Broadcast to all clients in the room |
-| `chat:system` | `{ room, message, timestamp }` | Join / leave announcements |
-| `chat:presence` | `{ room, users: string[] }` | Full user list, sent after any join or disconnect |
-| `chat:error` | `{ message }` | Validation failure (username missing, not joined yet, etc.) |
-
-There is only one room (`general`). State is in-memory and resets on server restart.
+There is no WebSocket endpoint. SSE covers the push case without upgrade handling and works unchanged under clustering, since each stream is served entirely by the worker that accepted it. Adding bidirectional messaging means adding `ws` plus an `'upgrade'` listener on the HTTP server in `src/app.ts` — and, if connections need to talk to each other, a Redis/NATS backplane, because a connection is pinned to one worker.
 
 ## Related pages
 

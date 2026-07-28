@@ -61,7 +61,7 @@ flowchart TD
 - **Framework**: [Express](./tools/runtime.md).
 - **Database**: [MongoDB + Mongoose](./tools/mongodb-mongoose.md).
 - **Observability**: [Observability Reference](./tools/observability-reference.md), [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
-- **Real-time / outbound**: [WebSockets](./tools/websockets.md) and [email + PDF rendering](./tools/email-and-rendering.md).
+- **Real-time / outbound**: [SSE metrics stream](./api/observability.md) and [email + PDF rendering](./tools/email-and-rendering.md).
 - **Process model**: [Clustering & graceful shutdown](./theory/clustering.md).
 - **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
 - **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
@@ -87,7 +87,7 @@ Contract-first workflow: OpenAPI + AsyncAPI, codegen, mocks, and implementation 
 %%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}}}%%
 flowchart LR
     OpenSpec[openapi.yaml] --> Routes[Routes + middlewares]
-    AsyncSpec[asyncapi.yaml] --> Realtime[WebSocket + SSE contracts]
+    AsyncSpec[asyncapi.yaml] --> Realtime[SSE + event + queue contracts]
     Routes --> Controllers[Controllers]
     Controllers --> Services[Services]
     Services --> Repositories[Repositories]

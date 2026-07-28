@@ -117,19 +117,6 @@ const getClient = (): Promise<RedisClientType | void> => {
  */
 export const startCache = () => getClient();
 
-/*
- * Liveness ping for /readyz. Returns true only if Redis is reachable (or cache is disabled)
- */
-export const pingCache = (): Promise<boolean> => {
-    if (!isCacheEnabled()) return Promise.resolve(true);
-    return getClient()
-        .then((redisClient) => {
-            if (!redisClient) return false;
-            return redisClient.ping().then((reply) => reply === 'PONG');
-        })
-        .catch(() => false);
-};
-
 /**
  * Close Redis gracefully and forget the cached client so a later restart begins from a clean state.
  */

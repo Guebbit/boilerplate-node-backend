@@ -3,6 +3,7 @@ import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 import { getObservabilityHealth } from '@controllers/observability/get-observability-health';
 import { getObservabilityMetricsOverview } from '@controllers/observability/get-observability-metrics-overview';
 import { getObservabilityAuditLogs } from '@controllers/observability/get-observability-audit';
+import { getObservabilityLoadTest } from '@controllers/observability/get-observability-load-test';
 import { getPrometheusMetrics, metricsRegistry } from '@utils/observability';
 import { streamObservabilityMetrics } from '@utils/realtime-observability';
 import { logger } from '@utils/winston';
@@ -31,3 +32,7 @@ router.get('/metrics', (_request, response) => {
 router.get('/health', getAuth, isAuth, isAdmin, getObservabilityHealth);
 router.get('/metrics/overview', getAuth, isAuth, isAdmin, getObservabilityMetricsOverview);
 router.get('/audit', getAuth, isAuth, isAdmin, getObservabilityAuditLogs);
+
+/* Dev/staging only — synthetic CPU load generator for exercising dashboards and log pipelines. */
+if (process.env.NODE_ENV !== 'production')
+    router.get('/load-test', getAuth, isAuth, isAdmin, getObservabilityLoadTest);

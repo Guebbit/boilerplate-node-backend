@@ -51,4 +51,3 @@ flowchart LR
 - [Security](./security.md)
 - [API overview](../api/#rest-patterns-used-here)
 - [Email & PDF rendering](./email-and-rendering.md)
-- [WebSockets](./websockets.md)

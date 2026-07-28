@@ -78,14 +78,6 @@ export const getActiveSpanContext = (): {
 };
 
 /**
- * Attach extra attributes to the currently active span, if any.
- * Safe to call when no span is active — simply does nothing.
- */
-export const setActiveSpanAttributes = (attributes: Attributes): void => {
-    trace.getActiveSpan()?.setAttributes(attributes);
-};
-
-/**
  * Record an error on the currently active span without throwing.
  * Useful in error handlers that want to annotate the span but handle the error separately.
  */

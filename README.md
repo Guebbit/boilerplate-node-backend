@@ -16,7 +16,7 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
     - `NODE_SMTP_HOST`, `NODE_SMTP_PORT`, `NODE_SMTP_USER`, `NODE_SMTP_PASS`, `NODE_SMTP_SENDER`
 - Optional: use Docker/Podman to run the app and its dependencies.
 - IMPORTANT:
-    - Remove `controllers/_development` and `routes/_development` before production deployments if you do not want development-only endpoints in your build.
+    - Development-only endpoints (e.g. `GET /observability/load-test`) are gated behind `NODE_ENV !== 'production'` and are not registered in production builds.
 
 ## Quickstart
 
@@ -123,15 +123,10 @@ curl http://localhost:3000/observability/metrics
 
 ## Realtime examples
 
-### WebSocket chat (`/ws/chat`)
-
-- Connect to `ws://localhost:3000/ws/chat`
-- Join default room:
-    - `{"type":"chat:join","payload":{"username":"alice"}}`
-- Send a message:
-    - `{"type":"chat:message:send","payload":{"message":"hello"}}`
-
-Contracts are defined as AsyncAPI channels in `asyncapi.yaml` and generated into `src/types/asyncapi.ts`.
+Realtime here is **server → client only**, over Server-Sent Events. There is deliberately no
+WebSocket layer: SSE runs over plain HTTP, needs no upgrade handling, and survives clustering
+without a backplane. If you need client → server messaging over a persistent connection, add
+`ws` and an `'upgrade'` listener on the HTTP server returned by `startServer` (`src/app.ts`).
 
 ### SSE live metrics (`/observability/events`)
 
@@ -152,7 +147,7 @@ curl -N http://localhost:3000/observability/events
 - Async contract source of truth: `asyncapi.yaml`
 - OpenAPI + AsyncAPI split in this repo:
     - `openapi.yaml` documents REST endpoints and request/response contracts
-    - `asyncapi.yaml` documents event-driven contracts (WebSocket + SSE + ecommerce cart checkout)
+    - `asyncapi.yaml` documents event-driven contracts (SSE + ecommerce cart checkout + worker queues + cache pub/sub)
 
 ### Validate / view AsyncAPI
 
@@ -169,7 +164,7 @@ curl -N http://localhost:3000/observability/events
 - `npm run ts-check` - TypeScript type-check
 - `npm run lint` - lint checks
 - `npm run lint:asyncapi` - validate AsyncAPI contract
-- `npm run gen:asyncapi-types` - generate TypeScript types from asyncapi.yaml into `src/types/`
+- `npm run genasyncapi` - generate TypeScript types from asyncapi.yaml into `src/types/`
 - `npm run prettier:check` - prettier non-mutating formatting check
 - `npm run test` - unit + integration tests
 - `npm run test:unit` - unit tests
@@ -217,12 +212,13 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
 - Source of truth for async/realtime contracts: `asyncapi.yaml`
 - Generated TypeScript types live in `src/types/asyncapi.ts` and are re-exported from `src/types/`
 - Regenerate types after editing `asyncapi.yaml`:
-    - `npm run gen:asyncapi-types`
+    - `npm run genasyncapi`
 - This contract documents:
-    - WebSocket chat channels (`realtime.chat.*`)
     - SSE observability channels (`observability.*`)
     - Ecommerce cart checkout events (`ecommerce.cart.checked_out`)
-- All WebSocket/SSE/domain-event code imports types and channel-name constants from `src/types`
+    - RabbitMQ worker job queues (`worker.*`)
+    - Redis pub/sub cache invalidation (`cache.tags.invalidated`)
+- All SSE/domain-event/queue code imports types and channel-name constants from `src/types`
 
 ## Frontend/backend tandem sync discipline
 

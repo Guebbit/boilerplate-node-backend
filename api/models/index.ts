@@ -68,6 +68,8 @@ export * from './observabilityHealthResponse';
 export * from './observabilityHealthResponseEnvelope';
 export * from './observabilityHealthStatus';
 export * from './observabilityHealthSystem';
+export * from './observabilityLoadTestResponseEnvelope';
+export * from './observabilityLoadTestResult';
 export * from './observabilityMetricsLatency';
 export * from './observabilityMetricsSummary';
 export * from './observabilityMetricsSummaryAuth';

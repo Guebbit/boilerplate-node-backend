@@ -13,18 +13,15 @@ info:
         AsyncAPI contract for real-time/event-driven flows in this boilerplate.
 
         Implemented:
-        - WebSocket chat events over `/ws/chat`
         - SSE observability events over `/observability/events`
         - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
+        - RabbitMQ worker job queues (`worker.*`)
+        - Redis pub/sub cache invalidation (`cache.tags.invalidated`)
 defaultContentType: application/json
 tags:
     - name: implemented
       description: Contracts already implemented in the backend runtime.
 servers:
-    websocketLocal:
-        url: localhost:3000
-        protocol: ws
-        description: Local WebSocket server (`/ws/chat`).
     sseLocal:
         url: localhost:3000
         protocol: http
@@ -38,56 +35,6 @@ servers:
         protocol: redis
         description: Local Redis for pub/sub cache invalidation.
 channels:
-    realtime.chat.command.join:
-        description: Client command to join the default chat room.
-        publish:
-            operationId: websocketChatJoin
-            summary: Client sends a join command.
-            message:
-                $ref: '#/components/messages/ChatJoinCommand'
-    realtime.chat.command.message.send:
-        description: Client command to send a chat message.
-        publish:
-            operationId: websocketChatSendMessage
-            summary: Client sends a new chat message.
-            message:
-                $ref: '#/components/messages/ChatMessageSendCommand'
-    realtime.chat.event.user.joined:
-        description: Broadcast when a user joins (maps to `chat:system`).
-        subscribe:
-            operationId: websocketChatUserJoined
-            message:
-                $ref: '#/components/messages/ChatSystemUserJoinedEvent'
-    realtime.chat.event.user.left:
-        description: Broadcast when a user leaves (maps to `chat:system`).
-        subscribe:
-            operationId: websocketChatUserLeft
-            message:
-                $ref: '#/components/messages/ChatSystemUserLeftEvent'
-    realtime.chat.event.message.new:
-        description: Broadcast when a new message is emitted.
-        subscribe:
-            operationId: websocketChatMessageNew
-            message:
-                $ref: '#/components/messages/ChatMessageNewEvent'
-    realtime.chat.event.presence.updated:
-        description: Broadcast of chat room presence updates.
-        subscribe:
-            operationId: websocketChatPresenceUpdated
-            message:
-                $ref: '#/components/messages/ChatPresenceUpdatedEvent'
-    realtime.chat.event.joined:
-        description: Private acknowledgment sent to the joining client only (not broadcast).
-        subscribe:
-            operationId: websocketChatJoined
-            message:
-                $ref: '#/components/messages/ChatJoinedEvent'
-    realtime.chat.event.error:
-        description: Chat protocol validation/runtime error sent to a client.
-        subscribe:
-            operationId: websocketChatError
-            message:
-                $ref: '#/components/messages/ChatErrorEvent'
     observability.metrics.snapshot:
         description: Initial metrics snapshot sent on SSE connect.
         subscribe:
@@ -156,68 +103,6 @@ channels:
                 $ref: '#/components/messages/CacheTagsInvalidatedConsumeMessage'
 components:
     messages:
-        ChatJoinCommand:
-            name: ChatJoinCommand
-            messageId: realtime.chat.command.join
-            title: Chat join command
-            payload:
-                $ref: '#/components/schemas/ChatJoinCommand'
-        ChatMessageSendCommand:
-            name: ChatMessageSendCommand
-            messageId: realtime.chat.command.message.send
-            title: Chat message send command
-            payload:
-                $ref: '#/components/schemas/ChatMessageSendCommand'
-        ChatSystemUserJoinedEvent:
-            name: ChatSystemUserJoinedEvent
-            messageId: realtime.chat.event.user.joined
-            title: User joined room notice
-            payload:
-                $ref: '#/components/schemas/ChatSystemPayload'
-            examples:
-                - payload:
-                      type: chat:system
-                      payload:
-                          room: general
-                          message: alice joined general
-                          timestamp: '2026-01-01T12:00:00.000Z'
-        ChatSystemUserLeftEvent:
-            name: ChatSystemUserLeftEvent
-            messageId: realtime.chat.event.user.left
-            title: User left room notice
-            payload:
-                $ref: '#/components/schemas/ChatSystemPayload'
-            examples:
-                - payload:
-                      type: chat:system
-                      payload:
-                          room: general
-                          message: alice left general
-                          timestamp: '2026-01-01T12:05:00.000Z'
-        ChatMessageNewEvent:
-            name: ChatMessageNewEvent
-            messageId: realtime.chat.event.message.new
-            title: New chat message event
-            payload:
-                $ref: '#/components/schemas/ChatMessagePayload'
-        ChatPresenceUpdatedEvent:
-            name: ChatPresenceUpdatedEvent
-            messageId: realtime.chat.event.presence.updated
-            title: Chat room presence event
-            payload:
-                $ref: '#/components/schemas/ChatPresencePayload'
-        ChatErrorEvent:
-            name: ChatErrorEvent
-            messageId: realtime.chat.event.error
-            title: Chat error event
-            payload:
-                $ref: '#/components/schemas/ChatErrorEvent'
-        ChatJoinedEvent:
-            name: ChatJoinedEvent
-            messageId: realtime.chat.event.joined
-            title: Private join acknowledgment
-            payload:
-                $ref: '#/components/schemas/ChatJoinedEvent'
         MetricsSnapshotEvent:
             name: MetricsSnapshotEvent
             messageId: observability.metrics.snapshot
@@ -279,94 +164,6 @@ components:
             payload:
                 $ref: '#/components/schemas/CacheTagsInvalidatedPayload'
     schemas:
-        ChatSystemPayload:
-            type: object
-            required:
-                - type
-                - payload
-            properties:
-                type:
-                    type: string
-                    enum:
-                        - chat:system
-                payload:
-                    type: object
-                    required:
-                        - message
-                        - room
-                        - timestamp
-                    properties:
-                        message:
-                            type: string
-                        room:
-                            type: string
-                            enum:
-                                - general
-                        timestamp:
-                            type: string
-                            format: date-time
-                    additionalProperties: false
-            additionalProperties: false
-        ChatMessagePayload:
-            type: object
-            required:
-                - type
-                - payload
-            properties:
-                type:
-                    type: string
-                    enum:
-                        - chat:message
-                payload:
-                    type: object
-                    required:
-                        - id
-                        - username
-                        - room
-                        - message
-                        - timestamp
-                    properties:
-                        id:
-                            type: string
-                        username:
-                            type: string
-                        room:
-                            type: string
-                            enum:
-                                - general
-                        message:
-                            type: string
-                        timestamp:
-                            type: string
-                            format: date-time
-                    additionalProperties: false
-            additionalProperties: false
-        ChatPresencePayload:
-            type: object
-            required:
-                - type
-                - payload
-            properties:
-                type:
-                    type: string
-                    enum:
-                        - chat:presence
-                payload:
-                    type: object
-                    required:
-                        - room
-                        - users
-                    properties:
-                        room:
-                            type: string
-                            enum:
-                                - general
-                        users:
-                            type: array
-                            items:
-                                type: string
-                    additionalProperties: false
-            additionalProperties: false
         ObservabilityMetricsPayload:
             type: object
             required:
@@ -419,12 +216,8 @@ components:
                 realtime:
                     type: object
                     required:
-                        - websocketConnections
                         - sseClients
                     properties:
-                        websocketConnections:
-                            type: integer
-                            minimum: 0
                         sseClients:
                             type: integer
                             minimum: 0
@@ -498,95 +291,6 @@ components:
                     type: string
                     format: date-time
                     description: When the invalidation occurred.
-            additionalProperties: false
-        ChatJoinCommand:
-            type: object
-            required:
-                - type
-                - payload
-            properties:
-                type:
-                    type: string
-                    enum:
-                        - chat:join
-                payload:
-                    type: object
-                    required:
-                        - username
-                    properties:
-                        username:
-                            type: string
-                            minLength: 1
-                            maxLength: 32
-                        room:
-                            type: string
-                            enum:
-                                - general
-                    additionalProperties: false
-            additionalProperties: false
-        ChatMessageSendCommand:
-            type: object
-            required:
-                - type
-                - payload
-            properties:
-                type:
-                    type: string
-                    enum:
-                        - chat:message:send
-                payload:
-                    type: object
-                    required:
-                        - message
-                    properties:
-                        message:
-                            type: string
-                            minLength: 1
-                            maxLength: 500
-                    additionalProperties: false
-            additionalProperties: false
-        ChatJoinedEvent:
-            type: object
-            required:
-                - type
-                - payload
-            properties:
-                type:
-                    type: string
-                    enum:
-                        - chat:joined
-                payload:
-                    type: object
-                    required:
-                        - username
-                        - room
-                    properties:
-                        username:
-                            type: string
-                        room:
-                            type: string
-                            enum:
-                                - general
-                    additionalProperties: false
-            additionalProperties: false
-        ChatErrorEvent:
-            type: object
-            required:
-                - type
-                - payload
-            properties:
-                type:
-                    type: string
-                    enum:
-                        - chat:error
-                payload:
-                    type: object
-                    required:
-                        - message
-                    properties:
-                        message:
-                            type: string
-                    additionalProperties: false
             additionalProperties: false
         CartCheckedOutEvent:
             type: object

@@ -215,6 +215,23 @@ export const GetObservabilityAuditLogsResponse = zod.object({
 
 
 /**
+ * Dev/staging-only endpoint that busy-loops the event loop for a fixed amount of
+ * work while emitting log lines, so dashboards and log pipelines can be exercised
+ * under load. Not registered when `NODE_ENV=production`. Requires admin role.
+ * @summary Synthetic CPU load test
+ */
+export const GetObservabilityLoadTestResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+}).and(zod.object({
+  "data": zod.object({
+  "durationMs": zod.number().describe('Wall-clock time in ms spent on the synthetic CPU load')
+})
+}))
+
+
+/**
  * Returns the full profile of the currently authenticated user
  * @summary Current user info
  */

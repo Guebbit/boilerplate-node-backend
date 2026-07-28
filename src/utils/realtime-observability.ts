@@ -5,7 +5,6 @@ import {
     type TObservabilityChannel
 } from '@types';
 import { getHttpRequestCounters } from '@utils/observability';
-import { getActiveWebSocketConnections } from '@utils/realtime-chat';
 
 /** In-memory set of active SSE response objects — one entry per connected client. */
 const sseClients = new Set<Response>();
@@ -48,7 +47,6 @@ export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayloa
             totalErrors: counters.totalErrors
         },
         realtime: {
-            websocketConnections: getActiveWebSocketConnections(),
             sseClients: getActiveSseClients()
         }
     }));

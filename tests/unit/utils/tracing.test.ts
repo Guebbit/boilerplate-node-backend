@@ -7,7 +7,6 @@
  *  - withSpan: error path records the exception and re-throws
  *  - getActiveSpanContext: returns IDs when a span is active
  *  - getActiveSpanContext: returns undefined when no span is active
- *  - setActiveSpanAttributes: sets attributes on the active span
  *  - recordErrorOnActiveSpan: marks the span as error and records exception
  */
 
@@ -17,13 +16,7 @@ import {
     SimpleSpanProcessor,
     NodeTracerProvider
 } from '@opentelemetry/sdk-trace-node';
-import {
-    getTracer,
-    withSpan,
-    getActiveSpanContext,
-    setActiveSpanAttributes,
-    recordErrorOnActiveSpan
-} from '@utils/tracer';
+import { getTracer, withSpan, getActiveSpanContext, recordErrorOnActiveSpan } from '@utils/tracer';
 
 // ---------------------------------------------------------------------------
 // Test tracer provider + in-memory exporter (no full SDK needed in tests)
@@ -169,37 +162,6 @@ describe('getActiveSpanContext', () => {
             expect(result.spanId).toMatch(/^[\da-f]{16}$/);
             span.end();
         });
-    });
-});
-
-// ---------------------------------------------------------------------------
-// setActiveSpanAttributes
-// ---------------------------------------------------------------------------
-
-describe('setActiveSpanAttributes', () => {
-    let exporter: InMemorySpanExporter;
-    let provider: NodeTracerProvider;
-
-    beforeEach(() => {
-        ({ exporter, provider } = setupTestProvider());
-    });
-
-    afterEach(async () => {
-        await teardownTestProvider(provider);
-    });
-
-    it('does not throw when no span is active', () => {
-        expect(() => setActiveSpanAttributes({ key: 'value' })).not.toThrow();
-    });
-
-    it('sets attributes on the active span', async () => {
-        await getTracer().startActiveSpan('attr-span', async (span) => {
-            setActiveSpanAttributes({ dynamicAttr: 'hello' });
-            span.end();
-        });
-        const spans = exporter.getFinishedSpans();
-        const span = spans.find((s) => s.name === 'attr-span');
-        expect(span?.attributes['dynamicAttr']).toBe('hello');
     });
 });
 

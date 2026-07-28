@@ -42,7 +42,7 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 | `lint:openapi` / `lint:openapi:fix`        | lint OpenAPI contract with Spectral                       | [OpenAPI Workflow](../api/openapi-workflow.md)   |
 | `genapi`                                   | regenerate derived `api/` client code from `openapi.yaml` | [OpenAPI Workflow](../api/openapi-workflow.md)   |
 | `lint:asyncapi`                            | validate `asyncapi.yaml`                                  | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
-| `gen:asyncapi-types`                       | regenerate async TS types from `asyncapi.yaml`            | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
+| `genasyncapi`                              | regenerate async TS types from `asyncapi.yaml`            | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
 | `docs:asyncapi`                            | open AsyncAPI Studio locally                              | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
 | `docs:dev` / `docs:build` / `docs:preview` | local docs authoring, production build, and preview       | [Testing & Docs](./testing-and-docs.md)          |
 

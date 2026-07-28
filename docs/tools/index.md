@@ -19,7 +19,6 @@ flowchart LR
     subgraph Async["Async + outbound"]
         Rabbit[RabbitMQ\nmessage queue]
         Mail[Email & PDF\nnodemailer · Puppeteer]
-        Ws[WebSockets\nws + SSE]
     end
 
     subgraph Obs["Observability"]
@@ -48,7 +47,7 @@ flowchart LR
     classDef obs fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef project fill:#fce7f3,stroke:#db2777,color:#111827;
     class Runtime,Security,Mongo,Redis core;
-    class Rabbit,Mail,Ws async;
+    class Rabbit,Mail async;
     class Winston,Prometheus,OTel,Tempo,Loki,Grafana,PostHog obs;
     class Testing,Dependencies,Scripts,Containers project;
 ```
@@ -64,7 +63,6 @@ flowchart LR
 | Core          | **[Redis Cache](./redis-cache.md)**                         | Optional in-memory response cache with tag-based invalidation and multi-instance pub/sub sync.                                 |
 | Async         | **[Email & PDF Rendering](./email-and-rendering.md)**       | Nodemailer + EJS for transactional email; Puppeteer for async PDF generation (invoices).                                       |
 | Async         | **[RabbitMQ](./rabbitmq.md)**                               | Message queue for fire-and-forget jobs: controllers publish, background workers consume independently.                         |
-| Async         | **[WebSockets](./websockets.md)**                           | Real-time bidirectional messaging (ws) and one-way server-sent events (SSE) scaffolding.                                       |
 | Observability | **[Observability Reference](./observability-reference.md)** | Full picture of logs, metrics, traces, and dashboards as one system — start here.                                              |
 | Observability | **[Winston](./winston.md)**                                 | Structured request and app logs forwarded to Loki; `trace_id` injected per request.                                            |
 | Observability | **[Prometheus](./prometheus.md)**                           | Numeric time-series: request rates, latency histograms, business counters, alert rules.                                        |

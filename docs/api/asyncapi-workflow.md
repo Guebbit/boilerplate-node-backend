@@ -9,7 +9,6 @@ For this boilerplate, keep REST and async contracts separate:
 
 Current scope of `asyncapi.yaml`:
 
-- WebSocket chat channels (`realtime.chat.*`)
 - SSE observability channels (`observability.*`)
 - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
 - RabbitMQ worker queues (`worker.email.send`, `worker.pdf.generate`)
@@ -19,7 +18,6 @@ Current scope of `asyncapi.yaml`:
 
 | Name | Protocol | Purpose |
 |------|----------|---------|
-| `websocketLocal` | `ws` | WebSocket chat |
 | `sseLocal` | `http` | SSE observability stream |
 | `rabbitmqLocal` | `amqp` | Async job queues (email, PDF) |
 | `redisLocal` | `redis` | Pub/sub cache invalidation |
@@ -30,14 +28,14 @@ Types are generated from `asyncapi.yaml` into `src/types/asyncapi.ts` by a custo
 They are re-exported from `src/types/index.ts` so all app code can import them consistently:
 
 ```ts
-import type { IChatMessagePayload, IEmailJobPayload, IPdfJobPayload } from '@types';
+import type { IObservabilityMetricsPayload, IEmailJobPayload, IPdfJobPayload } from '@types';
 import { WORKER_CHANNELS, CACHE_CHANNELS } from '@types';
 ```
 
 Regenerate types after editing `asyncapi.yaml`:
 
 ```bash
-npm run gen:asyncapi-types
+npm run genasyncapi
 ```
 
 The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `js-yaml`, converts each `components.schemas` entry into a TypeScript interface, and writes the result to `src/types/asyncapi.ts`.
@@ -50,9 +48,9 @@ The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `js-y
 ## Commands used in this repo
 
 ```bash
-npm run lint:asyncapi       # validate asyncapi.yaml
-npm run gen:asyncapi-types  # regenerate src/types/asyncapi.ts
-npm run docs:asyncapi       # open AsyncAPI Studio in browser
+npm run lint:asyncapi   # validate asyncapi.yaml
+npm run genasyncapi     # regenerate src/types/asyncapi.ts
+npm run docs:asyncapi   # open AsyncAPI Studio in browser
 ```
 
 ## How this complements OpenAPI
@@ -80,13 +78,13 @@ The subscriber is started during app boot and stopped during graceful shutdown. 
 
 ## Naming convention
 
-Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`). These names are used as event identifiers at runtime (SSE event names, WebSocket event types, domain event names).
+Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`). These names are used as event identifiers at runtime (SSE event names, queue names, domain event names).
 
 ## Realtime event names
 
-All SSE and WebSocket event names used at runtime come from the `CHAT_CHANNELS`, `OBSERVABILITY_CHANNELS`, and `ECOMMERCE_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
+All SSE and domain event names used at runtime come from the `OBSERVABILITY_CHANNELS` and `ECOMMERCE_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
 There are no handwritten duplicate string constants — `asyncapi.yaml` is the single source of truth.
 
 ## CI enforcement
 
-CI runs `lint:asyncapi` and `gen:asyncapi-types`, then verifies `src/types/asyncapi.ts` has no uncommitted changes. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails.
+CI runs `lint:asyncapi` and `genasyncapi`, then verifies `src/types/asyncapi.ts` has no uncommitted changes. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails.

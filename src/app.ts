@@ -41,7 +41,6 @@ import { router as userRoutes } from './routes/users';
 import { router as observabilityRoutes } from './routes/observability';
 import { router as feedbackRoutes } from './routes/feedback';
 import { router as systemRoutes } from './routes';
-import { handleWebSocketUpgrade } from './routes/websocket';
 
 import { MulterError } from 'multer';
 import { ExtendedError } from '@utils/helpers-errors';
@@ -96,9 +95,6 @@ export const startServer = () => {
                         activeServer = server;
                         resolve(server);
                     });
-                    server.on('upgrade', (request, socket, head) =>
-                        handleWebSocketUpgrade(request, socket, head)
-                    );
                 })
         );
 };

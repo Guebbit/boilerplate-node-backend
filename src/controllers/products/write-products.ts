@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
+import { coerceStringArray } from '@guebbit/js-toolkit';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@utils/response';
 import { resolveImageUrl } from '@utils/helpers-uploads';
 import { deleteFile } from '@utils/helpers-filesystem';
-import { extractStringList } from '@utils/helpers-request';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
@@ -43,8 +43,8 @@ export const writeProducts = (
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-    const categories = extractStringList((request.body as { categories?: unknown }).categories);
-    const tags = extractStringList((request.body as { tags?: unknown }).tags);
+    const categories = coerceStringArray((request.body as { categories?: unknown }).categories);
+    const tags = coerceStringArray((request.body as { tags?: unknown }).tags);
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 

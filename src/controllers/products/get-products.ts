@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import { coerceStringArray } from '@guebbit/js-toolkit';
 import {
     SearchProductsBody,
     searchProductsBodyPageDefault,
@@ -10,7 +11,7 @@ import {
 } from '@api/schemas.zod';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, extractStringList, mergeBodyQuery } from '@utils/helpers-request';
+import { extractId, mergeBodyQuery } from '@utils/helpers-request';
 import type { SearchProductsRequest } from '@types';
 import type { CastError } from 'mongoose';
 import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
@@ -65,8 +66,8 @@ export const getProducts = (
         request.query as Record<string, string> | undefined
     );
     // OpenAPI currently models category/tag as single-value filters; if arrays/CSV are provided we pick the first one.
-    const category = extractStringList(merged.category)[0];
-    const tag = extractStringList(merged.tag)[0];
+    const category = coerceStringArray(merged.category)[0];
+    const tag = coerceStringArray(merged.tag)[0];
     const id = extractId(request.params.id, merged.id as string | undefined);
 
     const parseResult = searchProductsQuerySchema.safeParse({ ...merged, id, category, tag });

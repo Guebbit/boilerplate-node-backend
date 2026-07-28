@@ -34,7 +34,7 @@ flowchart LR
 | Need | Go to |
 | --- | --- |
 | Change the contract and related tooling | [OpenAPI Workflow](./openapi-workflow.md) |
-| Change WebSocket/SSE/event contracts | [AsyncAPI Workflow](./asyncapi-workflow.md) |
+| Change SSE/event/queue contracts | [AsyncAPI Workflow](./asyncapi-workflow.md) |
 | Understand route style and response patterns | [REST patterns used here](#rest-patterns-used-here) |
 | Understand the app layers behind the API | [Theory / Layers](../theory/layers.md) |
 | Understand runtime, cache, and observability tools around the API | [Tools](../tools/) |

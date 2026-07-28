@@ -3,10 +3,10 @@
  * Generates src/types/asyncapi.ts from asyncapi.yaml using @asyncapi/modelina.
  *
  * Modelina handles schema-to-TypeScript conversion for all named component
- * schemas. Channel name constants and application-level union types are
- * appended as custom code since modelina does not produce those.
+ * schemas. Channel name constants are appended as custom code since modelina
+ * does not produce those.
  *
- * Usage: npm run gen:asyncapi-types
+ * Usage: npm run genasyncapi
  */
 import { TypeScriptGenerator, typeScriptDefaultModelNameConstraints } from '@asyncapi/modelina';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -44,13 +44,12 @@ interface AsyncApiDoc {
 const { channels } = yaml.load(specText) as AsyncApiDoc;
 const channelKeys = Object.keys(channels ?? {});
 
-const chatChannels = channelKeys.filter((k) => k.startsWith('realtime.chat.'));
 const observabilityChannels = channelKeys.filter((k) => k.startsWith('observability.'));
 const ecommerceChannels = channelKeys.filter((k) => k.startsWith('ecommerce.'));
 const workerChannels = channelKeys.filter((k) => k.startsWith('worker.'));
 const cacheChannels = channelKeys.filter((k) => k.startsWith('cache.'));
 
-/* 'realtime.chat.event.user.joined' → 'EVENT_USER_JOINED' */
+/* 'realtime.demo.event.broadcast' → 'EVENT_BROADCAST' */
 const toConstKey = (channelName: string, prefix: string): string =>
     channelName.replace(prefix, '').replace(/[._]/g, '_').replace(/^_/, '').toUpperCase();
 
@@ -68,19 +67,13 @@ generator.generate(specText).then((models) => {
     const header = [
         '/* eslint-disable @typescript-eslint/naming-convention */',
         '// GENERATED — do not edit manually.',
-        '// Source: asyncapi.yaml  |  Regenerate: npm run gen:asyncapi-types',
+        '// Source: asyncapi.yaml  |  Regenerate: npm run genasyncapi',
         ''
     ];
 
     const channelSection = [
         '// Channel name constants (canonical identifiers from asyncapi.yaml)',
         '',
-        renderConstGroup(
-            'CHAT_CHANNELS',
-            chatChannels,
-            'realtime.chat.',
-            'WebSocket chat channel names'
-        ),
         renderConstGroup(
             'OBSERVABILITY_CHANNELS',
             observabilityChannels,
@@ -131,27 +124,7 @@ generator.generate(specText).then((models) => {
         ''
     ];
 
-    const appTypes = [
-        '// Application-level union types',
-        '',
-        '/* Default chat room — mirrors the enum constraint in asyncapi.yaml */',
-        "export const DEFAULT_CHAT_ROOM = 'general' as const;",
-        'export type TChatRoom = typeof DEFAULT_CHAT_ROOM;',
-        '',
-        '/* All event types a chat client can send to the server */',
-        'export type TChatClientEvent = IChatJoinCommand | IChatMessageSendCommand;',
-        '',
-        '/* All event types the server can push to a chat client */',
-        'export type TChatServerEvent =',
-        '    | IChatSystemPayload',
-        '    | IChatMessagePayload',
-        '    | IChatPresencePayload',
-        '    | IChatJoinedEvent',
-        '    | IChatErrorEvent;',
-        ''
-    ];
-
-    const output = [...header, ...channelSection, ...modelSection, ...appTypes].join('\n');
+    const output = [...header, ...channelSection, ...modelSection].join('\n');
     writeFileSync(OUTPUT, output, 'utf8');
     console.log(`✓ Generated ${OUTPUT}`);
 });
