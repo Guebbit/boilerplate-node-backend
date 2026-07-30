@@ -1,5 +1,5 @@
-import { consumeFromQueue, isQueueEnabled } from '@utils/queue';
-import { logger } from '@utils/winston';
+import { consumeFromQueue, isQueueEnabled } from '@core/adapters/queue';
+import { logger } from '@core/adapters/logger';
 import { EMAIL_QUEUE, handleEmailJob } from './email.worker';
 import { PDF_QUEUE, handlePdfJob } from './pdf.worker';
 

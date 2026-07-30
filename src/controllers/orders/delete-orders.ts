@@ -3,9 +3,9 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from 'i18next';
 import type { CastError } from 'mongoose';
 import { orderService } from '@services/orders';
-import { rejectResponse, successResponse } from '@utils/response';
-import { extractAndValidateId } from '@utils/helpers-request';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { rejectResponse, successResponse } from '@core/http/response';
+import { extractAndValidateId } from '@core/http/request';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
  * DELETE /orders — delete an order by id in the request body (admin).

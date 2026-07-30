@@ -1,16 +1,16 @@
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import {
     getHttpRequestCounters,
     httpInflightRequests,
     getLatencyPercentiles
-} from '@utils/observability';
+} from '@core/observability/metrics-http';
 import {
     authLoginTotal,
     authSignupTotal,
     cartCheckoutTotal,
     orderCreatedTotal
-} from '@utils/domain-metrics';
+} from '@core/observability/metrics-domain';
 
 /**
  * Sum values for a specific label across a prom-client metric result.

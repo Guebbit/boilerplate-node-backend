@@ -1,7 +1,11 @@
 import type { Request, Response } from 'express';
 import { cartService } from '@services/cart';
-import { successResponse, rejectResponse } from '@utils/response';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import { successResponse, rejectResponse } from '@core/http/response';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
 
 /**
  * GET /cart

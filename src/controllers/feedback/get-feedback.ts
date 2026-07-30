@@ -2,10 +2,10 @@ import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import type { CastError } from 'mongoose';
 import type { SearchFeedbackRequestsRequest } from '@types';
-import { extractRequestPagination } from '@utils/helpers-request';
-import { rejectResponse, successResponse } from '@utils/response';
+import { extractRequestPagination } from '@core/http/request';
+import { rejectResponse, successResponse } from '@core/http/response';
 import { feedbackRequestService } from '@services/feedback-requests';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 

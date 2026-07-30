@@ -3,9 +3,9 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from 'i18next';
 import type { CastError } from 'mongoose';
 import { userService } from '@services/users';
-import { rejectResponse, successResponse } from '@utils/response';
-import { extractAndValidateId, extractHardDelete } from '@utils/helpers-request';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { rejectResponse, successResponse } from '@core/http/response';
+import { extractAndValidateId, extractHardDelete } from '@core/http/request';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
  * DELETE /users — delete a user by id in the request body (admin).

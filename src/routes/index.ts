@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { successResponse } from '@utils/response';
+import { successResponse } from '@core/http/response';
 
 export const router = Router();
 

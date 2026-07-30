@@ -2,10 +2,14 @@ import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { cartService } from '@services/cart';
-import { successResponse, rejectResponse } from '@utils/response';
-import { cartCheckoutTotal } from '@utils/domain-metrics';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
-import { emitDomainEvent } from '@utils/domain-events';
+import { successResponse, rejectResponse } from '@core/http/response';
+import { cartCheckoutTotal } from '@core/observability/metrics-domain';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
+import { emitDomainEvent } from '@core/observability/events';
 
 /**
  * POST /cart/checkout

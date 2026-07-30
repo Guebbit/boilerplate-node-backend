@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
-import { logger } from '@utils/winston';
-import { getRouteLabel } from '@utils/observability';
-import { getActiveSpanContext } from '@utils/tracer';
+import { logger } from '@core/adapters/logger';
+import { getRouteLabel } from '@core/observability/metrics-http';
+import { getActiveSpanContext } from '@core/observability/tracer';
 
 /**
  * Express middleware that emits one access-log entry per request.

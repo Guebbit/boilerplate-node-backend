@@ -7,13 +7,13 @@ import {
     generateSuccess,
     type IResponseReject,
     type IResponseSuccess
-} from '@utils/response';
-import { deleteFile } from '@utils/helpers-filesystem';
+} from '@core/http/response';
+import { deleteFile } from '@core/adapters/filesystem';
 import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
-import { normalizePagination, addTextFilter, paginatedSearch } from '@utils/search-helpers';
+import { normalizePagination, addTextFilter, paginatedSearch } from '@repositories/search';
 
 /**
  * Product Service

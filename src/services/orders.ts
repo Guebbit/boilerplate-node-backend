@@ -8,7 +8,7 @@ import {
     generateSuccess,
     type IResponseReject,
     type IResponseSuccess
-} from '@utils/response';
+} from '@core/http/response';
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
 

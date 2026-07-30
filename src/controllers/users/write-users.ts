@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { userService } from '@services/users';
-import { successResponse, rejectResponse } from '@utils/response';
-import { resolveImageUrl } from '@utils/helpers-uploads';
-import { deleteFile } from '@utils/helpers-filesystem';
+import { successResponse, rejectResponse } from '@core/http/response';
+import { resolveImageUrl } from '@core/http/uploads';
+import { deleteFile } from '@core/adapters/filesystem';
 import type {
     CreateUserRequest,
     CreateUserRequestMultipart,
@@ -14,7 +14,7 @@ import type {
     User
 } from '@types';
 import type { IUser } from '@models/users';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
  * POST /users — create a new user (admin).

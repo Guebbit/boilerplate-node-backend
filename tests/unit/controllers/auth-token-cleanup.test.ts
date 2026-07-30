@@ -1,10 +1,10 @@
 import { postLogin } from '@controllers/account/post-login';
 import { getRefreshToken } from '@controllers/account/get-refresh-token';
 import { authService } from '@services/auth';
-import { runTokenCleanup } from '@utils/token-cleanup';
+import { runTokenCleanup } from '@jobs/token-cleanup';
 import { createAccessToken } from '@middlewares/auth-jwt';
 
-jest.mock('@utils/token-cleanup', () => ({
+jest.mock('@jobs/token-cleanup', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     runTokenCleanup: jest.fn()
@@ -27,7 +27,7 @@ jest.mock('@middlewares/auth-jwt', () => ({
     createAccessToken: jest.fn()
 }));
 
-jest.mock('@utils/response', () => ({
+jest.mock('@core/http/response', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     successResponse: jest.fn(),

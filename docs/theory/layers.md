@@ -25,15 +25,26 @@ flowchart TD
 
 ## Quick map
 
-| Layer        | Folder             | Main job                                                                                                                                               |
-| ------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Routes       | `src/routes`       | match URLs and attach middleware                                                                                                                       |
-| Middlewares  | `src/middlewares`  | auth, authorization, rate limit, request guards                                                                                                        |
-| Controllers  | `src/controllers`  | parse request, call services, send response                                                                                                            |
-| Services     | `src/services`     | business rules and orchestration                                                                                                                       |
-| Repositories | `src/repositories` | persistence queries                                                                                                                                    |
-| Models       | `src/models`       | [Mongoose](../tools/mongodb-mongoose.md) schema/types                                                                                                  |
-| Utils        | `src/utils`        | shared helpers: [cache](../tools/redis-cache.md), [logs](../tools/winston.md), [metrics](../tools/prometheus.md), [tracing](../tools/opentelemetry.md) |
+| Layer        | Folder             | Main job                                              |
+| ------------ | ------------------ | ----------------------------------------------------- |
+| Routes       | `src/routes`       | match URLs and attach middleware                      |
+| Middlewares  | `src/middlewares`  | auth, authorization, rate limit, request guards       |
+| Controllers  | `src/controllers`  | parse request, call services, send response           |
+| Services     | `src/services`     | business rules and orchestration                      |
+| Repositories | `src/repositories` | persistence queries                                   |
+| Models       | `src/models`       | [Mongoose](../tools/mongodb-mongoose.md) schema/types |
+| Jobs         | `src/jobs`         | scheduled/background tasks not tied to a request      |
+| Core         | `src/core`         | technical substrate — see below                       |
+
+`src/core` is the bottom of the dependency graph: it may be imported by any
+layer above, and may never import from them. ESLint enforces this.
+
+| Folder               | Main job                                                                                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/bootstrap`     | runs once at startup: env validation, DB connect, [OTel SDK](../tools/opentelemetry.md), graceful shutdown                                                              |
+| `core/adapters`      | clients owning an external connection: [cache](../tools/redis-cache.md), [queue](../tools/rabbitmq.md), mailer, storage, [logger](../tools/winston.md), filesystem, PDF |
+| `core/observability` | [metrics](../tools/prometheus.md), [tracing](../tools/opentelemetry.md) helpers, audit, analytics, domain events, SSE stream                                            |
+| `core/http`          | Express-coupled request/response helpers                                                                                                                                |
 
 ## How to read a feature
 

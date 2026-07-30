@@ -1,11 +1,11 @@
 import 'dotenv/config';
 import { Types } from 'mongoose';
-import { start, connection } from '@utils/database';
+import { start, connection } from '@core/bootstrap/database';
 import { userRepository } from '@repositories/users';
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
 import type { IOrderDocument } from '@models/orders';
-import { logger } from '@utils/winston';
+import { logger } from '@core/adapters/logger';
 
 const reset = process.argv.includes('--reset');
 

@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import { upload } from '@utils/multer';
+import { upload } from '@core/adapters/storage';
 import { getProducts } from '@controllers/products/get-products';
 import { writeProducts } from '@controllers/products/write-products';
 import { deleteProducts } from '@controllers/products/delete-products';
 import { getProductItem } from '@controllers/products/get-product-item';
-import { invalidateCache, setCache } from '@utils/helpers-response';
+import { invalidateCache, setCache } from '@middlewares/cache';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();

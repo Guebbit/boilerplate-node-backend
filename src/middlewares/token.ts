@@ -8,8 +8,8 @@ import {
     getAccessTokenTTL,
     getExpiryTime,
     getExpiryTimeMilliseconds
-} from '@utils/token-config';
-import type { ERefreshTokenExpiryTime } from '@utils/token-config';
+} from '@services/auth-tokens';
+import type { ERefreshTokenExpiryTime } from '@services/auth-tokens';
 
 /*
  * Token Service — JWT creation and verification only.
@@ -24,7 +24,7 @@ export {
     ERefreshTokenExpiryTime,
     getExpiryTime,
     getExpiryTimeMilliseconds
-} from '@utils/token-config';
+} from '@services/auth-tokens';
 
 /*
  * Verify an access token (stateless JWT check only).

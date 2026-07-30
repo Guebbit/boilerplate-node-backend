@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import { upload } from '@utils/multer';
+import { upload } from '@core/adapters/storage';
 import { getUsers } from '@controllers/users/get-users';
 import { writeUsers } from '@controllers/users/write-users';
 import { deleteUsers } from '@controllers/users/delete-users';
 import { getUserItem } from '@controllers/users/get-user-item';
-import { invalidateCache, setCache } from '@utils/helpers-response';
+import { invalidateCache, setCache } from '@middlewares/cache';
 
 /** Express router for user management (admin only). */
 export const router = Router();

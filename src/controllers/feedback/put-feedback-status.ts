@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { UpdateFeedbackRequestStatusBody } from '@api/schemas.zod';
-import { rejectResponse, successResponse } from '@utils/response';
+import { rejectResponse, successResponse } from '@core/http/response';
 import type { UpdateFeedbackRequestStatusRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
  * Built on the orval-generated UpdateFeedbackRequestStatusBody (kept in sync

@@ -6,7 +6,7 @@ import {
     generateReject,
     type IResponseSuccess,
     type IResponseReject
-} from '@utils/response';
+} from '@core/http/response';
 import { zodUserSchema } from '@models/users';
 import type { IUserDocument, IUser } from '@models/users';
 import type { SearchUsersRequest } from '@types';
@@ -16,7 +16,7 @@ import {
     addTextFilter,
     addRegexFilter,
     paginatedSearch
-} from '@utils/search-helpers';
+} from '@repositories/search';
 
 /**
  * User Admin Service

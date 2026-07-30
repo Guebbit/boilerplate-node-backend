@@ -8,12 +8,16 @@ import {
     createAccessToken,
     ERefreshTokenExpiryTime
 } from '@middlewares/auth-jwt';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { LoginRequest } from '@types';
-import { runTokenCleanup } from '@utils/token-cleanup';
-import { authLoginTotal } from '@utils/domain-metrics';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import { runTokenCleanup } from '@jobs/token-cleanup';
+import { authLoginTotal } from '@core/observability/metrics-domain';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
 
 /**
  * Emit login failure observability (metrics + audit).

@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { defaultObservabilityContext } from '@utils/observability-context';
+import { defaultObservabilityContext } from '@core/observability/context';
 
 /**
  * Attaches the default observability context to every request.

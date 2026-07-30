@@ -1,5 +1,5 @@
 import type { IAuthContext } from './types/auth-context';
-import type { IObservabilityContext } from './utils/observability-context';
+import type { IObservabilityContext } from '@core/observability/context';
 
 declare module 'express-serve-static-core' {
     interface Request {

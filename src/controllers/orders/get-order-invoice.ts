@@ -2,10 +2,10 @@ import path from 'node:path';
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { orderService } from '@services/orders';
-import { rejectResponse } from '@utils/response';
-import { userScope } from '@utils/helpers-scopes';
+import { rejectResponse } from '@core/http/response';
+import { userScope } from '@core/http/scopes';
 import ejs from 'ejs';
-import { renderHtmlToPdf } from '@utils/helpers-pdf';
+import { renderHtmlToPdf } from '@core/adapters/pdf';
 
 /**
  * GET /orders/:id/invoice

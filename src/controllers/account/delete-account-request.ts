@@ -2,10 +2,10 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
-import { successResponse, rejectResponse } from '@utils/response';
-import { enqueueEmail } from '@utils/nodemailer';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { authAccountDeleteTotal } from '@utils/domain-metrics';
+import { successResponse, rejectResponse } from '@core/http/response';
+import { enqueueEmail } from '@core/adapters/mailer';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import { authAccountDeleteTotal } from '@core/observability/metrics-domain';
 
 /**
  * DELETE /account

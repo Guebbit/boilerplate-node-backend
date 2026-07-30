@@ -1,7 +1,7 @@
 import type { SendMailOptions } from 'nodemailer';
 import type { IEmailJobPayload } from '@types';
-import { nodemailer } from '@utils/nodemailer';
-import { logger } from '@utils/winston';
+import { nodemailer } from '@core/adapters/mailer';
+import { logger } from '@core/adapters/logger';
 
 /*
  * Queue name for email jobs

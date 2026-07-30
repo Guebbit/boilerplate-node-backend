@@ -107,7 +107,7 @@ Fixed `ObjectId` values are used so the data is repeatable and predictable acros
 
 ## External references
 
-- [Mongoose plugins](https://mongoosejs.com/docs/plugins.html) — used in `src/utils/database.ts` for query metrics
+- [Mongoose plugins](https://mongoosejs.com/docs/plugins.html) — used in `src/core/bootstrap/database.ts` for query metrics
 - [migrate-mongo usage](https://github.com/seppevs/migrate-mongo#usage)
 
 ## Related pages

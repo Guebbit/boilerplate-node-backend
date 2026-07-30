@@ -3,7 +3,7 @@ import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 import { postFeedbackContact } from '@controllers/feedback/post-feedback-contact';
 import { getFeedback } from '@controllers/feedback/get-feedback';
 import { putFeedbackStatus } from '@controllers/feedback/put-feedback-status';
-import { invalidateCache, setCache } from '@utils/helpers-response';
+import { invalidateCache, setCache } from '@middlewares/cache';
 
 /** Express router for feedback/contact endpoints (public contact form; admin read/update). */
 export const router = Router();

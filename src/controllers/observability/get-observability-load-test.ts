@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { getExecTime } from '@guebbit/js-toolkit';
-import { logger } from '@utils/winston';
-import { successResponse } from '@utils/response';
+import { logger } from '@core/adapters/logger';
+import { successResponse } from '@core/http/response';
 
 /**
  * GET /observability/load-test

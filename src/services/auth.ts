@@ -9,8 +9,8 @@ import {
     generateReject,
     type IResponseSuccess,
     type IResponseReject
-} from '@utils/response';
-import { databaseErrorInterpreter } from '@utils/helpers-errors';
+} from '@core/http/response';
+import { databaseErrorInterpreter } from '@core/http/errors';
 import { zodUserSchema } from '@models/users';
 import { ETokenType } from '@models/users';
 import type { IUserDocument } from '@models/users';

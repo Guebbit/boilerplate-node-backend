@@ -1,0 +1,295 @@
+/**
+ * RabbitMQ (AMQP 0-9-1) adapter.
+ *
+ * Like the cache adapter, every function degrades to a no-op when the broker is not
+ * configured — `publishToQueue` returns `false` and callers fall back to doing the work
+ * inline (see `adapters/mailer.ts` → `enqueueEmail`).
+ *
+ * See: docs/tools/rabbitmq.md
+ */
+
+// `amqplib` is the AMQP 0-9-1 client. Key concepts used below:
+//  - `ChannelModel` — the TCP *connection* to the broker (expensive; one per process).
+//  - `Channel` — a lightweight multiplexed session inside that connection; all commands
+//    (assertQueue/sendToQueue/consume/ack) are issued on a channel, never on the connection.
+//  - `ConsumeMessage` — a delivered message: `.content` (Buffer) plus delivery metadata,
+//    including the delivery tag that `ack`/`nack` reference.
+import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
+import { logger } from '@core/adapters/logger';
+
+// ─── Configuration ────────────────────────────────────────────────────────────
+
+/**
+ * Build the AMQP connection URL from env vars.
+ *
+ * Same two-mode pattern as Redis/Mongo: a ready-made URL wins, otherwise assemble one from
+ * fragments. `guest`/`guest` are RabbitMQ's built-in defaults, which only work over localhost.
+ * Returns `undefined` when nothing is configured — the signal that the queue is off.
+ */
+const getAmqpUrl = (): string | undefined => {
+    if (process.env.NODE_RABBITMQ_URL) return process.env.NODE_RABBITMQ_URL;
+    if (!process.env.NODE_RABBITMQ_PORT) return;
+
+    const host = process.env.NODE_RABBITMQ_HOST ?? '127.0.0.1';
+    const port = process.env.NODE_RABBITMQ_PORT;
+    const user = process.env.NODE_RABBITMQ_USER ?? 'guest';
+    const pass = process.env.NODE_RABBITMQ_PASS ?? 'guest';
+    return `amqp://${user}:${pass}@${host}:${port}`;
+};
+
+/**
+ * Returns true when RabbitMQ is configured and not explicitly disabled.
+ *
+ * Exported (unlike the cache equivalent) because callers branch on it *before* building a
+ * payload — see `enqueueEmail`, which sends inline rather than constructing a job envelope.
+ */
+export const isQueueEnabled = (): boolean =>
+    Boolean(getAmqpUrl()) && process.env.NODE_RABBITMQ_ENABLED !== '0';
+
+// ─── Connection state ─────────────────────────────────────────────────────────
+
+/** The single TCP connection to the broker. Kept so shutdown can close it. */
+let connection: ChannelModel | undefined;
+
+/** Shared channel for all publish/consume traffic in this process. */
+let channel: Channel | undefined;
+
+/** In-flight connect, shared by concurrent callers to avoid a connection storm. */
+let connectPromise: Promise<Channel | void> | undefined;
+
+/** One-shot flag so an unreachable broker does not log once per publish. */
+let connectionWarningLogged = false;
+
+/** Log the first failure only; reset on a successful connect so later outages are visible. */
+const logConnectionWarning = (error: unknown) => {
+    if (connectionWarningLogged) return;
+    logger.warn({
+        message: 'RabbitMQ unavailable, queue operations will be skipped.',
+        error: error instanceof Error ? error.message : String(error)
+    });
+    connectionWarningLogged = true;
+};
+
+// ─── Connection management ────────────────────────────────────────────────────
+
+/**
+ * Lazily connect to RabbitMQ and return a shared channel.
+ *
+ * Resolving with `void` (instead of rejecting) is what makes every public function in this
+ * file a safe no-op when the broker is absent.
+ */
+const getChannel = (): Promise<Channel | void> => {
+    if (!isQueueEnabled()) return Promise.resolve();
+    // Reuse the live channel — creating one per publish leaks channels on the broker.
+    if (channel) return Promise.resolve(channel);
+    // Join an in-flight attempt rather than opening a second connection.
+    if (connectPromise) return connectPromise;
+
+    const url = getAmqpUrl();
+    if (!url) return Promise.resolve();
+
+    connectPromise = amqplib
+        // Opens the TCP connection and performs the AMQP handshake (auth + vhost negotiation).
+        .connect(url)
+        .then((conn) => {
+            connection = conn;
+            // Mandatory: amqplib connections are EventEmitters, and an unhandled 'error'
+            // (broker restart, network drop) would take the process down.
+            connection.on('error', logConnectionWarning);
+            // On close, forget the cached handles so the *next* `getChannel()` reconnects.
+            // This is the whole reconnect strategy — driven by demand, no background loop.
+            connection.on('close', () => {
+                channel = undefined;
+                connection = undefined;
+            });
+            // Channels are cheap and multiplexed over the one connection; this is where all
+            // actual AMQP commands are issued.
+            return conn.createChannel();
+        })
+        .then((ch) => {
+            channel = ch;
+            // Connection is healthy again — re-arm the warning for a future outage.
+            connectionWarningLogged = false;
+            return ch;
+        })
+        .catch((error: unknown) => {
+            // Swallow: publish/consume callers treat void as "queue unavailable".
+            logConnectionWarning(error);
+            return;
+        })
+        .finally(() => {
+            // Always clear, so a failed attempt does not poison subsequent calls.
+            connectPromise = undefined;
+        });
+
+    return connectPromise;
+};
+
+/**
+ * Warm up RabbitMQ connection during app startup.
+ * Pays the handshake cost at boot instead of on the first user request.
+ */
+export const startQueue = (): Promise<void> => getChannel().then(() => {});
+
+/**
+ * Gracefully close the RabbitMQ connection.
+ *
+ * Closing the connection implicitly closes its channels, so there is no separate
+ * `channel.close()` here.
+ */
+export const stopQueue = (): Promise<void> => {
+    const conn = connection;
+    if (!conn) return Promise.resolve();
+
+    return (
+        conn
+            // Flushes pending frames, then closes. Unacked messages are requeued by the broker
+            // for another consumer — the reason `prefetch` is kept low (see `consumeFromQueue`).
+            .close()
+            // Already-dead socket: nothing to salvage, and we are exiting anyway.
+            .catch(() => {})
+            .finally(() => {
+                channel = undefined;
+                connection = undefined;
+                connectPromise = undefined;
+            })
+    );
+};
+
+// ─── Publish ──────────────────────────────────────────────────────────────────
+
+export interface IPublishOptions {
+    /** Queue name to publish to. */
+    queue: string;
+    /** Message payload (will be JSON-serialized). */
+    payload: unknown;
+    /** Make queue survive broker restarts. Default: true. */
+    durable?: boolean;
+    /** Make message persistent. Default: true. */
+    persistent?: boolean;
+}
+
+/**
+ * Publish a message to a queue.
+ * No-op when RabbitMQ is not configured.
+ *
+ * @returns `true` when the broker accepted the message, `false` when the queue is
+ *          unavailable — callers use this to decide whether to fall back to inline work.
+ *
+ * Publishes to the *default exchange* (empty name), where the routing key is taken as a
+ * literal queue name. That is the simplest AMQP topology: no exchange/binding setup needed.
+ */
+export const publishToQueue = (options: IPublishOptions): Promise<boolean> =>
+    getChannel().then((ch) => {
+        if (!ch) return false;
+
+        // Destructure with defaults here (rather than in the interface) so both call paths —
+        // explicit options and omitted options — go through the same durable-by-default choice.
+        const { queue, payload, durable = true, persistent = true } = options;
+
+        return (
+            ch
+                // `assertQueue` is idempotent: it creates the queue if missing, or verifies the
+                // existing one matches. Called on every publish so producer and consumer can
+                // start in any order — but note it *throws* (killing the channel) if the queue
+                // already exists with different settings.
+                .assertQueue(queue, {
+                    // `durable` = the queue definition survives a broker restart.
+                    durable
+                })
+                .then(() =>
+                    // `sendToQueue(queue, content, options)` — content must be a Buffer, so the
+                    // payload is JSON-serialized here and parsed back in `consumeFromQueue`.
+                    ch.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), {
+                        // `persistent` = the *message* is written to disk. Both this and a
+                        // `durable` queue are required to survive a restart: a durable queue
+                        // with transient messages comes back empty.
+                        persistent
+                    })
+                )
+            // `sendToQueue` returns a boolean: false means amqplib's internal write buffer is
+            // full (backpressure) and the caller should wait for the channel's 'drain' event.
+            // This is surfaced to the caller as-is rather than handled.
+        );
+    });
+
+// ─── Consume ──────────────────────────────────────────────────────────────────
+
+export interface IConsumeOptions {
+    /** Queue name to consume from. */
+    queue: string;
+    /** Handler called for each message. Return true to ack, false to nack. */
+    handler: (message: unknown, raw: ConsumeMessage) => Promise<boolean>;
+    /** Make queue survive broker restarts. Default: true. */
+    durable?: boolean;
+    /** Number of unacknowledged messages allowed at once. Default: 1. */
+    prefetch?: number;
+}
+
+/**
+ * Register a consumer on a queue.
+ * No-op when RabbitMQ is not configured.
+ *
+ * Acknowledgement policy, which is the important part of this function:
+ *  - handler resolves `true`  → `ack`  — done, broker deletes the message
+ *  - handler resolves `false` → `nack` without requeue — permanent business rejection
+ *  - handler *throws*         → `nack` with requeue — assumed transient, try again
+ *  - unparseable message      → `nack` without requeue — will never parse, so requeuing loops
+ *
+ * Caveat worth knowing: requeue-on-throw can spin hot if the failure is actually permanent.
+ * A dead-letter exchange is the usual fix once volume justifies it.
+ */
+export const consumeFromQueue = (options: IConsumeOptions): Promise<void> =>
+    getChannel().then((ch) => {
+        if (!ch) return;
+
+        const { queue, handler, durable = true, prefetch = 1 } = options;
+
+        return (
+            ch
+                // Same idempotent declaration as on the publish side — the consumer may boot first.
+                .assertQueue(queue, { durable })
+                // `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the
+                // broker hands over the next message only after the current one is acked, which
+                // gives fair round-robin across replicas instead of one worker hoarding a batch.
+                .then(() => ch.prefetch(prefetch))
+                .then(() =>
+                    // `consume` registers the callback and returns a consumerTag (unused here,
+                    // since the consumer lives for the whole process lifetime).
+                    ch.consume(queue, (incoming) => {
+                        // `null` is delivered when the consumer is cancelled broker-side
+                        // (queue deleted, channel closing) — nothing to ack.
+                        if (!incoming) return;
+
+                        let parsed: unknown;
+                        try {
+                            // `.content` is a Buffer; `toString()` assumes UTF-8 JSON, matching
+                            // what `publishToQueue` writes.
+                            parsed = JSON.parse(incoming.content.toString());
+                        } catch {
+                            // Malformed message — reject without requeue.
+                            // `nack(message, allUpTo, requeue)`: allUpTo=false rejects only this
+                            // delivery, requeue=false discards it. Requeuing would loop forever
+                            // since the bytes will never become valid JSON.
+                            logger.warn({ message: 'Queue message parse failed, nacking.', queue });
+                            ch.nack(incoming, false, false);
+                            return;
+                        }
+
+                        // The handler's boolean *is* the ack decision — see the policy above.
+                        handler(parsed, incoming)
+                            .then((ack) => {
+                                // `ack` removes the message from the queue permanently.
+                                if (ack) ch.ack(incoming);
+                                // Handled but refused: drop it (requeue=false).
+                                else ch.nack(incoming, false, false);
+                            })
+                            // Thrown error = presumed transient (DB down, SMTP timeout), so
+                            // requeue=true puts it back for another attempt.
+                            .catch(() => ch.nack(incoming, false, true));
+                    })
+                )
+                // Discard the consumerTag reply; callers only need "consumer registered".
+                .then(() => {})
+        );
+    });

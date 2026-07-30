@@ -1,12 +1,16 @@
 import type { Request, Response } from 'express';
 import { CreateOrderBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { CreateOrderRequest } from '@types';
-import { enqueueEmail } from '@utils/nodemailer';
-import { orderCreatedTotal } from '@utils/domain-metrics';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import { enqueueEmail } from '@core/adapters/mailer';
+import { orderCreatedTotal } from '@core/observability/metrics-domain';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
 
 /**
  * POST /orders

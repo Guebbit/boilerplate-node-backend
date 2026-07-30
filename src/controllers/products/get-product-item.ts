@@ -1,9 +1,13 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { productService } from '@services/products';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { CastError } from 'mongoose';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
 
 /**
  * GET /products/:id

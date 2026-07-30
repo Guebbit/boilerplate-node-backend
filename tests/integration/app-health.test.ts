@@ -9,7 +9,7 @@ import express from 'express';
 
 import { router as systemRoutes } from '../../src/routes';
 import { router as observabilityRoutes } from '../../src/routes/observability';
-import { rejectResponse } from '../../src/utils/response';
+import { rejectResponse } from '@core/http/response';
 
 const app = express();
 app.use(express.json());

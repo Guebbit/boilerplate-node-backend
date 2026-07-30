@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 import { createAccessToken } from '@middlewares/auth-jwt';
-import { rejectResponse, successResponse } from '@utils/response';
-import { runTokenCleanup } from '@utils/token-cleanup';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { authRefreshTotal } from '@utils/domain-metrics';
+import { rejectResponse, successResponse } from '@core/http/response';
+import { runTokenCleanup } from '@jobs/token-cleanup';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import { authRefreshTotal } from '@core/observability/metrics-domain';
 
 /**
  * GET /account/refresh

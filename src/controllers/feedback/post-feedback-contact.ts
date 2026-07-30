@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateFeedbackRequestBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@utils/response';
-import { enqueueEmail } from '@utils/nodemailer';
-import { logger } from '@utils/winston';
+import { successResponse, rejectResponse } from '@core/http/response';
+import { enqueueEmail } from '@core/adapters/mailer';
+import { logger } from '@core/adapters/logger';
 import type { CreateFeedbackRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
 

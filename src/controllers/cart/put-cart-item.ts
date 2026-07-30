@@ -2,10 +2,14 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { UpdateCartItemByIdRequest } from '@types';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
-import { extractCustomId, isValidObjectId } from '@utils/helpers-request';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
+import { extractCustomId, isValidObjectId } from '@core/http/request';
 
 /**
  * PUT /cart/:productId

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { cartService } from '@services/cart';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 
 /**
  * GET /cart/summary

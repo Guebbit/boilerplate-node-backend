@@ -1,6 +1,10 @@
 import type { Request, Response } from 'express';
-import { rejectResponse, successResponse } from '@utils/response';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import { rejectResponse, successResponse } from '@core/http/response';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
 
 /**
  * GET /account

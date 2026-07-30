@@ -5,8 +5,8 @@ import {
     generateReject,
     type IResponseSuccess,
     type IResponseReject
-} from '@utils/response';
-import { databaseErrorInterpreter } from '@utils/helpers-errors';
+} from '@core/http/response';
+import { databaseErrorInterpreter } from '@core/http/errors';
 import type { IOrderDocument } from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
@@ -18,7 +18,7 @@ import {
     toIdString,
     type ICartItemDto,
     type IUserCartDto
-} from '@utils/dto-cart';
+} from '@services/cart.dto';
 
 /**
  * Cart Service

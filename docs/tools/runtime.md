@@ -7,7 +7,7 @@
 | [Node.js](https://nodejs.org/en/docs) (≥ 22)         | JavaScript runtime      | language platform; see also [Clustering](../theory/clustering.md) |
 | [Express 5](https://expressjs.com/)                  | REST transport layer    | routes + middleware pipeline in `src/app.ts`                      |
 | [Zod](https://zod.dev/)                              | validation and coercion | service and schema helpers                                        |
-| [Multer](https://github.com/expressjs/multer#readme) | multipart/file uploads  | upload-aware endpoints via `src/utils/multer.ts`                  |
+| [Multer](https://github.com/expressjs/multer#readme) | multipart/file uploads  | upload-aware endpoints via `src/core/adapters/storage.ts`         |
 | [i18next](https://www.i18next.com/)                  | translations/messages   | shared locale-backed text from `src/locales/`                     |
 | [dotenv](https://github.com/motdotla/dotenv#readme)  | env loading             | reads `.env` into `process.env` at boot                           |
 | [TypeScript](https://www.typescriptlang.org/docs/)   | static types            | source language                                                   |

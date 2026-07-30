@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
-import { successResponse } from '@utils/response';
+import { successResponse } from '@core/http/response';
 import { ETokenType } from '@models/users';
 import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 import { authService } from '@services/auth';
 
 /**

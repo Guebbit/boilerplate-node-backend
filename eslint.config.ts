@@ -204,7 +204,8 @@ export default tseslint.config(
                         '@models/*',
                         '@repositories/*',
                         '@services/*',
-                        '@utils/*',
+                        '@core/*',
+                        '@jobs/*',
                         '../../src/app',
                         '../../src/cluster',
                         '../../src/controllers/*',
@@ -213,7 +214,33 @@ export default tseslint.config(
                         '../../src/repositories/*',
                         '../../src/routes/*',
                         '../../src/services/*',
-                        '../../src/utils/*'
+                        '../../src/core/*',
+                        '../../src/jobs/*'
+                    ]
+                }
+            ]
+        }
+    },
+
+    /**
+     * `src/core/**` is the technical substrate: bootstrap, adapters,
+     * observability and HTTP plumbing. It is the bottom of the dependency
+     * graph and must never reach up into application code — that inversion is
+     * what turned the old `src/utils/` into a dumping ground.
+     */
+    {
+        files: ['src/core/**/*.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    patterns: [
+                        '@controllers/*',
+                        '@services/*',
+                        '@repositories/*',
+                        '@models/*',
+                        '@jobs/*',
+                        '@middlewares/*'
                     ]
                 }
             ]

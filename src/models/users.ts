@@ -1,7 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
-import { logger } from '@utils/winston';
+import { logger } from '@core/adapters/logger';
 import { type User } from '@types';
 export { zodUserSchema } from './user-validation';
 

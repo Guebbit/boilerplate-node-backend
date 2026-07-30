@@ -7,7 +7,7 @@
 | `logger`      | normal application logs (request access logs, errors, warnings)       | JSON in production/test, pretty + colour in dev |
 | `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                     |
 
-Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/utils/winston.ts`.
+Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/core/adapters/logger.ts`.
 
 ## What an access log looks like
 
@@ -44,7 +44,7 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 ## Audit events
 
-`emitAuditEvent` (in `src/utils/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login.succeeded`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
+`emitAuditEvent` (in `src/core/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login.succeeded`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
 
 ```json
 {

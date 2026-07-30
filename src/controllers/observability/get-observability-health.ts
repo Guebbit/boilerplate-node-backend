@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import os from 'node:os';
-import { successResponse } from '@utils/response';
+import { successResponse } from '@core/http/response';
 
 /*
  * Map mongoose readyState integer to the spec enum values.

@@ -2,8 +2,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { userRepository } from '@repositories/users';
 import type { IToken } from '@models/users';
 import { verifyAccessToken } from './auth-jwt';
-import { rejectResponse } from '@utils/response';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { rejectResponse } from '@core/http/response';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
  * Get token (and strip it from "Bearer" prefix)

@@ -1,14 +1,18 @@
 import type { Request, Response } from 'express';
 import { authService } from '@services/auth';
-import { successResponse, rejectResponse } from '@utils/response';
-import { resolveImageUrl } from '@utils/helpers-uploads';
-import { deleteFile } from '@utils/helpers-filesystem';
+import { successResponse, rejectResponse } from '@core/http/response';
+import { resolveImageUrl } from '@core/http/uploads';
+import { deleteFile } from '@core/adapters/filesystem';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
-import { databaseErrorInterpreter } from '@utils/helpers-errors';
-import { authSignupTotal } from '@utils/domain-metrics';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
+import { databaseErrorInterpreter } from '@core/http/errors';
+import { authSignupTotal } from '@core/observability/metrics-domain';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
 
 /**
  * POST /account/signup

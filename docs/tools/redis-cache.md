@@ -5,7 +5,7 @@
 [Redis](https://redis.io/docs/latest/) is used as an **optional server-side cache** for repeated GET responses.
 It makes repeated reads cheaper without becoming required for the API to work.
 
-The repo uses the official [`redis`](https://github.com/redis/node-redis) Node client; cache helpers live in `src/utils/cache.ts`.
+The repo uses the official [`redis`](https://github.com/redis/node-redis) Node client; cache helpers live in `src/core/adapters/cache.ts`.
 
 ## Cache flow
 
@@ -47,7 +47,7 @@ flowchart LR
 **Redis as a cache store** keeps response data for fast reads.  
 **Redis as a pub/sub bus** synchronises which keys to evict across all instances.
 
-The publisher (`broadcastCacheInvalidation`) and subscriber (`subscribeCacheInvalidation`) both live in `src/utils/cache.ts`.
+The publisher (`broadcastCacheInvalidation`) and subscriber (`subscribeCacheInvalidation`) both live in `src/core/adapters/cache.ts`.
 
 - The subscriber is started automatically on app boot (after Redis connects) and stopped during graceful shutdown.
 - The publisher is called automatically by the `invalidateCache` middleware after every successful write.

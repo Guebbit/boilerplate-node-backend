@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { userService } from '@services/users';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { CastError } from 'mongoose';
 
 /**

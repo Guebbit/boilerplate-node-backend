@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@utils/response';
-import { getAuditBuffer } from '@utils/audit';
+import { successResponse, rejectResponse } from '@core/http/response';
+import { getAuditBuffer } from '@core/observability/audit';
 
 /**
  * GET /observability/audit

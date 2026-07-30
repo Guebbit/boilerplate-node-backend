@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
-import { rejectResponse, successResponse } from '@utils/response';
-import { databaseErrorInterpreter } from '@utils/helpers-errors';
+import { rejectResponse, successResponse } from '@core/http/response';
+import { databaseErrorInterpreter } from '@core/http/errors';
 import { userModel as Users } from '@models/users';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { authTokenCleanupTotal } from '@utils/domain-metrics';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import { authTokenCleanupTotal } from '@core/observability/metrics-domain';
 
 /**
  * DELETE /account/tokens/expired

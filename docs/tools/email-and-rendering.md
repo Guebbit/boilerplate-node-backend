@@ -11,7 +11,7 @@ Both are optional: they only activate when the relevant env vars / browser binar
 
 | Concern        | File                                                             |
 | -------------- | ---------------------------------------------------------------- |
-| SMTP transport | `src/utils/nodemailer.ts`                                        |
+| SMTP transport | `src/core/adapters/mailer.ts`                                    |
 | Email triggers | `src/controllers/account/post-reset-request.ts` (password reset) |
 | HTML templates | `views/*.ejs`                                                    |
 | PDF rendering  | `src/controllers/orders/get-order-invoice.ts`                    |

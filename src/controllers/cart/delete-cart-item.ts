@@ -1,11 +1,15 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { cartService } from '@services/cart';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { RemoveCartItemRequest } from '@types';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { extractCustomId, isValidObjectId } from '@utils/helpers-request';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import { extractCustomId, isValidObjectId } from '@core/http/request';
 
 /**
  * DELETE /cart/:productId

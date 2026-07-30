@@ -3,10 +3,14 @@ import { t } from 'i18next';
 import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { productService } from '@services/products';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { UpsertCartItemRequest } from '@types';
-import { emitAnalyticsEvent, AnalyticsEvent, buildAnalyticsBase } from '@utils/analytics';
-import { isValidObjectId } from '@utils/helpers-request';
+import {
+    emitAnalyticsEvent,
+    AnalyticsEvent,
+    buildAnalyticsBase
+} from '@core/observability/analytics';
+import { isValidObjectId } from '@core/http/request';
 
 /**
  * POST /cart

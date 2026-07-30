@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { requestLogger } from '@middlewares/request-logger';
 
-jest.mock('@utils/winston', () => ({
+jest.mock('@core/adapters/logger', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     logger: {
@@ -12,19 +12,19 @@ jest.mock('@utils/winston', () => ({
     }
 }));
 
-jest.mock('@utils/observability', () => ({
+jest.mock('@core/observability/metrics-http', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     getRouteLabel: () => '/products'
 }));
 
-jest.mock('@utils/tracer', () => ({
+jest.mock('@core/observability/tracer', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     getActiveSpanContext: () => ({ traceId: 'trace-xyz', spanId: 'span-abc' })
 }));
 
-import { logger } from '@utils/winston';
+import { logger } from '@core/adapters/logger';
 
 const mockLog = logger.log as jest.MockedFunction<typeof logger.log>;
 

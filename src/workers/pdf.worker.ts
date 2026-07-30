@@ -1,8 +1,8 @@
 import path from 'node:path';
 import ejs from 'ejs';
 import type { IPdfJobPayload } from '@types';
-import { logger } from '@utils/winston';
-import { renderHtmlToPdf } from '@utils/helpers-pdf';
+import { logger } from '@core/adapters/logger';
+import { renderHtmlToPdf } from '@core/adapters/pdf';
 
 /*
  * Queue name for PDF generation jobs

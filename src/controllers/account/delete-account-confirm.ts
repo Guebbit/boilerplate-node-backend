@@ -3,11 +3,11 @@ import { t } from 'i18next';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { AccountDeleteConfirmRequest } from '@types';
-import { enqueueEmail } from '@utils/nodemailer';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@utils/analytics';
+import { enqueueEmail } from '@core/adapters/mailer';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import { emitAnalyticsEvent, AnalyticsEvent } from '@core/observability/analytics';
 
 /**
  * DELETE /account/delete-confirm

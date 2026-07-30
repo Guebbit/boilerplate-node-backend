@@ -2,9 +2,9 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
  * PUT /orders — update an order by id in the request body (admin).

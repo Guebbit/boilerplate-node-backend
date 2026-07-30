@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import { upload } from '@utils/multer';
+import { upload } from '@core/adapters/storage';
 import { getAccount } from '@controllers/account/get-account';
 import { postLogin } from '@controllers/account/post-login';
 import { postSignup } from '@controllers/account/post-signup';
@@ -11,7 +11,7 @@ import { postLogoutEverywhere } from '@controllers/account/post-logout-everywher
 import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
 import { deleteAccountRequest } from '@controllers/account/delete-account-request';
 import { deleteAccountConfirm } from '@controllers/account/delete-account-confirm';
-import { invalidateCache, setCache } from '@utils/helpers-response';
+import { invalidateCache, setCache } from '@middlewares/cache';
 
 /** Express router for account/auth endpoints (login, signup, password reset, token refresh). */
 export const router = Router();

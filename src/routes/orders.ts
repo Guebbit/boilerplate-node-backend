@@ -6,7 +6,7 @@ import { putOrders } from '@controllers/orders/put-orders';
 import { deleteOrders } from '@controllers/orders/delete-orders';
 import { getOrderItem } from '@controllers/orders/get-order-item';
 import { getOrderInvoice } from '@controllers/orders/get-order-invoice';
-import { invalidateCache, setCache } from '@utils/helpers-response';
+import { invalidateCache, setCache } from '@middlewares/cache';
 
 /** Express router for order management (authenticated; non-admin users see only their own orders). */
 export const router = Router();

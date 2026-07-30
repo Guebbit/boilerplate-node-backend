@@ -2,10 +2,10 @@ import { deleteAccountRequest } from '@controllers/account/delete-account-reques
 import { deleteAccountConfirm } from '@controllers/account/delete-account-confirm';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
-import { enqueueEmail } from '@utils/nodemailer';
-import { successResponse, rejectResponse } from '@utils/response';
-import { emitAuditEvent } from '@utils/audit';
-import { authAccountDeleteTotal } from '@utils/domain-metrics';
+import { enqueueEmail } from '@core/adapters/mailer';
+import { successResponse, rejectResponse } from '@core/http/response';
+import { emitAuditEvent } from '@core/observability/audit';
+import { authAccountDeleteTotal } from '@core/observability/metrics-domain';
 
 jest.mock('@services/users', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -25,20 +25,20 @@ jest.mock('@services/auth', () => ({
     }
 }));
 
-jest.mock('@utils/nodemailer', () => ({
+jest.mock('@core/adapters/mailer', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     enqueueEmail: jest.fn()
 }));
 
-jest.mock('@utils/response', () => ({
+jest.mock('@core/http/response', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     successResponse: jest.fn(),
     rejectResponse: jest.fn()
 }));
 
-jest.mock('@utils/audit', () => ({
+jest.mock('@core/observability/audit', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     emitAuditEvent: jest.fn(),
@@ -49,7 +49,7 @@ jest.mock('@utils/audit', () => ({
     buildAuditEvent: jest.fn().mockReturnValue({})
 }));
 
-jest.mock('@utils/analytics', () => ({
+jest.mock('@core/observability/analytics', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     emitAnalyticsEvent: jest.fn(),
@@ -58,7 +58,7 @@ jest.mock('@utils/analytics', () => ({
     }
 }));
 
-jest.mock('@utils/domain-metrics', () => ({
+jest.mock('@core/observability/metrics-domain', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     authAccountDeleteTotal: { inc: jest.fn() }

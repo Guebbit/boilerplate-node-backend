@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // OTel must initialize before express/http/mongoose are imported.
-import { startTracing } from '@utils/tracing';
+import { startTracing } from '@core/bootstrap/otel-sdk';
 startTracing();
 
 import 'dotenv/config';
@@ -13,24 +13,24 @@ import i18next from 'i18next';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { start } from '@utils/database';
-import { startCache, subscribeCacheInvalidation } from '@utils/cache';
-import { startQueue } from '@utils/queue';
+import { start } from '@core/bootstrap/database';
+import { startCache, subscribeCacheInvalidation } from '@core/adapters/cache';
+import { startQueue } from '@core/adapters/queue';
 import { registerWorkers } from './workers';
-import { logger, auditLogger } from '@utils/winston';
+import { logger, auditLogger } from '@core/adapters/logger';
 import { rateLimiter } from '@middlewares/security';
 import { requestLogger } from '@middlewares/request-logger';
 import { attachObservability } from '@middlewares/observability';
-import { rejectResponse } from '@utils/response';
-import { validateRequiredEnvironment } from '@utils/environment';
+import { rejectResponse } from '@core/http/response';
+import { validateRequiredEnvironment } from '@core/bootstrap/environment';
 import {
     getRouteLabel,
     recordRequestMetric,
     incrementInflight,
     decrementInflight
-} from '@utils/observability';
-import { getActiveSpanContext, recordErrorOnActiveSpan } from '@utils/tracer';
-import { shutdownInfra, registerSignalHandlers } from '@utils/server-lifecycle';
+} from '@core/observability/metrics-http';
+import { getActiveSpanContext, recordErrorOnActiveSpan } from '@core/observability/tracer';
+import { shutdownInfra, registerSignalHandlers } from '@core/bootstrap/server-lifecycle';
 import enTranslation from './locales/en.json';
 
 import { router as productRoutes } from './routes/products';
@@ -43,7 +43,7 @@ import { router as feedbackRoutes } from './routes/feedback';
 import { router as systemRoutes } from './routes';
 
 import { MulterError } from 'multer';
-import { ExtendedError } from '@utils/helpers-errors';
+import { ExtendedError } from '@core/http/errors';
 
 /**
  * Server start

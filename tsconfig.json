@@ -11,7 +11,8 @@
             "@repositories/*": ["./src/repositories/*"],
             "@models/*": ["./src/models/*"],
             "@middlewares/*": ["./src/middlewares/*"],
-            "@utils/*": ["./src/utils/*"]
+            "@jobs/*": ["./src/jobs/*"],
+            "@core/*": ["./src/core/*"]
         },
         "strict": true,
         "composite": true,

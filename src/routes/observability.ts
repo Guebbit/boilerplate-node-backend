@@ -4,9 +4,9 @@ import { getObservabilityHealth } from '@controllers/observability/get-observabi
 import { getObservabilityMetricsOverview } from '@controllers/observability/get-observability-metrics-overview';
 import { getObservabilityAuditLogs } from '@controllers/observability/get-observability-audit';
 import { getObservabilityLoadTest } from '@controllers/observability/get-observability-load-test';
-import { getPrometheusMetrics, metricsRegistry } from '@utils/observability';
-import { streamObservabilityMetrics } from '@utils/realtime-observability';
-import { logger } from '@utils/winston';
+import { getPrometheusMetrics, metricsRegistry } from '@core/observability/metrics-http';
+import { streamObservabilityMetrics } from '@core/observability/stream';
+import { logger } from '@core/adapters/logger';
 
 /** Express router for observability endpoints mounted at /observability. */
 export const router = Router();

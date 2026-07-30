@@ -7,7 +7,7 @@ import { putCartItem } from '@controllers/cart/put-cart-item';
 import { deleteCart } from '@controllers/cart/delete-cart';
 import { deleteCartItem } from '@controllers/cart/delete-cart-item';
 import { postCheckout } from '@controllers/cart/post-checkout';
-import { invalidateCache } from '@utils/helpers-response';
+import { invalidateCache } from '@middlewares/cache';
 
 /** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();

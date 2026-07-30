@@ -5,11 +5,11 @@ import { createProduct, makeProduct } from '../../helpers/factories/products';
 import * as productService from '@services/products';
 import * as productRepository from '@repositories/products';
 import * as userRepository from '@repositories/users';
-import type { IResponseSuccess, IResponseReject } from '@utils/response';
-import type { IUserCartDto } from '@utils/dto-cart';
+import type { IResponseSuccess, IResponseReject } from '@core/http/response';
+import type { IUserCartDto } from '@services/cart.dto';
 
 // Mock the filesystem helper so tests never touch the real disk.
-jest.mock('@utils/helpers-filesystem', () => ({
+jest.mock('@core/adapters/filesystem', () => ({
     deleteFile: jest.fn().mockResolvedValue(true)
 }));
 
@@ -228,7 +228,7 @@ describe('productService.updateById', () => {
 
     it('updates the imageUrl and triggers deleteFile for the old image', async () => {
         const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
-            '@utils/helpers-filesystem'
+            '@core/adapters/filesystem'
         );
 
         const product = await createProduct({ imageUrl: '/images/old.jpg' });

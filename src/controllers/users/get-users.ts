@@ -7,8 +7,8 @@ import {
     searchUsersBodyPageSizeMax
 } from '@api/schemas.zod';
 import { userService } from '@services/users';
-import { rejectResponse, successResponse } from '@utils/response';
-import { extractId, mergeBodyQuery } from '@utils/helpers-request';
+import { rejectResponse, successResponse } from '@core/http/response';
+import { extractId, mergeBodyQuery } from '@core/http/request';
 import type { SearchUsersRequest } from '@types';
 import type { CastError } from 'mongoose';
 

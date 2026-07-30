@@ -3,11 +3,11 @@ import { t } from 'i18next';
 import { RequestPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
-import { successResponse, rejectResponse } from '@utils/response';
+import { successResponse, rejectResponse } from '@core/http/response';
 import type { PasswordResetRequest } from '@types';
-import { enqueueEmail } from '@utils/nodemailer';
-import { emitAuditEvent, AuditAction, buildAuditEvent } from '@utils/audit';
-import { authPasswordResetTotal } from '@utils/domain-metrics';
+import { enqueueEmail } from '@core/adapters/mailer';
+import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
+import { authPasswordResetTotal } from '@core/observability/metrics-domain';
 
 /**
  * POST /account/reset-request
