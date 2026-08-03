@@ -51,6 +51,22 @@ export const zodProductSchema = CreateProductBody.extend({
 });
 
 /**
+ * Normalizes a serialized product: `_id` → `id`, drops `__v`.
+ * Exported so lean/aggregate results (which bypass `toJSON`) can be mapped
+ * through the same logic — see @services/products `search()`.
+ */
+export const applyProductTransform = (
+    serialized: Record<string, unknown>
+): Record<string, unknown> => {
+    if (serialized._id) {
+        serialized.id = serialized._id.toString();
+        delete serialized._id;
+    }
+    delete serialized.__v;
+    return serialized;
+};
+
+/**
  * Mongoose Schema for the Product model
  */
 export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>(
@@ -91,6 +107,13 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
         timestamps: true
     }
 );
+
+productSchema.set('toJSON', {
+    virtuals: true,
+    versionKey: false,
+    transform: (_document, serialized) =>
+        applyProductTransform(serialized as unknown as Record<string, unknown>)
+});
 
 /**
  * Mongoose model for product CRUD operations.

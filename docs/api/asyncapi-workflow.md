@@ -38,7 +38,27 @@ Regenerate types after editing `asyncapi.yaml`:
 npm run genasyncapi
 ```
 
-The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `js-yaml`, converts each `components.schemas` entry into a TypeScript interface, and writes the result to `src/types/asyncapi.ts`.
+The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
+
+### Shared with the frontend
+
+This script is **byte-identical** to `scripts/gen-asyncapi-types.ts` in `boilerplate-vue-frontend`
+(PROPOSAL §5, option B — the frontend's generator was the more capable one and became the shared
+implementation). Only the output path differs, and it comes from `--out` in each repo's
+`genasyncapi` script:
+
+| Repo | Command |
+| --- | --- |
+| Backend | `tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.ts` |
+| Frontend | `tsx scripts/gen-asyncapi-types.ts --out src/types/realtime.generated.ts` |
+
+Because the input (`asyncapi.yaml`) is also identical, the two generated files are identical too —
+`diff` proves it. It emits a superset of what either side uses: the backend consumes
+`OBSERVABILITY_CHANNELS` / `TObservabilityChannel` and the payload interfaces, the frontend
+consumes `ISseEventPayloadMap` for per-event typing. The unused exports are type-only on the
+backend and tree-shaken in the frontend bundle.
+
+**If you change this script, copy it to the other repo.** Nothing enforces it automatically.
 
 ## Tooling used here
 

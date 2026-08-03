@@ -71,6 +71,8 @@ export const postSignup = (
                 distinctId: newUserId,
                 event: AnalyticsEvent.USER_SIGNED_UP
             });
+            // create() returns the in-memory document; the schema's toJSON transform
+            // strips the hashed password before it ever reaches res.json
             successResponse(response, result.data, 201);
         })
         .catch((error: CastError | Error) => {

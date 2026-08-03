@@ -10,7 +10,7 @@ import {
 } from '@core/http/response';
 import { deleteFile } from '@core/adapters/filesystem';
 import { cartService } from '@services/cart';
-import { zodProductSchema } from '@models/products';
+import { zodProductSchema, applyProductTransform } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
 import { normalizePagination, addTextFilter, paginatedSearch } from '@repositories/search';
@@ -94,11 +94,18 @@ export const search = (
         where.deletedAt = { $exists: false };
     }
 
-    return paginatedSearch(productRepository, where, pagination);
+    // findAll is lean — plain objects mislabeled IProductDocument, same as before this change;
+    // applyProductTransform normalizes them since .lean() bypasses the schema's toJSON.
+    return paginatedSearch(productRepository, where, pagination).then((result) => ({
+        ...result,
+        items: (result.items as unknown as Record<string, unknown>[]).map((item) =>
+            applyProductTransform(item)
+        ) as unknown as IProductDocument[]
+    }));
 };
 
 /**
- * Get a single product by ID as a lean (plain JS) object.
+ * Get a single product by ID.
  * Admin can see inactive or soft-deleted products; non-admin cannot.
  * Returns undefined if the id is falsy; null if no matching document is found.
  *
@@ -108,14 +115,12 @@ export const search = (
 export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
-    if (admin) return productRepository.findById(id).lean();
-    return productRepository
-        .findOne({
-            _id: id,
-            active: true,
-            deletedAt: { $exists: false }
-        })
-        .lean();
+    if (admin) return productRepository.findById(id);
+    return productRepository.findOne({
+        _id: id,
+        active: true,
+        deletedAt: { $exists: false }
+    });
 };
 
 /**

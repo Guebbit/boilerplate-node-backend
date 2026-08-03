@@ -161,21 +161,26 @@ export const login = (
             )
         );
 
-    return userRepository
-        .findOne({ email, deletedAt: undefined })
-        .then((user) => {
-            if (!user)
-                return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
-
-            return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
-                if (!doMatch)
+    return (
+        userRepository
+            // `password` is select:false — this is one of the few flows that legitimately needs it
+            .findOneWithCredentials({ email, deletedAt: undefined })
+            .then((user) => {
+                if (!user)
                     return generateReject(401, 'login - wrong credentials', [
                         t('login.wrong-data')
                     ]);
-                return generateSuccess<IUserDocument>(user);
-            });
-        })
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+
+                return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
+                    if (!doMatch)
+                        return generateReject(401, 'login - wrong credentials', [
+                            t('login.wrong-data')
+                        ]);
+                    return generateSuccess<IUserDocument>(user);
+                });
+            })
+            .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
+    );
 };
 
 /**
@@ -187,7 +192,8 @@ export const tokenRemoveAll = (
     type: ETokenType
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
     userRepository
-        .findById(userId)
+        // `tokens` is select:false — needed here to filter and re-save them
+        .findByIdWithCredentials(userId)
         .then(
             (
                 user

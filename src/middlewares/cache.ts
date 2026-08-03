@@ -3,7 +3,8 @@ import {
     getCacheValue,
     invalidateCacheTags,
     setCacheValue,
-    broadcastCacheInvalidation
+    broadcastCacheInvalidation,
+    resolveCacheTtl
 } from '@core/adapters/cache';
 
 /**
@@ -41,13 +42,19 @@ const getCacheKey = (request: Request) =>
 export const setCache =
     (seconds = 0, options: CacheOptions = {}) =>
     (request: Request, response: Response, next: NextFunction) => {
+        // Outside production the declared TTL is clamped (see resolveCacheTtl), so that writes
+        // which bypass the API — db:seed, migrations, mongosh — cannot leave stale answers
+        // around for an hour. Resolved here, before the header, so browsers are told the
+        // lifetime the server will actually honour.
+        const ttl = resolveCacheTtl(seconds);
+
         // Keep browser/proxy cache headers aligned with the server-side Redis cache policy.
         response.set(
             'Cache-Control',
-            `${request.authContext ? 'private' : 'public'}, max-age=${seconds}`
+            `${request.authContext ? 'private' : 'public'}, max-age=${ttl}`
         );
 
-        if (request.method !== 'GET' || seconds <= 0) {
+        if (request.method !== 'GET' || ttl <= 0) {
             next();
             return;
         }
@@ -70,7 +77,7 @@ export const setCache =
                     void setCacheValue(
                         cacheKey,
                         { status: response.statusCode, body },
-                        seconds,
+                        ttl,
                         options.tags
                     );
 

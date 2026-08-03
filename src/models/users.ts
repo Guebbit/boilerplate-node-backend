@@ -86,6 +86,31 @@ export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
 };
 
 /**
+ * Normalizes a serialized user into the OpenAPI `User` contract: `id` from
+ * `_id`; strips `_id`/`__v` plus everything that must never leave the server
+ * (`password`, `tokens`, `cart`, `deletedAt`); derives `active` from the
+ * (now-deleted) `deletedAt`. `password`/`tokens` are also `select: false` on
+ * the schema — this is defense in depth, not the only guard.
+ * Exported so lean results (which bypass `toJSON`) can be mapped through the
+ * same logic — see @services/users `search()`.
+ */
+export const applyUserTransform = (
+    serialized: Record<string, unknown>
+): Record<string, unknown> => {
+    if (serialized._id) {
+        serialized.id = serialized._id.toString();
+        delete serialized._id;
+    }
+    delete serialized.__v;
+    delete serialized.password;
+    delete serialized.tokens;
+    delete serialized.cart;
+    serialized.active = !serialized.deletedAt;
+    delete serialized.deletedAt;
+    return serialized;
+};
+
+/**
  * User Schema
  */
 export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
@@ -99,9 +124,13 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
             type: String,
             required: true
         },
+        // `select: false` — never loaded unless a query explicitly asks for it, so even a
+        // .lean() read that bypasses applyUserTransform still cannot leak the hash. Use the
+        // repository's *WithCredentials helpers to re-select it (see @repositories/users).
         password: {
             type: String,
-            required: true
+            required: true,
+            select: false
         },
         imageUrl: {
             type: String,
@@ -136,22 +165,28 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
             }
         },
         // sub documents always have _id
-        tokens: [
-            {
-                type: {
-                    type: String,
-                    required: true
-                },
-                token: {
-                    type: String,
-                    required: true
-                },
-                expiration: {
-                    type: Date,
-                    required: false
+        // `select: false` for the same reason as `password` — live refresh tokens are as good as
+        // a password to anyone who reads them.
+        tokens: {
+            type: [
+                {
+                    type: {
+                        type: String,
+                        required: true
+                    },
+                    token: {
+                        type: String,
+                        required: true
+                    },
+                    expiration: {
+                        type: Date,
+                        required: false
+                    }
                 }
-            }
-        ],
+            ],
+            select: false,
+            default: []
+        },
         deletedAt: {
             type: Date
         }
@@ -221,6 +256,13 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
             });
             return { status: 500, success: false };
         });
+});
+
+userSchema.set('toJSON', {
+    virtuals: true,
+    versionKey: false,
+    transform: (_document, serialized) =>
+        applyUserTransform(serialized as unknown as Record<string, unknown>)
 });
 
 /**

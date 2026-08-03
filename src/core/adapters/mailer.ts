@@ -14,12 +14,14 @@ import ejs, { type Data } from 'ejs';
 import { createTransport, type SendMailOptions, type SentMessageInfo } from 'nodemailer';
 // OTel semantic-convention keys for messaging spans. Using the standard attribute names
 // means tracing backends can render this as a messaging operation instead of an opaque span.
-// (These SEMATTRS_* constants are the older, now-deprecated naming; kept for consistency
-// with the installed semantic-conventions version.)
+// The messaging conventions are still incubating, hence the `/incubating` subpath — that is
+// where the current `ATTR_*` names live. The older `SEMATTRS_*` aliases are deprecated, and
+// `SEMATTRS_MESSAGING_DESTINATION` is not merely renamed: the attribute key itself moved from
+// `messaging.destination` to `messaging.destination.name`.
 import {
-    SEMATTRS_MESSAGING_SYSTEM,
-    SEMATTRS_MESSAGING_DESTINATION
-} from '@opentelemetry/semantic-conventions';
+    ATTR_MESSAGING_SYSTEM,
+    ATTR_MESSAGING_DESTINATION_NAME
+} from '@opentelemetry/semantic-conventions/incubating';
 import { getDirname } from '@core/adapters/filesystem';
 import { logger } from '@core/adapters/logger';
 import { withSpan } from '@core/observability/tracer';
@@ -53,13 +55,6 @@ export const transporter = createTransport({
         pass: process.env.NODE_SMTP_PASS ?? ''
     }
 });
-// const transporter = nodemailer.createTransport(
-//     sendgridTransport({
-//         auth: {
-//             api_key: process.env.NODE_APIKEY_SENDGRID ?? ""
-//         }
-//     })
-// );
 
 /**
  * Send email to requested target
@@ -88,10 +83,10 @@ export const nodemailer = (
         span.setAttributes({
             // `messaging.system` — the transport being used. Standard key, so backends group
             // this alongside other messaging spans.
-            [SEMATTRS_MESSAGING_SYSTEM]: 'smtp',
-            // `messaging.destination` — the recipient. `request.to` can be a string, an address
-            // object, or an array, hence the String() coercion.
-            [SEMATTRS_MESSAGING_DESTINATION]: String(request.to ?? ''),
+            [ATTR_MESSAGING_SYSTEM]: 'smtp',
+            // `messaging.destination.name` — the recipient. `request.to` can be a string, an
+            // address object, or an array, hence the String() coercion.
+            [ATTR_MESSAGING_DESTINATION_NAME]: String(request.to ?? ''),
             // Custom attribute: email template used to render the body.
             'email.template': templateName
         });

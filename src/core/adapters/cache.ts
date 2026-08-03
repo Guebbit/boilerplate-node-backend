@@ -83,6 +83,50 @@ let connectionWarningLogged = false;
 const isCacheEnabled = () => Boolean(getRedisUrl()) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
 
 /**
+ * Longest TTL allowed outside production, in seconds.
+ *
+ * Cache invalidation only fires for writes that go *through the API*. Anything that writes
+ * straight to Mongo — `db:seed`, a migration, a `mongosh` session — leaves the cache serving
+ * the old answer until it expires on its own. A 3600s route TTL therefore means "up to an hour
+ * of visibly wrong data" the first time you touch the database by hand.
+ *
+ * Capping the TTL in dev bounds the damage from *every* such writer, including the ones nobody
+ * has thought of yet, at the cost of fewer cache hits while developing. The caching layer still
+ * demonstrably works — you just stop losing an afternoon to it. Production keeps the route's
+ * declared TTL, because there the API is the only writer.
+ *
+ * Set `NODE_REDIS_CACHE_DEV_TTL_MAX=0` to disable the cap and use the declared TTLs everywhere.
+ */
+const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
+
+const getDevelopmentTtlMax = (): number => {
+    const raw = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+    if (raw === undefined || raw.trim() === '') return DEFAULT_DEV_TTL_MAX_SECONDS;
+
+    const parsed = Number(raw);
+    // A non-numeric or negative value is a config typo; fall back rather than cache forever.
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_DEV_TTL_MAX_SECONDS;
+};
+
+/**
+ * Clamp a route's declared TTL to the development ceiling.
+ *
+ * Applied where the TTL enters the system (the `setCache` middleware) rather than at write
+ * time, so the `Cache-Control: max-age` header advertises the same lifetime the server will
+ * actually honour.
+ *
+ * @param seconds - TTL declared by the route
+ * @returns the TTL to use, capped outside production
+ */
+export const resolveCacheTtl = (seconds: number): number => {
+    if (process.env.NODE_ENV === 'production') return seconds;
+
+    const max = getDevelopmentTtlMax();
+    if (max <= 0) return seconds;
+    return Math.min(seconds, max);
+};
+
+/**
  * Build one namespaced Redis key.
  *
  * Callers pass a sub-namespace, giving the two key families used here:
@@ -333,6 +377,89 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
             });
         });
 };
+
+/**
+ * Outcome of a {@link clearCache} call.
+ *
+ * Two fields rather than a bare count because "0 keys removed" is ambiguous on its own: it is
+ * the honest answer for an empty cache *and* the answer a dead Redis produces. Callers that
+ * exist to clear the cache need to tell those apart (PROPOSAL §15, option B).
+ */
+export interface IClearCacheResult {
+    /** Keys actually removed. Always `0` when `reachable` is false. */
+    deleted: number;
+    /**
+     * Whether the cache is now known to be clear.
+     *
+     * `false` in exactly one case: caching is switched on but Redis could not be reached, so
+     * stale entries survive the call and will be served until their TTL expires. `true` when
+     * the scan-and-delete ran, and also when caching is disabled — there is nothing to reach
+     * and nothing cached to go stale, which makes "clear" trivially true.
+     */
+    reachable: boolean;
+}
+
+/**
+ * Delete every cached response and tag set belonging to this app.
+ *
+ * The escape hatch for writes that bypass the API entirely — `db:seed`, `migrate-mongo`, a
+ * manual `mongosh` edit. Those change Mongo without ever running `invalidateCache`, so the
+ * cached answers survive them; this drops the lot.
+ *
+ * Deliberately **not** `FLUSHALL`: the delete is scoped to `<CACHE_PREFIX>:*`, so a Redis
+ * instance shared with another app (or another environment using a different prefix) is
+ * untouched. `SCAN` iterates in small batches instead of blocking the server the way `KEYS`
+ * would on a large keyspace.
+ *
+ * Because the keys live in shared Redis, one call clears the cache for every app instance —
+ * no pub/sub broadcast needed.
+ *
+ * Still fails open — it never rejects — but it now *reports* the failure instead of hiding it,
+ * so fail-open is a choice each caller makes rather than one baked in here. `db:seed` ignores
+ * `reachable` on purpose (§9: an unreachable Redis must not break seeding); `db:cache:clear`
+ * exits non-zero on it, because clearing the cache is the entire job.
+ */
+export const clearCache = (): Promise<IClearCacheResult> =>
+    getClient()
+        .then((redisClient) => {
+            if (!redisClient) {
+                /*
+                 * Two different situations land here, and `getClient()` cannot distinguish them
+                 * for us: caching is switched off, or it is on and the connect failed —
+                 * `getClient()` reports that by resolving void rather than rejecting, which is
+                 * why the `.catch` below never sees a connection error. `isCacheEnabled()` is
+                 * what separates "nothing to clear" from "could not clear".
+                 */
+                return { deleted: 0, reachable: !isCacheEnabled() };
+            }
+
+            const pattern = prefix('*');
+            let deleted = 0;
+
+            // `scanIterator` yields batches of keys (node-redis v5), so one DEL per batch.
+            const drain = async () => {
+                for await (const keys of redisClient.scanIterator({
+                    MATCH: pattern,
+                    COUNT: 100
+                })) {
+                    if (keys.length === 0) continue;
+                    deleted += await redisClient.del(keys);
+                }
+                return { deleted, reachable: true };
+            };
+
+            return drain();
+        })
+        .catch((error) => {
+            // Reached when SCAN or DEL fails mid-drain — the socket died partway through, say.
+            // Whatever `deleted` had reached is discarded: the cache is in an unknown state,
+            // which is the same verdict as never having connected.
+            logger.warn({
+                message: 'Redis cache clear failed.',
+                error: error instanceof Error ? error.message : String(error)
+            });
+            return { deleted: 0, reachable: false };
+        });
 
 // ─── Pub/Sub: cross-instance cache invalidation ───────────────────────────────
 //

@@ -20,6 +20,12 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 
 ## Quickstart
 
+This stack is **container-first**. The shipped `.env` uses compose service hostnames
+(`NODE_DB_URI=mongodb://database:27017/…`, `NODE_REDIS_URL=redis://redis:6379`) because the
+things that make this boilerplate worth cloning — Tempo, Loki, Prometheus, Grafana, Alloy,
+Umami — only exist inside the compose stack. Running on the host is supported, but it is the
+secondary path and has its own scripts (see [Running on the host](#running-on-the-host)).
+
 1. Install dependencies:
     - `npm install`
 2. Create env file:
@@ -27,15 +33,114 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 3. Set required environment variables in `.env`:
     - `NODE_TOKEN_ACCESS`
     - `NODE_TOKEN_REFRESH`
-    - Database config:
-        - Preferred: `NODE_DB_URI`
-        - Or fallback: `NODE_MONGODB_HOST` + `NODE_MONGODB_PORT` (+ optional `NODE_MONGODB_NAME`)
-4. Optional: enable Redis response caching by setting:
-    - Preferred: `NODE_REDIS_URL`
-    - Or fallback: `NODE_REDIS_HOST` + `NODE_REDIS_PORT`
-    - `NODE_REDIS_CACHE_ENABLED=1`
-5. Start development server:
-    - `npm run dev`
+    - The database and Redis URLs already point at the compose services — leave them alone
+      unless you are pointing at something external (Atlas, a managed Redis, …).
+4. Pick your container runtime's Promtail override (see `.env-example` → _Promtail Log
+   Collection_), e.g. `COMPOSE_FILE=docker-compose.yml:docker-compose.podman.yml`.
+5. Bring the stack up:
+    - `podman compose up` (or `docker compose up`)
+
+That is the whole quickstart. The `app` container runs `npm run db:bootstrap` before starting
+the server, so the database is migrated and seeded on first boot and you get a browsable API
+with demo products, users and orders rather than empty lists. Both halves are idempotent, so
+later boots are a no-op — see [Database migrations & seeding](#database-migrations--seeding).
+
+### Running on the host
+
+`npm run dev` on its own will **not** work against the shipped `.env`: the hostname `database`
+only resolves inside the compose network. Use the `:host` script variants, which override the
+URIs to `localhost` (the compose files publish Mongo on `27017` and Redis on `6379`, so start
+the stack — or at least those two services — first):
+
+| Container-first (default)   | Host equivalent                  |
+| --------------------------- | -------------------------------- |
+| `npm run dev:docker`        | `npm run dev:host`               |
+| `npm run db:migrate:up`     | `npm run db:migrate:up:host`     |
+| `npm run db:migrate:down`   | `npm run db:migrate:down:host`   |
+| `npm run db:migrate:status` | `npm run db:migrate:status:host` |
+| `npm run db:seed`           | `npm run db:seed:host`           |
+| `npm run db:seed:reset`     | `npm run db:seed:reset:host`     |
+| `npm run db:cache:clear`    | `npm run db:cache:clear:host`    |
+| `npm run db:bootstrap`      | `npm run db:bootstrap:host`      |
+
+The `:host` scripts set `NODE_DB_URI` and `NODE_REDIS_URL` inline via `cross-env`; they do not
+read a second env file, so there is nothing to keep in sync.
+
+If you genuinely want the host to be your primary environment, edit `.env` to use `localhost`
+and let compose override the two hostnames in its `environment:` block instead.
+
+## Host port map
+
+This repo owns the **`3000–3099`** host-port block, plus the well-known ports of the
+infrastructure images it runs. The paired frontend owns **`8080–8099`**. Keeping the two blocks
+disjoint is what lets both stacks be up at the same time — they previously collided on `4173`,
+where this repo's docs container, the frontend's docs container and the frontend's e2e vite
+server all wanted to live.
+
+| Service                      | Host port         | Env var                                           |
+| ---------------------------- | ----------------- | ------------------------------------------------- |
+| API                          | `3000`            | `NODE_PORT`                                       |
+| Grafana                      | `3001`            | `GRAFANA_PORT`                                    |
+| Umami dashboard / tracker    | `3080`            | `UMAMI_PORT`                                      |
+| Docs (VitePress + Nginx)     | `3090`            | `DOCS_PORT`                                       |
+| Loki                         | `3100`            | `LOKI_PORT`                                       |
+| OTel Collector (HTTP / gRPC) | `4318` / `4317`   | `OTEL_OTLP_HTTP_PORT` / `OTEL_OTLP_GRPC_PORT`     |
+| RabbitMQ (AMQP / management) | `5672` / `15672`  | `RABBITMQ_AMQP_PORT` / `RABBITMQ_MANAGEMENT_PORT` |
+| Redis                        | `6379`            | `NODE_REDIS_PORT`                                 |
+| Prometheus                   | `9090`            | `PROMETHEUS_PORT`                                 |
+| Alertmanager                 | `9093`            | `ALERTMANAGER_PORT`                               |
+| Alloy (Faro receiver / UI)   | `12347` / `12345` | `ALLOY_FARO_PORT` / `ALLOY_UI_PORT`               |
+| MongoDB                      | `27017`           | `NODE_MONGODB_PORT`                               |
+
+New services belong inside `3000–3099`. Every entry is overridable through the env var in the
+right-hand column if a port is already taken on your machine.
+
+## Database migrations & seeding
+
+Two tools, two non-overlapping jobs:
+
+|                     | Owns                                                    | Command                 | Re-runnable?                           |
+| ------------------- | ------------------------------------------------------- | ----------------------- | -------------------------------------- |
+| `migrate-mongo`     | **schema** — indexes, collection options, field renames | `npm run db:migrate:up` | yes, tracked in `migrations_changelog` |
+| `db/seeds/index.ts` | **demo data** — users, products, orders                 | `npm run db:seed`       | yes, upserts by fixed `_id`            |
+
+`npm run db:bootstrap` runs both, in that order, and is what the compose `app` service executes
+before starting the server.
+
+- The seeder **refuses to run when `NODE_ENV=production`**.
+- Passwords in the seed file are plain text; the model's `pre('save')` hook hashes them. Never
+  paste a pre-computed hash there — it drifts from the hook and its plaintext gets lost.
+- Seed credentials: `root@root.it` / `rootroot` (admin) and `gino@pino.it` / `password`.
+- `npm run db:seed:reset` drops the database first, for when you want a clean slate.
+
+### Seeding and the response cache
+
+The API clears its own cache on every write it handles — `POST /products` invalidates the
+`products` group, and so on. Writes that **skip the API** cannot do that: `db:seed`,
+`migrate-mongo` and any `mongosh` session go straight to Mongo, so cached answers survive them
+and `GET /products` keeps serving the pre-seed list.
+
+Two things stop that from biting:
+
+1. **The seeder clears the cache itself** when it actually created something, so a fresh
+   `compose up` never shows stale empty lists. Run `npm run db:cache:clear` by hand after any
+   manual database surgery. It is scoped to `NODE_REDIS_CACHE_PREFIX` — never `FLUSHALL` — so a
+   shared Redis is safe.
+2. **TTLs are capped outside production.** Routes declare their own lifetime
+   (`setCache(3600, …)` on `GET /products`), but when `NODE_ENV !== 'production'` it is clamped
+   to `NODE_REDIS_CACHE_DEV_TTL_MAX` (default `30`s). That bounds the damage from _any_
+   out-of-band writer, including ones nobody has thought of yet. Set it to `0` to use the
+   declared TTLs everywhere.
+
+The two callers treat an unreachable Redis differently, on purpose. **Seeding fails open** — it
+logs a warning and still succeeds, because a stack whose Redis is not up must still be seedable.
+**`db:cache:clear` fails closed** — it logs the reason and exits `1`, because clearing the cache
+is its entire job, and a manual recovery tool that reports success while doing nothing is worse
+than no tool at all: you stop looking for the cause.
+
+The genuinely complete answer is to have the database announce its own changes — MongoDB change
+streams, or CDC via Debezium — so _any_ write invalidates regardless of who made it. That needs
+a replica set this compose file does not run, and is more machinery than a boilerplate wants.
 
 ## Redis caching
 

@@ -5,6 +5,7 @@ import {
     type UpdateFeedbackRequestStatusRequest,
     type CreateFeedbackRequest
 } from '@types';
+import { applyFeedbackRequestTransform } from '@models/feedback-requests';
 import type { IFeedbackRequestDocument } from '@models/feedback-requests';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
 import {
@@ -22,16 +23,16 @@ import {
 
 /**
  * OCP-compliant status mapping: adding a new status only requires adding one entry here.
- * Also accepts legacy uppercase status values from older clients.
+ *
+ * Lowercase only, matching `openapi.yaml`'s `enum: [new, in_progress, resolved, spam]`. The
+ * uppercase aliases this used to carry "for older clients" accepted values the contract has
+ * never allowed — dead on `PUT /feedback/:id` (the generated Zod schema 422s them first) and
+ * actively wrong on the search path, which had no such guard.
  */
 const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
-    NEW: FeedbackRequestStatus.new,
     new: FeedbackRequestStatus.new,
-    IN_PROGRESS: FeedbackRequestStatus.in_progress,
     in_progress: FeedbackRequestStatus.in_progress,
-    RESOLVED: FeedbackRequestStatus.resolved,
     resolved: FeedbackRequestStatus.resolved,
-    SPAM: FeedbackRequestStatus.spam,
     spam: FeedbackRequestStatus.spam
 };
 
@@ -65,7 +66,13 @@ export const search = (
         'message'
     ]);
 
-    return paginatedSearch(feedbackRequestRepository, where, pagination);
+    // findAll is lean — applyFeedbackRequestTransform normalizes it since .lean() bypasses toJSON.
+    return paginatedSearch(feedbackRequestRepository, where, pagination).then((result) => ({
+        ...result,
+        items: (result.items as unknown as Record<string, unknown>[]).map((item) =>
+            applyFeedbackRequestTransform(item)
+        ) as unknown as IFeedbackRequestDocument[]
+    }));
 };
 
 export const updateStatus = (

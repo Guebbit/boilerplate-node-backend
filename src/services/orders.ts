@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
 import { t } from 'i18next';
 import type { SearchOrdersRequest, CartItem, OrderStatus } from '@types';
+import { applyOrderTransform } from '@models/orders';
 import type { IOrderDocument, IOrderDocumentItem } from '@models/orders';
 import {
     generateReject,
@@ -54,7 +55,15 @@ const addComputedFields: PipelineStage.AddFields = {
  * @param pipeline - Optional stages to apply BEFORE the computed fields stage
  */
 export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]> =>
-    orderRepository.aggregate([...pipeline, addComputedFields]);
+    // aggregate output is plain JS — applyOrderTransform normalizes it since it bypasses toJSON.
+    orderRepository
+        .aggregate([...pipeline, addComputedFields])
+        .then(
+            (items) =>
+                (items as unknown as Record<string, unknown>[]).map((item) =>
+                    applyOrderTransform(item)
+                ) as unknown as IOrderDocument[]
+        );
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI.
@@ -110,7 +119,9 @@ export const search = (
             return orderRepository
                 .aggregate([...basePipeline, { $skip: skip }, { $limit: pageSize }])
                 .then((items) => ({
-                    items,
+                    items: (items as unknown as Record<string, unknown>[]).map((item) =>
+                        applyOrderTransform(item)
+                    ) as unknown as IOrderDocument[],
                     meta: {
                         page,
                         pageSize,
@@ -144,7 +155,13 @@ export const getById = (
                 { $limit: 1 },
                 addComputedFields
             ])
-            .then(([result]) => result ?? undefined);
+            .then(([result]) =>
+                result
+                    ? (applyOrderTransform(
+                          result as unknown as Record<string, unknown>
+                      ) as unknown as IOrderDocument)
+                    : undefined
+            );
     }
     return orderRepository.findById(id).then((order) => order ?? undefined);
 };

@@ -6,7 +6,10 @@ jest.mock('@core/adapters/cache', () => ({
     getCacheValue: jest.fn(),
     setCacheValue: jest.fn(),
     invalidateCacheTags: jest.fn(),
-    broadcastCacheInvalidation: jest.fn()
+    broadcastCacheInvalidation: jest.fn(),
+    // Identity by default so the tests below assert the TTL the route declared. The clamping
+    // behaviour itself is tested against the real implementation in core/adapters/cache.test.ts.
+    resolveCacheTtl: jest.fn((seconds: number) => seconds)
 }));
 
 const mockedCache = jest.mocked(cache);
@@ -38,6 +41,7 @@ const createResponse = () => {
 describe('setCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockedCache.resolveCacheTtl.mockImplementation((seconds: number) => seconds);
     });
 
     it('returns a cached response when Redis has a match', async () => {
@@ -94,6 +98,45 @@ describe('setCache', () => {
             120,
             ['products']
         );
+    });
+
+    it('stores and advertises the clamped TTL, not the declared one', async () => {
+        // Stand in for the dev cap: the route asks for an hour, the resolver allows 30s.
+        mockedCache.resolveCacheTtl.mockReturnValue(30);
+        mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+
+        const middleware = setCache(3600, { tags: ['products'] });
+        const { response, headers } = createResponse();
+        const request = { method: 'GET', originalUrl: '/products' } as Request;
+
+        await middleware(request, response, jest.fn() as NextFunction);
+
+        expect(mockedCache.resolveCacheTtl).toHaveBeenCalledWith(3600);
+        // The browser must not be told to hold it longer than the server will
+        expect(headers['cache-control']).toBe('public, max-age=30');
+
+        response.json({ success: true });
+
+        expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.any(Object),
+            30,
+            ['products']
+        );
+    });
+
+    it('skips caching entirely when the TTL resolves to zero', async () => {
+        mockedCache.resolveCacheTtl.mockReturnValue(0);
+
+        const middleware = setCache(3600, { tags: ['products'] });
+        const { response } = createResponse();
+        const next = jest.fn() as NextFunction;
+        const request = { method: 'GET', originalUrl: '/products' } as Request;
+
+        await middleware(request, response, next);
+
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
     });
 });
 

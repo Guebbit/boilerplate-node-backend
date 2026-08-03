@@ -86,6 +86,8 @@ export const writeUsers = (
                         target_id: String(user._id)
                     })
                 );
+                // create() returns the in-memory document; the schema's toJSON transform
+                // strips the hashed password before it ever reaches res.json
                 successResponse(response, user, 201);
             })
             .catch((error: Error) =>

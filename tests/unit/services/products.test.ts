@@ -157,8 +157,8 @@ describe('productService.getById', () => {
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
-        // Lean object — no Mongoose save() method
-        expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
+        // A real Mongoose document — schema's toJSON transform normalizes it on the way out
+        expect(typeof (found as unknown as { save: unknown }).save).toBe('function');
     });
 
     it('returns null for an inactive product when called as non-admin', async () => {

@@ -4,13 +4,14 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 
 ## Runtime scripts
 
-| Script               | Job                                            | Read more                                 |
-| -------------------- | ---------------------------------------------- | ----------------------------------------- |
-| `dev`                | watch-mode local runtime from `src/cluster.ts` | [Runtime](./runtime.md)                   |
-| `start`              | start the clustered runtime without watch mode | [Runtime](./runtime.md)                   |
-| `debug`              | start with Node inspector break-on-start       | [Runtime](./runtime.md)                   |
-| `dev:docker`         | single-worker hot reload inside Docker/Podman  | [Docker & Podman](./docker-and-podman.md) |
-| `dev:docker:cluster` | clustered hot reload inside Docker/Podman      | [Docker & Podman](./docker-and-podman.md) |
+| Script               | Job                                                                                        | Read more                                 |
+| -------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| `dev`                | watch-mode local runtime from `src/cluster.ts` — expects the compose hostnames from `.env` | [Runtime](./runtime.md)                   |
+| `dev:host`           | same, with `NODE_DB_URI`/`NODE_REDIS_URL` overridden to `localhost`                        | [Runtime](./runtime.md)                   |
+| `start`              | start the clustered runtime without watch mode                                             | [Runtime](./runtime.md)                   |
+| `debug`              | start with Node inspector break-on-start                                                   | [Runtime](./runtime.md)                   |
+| `dev:docker`         | single-worker hot reload inside Docker/Podman                                              | [Docker & Podman](./docker-and-podman.md) |
+| `dev:docker:cluster` | clustered hot reload inside Docker/Podman                                                  | [Docker & Podman](./docker-and-podman.md) |
 
 ## Validation scripts
 
@@ -48,13 +49,29 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 
 ## Database & seed scripts
 
-| Script              | Job                            | Read more          |
-| ------------------- | ------------------------------ | ------------------ |
-| `db:migrate:up`     | apply pending Mongo migrations | direct CLI wrapper |
-| `db:migrate:down`   | roll back the last migration   | direct CLI wrapper |
-| `db:migrate:status` | inspect migration state        | direct CLI wrapper |
-| `db:seed`           | load seed data                 | direct CLI wrapper |
-| `db:seed:reset`     | reset and reload seed data     | direct CLI wrapper |
+Migrations own **schema** (indexes, collection options); the seeder owns **demo data**. Both are
+idempotent, and `db:bootstrap` chains them — it is what the compose `app` service runs before
+starting the server.
+
+| Script              | Job                                                | Read more                       |
+| ------------------- | -------------------------------------------------- | ------------------------------- |
+| `db:migrate:up`     | apply pending Mongo migrations (indexes/schema)    | direct CLI wrapper              |
+| `db:migrate:down`   | roll back the last migration                       | direct CLI wrapper              |
+| `db:migrate:status` | inspect migration state                            | direct CLI wrapper              |
+| `db:seed`           | upsert the demo dataset (no-op if already present) | direct CLI wrapper              |
+| `db:seed:reset`     | drop the database, then reseed                     | direct CLI wrapper              |
+| `db:cache:clear`    | drop every cached response under the app's prefix  | [Redis cache](./redis-cache.md) |
+| `db:bootstrap`      | `db:migrate:up` followed by `db:seed`              | runs on container boot          |
+
+`db:seed` calls `db:cache:clear`'s logic itself whenever it created something. Run the script by
+hand after editing the database another way (`mongosh`, a GUI) — those writes never reach the
+API, so nothing else invalidates the cache. See
+[Seeding and the response cache](../../README.md#seeding-and-the-response-cache).
+
+Every one of these has a `:host` twin (`db:seed:host`, `db:cache:clear:host`, `db:bootstrap:host`,
+…) that overrides `NODE_DB_URI` / `NODE_REDIS_URL` to `localhost` via `cross-env`. The shipped
+`.env` uses compose hostnames, so the plain scripts only resolve from inside a container — see
+the README's [Running on the host](../../README.md#running-on-the-host).
 
 ## Container & host helper scripts
 

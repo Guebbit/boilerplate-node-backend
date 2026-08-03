@@ -1,130 +1,379 @@
 #!/usr/bin/env tsx
 /*
- * Generates src/types/asyncapi.ts from asyncapi.yaml using @asyncapi/modelina.
+ * Generates the TypeScript realtime contract types from asyncapi.yaml.
  *
- * Modelina handles schema-to-TypeScript conversion for all named component
- * schemas. Channel name constants are appended as custom code since modelina
- * does not produce those.
+ * SHARED SCRIPT — this file is byte-identical in `boilerplate-node-api-mongodb-mongoose` and
+ * `boilerplate-vue-frontend` (PROPOSAL §5, option B). Only the output path differs, and that
+ * comes from `--out` in each repo's `genasyncapi` script, so the two copies can be compared
+ * with a plain `diff`. Change it in one repo and copy it to the other, or the outputs drift.
  *
- * Usage: npm run genasyncapi
+ * It emits a SUPERSET of what either repo needs, so neither has to rename anything:
+ *
+ *   - the modelina-generated payload interfaces          (both)
+ *   - `I<MessageName>` aliases for components.messages   (both)
+ *   - `<NAMESPACE>_CHANNELS` constant objects            (backend: OBSERVABILITY_CHANNELS, …)
+ *   - `T<Namespace>Channel` unions                       (backend: TObservabilityChannel, …)
+ *   - `REALTIME_SSE_EVENT_NAMES` + `ISseEventPayloadMap` (frontend: per-event payload typing)
+ *
+ * Unused exports are harmless — tree-shaken in the frontend bundle, type-only in the backend.
+ *
+ * Usage: tsx scripts/gen-asyncapi-types.ts --out <path>
  */
 import { TypeScriptGenerator, typeScriptDefaultModelNameConstraints } from '@asyncapi/modelina';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import yaml from 'js-yaml';
+import { parse } from 'yaml';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const INPUT = resolve(ROOT, 'asyncapi.yaml');
-const OUTPUT = resolve(ROOT, 'src/types/asyncapi.ts');
+interface IAsyncApiOperation {
+    message?: {
+        $ref?: string;
+    };
+}
 
-/* Named (non-anonymous) models get an I prefix, anonymous helpers keep their name. */
-const modelNameConstraints = typeScriptDefaultModelNameConstraints({
-    NAMING_FORMATTER: (value: string) => {
-        if (value.toLowerCase().startsWith('anonymous')) return value;
-        const pascal = value.charAt(0).toUpperCase() + value.slice(1);
-        return `I${pascal}`;
+interface IAsyncApiChannel {
+    publish?: IAsyncApiOperation;
+    subscribe?: IAsyncApiOperation;
+}
+
+interface IAsyncApiMessage {
+    payload?: IJsonSchema;
+}
+
+interface IJsonSchema {
+    $ref?: string;
+    type?: string;
+    enum?: unknown[];
+    oneOf?: IJsonSchema[];
+    anyOf?: IJsonSchema[];
+    allOf?: IJsonSchema[];
+    required?: string[];
+    properties?: Record<string, IJsonSchema>;
+    items?: IJsonSchema;
+    additionalProperties?: boolean | IJsonSchema;
+}
+
+interface IAsyncApiDocument {
+    channels?: Record<string, IAsyncApiChannel>;
+    components?: {
+        messages?: Record<string, IAsyncApiMessage>;
+    };
+}
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const INPUT = path.resolve(ROOT, 'asyncapi.yaml');
+
+/*
+ * Reads the required `--out` argument.
+ *
+ * @returns Absolute path of the file to generate.
+ */
+const resolveOutputPath = (): string => {
+    const flagIndex = process.argv.indexOf('--out');
+    const value = flagIndex === -1 ? undefined : process.argv[flagIndex + 1];
+    if (!value) {
+        console.error('Missing required argument: --out <path>');
+        process.exit(1);
     }
+    return path.resolve(ROOT, value);
+};
+
+const OUTPUT = resolveOutputPath();
+
+/*
+ * Converts source names into `PascalCase`.
+ *
+ * @param value Source name from the AsyncAPI contract.
+ * @returns Sanitized `PascalCase` identifier.
+ */
+const toPascalCase = (value: string): string =>
+    value
+        .replaceAll(/[^A-Za-z0-9]+/gu, ' ')
+        .trim()
+        .split(/\s+/u)
+        .filter(Boolean)
+        .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
+        .join('');
+
+/*
+ * Formats a model/message identifier with the project interface prefix.
+ *
+ * @param value Raw model or message name.
+ * @returns Interface-style type name prefixed with `I`.
+ */
+const toInterfaceName = (value: string): string => `I${toPascalCase(value)}`;
+
+/*
+ * Resolves `#/components/...` refs to frontend interface type names.
+ *
+ * @param reference AsyncAPI `$ref` value.
+ * @returns TypeScript type name for the referenced model.
+ */
+const refToTypeName = (reference: string): string =>
+    toInterfaceName(reference.split('/').pop() ?? '');
+
+/*
+ * Converts an object key into a valid TypeScript property declaration key.
+ *
+ * @param property Object key from JSON Schema.
+ * @returns Plain identifier or quoted literal key.
+ */
+const formatPropertyKey = (property: string): string =>
+    /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(property) ? property : `'${property}'`;
+
+/*
+ * Converts an AsyncAPI payload JSON Schema into a TypeScript type string.
+ *
+ * @param schema JSON Schema fragment.
+ * @param depth Current recursive indentation depth.
+ * @returns TypeScript type representation.
+ */
+const schemaToType = (schema: IJsonSchema | undefined, depth = 0): string => {
+    const indentation = '    '.repeat(depth);
+    const childIndentation = '    '.repeat(depth + 1);
+
+    if (!schema) return 'unknown';
+    if (schema.$ref) return refToTypeName(schema.$ref);
+
+    if (Array.isArray(schema.oneOf))
+        return schema.oneOf.map((option) => schemaToType(option, depth)).join(' | ');
+
+    if (Array.isArray(schema.anyOf))
+        return schema.anyOf.map((option) => schemaToType(option, depth)).join(' | ');
+
+    if (Array.isArray(schema.allOf))
+        return schema.allOf.map((option) => schemaToType(option, depth)).join(' & ');
+
+    if (Array.isArray(schema.enum) && schema.enum.length > 0)
+        return schema.enum.map((value) => JSON.stringify(value)).join(' | ');
+
+    if (schema.type === 'array') return `(${schemaToType(schema.items, depth)})[]`;
+
+    if (schema.type === 'object' || schema.properties || schema.additionalProperties) {
+        const requiredSet = schema.required ? new Set(schema.required) : undefined;
+        const properties = Object.entries(schema.properties ?? {}).map(([key, propertySchema]) => {
+            const safeKey = formatPropertyKey(key);
+            const optional = requiredSet?.has(key) ? '' : '?';
+            return `${childIndentation}${safeKey}${optional}: ${schemaToType(propertySchema, depth + 1)};`;
+        });
+
+        if (
+            typeof schema.additionalProperties === 'object' &&
+            !Array.isArray(schema.additionalProperties)
+        )
+            properties.push(
+                `${childIndentation}[key: string]: ${schemaToType(schema.additionalProperties, depth + 1)};`
+            );
+
+        if (
+            (schema.additionalProperties === true || schema.additionalProperties === undefined) &&
+            properties.length === 0
+        )
+            return 'Record<string, unknown>';
+
+        return `{\n${properties.join('\n')}\n${indentation}}`;
+    }
+
+    if (schema.type === 'integer' || schema.type === 'number') return 'number';
+    if (schema.type === 'boolean') return 'boolean';
+    if (schema.type === 'string') return 'string';
+
+    return 'unknown';
+};
+
+/*
+ * Builds channel-to-message-type entries from channel prefixes and operation kind.
+ *
+ * @param channels AsyncAPI channels map.
+ * @param prefix Channel prefix selector.
+ * @param operation Operation direction (`publish` or `subscribe`).
+ * @returns Ordered entries containing channel names and referenced message type names.
+ */
+const collectChannelMessageEntries = (
+    channels: Record<string, IAsyncApiChannel>,
+    prefix: string,
+    operation: 'publish' | 'subscribe'
+): Array<{ channelName: string; messageType: string }> =>
+    Object.entries(channels)
+        .filter(([channelName]) => channelName.startsWith(prefix))
+        .map(([channelName, channel]) => ({
+            channelName,
+            messageType: channel[operation]?.message?.$ref
+                ? refToTypeName(channel[operation].message.$ref)
+                : 'unknown'
+        }))
+        .toSorted((a, b) => a.channelName.localeCompare(b.channelName));
+
+/*
+ * Renders a readonly literal string array declaration.
+ *
+ * @param exportName Exported constant name.
+ * @param values Literal string values.
+ * @returns TypeScript source for the readonly array export.
+ */
+const renderLiteralArray = (exportName: string, values: string[]): string => {
+    const lines = values.map((value) => `    ${JSON.stringify(value)},`).join('\n');
+    return `export const ${exportName} = [\n${lines}\n] as const;`;
+};
+
+/*
+ * Renders a typed event-name to payload map interface.
+ *
+ * @param interfaceName Map interface name.
+ * @param entries Channel/message entries.
+ * @returns TypeScript source for the payload map interface.
+ */
+const renderPayloadMap = (
+    interfaceName: string,
+    entries: Array<{ channelName: string; messageType: string }>
+): string => {
+    const rows = entries
+        .map(
+            ({ channelName, messageType }) => `    ${JSON.stringify(channelName)}: ${messageType};`
+        )
+        .join('\n');
+    return `export interface ${interfaceName} {\n${rows}\n}`;
+};
+
+/*
+ * Turns a channel name into the SCREAMING_SNAKE key used inside its namespace constant.
+ * `observability.metrics.snapshot` under `observability.` becomes `METRICS_SNAPSHOT`.
+ *
+ * @param channelName Full channel name.
+ * @param prefix Namespace prefix to strip.
+ * @returns Constant object key.
+ */
+const toConstantKey = (channelName: string, prefix: string): string =>
+    channelName
+        .slice(prefix.length)
+        .replaceAll(/[.\-_]+/gu, '_')
+        .toUpperCase();
+
+/*
+ * Renders one namespace's channel-name constant object plus its union type.
+ * Namespaces are discovered from the contract, so a new channel prefix generates its own
+ * group with no change to this script.
+ *
+ * @param namespace First dot-segment of the channel names (e.g. `observability`).
+ * @param channelNames Every channel in that namespace.
+ * @returns TypeScript source for the constant object and its union type.
+ */
+const renderChannelNamespace = (namespace: string, channelNames: string[]): string => {
+    const prefix = `${namespace}.`;
+    const constantName = `${namespace.toUpperCase()}_CHANNELS`;
+    const unionName = `T${toPascalCase(namespace)}Channel`;
+    const entries = channelNames
+        .map((channelName) => `    ${toConstantKey(channelName, prefix)}: '${channelName}',`)
+        .join('\n');
+
+    return [
+        `/* Channel names in the "${prefix}" namespace */`,
+        `export const ${constantName} = {`,
+        entries,
+        '} as const;',
+        '',
+        `/* Union of every "${prefix}" channel name */`,
+        `export type ${unionName} = (typeof ${constantName})[keyof typeof ${constantName}];`,
+        ''
+    ].join('\n');
+};
+
+/*
+ * Groups channel names by their first dot-segment, preserving contract order.
+ *
+ * @param channelNames Every channel name in the contract.
+ * @returns Namespace to channel-names map.
+ */
+const groupChannelsByNamespace = (channelNames: string[]): Map<string, string[]> => {
+    const groups = new Map<string, string[]>();
+    for (const channelName of channelNames) {
+        const namespace = channelName.split('.')[0];
+        if (!namespace) continue;
+        groups.set(namespace, [...(groups.get(namespace) ?? []), channelName]);
+    }
+    return groups;
+};
+
+const modelNameConstraints = typeScriptDefaultModelNameConstraints({
+    NAMING_FORMATTER: (value: string) => toInterfaceName(value)
 });
 
 const generator = new TypeScriptGenerator({
     modelType: 'interface',
     enumType: 'union',
     rawPropertyNames: true,
-    constraints: { modelName: modelNameConstraints }
+    constraints: {
+        modelName: modelNameConstraints
+    }
 });
 
-/* Read spec once — modelina consumes it as a string; yaml for channel parsing. */
 const specText = readFileSync(INPUT, 'utf8');
+const document = parse(specText) as IAsyncApiDocument;
 
-interface AsyncApiDoc {
-    channels: Record<string, unknown>;
-}
+const channels = document.channels ?? {};
+const messages = document.components?.messages ?? {};
 
-const { channels } = yaml.load(specText) as AsyncApiDoc;
-const channelKeys = Object.keys(channels ?? {});
+const sseEntries = collectChannelMessageEntries(channels, 'observability.', 'subscribe');
 
-const observabilityChannels = channelKeys.filter((k) => k.startsWith('observability.'));
-const ecommerceChannels = channelKeys.filter((k) => k.startsWith('ecommerce.'));
-const workerChannels = channelKeys.filter((k) => k.startsWith('worker.'));
-const cacheChannels = channelKeys.filter((k) => k.startsWith('cache.'));
+const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels))].map(
+    ([namespace, channelNames]) => renderChannelNamespace(namespace, channelNames)
+);
 
-/* 'realtime.demo.event.broadcast' → 'EVENT_BROADCAST' */
-const toConstKey = (channelName: string, prefix: string): string =>
-    channelName.replace(prefix, '').replace(/[._]/g, '_').replace(/^_/, '').toUpperCase();
+const messageTypeBlocks = Object.entries(messages)
+    .map(([messageName, message]) => {
+        const aliasName = toInterfaceName(messageName);
+        if (message.payload?.$ref) {
+            const targetName = refToTypeName(message.payload.$ref);
+            // Skip self-referential aliases (message name resolves to same type as schema)
+            if (aliasName === targetName) return '';
+            return `export type ${aliasName} = ${targetName};`;
+        }
+        return `export type ${aliasName} = ${schemaToType(message.payload)};`;
+    })
+    .filter(Boolean);
 
-const renderConstGroup = (
-    exportName: string,
-    chList: string[],
-    prefix: string,
-    description: string
-): string => {
-    const entries = chList.map((ch) => `    ${toConstKey(ch, prefix)}: '${ch}',`).join('\n');
-    return `/* ${description} */\nexport const ${exportName} = {\n${entries}\n} as const;\n`;
+/*
+ * Builds the full generated file output content.
+ *
+ * @param modelBlocks Modelina-generated schema blocks.
+ * @returns Complete TypeScript source for the generated types file.
+ */
+const buildOutput = (modelBlocks: string[]): string => {
+    const sections = [
+        '/* eslint-disable @typescript-eslint/naming-convention */',
+        '/*',
+        ' * GENERATED — do not edit manually.',
+        ' * Source: asyncapi.yaml  |  Regenerate: npm run genasyncapi',
+        ' */',
+        '',
+        ...modelBlocks,
+        '',
+        ...messageTypeBlocks,
+        '',
+        '/* Channel name constants (canonical identifiers from asyncapi.yaml) */',
+        '',
+        ...channelNamespaceBlocks,
+        renderLiteralArray(
+            'REALTIME_SSE_EVENT_NAMES',
+            sseEntries.map(({ channelName }) => channelName)
+        ),
+        'export type ISseEventName = (typeof REALTIME_SSE_EVENT_NAMES)[number];',
+        renderPayloadMap('ISseEventPayloadMap', sseEntries),
+        'export type ISseEventPayload<TEventName extends ISseEventName> = ISseEventPayloadMap[TEventName];',
+        ''
+    ];
+
+    return sections.join('\n');
 };
 
+/*
+ * Generates contract models and writes the final realtime types file.
+ */
 generator.generate(specText).then((models) => {
-    const header = [
-        '/* eslint-disable @typescript-eslint/naming-convention */',
-        '// GENERATED — do not edit manually.',
-        '// Source: asyncapi.yaml  |  Regenerate: npm run genasyncapi',
-        ''
-    ];
-
-    const channelSection = [
-        '// Channel name constants (canonical identifiers from asyncapi.yaml)',
-        '',
-        renderConstGroup(
-            'OBSERVABILITY_CHANNELS',
-            observabilityChannels,
-            'observability.',
-            'SSE observability channel names'
-        ),
-        renderConstGroup(
-            'ECOMMERCE_CHANNELS',
-            ecommerceChannels,
-            'ecommerce.',
-            'Ecommerce domain event channel names'
-        ),
-        renderConstGroup(
-            'WORKER_CHANNELS',
-            workerChannels,
-            'worker.',
-            'RabbitMQ worker queue channel names'
-        ),
-        renderConstGroup(
-            'CACHE_CHANNELS',
-            cacheChannels,
-            'cache.',
-            'Redis pub/sub cache channel names'
-        ),
-        '/* Union of all SSE observability channel names */',
-        'export type TObservabilityChannel =',
-        '    (typeof OBSERVABILITY_CHANNELS)[keyof typeof OBSERVABILITY_CHANNELS];',
-        '',
-        '/* Union of all ecommerce channel names */',
-        'export type TEcommerceChannel =',
-        '    (typeof ECOMMERCE_CHANNELS)[keyof typeof ECOMMERCE_CHANNELS];',
-        '',
-        '/* Union of all worker queue channel names */',
-        'export type TWorkerChannel = (typeof WORKER_CHANNELS)[keyof typeof WORKER_CHANNELS];',
-        '',
-        '/* Union of all cache pub/sub channel names */',
-        'export type TCacheChannel = (typeof CACHE_CHANNELS)[keyof typeof CACHE_CHANNELS];',
-        ''
-    ];
-
-    /* Modelina-generated models: named interfaces + anonymous helpers. */
-    const modelSection = [
-        '// TypeScript models generated by @asyncapi/modelina from asyncapi.yaml',
-        '',
-        ...models.map(
-            (m) => `export ${m.result.replace(/Map<string, any>/g, 'Record<string, unknown>')}`
-        ),
-        ''
-    ];
-
-    const output = [...header, ...channelSection, ...modelSection].join('\n');
-    writeFileSync(OUTPUT, output, 'utf8');
+    const modelBlocks = models.map(
+        (model) =>
+            `export ${model.result.replaceAll('Map<string, any>', 'Record<string, unknown>')}`
+    );
+    writeFileSync(OUTPUT, buildOutput(modelBlocks), 'utf8');
     console.log(`✓ Generated ${OUTPUT}`);
 });

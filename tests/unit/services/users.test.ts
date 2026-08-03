@@ -256,7 +256,7 @@ describe('authService.tokenAdd', () => {
 
         await authService.tokenAdd(user, 'email-verify');
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.tokens).toHaveLength(1);
         expect(refreshed!.tokens[0].type).toBe('email-verify');
     });
@@ -268,7 +268,7 @@ describe('authService.tokenAdd', () => {
 
         await authService.tokenAdd(user, 'reset', 3_600_000);
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         const expiration = refreshed!.tokens[0].expiration!;
         expect(expiration.getTime()).toBeGreaterThan(now);
     });
@@ -437,7 +437,7 @@ describe('userService.search', () => {
 });
 
 describe('userService.getById', () => {
-    it('returns a plain object for an existing user', async () => {
+    it('returns a real document for an existing user', async () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
@@ -445,8 +445,8 @@ describe('userService.getById', () => {
 
         expect(found).toBeDefined();
         expect(found!.email).toBe('user@example.com');
-        // Lean object — no Mongoose Document methods
-        expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
+        // A real Mongoose document — schema's toJSON transform normalizes it on the way out
+        expect(typeof (found as unknown as { save: unknown }).save).toBe('function');
     });
 
     it('returns undefined for a non-existent id', async () => {
@@ -509,7 +509,7 @@ describe('userService.adminUpdateById', () => {
 
         await userService.adminUpdateById(id, { password: 'UpdatedPwd1!' });
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).not.toBe(originalHash);
     });
 
@@ -520,7 +520,7 @@ describe('userService.adminUpdateById', () => {
 
         await userService.adminUpdateById(id, { password: '' });
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).toBe(originalHash);
     });
 

@@ -88,7 +88,7 @@ which website its events belong to:
 ```html
 <script
     defer
-    src="http://localhost:8090/script.js"
+    src="http://localhost:3080/script.js"
     data-website-id="00000000-0000-4000-8000-000000000001"
 ></script>
 ```

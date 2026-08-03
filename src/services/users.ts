@@ -7,7 +7,7 @@ import {
     type IResponseSuccess,
     type IResponseReject
 } from '@core/http/response';
-import { zodUserSchema } from '@models/users';
+import { zodUserSchema, applyUserTransform } from '@models/users';
 import type { IUserDocument, IUser } from '@models/users';
 import type { SearchUsersRequest } from '@types';
 import { userRepository } from '@repositories/users';
@@ -73,19 +73,22 @@ export const search = (
     if (filters.active !== undefined && filters.active !== null)
         where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
 
-    return paginatedSearch(userRepository, where, pagination);
+    // findAll is lean — applyUserTransform normalizes it since .lean() bypasses toJSON.
+    return paginatedSearch(userRepository, where, pagination).then((result) => ({
+        ...result,
+        items: (result.items as unknown as Record<string, unknown>[]).map((item) =>
+            applyUserTransform(item)
+        ) as unknown as IUserDocument[]
+    }));
 };
 
 /**
- * Get a single user by ID as a lean (plain JS) object.
+ * Get a single user by ID.
  * Returns undefined when no id provided; result union otherwise (LSP).
  */
 export const getById = (id?: string) => {
     if (!id) return Promise.resolve();
-    return userRepository.findById(id).then((user) => {
-        if (!user) return;
-        return user.toObject();
-    });
+    return userRepository.findById(id).then((user) => user ?? undefined);
 };
 
 /**
@@ -121,7 +124,8 @@ export const adminUpdateById = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
-    userRepository.findById(id).then((user) => {
+    // Credentials included: `data.password`, when present, is assigned onto this document.
+    userRepository.findByIdWithCredentials(id).then((user) => {
         if (!user) return generateReject(404, 'Not Found', [t('ecommerce.user-not-found')]);
         return adminUpdate(user, data);
     });
@@ -153,7 +157,9 @@ export const remove = (
  * @param email
  */
 export const findByEmail = (email: string): Promise<IUserDocument | undefined | null> =>
-    userRepository.findOne({ email });
+    // Credentials included: both callers (reset-request, delete-request) immediately push a
+    // token onto the document, which `select: false` would otherwise leave undefined.
+    userRepository.findOneWithCredentials({ email });
 
 /**
  * Find a user that holds a password-reset token.
@@ -164,7 +170,8 @@ export const findByEmail = (email: string): Promise<IUserDocument | undefined | 
 export const findByPasswordResetToken = (
     token: string
 ): Promise<IUserDocument | undefined | null> =>
-    userRepository.findOne({ 'tokens.token': token, 'tokens.type': 'password' });
+    // Credentials included: the caller inspects the matching token entry's expiration.
+    userRepository.findOneWithCredentials({ 'tokens.token': token, 'tokens.type': 'password' });
 
 /**
  * Find a user that holds an account-deletion token.
@@ -175,7 +182,8 @@ export const findByPasswordResetToken = (
 export const findByAccountDeleteToken = (
     token: string
 ): Promise<IUserDocument | undefined | null> =>
-    userRepository.findOne({ 'tokens.token': token, 'tokens.type': 'delete' });
+    // Credentials included: the caller inspects the matching token entry's expiration.
+    userRepository.findOneWithCredentials({ 'tokens.token': token, 'tokens.type': 'delete' });
 
 /**
  * Remove the given token from the user document and persist it.
