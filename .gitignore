@@ -7,3 +7,10 @@ dist
 src/storage/invoices/*
 src/storage/files/*
 docs/.vitepress/cache
+
+# test output
+coverage
+
+# mutation testing (stryker sandbox + html report)
+.stryker-tmp
+reports/

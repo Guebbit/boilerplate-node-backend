@@ -65,7 +65,7 @@ flowchart LR
 | App image           | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                            |
 | Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                          |
 | Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands |
-| Podman support      | `podman:restart`, `podman:rebuild`, and `podman:nuke` scripts wrap the same compose-oriented workflow                                 |
+| Podman support      | `podman:restart`, `podman:rebuild`, and `podman:kill` scripts wrap the same compose-oriented workflow                                 |
 
 ## Container reference
 
@@ -111,20 +111,36 @@ flowchart LR
 
 ## Podman and Promtail log collection
 
-The main `docker-compose.yml` mounts `/var/lib/docker/containers` and uses Docker's `json-file` log format.
-Rootless Podman uses the `k8s-file` log driver (CRI format) and stores logs under a different host path.
+Docker writes container logs as `json-file` under `/var/lib/docker/containers`. Rootless Podman
+uses the `k8s-file` log driver (CRI format) and stores them under a different host path. Promtail
+has to be pointed at the right one, or it tails nothing.
 
-A dedicated override file, `docker-compose.podman.yml`, handles this difference. To activate it, add two lines to your `.env` (see `.env-example`):
+The base `docker-compose.yml` therefore mounts **neither**. Each runtime adds its own path through
+a small override file — `docker-compose.docker.yml` or `docker-compose.podman.yml` — and the npm
+scripts pass the correct one with `-f`:
+
+```bash
+npm run podman:restart   # -f docker-compose.yml -f docker-compose.podman.yml
+npm run docker:restart   # -f docker-compose.yml -f docker-compose.docker.yml
+```
+
+On Podman, one line in `.env` (see `.env-example`) supplies the log path the override needs:
 
 ```dotenv
-COMPOSE_FILE=docker-compose.yml:docker-compose.podman.yml
 PODMAN_CONTAINERS_PATH=/home/youruser/.local/share/containers/storage/overlay-containers
 ```
 
-`podman compose` reads `.env` automatically, so the `podman:restart` and `podman:rebuild` scripts stay simple and require no extra flags.
+The Podman override also swaps in `.docker/observability/promtail.podman.config.yaml`, which
+parses the CRI log format.
 
-- `COMPOSE_FILE` tells compose to merge the Podman override, which swaps in `.docker/observability/promtail.podman.config.yaml` (CRI pipeline).
-- `PODMAN_CONTAINERS_PATH` is the host path where rootless Podman stores container log files.
+> **Use the scripts, not a bare `compose up`.** The base file alone gives Promtail no host log
+> path: it starts, tails nothing, and Loki stays empty with no error anywhere — the failure is
+> completely silent, and only shows up as blank log panels in Grafana.
+>
+> **Do not set `COMPOSE_FILE` in `.env` to work around this.** Docker Compose honours it there,
+> but podman-compose ignores it (verified 2026-08-05 against podman-compose 1.6.0), so it works
+> on one runtime and silently does nothing on the other — which is why the file list lives in the
+> scripts instead.
 
 ## When Kubernetes starts to make sense
 

@@ -35,10 +35,16 @@ secondary path and has its own scripts (see [Running on the host](#running-on-th
     - `NODE_TOKEN_REFRESH`
     - The database and Redis URLs already point at the compose services — leave them alone
       unless you are pointing at something external (Atlas, a managed Redis, …).
-4. Pick your container runtime's Promtail override (see `.env-example` → _Promtail Log
-   Collection_), e.g. `COMPOSE_FILE=docker-compose.yml:docker-compose.podman.yml`.
-5. Bring the stack up:
-    - `podman compose up` (or `docker compose up`)
+4. On Podman, set `PODMAN_CONTAINERS_PATH` in `.env` (see `.env-example` → _Promtail Log
+   Collection_). Nothing to set on Docker.
+5. Bring the stack up with the script for your runtime:
+    - `npm run podman:restart` (or `npm run docker:restart`)
+
+Use the scripts rather than a bare `compose up`: each one passes its runtime's Promtail override
+with `-f`, which is what gives Promtail a host log path to tail. A bare `podman compose up` runs
+the base file only, and its Promtail tails nothing — Loki stays empty and Grafana's log panels
+stay blank, with no error anywhere. `COMPOSE_FILE` in `.env` does not fix this: podman-compose
+ignores it there.
 
 That is the whole quickstart. The `app` container runs `npm run db:bootstrap` before starting
 the server, so the database is migrated and seeded on first boot and you get a browsable API
@@ -94,6 +100,32 @@ server all wanted to live.
 
 New services belong inside `3000–3099`. Every entry is overridable through the env var in the
 right-hand column if a port is already taken on your machine.
+
+> `DOCS_PORT` must not be set back to `4173`. That is VitePress's own `preview` default, which
+> the paired frontend uses on the host — it is the exact collision this port map exists to avoid.
+
+## Pairing with the frontend
+
+Start **this** stack first, then the frontend's: it owns the API, plus the Alloy Faro receiver
+and Umami that the frontend's browser code posts to.
+
+The two stacks stay **independent** — separate compose projects, separate networks, and nothing
+to join. The only thing that crosses the boundary is the user's browser, running on the host: it
+resolves the frontend's `VITE_API_URL` itself, so the frontend always addresses this API through
+a **host** port (`http://localhost:3000`), never a compose service name. That is why the two
+disjoint port blocks are the entire integration contract.
+
+What has to line up:
+
+| This repo (`.env`)                           | Frontend (`.env`)                    |
+| -------------------------------------------- | ------------------------------------ |
+| `NODE_PORT=3000`                             | `VITE_API_URL=http://localhost:3000` |
+| `NODE_CORS_ORIGIN` contains `:8080`, `:8085` | dev server `8080`, e2e server `8085` |
+| `ALLOY_FARO_PORT=12347`                      | `VITE_FARO_URL=…:12347/collect`      |
+| `UMAMI_PORT=3080`                            | `VITE_UMAMI_SRC=…:3080/script.js`    |
+| `UMAMI_WEBSITE_ID`                           | `VITE_UMAMI_WEBSITE_ID` (same UUID)  |
+
+The shipped defaults on both sides already match; the table is for when you move a port.
 
 ## Database migrations & seeding
 

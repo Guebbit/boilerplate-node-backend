@@ -32,8 +32,7 @@ JWT-based authentication. Login returns an `accessToken` (short-lived) and a `re
 | POST | `/account/login` | none | Authenticate and get JWT |
 | POST | `/account/signup` | none | Register a new user |
 | GET | `/account` | user | Get current user profile |
-| GET | `/account/refresh` | none | Refresh access token |
-| GET | `/account/refresh/:token` | none | Refresh via token param |
+| GET | `/account/refresh` | none | Refresh access token (uses HttpOnly cookie) |
 | POST | `/account/reset` | none | Request password reset email |
 | POST | `/account/reset-confirm` | none | Confirm password reset |
 | POST | `/account/logout-all` | user | Revoke all refresh tokens |

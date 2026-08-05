@@ -27,14 +27,18 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 
 ## Test scripts
 
-| Script             | Job                                                                         | Read more                                      |
-| ------------------ | --------------------------------------------------------------------------- | ---------------------------------------------- |
-| `test`             | run unit then integration suites                                            | [Testing & Docs](./testing-and-docs.md)        |
-| `test:unit`        | full Jest unit suite                                                        | [Testing & Docs](./testing-and-docs.md)        |
-| `test:integration` | HTTP integration suite in-band                                              | [Testing & Docs](./testing-and-docs.md)        |
-| `test:unit:target` | placeholder one-file Jest command for focused debugging                     | [Testing & Docs](./testing-and-docs.md)        |
-| `test:prism`       | run a quick Prism mock smoke test from `openapi.yaml`                       | [OpenAPI Workflow](../api/openapi-workflow.md) |
-| `setup:mongod`     | copy a `mongod` binary from a Docker image for restricted test environments | [Testing & Docs](./testing-and-docs.md)        |
+| Script               | Job                                                                                                                                 | Read more                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `test`               | run unit, then integration, then contract                                                                                           | [Testing & Docs](./testing-and-docs.md)        |
+| `test:unit`          | `tests/unit` only — logic below HTTP                                                                                                | [Testing & Docs](./testing-and-docs.md)        |
+| `test:unit:coverage` | the same suite with a coverage report                                                                                               | [Testing & Docs](./testing-and-docs.md)        |
+| `test:integration`   | HTTP integration suite in-band                                                                                                      | [Testing & Docs](./testing-and-docs.md)        |
+| `test:contract`      | validate real responses against `openapi.yaml`                                                                                      | [Testing & Docs](./testing-and-docs.md)        |
+| `test:all`           | every suite in one Jest run — the escape hatch, not the routine                                                                     | [Testing & Docs](./testing-and-docs.md)        |
+| `test:mutation`      | Stryker: break the source on purpose and report what the tests failed to notice. Slow — nightly or before a refactor, never in a PR | [Testing & Docs](./testing-and-docs.md)        |
+| `test:unit:target`   | placeholder one-file Jest command for focused debugging                                                                             | [Testing & Docs](./testing-and-docs.md)        |
+| `test:prism`         | run a quick Prism mock smoke test from `openapi.yaml`                                                                               | [OpenAPI Workflow](../api/openapi-workflow.md) |
+| `setup:mongod`       | copy a `mongod` binary from a Docker image for restricted test environments                                                         | [Testing & Docs](./testing-and-docs.md)        |
 
 ## Contract and docs scripts
 
@@ -65,22 +69,25 @@ starting the server.
 
 `db:seed` calls `db:cache:clear`'s logic itself whenever it created something. Run the script by
 hand after editing the database another way (`mongosh`, a GUI) — those writes never reach the
-API, so nothing else invalidates the cache. See
-[Seeding and the response cache](../../README.md#seeding-and-the-response-cache).
+API, so nothing else invalidates the cache. See _Seeding and the response cache_ in the repo
+README.
 
 Every one of these has a `:host` twin (`db:seed:host`, `db:cache:clear:host`, `db:bootstrap:host`,
 …) that overrides `NODE_DB_URI` / `NODE_REDIS_URL` to `localhost` via `cross-env`. The shipped
 `.env` uses compose hostnames, so the plain scripts only resolve from inside a container — see
-the README's [Running on the host](../../README.md#running-on-the-host).
+_Running on the host_ in the repo README.
 
 ## Container & host helper scripts
 
-| Script                  | Job                                                            | Read more                                 |
-| ----------------------- | -------------------------------------------------------------- | ----------------------------------------- |
-| `podman:restart`        | restart the compose stack                                      | [Docker & Podman](./docker-and-podman.md) |
-| `podman:rebuild`        | rebuild images and restart the stack                           | [Docker & Podman](./docker-and-podman.md) |
-| `podman:nuke`           | force-stop stuck Podman processes and restart the user service | [Docker & Podman](./docker-and-podman.md) |
-| `kill:win` / `kill:gnu` | emergency local process cleanup helpers                        | local developer convenience               |
+Each runtime has the same three verbs. Use them instead of a bare `compose up`: they pass that
+runtime's Promtail override with `-f`, which is what gives Promtail a host log path to tail.
+
+| Script                              | Job                                                                                                                                                        | Read more                                 |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `podman:restart` / `docker:restart` | restart the compose stack                                                                                                                                  | [Docker & Podman](./docker-and-podman.md) |
+| `podman:rebuild` / `docker:rebuild` | rebuild images and restart the stack                                                                                                                       | [Docker & Podman](./docker-and-podman.md) |
+| `podman:kill` / `docker:kill`       | force-stop this project's compose containers                                                                                                               | [Docker & Podman](./docker-and-podman.md) |
+| `podman:compose` / `docker:compose` | the `compose -f base -f override` invocation the three above share; call it directly for one-off subcommands, e.g. `npm run podman:compose -- logs -f app` | [Docker & Podman](./docker-and-podman.md) |
 
 ## Maintenance & publishing scripts
 

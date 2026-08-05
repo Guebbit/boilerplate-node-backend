@@ -80,11 +80,26 @@ export default withMermaid(
                         ]
                     },
                     {
-                        text: 'Analytics & QA',
+                        text: 'Analytics',
+                        collapsed: false,
+                        items: [{ text: 'PostHog', link: '/tools/posthog' }]
+                    },
+                    {
+                        text: 'Testing',
                         collapsed: false,
                         items: [
-                            { text: 'PostHog', link: '/tools/posthog' },
-                            { text: 'Testing & Docs', link: '/tools/testing-and-docs' }
+                            { text: 'Testing (overview)', link: '/tools/testing-and-docs' },
+                            { text: 'Unit Testing', link: '/tools/unit-testing' },
+                            { text: 'Integration Testing', link: '/tools/integration-testing' },
+                            {
+                                text: 'Contract Testing (Response)',
+                                link: '/tools/contract-testing'
+                            },
+                            {
+                                text: 'Contract-Derived Request Data',
+                                link: '/tools/contract-request-data'
+                            },
+                            { text: 'Mutation Testing', link: '/tools/mutation-testing' }
                         ]
                     }
                 ],
