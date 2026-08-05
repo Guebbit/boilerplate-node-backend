@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { AuthTokens } from './authTokens';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type AuthTokensEnvelope = SuccessEnvelope & {
+export interface AuthTokensEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: AuthTokens;
-};
+}

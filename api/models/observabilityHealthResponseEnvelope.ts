@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { ObservabilityHealthResponse } from './observabilityHealthResponse';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type ObservabilityHealthResponseEnvelope = SuccessEnvelope & {
+export interface ObservabilityHealthResponseEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: ObservabilityHealthResponse;
-};
+}

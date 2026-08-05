@@ -7,9 +7,11 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { HealthPing } from './healthPing';
 
-export interface SuccessEnvelope {
+export interface HealthPingEnvelope {
   success: true;
   status: number;
   message: string;
+  data: HealthPing;
 }

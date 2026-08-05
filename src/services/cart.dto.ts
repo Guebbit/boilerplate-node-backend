@@ -77,6 +77,18 @@ export const toCartItemDto = ({ product, quantity }: ICartItem): ICartItemDto =>
 });
 
 /*
+ * Project an internal cart item down to what `openapi.yaml` declares for CartItem —
+ * `{ productId, quantity }` and nothing else.
+ *
+ * ICartItemDto carries the populated product so the cart can be priced without a second query;
+ * that field must not reach the wire, because CartItem is `additionalProperties: false`.
+ */
+export const toCartItemResponse = ({ productId, quantity }: ICartItemDto): CartItem => ({
+    productId,
+    quantity
+});
+
+/*
  * Map a full user document to IUserCartDto, projecting only cart-relevant fields.
  */
 export const toUserCartDto = (user: IUserDocument): IUserCartDto => ({

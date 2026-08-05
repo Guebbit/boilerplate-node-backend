@@ -20,50 +20,30 @@ import { orderRepository } from '@repositories/orders';
  */
 
 /**
- * Computed fields pipeline stage — shared between getAll and search.
- * Adds totalItems, totalQuantity and totalPrice to every order document.
+ * Normalize aggregate output into order documents.
+ *
+ * `aggregate` returns plain JS objects that bypass `toJSON`, so `applyOrderTransform` has to be
+ * applied by hand — including the `totalItems`/`totalQuantity`/`totalPrice` it derives. The double
+ * cast is unavoidable (aggregate is untyped and the result is document-shaped, not a document);
+ * keeping it in one place is what stops each caller from spelling it differently.
  */
-const addComputedFields: PipelineStage.AddFields = {
-    $addFields: {
-        // Count all OrderItems
-        totalItems: {
-            $size: '$items'
-        },
-        // Sum quantities from all OrderItems
-        totalQuantity: {
-            $sum: '$items.quantity'
-        },
-        // Sum of all prices multiplied for quantity
-        totalPrice: {
-            $sum: {
-                $map: {
-                    input: '$items',
-                    as: 'product',
-                    in: {
-                        $multiply: ['$$product.product.price', '$$product.quantity']
-                    }
-                }
-            }
-        }
-    }
-};
+const transformAggregatedOrders = (items: unknown[]): IOrderDocument[] =>
+    (items as Record<string, unknown>[]).map((item) =>
+        applyOrderTransform(item)
+    ) as unknown as IOrderDocument[];
 
 /**
  * Get all orders with optional aggregation pipeline stages.
- * Adds computed fields: totalItems, totalQuantity, totalPrice.
+ * `totalItems`, `totalQuantity` and `totalPrice` are added by `applyOrderTransform`.
  *
- * @param pipeline - Optional stages to apply BEFORE the computed fields stage
+ * @param pipeline - Optional stages to apply
  */
 export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]> =>
-    // aggregate output is plain JS — applyOrderTransform normalizes it since it bypasses toJSON.
+    // Mongoose rejects an empty pipeline, and callers are allowed to pass no stages at all, so a
+    // match-everything stage stands in for that case only.
     orderRepository
-        .aggregate([...pipeline, addComputedFields])
-        .then(
-            (items) =>
-                (items as unknown as Record<string, unknown>[]).map((item) =>
-                    applyOrderTransform(item)
-                ) as unknown as IOrderDocument[]
-        );
+        .aggregate(pipeline.length > 0 ? pipeline : [{ $match: {} }])
+        .then((items) => transformAggregatedOrders(items));
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI.
@@ -104,11 +84,7 @@ export const search = (
         // Assumes productSchema uses default _id. If you store product.id instead, change to "items.product.id".
         match['items.product._id'] = new Types.ObjectId(String(search.productId));
 
-    const basePipeline: PipelineStage[] = [
-        { $match: match },
-        { $sort: { createdAt: -1 } },
-        addComputedFields
-    ];
+    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: { createdAt: -1 } }];
 
     return orderRepository
         .aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }])
@@ -119,9 +95,7 @@ export const search = (
             return orderRepository
                 .aggregate([...basePipeline, { $skip: skip }, { $limit: pageSize }])
                 .then((items) => ({
-                    items: (items as unknown as Record<string, unknown>[]).map((item) =>
-                        applyOrderTransform(item)
-                    ) as unknown as IOrderDocument[],
+                    items: transformAggregatedOrders(items),
                     meta: {
                         page,
                         pageSize,
@@ -152,16 +126,9 @@ export const getById = (
                 {
                     $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown>
                 },
-                { $limit: 1 },
-                addComputedFields
+                { $limit: 1 }
             ])
-            .then(([result]) =>
-                result
-                    ? (applyOrderTransform(
-                          result as unknown as Record<string, unknown>
-                      ) as unknown as IOrderDocument)
-                    : undefined
-            );
+            .then(([result]) => (result ? transformAggregatedOrders([result])[0] : undefined));
     }
     return orderRepository.findById(id).then((order) => order ?? undefined);
 };

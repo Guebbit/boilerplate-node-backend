@@ -7,11 +7,9 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { FeedbackRequest } from './feedbackRequest';
+import type { ErrorResponse } from './errorResponse';
 
-export interface FeedbackRequestEnvelope {
-  success: true;
-  status: number;
-  message: string;
-  data: FeedbackRequest;
-}
+/**
+ * The request conflicts with the current state of the resource
+ */
+export type ConflictResponse = ErrorResponse;

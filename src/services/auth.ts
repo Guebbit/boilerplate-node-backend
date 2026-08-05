@@ -70,7 +70,7 @@ export const passwordChange = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-                400,
+                422,
                 'passwordChange - bad request',
                 parseResult.error.issues.map(({ message }) => message)
             )
@@ -115,7 +115,7 @@ export const signup = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-                400,
+                422,
                 'signup - bad request',
                 parseResult.error.issues.map(({ message }) => message)
             )
@@ -155,7 +155,7 @@ export const login = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-                400,
+                422,
                 'login - bad request',
                 parseResult.error.issues.map(({ message }) => message)
             )

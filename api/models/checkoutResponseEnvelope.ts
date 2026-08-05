@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { CheckoutResponse } from './checkoutResponse';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type CheckoutResponseEnvelope = SuccessEnvelope & {
+export interface CheckoutResponseEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: CheckoutResponse;
-};
+}

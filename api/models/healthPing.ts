@@ -7,11 +7,9 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { FeedbackRequest } from './feedbackRequest';
+import type { HealthPingStatus } from './healthPingStatus';
 
-export interface FeedbackRequestEnvelope {
-  success: true;
-  status: number;
-  message: string;
-  data: FeedbackRequest;
+export interface HealthPing {
+  /** Liveness indicator. Always `ok` when the process is answering. */
+  status: HealthPingStatus;
 }

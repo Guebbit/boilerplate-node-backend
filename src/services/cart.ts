@@ -7,6 +7,7 @@ import {
     type IResponseReject
 } from '@core/http/response';
 import { databaseErrorInterpreter } from '@core/http/errors';
+import { sumLineItems } from '@core/totals';
 import type { IOrderDocument } from '@models/orders';
 import type { IUserDocument, ICartItem } from '@models/users';
 import type { IProductDocument } from '@models/products';
@@ -15,10 +16,12 @@ import { orderRepository } from '@repositories/orders';
 import {
     toUserCartDto,
     toCartItemDto,
+    toCartItemResponse,
     toIdString,
     type ICartItemDto,
     type IUserCartDto
 } from '@services/cart.dto';
+import type { CartItem } from '@types';
 
 /**
  * Cart Service
@@ -59,27 +62,27 @@ export const cartGet = (userId: string): Promise<ICartItemDto[]> =>
 
 /**
  * Get user cart with computed summary (item count, total quantity, total price).
+ *
+ * The populated `product` is used to price the cart and is then dropped: `CartItem` in
+ * `openapi.yaml` is `additionalProperties: false` over `{ productId, quantity }`, so shipping the
+ * whole product per line was over-serialization. No client reads it — the frontend renders the
+ * cart from `productId`/`quantity` and looks products up in its own store — and the contract
+ * suite fails on it. Use {@link cartGet} where the populated product is actually needed.
  */
 export const cartGetWithSummary = (
     userId: string
 ): Promise<{
-    items: ICartItemDto[];
+    items: CartItem[];
     summary: { itemsCount: number; totalQuantity: number; total: number };
 }> =>
     cartGet(userId).then((items) => {
-        let totalQuantity = 0;
-        let total = 0;
-        for (const item of items) {
-            totalQuantity += item.quantity;
-            const product = item.product as { price?: number };
-            total += (product?.price ?? 0) * item.quantity;
-        }
+        const { count, quantity, price } = sumLineItems(items);
         return {
-            items,
+            items: items.map((item) => toCartItemResponse(item)),
             summary: {
-                itemsCount: items.length,
-                totalQuantity,
-                total
+                itemsCount: count,
+                totalQuantity: quantity,
+                total: price
             }
         };
     });

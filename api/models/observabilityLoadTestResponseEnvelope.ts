@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { ObservabilityLoadTestResult } from './observabilityLoadTestResult';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type ObservabilityLoadTestResponseEnvelope = SuccessEnvelope & {
+export interface ObservabilityLoadTestResponseEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: ObservabilityLoadTestResult;
-};
+}

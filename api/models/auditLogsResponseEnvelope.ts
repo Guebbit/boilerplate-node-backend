@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { AuditLogsResponse } from './auditLogsResponse';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type AuditLogsResponseEnvelope = SuccessEnvelope & {
+export interface AuditLogsResponseEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: AuditLogsResponse;
-};
+}

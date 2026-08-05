@@ -7,9 +7,11 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { SuccessEnvelope } from './successEnvelope';
 import type { User } from './user';
 
-export type UserEnvelope = SuccessEnvelope & {
+export interface UserEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: User;
-};
+}

@@ -7,11 +7,13 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { FeedbackRequest } from './feedbackRequest';
 
-export interface FeedbackRequestEnvelope {
-  success: true;
-  status: number;
-  message: string;
-  data: FeedbackRequest;
-}
+/**
+ * Liveness indicator. Always `ok` when the process is answering.
+ */
+export type HealthPingStatus = typeof HealthPingStatus[keyof typeof HealthPingStatus];
+
+
+export const HealthPingStatus = {
+  ok: 'ok',
+} as const;

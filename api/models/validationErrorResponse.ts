@@ -7,8 +7,16 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ErrorResponse } from './errorResponse';
+import type { ErrorItem } from './errorItem';
 
-export type ValidationErrorResponse = ErrorResponse & {
-  message?: string;
-};
+export interface ValidationErrorResponse {
+  success: false;
+  status: number;
+  /** Human-readable summary for this failure */
+  message: string;
+  /**
+     * Structured machine-friendly errors
+     * @minItems 1
+     */
+  errors: ErrorItem[];
+}

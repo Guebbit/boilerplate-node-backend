@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { FeedbackRequestsResponse } from './feedbackRequestsResponse';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type FeedbackRequestsResponseEnvelope = SuccessEnvelope & {
+export interface FeedbackRequestsResponseEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: FeedbackRequestsResponse;
-};
+}

@@ -22,13 +22,27 @@ import {
     ATTR_MESSAGING_SYSTEM,
     ATTR_MESSAGING_DESTINATION_NAME
 } from '@opentelemetry/semantic-conventions/incubating';
-import { getDirname } from '@core/adapters/filesystem';
 import { logger } from '@core/adapters/logger';
 import { withSpan } from '@core/observability/tracer';
 import { isQueueEnabled, publishToQueue } from '@core/adapters/queue';
 // Queue name shared with the worker that drains it — imported rather than duplicated so
 // producer and consumer cannot drift apart.
 import { EMAIL_QUEUE } from '../../workers/email.worker';
+
+/**
+ * Absolute path to the EJS email templates.
+ *
+ * Defaults to `views/templates-emails` under the process working directory, which is the project
+ * root for every entry point (npm scripts, the compose command, tsx). There is no compile step —
+ * `build` runs `ts-check` and lint, so the app always executes from source and `views/` never
+ * moves. `NODE_EMAIL_TEMPLATES_DIR` overrides the whole path when it does.
+ *
+ * `tests/unit/core/adapters/mailer-templates.test.ts` asserts every template resolves under this
+ * directory, so the path cannot silently rot.
+ */
+export const EMAIL_TEMPLATES_DIR = process.env.NODE_EMAIL_TEMPLATES_DIR
+    ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
+    : path.resolve(process.cwd(), 'views/templates-emails');
 
 /**
  * Create a transporter object using the default SMTP transport.
@@ -97,15 +111,7 @@ export const nodemailer = (
                 // `renderFile` reads the template from disk and returns the interpolated HTML.
                 // EJS caches compiled templates internally, so repeat sends skip recompilation.
                 .renderFile(
-                    // Retrieve the template.
-                    // `path.resolve` + `getDirname(import.meta.url)` builds an absolute path
-                    // relative to *this file* rather than the process CWD — required because the
-                    // compiled output runs from `dist/`, where CWD-relative paths would miss.
-                    path.resolve(
-                        getDirname(import.meta.url),
-                        '../../views/templates-emails',
-                        templateName
-                    ),
+                    path.resolve(EMAIL_TEMPLATES_DIR, templateName),
                     // Populate the template
                     data
                 )

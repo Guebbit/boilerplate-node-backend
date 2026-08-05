@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { RefreshTokenResponse } from './refreshTokenResponse';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type RefreshTokenEnvelope = SuccessEnvelope & {
+export interface RefreshTokenEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: RefreshTokenResponse;
-};
+}

@@ -8,8 +8,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { CartResponse } from './cartResponse';
-import type { SuccessEnvelope } from './successEnvelope';
 
-export type CartResponseEnvelope = SuccessEnvelope & {
+export interface CartResponseEnvelope {
+  success: true;
+  status: number;
+  message: string;
   data: CartResponse;
-};
+}

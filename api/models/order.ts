@@ -17,8 +17,21 @@ export interface Order {
   userId: Id;
   email: Email;
   items: OrderItem[];
-  /** @minimum 0 */
-  total: number;
+  /**
+     * Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.
+     * @minimum 0
+     */
+  totalItems: number;
+  /**
+     * Sum of `quantity` across every line item.
+     * @minimum 0
+     */
+  totalQuantity: number;
+  /**
+     * Sum of `product.price × quantity` across every line item.
+     * @minimum 0
+     */
+  totalPrice: number;
   /** Optional order notes */
   notes?: string;
   status: OrderStatus;

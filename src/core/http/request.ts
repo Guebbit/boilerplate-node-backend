@@ -16,6 +16,21 @@ import { Types } from 'mongoose';
 import { rejectResponse } from '@core/http/response';
 
 /**
+ * Read `request.body` as a plain object.
+ *
+ * Express 5 leaves `req.body` UNDEFINED when the request carries no body (express 4 defaulted it
+ * to `{}`), so every reader has to cope with that — a body-less `DELETE /cart/:productId`, which
+ * is exactly what the frontend sends, otherwise threw "Cannot read properties of undefined" and
+ * surfaced as a 500. Every helper below goes through here so the guard exists once instead of
+ * being remembered per call site.
+ *
+ * Typed as a `Record` rather than `any`: body values come off the wire and are `unknown` until
+ * something validates them.
+ */
+const getRequestBody = (request: Request<ParamsDictionary>): Record<string, unknown> =>
+    (request.body ?? {}) as Record<string, unknown>;
+
+/**
  * Normalize pagination parameters from a pre-merged source object.
  * Falls back to NODE_SETTINGS_PAGINATION_PAGE_SIZE env var.
  *
@@ -82,9 +97,7 @@ export const extractRequestPagination = (
     request: Request<ParamsDictionary>
 ): { page: number | undefined; pageSize: number | undefined } => {
     const merged = mergeBodyQuery(
-        // `request.body` is `any` under Express' types and may be undefined when no body parser
-        // matched the content type, hence the explicit casts.
-        request.body as Record<string, unknown> | undefined,
+        getRequestBody(request),
         request.query as Record<string, string> | undefined
     );
     return extractPagination({
@@ -112,7 +125,8 @@ export const extractAndValidateId = (
     entityLabel: string
 ): string | undefined => {
     // Route param first (`/products/:id`), then body — a param is the more explicit intent.
-    const rawId = request.params.id ?? (request.body as { id?: string }).id;
+    const rawId =
+        request.params.id ?? (getRequestBody(request).id as string | string[] | undefined);
     // A repeated query/body key arrives as an array; take the first rather than stringifying
     // the whole array into something that can never be a valid ObjectId.
     const id = Array.isArray(rawId) ? rawId[0] : rawId;
@@ -143,8 +157,7 @@ export const extractCustomId = (
     fields: { param?: string; body?: string } = {}
 ): string | undefined => {
     const fromParameters = fields.param ? request.params[fields.param] : undefined;
-    const body = request.body as Record<string, unknown>;
-    const fromBody = fields.body ? body[fields.body] : undefined;
+    const fromBody = fields.body ? getRequestBody(request)[fields.body] : undefined;
     // Delegates precedence to `extractId`: param before body, first truthy value wins.
     return extractId(
         Array.isArray(fromParameters) ? fromParameters[0] : (fromParameters as string | undefined),
@@ -175,8 +188,4 @@ export const isValidObjectId = (id: string | undefined): id is string =>
  */
 export const extractHardDelete = (request: Request<ParamsDictionary>): boolean =>
     // `??` chain, so an explicitly-false body value is not overridden by an absent query param.
-    !!(
-        request.query.hardDelete ??
-        request.params.hardDelete ??
-        (request.body as { hardDelete?: boolean }).hardDelete
-    );
+    !!(request.query.hardDelete ?? request.params.hardDelete ?? getRequestBody(request).hardDelete);
