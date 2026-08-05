@@ -51,18 +51,20 @@ describe('authService.signup', () => {
         expect((result as IResponseReject).status).toBe(409);
     });
 
-    it('rejects with 400 when the email format is invalid', async () => {
+    it('rejects with 422 when the email format is invalid', async () => {
         const result = await authService.signup('not-an-email', 'user', 'Password1!', 'Password1!');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        // 422 across the board for validation failures: auth used to answer 400 here while every
+        // other service used 422, and openapi.yaml declares 422 (it never declares 400 at all).
+        expect((result as IResponseReject).status).toBe(422);
     });
 
-    it('rejects with 400 when the password is too short', async () => {
+    it('rejects with 422 when the password is too short', async () => {
         const result = await authService.signup('short@example.com', 'shortpwd', 'abc', 'abc');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        expect((result as IResponseReject).status).toBe(422);
     });
 });
 
@@ -287,7 +289,7 @@ describe('authService.passwordChange', () => {
         const result = await authService.passwordChange(user, 'NewPassword1!', 'Different1!');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        expect((result as IResponseReject).status).toBe(422);
     });
 
     it('rejects when the new password is too short', async () => {
@@ -295,7 +297,7 @@ describe('authService.passwordChange', () => {
         const result = await authService.passwordChange(user, 'abc', 'abc');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        expect((result as IResponseReject).status).toBe(422);
     });
 
     it('actually changes the password so the new one can be used to log in', async () => {

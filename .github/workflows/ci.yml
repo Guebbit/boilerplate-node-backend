@@ -286,6 +286,38 @@ jobs:
             - name: Run integration tests
               run: npm run test:integration
 
+    test-contract:
+        # Drives the real Express app over HTTP (supertest + in-memory Mongo) and validates every
+        # response against openapi.yaml, including `additionalProperties: false`.
+        #
+        # This is the gate for the over-serialization class — a field appearing on a response
+        # without being declared in the spec fails here. The generated Zod schemas do not cover it:
+        # nothing in this service validates a *response* with Zod (they guard request bodies), and
+        # they are generated non-strict, so unknown keys would be stripped rather than rejected.
+        #
+        # No Mongo/Redis service container is needed: the suite uses mongodb-memory-server, and the
+        # cache adapter treats an unreachable Redis as a miss.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run contract tests
+              run: npm run test:contract
+
     audit:
         # Fail on known high/critical severity vulnerabilities in production dependencies.
         runs-on: ubuntu-latest
@@ -325,6 +357,7 @@ jobs:
             - build
             - test-unit
             - test-integration
+            - test-contract
             - audit
         runs-on: ubuntu-latest
         timeout-minutes: 5

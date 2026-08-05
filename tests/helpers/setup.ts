@@ -2,6 +2,14 @@ import { existsSync } from 'node:fs';
 import i18next from 'i18next';
 import enTranslation from '../../src/locales/en.json';
 
+/**
+ * The global rate limiter (src/middlewares/security.ts) defaults to 100 requests per 15 minutes.
+ * The contract suite issues far more than that across a run, and every request shares the same
+ * source address, so without this the later tests fail with 429s that have nothing to do with
+ * what they assert. Raised rather than disabled, so a runaway loop still terminates.
+ */
+process.env.NODE_RATE_LIMIT_MAX ??= '100000';
+
 //
 //
 /**
