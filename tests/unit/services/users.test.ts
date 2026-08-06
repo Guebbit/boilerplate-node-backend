@@ -352,6 +352,81 @@ describe('userService.validateData', () => {
 
         expect(errors).toHaveLength(0);
     });
+
+    /**
+     * These four used to pass validation untouched, because the schema was applied through a
+     * `.pick({ email, username, password })` that never looked at the rest of the payload.
+     * `admin` was the worst of them: an unchecked string reached Mongoose and threw a CastError
+     * on save, so `POST /users` answered 500 where its own contract promises 422.
+     */
+    it.each(['admin', 'active'])('rejects a wrong-typed %s flag', (field) => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!',
+            [field]: 'not-a-boolean'
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it.each([true, false])('accepts a real boolean admin flag (%s)', (admin) => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!',
+            admin
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // The contract says `uri-reference`, not `uri`: an uploaded avatar is stored as a path
+    // relative to the API host, so requiring an absolute URL here would reject every upload.
+    it('accepts a server-relative upload path as the imageUrl', () => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!',
+            imageUrl: '/uploads/1700000000-avatar.jpg'
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // Not strict: a PUT body legitimately carries `id`, which is not part of the user schema.
+    it('ignores body keys the schema does not declare', () => {
+        const errors = userService.validateData({
+            id: '65dc8a99604c307b702b5ccc',
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!'
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    /**
+     * The messages are what the API sends a client verbatim, so a wrong i18n key is a
+     * user-visible bug — and the assertions above cannot see it, because a missing key makes
+     * i18next return the key itself, which is still a non-empty string.
+     *
+     * That is exactly what had happened: `user-validation.ts` asked for `signup.user-field-*`
+     * while `en.json` defined them under `login.*`, so every user whose email failed validation
+     * was told "signup.user-field-email-invalid". A raw key is recognisable by shape — a dotted
+     * identifier with no spaces — which is what this asserts against, so it keeps working when
+     * the copy is reworded.
+     */
+    it('returns translated messages, never raw i18n keys', () => {
+        const errors = userService.validateData({
+            email: 'not-an-email',
+            username: 'ab',
+            password: 'x'
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+        for (const message of errors) expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
+    });
 });
 
 describe('userService.search', () => {

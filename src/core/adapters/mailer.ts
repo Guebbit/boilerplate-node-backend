@@ -50,25 +50,41 @@ export const EMAIL_TEMPLATES_DIR = process.env.NODE_EMAIL_TEMPLATES_DIR
  * Built once at module load and reused: nodemailer pools SMTP connections internally, so a
  * per-email transport would pay the TCP + TLS + AUTH handshake every time.
  * Exported so tests can stub `transporter.sendMail`.
+ *
+ * Under `NODE_ENV=test` it is nodemailer's `jsonTransport` instead: it renders the envelope to
+ * JSON and resolves, opening no socket. Without it the suite picks up the real credentials from
+ * `.env` and delivers actual mail — the contract suite creates orders with generated addresses,
+ * which got the sender a `550 ... blacklisted` from the relay, and because controllers dispatch
+ * with `void enqueueEmail(...)` the rejection surfaced as an unhandled rejection attributed to
+ * whichever unrelated test happened to be running.
  */
-export const transporter = createTransport({
-    // Hostname this client announces in the SMTP EHLO greeting. Some strict servers check it.
-    name: process.env.NODE_SMTP_NAME ?? '',
-    // SMTP server to connect to.
-    host: process.env.NODE_SMTP_HOST ?? '',
-    // 587 = submission with STARTTLS (the modern default); 465 = implicit TLS; 25 = relay.
-    port: process.env.NODE_SMTP_PORT ? Number.parseInt(process.env.NODE_SMTP_PORT) : 587,
-    // `secure: true` means TLS from the first byte, which is only correct on 465.
-    // On 587 it must be false — the connection starts plaintext and is upgraded via STARTTLS.
-    secure: process.env.NODE_SMTP_PORT === '465', // True for 465, false for other ports (587 = TCP)
-    // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer attempts an
-    // unauthenticated send and the server rejects it — the failure surfaces at send time,
-    // not at boot, because email is not a hard startup dependency.
-    auth: {
-        user: process.env.NODE_SMTP_USER ?? '',
-        pass: process.env.NODE_SMTP_PASS ?? ''
-    }
-});
+export const transporter =
+    // Two calls rather than one with a ternary argument: `createTransport` is overloaded per
+    // transport kind, and a union argument matches no single overload.
+    process.env.NODE_ENV === 'test'
+        ? createTransport({ jsonTransport: true })
+        : createTransport({
+              // Hostname this client announces in the SMTP EHLO greeting. Some strict servers
+              // check it.
+              name: process.env.NODE_SMTP_NAME ?? '',
+              // SMTP server to connect to.
+              host: process.env.NODE_SMTP_HOST ?? '',
+              // 587 = submission with STARTTLS (the modern default); 465 = implicit TLS;
+              // 25 = relay.
+              port: process.env.NODE_SMTP_PORT ? Number.parseInt(process.env.NODE_SMTP_PORT) : 587,
+              // `secure: true` means TLS from the first byte, which is only correct on 465.
+              // On 587 it must be false — the connection starts plaintext and is upgraded via
+              // STARTTLS.
+              secure: process.env.NODE_SMTP_PORT === '465', // True for 465, false otherwise
+              // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
+              // attempts an unauthenticated send and the server rejects it — the failure
+              // surfaces at send time, not at boot, because email is not a hard startup
+              // dependency.
+              auth: {
+                  user: process.env.NODE_SMTP_USER ?? '',
+                  pass: process.env.NODE_SMTP_PASS ?? ''
+              }
+          });
 
 /**
  * Send email to requested target

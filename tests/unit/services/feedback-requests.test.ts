@@ -88,18 +88,16 @@ describe('create', () => {
     });
 });
 
-describe('search', () => {
-    /** Seeds a small, deliberately varied corpus. */
-    const seed = async () => {
-        await create(makePayload({ email: 'ada@example.com', subject: 'Checkout bug' }));
-        await create(makePayload({ email: 'grace@example.com', subject: 'Login trouble' }));
-        const third = await create(
-            makePayload({ email: 'alan@example.com', subject: 'Feature idea' })
-        );
-        third.status = FeedbackRequestStatus.resolved;
-        await feedbackRequestRepository.save(third);
-    };
+/** Seeds a small, deliberately varied corpus. */
+const seed = async () => {
+    await create(makePayload({ email: 'ada@example.com', subject: 'Checkout bug' }));
+    await create(makePayload({ email: 'grace@example.com', subject: 'Login trouble' }));
+    const third = await create(makePayload({ email: 'alan@example.com', subject: 'Feature idea' }));
+    third.status = FeedbackRequestStatus.resolved;
+    await feedbackRequestRepository.save(third);
+};
 
+describe('search', () => {
     it('returns every request when no filter is given', async () => {
         await seed();
 

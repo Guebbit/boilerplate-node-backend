@@ -8,11 +8,12 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
+import type { ImageUrl } from './imageUrl';
 import type { Password } from './password';
 
 export interface UpdateUserByIdRequest {
   email?: Email;
   password?: Password;
   username?: string;
-  imageUrl?: string;
+  imageUrl?: ImageUrl;
 }

@@ -32,6 +32,14 @@ jest.mock('@core/adapters/logger', () => ({
 
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
+/** A CastError-shaped object: `kind` as an own property is the discriminator. */
+const makeCastError = (): CastError =>
+    Object.assign(new Error('Cast to ObjectId failed for value "abc" at path "_id"'), {
+        kind: 'ObjectId',
+        path: '_id',
+        value: 'abc'
+    }) as unknown as CastError;
+
 describe('ExtendedError', () => {
     it('exposes the name, status, operational flag and user-facing errors it was given', () => {
         const error = new ExtendedError('ValidationError', 422, true, ['Email is required']);
@@ -126,6 +134,7 @@ describe('databaseErrorInterpreter', () => {
     it('substitutes a placeholder when the Error carries an empty message', () => {
         // `||` rather than `??` on purpose: '' must fall through, or the client receives a
         // failure envelope with no message at all.
+        // eslint-disable-next-line unicorn/error-message -- the empty message is the input under test
         const result = databaseErrorInterpreter(new Error(''));
 
         expect(result).toEqual([500, 'Unknown error']);
@@ -154,14 +163,6 @@ describe('databaseErrorInterpreter', () => {
      * change to this file, not a silent one. See the accompanying report for the suggested fix.
      */
     describe('CastError branch (known defect — see module CAVEAT)', () => {
-        /** A CastError-shaped object: `kind` as an own property is the discriminator. */
-        const makeCastError = (): CastError =>
-            Object.assign(new Error('Cast to ObjectId failed for value "abc" at path "_id"'), {
-                kind: 'ObjectId',
-                path: '_id',
-                value: 'abc'
-            }) as unknown as CastError;
-
         it('yields NaN as the status, because it parses the prose message', () => {
             const [status] = databaseErrorInterpreter(makeCastError());
 

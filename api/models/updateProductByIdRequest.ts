@@ -7,6 +7,7 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { ImageUrl } from './imageUrl';
 
 export interface UpdateProductByIdRequest {
   title: string;
@@ -14,7 +15,7 @@ export interface UpdateProductByIdRequest {
   /** @minimum 0 */
   price: number;
   active?: boolean;
-  imageUrl?: string;
+  imageUrl?: ImageUrl;
   categories?: string[];
   tags?: string[];
 }

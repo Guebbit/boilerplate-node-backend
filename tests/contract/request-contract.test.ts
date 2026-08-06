@@ -13,27 +13,31 @@
  *     a hand-added `.min(3)` / `.min(5)` the spec never mentions.
  *   - `invalidPayloads()` → each entry expects 422 and a `ValidationErrorResponse`-shaped body.
  *     Catches a validator LAXER than its contract — the spec promises a constraint that isn't
- *     enforced. Several confirmed running this file:
- *       - `CreateProductRequest.imageUrl` / `CreateUserRequest.imageUrl` are declared
- *         `format: uri`, but `zodProductSchema` / (users' equivalent) override it to a plain
- *         `z.string()` — it holds a relative upload path, not an absolute URL — so a non-URL
- *         string is accepted, not rejected. Same for `SignupRequest.imageUrl`.
- *       - `CreateProductRequest.price` declares `minimum: 0`, but `zodProductSchema.price` only
- *         `.refine()`s that it's present — the non-negative constraint isn't enforced at all.
- *       - `CreateProductRequest.active`/`categories`/`tags` and `CreateUserRequest.active`
- *         accept a wrong-typed value (a string where a boolean/array is declared): both
- *         controllers coerce these fields (`!!request.body.active`, `coerceStringArray(...)`)
- *         *before* zod validation runs, so an invalid type never reaches the check that would
- *         reject it.
- *   - One finding is neither of the above and more serious: `POST /users` with a wrong-typed
- *     `admin` field (a string, not a boolean) returns **500**, not 422 — malformed input
- *     crashing the request instead of being rejected cleanly. Left as-is here too; it's a
- *     `src/controllers/users/write-users.ts` / `src/models/user-validation.ts` bug, not
- *     something this test file should paper over by generating a "nicer" payload.
+ *     enforced.
  *
- * None of the findings above are fixed here: closing a spec/validator gap means either
- * loosening the spec or tightening the validator (or, for the 500, fixing the crash), and this
- * file's job is to make the drift visible, not to pick a side.
+ * Every finding this file made on its first run has since been closed. They are listed here
+ * because each one names a mechanism that will produce the same class of bug again, and because
+ * the fix went a different way in each case — "tighten the validator" is not always the answer:
+ *
+ *   - `imageUrl` (on `CreateUserRequest`, `CreateProductRequest`, `SignupRequest`) was declared
+ *     `format: uri` while the field holds a *relative* upload path, so `zodUserSchema` /
+ *     `zodProductSchema` each overrode it back to a plain `z.string()`. Fixed by correcting the
+ *     SPEC, not the validators: the field is now a shared `ImageUrl` schema with
+ *     `format: uri-reference`, which is what it always meant. Tightening the validator instead
+ *     would have rejected every upload the API itself produces. Both overrides are now gone.
+ *   - `CreateProductRequest.price` declares `minimum: 0`, and the constraint was not enforced at
+ *     all — `zodProductSchema` overrode `price` for its i18n message and, because `.extend()`
+ *     REPLACES a field, silently dropped the minimum along with it. The override now restates
+ *     `.min(0)`. Any `.extend()` on a generated schema carries this hazard.
+ *   - `CreateProductRequest.active`/`categories`/`tags` and `CreateUserRequest.active`/`admin`
+ *     accepted wrong-typed values because the controllers coerced them (`!!request.body.active`,
+ *     `coerceStringArray(...)`) BEFORE validation ran, so an invalid type never reached the check
+ *     that would reject it. Coercion now happens only for `multipart/form-data`, which is the
+ *     only transport that needs it — see `isMultipartRequest` / `parseFormBoolean`.
+ *   - `POST /users` with a wrong-typed `admin` returned **500**, not 422: `userService
+ *     .validateData` applied the schema through a `.pick()` of email/username/password, so the
+ *     value reached Mongoose unchecked and threw a CastError on save. It now validates the whole
+ *     schema.
  *
  * Generated data is additive, same convention as `tests/helpers/factories/*`: deterministic
  * scenario tests keep using the hand-written factories. This file exists specifically for what
@@ -130,7 +134,10 @@ describe('POST /products (contract-derived)', () => {
         'rejects a payload where $field is $violation',
         async ({ payload }) => {
             const { bearer } = await authenticateAs('admin');
-            const response = await api().post('/products').set('Authorization', bearer).send(payload);
+            const response = await api()
+                .post('/products')
+                .set('Authorization', bearer)
+                .send(payload);
 
             expect(response.status).toBe(422);
             expect(response.body.success).toBe(false);

@@ -69,16 +69,20 @@ describe('generateSuccess', () => {
         // `errors` field on every successful response.
         const response = generateSuccess({ id: 'x' });
 
-        expect(Object.keys(response).sort()).toEqual(['data', 'message', 'status', 'success']);
+        expect(Object.keys(response).toSorted()).toEqual(['data', 'message', 'status', 'success']);
     });
 
     it('preserves undefined data rather than dropping the key', () => {
+        // eslint-disable-next-line unicorn/no-useless-undefined -- `data` is a required parameter
         const response = generateSuccess(undefined);
 
         expect(response).toHaveProperty('data');
         expect(response.data).toBeUndefined();
     });
 });
+
+/** The `code` a given status maps to — the single fact every status test below asserts. */
+const codeFor = (status: number) => generateReject(status, 'x', ['y']).errors[0].code;
 
 describe('generateReject', () => {
     it('builds structured error items from plain string errors', () => {
@@ -148,7 +152,6 @@ describe('generateReject', () => {
 
     it('maps each status to its own stable code', () => {
         // Clients branch on `code`, never on `message`. Distinct statuses must not collapse.
-        const codeFor = (status: number) => generateReject(status, 'x', ['y']).errors[0].code;
 
         expect(codeFor(400)).toBe('BAD_REQUEST');
         expect(codeFor(401)).toBe('UNAUTHORIZED');
@@ -158,8 +161,6 @@ describe('generateReject', () => {
     });
 
     it('collapses any 5xx to a single internal code', () => {
-        const codeFor = (status: number) => generateReject(status, 'x', ['y']).errors[0].code;
-
         expect(codeFor(500)).toBe('INTERNAL_ERROR');
         expect(codeFor(502)).toBe('INTERNAL_ERROR');
         expect(codeFor(599)).toBe('INTERNAL_ERROR');
@@ -172,8 +173,6 @@ describe('generateReject', () => {
     });
 
     it('falls back to REQUEST_ERROR for unmapped 4xx statuses', () => {
-        const codeFor = (status: number) => generateReject(status, 'x', ['y']).errors[0].code;
-
         expect(codeFor(422)).toBe('REQUEST_ERROR');
         expect(codeFor(429)).toBe('REQUEST_ERROR');
     });

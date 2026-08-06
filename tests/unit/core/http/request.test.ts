@@ -19,7 +19,10 @@ import {
     extractRequestPagination,
     extractAndValidateId,
     extractCustomId,
-    isValidObjectId
+    isValidObjectId,
+    isMultipartRequest,
+    parseFormBoolean,
+    decodeFormFields
 } from '@core/http/request';
 
 /** A valid 24-hex ObjectId, used wherever the format has to pass. */
@@ -50,6 +53,21 @@ const makeResponse = () => {
     } as unknown as Response;
     return { response, sent };
 };
+
+/**
+ * Request stub that answers `is()` the way express does: the matched type when the
+ * Content-Type matches, `false` when it does not, and `null` when there is no body at all.
+ * Both arguments are omittable, which is how a body-less request is expressed.
+ */
+const makeTypedRequest = (contentType?: string, body?: unknown) =>
+    ({
+        params: {},
+        body,
+        query: {},
+        is: (type: string) =>
+            // eslint-disable-next-line unicorn/no-null -- express really returns null here
+            contentType === undefined ? null : contentType === type ? type : false
+    }) as unknown as Request<ParamsDictionary>;
 
 describe('extractPagination', () => {
     const originalPageSize = process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
@@ -236,5 +254,128 @@ describe('extractCustomId', () => {
 
     it('returns undefined when no fields are requested at all', () => {
         expect(extractCustomId(makeRequest())).toBeUndefined();
+    });
+});
+
+describe('isMultipartRequest', () => {
+    it('is true for a multipart/form-data body', () => {
+        expect(isMultipartRequest(makeTypedRequest('multipart/form-data'))).toBe(true);
+    });
+
+    it('is false for a JSON body', () => {
+        expect(isMultipartRequest(makeTypedRequest('application/json'))).toBe(false);
+    });
+
+    // express returns `null`, not `false`, when the request carries no body — a distinction
+    // `!!` has to flatten, or a body-less request would be treated as a form.
+    it('is false when the request carries no body at all', () => {
+        expect(isMultipartRequest(makeTypedRequest())).toBe(false);
+    });
+});
+
+describe('parseFormBoolean', () => {
+    // The whole reason this helper exists: `!!'false'` is `true`, so unchecking a box in a
+    // form used to turn the flag ON.
+    it.each([
+        ['false', false],
+        ['0', false],
+        ['off', false],
+        ['no', false]
+    ])('reads %s as false', (input, expected) => {
+        expect(parseFormBoolean(input)).toBe(expected);
+    });
+
+    it.each([
+        ['true', true],
+        ['1', true],
+        ['on', true],
+        ['yes', true]
+    ])('reads %s as true', (input, expected) => {
+        expect(parseFormBoolean(input)).toBe(expected);
+    });
+
+    it('is case-insensitive and ignores surrounding whitespace', () => {
+        expect(parseFormBoolean('  FALSE ')).toBe(false);
+        expect(parseFormBoolean('True')).toBe(true);
+    });
+
+    // Returning the value untouched is what lets the validator downstream answer 422. Coercing
+    // it to `true` — as `!!value` did — is how a wrong-typed field became a stored `true`.
+    it('returns an unrecognised string unchanged, so the validator can reject it', () => {
+        expect(parseFormBoolean('not-a-boolean')).toBe('not-a-boolean');
+    });
+
+    it('passes non-strings straight through', () => {
+        expect(parseFormBoolean(true)).toBe(true);
+        expect(parseFormBoolean(false)).toBe(false);
+        // eslint-disable-next-line unicorn/no-useless-undefined -- `value` is a required parameter
+        expect(parseFormBoolean(undefined)).toBeUndefined();
+        expect(parseFormBoolean(42)).toBe(42);
+    });
+
+    // '' is neither true nor false: an empty form field must not become `true`.
+    it('returns an empty string unchanged', () => {
+        expect(parseFormBoolean('')).toBe('');
+    });
+});
+
+describe('decodeFormFields', () => {
+    const JSON_TYPE = 'application/json';
+    const FORM_TYPE = 'multipart/form-data';
+
+    it('decodes multipart booleans and string arrays', () => {
+        const request = makeTypedRequest(FORM_TYPE, {
+            active: 'false',
+            categories: 'tools',
+            tags: ['a', 'b']
+        });
+
+        expect(
+            decodeFormFields(request, {
+                booleans: ['active'],
+                stringArrays: ['categories', 'tags']
+            })
+        ).toEqual({ active: false, categories: ['tools'], tags: ['a', 'b'] });
+    });
+
+    // The whole reason the helper checks the content type: a JSON body already carries its
+    // types, and decoding it would destroy the type error the validator has to see.
+    it('leaves a JSON body untouched, wrong types included', () => {
+        const request = makeTypedRequest(JSON_TYPE, { active: 'not-a-boolean', categories: 42 });
+
+        expect(
+            decodeFormFields(request, { booleans: ['active'], stringArrays: ['categories'] })
+        ).toEqual({ active: 'not-a-boolean', categories: 42 });
+    });
+
+    it('passes a real JSON boolean through unchanged', () => {
+        const request = makeTypedRequest(JSON_TYPE, { active: false });
+
+        expect(decodeFormFields(request, { booleans: ['active'] })).toEqual({ active: false });
+    });
+
+    // Defaulting an absent field would turn a partial update into a full overwrite: the service
+    // layer only assigns what is defined, so `[]` here would wipe the stored tags.
+    it.each([JSON_TYPE, FORM_TYPE])('leaves an absent field undefined (%s)', (contentType) => {
+        const request = makeTypedRequest(contentType, {});
+
+        const decoded = decodeFormFields(request, {
+            booleans: ['active'],
+            stringArrays: ['tags']
+        });
+
+        expect(decoded.active).toBeUndefined();
+        expect(decoded.tags).toBeUndefined();
+    });
+
+    it('returns an empty object when no fields are requested', () => {
+        expect(decodeFormFields(makeTypedRequest(FORM_TYPE, { active: 'true' }), {})).toEqual({});
+    });
+
+    // express 5 leaves `request.body` undefined for a body-less request.
+    it('survives a request with no body at all', () => {
+        const request = makeTypedRequest();
+
+        expect(decodeFormFields(request, { booleans: ['active'] })).toEqual({ active: undefined });
     });
 });

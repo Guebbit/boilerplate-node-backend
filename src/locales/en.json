@@ -2,18 +2,18 @@
     "login": {
         "invalid-data": "Inserted data are invalid.",
         "wrong-data": "Invalid email or password.",
-        "success": "Login successful.",
+        "success": "Login successful."
+    },
+    "signup": {
+        "email-already-used": "Email was already used.",
+        "registration-successful": "Registration successful, confirm via email to login.",
+        "password-dont-match": "Confirmation password must be the same of password.",
         "user-field-email-required": "Email is required",
         "user-field-email-invalid": "Not a valid email",
         "user-field-username-required": "Username is required",
         "user-field-username-min": "Name is too short",
         "user-field-password-required": "Password is required",
         "user-field-password-min": "Password is too short"
-    },
-    "signup": {
-        "email-already-used": "Email was already used.",
-        "registration-successful": "Registration successful, confirm via email to login.",
-        "password-dont-match": "Confirmation password must be the same of password."
     },
     "reset": {
         "email-not-found": "No user associated with the inserted email was found.",
@@ -30,9 +30,8 @@
         "product-not-found": "The requested product was not found.",
         "product-field-title-required": "Title is required",
         "product-field-title-min": "Title is too short",
-        "product-field-price-required": "Price is missing",
         "product-field-price-invalid": "Price is missing or invalid",
-        "product-field-image-required": "Image is required",
+        "product-field-price-min": "Price cannot be negative",
         "product-added-to-cart": "Product successfully added to cart.",
         "product-hard-deleted": "Product was permanently deleted.",
         "product-soft-deleted": "Product was soft deleted (users only).",

@@ -60,10 +60,13 @@ const ensureSeeded = (): void => {
     random = createRandom(seed);
     seeded = true;
     // eslint-disable-next-line no-console
-    console.log(`[contract-data] seed=${seed} (rerun with CONTRACT_DATA_SEED=${seed} to reproduce)`);
+    console.log(
+        `[contract-data] seed=${seed} (rerun with CONTRACT_DATA_SEED=${seed} to reproduce)`
+    );
 };
 
-const randomInt = (min: number, max: number): number => min + Math.floor(random() * (max - min + 1));
+const randomInt = (min: number, max: number): number =>
+    min + Math.floor(random() * (max - min + 1));
 
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
 const HEX_ALPHABET = '0123456789abcdef';
@@ -105,7 +108,8 @@ interface IZodDef {
 const defOf = (schema: ZodTypeAny): IZodDef =>
     (schema as unknown as { _zod: { def: IZodDef } })._zod.def;
 
-const checksOf = (def: IZodDef): IZodCheckDef[] => (def.checks ?? []).map((check) => check._zod.def);
+const checksOf = (def: IZodDef): IZodCheckDef[] =>
+    (def.checks ?? []).map((check) => check._zod.def);
 
 const isOptionalField = (schema: ZodTypeAny): boolean => defOf(schema).type === 'optional';
 
@@ -144,8 +148,10 @@ const clampStringLength = (value: string, checks: IZodCheckDef[]): string => {
     const minLength = checks.find((check) => check.check === 'min_length')?.minimum;
     const maxLength = checks.find((check) => check.check === 'max_length')?.maximum;
     let result = value;
-    if (typeof minLength === 'number' && result.length < minLength) result = result.padEnd(minLength, 'x');
-    if (typeof maxLength === 'number' && result.length > maxLength) result = result.slice(0, maxLength);
+    if (typeof minLength === 'number' && result.length < minLength)
+        result = result.padEnd(minLength, 'x');
+    if (typeof maxLength === 'number' && result.length > maxLength)
+        result = result.slice(0, maxLength);
     return result;
 };
 
@@ -179,7 +185,8 @@ const buildValue = (schema: ZodTypeAny): unknown => {
             return values[randomInt(0, values.length - 1)];
         }
         case 'array': {
-            const minItems = checksOf(def).find((check) => check.check === 'min_length')?.minimum ?? 1;
+            const minItems =
+                checksOf(def).find((check) => check.check === 'min_length')?.minimum ?? 1;
             const count = Math.max(minItems, 1);
             return Array.from({ length: count }, () => buildValue(def.element as ZodTypeAny));
         }
@@ -297,7 +304,10 @@ const violationsForField = (fieldSchema: ZodTypeAny): { violation: string; value
     }
 
     if (violations.length === 0)
-        violations.push({ violation: 'wrong type (number instead of the declared type)', value: 424_242 });
+        violations.push({
+            violation: 'wrong type (number instead of the declared type)',
+            value: 424_242
+        });
 
     return violations;
 };

@@ -167,6 +167,7 @@ describe('getAuth', () => {
     it('proceeds anonymously when the token is valid but the user no longer exists', async () => {
         // A deleted account holding a still-valid JWT must not be granted an identity.
         mockedVerifyAccessToken.mockResolvedValue({ id: 'ghost' });
+        // eslint-disable-next-line unicorn/no-null -- the repository really resolves null
         mockedFindById.mockResolvedValue(null as never);
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });

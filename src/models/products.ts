@@ -30,24 +30,26 @@ export type IProductModel = Model<IProductDocument, unknown, IProductMethods>;
 
 /**
  * Zod Schema for product data validation.
- * Built on the orval-generated CreateProductBody (kept in sync with
- * openapi.yaml); imageUrl is overridden back to a plain string since it
- * holds a relative upload path (see resolveImageUrl), not an absolute URL.
+ * Built on the orval-generated CreateProductBody (kept in sync with openapi.yaml), so only
+ * fields needing custom i18n messages or stricter rules are overridden — every constraint the
+ * contract declares and this file does not mention still applies.
  * Used by the service layer to validate incoming product data.
+ *
+ * `.min(0)` restates `openapi.yaml`'s `minimum: 0` rather than relying on the generated schema
+ * to carry it: `.extend()` REPLACES a field outright, so an override that forgets a constraint
+ * silently drops it. That is exactly what happened here — the previous `price` override was a
+ * bare `.number().refine(v => v != null)` (itself dead: `z.number()` already rejects null and
+ * undefined), which meant a negative price was accepted despite the contract forbidding it.
  */
 export const zodProductSchema = CreateProductBody.extend({
     title: z
         .string()
-        .min(1, { error: t('ecommerce.product-invalid-title-required') })
-        .min(5, { error: t('ecommerce.product-invalid-title-min') }),
+        .min(1, { error: t('ecommerce.product-field-title-required') })
+        .min(5, { error: t('ecommerce.product-field-title-min') }),
 
     price: z
-        .number({ error: t('ecommerce.product-invalid-price-invalid') })
-        .refine((v) => v !== undefined && v !== null, {
-            error: t('ecommerce.product-invalid-price-required')
-        }),
-
-    imageUrl: z.string()
+        .number({ error: t('ecommerce.product-field-price-invalid') })
+        .min(0, { error: t('ecommerce.product-field-price-min') })
 });
 
 /**

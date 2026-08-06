@@ -7,15 +7,8 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ImageUrl } from './imageUrl';
 
-export interface CreateProductRequest {
-  title: string;
-  /** @minimum 0 */
-  price: number;
-  description?: string;
-  active?: boolean;
-  imageUrl?: ImageUrl;
-  categories?: string[];
-  tags?: string[];
-}
+/**
+ * Absolute URL or server-relative upload path (e.g. `/uploads/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.
+ */
+export type ImageUrl = string;

@@ -9,6 +9,7 @@
  */
 import type { Email } from './email';
 import type { Id } from './id';
+import type { ImageUrl } from './imageUrl';
 import type { Password } from './password';
 
 export interface UpdateUserRequest {
@@ -16,5 +17,5 @@ export interface UpdateUserRequest {
   email?: Email;
   username?: string;
   password?: Password;
-  imageUrl?: string;
+  imageUrl?: ImageUrl;
 }

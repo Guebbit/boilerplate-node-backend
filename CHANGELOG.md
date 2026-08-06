@@ -13,6 +13,16 @@ its own tests.
 
 ### ⚠ Breaking
 
+- **Wrong-typed request fields are rejected with `422` instead of being coerced into something
+  plausible.** `POST`/`PUT` on `/users` and `/products` ran `!!request.body.active` and
+  `coerceStringArray(...)` _before_ validation, so `{"active": "not-a-boolean"}` reached the
+  validator as a perfectly good `true` and answered `201`. A JSON body now goes to the validator
+  exactly as sent, which is what lets it reject one; `multipart/form-data` — the only transport
+  that cannot carry a type — is still decoded first. A client sending the _string_ `"true"` in
+  JSON, or a number for `categories`/`tags`, now gets `422` where it previously got a silently
+  corrected success. `price` below its declared `minimum: 0` is likewise rejected rather than
+  stored.
+
 - **`GET /account/refresh/{token}` is removed.** Refreshing accepts the `HttpOnly` `jwt` cookie and
   nothing else. A refresh token passed in the URL path is written to browser history, proxy and
   server access logs, and any `Referer` header the page later sends — and it is a long-lived
@@ -50,6 +60,20 @@ its own tests.
   Any script that ignored its exit code will start failing — correctly.
 
 ### Added
+
+- **`decodeFormFields()`** in `src/core/http/request.ts`, over `isMultipartRequest()` and
+  `parseFormBoolean()`. A write controller declares _which_ of its fields are booleans and which
+  are string arrays; how either is spelled on the wire stops being the controller's business. Both
+  write controllers had grown a copy of that rule, and the two copies' comments had already
+  drifted apart on what it did.
+- **Per-path coverage floors in `jest.config.json`** — 70% statements/branches/functions/lines over
+  the same four paths `stryker.config.json` mutates, mirroring what `vitest.config.ts` already does
+  on the frontend. Mutation testing answers "do the tests assert anything"; coverage answers "do
+  the tests run this at all", which is the cheap check and belongs in CI, where mutation testing
+  does not. Current figures clear it comfortably: `core/http` 99.66%, `models` 100%, `services`
+  97.29%, `middlewares` 91.9%.
+- **`TODO.md`** — deliberate deferrals, each recording what is true today and why, so picking one
+  up does not begin by re-deriving the reasoning.
 
 - **`src/core/totals.ts`** — `sumLineItems()` and `toCents()`, the one implementation of "sum a list
   of `{ quantity, product: { price } }`". Orders and carts had grown a copy each, and they had
@@ -180,6 +204,25 @@ its own tests.
 
 ### Changed
 
+- **`imageUrl` is `format: uri-reference`, declared once as `components/schemas/ImageUrl`** instead
+  of `format: uri` repeated at nine sites. The field holds an absolute URL (the schema defaults) or
+  a server-relative upload path (`/images/x.png`, which is what `resolveImageUrl` writes) — and
+  `uri` permits only the first, so orval generated `zod.url()` and both `src/models/products.ts`
+  and `src/models/user-validation.ts` carried a hand-written override putting it back to a plain
+  string. The spec now states what the code does and both overrides are gone. Tightening the
+  implementation instead was the alternative and is the wrong one: an absolute URL in the database
+  bakes the current host into every row, so a domain change or a staging copy strands them (see
+  `TODO.md`).
+- **`userService.validateData` validates the whole schema** rather than a `.pick()` of
+  email/username/password, and takes `unknown` — it is the boundary that _establishes_ the type, so
+  a narrower parameter only forces its callers to cast on the way in. `productService.validateData`
+  likewise. See _Fixed_.
+- **The mailer uses nodemailer's `jsonTransport` under `NODE_ENV=test`.** See _Fixed_.
+- **`jest.config.json` ignores `.stryker-tmp/`.** A Stryker run copies the whole project there, so a
+  plain `jest` started while one is in flight — or after a crashed run left the directory behind —
+  otherwise collects the copies as a second, duplicate suite, competing for the same in-memory
+  Mongo and reporting failures against paths that are not the source tree.
+
 - **The container scripts now select their own compose override.** `podman:*` and `docker:*` share
   a `podman:compose` / `docker:compose` entry point that spells out
   `compose -f docker-compose.yml -f <runtime override>`, replacing the manual `COMPOSE_FILE` step
@@ -250,6 +293,43 @@ its own tests.
   door every consumer imports — rather than calling itself a backward-compatibility shim.
 
 ### Fixed
+
+- **The API answered validation errors with raw i18n keys.** `src/models/user-validation.ts` asked
+  for `signup.user-field-*` while `src/locales/en.json` defined them under `login.*`, and i18next
+  returns the key itself when it cannot resolve one — so a user with a malformed email was told
+  `"signup.user-field-email-invalid"`. `src/models/products.ts` had the same fault against
+  `ecommerce.product-invalid-*`. The existing tests could not see either: they asserted only that
+  the error list was non-empty, and a raw key is a perfectly good non-empty string. Keys and
+  references now agree, and both validation suites assert that no message is shaped like a dotted
+  identifier — a check that survives the copy being reworded.
+- **`POST /users` answered `500` for a wrong-typed `admin` field.** `validateData` applied the
+  schema through a `.pick()` of three fields, so `admin`, `active` and `imageUrl` were not checked
+  at all — the string reached Mongoose, which threw a CastError on save, which the controller
+  mapped to `500`. Malformed input told the client the server was broken, and reached the
+  persistence layer to do it. It now gets the `422` the contract promises.
+- **A multipart form that _unchecked_ `active` turned it on.** The coercion was
+  `!!request.body.active`, and `!!'false'` is `true` because every non-empty string is truthy.
+  Multipart booleans are now decoded against the spellings forms actually send.
+- **A partial update wiped `categories` and `tags`.** `coerceStringArray(undefined)` returns `[]`,
+  which `productService.update` reads as "the caller sent an empty list" rather than "the caller
+  did not mention this field" — so a `PUT /products/{id}` omitting them cleared whatever was
+  stored. An absent field is now left absent, on both transports.
+- **`price` below its declared `minimum: 0` was accepted.** `zodProductSchema` overrode `price` to
+  attach an i18n message, and `.extend()` _replaces_ a field — so the override silently dropped the
+  contract's minimum, and what it kept was a dead `.refine()` (`z.number()` already rejects `null`
+  and `undefined`). Any `.extend()` over a generated schema carries this hazard.
+- **The test suite delivered real email through the production SMTP relay.** `tests/` loads the same
+  `.env` as the app, the mailer built its transport from it at module load, and `postOrders`
+  dispatches with `void enqueueEmail(...)` — so every contract run asked the real mail server to
+  deliver from the real sender to generated `@example.com` addresses. The relay eventually refused
+  with `550 ... blacklisted`; because the promise is discarded, that surfaced as an unhandled
+  rejection attributed to whichever unrelated test happened to be running, which is why the
+  reported failure moved between runs. Under `NODE_ENV=test` the transport is now `jsonTransport`,
+  which opens no socket.
+- **`tests/contract/request-contract.test.ts` is green**, and the contract suites pass 112/112. The
+  10 assertions it used to fail were every one a real contract violation rather than a test bug —
+  they are the entries above. The file's header now records _how_ each was closed, because the
+  answer differed: the spec was wrong about `imageUrl`, the validator was wrong about the rest.
 
 - **Promtail collected nothing under either runtime.** The base compose file mounts no host log
   path by design — each runtime adds its own through `docker-compose.docker.yml` or
@@ -342,14 +422,14 @@ its own tests.
 
 ### Known issues
 
-- **`tests/contract/request-contract.test.ts` fails 10 assertions**, and every one is a real
-  contract violation rather than a test bug: the API accepts payloads its own `openapi.yaml`
-  declares illegal. `imageUrl` is not validated as a URL on `POST /users`, `POST /products` or
-  `POST /account/signup`; `active` and `admin` accept a string where the spec says boolean;
-  `categories` and `tags` accept a number; `email` is unvalidated on `POST /orders`; and — the one
-  worth fixing first — **`price` is accepted below its declared minimum of 0**, so a negative
-  price can reach an order. The other six contract suites are green (58/58). These are exactly the
-  "validator laxer than the contract" class that suite was built to catch.
+- **`npm run test:mutation` strands roughly 200 MB of `/tmp` per killed worker.** Every suite using
+  `setupTestDb()` starts a `mongodb-memory-server`, whose data directory is removed on a graceful
+  shutdown only — and Stryker kills its runners by design, once per timed-out mutant and again at
+  the end of a run. A run here filled a 16 GB tmpfs, at which point everything on the machine that
+  writes to `/tmp` began failing with ENOSPC, including tools with nothing to do with this project.
+  `TODO.md` carries the cleanup command and the fix — an age-filtered prune from a jest
+  `globalSetup`, which has to avoid deleting a live sibling's directory while several Stryker jest
+  instances run at once.
 
 - **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/core/http/errors.ts`). It
   returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a

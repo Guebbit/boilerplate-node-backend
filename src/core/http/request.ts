@@ -13,6 +13,7 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 // i18next middleware has already set up by the time a controller runs.
 import { t } from 'i18next';
 import { Types } from 'mongoose';
+import { coerceStringArray } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@core/http/response';
 
 /**
@@ -176,6 +177,86 @@ export const extractCustomId = (
  */
 export const isValidObjectId = (id: string | undefined): id is string =>
     !!id && Types.ObjectId.isValid(id);
+
+/**
+ * True when the body arrived as `multipart/form-data`.
+ *
+ * The distinction matters because multipart carries every field as a *string*: a form's
+ * `active=false` is the string 'false', and a repeated key is what stands in for an array.
+ * A JSON body is already typed, so it needs no coercion — and coercing it anyway is how a
+ * contract violation gets swallowed: `!!'not-a-boolean'` is `true`, so a wrong-typed JSON field
+ * became a valid value before validation ever saw it, and the endpoint answered 201 where its
+ * own contract promises 422. Callers therefore coerce only when this returns true.
+ */
+export const isMultipartRequest = (request: Request<ParamsDictionary>): boolean =>
+    !!request.is('multipart/form-data');
+
+/** Multipart spellings of a boolean, as HTML forms and common clients send them. */
+const FORM_BOOLEANS: Record<string, boolean> = {
+    true: true,
+    '1': true,
+    on: true,
+    yes: true,
+    false: false,
+    '0': false,
+    off: false,
+    no: false
+};
+
+/**
+ * Parse a multipart form value as a boolean.
+ *
+ * `!!value` cannot do this: `!!'false'` is `true`, so a form that unchecked a box still turned
+ * the flag on. Anything not recognisable as a boolean is returned untouched (hence `unknown`)
+ * so the validator downstream rejects it rather than this helper inventing a value for it.
+ */
+export const parseFormBoolean = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    const normalized = value.trim().toLowerCase();
+    return normalized in FORM_BOOLEANS ? FORM_BOOLEANS[normalized] : value;
+};
+
+/**
+ * Read the fields whose type survives a JSON body but not a multipart one.
+ *
+ * A write controller says WHICH of its fields are booleans and which are string arrays; how
+ * either is spelled on the wire is this module's business, not the controller's. Both write
+ * controllers need exactly this, so the rule — and the reasoning behind it — lives here once.
+ *
+ * On a JSON body every value is returned untouched, because JSON already carries the type.
+ * That is the whole point: decoding a JSON body would destroy the type error the validator
+ * downstream has to see. Coercing unconditionally is what made `{"active": "not-a-boolean"}`
+ * arrive at the validator as a perfectly good `true` and answer 201 where the contract
+ * promises 422.
+ *
+ * Absent fields come back `undefined` rather than defaulted to `false`/`[]`: the service layer
+ * only assigns fields that are defined, so defaulting here would turn a partial update into a
+ * full overwrite and silently wipe whatever the caller did not mention.
+ *
+ * Values are `unknown` on purpose — this decodes a transport, it does not validate. Whatever it
+ * could not recognise is passed through for the schema to reject.
+ */
+export const decodeFormFields = <K extends string>(
+    request: Request<ParamsDictionary>,
+    fields: { booleans?: readonly K[]; stringArrays?: readonly K[] }
+): Partial<Record<K, unknown>> => {
+    const body = getRequestBody(request);
+    const multipart = isMultipartRequest(request);
+    const decoded: Partial<Record<K, unknown>> = {};
+
+    // An absent field is never decoded, on either transport. `coerceStringArray(undefined)`
+    // returns `[]`, which reads as "the caller sent an empty list" — and the service layer,
+    // which skips undefined but assigns `[]`, would clear the stored value on a partial update.
+    const decode = (key: K, coerce: (value: unknown) => unknown) => {
+        const raw = body[key];
+        decoded[key] = raw === undefined || !multipart ? raw : coerce(raw);
+    };
+
+    for (const key of fields.booleans ?? []) decode(key, parseFormBoolean);
+    for (const key of fields.stringArrays ?? []) decode(key, coerceStringArray);
+
+    return decoded;
+};
 
 /**
  * Extract the hardDelete flag from query, params, or body.

@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { t } from 'i18next';
-import { coerceStringArray } from '@guebbit/js-toolkit';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { decodeFormFields } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
 import { deleteFile } from '@core/adapters/filesystem';
 import type {
@@ -11,7 +11,8 @@ import type {
     UpdateProductRequest,
     UpdateProductRequestMultipart,
     UpdateProductByIdRequest,
-    UpdateProductByIdRequestMultipart
+    UpdateProductByIdRequestMultipart,
+    Product
 } from '@types';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
@@ -43,8 +44,12 @@ export const writeProducts = (
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-    const categories = coerceStringArray((request.body as { categories?: unknown }).categories);
-    const tags = coerceStringArray((request.body as { tags?: unknown }).tags);
+
+    // Fields whose type a multipart body cannot carry — see `decodeFormFields`.
+    const { active, categories, tags } = decodeFormFields(request as Request, {
+        booleans: ['active'],
+        stringArrays: ['categories', 'tags']
+    });
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
@@ -54,7 +59,7 @@ export const writeProducts = (
     const errors = productService.validateData({
         ...request.body,
         imageUrl,
-        active: !!request.body.active,
+        active,
         categories,
         tags
     });
@@ -62,6 +67,13 @@ export const writeProducts = (
         return deleteUpload().then(() => {
             rejectResponse(response, 422, 'writeProduct - validation failed', errors);
         });
+
+    // Past the guard above, these have been checked against zodProductSchema — the assertion
+    // records what the validator just established rather than assuming it.
+    const validated = { imageUrl, active, categories, tags } as Pick<
+        Product,
+        'imageUrl' | 'active' | 'categories' | 'tags'
+    >;
 
     /**
      * NO ID = new product
@@ -78,10 +90,7 @@ export const writeProducts = (
         return productService
             .create({
                 ...request.body,
-                imageUrl,
-                active: !!request.body.active,
-                categories,
-                tags
+                ...validated
             })
             .then((product) => {
                 emitAuditEvent(
@@ -107,10 +116,7 @@ export const writeProducts = (
     return productService
         .updateById(id, {
             ...request.body,
-            imageUrl,
-            active: !!request.body.active,
-            categories,
-            tags
+            ...validated
         })
         .then((product) => {
             emitAuditEvent(

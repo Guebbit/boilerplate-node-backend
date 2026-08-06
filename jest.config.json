@@ -4,7 +4,15 @@
     "coverageProvider": "v8",
     "testEnvironment": "node",
     "testMatch": ["**/tests/**/*.test.ts"],
+    "testPathIgnorePatterns": ["/node_modules/", "<rootDir>/.stryker-tmp/"],
+    "modulePathIgnorePatterns": ["<rootDir>/.stryker-tmp/"],
     "collectCoverageFrom": ["src/**/*.ts", "!src/types/**", "!src/**/*.d.ts"],
+    "coverageThreshold": {
+        "src/core/http/": { "statements": 70, "branches": 70, "functions": 70, "lines": 70 },
+        "src/middlewares/": { "statements": 70, "branches": 70, "functions": 70, "lines": 70 },
+        "src/models/": { "statements": 70, "branches": 70, "functions": 70, "lines": 70 },
+        "src/services/": { "statements": 70, "branches": 70, "functions": 70, "lines": 70 }
+    },
     "setupFiles": ["<rootDir>/tests/helpers/setup.ts"],
     "testTimeout": 30000,
     "transform": {

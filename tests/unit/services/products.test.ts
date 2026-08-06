@@ -52,6 +52,96 @@ describe('productService.validateData', () => {
 
         expect(errors.length).toBeGreaterThan(0);
     });
+
+    /**
+     * `openapi.yaml` declares `CreateProductRequest.price` with `minimum: 0`, and
+     * `zodProductSchema` overrides the field for its i18n message. `.extend()` REPLACES a field,
+     * so the override has to restate every constraint it wants to keep — the previous one did
+     * not, and a negative price was accepted despite the contract forbidding it.
+     */
+    it('rejects a negative price, as the contract minimum requires', () => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: -1,
+            imageUrl: '/uploads/img.jpg',
+            active: true,
+            description: ''
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('accepts a price of exactly 0 — the minimum is inclusive', () => {
+        const errors = productService.validateData({
+            title: 'A Free Product',
+            price: 0,
+            imageUrl: '/uploads/img.jpg',
+            active: true,
+            description: ''
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // These reach the validator only because the controller stopped coercing JSON bodies:
+    // `!!'not-a-boolean'` and `coerceStringArray(42)` used to turn each of them into a
+    // plausible value before validation ever ran, so the endpoint answered 201.
+    it('rejects a wrong-typed active flag', () => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: 10,
+            imageUrl: '/uploads/img.jpg',
+            active: 'not-a-boolean',
+            description: ''
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it.each(['categories', 'tags'])('rejects a wrong-typed %s field', (field) => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: 10,
+            imageUrl: '/uploads/img.jpg',
+            active: true,
+            description: '',
+            [field]: 42
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    // The contract says `uri-reference`, not `uri`: an uploaded image is stored as a path
+    // relative to the API host, so requiring an absolute URL here would reject every upload.
+    it('accepts a server-relative upload path as the imageUrl', () => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: 10,
+            imageUrl: '/uploads/1700000000-photo.jpg',
+            active: true,
+            description: ''
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    /**
+     * The messages are what the API sends a client verbatim, so a wrong i18n key is a
+     * user-visible bug — and the assertions above cannot see it, because a missing key makes
+     * i18next return the key itself, which is still a non-empty string.
+     *
+     * That is exactly what had happened: `user-validation.ts` asked for `signup.user-field-*`
+     * while `en.json` defined them under `login.*`, so every user whose email failed validation
+     * was told "signup.user-field-email-invalid". A raw key is recognisable by shape — a dotted
+     * identifier with no spaces — which is what this asserts against, so it keeps working when
+     * the copy is reworded.
+     */
+    it('returns translated messages, never raw i18n keys', () => {
+        const errors = productService.validateData({ title: 'ab', price: -5 });
+
+        expect(errors.length).toBeGreaterThan(0);
+        for (const message of errors) expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
+    });
 });
 
 describe('productService.search', () => {

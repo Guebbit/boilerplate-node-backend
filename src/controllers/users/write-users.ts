@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { t } from 'i18next';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { decodeFormFields } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
 import { deleteFile } from '@core/adapters/filesystem';
 import type {
@@ -44,6 +45,11 @@ export const writeUsers = (
      */
     const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
+
+    // Fields whose type a multipart body cannot carry — see `decodeFormFields`.
+    const { admin, active } = decodeFormFields(request as Request, {
+        booleans: ['admin', 'active']
+    });
     // If problem arises: remove the uploaded file (that can be missing so nothing happen)
     const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
 
@@ -52,12 +58,18 @@ export const writeUsers = (
      */
     const errors = userService.validateData({
         ...request.body,
-        imageUrl
+        imageUrl,
+        admin,
+        active
     });
     if (errors.length > 0)
         return deleteUpload().then(() => {
             rejectResponse(response, 422, 'writeUser - validation failed', errors);
         });
+
+    // Past the guard above, these have been checked against zodUserSchema — the assertion
+    // records what the validator just established rather than assuming it.
+    const validated = { imageUrl, admin, active } as Pick<User, 'imageUrl' | 'admin' | 'active'>;
 
     /**
      * NO ID = new user
@@ -75,7 +87,7 @@ export const writeUsers = (
             .adminCreate({
                 // After validation it will be compatible for sure
                 ...(request.body as IUser),
-                imageUrl
+                ...validated
             })
             .then((user) => {
                 emitAuditEvent(
@@ -100,7 +112,7 @@ export const writeUsers = (
     /**
      * ID = edit user
      */
-    return userService.adminUpdateById(id, { ...request.body, imageUrl }).then((result) => {
+    return userService.adminUpdateById(id, { ...request.body, ...validated }).then((result) => {
         if (!result.success)
             return deleteUpload().then(() => {
                 rejectResponse(response, result.status, result.message, result.errors);

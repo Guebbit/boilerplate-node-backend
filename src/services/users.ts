@@ -27,16 +27,18 @@ import {
 /**
  * Validate user data for admin create/edit forms.
  * Returns an array of UI-friendly error messages (empty array means valid).
+ *
+ * Validates the WHOLE schema, not a `.pick()` of email/username/password as it used to. The
+ * pick left `admin`, `active` and `imageUrl` unchecked, so a wrong-typed value reached Mongoose
+ * untouched: `POST /users` with `admin: 'not-a-boolean'` answered 500 (a CastError on save)
+ * instead of the 422 the contract promises, and `active: 'not-a-boolean'` was accepted outright.
+ * The schema is not strict, so unrelated body keys (`id` on a PUT) are still ignored.
+ *
+ * Takes `unknown` on purpose: this is the boundary that ESTABLISHES the type, so a narrower
+ * parameter would only force its callers — all holding raw request bodies — to cast on the way in.
  */
-export const validateData = (
-    userData: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>,
-    requirePassword = true
-): string[] => {
-    const schema = requirePassword
-        ? zodUserSchema.pick({ email: true, username: true, password: true })
-        : zodUserSchema
-              .pick({ email: true, username: true, password: true })
-              .partial({ password: true });
+export const validateData = (userData: unknown, requirePassword = true): string[] => {
+    const schema = requirePassword ? zodUserSchema : zodUserSchema.partial({ password: true });
 
     const parseResult = schema.safeParse(userData);
     if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);

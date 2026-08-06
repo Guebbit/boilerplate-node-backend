@@ -56,6 +56,7 @@ export * from './healthPingEnvelope';
 export * from './healthPingStatus';
 export * from './id';
 export * from './idParamParameter';
+export * from './imageUrl';
 export * from './internalErrorResponse';
 export * from './listOrdersParams';
 export * from './listProductsParams';

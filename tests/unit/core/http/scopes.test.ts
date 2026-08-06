@@ -59,7 +59,7 @@ describe('userScope', () => {
     it('throws when there is no auth context at all', () => {
         // The documented safe direction: an unauthenticated request must error out rather than
         // fall through to an unscoped query. `new Types.ObjectId('')` is what enforces it.
-        expect(() => userScope(requestWith(undefined))).toThrow();
+        expect(() => userScope(requestWith())).toThrow();
     });
 
     it('throws when the auth context carries no id', () => {

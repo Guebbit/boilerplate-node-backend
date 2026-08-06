@@ -25,9 +25,13 @@ import { normalizePagination, addTextFilter, paginatedSearch } from '@repositori
  * Validate product data using the Zod schema.
  * Returns an array of UI-friendly error messages (empty array means valid).
  *
+ * Takes `unknown` on purpose: this is the boundary that ESTABLISHES the type. Declaring a
+ * narrower parameter would force every caller — all of which hold raw request bodies — to cast
+ * on the way in, which is precisely the assertion this function exists to replace.
+ *
  * @param productData
  */
-export const validateData = (productData: Omit<Product, 'id'>): string[] => {
+export const validateData = (productData: unknown): string[] => {
     const parseResult = zodProductSchema.safeParse(productData);
     if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
     return [];

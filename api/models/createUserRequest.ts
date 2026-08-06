@@ -8,6 +8,7 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
+import type { ImageUrl } from './imageUrl';
 import type { Password } from './password';
 
 export interface CreateUserRequest {
@@ -16,5 +17,5 @@ export interface CreateUserRequest {
   password: Password;
   admin?: boolean;
   active?: boolean;
-  imageUrl?: string;
+  imageUrl?: ImageUrl;
 }

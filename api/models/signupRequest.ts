@@ -8,6 +8,7 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
+import type { ImageUrl } from './imageUrl';
 import type { Password } from './password';
 
 export interface SignupRequest {
@@ -16,5 +17,5 @@ export interface SignupRequest {
   username: string;
   password: Password;
   passwordConfirm: Password;
-  imageUrl?: string;
+  imageUrl?: ImageUrl;
 }

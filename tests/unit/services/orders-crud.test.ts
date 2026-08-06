@@ -144,6 +144,7 @@ describe('getById', () => {
     });
 
     it('returns undefined for an empty id without querying', async () => {
+        // eslint-disable-next-line unicorn/no-useless-undefined -- `id` is a required parameter
         await expect(getById(undefined)).resolves.toBeUndefined();
         await expect(getById('')).resolves.toBeUndefined();
     });

@@ -9,6 +9,7 @@
  */
 import type { Email } from './email';
 import type { Id } from './id';
+import type { ImageUrl } from './imageUrl';
 
 export interface User {
   id: Id;
@@ -16,7 +17,7 @@ export interface User {
   username: string;
   admin?: boolean;
   active?: boolean;
-  imageUrl?: string;
+  imageUrl?: ImageUrl;
   createdAt?: string;
   updatedAt?: string;
 }

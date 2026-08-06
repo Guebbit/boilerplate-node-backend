@@ -58,7 +58,7 @@ describe('toIdString', () => {
     it('ignores a non-string `id` and falls back to `_id`', () => {
         const id = new Types.ObjectId();
 
-        expect(toIdString({ id: 12345, _id: id })).toBe(id.toString());
+        expect(toIdString({ id: 12_345, _id: id })).toBe(id.toString());
     });
 
     it('handles a nested _id chain', () => {
@@ -67,10 +67,12 @@ describe('toIdString', () => {
 
     it('returns an empty string for null', () => {
         // `value !== null` guard — `typeof null === 'object'`, so without it this throws.
+        // eslint-disable-next-line unicorn/no-null -- null is the input under test
         expect(toIdString(null)).toBe('');
     });
 
     it('returns an empty string for undefined', () => {
+        // eslint-disable-next-line unicorn/no-useless-undefined -- `value` is a required parameter
         expect(toIdString(undefined)).toBe('');
     });
 
@@ -164,6 +166,7 @@ describe('toCartItemDto', () => {
                 _id: productId,
                 title: 123,
                 price: 'free',
+                // eslint-disable-next-line unicorn/no-null -- a wrong-typed field under test
                 description: null,
                 imageUrl: {},
                 categories: 'tools',
@@ -213,6 +216,7 @@ describe('toCartItemDto', () => {
         const dto = toCartItemDto({
             product: asProduct({
                 _id: new Types.ObjectId(),
+                // eslint-disable-next-line unicorn/no-null -- a non-string entry to filter out
                 categories: ['tools', 42, null, 'office'],
                 tags: [undefined, 'new']
             }),
@@ -257,7 +261,7 @@ describe('toCartItemResponse', () => {
         // `CartItem` is additionalProperties:false. `toEqual` plus the key assertion below is
         // the guard against the populated product reaching the wire.
         expect(response).toEqual({ productId: 'p1', quantity: 3 });
-        expect(Object.keys(response).sort()).toEqual(['productId', 'quantity']);
+        expect(Object.keys(response).toSorted()).toEqual(['productId', 'quantity']);
     });
 
     it('drops the product even when there is nothing else to carry', () => {
@@ -309,7 +313,7 @@ describe('toUserCartDto', () => {
             cart: { items: [], updatedAt: new Date() }
         } as unknown as IUserDocument);
 
-        expect(Object.keys(dto).sort()).toEqual(['cart', 'id']);
+        expect(Object.keys(dto).toSorted()).toEqual(['cart', 'id']);
     });
 
     it('handles an empty cart', () => {

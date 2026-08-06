@@ -61,8 +61,8 @@ describe('getExpiryTime', () => {
         process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
 
         expect(getExpiryTime(ERefreshTokenExpiryTime.SHORT)).toBe(3600);
-        expect(getExpiryTime(ERefreshTokenExpiryTime.MEDIUM)).toBe(86400);
-        expect(getExpiryTime(ERefreshTokenExpiryTime.LONG)).toBe(2592000);
+        expect(getExpiryTime(ERefreshTokenExpiryTime.MEDIUM)).toBe(86_400);
+        expect(getExpiryTime(ERefreshTokenExpiryTime.LONG)).toBe(2_592_000);
     });
 
     it('falls back to the access-token variable when no tier is given', () => {
@@ -71,7 +71,6 @@ describe('getExpiryTime', () => {
         process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
 
         expect(getExpiryTime()).toBe(900);
-        expect(getExpiryTime(undefined)).toBe(900);
     });
 
     it('returns 0 when the variable is unset', () => {

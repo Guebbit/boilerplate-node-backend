@@ -8,6 +8,7 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Id } from './id';
+import type { ImageUrl } from './imageUrl';
 
 export interface Product {
   id: Id;
@@ -16,7 +17,7 @@ export interface Product {
   price: number;
   description?: string;
   active?: boolean;
-  imageUrl?: string;
+  imageUrl?: ImageUrl;
   categories?: string[];
   tags?: string[];
   createdAt?: string;

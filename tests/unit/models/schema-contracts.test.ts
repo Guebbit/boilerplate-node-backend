@@ -223,22 +223,22 @@ describe('feedback request schema', () => {
     });
 });
 
-describe('order schema', () => {
-    /**
-     * `items[].product` embeds the whole `productSchema`, not a reference — an order is a
-     * *snapshot*, so a later price change must not rewrite past orders. That is why a bare
-     * ObjectId fails validation here: title and price are required on the embedded copy.
-     */
-    const makeOrderPayload = async () => {
-        const user = await createUser({ email: 'buyer@example.com' });
-        const product = await createProduct({ title: 'Bought', price: 12.5 });
-        return {
-            userId: user._id,
-            email: user.email,
-            items: [{ product: product.toObject(), quantity: 2 }]
-        };
+/**
+ * `items[].product` embeds the whole `productSchema`, not a reference — an order is a
+ * *snapshot*, so a later price change must not rewrite past orders. That is why a bare
+ * ObjectId fails validation here: title and price are required on the embedded copy.
+ */
+const makeOrderPayload = async () => {
+    const user = await createUser({ email: 'buyer@example.com' });
+    const product = await createProduct({ title: 'Bought', price: 12.5 });
+    return {
+        userId: user._id,
+        email: user.email,
+        items: [{ product: product.toObject(), quantity: 2 }]
     };
+};
 
+describe('order schema', () => {
     it('requires an email', async () => {
         const payload = await makeOrderPayload();
 
