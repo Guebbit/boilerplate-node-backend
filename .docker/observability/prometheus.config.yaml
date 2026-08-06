@@ -22,6 +22,18 @@ scrape_configs:
     # Scrape app business + runtime metrics exposed on /observability/metrics.
     - job_name: api
       metrics_path: /observability/metrics
+      # /observability/metrics is no longer public: it exposes request volumes, error rates,
+      # latency percentiles and login success/failure counters, which is a map of how the service
+      # behaves and when it is weakest. Prometheus cannot hold a JWT — it has no way to log in or
+      # refresh one — so it authenticates with a static bearer credential, which is the mechanism
+      # `scrape_configs` provides for exactly this.
+      #
+      # This value must equal NODE_METRICS_TOKEN in the API's .env. It is a development default
+      # and belongs on the list of secrets to change before this faces anything, alongside
+      # NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH.
+      authorization:
+          type: Bearer
+          credentials: change-me-dev-metrics-token
       static_configs:
           - targets: ['app:3000']
       relabel_configs:

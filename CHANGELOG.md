@@ -564,6 +564,24 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 
 ### Security
 
+- **`/observability/metrics` and `/observability/events` were public.** Neither carries user data,
+  which is why they were left open, but both are a map of how the service behaves — request
+  volumes, error rates, latency percentiles, login success and failure counters, uptime and heap.
+  Each is now authenticated, and they use different mechanisms because their callers can:
+    - **`/events`** is opened by a browser's `EventSource`, which **cannot set request headers** —
+      a limitation of that API, not an oversight — so a bearer token was never available to it.
+      It authenticates with the `HttpOnly` session cookie instead, which is what
+      `withCredentials: true` on the frontend's client was always for. Verified the same way
+      `GET /account/refresh` verifies it, signature _and_ presence on the user document, so
+      logging out revokes the stream too. Deliberately not a token in the query string: URLs land
+      in access logs, proxy logs, history and `Referer` headers.
+    - **`/metrics`** is scraped by Prometheus, which cannot log in or hold a session. It takes a
+      static bearer credential — the mechanism `scrape_configs` provides for exactly this — from
+      `NODE_METRICS_TOKEN`, compared with `timingSafeEqual`. Unset means the endpoint refuses
+      every request: an unauthenticated metrics endpoint is not a state to arrive at by forgetting
+      a variable. `.env-example` and `prometheus.config.yaml` both ship a development default, so
+      the stack works out of the box; change it with the other secrets.
+
 - **An unauthenticated request could pin a CPU for ~45 seconds.** `addTextFilter` and
   `addRegexFilter` passed client text straight into MongoDB's `$regex`, and MongoDB evaluates the
   pattern server-side against every candidate document. `GET /products?text=(a%2B)%2B%24` needs no

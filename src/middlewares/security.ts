@@ -1,4 +1,8 @@
+import { timingSafeEqual } from 'node:crypto';
+import type { NextFunction, Request, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
+import { rejectResponse } from '@core/http/response';
+import { logger } from '@core/adapters/logger';
 
 /**
  * Default window and per-IP budget, used when the `NODE_RATE_LIMIT_*` variables are unset.
@@ -64,3 +68,59 @@ export const authRateLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false
 });
+
+/**
+ * Guards the Prometheus scrape endpoint.
+ *
+ * `/observability/metrics` cannot use the admin JWT the other observability routes use: it is
+ * scraped by Prometheus, which has no way to log in, refresh a token, or hold a session. What
+ * Prometheus does support is a static bearer credential in its `scrape_configs`
+ * (`authorization: { type: Bearer, credentials: … }`), so that is the credential here.
+ *
+ * Left open, the endpoint is free reconnaissance: request volumes, error rates, latency
+ * percentiles, in-flight counts, login success/failure counters, process uptime and heap. None of
+ * it is user data, all of it is a map of how the service behaves and when it is weakest.
+ *
+ * Deny-by-default when `NODE_METRICS_TOKEN` is unset, rather than open-by-default: an
+ * unauthenticated metrics endpoint is not a state to arrive at by forgetting a variable. The
+ * shipped `.env-example` and compose config both set it, so the stack works out of the box —
+ * change it, like any other secret, before it faces anything.
+ *
+ * `timingSafeEqual` rather than `===`: a byte-by-byte comparison that returns early leaks the
+ * token's prefix to anyone willing to measure, and the whole token to anyone patient.
+ */
+export const isMetricsScraper = (request: Request, response: Response, next: NextFunction) => {
+    const expected = process.env.NODE_METRICS_TOKEN;
+
+    if (!expected) {
+        logger.warn({
+            message:
+                'NODE_METRICS_TOKEN is not set — /observability/metrics is refusing every request.'
+        });
+        rejectResponse(response, 503, 'isMetricsScraper - not configured', []);
+        return;
+    }
+
+    // The scheme is required, not stripped-if-present: accepting a bare token would mean the
+    // credential is read from a header shape no client should be sending, which is one more way
+    // for it to end up somewhere it was not meant to be.
+    const authorization = request.header('Authorization') ?? '';
+    const provided = authorization.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : '';
+    const expectedBytes = Buffer.from(expected);
+    const providedBytes = Buffer.from(provided);
+
+    // `timingSafeEqual` throws on a length mismatch, which would itself be a length oracle — so
+    // the lengths are compared first and the result folded into one boolean.
+    const matches =
+        expectedBytes.length === providedBytes.length &&
+        timingSafeEqual(expectedBytes, providedBytes);
+
+    if (!matches) {
+        rejectResponse(response, 401, 'isMetricsScraper - bad credentials', []);
+        return;
+    }
+
+    next();
+};

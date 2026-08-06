@@ -8,11 +8,16 @@
  * subpath exports), so the duplicate app is gone with it — along with the risk of these tests
  * passing against a middleware stack the real app does not have.
  *
- * No DB or Redis is started: the routes exercised here need neither, and the auth middleware
- * answers 401 for unauthenticated requests without touching the database.
+ * Redis is not started: the routes exercised here do not need it. A database IS, since
+ * `/observability/events` now authenticates with an admin session cookie and a session needs a
+ * user to belong to.
  */
 import type { IncomingMessage } from 'node:http';
 import { api } from '../helpers/http';
+import { setupTestDb } from '../helpers/setup-test-db';
+import { createAdminUser, PLAIN_PASSWORD } from '../helpers/factories/users';
+
+setupTestDb();
 
 describe('System routes', () => {
     it('GET / returns the welcome payload', async () => {
@@ -32,7 +37,11 @@ describe('System routes', () => {
 
 describe('Observability routes', () => {
     it('GET /observability/metrics returns prometheus exposition', async () => {
-        const response = await api().get('/observability/metrics');
+        // No longer public — Prometheus scrapes it with a static bearer credential, since it
+        // cannot log in or hold a session. See `isMetricsScraper`.
+        const response = await api()
+            .get('/observability/metrics')
+            .set('Authorization', `Bearer ${process.env.NODE_METRICS_TOKEN ?? ''}`);
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toContain('text/plain');
@@ -43,8 +52,20 @@ describe('Observability routes', () => {
     it('GET /observability/events returns an SSE snapshot', async () => {
         // supertest buffers the whole response, so the stream is read by aborting shortly after
         // the first chunk lands rather than by holding the connection open.
+        // No longer public either. `EventSource` cannot set headers, so the stream authenticates
+        // with the session cookie an admin login sets — which is how the frontend already opens
+        // it (`withCredentials: true`).
+        const admin = await createAdminUser({ email: 'sse-admin@example.com' });
+        const login = await api()
+            .post('/account/login')
+            .send({ email: admin.email, password: PLAIN_PASSWORD });
+        const cookie = (login.headers['set-cookie'] as unknown as string[]).find((value) =>
+            value.startsWith('jwt=')
+        )!;
+
         const response = await api()
             .get('/observability/events')
+            .set('Cookie', cookie)
             .buffer(true)
             .parse((res, callback) => {
                 const stream = res as unknown as IncomingMessage;

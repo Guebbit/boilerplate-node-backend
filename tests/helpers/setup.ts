@@ -26,6 +26,13 @@ process.env.NODE_RATE_LIMIT_MAX ??= '1000';
  */
 process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '1000';
 
+/**
+ * The Prometheus scrape credential. `/observability/metrics` denies by default when this is
+ * unset — an unauthenticated metrics endpoint is not a state to arrive at by forgetting a
+ * variable — so the suite has to set one to reach it at all.
+ */
+process.env.NODE_METRICS_TOKEN ??= 'test-metrics-token';
+
 //
 //
 /**
