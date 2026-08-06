@@ -107,3 +107,69 @@ describe('upload content validation', () => {
         expect(uploadedFiles()).toEqual(before);
     });
 });
+
+/**
+ * The upload directory is served by this API (`express.static` in `app.ts`), which is what makes
+ * a stored `imageUrl` resolvable at all — and what makes everything above load-bearing rather
+ * than theoretical. These assert the serving side of that bargain.
+ */
+describe('serving the upload directory', () => {
+    it('serves a stored image with an image content type', async () => {
+        const uploaded = await signupWith(PNG_BYTES, 'avatar.png', 'image/png');
+        const imageUrl = uploaded.body.data.imageUrl as string;
+
+        const response = await api().get(imageUrl);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toContain('image/png');
+        // Helmet defaults every response to `same-origin`, which would have the browser fetch the
+        // bytes and then refuse to render them for the frontend on another port.
+        expect(response.headers['cross-origin-resource-policy']).toBe('cross-origin');
+        // Set globally by helmet; restated here because it is what stops a browser second-guessing
+        // the type we just committed to.
+        expect(response.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    /**
+     * The reason the stored extension is derived from the declared type rather than the client's
+     * filename. Were it carried over, this upload would be stored as `.html` and served as
+     * `text/html` — and a PNG may legally carry `<script>` in a metadata chunk, so it would
+     * execute. Stored XSS that passes a content check cleanly.
+     */
+    it('never serves an uploaded file as html, whatever it was named', async () => {
+        const uploaded = await signupWith(PNG_BYTES, 'payload.html', 'image/png');
+        const imageUrl = uploaded.body.data.imageUrl as string;
+
+        expect(imageUrl.endsWith('.png')).toBe(true);
+
+        const response = await api().get(imageUrl);
+
+        expect(response.headers['content-type']).not.toContain('text/html');
+    });
+
+    it('does not serve dotfiles', async () => {
+        const response = await api().get('/.env');
+
+        expect(response.status).toBe(404);
+    });
+
+    it('does not list the upload directory', async () => {
+        const response = await api().get('/images/');
+
+        expect(response.status).toBe(404);
+    });
+
+    /**
+     * `express.static` resolves `..` before it looks at the filesystem, but the guarantee is
+     * worth pinning rather than assuming — it is the difference between serving one directory and
+     * serving the repository.
+     */
+    it.each(['/../package.json', '/images/../../package.json', '/%2e%2e/package.json'])(
+        'refuses to escape the public directory via %s',
+        async (attempt) => {
+            const response = await api().get(attempt);
+
+            expect(response.status).toBeGreaterThanOrEqual(400);
+        }
+    );
+});

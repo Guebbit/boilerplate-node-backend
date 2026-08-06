@@ -14,7 +14,11 @@ import multer, { type Field, type FileFilterCallback } from 'multer';
 // filenames would let someone guess the URL of another user's upload.
 import { randomBytes } from 'node:crypto';
 import { createLocaleContext, runWithLocaleContext, t } from '@core/i18n';
-import { identifyImageFile } from '@core/adapters/image-signatures';
+import {
+    extensionForImage,
+    identifyImageFile,
+    normaliseDeclaredImageMime
+} from '@core/adapters/image-signatures';
 import { deleteFile } from '@core/adapters/filesystem';
 import { getFormFiles } from '@core/http/uploads';
 import { logger } from '@core/adapters/logger';
@@ -76,9 +80,16 @@ export const resolveUploadDestination = (
 /**
  * Change file name
  *
- * The client-supplied `originalname` is never reused as-is. That would allow path traversal
- * (`../../etc/passwd`), overwriting an existing file by name collision, and enumeration of
- * other users' uploads.
+ * The client-supplied `originalname` is never reused, in whole OR IN PART. Reusing the stem
+ * would allow path traversal (`../../etc/passwd`), overwriting an existing file by name
+ * collision, and enumeration of other users' uploads.
+ *
+ * Reusing its EXTENSION is just as dangerous once the upload directory is served, and less
+ * obviously so: the extension decides the `Content-Type` a static file server sends, and a PNG
+ * may legally carry arbitrary bytes in its metadata chunks. Valid image bytes stored as `.html`
+ * are therefore served as `text/html` and executed — stored XSS that passes a content check
+ * cleanly. The extension comes from the declared type instead, which `fileFilter` has already
+ * constrained to a closed set, and `validateUploadedImages` then confirms the bytes agree.
  *
  * @param request
  * @param file
@@ -89,12 +100,11 @@ export const resolveUploadFilename = (
     file: Express.Multer.File,
     callback: (error: Error | null, filename: string) => void
 ): void => {
-    // randomize name for security reason.
-    // 16 random bytes as hex = 32 chars / 128 bits — collision probability is negligible,
-    // and the name is unguessable. Only the extension is carried over from the original,
-    // and `fileFilter` has already constrained the type.
+    // 16 random bytes as hex = 32 chars / 128 bits — collision probability is negligible, and
+    // the name is unguessable, which is what keeps one user's uploads from being enumerable.
+    const extension = extensionForImage(normaliseDeclaredImageMime(file.mimetype)) ?? 'bin';
     // eslint-disable-next-line unicorn/no-null
-    callback(null, randomBytes(16).toString('hex') + '.' + getExtension(file.originalname));
+    callback(null, randomBytes(16).toString('hex') + '.' + extension);
 };
 
 export const fileStorage = multer.diskStorage({
@@ -232,17 +242,29 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
     const paths = getFormFiles(request);
     if (!paths || paths.length === 0) return next();
 
+    // The declared type decided the stored EXTENSION, and the extension decides the
+    // `Content-Type` a static file server sends — so the bytes have to match the declaration,
+    // not merely be some image. Valid JPEG bytes stored as `.png` would otherwise be served as
+    // `image/png`; harmless today, but it is the same class of mismatch this whole check exists
+    // to remove, and cheap to close while the file is in hand.
+    const declared = normaliseDeclaredImageMime(request.file?.mimetype);
+
     void Promise.all(paths.map((path) => identifyImageFile(path)))
         .then((identified) => {
-            const rejected = paths.filter((_path, index) => identified[index] === undefined);
+            const rejected = paths.filter(
+                (_path, index) =>
+                    identified[index] === undefined ||
+                    (declared !== undefined && identified[index] !== declared)
+            );
             if (rejected.length === 0) return next();
 
             // Logged, because a mismatch between the declared type and the bytes is not a typo —
             // it is either a broken client or someone probing what this endpoint will store.
             logger.warn({
-                message: 'Upload rejected: content does not match an accepted image format.',
+                message: 'Upload rejected: content does not match the declared image format.',
                 files: rejected,
-                declared: request.file?.mimetype,
+                declared,
+                identified,
                 request_id: request.requestId
             });
 

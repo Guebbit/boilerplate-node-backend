@@ -111,3 +111,36 @@ export const identifyImageFile = async (filePath: string): Promise<string | unde
         await handle?.close();
     }
 };
+
+/**
+ * The file extension an identified image should be stored under.
+ *
+ * Derived from the type, never from the client's filename. `originalname` is attacker-controlled
+ * in full — and once the upload directory is served statically, the extension is what decides the
+ * `Content-Type` a browser receives. A file stored as `.html` is served as `text/html`, and a PNG
+ * may legally carry arbitrary bytes in its metadata chunks, so "valid PNG bytes under an .html
+ * name" is stored XSS that passes every content check.
+ *
+ * A closed map is the fix: the value can only ever be one of these four strings.
+ *
+ * @param mime - A MIME type returned by {@link identifyImage}.
+ * @returns The extension to store it under, or `undefined` for anything unrecognised.
+ */
+export const extensionForImage = (mime: string | undefined): string | undefined =>
+    ({
+        'image/png': 'png',
+        'image/jpeg': 'jpg',
+        'image/webp': 'webp'
+    })[mime ?? ''];
+
+/**
+ * The MIME type a declared `Content-Type` corresponds to, normalised.
+ *
+ * `image/jpg` is not a real IANA type but is sent often enough that rejecting it would reject
+ * valid JPEGs over a spelling mistake; it is folded into `image/jpeg` here so the declared and
+ * sniffed types can be compared as equals.
+ *
+ * @param declared - The `Content-Type` from the multipart part.
+ */
+export const normaliseDeclaredImageMime = (declared: string | undefined): string | undefined =>
+    declared === 'image/jpg' ? 'image/jpeg' : declared;

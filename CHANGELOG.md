@@ -61,6 +61,15 @@ its own tests.
 
 ### Added
 
+- **Uploaded images are served.** `public/` is mounted through `express.static`, which it never
+  was: uploads were written to `public/images/` and served by nothing, so every `imageUrl` this
+  API stored pointed at a URL it would not answer. Kept in the API rather than delegated to a
+  reverse proxy so the guarantees stay where the test suite can hold them — `dotfiles: 'ignore'`,
+  no directory index, `Cross-Origin-Resource-Policy: cross-origin` (helmet defaults to
+  `same-origin`, which would have the paired frontend fetch an image and then refuse to render
+  it), and a one-year immutable cache, which is safe because a filename is 128 bits of randomness
+  derived from nothing the client controls.
+
 - **Per-request language.** Every endpoint honours `Accept-Language` — q-weights, region tags
   (`en-GB` → `en`), `*`, and a fallback rather than an error for anything unsupported. The
   negotiated language is stated back in `Content-Language`, and `Vary: Accept-Language` is set so
@@ -563,6 +572,15 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - **`js-yaml` and `@types/js-yaml`** — no remaining consumer.
 
 ### Security
+
+- **The stored filename's extension came from the client.** `resolveUploadFilename` randomised the
+  stem but carried `originalname`'s extension over, so valid PNG bytes uploaded as `payload.html`
+  were stored as `<random>.html`. Harmless while nothing served the directory — and stored XSS the
+  moment anything did, since a static file server derives `Content-Type` from the extension and a
+  PNG may legally carry `<script>` in a metadata chunk. Bytes that pass every content check would
+  have been served as `text/html` and executed. The extension now comes from the declared type, a
+  closed set of `png`/`jpg`/`webp`, and the content check additionally requires the bytes to match
+  what was declared.
 
 - **`/observability/metrics` and `/observability/events` were public.** Neither carries user data,
   which is why they were left open, but both are a map of how the service behaves — request
