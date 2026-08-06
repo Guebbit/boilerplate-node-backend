@@ -14,7 +14,7 @@
  */
 
 import type { Request } from 'express';
-import { getFormFiles, resolveImageUrl } from '@core/http/uploads';
+import { getFormFiles, resolveImageUrl, toPosixPath } from '@core/http/uploads';
 
 /** Only `file` / `files` are read, so a partial Request is enough and keeps intent visible. */
 const requestWith = (parts: Partial<Request>): Request => parts as Request;
@@ -168,5 +168,92 @@ describe('resolveImageUrl', () => {
             resolveImageUrl(requestWith({ file: uploaded('public/images/public-notice.png') }))
                 .imageUrl
         ).toBe('/images/public-notice.png');
+    });
+
+    /**
+     * The Windows case, which is the whole reason `imageUrl` is normalised at all.
+     *
+     * multer builds `file.path` with `path.join()`, so on Windows it arrives backslashed. The
+     * value that gets PERSISTED must be a URL path or `express.static` answers 404 — and it does
+     * so only on Windows, only in production data, and only once someone renders the image, which
+     * is about as late as a bug can surface. These run on every platform because they feed the
+     * helper a literal Windows-shaped string rather than asking the host what its separator is.
+     */
+    describe('separator normalisation', () => {
+        it('converts a Windows path to a URL path when storing', () => {
+            delete process.env.NODE_PUBLIC_PATH;
+
+            const result = resolveImageUrl(
+                requestWith({ file: uploaded(String.raw`public\images\a.png`) })
+            );
+
+            expect(result.imageUrl).toBe('/images/a.png');
+        });
+
+        it('leaves imageUrlRaw in the platform-native form the filesystem needs', () => {
+            delete process.env.NODE_PUBLIC_PATH;
+
+            const result = resolveImageUrl(
+                requestWith({ file: uploaded(String.raw`public\images\a.png`) })
+            );
+
+            // Only ONE of the two values is a URL. `imageUrlRaw` goes to `deleteFile()` when the
+            // surrounding operation fails, so normalising it too would break cleanup on Windows —
+            // the exact inverse of the bug being fixed here.
+            expect(result.imageUrlRaw).toBe(String.raw`public\images\a.png`);
+        });
+
+        it('matches a posix NODE_PUBLIC_PATH against a backslashed upload path', () => {
+            // The prefix is normalised as well as the path, so the two agree on separators
+            // whatever mix the platform and the configured value arrive in. Stripping before
+            // normalising would leave this unmatched and persist the whole absolute path.
+            process.env.NODE_PUBLIC_PATH = 'C:/srv/uploads';
+
+            const result = resolveImageUrl(
+                requestWith({ file: uploaded(String.raw`C:\srv\uploads\images\a.png`) })
+            );
+
+            expect(result.imageUrl).toBe('/images/a.png');
+        });
+
+        it('matches a backslashed NODE_PUBLIC_PATH against a backslashed upload path', () => {
+            process.env.NODE_PUBLIC_PATH = String.raw`C:\srv\uploads`;
+
+            const result = resolveImageUrl(
+                requestWith({ file: uploaded(String.raw`C:\srv\uploads\images\a.png`) })
+            );
+
+            expect(result.imageUrl).toBe('/images/a.png');
+        });
+
+        it('never persists a backslash, whatever the inputs look like', () => {
+            // The invariant the other cases are examples of. A stored value containing `\` is
+            // broken by definition: it is read as part of the filename, not as a separator.
+            process.env.NODE_PUBLIC_PATH = String.raw`C:\srv`;
+
+            for (const path of [
+                String.raw`C:\srv\images\a.png`,
+                'C:/srv/images/a.png',
+                String.raw`C:\srv/images\a.png`
+            ])
+                expect(resolveImageUrl(requestWith({ file: uploaded(path) })).imageUrl).not.toMatch(
+                    /\\/
+                );
+        });
+    });
+});
+
+describe('toPosixPath', () => {
+    it('rewrites every separator, not just the first', () => {
+        expect(toPosixPath(String.raw`a\b\c\d.png`)).toBe('a/b/c/d.png');
+    });
+
+    it('leaves an already-posix path untouched', () => {
+        // Idempotence matters: the helper runs on values that may already have been through it.
+        expect(toPosixPath('/images/a.png')).toBe('/images/a.png');
+    });
+
+    it('leaves a path with no separators at all untouched', () => {
+        expect(toPosixPath('a.png')).toBe('a.png');
     });
 });

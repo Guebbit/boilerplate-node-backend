@@ -34,8 +34,18 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Managed providers (Atlas, Railway, …) hand you a single credential-bearing URI, while
  * docker-compose setups are easier to express as separate host/port values. Precedence is
  * URI first, so a deployment can override a baked-in default with one variable.
+ *
+ * Note the truthiness check rather than a `!== undefined` one: an EMPTY `NODE_DB_URI` falls
+ * through to the fragments deliberately, and that is load-bearing. It is how the `:host` npm
+ * scripts reach a containerised database from the host — they blank the URI and override only
+ * `NODE_MONGODB_HOST`, so the database NAME keeps coming from `.env` instead of being spelled
+ * out a second time in `package.json` (where it used to drift, and seed the wrong database).
+ *
+ * Exported for `migrate-mongo-config.js`, which cannot import this module — it is CommonJS,
+ * loaded by migrate-mongo's own resolver, and this file is TypeScript. It reimplements these
+ * five lines, and `tests/unit/db/host-scripts.test.ts` asserts the two never disagree.
  */
-const getDatabaseUri = () => {
+export const getDatabaseUri = () => {
     if (process.env.NODE_DB_URI) return process.env.NODE_DB_URI;
 
     const host = process.env.NODE_MONGODB_HOST ?? '127.0.0.1';

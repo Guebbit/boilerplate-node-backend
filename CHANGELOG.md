@@ -358,6 +358,16 @@ its own tests.
   output.
 - **`src/middlewares/auth-jwt.ts`**'s barrel comment now describes what the module is — the front
   door every consumer imports — rather than calling itself a backward-compatibility shim.
+- **The demo dataset moved to `db/seeds/fixtures.ts`**, leaving `db/seeds/index.ts` as the runner
+  that owns the connection, the upsert policy and the production gate. `index.ts` seeds on import,
+  so nothing could read the fixtures without also connecting to a database and writing to it —
+  which is why they had never been tested. `tests/unit/db/seed-fixtures.test.ts` now asserts every
+  fixture `imageUrl` is a rooted URL path with no backslash that resolves to a file the repository
+  actually ships.
+- **Seed fixture images moved to `public/images/seed/`, and uploads are no longer tracked by git.**
+  `public/` is served by `express.static`, so uploads land in a tracked directory — `.gitignore` now
+  drops `public/images/*` and negates `seed/`. Separating the two is what lets that stay two stable
+  lines instead of a list of filenames to maintain as fixtures change.
 
 ### Fixed
 
@@ -557,6 +567,41 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   password back through a finder that no longer selects it. Five tests moved onto the credential
   finders; this one started actually asserting.
 
+- **The `:host` scripts ignored `NODE_MONGODB_NAME` and could seed the wrong database.** Six of
+  them spelled out `mongodb://localhost:27017/boilerplate-node-backend` literally, so renaming the
+  database in `.env` left every one of them pointing at the old name — silently, and in the
+  destructive direction: `db:seed:reset:host` would create and reset a database nobody had
+  configured while the real data sat untouched elsewhere, with nothing in the output naming which
+  one it had touched. They now blank `NODE_DB_URI` / `NODE_REDIS_URL` and set `NODE_MONGODB_HOST` /
+  `NODE_REDIS_HOST` to `localhost`, which is all the host case actually needs: an empty URI makes
+  both resolvers fall through to their host/port/name fragments, so everything except the hostname
+  still comes from `.env`. That empty-string fall-through is now load-bearing and reads like a bug
+  to anyone tidying the resolver, so it is documented at both call sites and pinned by its own test.
+
+- **`migrate-mongo-config.js` read `NODE_DB_URI` raw**, with no host/port/name fallback — which is
+  why the `:host` scripts had to write out a full URI in the first place. It now resolves the URI
+  exactly as the application does. It cannot import `getDatabaseUri` (CommonJS, loaded by
+  migrate-mongo's own resolver, against a TypeScript module), so the five lines are duplicated and
+  `tests/unit/db/host-scripts.test.ts` runs both over a six-case env matrix and fails if they ever
+  disagree — the duplication is allowed to exist only because that test exists.
+
+- **Uploaded image URLs were stored with Windows path separators, and 404ed.** multer builds
+  `file.path` with `path.join()`, so an upload on Windows arrived as `public\images\x.jpg` and
+  `resolveImageUrl` persisted it with only the public prefix stripped. A backslash is a literal
+  filename character in a URL, so every such row asked `express.static` for a file that does not
+  exist. `imageUrl` is now normalised before it is persisted — prefix included, so a posix
+  `NODE_PUBLIC_PATH` still matches a backslashed path. `imageUrlRaw` is deliberately left
+  platform-native: it is what `deleteFile()` receives, and normalising it too would break upload
+  cleanup on Windows, which is this bug inverted.
+
+- **The demo fixtures shipped the same broken URLs**, as ten backslashed `\images\x.jpg` literals,
+  so every `db:seed` on every platform wrote image paths that could not resolve. It went unnoticed
+  because nothing served `public/` at all until this release. Seeding is idempotent by **skipping**
+  an existing `_id` rather than rewriting it, so re-seeding does not repair an affected database:
+  `db/migrations/20260806140000-image-url-separators.js` does, across `products`, `users` and the
+  embedded product snapshot inside `orders`. Its `down` is deliberately empty — reversing a repair
+  means restoring data that 404s.
+
 ### Removed
 
 - **The commented-out SendGrid transport block** in `src/core/adapters/mailer.ts`. It could not have
@@ -717,7 +762,16 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - The two `openapi.yaml` copies (this repo and the frontend's) are hand-synced. They are byte-identical
   as of this entry, but nothing enforces that — keeping them so is still a manual step on every
   contract change.
-- Uploaded images 404: files are written to `public/images/`, but nothing mounts them.
+- **None of the image serving has been exercised against a running stack.** The `express.static`
+  mount, the separator normalisation and the repair migration are all verified statically and by
+  unit tests; nobody has uploaded a file, requested the returned `imageUrl` and seen a `200`, and
+  the migration has been written but never run against a live database.
 - `.env-example`'s JWT secrets are literal placeholders that `validateRequiredEnvironment` accepts,
   since it only checks for non-emptiness.
-- The `:host` scripts hardcode the database name, ignoring `NODE_MONGODB_NAME`.
+- **The `:host` scripts have not been run against a live database since being rewritten.** The
+  tests assert the URI each one resolves to — which is the thing that was wrong — but not that
+  Mongo and Redis answer on it. Setting `NODE_MONGODB_NAME` to something else and confirming
+  `db:seed:host` targets it is still a manual check nobody has performed.
+- **The pairing with `boilerplate-vue-frontend` has never been confirmed in a browser.** Both
+  stacks up, a real request visible in this API's logs: that check is still outstanding. Everything
+  claimed about the pairing rests on `compose config` output, the Vite sources and this suite.

@@ -7,7 +7,7 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 | Script               | Job                                                                                        | Read more                                 |
 | -------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------- |
 | `dev`                | watch-mode local runtime from `src/cluster.ts` — expects the compose hostnames from `.env` | [Runtime](./runtime.md)                   |
-| `dev:host`           | same, with `NODE_DB_URI`/`NODE_REDIS_URL` overridden to `localhost`                        | [Runtime](./runtime.md)                   |
+| `dev:host`           | same, with the Mongo and Redis **hostnames** redirected to `localhost`                     | [Runtime](./runtime.md)                   |
 | `start`              | start the clustered runtime without watch mode                                             | [Runtime](./runtime.md)                   |
 | `debug`              | start with Node inspector break-on-start                                                   | [Runtime](./runtime.md)                   |
 | `dev:docker`         | single-worker hot reload inside Docker/Podman                                              | [Docker & Podman](./docker-and-podman.md) |
@@ -73,9 +73,14 @@ API, so nothing else invalidates the cache. See _Seeding and the response cache_
 README.
 
 Every one of these has a `:host` twin (`db:seed:host`, `db:cache:clear:host`, `db:bootstrap:host`,
-…) that overrides `NODE_DB_URI` / `NODE_REDIS_URL` to `localhost` via `cross-env`. The shipped
-`.env` uses compose hostnames, so the plain scripts only resolve from inside a container — see
-_Running on the host_ in the repo README.
+…) that redirects the **hostname** to `localhost` via `cross-env` — by blanking `NODE_DB_URI` /
+`NODE_REDIS_URL` so the resolvers fall through to `NODE_MONGODB_HOST` / `NODE_REDIS_HOST`, leaving
+the port and the database name to `.env`. The shipped `.env` uses compose hostnames, so the plain
+scripts only resolve from inside a container — see _Running on the host_ in the repo README.
+
+They deliberately do **not** spell out a URI. One that includes the database name overrides
+`NODE_MONGODB_NAME` without saying so, which is how these scripts used to seed a database nobody
+had configured.
 
 ## Container & host helper scripts
 

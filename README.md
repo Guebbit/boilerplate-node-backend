@@ -54,9 +54,10 @@ later boots are a no-op — see [Database migrations & seeding](#database-migrat
 ### Running on the host
 
 `npm run dev` on its own will **not** work against the shipped `.env`: the hostname `database`
-only resolves inside the compose network. Use the `:host` script variants, which override the
-URIs to `localhost` (the compose files publish Mongo on `27017` and Redis on `6379`, so start
-the stack — or at least those two services — first):
+only resolves inside the compose network. Use the `:host` script variants, which redirect the
+**hostname** to `localhost` and change nothing else (the compose files publish Mongo and Redis on
+the `NODE_MONGODB_PORT` / `NODE_REDIS_PORT` from your `.env`, so start the stack — or at least
+those two services — first):
 
 | Container-first (default)   | Host equivalent                  |
 | --------------------------- | -------------------------------- |
@@ -69,8 +70,18 @@ the stack — or at least those two services — first):
 | `npm run db:cache:clear`    | `npm run db:cache:clear:host`    |
 | `npm run db:bootstrap`      | `npm run db:bootstrap:host`      |
 
-The `:host` scripts set `NODE_DB_URI` and `NODE_REDIS_URL` inline via `cross-env`; they do not
-read a second env file, so there is nothing to keep in sync.
+Mechanically, each one **blanks** `NODE_DB_URI` / `NODE_REDIS_URL` and sets
+`NODE_MONGODB_HOST=localhost` / `NODE_REDIS_HOST=localhost` via `cross-env`. An empty URI makes
+both resolvers fall through to their host/port/name fragments, so everything except the hostname
+— the database **name** above all — still comes from your `.env`. There is no second env file to
+keep in sync, and nothing is duplicated.
+
+That indirection is the point. These scripts used to spell out
+`mongodb://localhost:27017/boilerplate-node-backend` in full, six times. Renaming the database in
+`.env` then left every `:host` script pointing at the old one, silently: `db:seed:host` would
+create and populate `boilerplate-node-backend` while your actual data sat untouched somewhere
+else, and nothing in the output said which database it had touched.
+`tests/unit/db/host-scripts.test.ts` fails if a literal URI or database name comes back.
 
 If you genuinely want the host to be your primary environment, edit `.env` to use `localhost`
 and let compose override the two hostnames in its `environment:` block instead.
@@ -131,10 +142,10 @@ The shipped defaults on both sides already match; the table is for when you move
 
 Two tools, two non-overlapping jobs:
 
-|                     | Owns                                                    | Command                 | Re-runnable?                           |
-| ------------------- | ------------------------------------------------------- | ----------------------- | -------------------------------------- |
-| `migrate-mongo`     | **schema** — indexes, collection options, field renames | `npm run db:migrate:up` | yes, tracked in `migrations_changelog` |
-| `db/seeds/index.ts` | **demo data** — users, products, orders                 | `npm run db:seed`       | yes, upserts by fixed `_id`            |
+|                        | Owns                                                    | Command                 | Re-runnable?                           |
+| ---------------------- | ------------------------------------------------------- | ----------------------- | -------------------------------------- |
+| `migrate-mongo`        | **schema** — indexes, collection options, field renames | `npm run db:migrate:up` | yes, tracked in `migrations_changelog` |
+| `db/seeds/fixtures.ts` | **demo data** — users, products, orders                 | `npm run db:seed`       | yes, upserts by fixed `_id`            |
 
 `npm run db:bootstrap` runs both, in that order, and is what the compose `app` service executes
 before starting the server.
@@ -144,6 +155,28 @@ before starting the server.
   paste a pre-computed hash there — it drifts from the hook and its plaintext gets lost.
 - Seed credentials: `root@root.it` / `rootroot` (admin) and `gino@pino.it` / `password`.
 - `npm run db:seed:reset` drops the database first, for when you want a clean slate.
+- The dataset lives in `db/seeds/fixtures.ts` (data, no side effects); `db/seeds/index.ts` is the
+  runner that holds the connection, the upsert policy and the production gate. Split so the
+  fixtures can be read — by a test, or by you — without connecting to a database and writing to it.
+- Re-running the seeder **skips** a fixture whose `_id` already exists; it does not rewrite it. To
+  repair rows an earlier version seeded badly, run the migrations, or `db:seed:reset` for a clean
+  slate.
+
+### Uploaded images
+
+Uploads land in `public/images/`, which `express.static` serves (see `src/app.ts`), and `.gitignore`
+drops — a served directory must not accumulate strangers' files in your git history.
+
+The demo images the fixtures reference are the exception: they are repository content and live in
+`public/images/seed/`, which is negated in `.gitignore`. Keeping them in their own directory is
+what lets one rule ignore uploads without enumerating which files are fixtures.
+
+Stored `imageUrl`s are **URL paths** — forward slashes, always, whatever platform wrote them.
+multer builds its `file.path` with `path.join()`, so an upload on Windows arrives backslashed;
+`resolveImageUrl` normalises it before it is persisted. A backslash in a URL is a literal filename
+character, so a row that keeps one points at a file the server will 404 —
+`db/migrations/20260806140000-image-url-separators.js` repairs any that were stored before this
+was fixed.
 
 ### Seeding and the response cache
 
