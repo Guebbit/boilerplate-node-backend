@@ -11,13 +11,17 @@ import { postLogoutEverywhere } from '@controllers/account/post-logout-everywher
 import { deleteExpiredTokens } from '@controllers/account/delete-expired-tokens';
 import { deleteAccountRequest } from '@controllers/account/delete-account-request';
 import { deleteAccountConfirm } from '@controllers/account/delete-account-confirm';
-import { invalidateCache, setCache } from '@middlewares/cache';
+import { invalidateCache, noStore, setCache } from '@middlewares/cache';
 
 /** Express router for account/auth endpoints (login, signup, password reset, token refresh). */
 export const router = Router();
 
 // All routes apply getAuth so request.authContext is populated when a token is present
 router.use(getAuth);
+
+// Credentials and auth-state changes: never cacheable. Mounted here rather than per
+// controller so a route added later cannot silently omit it — see `noStore`.
+router.use(noStore);
 
 // GET /account — current user profile (requires auth)
 router.get('/', setCache(3600, { tags: ['account'] }), isAuth, getAccount);

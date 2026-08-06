@@ -208,6 +208,17 @@ its own tests.
 
 ### Changed
 
+- **Rate limiting is 100 requests per minute, not 100 per fifteen.** The old budget was a session
+  limit wearing a rate limiter's clothes: a single-page app spends 5-15 requests rendering one
+  page, and a full pass of the frontend's live e2e suite issues ~150, peaking at 52 in a minute —
+  measured, not estimated. An ordinary browsing session tripped it, and a limit a legitimate user
+  reaches is worse than none, because the 429 lands on them and reads as the app being broken
+  while an attacker simply rotates IPs. The window shrank too: exhausting a 15-minute budget in
+  the first two minutes locked the user out for the remaining thirteen, where a one-minute window
+  makes the limit a brake on burst rate rather than a quota. Test suites raise the budget 10x
+  (`tests/helpers/setup.ts`). Found because the first live e2e run against this API failed 14
+  assertions, every one of them a 429 cascade rather than anything the tests were checking.
+
 - **The pre-commit hook runs `complete:fast` instead of `complete:check`.** The full gate runs the
   unit, integration and contract suites — minutes per commit, which is long enough that people
   reach for `--no-verify`, and a hook that gets bypassed protects nothing. CI already runs each of
@@ -304,6 +315,29 @@ its own tests.
   door every consumer imports — rather than calling itself a backward-compatibility shim.
 
 ### Fixed
+
+- **Auth responses could be served from cache, silently logging the client out.** Express attaches
+  an `ETag` automatically, and `GET /account/refresh` declared no cache policy — so a browser
+  applied heuristic caching, stored the response, and later revalidated with `If-None-Match`.
+  Express answered `304 Not Modified`, which by definition carries **no body** — and that
+  endpoint's entire purpose is returning a freshly minted access token _in the body_. The client
+  received nothing, left its in-memory token undefined, and issued every subsequent request
+  unauthenticated, while still holding a valid refresh cookie so the UI went on showing the user
+  as signed in. Intermittent by nature: a JWT embeds its issued-at second, so two refreshes inside
+  the same second produce byte-identical bodies, the same ETag, and the 304. Now `Cache-Control:
+no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`), which also
+  strips inbound `If-None-Match`/`If-Modified-Since` so a non-compliant client or intermediary
+  cannot force a 304 either. `no-store` rather than `no-cache`: the latter permits storing and
+  merely requires revalidation, which is exactly the path that breaks this. Routes that genuinely
+  want caching still override it — `GET /account` keeps its `setCache`. Verified at the HTTP
+  level: forced revalidation returned `304`/0 bytes before, `200`/233 bytes after.
+- **Paginated lists had no total order, so pages could repeat or skip rows.** `DEFAULT_SORT` was
+  `{ createdAt: -1 }` on a column that is not unique — a seed, a bulk import or two concurrent
+  creates land in the same millisecond — and MongoDB does not order ties. Two identical queries
+  returned different orders against the real API. Because `paginatedSearch` issues `count` and
+  `findAll` as separate queries, a shifting tie order could return a document on page 1 _and_
+  page 2, or on neither. Now `{ createdAt: -1, _id: -1 }`: `_id` is unique, so the sort is total
+  and paging is stable.
 
 - **This repository's git hooks had never run.** `.husky/pre-commit` and `.husky/commit-msg` were
   both present and both inert: `husky` was not a dependency, there was no `prepare` script to

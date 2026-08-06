@@ -75,7 +75,20 @@ export const addRegexFilter = (
     };
 };
 
-const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1 };
+/**
+ * Newest first, with `_id` breaking ties.
+ *
+ * The tiebreaker is not cosmetic. `createdAt` is not unique — a seed, a bulk import, or two
+ * concurrent creates land inside the same millisecond — and MongoDB does not guarantee any
+ * particular order among documents whose sort keys are equal. Two identical queries can
+ * therefore return tied documents in different orders, which was observed against the real API.
+ *
+ * That breaks pagination rather than merely shuffling a list: `paginatedSearch` issues `count`
+ * and `findAll` as separate queries, so if the tie order changes between them a document can be
+ * returned on page 1 AND page 2, or skipped by both. `_id` is unique and monotonic, so adding it
+ * makes the sort total and the paging stable.
+ */
+const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
 
 /**
  * Execute a paginated search: count + findAll + meta assembly.

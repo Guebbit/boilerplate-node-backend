@@ -3,12 +3,17 @@ import i18next from 'i18next';
 import enTranslation from '../../src/locales/en.json';
 
 /**
- * The global rate limiter (src/middlewares/security.ts) defaults to 100 requests per 15 minutes.
- * The contract suite issues far more than that across a run, and every request shares the same
- * source address, so without this the later tests fail with 429s that have nothing to do with
- * what they assert. Raised rather than disabled, so a runaway loop still terminates.
+ * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/middlewares/security.ts, currently 100).
+ *
+ * A suite issues far more requests than a person does, and every one of them shares a single
+ * source address, so the per-IP limiter sees one very busy client. Without this the later tests
+ * fail with 429s that have nothing to do with what they assert.
+ *
+ * Raised rather than disabled, so a runaway loop still terminates — and written as a literal
+ * rather than imported from `security.ts`, because importing that module here would evaluate
+ * `rateLimit()` before this line had a chance to set the variable it reads.
  */
-process.env.NODE_RATE_LIMIT_MAX ??= '100000';
+process.env.NODE_RATE_LIMIT_MAX ??= '1000';
 
 //
 //
