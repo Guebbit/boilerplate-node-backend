@@ -564,6 +564,49 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 
 ### Security
 
+- **An unauthenticated request could pin a CPU for ~45 seconds.** `addTextFilter` and
+  `addRegexFilter` passed client text straight into MongoDB's `$regex`, and MongoDB evaluates the
+  pattern server-side against every candidate document. `GET /products?text=(a%2B)%2B%24` needs no
+  token, and a catastrophic backtracking pattern costs seconds of CPU per document from a handful
+  of characters — measured at 45s for a single match against a 31-character subject. Every
+  `$regex` now escapes its input, which is also what a search box means: unescaped, `.` matched
+  everything, `^` anchored, and a lone `(` was a syntax error the driver surfaced as a 500, so
+  someone searching for `50% (off)` got an error rather than products.
+
+- **An upload's type was decided by the client.** `fileFilter` compared the `Content-Type` the
+  client wrote on the multipart part, which nothing verifies —
+  `curl -F 'imageUpload=@shell.html;type=image/png'` sets it to anything. Uploads are now
+  identified by their leading bytes after the write, and anything that is not a real PNG, JPEG or
+  WebP is deleted and the request rejected with `422`. Raw image formats only, deliberately: SVG
+  is XML a browser executes, so accepting it means accepting script upload and no amount of
+  sniffing makes it safe.
+
+- **Uploads had no size limit at all.** Multer's default is unlimited, so a public endpoint would
+  write every byte a client cared to stream, before any handler ran. `NODE_MAX_UPLOAD_BYTES`
+  (5 MB default) plus caps on the number of files, fields and parts.
+
+- **A hundred password guesses a minute, from the same budget as browsing.** The global limiter is
+  sized for a page of products, and `POST /account/login` inherited it. `authRateLimiter` gives the
+  credential endpoints — login, signup, reset, reset-confirm — their own much smaller budget
+  (`NODE_AUTH_RATE_LIMIT_MAX`, 10 by default), so raising the global limit for legitimate traffic
+  no longer raises the guessing rate with it. Successful attempts do not spend it, so a shared
+  address does not lock out its own users for signing in correctly.
+
+- **`trust proxy` is now explicit.** Everything that identifies a caller by address — the rate
+  limiter's bucket key, the audit log's `ip` — reads `request.ip`, and behind a proxy that is the
+  _proxy's_ address unless Express is told how many hops to count back. Left unset, the per-IP
+  limiter degenerates into one shared bucket that protects nothing and lets one busy caller 429
+  everyone; set to `true`, `X-Forwarded-For` is client-supplied and the limit is bypassed
+  entirely. `NODE_TRUST_PROXY_HOPS` is the number of proxies you actually run, and defaults to `0`.
+
+- **The 500 handler returned the thrown error's own text.** `errors[].message` was `error.message`,
+  which is the one place an _unexpected_ error's wording reaches an unauthenticated caller — and
+  unexpected is exactly the case where nobody chose it: a driver error naming hosts and ports, an
+  ENOENT naming a filesystem layout, a client quoting a URL with a key in it. The client now gets
+  a chosen, translated message and the stable `INTERNAL_ERROR` code; the detail is logged with the
+  request and trace id, where an operator can act on it and a stranger cannot. Deliberate
+  `ExtendedError`s still return the copy their thrower chose.
+
 - **The upload callbacks are now covered by tests.** `resolveUploadDestination`,
   `resolveUploadFilename` and `fileFilter` are the whole of this repo's upload security — a field
   whitelist, a filename never derived from client input (against traversal, collision and

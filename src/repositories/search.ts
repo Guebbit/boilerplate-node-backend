@@ -48,6 +48,26 @@ export const buildPaginatedMeta = (
  * Add a text-search $or clause to a Mongoose filter.
  * Searches across multiple fields with case-insensitive regex.
  */
+/**
+ * Escapes every regex metacharacter, so a user's search text is matched literally.
+ *
+ * `$regex` with unescaped input is a remote denial of service, not a correctness nit. MongoDB
+ * evaluates the pattern server-side against every candidate document, and a catastrophic
+ * backtracking pattern costs seconds of CPU per document from a handful of characters —
+ * `(a+)+$` against a 31-character subject takes ~45s in one engine. `POST /products/search` and
+ * `GET /products?text=` are public, so that is an unauthenticated request pinning a core.
+ *
+ * It is also what a search box means. Unescaped, `.` matches every character, `^` anchors, and a
+ * lone `(` is a syntax error the driver raises as a 500 — so a user searching for "1.5" or
+ * "50% (off)" gets wrong results or an error rather than the products they were looking for.
+ *
+ * Literal matching gives up regex search as a feature. Nothing in this API offered it: these
+ * helpers back "type words into a box", and a query language for anonymous callers is not a
+ * thing to expose accidentally.
+ */
+export const escapeRegex = (value: string): string =>
+    value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
+
 export const addTextFilter = (
     where: Record<string, unknown>,
     text: string | undefined | null,
@@ -56,7 +76,7 @@ export const addTextFilter = (
     if (!text || String(text).trim() === '') return;
     const trimmed = String(text).trim();
     where.$or = fields.map((field) => ({
-        [field]: { $regex: trimmed, $options: 'i' }
+        [field]: { $regex: escapeRegex(trimmed), $options: 'i' }
     }));
 };
 
@@ -70,7 +90,7 @@ export const addRegexFilter = (
 ): void => {
     if (!value || String(value).trim() === '') return;
     where[field] = {
-        $regex: String(value).trim(),
+        $regex: escapeRegex(String(value).trim()),
         $options: 'i'
     };
 };

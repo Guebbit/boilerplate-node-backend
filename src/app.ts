@@ -129,6 +129,27 @@ export const stopServer = () => {
 app.set('etag', 'strong');
 
 /**
+ * How many reverse proxies sit in front of this process.
+ *
+ * Everything that identifies a caller by address — the rate limiter's bucket key, the audit
+ * log's `ip` — reads `request.ip`, and behind a proxy that is the PROXY's address unless Express
+ * is told otherwise. Both failure modes are bad and neither is visible:
+ *
+ * - **Unset (Express's default) behind a proxy**: every request looks like one client, so the
+ *   per-IP limiter becomes one shared bucket. It stops protecting anything, and a single busy
+ *   caller 429s everyone else. The audit log records the proxy for every actor.
+ * - **`true` (trust everything)**: `X-Forwarded-For` is client-supplied, so a caller sets it to a
+ *   random value per request and never hits the limit at all. `true` is strictly worse than
+ *   unset for anything security-related, which is why it is not the default here.
+ *
+ * The correct value is the NUMBER of proxies you actually run, so Express counts back from the
+ * right-hand end of `X-Forwarded-For` — the part a client cannot forge. `0` (the default here)
+ * means "no proxy, use the socket address", which is right for local development and for the
+ * compose stack, where the API is published directly.
+ */
+app.set('trust proxy', Number.parseInt(process.env.NODE_TRUST_PROXY_HOPS ?? '0', 10) || 0);
+
+/**
  * Secure headers
  */
 app.use(helmet());
@@ -248,8 +269,17 @@ app.use((request: Request, response: Response) => {
 
 /**
  * Global error handler — log once, stack in OTel span.
+ *
+ * Exported so it can be driven directly. Mounted last, after the 404 catch-all, which is what an
+ * error handler has to be and also what makes it unreachable from a route registered afterwards
+ * — so a test cannot get at it by adding a throwing route to `app`.
  */
-app.use((error: Error, request: Request, response: Response, _next: NextFunction) => {
+export const handleUncaughtError = (
+    error: Error,
+    request: Request,
+    response: Response,
+    _next: NextFunction
+) => {
     if (response.headersSent) return;
 
     recordErrorOnActiveSpan(error);
@@ -272,16 +302,32 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
         ]);
     if (error instanceof ExtendedError)
         return rejectResponse(response, error.httpCode, error.name, error.errors);
-    // `message` (3rd arg) is developer-facing and stays English by convention — see the
-    // `rejectResponse` docblock in `core/http/request.ts`. `errors[].message` is what the user
-    // reads, so its fallback is translated.
+    /*
+     * The client is told that something failed, and nothing else.
+     *
+     * `errors[].message` used to be `error.message` — whatever threw. That is the one place an
+     * unexpected error's own text reaches an unauthenticated caller, and unexpected is precisely
+     * the case where nobody chose the wording: a Mongoose validation error naming internal field
+     * paths, a driver error naming hosts and ports, an ENOENT naming a filesystem layout, a
+     * third-party client quoting a URL with a key in it. Any of those is free reconnaissance,
+     * and none of it means anything to the person reading it.
+     *
+     * The detail is not lost — it is logged above with the request id and trace id, which is
+     * where an operator can act on it and a stranger cannot. `message` (3rd arg) stays the
+     * developer-facing constant, per the `rejectResponse` docblock in `core/http/request.ts`.
+     *
+     * Deliberate errors are unaffected: `ExtendedError` carries copy its thrower chose and is
+     * returned verbatim by the branch above.
+     */
     rejectResponse(response, 500, 'Internal Server Error', [
         {
             code: 'INTERNAL_ERROR',
-            message: error.message || t('generic.error-internal')
+            message: t('generic.error-internal')
         }
     ]);
-});
+};
+
+app.use(handleUncaughtError);
 
 /*
  * Process-level error handlers — audit unhandled rejections/exceptions

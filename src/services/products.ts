@@ -13,7 +13,12 @@ import { cartService } from '@services/cart';
 import { zodProductSchema, applyProductTransform } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
-import { normalizePagination, addTextFilter, paginatedSearch } from '@repositories/search';
+import {
+    normalizePagination,
+    addTextFilter,
+    paginatedSearch,
+    escapeRegex
+} from '@repositories/search';
 
 /**
  * Product Service
@@ -69,13 +74,18 @@ export const search = (
         'description'
     ]);
 
-    // Filter by categories/tags
+    // Filter by categories/tags. Escaped for the same reason as every other `$regex` in this
+    // codebase — see `escapeRegex` in @repositories/search: unescaped client text is an
+    // unauthenticated denial of service, and these filters are reachable from the public
+    // product listing.
     if (filters.category && String(filters.category).trim() !== '')
         where.categories = {
-            $elemMatch: { $regex: String(filters.category).trim(), $options: 'i' }
+            $elemMatch: { $regex: escapeRegex(String(filters.category).trim()), $options: 'i' }
         };
     if (filters.tag && String(filters.tag).trim() !== '')
-        where.tags = { $elemMatch: { $regex: String(filters.tag).trim(), $options: 'i' } };
+        where.tags = {
+            $elemMatch: { $regex: escapeRegex(String(filters.tag).trim()), $options: 'i' }
+        };
 
     // Filter by price range
     const priceConditions: Record<string, number> = {};

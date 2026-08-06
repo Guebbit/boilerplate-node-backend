@@ -13,7 +13,12 @@ import multer, { type Field, type FileFilterCallback } from 'multer';
 // `randomBytes` = cryptographically secure RNG. Deliberately not `Math.random()`: predictable
 // filenames would let someone guess the URL of another user's upload.
 import { randomBytes } from 'node:crypto';
-import { createLocaleContext, runWithLocaleContext } from '@core/i18n';
+import { createLocaleContext, runWithLocaleContext, t } from '@core/i18n';
+import { identifyImageFile } from '@core/adapters/image-signatures';
+import { deleteFile } from '@core/adapters/filesystem';
+import { getFormFiles } from '@core/http/uploads';
+import { logger } from '@core/adapters/logger';
+import { ExtendedError } from '@core/http/errors';
 
 /**
  * Get extension of filename
@@ -98,14 +103,24 @@ export const fileStorage = multer.diskStorage({
 });
 
 /**
- * Whitelist for file type
+ * Declared types this API is willing to consider.
  *
- * Called by multer *before* the file is written, so rejected uploads never touch disk.
+ * `image/jpg` is not a real IANA type, but enough clients send it that rejecting it would be
+ * rejecting valid JPEGs over a spelling mistake. The bytes decide the truth either way — see
+ * {@link validateUploadedImages}.
+ */
+const ACCEPTED_UPLOAD_MIMETYPES = new Set(['image/png', 'image/jpg', 'image/jpeg', 'image/webp']);
+
+/**
+ * First gate: the type the client CLAIMS.
  *
- * Two things to be aware of: `mimetype` is taken from the client's Content-Type header and can
- * be forged (real validation means inspecting magic bytes), and rejecting with
- * `callback(null, false)` silently *drops* the file — the request still succeeds with no
- * `request.file`, so the handler must treat a missing file as a validation failure.
+ * Called by multer before the file is written, so an obviously-wrong upload never touches disk —
+ * which is its whole value. It is not, and cannot be, a real type check: `mimetype` comes from
+ * the client's own `Content-Type` on the part, and nothing verifies it. The bytes are checked
+ * after the write, by {@link validateUploadedImages}.
+ *
+ * Rejecting with `callback(null, false)` silently *drops* the file — the request still succeeds
+ * with no `request.file`, so the handler must treat a missing file as a validation failure.
  * Passing an Error instead would surface it as a request error.
  *
  * @param request
@@ -118,7 +133,7 @@ export const fileFilter = (
     callback: FileFilterCallback
 ): void =>
     // Images only. Note 'image/jpg' is not a real IANA type, but some clients send it anyway.
-    file.mimetype === 'image/png' || file.mimetype === 'image/jpg' || file.mimetype === 'image/jpeg'
+    ACCEPTED_UPLOAD_MIMETYPES.has(file.mimetype)
         ? // eslint-disable-next-line unicorn/no-null
           callback(null, true)
         : // eslint-disable-next-line unicorn/no-null
@@ -134,11 +149,38 @@ export const fileFilter = (
  * per non-file field). Adding `limits: { fileSize }` is the standard hardening step if these
  * routes are ever exposed to untrusted clients.
  */
+/**
+ * Ceiling on a single upload, in bytes. 5 MB by default, overridable per deployment.
+ *
+ * Multer's own default is UNLIMITED, which on a public endpoint is a denial of service with no
+ * exploit required: a client streams until the disk fills, and every byte is written before any
+ * handler runs. A limit is the only thing that stops it, and it has to be here rather than in a
+ * handler for the same reason.
+ */
+const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+const getMaxUploadBytes = () => {
+    const configured = Number.parseInt(process.env.NODE_MAX_UPLOAD_BYTES ?? '', 10);
+    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_UPLOAD_BYTES;
+};
+
 const rawUpload = multer({
     // Where/how files are written (see `fileStorage` above).
     storage: fileStorage,
     // Which files are accepted at all (see `fileFilter` above).
-    fileFilter
+    fileFilter,
+    limits: {
+        fileSize: getMaxUploadBytes(),
+        // These endpoints accept one image. Without a cap, a request carrying ten thousand file
+        // parts is accepted and each one is written.
+        files: 1,
+        // Non-file parts are bounded too: multer's 1 MB per field is generous, and the number of
+        // fields is unlimited by default, so a body of a million empty fields is otherwise a
+        // free way to burn parser time.
+        fields: 32,
+        fieldSize: 100 * 1024,
+        parts: 64
+    }
 });
 
 /**
@@ -170,21 +212,72 @@ const withLocaleRestored =
         });
 
 /**
+ * Second gate: the type the FILE ACTUALLY IS.
+ *
+ * Runs after multer, because the bytes do not exist until then — a `fileFilter` sees headers, not
+ * content, so a content check cannot live there. Anything whose leading bytes are not one of the
+ * accepted image formats is deleted and the request fails; the window in which a rejected file
+ * exists on disk is the few milliseconds between the write and this read, under a random name in
+ * a directory this app does not serve.
+ *
+ * Rejecting with a 422 rather than dropping the file silently, unlike `fileFilter`: a client that
+ * uploaded a real file and got a success with no image would have no idea why, and a client
+ * uploading something disguised should be told plainly that it was rejected.
+ *
+ * @param request - Express request already processed by a multer middleware.
+ * @param _response - Unused; the error handler formats the rejection.
+ * @param next - Called with an `ExtendedError` when any uploaded file fails the check.
+ */
+export const validateUploadedImages: RequestHandler = (request, _response, next) => {
+    const paths = getFormFiles(request);
+    if (!paths || paths.length === 0) return next();
+
+    void Promise.all(paths.map((path) => identifyImageFile(path)))
+        .then((identified) => {
+            const rejected = paths.filter((_path, index) => identified[index] === undefined);
+            if (rejected.length === 0) return next();
+
+            // Logged, because a mismatch between the declared type and the bytes is not a typo —
+            // it is either a broken client or someone probing what this endpoint will store.
+            logger.warn({
+                message: 'Upload rejected: content does not match an accepted image format.',
+                files: rejected,
+                declared: request.file?.mimetype,
+                request_id: request.requestId
+            });
+
+            return Promise.all(rejected.map((path) => deleteFile(path))).then(() =>
+                next(
+                    // `true` = operational: a client sent something invalid, which is expected
+                    // traffic, not a programmer error worth logging as one.
+                    new ExtendedError('Unprocessable Entity', 422, true, [
+                        t('generic.error-invalid-data')
+                    ])
+                )
+            );
+        })
+        .catch((error: Error) => next(error));
+};
+
+/**
  * Multer middleware.
  *
  * The configured instance routes mount as `upload.single('imageUpload')`, `upload.array(...)` or
- * `upload.fields(...)` — each already wrapped so the request-scoped locale survives the upload
- * (see {@link withLocaleRestored}).
- *
- * No `limits` are configured, so multer applies its own defaults (unlimited file size, 1 MB
- * per non-file field). Adding `limits: { fileSize }` is the standard hardening step if these
- * routes are ever exposed to untrusted clients.
+ * `upload.fields(...)`. Each is wrapped twice: once so the request-scoped locale survives the
+ * upload (see {@link withLocaleRestored}), and once so the stored bytes are checked against the
+ * format they claim to be (see {@link validateUploadedImages}). Composing both here rather than
+ * at the route mounts is deliberate — a route that forgets one of them looks perfectly correct.
  */
+const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
+    withLocaleRestored(middleware),
+    validateUploadedImages
+];
+
 export const upload = {
-    single: (fieldName: string) => withLocaleRestored(rawUpload.single(fieldName)),
+    single: (fieldName: string) => wrapUpload(rawUpload.single(fieldName)),
     array: (fieldName: string, maxCount?: number) =>
-        withLocaleRestored(rawUpload.array(fieldName, maxCount)),
-    fields: (fields: Field[]) => withLocaleRestored(rawUpload.fields(fields)),
-    none: () => withLocaleRestored(rawUpload.none()),
-    any: () => withLocaleRestored(rawUpload.any())
+        wrapUpload(rawUpload.array(fieldName, maxCount)),
+    fields: (fields: Field[]) => wrapUpload(rawUpload.fields(fields)),
+    none: () => wrapUpload(rawUpload.none()),
+    any: () => wrapUpload(rawUpload.any())
 };

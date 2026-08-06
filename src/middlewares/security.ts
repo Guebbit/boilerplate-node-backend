@@ -33,3 +33,34 @@ export const rateLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false
 });
+
+/**
+ * Attempts per IP per window against the credential endpoints. Deliberately a small fraction of
+ * the global budget.
+ */
+export const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
+
+/**
+ * Rate limiter for endpoints that accept credentials or mint tokens.
+ *
+ * The global limiter is sized for browsing — a page of products costs several requests, so its
+ * budget has to be generous. Applied to `POST /account/login` that generosity is a hundred
+ * password guesses a minute from one address, and an attacker with a small credential list needs
+ * no more than that. Worse, the two share a bucket: an attacker's guesses and a real user's page
+ * views spend the same allowance, so raising the global limit for legitimate traffic silently
+ * raises the guessing rate too.
+ *
+ * A separate, much smaller budget decouples them. It is mounted per route rather than globally,
+ * so browsing never consumes it and a locked-out guesser can still read the catalogue.
+ *
+ * `skipSuccessfulRequests` is on: a user who signs in correctly has not spent anything, so a
+ * shared address (an office, a school, CGNAT) does not lock its own users out for succeeding.
+ * Only failures count, which is exactly the signal worth limiting.
+ */
+export const authRateLimiter = rateLimit({
+    windowMs: Number(process.env.NODE_RATE_LIMIT_WINDOW_MS) || DEFAULT_RATE_LIMIT_WINDOW_MS,
+    limit: Number(process.env.NODE_AUTH_RATE_LIMIT_MAX) || DEFAULT_AUTH_RATE_LIMIT_MAX,
+    skipSuccessfulRequests: true,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false
+});

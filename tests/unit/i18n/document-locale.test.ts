@@ -113,12 +113,25 @@ describe('the PDF worker renders in the payload’s locale', () => {
 describe('every upload method restores the locale', () => {
     const methods = ['single', 'array', 'fields', 'none', 'any'] as const;
 
+    /**
+     * Each method returns a PAIR — the locale-restoring multer wrapper, then the content check.
+     * Asserted rather than assumed, because a route mounting only the first would type-check and
+     * silently accept a file whose bytes are not an image.
+     */
+    it.each(methods)('upload.%s returns both guards', async (method) => {
+        const { upload } = await import('@core/adapters/storage');
+        const handlers =
+            method === 'fields' ? upload.fields([]) : (upload[method] as () => unknown[])();
+
+        expect(handlers).toHaveLength(2);
+    });
+
     it.each(methods)('upload.%s re-enters the request locale', async (method) => {
         const { upload } = await import('@core/adapters/storage');
-        const middleware =
-            method === 'fields' ? upload.fields([]) : (upload[method] as () => unknown)();
+        const [localeAware] =
+            method === 'fields' ? upload.fields([]) : (upload[method] as () => unknown[])();
 
-        const observed = await runMiddleware(middleware, {
+        const observed = await runMiddleware(localeAware, {
             locale: 'it',
             headers: {}
         } as unknown as Request);
@@ -128,8 +141,9 @@ describe('every upload method restores the locale', () => {
 
     it('leaves the chain alone when no locale was negotiated', async () => {
         const { upload } = await import('@core/adapters/storage');
+        const [localeAware] = upload.none();
 
-        const observed = await runMiddleware(upload.none(), { headers: {} } as unknown as Request);
+        const observed = await runMiddleware(localeAware, { headers: {} } as unknown as Request);
 
         expect(observed).toBeUndefined();
     });

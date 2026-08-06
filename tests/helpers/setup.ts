@@ -15,6 +15,17 @@ import { getFallbackLocale, listSupportedLocales, loadLocaleResources } from '@c
  */
 process.env.NODE_RATE_LIMIT_MAX ??= '1000';
 
+/**
+ * Same reasoning for the credential-endpoint budget (`authRateLimiter`), which is deliberately
+ * much smaller — ten failed attempts per IP per minute. Suites drive login, signup and reset far
+ * harder than a person does, from one address, and the concurrency test alone fires twenty
+ * deliberately-invalid signups at once.
+ *
+ * Raised rather than disabled, so a test that accidentally loops on a credential endpoint still
+ * terminates — and so the limiter's own tests can still reach it by setting a lower value.
+ */
+process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '1000';
+
 //
 //
 /**

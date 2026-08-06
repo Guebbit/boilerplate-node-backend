@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authRateLimiter } from '@middlewares/security';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 import { upload } from '@core/adapters/storage';
 import { getAccount } from '@controllers/account/get-account';
@@ -33,21 +34,27 @@ router.delete('/', isAuth, deleteAccountRequest);
 router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAccountConfirm);
 
 // POST /account/login — authenticate and get tokens
-router.post('/login', postLogin);
+router.post('/login', authRateLimiter, postLogin);
 
 // POST /account/signup — register new user
 router.post(
     '/signup',
+    authRateLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
     postSignup
 );
 
 // POST /account/reset — request password reset email
-router.post('/reset', postResetRequest);
+router.post('/reset', authRateLimiter, postResetRequest);
 
 // POST /account/reset-confirm — complete password reset with token
-router.post('/reset-confirm', invalidateCache(['users', 'account']), postResetConfirm);
+router.post(
+    '/reset-confirm',
+    authRateLimiter,
+    invalidateCache(['users', 'account']),
+    postResetConfirm
+);
 
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
