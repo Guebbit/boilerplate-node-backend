@@ -54,6 +54,25 @@ export const setCache =
             `${request.authContext ? 'private' : 'public'}, max-age=${ttl}`
         );
 
+        // The Redis key is scoped by user (see getCacheScope), but a cache in front of the API
+        // keys on method + URL + the headers named in `Vary` — and nothing here named the one
+        // header that decides the body. `getAuth` derives `authContext` from `Authorization`
+        // alone, never from a cookie, so that header is the entire scope key.
+        //
+        // Without it: an anonymous `GET /products?page=1&pageSize=10` answers `public,
+        // max-age=30` with the 3 publicly visible products, and the browser stores it. An admin
+        // asking for the same URL seconds later matches that entry — same URL, same `Vary:
+        // Origin` — so the browser answers from its own store and the request never reaches the
+        // API. The admin gets the anonymous list under an admin header, with Edit/Delete on
+        // every row, and nothing refetches. Same mechanism on `GET /account`: one user's profile
+        // served to the next, flipping `isAdmin` and sending route guards the wrong way.
+        //
+        // `response.vary` appends, so the `Vary: Origin` that CORS sets is preserved. An
+        // authenticated response keys on a rotating bearer token and so is effectively
+        // uncacheable in the browser; that is the point. Anonymous traffic — the volume worth
+        // caching — still shares one entry.
+        response.vary('Authorization');
+
         if (request.method !== 'GET' || ttl <= 0) {
             next();
             return;

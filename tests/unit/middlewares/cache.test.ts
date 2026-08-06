@@ -28,6 +28,14 @@ const createResponse = () => {
             response.statusCode = statusCode;
             return response;
         }),
+        // Express appends rather than replaces, and the real stack already carries `Vary: Origin`
+        // from CORS — so the mock has to append too, or a test could pass while the real response
+        // dropped a header it must keep.
+        vary: jest.fn((field: string) => {
+            const existing = headers['vary'];
+            headers['vary'] = existing ? `${existing}, ${field}` : field;
+            return response;
+        }),
         json: jest.fn((body: unknown) => body),
         on: jest.fn((event: string, handler: () => void) => {
             listeners.set(event, handler);
@@ -123,6 +131,37 @@ describe('setCache', () => {
             30,
             ['products']
         );
+    });
+
+    // Regression guard. The Redis key is scoped per user, but nothing told the *browser* that the
+    // body depends on who asked: an anonymous `GET /products` answered `public, max-age=30`, the
+    // browser stored it, and an admin hitting the same URL seconds later was served those 3 public
+    // rows from local cache without a request ever reaching the API — admin header, admin row
+    // controls, anonymous data. Both scopes must name `Authorization` in `Vary`, since it is the
+    // only input `getAuth` reads.
+    it.each([
+        ['guest', {} as Partial<Request>, 'public, max-age=30'],
+        [
+            'authenticated',
+            { authContext: { id: '507f1f77bcf86cd799439011' } } as Partial<Request>,
+            'private, max-age=30'
+        ]
+    ])('varies a %s response on Authorization', async (_scope, extraRequest, cacheControl) => {
+        mockedCache.resolveCacheTtl.mockReturnValue(30);
+        mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+
+        const middleware = setCache(30, { tags: ['products'] });
+        const { response, headers } = createResponse();
+        const request = {
+            method: 'GET',
+            originalUrl: '/products?page=1&pageSize=10',
+            ...extraRequest
+        } as unknown as Request;
+
+        await middleware(request, response, jest.fn() as NextFunction);
+
+        expect(headers['vary']).toBe('Authorization');
+        expect(headers['cache-control']).toBe(cacheControl);
     });
 
     it('skips caching entirely when the TTL resolves to zero', async () => {

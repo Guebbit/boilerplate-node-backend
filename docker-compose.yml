@@ -83,7 +83,17 @@ services:
         # Health check to verify the container is ready to accept traffic
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
-            test: ['CMD', 'curl', '-f', 'http://localhost:${NODE_PORT:-3000}/']
+            # `node -e`, not `curl -f`: the image is node:*-alpine and does not ship curl, so the
+            # curl form exited non-zero every time and parked the container on `unhealthy` while
+            # the API was answering 200 on `/` throughout. Node's built-in fetch needs nothing
+            # added to the image.
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
             # How often to run the test
             interval: 2m
             # How long to wait for the test to complete

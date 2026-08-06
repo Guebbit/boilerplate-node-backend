@@ -316,6 +316,40 @@ its own tests.
 
 ### Fixed
 
+- **Cached responses were reused across authentication scopes, so an admin was served the anonymous
+  list.** `setCache` scoped its Redis key by user id and set `Cache-Control: public|private,
+max-age=N`, but never named `Authorization` in `Vary` — and a cache keys on method + URL + the
+  headers `Vary` lists, nothing more. A browser's stored copy of an anonymous
+  `GET /products?page=1&pageSize=10` therefore matched an admin's request for the same URL and was
+  answered from local storage, the request never reaching the API: the admin saw the 3 public
+  products under an admin header, with per-row Edit and Delete rendered from a `no-store`d
+  `GET /account` that _was_ live, and nothing left to re-fetch. `GET /account` carried the same
+  fault — it re-enables caching over the router's `noStore` — serving one user's profile to the
+  next within the TTL and flipping `isAdmin` for whoever asked after. Now
+  `response.vary('Authorization')`, appending so the `Vary: Origin` that CORS sets survives;
+  `getAuth` derives `authContext` from that header alone and never from a cookie, so it is the
+  entire scope key. By design, an authenticated response now keys on a rotating bearer token and is
+  effectively uncacheable in the browser, while anonymous traffic — the volume worth caching — still
+  shares one entry. The Redis cache is untouched, having always been scoped correctly.
+
+- **Why the above took so long to find**, recorded because the next caching bug will do the same
+  thing. It is the cause of three of the paired frontend's five live-profile e2e failures, and every
+  attempt to observe it destroyed it: `cy.intercept` proxies a request to the network and so
+  bypasses the browser cache, making the failing test pass whenever it was instrumented — which read
+  as a timing race for weeks. For the same reason every `curl` check exonerated the API correctly
+  and uselessly: curl has no cache, and the API's answers were never wrong; the question simply
+  never reached it. Proven in the end by controlled A/B against the live stack — with the line
+  removed exactly one e2e test fails, `Found '3', expected '5'`; with it restored the live suite is
+  63/63, up from 58 passing / 5 failing.
+
+- **The app container reported `unhealthy` permanently, including straight after a clean rebuild.**
+  The healthcheck was `curl -f http://localhost:${NODE_PORT:-3000}/` and the image is
+  `node:25-alpine`, which ships no curl — `command -v curl` inside the container returns nothing —
+  so the check exited non-zero every time while the API answered `200` on `/` throughout. It made
+  every genuine health signal invisible and would have deadlocked any
+  `depends_on: condition: service_healthy` pointing at the app. Now `node -e` using the built-in
+  fetch, which needs nothing added to the image.
+
 - **Auth responses could be served from cache, silently logging the client out.** Express attaches
   an `ETag` automatically, and `GET /account/refresh` declared no cache policy — so a browser
   applied heuristic caching, stored the response, and later revalidated with `If-None-Match`.
@@ -459,6 +493,13 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 
 ### Security
 
+- **`Cache-Control: public` on responses whose body depends on the caller** — see _Fixed_. The
+  visible symptom was wrong data, but the exposure is the point: `public` invites _shared_ caches —
+  a CDN, a corporate proxy — to store one caller's copy and hand it to the next, and in the other
+  direction an admin's response, which lists inactive and soft-deleted products, sat in the browser
+  under the very URL an anonymous visit reuses. Naming `Authorization` in `Vary` closes both
+  directions; `private` alone never did, because it constrains _who may store_ a response and says
+  nothing about _which requests it may answer_.
 - **The refresh token is no longer accepted from the URL path** — see _Breaking_.
   `getRefreshToken` read `request.params.token` ahead of the cookie, so the weaker source also won
   precedence over the stronger one. It now reads the cookie only.
