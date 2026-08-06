@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@core/http/response';
 import { getAuditBuffer } from '@core/observability/audit';
+import { t } from '@core/i18n';
 
 /**
  * GET /observability/audit
@@ -14,8 +15,8 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
     const sinceDate = since ? new Date(since) : undefined;
 
     if (sinceDate !== undefined && Number.isNaN(sinceDate.getTime()))
-        return rejectResponse(response, 422, 'Validation failed', [
-            'since must be a valid ISO-8601 timestamp'
+        return rejectResponse(response, 422, 'getObservabilityAuditLogs - invalid since', [
+            t('observability.audit-since-invalid')
         ]);
 
     let items = getAuditBuffer();

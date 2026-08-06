@@ -217,6 +217,98 @@ Client -> Express -> MongoDB update -> related Redis cache cleared
 - Product, order, user, account, and checkout mutations invalidate related cached responses automatically.
 - If Redis is unavailable, the API continues without server-side caching.
 
+## Internationalization (i18n)
+
+Every response's user-facing copy is chosen per request from the client's `Accept-Language`
+header. There is no global "current language" the API holds between requests.
+
+### How it works
+
+| Piece        | Where                       | Job                                                                                                                                                        |
+| ------------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dictionaries | `src/locales/*.json`        | one file per language; the directory listing IS the supported list                                                                                         |
+| negotiation  | `src/middlewares/locale.ts` | picks the best supported language, sets `request.locale` / `request.t`, answers with `Content-Language` and `Vary: Accept-Language`                        |
+| ambient `t`  | `src/core/i18n.ts`          | an `AsyncLocalStorage`-backed re-export of `t`, so anything on the request's async chain resolves in that request's language without `t` being passed down |
+
+Adding a language is one step: drop `src/locales/xx.json` next to `en.json`. `i18next.init()`
+and the negotiator both read the same directory. `NODE_SUPPORTED_LOCALES` overrides the listing
+if you want to ship a dictionary without exposing it yet; `NODE_DEFAULT_LOCALE` and
+`NODE_FALLBACK_LOCALE` are the out-of-request and no-match languages.
+
+```
+POST /account/signup   Accept-Language: it     → "Email non valida"     Content-Language: it
+POST /account/signup   Accept-Language: de     → "Not a valid email"    Content-Language: en
+```
+
+### Two rules that are easy to get wrong
+
+**Never `i18next.changeLanguage()` per request.** It mutates one global instance and it is async,
+so two overlapping requests in different languages answer each other's. Use the ambient `t` (or
+`i18next.getFixedT(locale)` directly). `tests/integration/locale.test.ts` fires 20 interleaved
+requests in alternating languages as the regression guard.
+
+**Validation messages must be thunks.** `error: () => t('…')`, never `error: t('…')`. Schema
+modules are evaluated at import, which ES module semantics put _before_ `i18next.init()` in
+`app.ts`'s body; an eager `t()` returns `undefined` there and Zod silently discards it and uses
+its own English. A thunk is called by Zod at parse time instead.
+`tests/unit/i18n/validation-messages.test.ts` reproduces the live import ordering, which Jest's
+`setupFiles` otherwise hides.
+
+### Outside a request
+
+The ambient `t` falls back to the global instance whenever there is no request on the async
+chain — jobs, migrations, scripts, tests, and anything the queue picks up in another process.
+Work that must speak a specific user's language has to carry the locale explicitly rather than
+rely on the store surviving. Two mechanisms exist for that:
+
+- **`users.locale`** — the language a user signed up in, editable afterwards. It is what a
+  worker sending a password-reset email at 3am reads, because there is no request then to
+  negotiate from. Every email addressed to a known user is sent in this language, falling back
+  to the request's.
+- **`enqueueEmail(request, template, data, locale?)`** — the locale travels in the queue payload
+  and `workers/email.worker.ts` re-establishes it with `runWithLocale` before rendering. It
+  defaults to the ambient locale, so ordinary call sites need no change.
+
+One deliberate exception: the contact-form notification goes to the _support mailbox_, not to the
+person who filled in the form, so it renders in `NODE_DEFAULT_LOCALE` — see
+`controllers/feedback/post-feedback-contact.ts`.
+
+### Serving the dictionary to a client
+
+`GET /locales` reports what this deployment supports; `GET /locales/:locale` serves **this API's
+own dictionary** — its response copy and nothing else. Both are public and cacheable: static
+copy, no user data, and a client that has just failed to reach the API is exactly who needs them.
+
+The rule they implement: **each repository owns its own dictionary.** This API never serves a
+client's UI copy — that would put view text in the API's keyspace and make the two repositories
+undeployable apart. A client merges what it fetches here under a namespace it reserves for the
+API (`api.*` in the Vue boilerplate), never at the root, where two independently-authored
+keyspaces would eventually collide silently.
+
+A client normally needs none of it: this API resolves its own keys and puts finished text on the
+wire. It earns its place when no response arrives at all — a network failure, a bare 502 — and the
+client has to produce the copy itself, in the active language.
+
+`src/locales/es.json` is the demonstration: Spanish was added by dropping in one file. The API
+answers `Accept-Language: es` with no other change, and a client with no Spanish UI copy of its
+own still shows Spanish API messages while its own strings fall back per key.
+
+### What is deliberately NOT translated
+
+These are technician-facing and stay English on purpose. Do not "fix" them:
+
+- **log messages** (`logger.info`, `logger.error`, access logs)
+- **audit-log actions** (`AuditAction.*`) and analytics event names
+- **OpenTelemetry span names and attributes**
+- **thrown `Error` messages**
+- **the `message` argument of `rejectResponse`** — the third one. `rejectResponse(response,
+status, message, errors)` splits the audiences: `message` is developer-oriented, `errors[]` is
+  what the user reads. So `'updateOrder - missing id'` in `message` is correct, not debt.
+- **`errors[].code`** — a stable machine-readable identifier clients switch on.
+
+`tests/unit/i18n/no-hardcoded-user-text.test.ts` enforces the other side of that line: no string
+literal may appear as a bare element of an `errors[]` array or as an error object's `message`.
+
 ## Observability (metrics + traces)
 
 You now get:

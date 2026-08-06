@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { getCurrentLocale, t } from '@core/i18n';
 import { orderService } from '@services/orders';
 import { rejectResponse } from '@core/http/response';
 import { userScope } from '@core/http/scopes';
@@ -29,8 +29,12 @@ export const getOrderInvoice = (request: Request, response: Response) =>
              */
             return ejs
                 .renderFile(path.resolve('views', 'templates-files', 'invoice-order-file.ejs'), {
+                    // Same convention as the email templates: the document resolves its own copy
+                    // through `t`, in the request's language.
+                    t,
+                    locale: getCurrentLocale(),
                     order,
-                    pageMetaTitle: `Invoice - Order ${String(order._id)}`
+                    pageMetaTitle: t('invoice.meta-title', { order: String(order._id) })
                 })
                 .then((html) => renderHtmlToPdf(html))
                 .then((pdf) => {

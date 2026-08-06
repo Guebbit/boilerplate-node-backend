@@ -25,10 +25,16 @@ const getCacheScope = (request: Request) => {
 };
 
 /**
- * Build one cache key from method + URL + user scope.
+ * Build one cache key from method + URL + user scope + language.
+ *
+ * The locale belongs in the key for the same reason the user does: it changes the body. Bodies
+ * carry translated `message` / `errors` copy, so an Italian response stored under a locale-blind
+ * key is served verbatim to the next English caller of the same URL. `request.locale` is set by
+ * the locale middleware, which is mounted before the routes; the fallback keeps this usable in
+ * unit tests that exercise the cache middleware in isolation.
  */
 const getCacheKey = (request: Request) =>
-    `${request.method}:${request.originalUrl}:${getCacheScope(request)}`;
+    `${request.method}:${request.originalUrl}:${getCacheScope(request)}:${request.locale ?? '-'}`;
 
 /**
  * Cache GET responses in Redis.
@@ -72,6 +78,11 @@ export const setCache =
         // uncacheable in the browser; that is the point. Anonymous traffic — the volume worth
         // caching — still shares one entry.
         response.vary('Authorization');
+
+        // Same argument, second header: `attachLocale` already sets `Vary: Accept-Language` on
+        // every response, and it is repeated here so a route that reaches `setCache` by some
+        // other path still declares it. `vary` de-duplicates.
+        response.vary('Accept-Language');
 
         if (request.method !== 'GET' || ttl <= 0) {
             next();

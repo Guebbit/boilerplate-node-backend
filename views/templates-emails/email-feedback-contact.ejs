@@ -1,16 +1,21 @@
 <!doctype html>
-<html lang="en">
+<%#
+    Operator-facing notification, not customer-facing: it goes to the support inbox, so it is
+    rendered in NODE_DEFAULT_LOCALE (see post-feedback-contact.ts) rather than in the language
+    of whoever filled in the form.
+%>
+<html lang="<%= locale %>">
     <head>
         <meta charset="UTF-8" />
-        <title>New contact request</title>
+        <title><%= t('email.feedback-contact.meta-title') %></title>
     </head>
     <body>
-        <h2>New contact request</h2>
-        <p><strong>Name:</strong> <%= name || 'N/A' %></p>
-        <p><strong>Email:</strong> <%= email %></p>
-        <p><strong>Subject:</strong> <%= subject %></p>
-        <p><strong>Message:</strong></p>
+        <h2><%= t('email.feedback-contact.title') %></h2>
+        <p><strong><%= t('email.feedback-contact.label-name') %>:</strong> <%= name || t('email.feedback-contact.not-available') %></p>
+        <p><strong><%= t('email.feedback-contact.label-email') %>:</strong> <%= email %></p>
+        <p><strong><%= t('email.feedback-contact.label-subject') %>:</strong> <%= subject %></p>
+        <p><strong><%= t('email.feedback-contact.label-message') %>:</strong></p>
         <pre><%= message %></pre>
-        <p><strong>Created at:</strong> <%= createdAt %></p>
+        <p><strong><%= t('email.feedback-contact.label-created-at') %>:</strong> <%= createdAt %></p>
     </body>
 </html>

@@ -31,7 +31,14 @@ import {
 } from '@core/observability/metrics-http';
 import { getActiveSpanContext, recordErrorOnActiveSpan } from '@core/observability/tracer';
 import { shutdownInfra, registerSignalHandlers } from '@core/bootstrap/server-lifecycle';
-import enTranslation from './locales/en.json';
+import {
+    getDefaultLocale,
+    getFallbackLocale,
+    listSupportedLocales,
+    loadLocaleResources,
+    t
+} from '@core/i18n';
+import { attachLocale } from '@middlewares/locale';
 
 import { router as productRoutes } from './routes/products';
 import { router as authRoutes } from './routes/account';
@@ -40,6 +47,7 @@ import { router as cartRoutes } from './routes/cart';
 import { router as userRoutes } from './routes/users';
 import { router as observabilityRoutes } from './routes/observability';
 import { router as feedbackRoutes } from './routes/feedback';
+import { router as localeRoutes } from './routes/locales';
 import { router as systemRoutes } from './routes';
 
 import { MulterError } from 'multer';
@@ -75,14 +83,13 @@ export const startServer = () => {
         .then(() => startQueue())
         .then(() => registerWorkers())
         .then(() =>
+            // Every dictionary in src/locales is registered, so dropping in a file is the only
+            // step needed to add a language — the middleware negotiates against the same list.
             i18next.init({
-                lng: process.env.NODE_DEFAULT_LOCALE ?? 'en',
-                fallbackLng: process.env.NODE_FALLBACK_LOCALE ?? 'en',
-                resources: {
-                    en: {
-                        translation: enTranslation as Record<string, unknown>
-                    }
-                }
+                lng: getDefaultLocale(),
+                fallbackLng: getFallbackLocale(),
+                supportedLngs: listSupportedLocales(),
+                resources: loadLocaleResources()
             })
         )
         .then(
@@ -195,6 +202,12 @@ app.use(requestLogger);
 app.use(attachObservability);
 
 /*
+ * Negotiate Accept-Language and run the request inside that locale — must precede the routes,
+ * since everything downstream resolves its user-facing copy against it
+ */
+app.use(attachLocale);
+
+/*
  * Prometheus HTTP metrics — track latency and in-flight requests
  */
 app.use((request, response, next) => {
@@ -223,6 +236,7 @@ app.use('/cart', cartRoutes);
 app.use('/users', userRoutes);
 app.use('/observability', observabilityRoutes);
 app.use('/feedback', feedbackRoutes);
+app.use('/locales', localeRoutes);
 app.use('/', systemRoutes);
 
 /**
@@ -258,10 +272,13 @@ app.use((error: Error, request: Request, response: Response, _next: NextFunction
         ]);
     if (error instanceof ExtendedError)
         return rejectResponse(response, error.httpCode, error.name, error.errors);
+    // `message` (3rd arg) is developer-facing and stays English by convention — see the
+    // `rejectResponse` docblock in `core/http/request.ts`. `errors[].message` is what the user
+    // reads, so its fallback is translated.
     rejectResponse(response, 500, 'Internal Server Error', [
         {
             code: 'INTERNAL_ERROR',
-            message: error.message || 'Internal Server Error'
+            message: error.message || t('generic.error-internal')
         }
     ]);
 });

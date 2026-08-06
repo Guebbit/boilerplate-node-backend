@@ -136,6 +136,22 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
             type: String,
             default: process.env.NODE_DEFAULT_IMAGE_USER ?? 'https://placekitten.com/600/600'
         },
+        /**
+         * The user's preferred language, for work that happens when they are not here.
+         *
+         * `Accept-Language` answers "what language is THIS request in", which is the right
+         * source for a response and the only source a stateless API needs. It cannot answer
+         * "what language should the password-reset email a worker sends at 3am be in" — there is
+         * no request to read. That is what this field is for. Set at signup from the negotiated
+         * request locale, editable from the user endpoints.
+         *
+         * Not validated against the supported list: a locale that is dropped from a deployment
+         * must not make an existing user unreadable, and `getFixedT` falls back per key anyway.
+         */
+        locale: {
+            type: String,
+            default: process.env.NODE_DEFAULT_LOCALE ?? 'en'
+        },
         admin: {
             type: Boolean,
             default: false

@@ -254,6 +254,14 @@ components:
                 data:
                     type: object
                     description: Template variables passed to EJS.
+                locale:
+                    type: string
+                    description: >-
+                        Language to render the template in. Carried explicitly because the
+                        request-scoped locale (AsyncLocalStorage, see src/core/i18n.ts) does not
+                        survive the hop onto the queue — the worker may not even be in the same
+                        process. Omitted means NODE_DEFAULT_LOCALE.
+                    example: it
             additionalProperties: false
         PdfJobPayload:
             type: object
@@ -268,6 +276,13 @@ components:
                 templateData:
                     type: object
                     description: Data passed to the EJS template.
+                locale:
+                    type: string
+                    description: >-
+                        Language to render the document in. Carried explicitly for the same
+                        reason as on EmailJobPayload — the request-scoped locale does not survive
+                        the hop onto the queue. Omitted means NODE_FALLBACK_LOCALE.
+                    example: it
                 outputPath:
                     type: string
                     description: Filesystem path where the generated PDF will be written.

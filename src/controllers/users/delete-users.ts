@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import type { CastError } from 'mongoose';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@core/http/response';

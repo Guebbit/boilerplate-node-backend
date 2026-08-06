@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { getCurrentLocale, runWithLocale, t } from '@core/i18n';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { destroyRefreshCookie, destroyLoggedCookie } from '@middlewares/auth-jwt';
@@ -46,23 +46,32 @@ export const deleteAccountConfirm = (
                 return;
             }
 
-            const { email, username, _id, admin } = user;
+            const { email, username, _id, admin, locale } = user;
 
             /* Hard-delete the account */
             return userService.remove(user, true).then(() => {
                 /* Send goodbye email (no need to wait) */
-                void enqueueEmail(
-                    {
-                        to: email,
-                        subject: 'Account deleted'
-                    },
-                    'email-delete-confirm.ejs',
-                    {
-                        ...response.locals,
-                        pageMetaTitle: 'Account deleted',
-                        pageMetaLinks: [],
-                        name: username
-                    }
+                /*
+                 * The recipient's OWN language, not the language of the request that triggered
+                 * this. These links are clicked from an email client, possibly on a shared or
+                 * borrowed device, so the browser's `Accept-Language` says very little about
+                 * who the message is for. `runWithLocale` binds both the subject and the
+                 * template's `t` to the same locale and carries it onto the queue payload.
+                 */
+                void runWithLocale(locale ?? getCurrentLocale(), () =>
+                    enqueueEmail(
+                        {
+                            to: email,
+                            subject: t('email.delete-confirm.subject')
+                        },
+                        'email-delete-confirm.ejs',
+                        {
+                            ...response.locals,
+                            pageMetaTitle: t('email.delete-confirm.meta-title'),
+                            pageMetaLinks: [],
+                            name: username
+                        }
+                    )
                 );
 
                 emitAuditEvent(

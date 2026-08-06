@@ -63,12 +63,13 @@ describe('setCache', () => {
         const next = jest.fn() as NextFunction;
         const request = {
             method: 'GET',
-            originalUrl: '/products?page=1'
+            originalUrl: '/products?page=1',
+            locale: 'en'
         } as Request;
 
         await middleware(request, response, next);
 
-        expect(mockedCache.getCacheValue).toHaveBeenCalledWith('GET:/products?page=1:guest');
+        expect(mockedCache.getCacheValue).toHaveBeenCalledWith('GET:/products?page=1:guest:en');
         expect(headers['x-cache']).toBe('HIT');
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.json).toHaveBeenCalledWith({ success: true });
@@ -84,6 +85,7 @@ describe('setCache', () => {
         const request = {
             method: 'GET',
             originalUrl: '/products',
+            locale: 'en',
             authContext: {
                 id: '507f1f77bcf86cd799439011'
             }
@@ -98,7 +100,7 @@ describe('setCache', () => {
         response.json({ success: true, data: [] });
 
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
-            'GET:/products:user:507f1f77bcf86cd799439011',
+            'GET:/products:user:507f1f77bcf86cd799439011:en',
             {
                 status: 201,
                 body: { success: true, data: [] }
@@ -139,6 +141,10 @@ describe('setCache', () => {
     // rows from local cache without a request ever reaching the API — admin header, admin row
     // controls, anonymous data. Both scopes must name `Authorization` in `Vary`, since it is the
     // only input `getAuth` reads.
+    //
+    // `Accept-Language` is there for the same reason with a different header: bodies carry
+    // translated `message` / `errors` copy, so a cache that does not key on it hands an Italian
+    // body to the next English caller of the same URL.
     it.each([
         ['guest', {} as Partial<Request>, 'public, max-age=30'],
         [
@@ -146,22 +152,48 @@ describe('setCache', () => {
             { authContext: { id: '507f1f77bcf86cd799439011' } } as Partial<Request>,
             'private, max-age=30'
         ]
-    ])('varies a %s response on Authorization', async (_scope, extraRequest, cacheControl) => {
+    ])(
+        'varies a %s response on Authorization and Accept-Language',
+        async (_scope, extraRequest, cacheControl) => {
+            mockedCache.resolveCacheTtl.mockReturnValue(30);
+            mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+
+            const middleware = setCache(30, { tags: ['products'] });
+            const { response, headers } = createResponse();
+            const request = {
+                method: 'GET',
+                originalUrl: '/products?page=1&pageSize=10',
+                ...extraRequest
+            } as unknown as Request;
+
+            await middleware(request, response, jest.fn() as NextFunction);
+
+            expect(headers['vary']).toBe('Authorization, Accept-Language');
+            expect(headers['cache-control']).toBe(cacheControl);
+        }
+    );
+
+    /**
+     * The server-side twin of the `Vary` guard above: two requests for the same URL, from the
+     * same (anonymous) caller, in different languages must not share a Redis entry.
+     */
+    it('keys the Redis entry by locale, so languages cannot share an entry', async () => {
         mockedCache.resolveCacheTtl.mockReturnValue(30);
         mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
 
         const middleware = setCache(30, { tags: ['products'] });
-        const { response, headers } = createResponse();
-        const request = {
-            method: 'GET',
-            originalUrl: '/products?page=1&pageSize=10',
-            ...extraRequest
-        } as unknown as Request;
 
-        await middleware(request, response, jest.fn() as NextFunction);
+        for (const locale of ['en', 'it'])
+            await middleware(
+                { method: 'GET', originalUrl: '/products', locale } as Request,
+                createResponse().response,
+                jest.fn() as NextFunction
+            );
 
-        expect(headers['vary']).toBe('Authorization');
-        expect(headers['cache-control']).toBe(cacheControl);
+        expect(mockedCache.getCacheValue.mock.calls.map(([key]) => key)).toEqual([
+            'GET:/products:guest:en',
+            'GET:/products:guest:it'
+        ]);
     });
 
     it('skips caching entirely when the TTL resolves to zero', async () => {

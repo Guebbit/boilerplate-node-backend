@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import type { CastError, QueryFilter } from 'mongoose';
 import {
     generateSuccess,
@@ -98,7 +98,7 @@ export const getById = (id?: string) => {
  */
 export const adminCreate = (
     data: Pick<IUser, 'email' | 'username' | 'password'> &
-        Partial<Pick<IUser, 'admin' | 'imageUrl'>>
+        Partial<Pick<IUser, 'admin' | 'imageUrl' | 'locale'>>
 ): Promise<IUserDocument> => userRepository.create(data);
 
 /**
@@ -107,12 +107,14 @@ export const adminCreate = (
  */
 export const adminUpdate = (
     user: IUserDocument,
-    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
+    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>>
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
     if (data.username !== undefined) user.username = data.username;
     if (data.admin !== undefined) user.admin = data.admin;
     if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
+    // The preference that outlives the request — see the `locale` field on the user schema.
+    if (data.locale !== undefined) user.locale = data.locale;
     if (data.password && data.password.trim().length > 0) user.password = data.password;
 
     return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
@@ -124,7 +126,7 @@ export const adminUpdate = (
  */
 export const adminUpdateById = (
     id: string,
-    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl'>>
+    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>>
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.
     userRepository.findByIdWithCredentials(id).then((user) => {

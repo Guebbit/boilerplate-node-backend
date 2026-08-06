@@ -2,6 +2,7 @@ import type { SendMailOptions } from 'nodemailer';
 import type { IEmailJobPayload } from '@types';
 import { nodemailer } from '@core/adapters/mailer';
 import { logger } from '@core/adapters/logger';
+import { getFallbackLocale, runWithLocale } from '@core/i18n';
 
 /*
  * Queue name for email jobs
@@ -27,11 +28,22 @@ export const handleEmailJob = (message: unknown): Promise<boolean> => {
         return Promise.resolve(false);
     }
 
-    return nodemailer(job.request, job.templateName, job.data ?? {})
-        .then(() => true)
-        .catch((error: Error) => {
-            logger.error({ message: 'Email worker failed to send.', error: error.message });
-            // Returning false = nack without requeue (goes to dead-letter if configured).
-            return false;
-        });
+    /*
+     * Re-establish the locale the producer recorded before rendering.
+     *
+     * This is the boundary AsyncLocalStorage cannot cross: the request that enqueued this job
+     * finished long ago and may have run in another process entirely, so the store is gone and
+     * the ambient `t` would silently fall back to the boot language. `runWithLocale` puts the
+     * payload's locale back on THIS chain, which is what the template's `t` then resolves
+     * against. A job from before this field existed has no locale and gets the fallback.
+     */
+    return runWithLocale(job.locale ?? getFallbackLocale(), () =>
+        nodemailer(job.request, job.templateName, job.data ?? {})
+            .then(() => true)
+            .catch((error: Error) => {
+                logger.error({ message: 'Email worker failed to send.', error: error.message });
+                // Returning false = nack without requeue (goes to dead-letter if configured).
+                return false;
+            })
+    );
 };

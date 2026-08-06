@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import type { QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, Product } from '@types';
 import {

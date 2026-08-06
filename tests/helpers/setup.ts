@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import i18next from 'i18next';
-import enTranslation from '../../src/locales/en.json';
+import { getFallbackLocale, listSupportedLocales, loadLocaleResources } from '@core/i18n';
 
 /**
  * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/middlewares/security.ts, currently 100).
@@ -30,14 +30,16 @@ if (existsSync(systemBinary)) {
 }
 
 /**
- * WARNING: it's async
+ * WARNING: it's async — and it runs in `setupFiles`, i.e. BEFORE the test file imports anything.
+ *
+ * That ordering is exactly what hid PROBLEM 01: under Jest, i18next is up by the time a
+ * module-scope `t()` runs, so eagerly-resolved Zod messages worked here and only here. Tests that
+ * assert on translated messages must therefore not rely on this — see
+ * `tests/unit/i18n/validation-messages.test.ts`, which initialises its own instance.
  */
 void i18next.init({
     lng: 'en',
-    fallbackLng: 'en',
-    resources: {
-        en: {
-            translation: enTranslation as Record<string, unknown>
-        }
-    }
+    fallbackLng: getFallbackLocale(),
+    supportedLngs: listSupportedLocales(),
+    resources: loadLocaleResources()
 });

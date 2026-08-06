@@ -1,7 +1,7 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { z } from 'zod';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { CreateProductBody } from '@api/schemas.zod';
 import type { Product } from '@types';
 
@@ -40,16 +40,20 @@ export type IProductModel = Model<IProductDocument, unknown, IProductMethods>;
  * silently drops it. That is exactly what happened here — the previous `price` override was a
  * bare `.number().refine(v => v != null)` (itself dead: `z.number()` already rejects null and
  * undefined), which meant a negative price was accepted despite the contract forbidding it.
+ *
+ * Every message is a THUNK — `error: () => t('…')`, never `error: t('…')`. See the same note in
+ * `user-validation.ts`: eager `t()` runs before `i18next.init()` and Zod discards the resulting
+ * `undefined`; a thunk runs at parse time, in the request's locale.
  */
 export const zodProductSchema = CreateProductBody.extend({
     title: z
         .string()
-        .min(1, { error: t('ecommerce.product-field-title-required') })
-        .min(5, { error: t('ecommerce.product-field-title-min') }),
+        .min(1, { error: () => t('ecommerce.product-field-title-required') })
+        .min(5, { error: () => t('ecommerce.product-field-title-min') }),
 
     price: z
-        .number({ error: t('ecommerce.product-field-price-invalid') })
-        .min(0, { error: t('ecommerce.product-field-price-min') })
+        .number({ error: () => t('ecommerce.product-field-price-invalid') })
+        .min(0, { error: () => t('ecommerce.product-field-price-min') })
 });
 
 /**

@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { getCurrentLocale, runWithLocale, t } from '@core/i18n';
 import { ConfirmPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
@@ -67,18 +67,27 @@ export const postResetConfirm = (
                  */
                 return userService.consumeToken(user, token).then(() => {
                     // send confirmation email (no need to wait)
-                    void enqueueEmail(
-                        {
-                            to: user.email,
-                            subject: 'Password change confirmed'
-                        },
-                        'email-reset-confirm.ejs',
-                        {
-                            ...response.locals,
-                            pageMetaTitle: 'Password change confirmed',
-                            pageMetaLinks: [],
-                            name: user.username
-                        }
+                    /*
+                     * The recipient's OWN language, not the language of the request that triggered
+                     * this. These links are clicked from an email client, possibly on a shared or
+                     * borrowed device, so the browser's `Accept-Language` says very little about
+                     * who the message is for. `runWithLocale` binds both the subject and the
+                     * template's `t` to the same locale and carries it onto the queue payload.
+                     */
+                    void runWithLocale(user.locale ?? getCurrentLocale(), () =>
+                        enqueueEmail(
+                            {
+                                to: user.email,
+                                subject: t('email.reset-confirm.subject')
+                            },
+                            'email-reset-confirm.ejs',
+                            {
+                                ...response.locals,
+                                pageMetaTitle: t('email.reset-confirm.meta-title'),
+                                pageMetaLinks: [],
+                                name: user.username
+                            }
+                        )
                     );
 
                     emitAuditEvent(

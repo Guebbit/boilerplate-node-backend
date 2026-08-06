@@ -61,6 +61,42 @@ its own tests.
 
 ### Added
 
+- **Per-request language.** Every endpoint honours `Accept-Language` — q-weights, region tags
+  (`en-GB` → `en`), `*`, and a fallback rather than an error for anything unsupported. The
+  negotiated language is stated back in `Content-Language`, and `Vary: Accept-Language` is set so
+  no shared cache can hand one language's body to another language's request. `src/core/i18n.ts`
+  carries it down the request's async chain with `AsyncLocalStorage`, so a Zod thunk twelve calls
+  deep resolves in the caller's language without `t` being threaded through twelve signatures.
+  Never `i18next.changeLanguage()`, which mutates one global and is async: two overlapping
+  requests in different languages would answer each other's. An integration test fires twenty
+  interleaved requests in alternating languages as the standing guard.
+
+- **`src/locales/it.json` and `src/locales/es.json`.** Adding a language is now one step — drop the
+  file in. `i18next.init()`'s resources and the negotiator read the same list, so nothing else has
+  to be told. `NODE_SUPPORTED_LOCALES` overrides the directory when you want to ship a dictionary
+  without exposing it yet.
+
+- **`GET /locales` and `GET /locales/:locale`.** Which languages a deployment supports is runtime
+  state — it depends on which dictionaries were deployed — so it cannot be an enum in
+  `openapi.yaml`; a client has to ask. `GET /locales/:locale` serves **this API's own** dictionary,
+  never a client's UI copy: the two repositories are independent, and view text in the API's
+  keyspace would make them undeployable apart. Public and cacheable, because a client that has just
+  failed to reach the API is exactly who needs them.
+
+- **A persisted `locale` on the user document.** `Accept-Language` answers "what language is this
+  request in", which is all a stateless API needs for a response. It cannot answer "what language
+  should the email a worker sends at 3am be in", because there is no request to read. Set at signup
+  from the negotiated locale, editable from the user endpoints, part of the `User` contract, and
+  backfilled by `20260806120000-user-locale.js`. Every email addressed to a known user is sent in
+  it, falling back to the request's.
+
+- **Localised emails and invoices.** The seven `views/templates-emails/*.ejs` templates and the
+  invoice PDF resolve their copy through `t` instead of carrying hardcoded English, subjects
+  included. The locale travels in the queue payload — `AsyncLocalStorage` does not survive the hop
+  to a worker that may not even be in the same process — and both workers re-establish it before
+  rendering. One deliberate exception: the contact-form notification goes to the support mailbox,
+  not to the person who filled in the form, so it renders in `NODE_DEFAULT_LOCALE`.
+
 - **`npm run complete:fast`** — `ts-check`, `lint`, `prettier:check`, and nothing that takes
   minutes. It is what `.husky/pre-commit` runs; `complete:check` stays the full gate, run by hand
   before pushing.
@@ -316,6 +352,41 @@ its own tests.
 
 ### Fixed
 
+- **Every custom validation message was discarded, and clients got Zod's English defaults.** The
+  Zod schemas called `t()` at module scope, and ES module semantics guarantee every import is fully
+  evaluated _before_ the first statement of `app.ts`'s body — where `i18next.init()` lives. `t()`
+  returned `undefined`, Zod read `{ message: undefined }` as "no custom message supplied", and used
+  its own. `en.json` had defined "Not a valid email" all along and it never reached anyone. Messages
+  are now thunks (`error: () => t('…')`), which Zod calls at parse time. No test caught it because
+  `tests/helpers/setup.ts` runs in Jest's `setupFiles`, so under test i18n _was_ up when `t()` ran —
+  the same code had two behaviours. `tests/unit/i18n/validation-messages.test.ts` reproduces the
+  live ordering instead of Jest's.
+
+- **Multipart requests were answered in the wrong language, and said otherwise.** `upload.single()`
+  consumes the request stream, so the rest of the chain resumes from a socket read callback whose
+  async context predates the locale middleware — the `AsyncLocalStorage` store is gone and the
+  ambient `t` silently falls back to the boot language. The response still carried
+  `Content-Language: it`, because the header is set by the middleware, which does run. `POST
+/account/signup` is multipart, so this was the user-visible path. Fixed at the source in
+  `core/adapters/storage.ts`, where every `upload.*` method is wrapped to re-enter the store,
+  rather than at the seven route mounts — a route that forgets the wrapper looks perfectly correct
+  and fails only in a language nobody tests in.
+
+- **The supported-locale list could disagree with itself.** `i18next.init()` registered its
+  resources once at boot while the middleware re-read `src/locales/` per request, so dropping in a
+  dictionary on a running server made the negotiator offer a language i18next could not resolve —
+  again answering `Content-Language: xx` with fallback copy. The list is memoised, so the two
+  cannot drift; adding a locale needs a restart, which a deploy does anyway.
+
+- **Redis could serve one language's response to another.** `setCache` keyed on method + URL + user
+  scope, and bodies carry translated `message` / `errors` copy. The locale is now part of the key,
+  and `Vary: Accept-Language` is set for caches in front of the API — the same fault the
+  `Vary: Authorization` fix in this release describes, with a different header.
+
+- **`tests/helpers/contract-data.ts` ignored `pattern` entirely**, so `validPayload()` could emit a
+  value the contract declares illegal and the resulting `422` looked like an endpoint bug. It now
+  refuses to return a value it knows violates a pattern, naming the fix in the error.
+
 - **Cached responses were reused across authentication scopes, so an admin was served the anonymous
   list.** `setCache` scoped its Redis key by user id and set `Cache-Control: public|private,
 max-age=N`, but never named `Authorization` in `Vary` — and a cache keys on method + URL + the
@@ -492,6 +563,14 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - **`js-yaml` and `@types/js-yaml`** — no remaining consumer.
 
 ### Security
+
+- **The upload callbacks are now covered by tests.** `resolveUploadDestination`,
+  `resolveUploadFilename` and `fileFilter` are the whole of this repo's upload security — a field
+  whitelist, a filename never derived from client input (against traversal, collision and
+  enumeration), and a type check — and none of it was asserted, because a multer storage engine
+  keeps its callbacks to itself. The first two are extracted as named exports for exactly that
+  reason. Note `fileFilter` still trusts the client-supplied `mimetype`, which is forgeable; the
+  tests pin current behaviour so a move to content sniffing is visible.
 
 - **`Cache-Control: public` on responses whose body depends on the caller** — see _Fixed_. The
   visible symptom was wrong data, but the exposure is the point: `public` invites _shared_ caches —

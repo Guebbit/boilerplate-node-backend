@@ -23,6 +23,7 @@ import {
     ATTR_MESSAGING_DESTINATION_NAME
 } from '@opentelemetry/semantic-conventions/incubating';
 import { logger } from '@core/adapters/logger';
+import { getCurrentLocale, t } from '@core/i18n';
 import { withSpan } from '@core/observability/tracer';
 import { isQueueEnabled, publishToQueue } from '@core/adapters/queue';
 // Queue name shared with the worker that drains it — imported rather than duplicated so
@@ -126,11 +127,15 @@ export const nodemailer = (
             ejs
                 // `renderFile` reads the template from disk and returns the interpolated HTML.
                 // EJS caches compiled templates internally, so repeat sends skip recompilation.
-                .renderFile(
-                    path.resolve(EMAIL_TEMPLATES_DIR, templateName),
-                    // Populate the template
-                    data
-                )
+                .renderFile(path.resolve(EMAIL_TEMPLATES_DIR, templateName), {
+                    // Every template resolves its copy through `t`, in the ambient locale — the
+                    // request's when sent inline, the payload's when the worker replayed it
+                    // inside `runWithLocale`. `locale` is exposed too, for `<html lang>`.
+                    // Spread last so a caller can still override either for a one-off.
+                    t,
+                    locale: getCurrentLocale(),
+                    ...data
+                })
                 /**
                  * Send email (nodemailer returns a Promise when no callback is provided)
                  */
@@ -172,7 +177,8 @@ export const nodemailer = (
 export const enqueueEmail = (
     request: SendMailOptions,
     templateName: string,
-    data: Data
+    data: Data,
+    locale: string = getCurrentLocale()
 ): Promise<void> => {
     // No broker configured → send inline. `.then(() => {})` discards SentMessageInfo so both
     // branches share the same `Promise<void>` return type.
@@ -182,13 +188,24 @@ export const enqueueEmail = (
         queue: EMAIL_QUEUE,
         // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
         // (streams, Buffers, functions) in `request` would not survive the round trip.
-        payload: { request, templateName, data }
+        //
+        // `locale` travels IN the payload because AsyncLocalStorage does not: the worker drains
+        // this queue later, possibly in another process, with no request on its async chain.
+        // Defaulting it to the ambient locale means every existing call site gets the caller's
+        // language for free; a caller acting on someone else's behalf (a job sending to a user
+        // at 3am) passes that user's persisted `locale` explicitly.
+        payload: { request, templateName, data, locale }
     }).then((published) => {
         if (!published) {
             // Fallback: queue publish failed, send directly.
             return nodemailer(request, templateName, data).then(() => {});
         }
         // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
-        logger.debug({ message: 'Email job enqueued.', to: request.to, template: templateName });
+        logger.debug({
+            message: 'Email job enqueued.',
+            to: request.to,
+            template: templateName,
+            locale
+        });
     });
 };

@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= locale %>">
 <%- include("../layouts/pdf-template-head.ejs"); %>
 <body>
 <main class="centered">
-    <h1>The order has been confirmed</h1>
+    <h1><%= t('invoice.title') %></h1>
     <ul>
         <% order.items.forEach(function(item) { %>
             <li>
-                <%= item.product.title %> - <%= item.quantity %> - $<%= item.product.price %>
+                <%= t('invoice.line', { title: item.product.title, quantity: item.quantity, price: item.product.price }) %>
             </li>
         <% }); %>
     </ul>

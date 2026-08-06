@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { getCurrentLocale, runWithLocale, t } from '@core/i18n';
 import { RequestPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
@@ -26,6 +26,9 @@ const lookupResetData = (email?: string) => {
         if (!user) return;
         return authService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
             username: user.username,
+            // The account's own language, so the email matches the rest of what this user
+            // receives from us rather than the browser that happened to submit the form.
+            locale: user.locale,
             token
         }));
     });
@@ -63,19 +66,21 @@ export const postResetRequest = (
                 authPasswordResetTotal.inc({ status: data?.token ? 'success' : 'failure' });
 
                 if (data?.token)
-                    void enqueueEmail(
-                        {
-                            to: email,
-                            subject: 'Password reset'
-                        },
-                        'email-reset-request.ejs',
-                        {
-                            ...response.locals,
-                            pageMetaTitle: 'Password reset requested',
-                            pageMetaLinks: [],
-                            name: data.username,
-                            token: data.token
-                        }
+                    void runWithLocale(data.locale ?? getCurrentLocale(), () =>
+                        enqueueEmail(
+                            {
+                                to: email,
+                                subject: t('email.reset-request.subject')
+                            },
+                            'email-reset-request.ejs',
+                            {
+                                ...response.locals,
+                                pageMetaTitle: t('email.reset-request.meta-title'),
+                                pageMetaLinks: [],
+                                name: data.username,
+                                token: data.token
+                            }
+                        )
                     );
 
                 emitAuditEvent(

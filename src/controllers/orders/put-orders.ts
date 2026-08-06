@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@core/http/response';

@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@core/http/response';
 import { cartCheckoutTotal } from '@core/observability/metrics-domain';

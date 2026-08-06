@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 // i18next translation function — messages are resolved against the request's locale, which the
 // i18next middleware has already set up by the time a controller runs.
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { Types } from 'mongoose';
 import { coerceStringArray } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@core/http/response';

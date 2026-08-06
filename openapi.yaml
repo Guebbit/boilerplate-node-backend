@@ -5,6 +5,17 @@ info:
     description: |
         Stable, codegen-oriented OpenAPI contract.
         Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
+
+        Language: every endpoint honours `Accept-Language` (q-weights and region tags
+        included). It selects the language of user-facing copy only — `errors[].message` and a
+        success envelope's `message` — never the response shape, the status code, or a
+        machine-readable field such as `errors[].code`. An unsupported language falls back
+        instead of erroring; `Content-Language` states what was used and `Vary:
+        Accept-Language` is always set. `GET /locales` lists what a deployment supports.
+
+        The header is intentionally not declared per operation: it applies to all of them and
+        clients set it once in an interceptor, so declaring it 33 times would only add a
+        redundant argument to every generated function. This paragraph is its contract.
     contact:
         name: API Team
 
@@ -40,6 +51,9 @@ components:
             bearerFormat: JWT
 
     parameters:
+        # `Accept-Language` is honoured by every operation and is documented in
+        # `info.description` rather than declared here — see the note there.
+
         # Common parameters
         PageParam:
             name: page
@@ -174,6 +188,13 @@ components:
         Password:
             type: string
             minLength: 8
+        Locale:
+            type: string
+            description: >-
+                BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports
+                is a runtime fact, not a contract one — ask `GET /locales`.
+            pattern: '^[a-z]{2}(-[A-Za-z0-9]+)*$'
+            example: it
         ImageUrl:
             type: string
             format: uri-reference
@@ -217,6 +238,65 @@ components:
                     type: integer
                 message: &envelopeMessage
                     type: string
+
+        LocaleCapabilities:
+            type: object
+            additionalProperties: false
+            required: [locales, default, fallback]
+            description: >-
+                Which languages a deployment can answer in. Runtime state, not contract state:
+                it is derived from the dictionaries actually deployed, so it cannot be an enum
+                here.
+            properties:
+                locales:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Locale'
+                    description: Every supported language tag.
+                default:
+                    $ref: '#/components/schemas/Locale'
+                fallback:
+                    $ref: '#/components/schemas/Locale'
+
+        LocaleCapabilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/LocaleCapabilities'
+
+        LocaleDictionary:
+            type: object
+            additionalProperties: false
+            required: [locale, messages]
+            description: >-
+                The API's OWN message dictionary for one language — its API-response copy and
+                nothing else. It is never a client's UI dictionary: the two are authored and
+                deployed in separate repositories, and mixing them would put view copy in the
+                API's keyspace. A client that wants these merges them under a namespace it
+                reserves for the API, never at the root.
+            properties:
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                messages:
+                    type: object
+                    additionalProperties: true
+                    description: Nested key/value dictionary, the same shape the API loads.
+
+        LocaleDictionaryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/LocaleDictionary'
 
         HealthPing:
             type: object
@@ -535,6 +615,8 @@ components:
                     type: boolean
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
                 createdAt:
                     type: string
                     format: date-time
@@ -791,6 +873,8 @@ components:
                     type: boolean
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         CreateUserRequestMultipart:
             type: object
@@ -811,6 +895,8 @@ components:
                     type: string
                     format: binary
                     description: Optional user profile image
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         UpdateUserRequest:
             type: object
@@ -827,6 +913,8 @@ components:
                     $ref: '#/components/schemas/Password'
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         UpdateUserRequestMultipart:
             type: object
@@ -845,6 +933,8 @@ components:
                     type: string
                     format: binary
                     description: Optional user profile image
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         UpdateUserByIdRequest:
             type: object
@@ -1543,6 +1633,55 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/HealthPingEnvelope'
+
+    # --------- Locales ---------
+    /locales:
+        get:
+            tags: [System]
+            summary: Supported languages
+            description: |
+                Which languages this deployment can answer in, plus its default and fallback.
+
+                Public, unauthenticated and cacheable: it is static copy that changes only on
+                deploy, and a client that has just failed to reach the API is exactly who needs
+                it.
+            operationId: getLocales
+            responses:
+                '200':
+                    description: Locale capabilities
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /locales/{locale}:
+        get:
+            tags: [System]
+            summary: API message dictionary
+            description: |
+                This API's own dictionary for one language.
+
+                Normally unnecessary — the API resolves its keys itself and puts finished text on
+                the wire. It earns its place when no response arrives at all (a network failure, a
+                bare 502) and the client must produce the copy itself, in the active language.
+            operationId: getLocaleDictionary
+            parameters:
+                - name: locale
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Locale'
+                  description: A language tag from `GET /locales`.
+            responses:
+                '200':
+                    description: Dictionary for the requested locale
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleDictionaryEnvelope'
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
 
     # --------- Observability ---------
     /observability/events:

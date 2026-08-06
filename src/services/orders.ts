@@ -1,6 +1,6 @@
 import { Types } from 'mongoose';
 import type { PipelineStage } from 'mongoose';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import type { SearchOrdersRequest, CartItem, OrderStatus } from '@types';
 import { applyOrderTransform } from '@models/orders';
 import type { IOrderDocument, IOrderDocumentItem } from '@models/orders';

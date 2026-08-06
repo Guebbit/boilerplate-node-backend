@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { t } from 'i18next';
+import { getCurrentLocale, t } from '@core/i18n';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import type { CastError } from 'mongoose';
@@ -133,7 +133,11 @@ export const signup = (
                     username,
                     email,
                     imageUrl: imageUrl ?? '',
-                    password
+                    password,
+                    // The language they signed up in, kept for work that happens later without
+                    // a request to read `Accept-Language` from — a queued email, a nightly job.
+                    // Editable afterwards from the user endpoints.
+                    locale: getCurrentLocale()
                 })
                 .then((createdUser) => generateSuccess<IUserDocument>(createdUser));
         })

@@ -90,6 +90,8 @@ interface IZodCheckDef {
     minimum?: number;
     maximum?: number;
     value?: number;
+    /** Present on `string_format` checks whose `format` is `regex` — i.e. OpenAPI `pattern`. */
+    pattern?: RegExp;
 }
 
 interface IZodDef {
@@ -144,6 +146,46 @@ const randomStringForFormat = (format?: string): string => {
     }
 };
 
+/**
+ * Values for `pattern` constraints the generic generator cannot satisfy on its own.
+ *
+ * Producing a string from an arbitrary regex is a whole library's worth of work and not worth
+ * it for a handful of patterns. The important part is not the table — it is that
+ * {@link satisfyPattern} REFUSES to return a value it knows is illegal. A `pattern` used to be
+ * ignored outright, so `validPayload` could hand an endpoint a payload the contract forbids and
+ * the resulting 422 looked like an endpoint bug rather than a generator gap. Adding a pattern to
+ * `openapi.yaml` now fails loudly here, with the fix named in the message.
+ */
+const PATTERN_SAMPLES: Record<string, string> = {
+    // Locale — BCP 47 language tag
+    '^[a-z]{2}(-[A-Za-z0-9]+)*$': 'it'
+};
+
+/**
+ * Ensures `value` satisfies every `regex` check on the field, substituting a known-good sample
+ * when it does not.
+ */
+const satisfyPattern = (value: string, checks: IZodCheckDef[]): string => {
+    let result = value;
+
+    for (const check of checks) {
+        const { pattern } = check;
+        if (!pattern || pattern.test(result)) continue;
+
+        const sample = PATTERN_SAMPLES[pattern.source];
+        if (sample === undefined)
+            throw new Error(
+                `contract-data: no sample value for pattern ${pattern.source}. ` +
+                    'Add one to PATTERN_SAMPLES in tests/helpers/contract-data.ts — without it ' +
+                    'validPayload() would emit a value the contract declares illegal.'
+            );
+
+        result = sample;
+    }
+
+    return result;
+};
+
 const clampStringLength = (value: string, checks: IZodCheckDef[]): string => {
     const minLength = checks.find((check) => check.check === 'min_length')?.minimum;
     const maxLength = checks.find((check) => check.check === 'max_length')?.maximum;
@@ -159,7 +201,12 @@ const buildValue = (schema: ZodTypeAny): unknown => {
     const def = defOf(schema);
     switch (def.type) {
         case 'string': {
-            return clampStringLength(randomStringForFormat(def.format), checksOf(def));
+            const checks = checksOf(def);
+            // Pattern last: clamping a padded/truncated string could otherwise break it.
+            return satisfyPattern(
+                clampStringLength(randomStringForFormat(def.format), checks),
+                checks
+            );
         }
         case 'number': {
             const checks = checksOf(def);

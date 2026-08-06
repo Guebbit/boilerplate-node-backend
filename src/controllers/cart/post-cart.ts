@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { productService } from '@services/products';
