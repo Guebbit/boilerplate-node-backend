@@ -1,1 +1,8 @@
-npm run complete:check
+# Deliberately NOT `complete:check`. That runs the unit, integration and contract suites, which
+# take minutes — long enough that people reach for `--no-verify`, and a hook that gets bypassed
+# protects nothing. CI already runs every one of those as its own parallel job, so the only thing
+# a commit hook adds is catching what would be embarrassing in a diff: a type error, a lint error,
+# unformatted code. Those are seconds, and they are the ones worth blocking on.
+#
+# Before pushing (or opening a PR), run the real gate by hand: `npm run complete:check`.
+npm run complete:fast

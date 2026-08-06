@@ -61,6 +61,10 @@ its own tests.
 
 ### Added
 
+- **`npm run complete:fast`** — `ts-check`, `lint`, `prettier:check`, and nothing that takes
+  minutes. It is what `.husky/pre-commit` runs; `complete:check` stays the full gate, run by hand
+  before pushing.
+
 - **`decodeFormFields()`** in `src/core/http/request.ts`, over `isMultipartRequest()` and
   `parseFormBoolean()`. A write controller declares _which_ of its fields are booleans and which
   are string arrays; how either is spelled on the wire stops being the controller's business. Both
@@ -204,6 +208,13 @@ its own tests.
 
 ### Changed
 
+- **The pre-commit hook runs `complete:fast` instead of `complete:check`.** The full gate runs the
+  unit, integration and contract suites — minutes per commit, which is long enough that people
+  reach for `--no-verify`, and a hook that gets bypassed protects nothing. CI already runs each of
+  those as its own parallel job, where a failure names the job instead of failing one long serial
+  script. What a commit hook usefully adds is the class of thing that is merely embarrassing in a
+  diff — a type error, a lint error, unformatted code — and that costs about six seconds.
+
 - **`imageUrl` is `format: uri-reference`, declared once as `components/schemas/ImageUrl`** instead
   of `format: uri` repeated at nine sites. The field holds an absolute URL (the schema defaults) or
   a server-relative upload path (`/images/x.png`, which is what `resolveImageUrl` writes) — and
@@ -293,6 +304,13 @@ its own tests.
   door every consumer imports — rather than calling itself a backward-compatibility shim.
 
 ### Fixed
+
+- **This repository's git hooks had never run.** `.husky/pre-commit` and `.husky/commit-msg` were
+  both present and both inert: `husky` was not a dependency, there was no `prepare` script to
+  install it, and `core.hooksPath` was unset, so `.git/hooks/` held nothing but samples. Neither
+  the pre-commit gate nor commitlint had ever fired on a commit here — the hook files read as
+  protection that was not there. The frontend was wired correctly, which is what made the
+  difference visible: an identical commit took seconds in one repo and minutes in the other.
 
 - **The API answered validation errors with raw i18n keys.** `src/models/user-validation.ts` asked
   for `signup.user-field-*` while `src/locales/en.json` defined them under `login.*`, and i18next

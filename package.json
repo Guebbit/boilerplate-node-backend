@@ -62,7 +62,9 @@
         "update:all": "npm-check-updates -u",
         "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",
         "complete:check": "npm run build && npm run test && npm run lint && npm run prettier:check",
-        "publish:public": "npm publish --access public"
+        "complete:fast": "npm run ts-check && npm run lint && npm run prettier:check",
+        "publish:public": "npm publish --access public",
+        "prepare": "husky"
     },
     "devDependencies": {
         "@asyncapi/cli": "^6.0.2",
@@ -95,6 +97,7 @@
         "eslint-plugin-prettier": "^5.5.5",
         "eslint-plugin-unicorn": "^63.0.0",
         "globals": "^17.4.0",
+        "husky": "^9.1.7",
         "jest": "^30.3.0",
         "jest-openapi": "^0.14.2",
         "jiti": "^2.6.1",
