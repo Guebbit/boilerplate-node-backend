@@ -55,33 +55,22 @@ export function getFormFiles(request: Request): string[] | undefined {
 }
 
 /**
- * Resolve the URL of the image a request uploaded, or `undefined` if it uploaded none.
+ * The URL of the image this request uploaded, or `undefined` if it uploaded none.
  *
- * Only the public-relative URL is returned — never the filesystem path multer produced. That is a
- * deliberate boundary: baking the container's filesystem layout into database rows breaks the
- * moment the mount path changes, and a controller holding a real path is a controller that will
- * eventually unlink one, which is the coupling that makes moving uploads to object storage a
- * rewrite instead of an adapter swap. Deleting a stored image goes through
- * `@core/adapters/image-store`, which speaks these URLs; the raw paths stay inside the upload
- * pipeline, where `getFormFiles` hands them to the content check.
+ * The value is produced by the image store when it commits the staged file (`storeUploadedImages`
+ * in `@core/adapters/storage`), and simply read back here — a controller never learns where the
+ * bytes went. That is the boundary the whole storage seam rests on: it is what allows the same
+ * controller to work whether the store answered `/images/x.png` or
+ * `https://cdn.example.com/images/x.png`.
  *
- * The value is separator-normalised, because multer builds it with `path.join()` and on Windows it
- * arrives as `public\images\x.png`. A URL path has no backslashes, so persisting that form
- * produced rows `express.static` answers with a 404 — silently, and only on developer machines
- * that happen to run Windows.
+ * It used to be derived here instead, by stripping `NODE_PUBLIC_PATH` off multer's path, which is
+ * why this module carries {@link toPosixPath} and its Windows-separator history. Constructing the
+ * url in the store rather than deriving it from a path retires that whole class of bug: there is
+ * no longer a filesystem separator anywhere near the value that gets persisted.
  *
- * @param request - Express request with optional multer file
+ * @param request - Express request that has been through the upload middleware
  */
 export function resolveImageUrl(request: Request): string | undefined {
     // `[0]`: these endpoints accept a single image, so ignore any extras.
-    const uploadedPath = getFormFiles(request)?.[0];
-    // Normalise BEFORE stripping, and normalise the prefix too, so the two agree on separators
-    // whatever mix the platform and `NODE_PUBLIC_PATH` arrive in. Stripping first would leave a
-    // Windows-shaped prefix unmatched against a posix-shaped configured path.
-    const publicPath = toPosixPath(process.env.NODE_PUBLIC_PATH ?? 'public');
-    // Strip the public-directory prefix ('public/images/x.png' → '/images/x.png') to get the
-    // path as a browser will request it. Note `String.replace` with a string pattern replaces
-    // only the first occurrence — which is what we want, and also why the prefix must not
-    // appear again inside the filename (it cannot: names are random hex).
-    return uploadedPath && toPosixPath(uploadedPath).replace(publicPath, '');
+    return request.storedImageUrls?.[0];
 }

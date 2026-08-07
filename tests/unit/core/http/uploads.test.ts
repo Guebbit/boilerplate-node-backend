@@ -7,10 +7,11 @@
  * separately here — a regression that handles only two of them would still look fine on the
  * route that happens to use the third.
  *
- * `resolveImageUrl()` returns the public-relative URL and nothing else. It used to hand back the
- * filesystem path as well, for controllers to unlink on a failure; deletion now goes through
- * `@core/adapters/image-store`, which speaks stored URLs, so the path no longer leaves the upload
- * pipeline. Persisting one would bake the container's filesystem layout into database rows.
+ * `resolveImageUrl()` reads back the url the image store recorded when it committed the upload. It
+ * used to derive that url here, by stripping `NODE_PUBLIC_PATH` off multer's path, and to hand the
+ * path itself back too so controllers could unlink it on a failure. Both are gone: the store
+ * constructs the url and owns the delete, so no filesystem path leaves the upload pipeline and
+ * none can reach a database row.
  */
 
 import type { Request } from 'express';
@@ -98,123 +99,57 @@ describe('getFormFiles', () => {
 });
 
 describe('resolveImageUrl', () => {
-    const originalPublicPath = process.env.NODE_PUBLIC_PATH;
-
-    afterEach(() => {
-        if (originalPublicPath === undefined) delete process.env.NODE_PUBLIC_PATH;
-        else process.env.NODE_PUBLIC_PATH = originalPublicPath;
-    });
-
-    it('strips the public prefix off the uploaded path', () => {
-        delete process.env.NODE_PUBLIC_PATH;
-
-        const result = resolveImageUrl(requestWith({ file: uploaded('public/images/a.png') }));
-
-        // The stored value is a URL, never the path the file was written to: the filesystem
-        // layout must not end up in the database.
-        expect(result).toBe('/images/a.png');
-    });
-
-    it('strips a configured NODE_PUBLIC_PATH prefix instead of the default', () => {
-        process.env.NODE_PUBLIC_PATH = '/srv/uploads';
-
-        const result = resolveImageUrl(
-            requestWith({ file: uploaded('/srv/uploads/images/a.png') })
+    /**
+     * Reads back what the image store committed, and nothing else.
+     *
+     * The url used to be derived here from multer's path, which is why this suite once carried a
+     * whole separator-normalisation section: `public\\images\\x.png` had to become
+     * `/images/x.png` without the backslashes surviving into the database. The store now
+     * CONSTRUCTS the url instead (`@core/adapters/image-store`), so there is no path to normalise
+     * and no way for a separator to reach a stored value — the tests for that property moved with
+     * the behaviour.
+     */
+    it('returns the url the store recorded for the upload', () => {
+        expect(resolveImageUrl(requestWith({ storedImageUrls: ['/images/a.png'] }))).toBe(
+            '/images/a.png'
         );
-
-        expect(result).toBe('/images/a.png');
     });
 
-    it('defaults the prefix to "public" when NODE_PUBLIC_PATH is unset', () => {
-        delete process.env.NODE_PUBLIC_PATH;
-
-        expect(resolveImageUrl(requestWith({ file: uploaded('public/x.png') }))).toBe('/x.png');
+    /* A remote store answers absolute urls, and controllers must not be able to tell. */
+    it('returns an absolute url unchanged', () => {
+        expect(
+            resolveImageUrl(
+                requestWith({ storedImageUrls: ['https://cdn.example.com/images/a.png'] })
+            )
+        ).toBe('https://cdn.example.com/images/a.png');
     });
 
-    it('takes only the first file when several were uploaded', () => {
+    it('takes only the first url when several images were committed', () => {
         // These endpoints accept a single image; extras are ignored rather than silently
         // overwriting each other downstream.
-        const result = resolveImageUrl(
-            requestWith({
-                files: [uploaded('public/images/first.png'), uploaded('public/images/second.png')]
-            })
-        );
-
-        expect(result).toBe('/images/first.png');
+        expect(
+            resolveImageUrl(
+                requestWith({ storedImageUrls: ['/images/first.png', '/images/second.png'] })
+            )
+        ).toBe('/images/first.png');
     });
 
-    it('returns undefined when no file was uploaded', () => {
+    it('returns undefined when the request uploaded nothing', () => {
         // Callers distinguish "no image supplied" from "image supplied" on this being undefined,
         // so an empty string here would read as "an image at the site root" — and, worse, would
         // make the failure-path cleanup try to delete it.
         expect(resolveImageUrl(requestWith({}))).toBeUndefined();
     });
 
-    it('replaces only the leading occurrence of the prefix', () => {
-        // `String.replace` with a string pattern replaces the first match only — relied upon, so
-        // pinned: a global replace would corrupt any filename that repeated the prefix.
-        process.env.NODE_PUBLIC_PATH = 'public';
-
-        expect(
-            resolveImageUrl(requestWith({ file: uploaded('public/images/public-notice.png') }))
-        ).toBe('/images/public-notice.png');
-    });
-
     /**
-     * The Windows case, which is the whole reason `imageUrl` is normalised at all.
-     *
-     * multer builds `file.path` with `path.join()`, so on Windows it arrives backslashed. The
-     * value that gets PERSISTED must be a URL path or `express.static` answers 404 — and it does
-     * so only on Windows, only in production data, and only once someone renders the image, which
-     * is about as late as a bug can surface. These run on every platform because they feed the
-     * helper a literal Windows-shaped string rather than asking the host what its separator is.
+     * The staged path is deliberately NOT a fallback. A request whose upload never reached the
+     * store has no stored image, and answering with the temp path would persist a filesystem path
+     * into `imageUrl` — the exact bug the store exists to make impossible.
      */
-    describe('separator normalisation', () => {
-        it('converts a Windows path to a URL path when storing', () => {
-            delete process.env.NODE_PUBLIC_PATH;
-
-            const result = resolveImageUrl(
-                requestWith({ file: uploaded(String.raw`public\images\a.png`) })
-            );
-
-            expect(result).toBe('/images/a.png');
-        });
-
-        it('matches a posix NODE_PUBLIC_PATH against a backslashed upload path', () => {
-            // The prefix is normalised as well as the path, so the two agree on separators
-            // whatever mix the platform and the configured value arrive in. Stripping before
-            // normalising would leave this unmatched and persist the whole absolute path.
-            process.env.NODE_PUBLIC_PATH = 'C:/srv/uploads';
-
-            const result = resolveImageUrl(
-                requestWith({ file: uploaded(String.raw`C:\srv\uploads\images\a.png`) })
-            );
-
-            expect(result).toBe('/images/a.png');
-        });
-
-        it('matches a backslashed NODE_PUBLIC_PATH against a backslashed upload path', () => {
-            process.env.NODE_PUBLIC_PATH = String.raw`C:\srv\uploads`;
-
-            const result = resolveImageUrl(
-                requestWith({ file: uploaded(String.raw`C:\srv\uploads\images\a.png`) })
-            );
-
-            expect(result).toBe('/images/a.png');
-        });
-
-        it('never persists a backslash, whatever the inputs look like', () => {
-            // The invariant the other cases are examples of. A stored value containing `\` is
-            // broken by definition: it is read as part of the filename, not as a separator.
-            process.env.NODE_PUBLIC_PATH = String.raw`C:\srv`;
-
-            for (const path of [
-                String.raw`C:\srv\images\a.png`,
-                'C:/srv/images/a.png',
-                String.raw`C:\srv/images\a.png`
-            ])
-                expect(resolveImageUrl(requestWith({ file: uploaded(path) }))).not.toMatch(/\\/);
-        });
+    it('ignores a staged file the store never committed', () => {
+        expect(
+            resolveImageUrl(requestWith({ file: uploaded('/tmp/staging/a.png') }))
+        ).toBeUndefined();
     });
 });
 

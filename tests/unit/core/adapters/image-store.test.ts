@@ -6,11 +6,16 @@
  * temp directory: a mocked `fs` would assert that the code calls unlink with a string, which is
  * not the property that matters — *which* string is.
  */
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { filesystemImageStore } from '@core/adapters/image-store';
+import {
+    assertImageStoreReady,
+    filesystemImageStore,
+    imageStore,
+    isRemoteStoreConfigured
+} from '@core/adapters/image-store';
 
 const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
 
@@ -32,6 +37,127 @@ beforeEach(async () => {
 afterEach(async () => {
     await rm(root, { recursive: true, force: true });
     process.env.NODE_PUBLIC_PATH = ORIGINAL_PUBLIC_PATH;
+});
+
+/** A file standing in for a staged upload, in its own directory outside the public root. */
+const stageUpload = async (name: string, contents = 'image bytes') => {
+    const staging = path.join(root, 'staging');
+    await mkdir(staging, { recursive: true });
+    const file = path.join(staging, name);
+    await writeFile(file, contents);
+    return file;
+};
+
+describe('filesystemImageStore.put', () => {
+    it('commits the staged file into the public images directory', async () => {
+        const staged = await stageUpload('abc123.png', 'the uploaded bytes');
+
+        const url = await filesystemImageStore.put(staged);
+
+        expect(url).toBe('/images/abc123.png');
+        expect(await readFile(path.join(root, 'images', 'abc123.png'), 'utf8')).toBe(
+            'the uploaded bytes'
+        );
+    });
+
+    /* Staging exists so an unchecked upload is never publicly readable; leaving a copy behind
+       would defeat it, and would leak a file per upload besides. */
+    it('consumes the staged file', async () => {
+        const staged = await stageUpload('abc123.png');
+
+        await filesystemImageStore.put(staged);
+
+        expect(existsSync(staged)).toBe(false);
+    });
+
+    /**
+     * The url is built from literals, not from the destination path, so a Windows separator cannot
+     * reach a stored value however the filesystem spells it. This is the invariant that used to be
+     * defended by normalising multer's path in `resolveImageUrl` — asserted here now that the
+     * construction lives here.
+     */
+    it('returns a url, never a path', async () => {
+        const staged = await stageUpload('abc123.png');
+
+        const url = await filesystemImageStore.put(staged);
+
+        expect(url).not.toMatch(/\\/);
+        expect(url.startsWith('/')).toBe(true);
+    });
+
+    it('round-trips: what put returns, remove deletes', async () => {
+        const staged = await stageUpload('abc123.png');
+
+        const url = await filesystemImageStore.put(staged);
+
+        await expect(filesystemImageStore.remove(url)).resolves.toBe(true);
+        expect(existsSync(path.join(root, 'images', 'abc123.png'))).toBe(false);
+    });
+
+    /* Unlike `remove`, this one must fail loudly: the caller is about to persist the url. */
+    it('rejects when the images directory does not exist', async () => {
+        await rm(path.join(root, 'images'), { recursive: true, force: true });
+        const staged = await stageUpload('abc123.png');
+
+        await expect(filesystemImageStore.put(staged)).rejects.toThrow();
+    });
+});
+
+/**
+ * The remote backend is wired but not written (see the TODO in `@core/adapters/image-store`), and
+ * what matters until it is, is that asking for it can never be mistaken for getting it.
+ */
+describe('remote store selection', () => {
+    const ORIGINAL_BUCKET = process.env.NODE_IMAGE_STORE_BUCKET;
+
+    afterEach(() => {
+        if (ORIGINAL_BUCKET === undefined) delete process.env.NODE_IMAGE_STORE_BUCKET;
+        else process.env.NODE_IMAGE_STORE_BUCKET = ORIGINAL_BUCKET;
+    });
+
+    it('uses local storage when no bucket is configured', async () => {
+        delete process.env.NODE_IMAGE_STORE_BUCKET;
+        const staging = path.join(root, 'staging');
+        await mkdir(staging, { recursive: true });
+        await writeFile(path.join(staging, 'local.png'), 'bytes');
+
+        expect(isRemoteStoreConfigured()).toBe(false);
+        await expect(imageStore.put(path.join(staging, 'local.png'))).resolves.toBe(
+            '/images/local.png'
+        );
+    });
+
+    it('boots normally when no bucket is configured', () => {
+        delete process.env.NODE_IMAGE_STORE_BUCKET;
+
+        expect(() => assertImageStoreReady()).not.toThrow();
+    });
+
+    /**
+     * Refusing to boot is the deliberate choice. Falling back to local disk would put some images
+     * in the bucket and some on a container filesystem, with nothing to say which is where — a
+     * data-loss bug that only appears on the next rebuild.
+     */
+    it('refuses to boot when a bucket is configured but unimplemented', () => {
+        process.env.NODE_IMAGE_STORE_BUCKET = 'my-cdn-bucket';
+
+        expect(() => assertImageStoreReady()).toThrow(/NODE_IMAGE_STORE_BUCKET is set/);
+    });
+
+    it('names the missing companion variables, so the message is actionable', () => {
+        process.env.NODE_IMAGE_STORE_BUCKET = 'my-cdn-bucket';
+
+        expect(() => assertImageStoreReady()).toThrow(/NODE_IMAGE_STORE_ENDPOINT/);
+    });
+
+    /* Belt and braces: even if a process somehow started, no upload may silently land locally. */
+    it('rejects uploads and deletes instead of falling back to local storage', async () => {
+        process.env.NODE_IMAGE_STORE_BUCKET = 'my-cdn-bucket';
+
+        expect(isRemoteStoreConfigured()).toBe(true);
+        await expect(imageStore.put('/tmp/whatever.png')).rejects.toThrow(/no remote image store/);
+        await expect(imageStore.remove('/images/x.png')).rejects.toThrow(/no remote image store/);
+    });
 });
 
 describe('filesystemImageStore.remove', () => {

@@ -13,6 +13,9 @@ import multer, { type Field, type FileFilterCallback } from 'multer';
 // `randomBytes` = cryptographically secure RNG. Deliberately not `Math.random()`: predictable
 // filenames would let someone guess the URL of another user's upload.
 import { randomBytes } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { createLocaleContext, runWithLocaleContext, t } from '@core/i18n';
 import {
     extensionForImage,
@@ -20,6 +23,7 @@ import {
     normaliseDeclaredImageMime
 } from '@core/adapters/image-signatures';
 import { deleteFile } from '@core/adapters/filesystem';
+import { imageStore } from '@core/adapters/image-store';
 import { getFormFiles } from '@core/http/uploads';
 import { logger } from '@core/adapters/logger';
 import { ExtendedError } from '@core/http/errors';
@@ -39,6 +43,26 @@ export function getExtension(filename: string) {
 }
 
 /**
+ * Where an upload is written while the request is still being decided.
+ *
+ * NOT the public directory, which is what this used to be. Two reasons, in order of importance:
+ *
+ *   1. A file multer has written is a file that exists; a file in `public/` is a file the world can
+ *      fetch. Between those two facts sat every check this API makes — the content check that
+ *      catches a disguised upload, the field validation, the database write. An upload that was
+ *      about to be rejected was publicly readable while it was being rejected. Now it is not
+ *      reachable at all until it is committed by {@link storeUploadedImages}.
+ *   2. A remote store cannot be written to as bytes stream in; it takes a finished file. Staging
+ *      is the step that turns "multer wrote it" and "the store has it" into two separate moments,
+ *      which is what lets the second one be a bucket instead of a directory.
+ *
+ * Defaults under the system temp directory. Override with `NODE_UPLOAD_STAGING_PATH` when temp is
+ * small, is a tmpfs sized below `NODE_MAX_UPLOAD_BYTES`, or is not writable by the app user.
+ */
+export const uploadStagingPath = () =>
+    process.env.NODE_UPLOAD_STAGING_PATH ?? path.join(tmpdir(), 'node-api-uploads');
+
+/**
  * Manage file storage
  *
  * `multer.diskStorage` builds a storage engine from two callbacks — `destination` (which
@@ -46,12 +70,10 @@ export function getExtension(filename: string) {
  * uploads in a Buffer, which is faster but lets a large upload exhaust process memory.
  */
 /**
- * Write file into destination
- * WARNING: Do not upload all files in a single directory. Create subdirectories with a maximum number of files?
+ * Write file into the staging directory
  *
- * Routing by `fieldname` (the form field the file arrived in) keeps different upload kinds
- * in different directories — and rejects anything unrecognised rather than defaulting to a
- * shared dump. The target directory must already exist: multer does not create it.
+ * Routing by `fieldname` (the form field the file arrived in) rejects anything unrecognised rather
+ * than defaulting to a shared dump.
  *
  * Exported, rather than inlined into `diskStorage`, so it can be exercised directly: a storage
  * engine hides its callbacks, and these two encode security decisions (a field whitelist, and
@@ -66,15 +88,22 @@ export const resolveUploadDestination = (
     file: Express.Multer.File,
     callback: (error: Error | null, destination: string) => void
 ): void => {
-    if (file.fieldname === 'imageUpload')
-        // Inside the public/static directory, so uploaded images are servable by URL.
-        // eslint-disable-next-line unicorn/no-null
-        callback(null, (process.env.NODE_PUBLIC_PATH ?? 'public') + '/images/');
     // if (file.fieldname === "pdfUpload")
     //     callback(null, 'src/uploads/');
     // Unknown field → reject. Whitelist rather than blacklist: an unexpected field name is
     // more likely an attack or a client bug than a legitimate upload.
-    else callback(new Error(`Unsupported upload field: ${file.fieldname}`), '');
+    if (file.fieldname !== 'imageUpload') {
+        callback(new Error(`Unsupported upload field: ${file.fieldname}`), '');
+        return;
+    }
+
+    // Created on demand because multer will not create it, and the default lives in the system
+    // temp directory, which a reboot empties.
+    const staging = uploadStagingPath();
+    void mkdir(staging, { recursive: true })
+        // eslint-disable-next-line unicorn/no-null
+        .then(() => callback(null, staging))
+        .catch((error: Error) => callback(error, ''));
 };
 
 /**
@@ -282,17 +311,71 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
 };
 
 /**
+ * Third and last step: hand the staged file to the image store.
+ *
+ * Runs only once the bytes have been proven to be the image they claim to be, so nothing that
+ * fails a check is ever committed — and, with a remote store, nothing that fails a check is ever
+ * uploaded, which is the difference between a rejected file costing microseconds and costing a
+ * round trip plus egress.
+ *
+ * The resulting urls go on the request rather than being returned, because multer's three shapes
+ * (`.single()`, `.array()`, `.fields()`) already forced the same accommodation on `getFormFiles`;
+ * controllers read `resolveImageUrl(request)` and never learn which they got.
+ *
+ * A failure here fails the request. That is the point of doing it before the controller: a stored
+ * image the database write then contradicts is recoverable (the failure path deletes it), while a
+ * database row pointing at bytes that were never stored is a 404 in someone's catalogue forever.
+ *
+ * NOTE: after this runs, `request.file.path` names a file that no longer exists — `put` consumed
+ * it. Nothing downstream reads it (that is what `resolveImageUrl` is for), and it is left as multer
+ * set it rather than rewritten, because a path that lies about a moved file is easier to notice
+ * than one that quietly describes the store's internals.
+ */
+export const storeUploadedImages: RequestHandler = (request, _response, next) => {
+    const staged = getFormFiles(request);
+    if (!staged || staged.length === 0) return next();
+
+    // `allSettled`, not `all`: with several files the interesting failure is the partial one, and
+    // `all` rejects while the successful puts are still in flight — leaving images committed to
+    // storage that nothing will ever reference or delete. The results are needed to clean those up.
+    void Promise.allSettled(staged.map((stagedPath) => imageStore.put(stagedPath))).then(
+        (results) => {
+            const failed = results.find((result) => result.status === 'rejected');
+            if (!failed) {
+                request.storedImageUrls = results.map(
+                    (result) => (result as PromiseFulfilledResult<string>).value
+                );
+                return next();
+            }
+
+            return Promise.all([
+                // Staged files are nobody's responsibility now. A successful `put` already consumed
+                // its own, and deleting a file that is gone is a no-op.
+                ...staged.map((stagedPath) => deleteFile(stagedPath)),
+                // Anything that DID make it into storage is now unreferenced — the request is about
+                // to fail, so no row will ever name it.
+                ...results
+                    .filter((result) => result.status === 'fulfilled')
+                    .map((result) => imageStore.remove(result.value))
+            ]).then(() => next(failed.reason));
+        }
+    );
+};
+
+/**
  * Multer middleware.
  *
  * The configured instance routes mount as `upload.single('imageUpload')`, `upload.array(...)` or
- * `upload.fields(...)`. Each is wrapped twice: once so the request-scoped locale survives the
- * upload (see {@link withLocaleRestored}), and once so the stored bytes are checked against the
- * format they claim to be (see {@link validateUploadedImages}). Composing both here rather than
- * at the route mounts is deliberate — a route that forgets one of them looks perfectly correct.
+ * `upload.fields(...)`. Each is wrapped in the full pipeline: the locale is restored across the
+ * body parse (see {@link withLocaleRestored}), the bytes are checked against the format they claim
+ * to be (see {@link validateUploadedImages}), and only then is the file committed to storage (see
+ * {@link storeUploadedImages}). Composing them here rather than at the route mounts is deliberate —
+ * a route that forgets one looks perfectly correct, and the one it forgets is a security check.
  */
 const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
     withLocaleRestored(middleware),
-    validateUploadedImages
+    validateUploadedImages,
+    storeUploadedImages
 ];
 
 export const upload = {

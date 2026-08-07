@@ -114,16 +114,18 @@ describe('every upload method restores the locale', () => {
     const methods = ['single', 'array', 'fields', 'none', 'any'] as const;
 
     /**
-     * Each method returns a PAIR — the locale-restoring multer wrapper, then the content check.
-     * Asserted rather than assumed, because a route mounting only the first would type-check and
-     * silently accept a file whose bytes are not an image.
+     * Each method returns the whole pipeline — the locale-restoring multer wrapper, then the
+     * content check, then the commit to the image store. Asserted rather than assumed, because a
+     * route mounting only the first would type-check and silently accept a file whose bytes are
+     * not an image, and one mounting only the first two would leave every upload staged in a temp
+     * directory with nothing ever pointing at it.
      */
-    it.each(methods)('upload.%s returns both guards', async (method) => {
+    it.each(methods)('upload.%s returns the full guard chain', async (method) => {
         const { upload } = await import('@core/adapters/storage');
         const handlers =
             method === 'fields' ? upload.fields([]) : (upload[method] as () => unknown[])();
 
-        expect(handlers).toHaveLength(2);
+        expect(handlers).toHaveLength(3);
     });
 
     it.each(methods)('upload.%s re-enters the request locale', async (method) => {

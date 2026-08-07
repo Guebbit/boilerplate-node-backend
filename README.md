@@ -163,19 +163,34 @@ before starting the server.
 
 ### Uploaded images
 
-Uploads land in `public/images/`, which `express.static` serves (see `src/app.ts`), and `.gitignore`
-drops — a served directory must not accumulate strangers' files in your git history.
+An upload takes two steps. multer writes it to a **staging** directory that nothing serves
+(`NODE_UPLOAD_STAGING_PATH`, by default under the system temp directory); once its bytes have been
+confirmed to be the image type they claim, `storeUploadedImages` commits it to the **image store**.
+Nothing is publicly readable in between — an upload that is about to be rejected is never fetchable
+while it is being rejected — and the split is also what lets the second step be something other
+than a directory.
 
-The demo images the fixtures reference are the exception: they are repository content and live in
-`public/images/seed/`, which is negated in `.gitignore`. Keeping them in their own directory is
-what lets one rule ignore uploads without enumerating which files are fixtures.
+The store that ships puts the file in `public/images/`, which `express.static` serves (see
+`src/app.ts`) and `.gitignore` drops — a served directory must not accumulate strangers' files in
+your git history — and returns `/images/<name>`, which is what lands in `imageUrl`.
 
-Stored `imageUrl`s are **URL paths** — forward slashes, always, whatever platform wrote them.
-multer builds its `file.path` with `path.join()`, so an upload on Windows arrives backslashed;
-`resolveImageUrl` normalises it before it is persisted. A backslash in a URL is a literal filename
-character, so a row that keeps one points at a file the server will 404 —
-`db/migrations/20260806140000-image-url-separators.js` repairs any that were stored before this
-was fixed.
+`@core/adapters/image-store` is the only module that may turn an `imageUrl` into a path. That is
+the rule that keeps the destination swappable: set `NODE_IMAGE_STORE_BUCKET` and the app selects a
+remote store (a personal CDN, or any S3-compatible bucket) instead — which is **not implemented
+yet**, so it refuses to boot rather than silently writing to local disk. See the TODO in that file
+and the matching section of `.env-example`. Everything else is done; unset, you get exactly the
+behaviour described above.
+
+The demo images the fixtures reference are the exception to the ignore rule: they are repository
+content and live in `public/images/seed/`, which is negated in `.gitignore`. Keeping them in their
+own directory is what lets one rule ignore uploads without enumerating which files are fixtures.
+
+Stored `imageUrl`s are **URL paths** — forward slashes, always, whatever platform wrote them. The
+store builds the value from the object's name rather than deriving it from a filesystem path, so a
+separator cannot reach a row at all. It could before: multer builds `file.path` with `path.join()`,
+so an upload on Windows arrived backslashed and was persisted that way. A backslash in a URL is a
+literal filename character, so such a row points at a file the server will 404 —
+`db/migrations/20260806140000-image-url-separators.js` repairs any stored before this was fixed.
 
 ### Seeding and the response cache
 

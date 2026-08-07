@@ -2,6 +2,7 @@
  * Filesystem helpers.
  */
 
+import { copyFile, rename, unlink } from 'node:fs/promises';
 // Shared toolkit helper: unlinks a file and routes any error to the callback instead of
 // throwing, so callers do not need their own try/catch.
 import { deleteFile as toolkitDeleteFile } from '@guebbit/js-toolkit';
@@ -16,6 +17,34 @@ import { logger } from '@core/adapters/logger';
  *
  * @param filePath - absolute path as produced by multer (`request.file.path`)
  */
+/**
+ * Move a file, across filesystems if necessary.
+ *
+ * `rename` is atomic and free, and it is also the one call that CANNOT cross a device boundary —
+ * it fails with `EXDEV`. That is not an edge case here: uploads are staged in the system temp
+ * directory, which on Linux is routinely a tmpfs, while the public directory is on the container's
+ * disk or a mounted volume. So the fallback is the normal path in production and the fast path is
+ * the normal one in tests, and both have to work.
+ *
+ * Copy-then-unlink is deliberately in that order: a crash between the two leaves a stale staged
+ * file, which the next cleanup removes, whereas unlink-then-copy would lose the upload outright.
+ *
+ * Unlike {@link deleteFile}, this one THROWS. A cleanup that fails can be swallowed; a move that
+ * fails means the bytes the client sent are not where the database is about to say they are.
+ *
+ * @param source - path to move from
+ * @param destination - path to move to; its directory must exist
+ */
+export const moveFile = async (source: string, destination: string) => {
+    try {
+        await rename(source, destination);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+        await copyFile(source, destination);
+        await unlink(source);
+    }
+};
+
 export const deleteFile = (filePath: string) =>
     // Second argument is the error callback the toolkit invokes instead of rejecting.
     toolkitDeleteFile(filePath, (error) =>

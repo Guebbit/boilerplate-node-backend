@@ -278,6 +278,33 @@ its own tests.
 
 ### Changed
 
+- **Uploads are staged privately and committed to a store, instead of being written straight into
+  `public/`.** multer now writes to `NODE_UPLOAD_STAGING_PATH` (default: a directory under the
+  system temp directory), and `storeUploadedImages` hands the finished file to
+  `@core/adapters/image-store` once the content check has passed. The local store puts it in
+  `NODE_PUBLIC_PATH/images/` and returns `/images/<name>` — the same location and the same stored
+  value as before, so nothing changes for a client, a database row or the static mount. What
+  changes is _when_ a file is publicly readable: an upload used to be fetchable from the instant
+  multer wrote it, which was before its bytes had been checked and before anything had been
+  validated, so a file that was about to be rejected was reachable while it was being rejected.
+  Now nothing is reachable until the request has earned it. The staging step is also the thing that
+  makes a remote store possible at all: a bucket takes a finished file, not a stream being parsed.
+  Two smaller consequences: `moveFile` handles the `EXDEV` a staging directory on a different
+  filesystem produces (a tmpfs `/tmp` with the public directory on disk is the normal case, not an
+  exotic one), and a multi-file upload that partially fails now removes the images it did manage to
+  store rather than orphaning them.
+
+- **Remote image storage is wired but not implemented, and says so loudly.** Setting
+  `NODE_IMAGE_STORE_BUCKET` selects a remote store — a personal CDN, or any S3-compatible bucket —
+  and the app then refuses to boot, naming the TODO in `src/core/adapters/image-store.ts` that is
+  the whole of the remaining work. Refusing is deliberate: falling back to local disk would write
+  some images to a bucket and some to a container filesystem with nothing recording which is where,
+  and that only becomes visible on the rebuild that loses half of them. Unset (the default), every
+  deployment behaves exactly as it does today, with no bucket, no credentials and no service to
+  run. Note for when it is implemented: stored values become absolute URLs
+  (`https://cdn.example.com/images/x.png`) while existing rows stay relative — `ImageUrl` is
+  `uri-reference` precisely so both validate, and both must keep working.
+
 - **Stored images are deleted through a storage port, `@core/adapters/image-store`.** Where the
   bytes live is now one module's business: callers hand it the `imageUrl` value and it decides
   whether that names a file under `public/`, an object in a bucket, or nothing it owns. Previously
