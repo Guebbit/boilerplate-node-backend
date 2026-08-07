@@ -13,6 +13,7 @@
         "src/models/": { "statements": 70, "branches": 70, "functions": 70, "lines": 70 },
         "src/services/": { "statements": 70, "branches": 70, "functions": 70, "lines": 70 }
     },
+    "globalSetup": "<rootDir>/tests/helpers/global-setup.ts",
     "setupFiles": ["<rootDir>/tests/helpers/setup.ts"],
     "testTimeout": 30000,
     "transform": {

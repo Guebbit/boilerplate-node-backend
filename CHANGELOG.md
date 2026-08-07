@@ -425,6 +425,32 @@ its own tests.
 
 ### Fixed
 
+- **`npm run test:mutation` leaked ~200 MB of `/tmp` per killed worker, and eventually took the rest
+  of the machine with it.** Every test file that calls `setupTestDb()` starts a
+  `mongodb-memory-server` whose data directory is a ~201 MB `mongo-mem-*` under `os.tmpdir()`.
+  `MongoMemoryServer.stop()` removes it, so a normal `npm test` leaves nothing behind — but Stryker
+  SIGKILLs a jest worker per timed-out mutant and again at the end of a run, and a killed worker
+  never reaches `stop()`. A few runs filled a 16 GB tmpfs, at which point _everything_ on the
+  machine that writes to `/tmp` starts failing with ENOSPC, most of it nothing to do with this
+  project. A jest `globalSetup` (`tests/helpers/global-setup.ts`) now sweeps stranded directories
+  once per jest instance rather than once per worker. It removes one on either of two verdicts: its
+  `mongod` is provably gone — the child exits cleanly with its parent and truncates `mongod.lock`,
+  so an empty lock or a dead pid is positive evidence, not merely absent evidence of life — or it is
+  older than an hour, the backstop for what the lock cannot answer. The first is what lets a long
+  run reclaim its own strandings while it is still going; both exist so a concurrent instance's live
+  `dbpath` is never deleted out from under it, which would trade a disk leak for an unexplainable
+  flake.
+
+- **`npm run test:mutation` could not start at all.** Stryker's `ignorePatterns` excluded `public/**`
+  from the sandbox it copies the project into, and `tests/unit/db/seed-fixtures.test.ts` asserts that
+  every seed fixture's `imageUrl` resolves to a file committed under `public/images/seed/`. In the
+  sandbox those files did not exist, so the assertions failed and Stryker refused to mutate anything
+  ("There were failed tests in the initial test run"). The two changes were made two days apart and
+  neither is wrong on its own; a plain `jest` run reads the real working tree, where the images are
+  there, which is why `npm test` stayed green throughout. `public/` is copied into the sandbox again
+  — `.gitignore` already keeps runtime uploads out of it, and the committed remainder is under a
+  megabyte.
+
 - **Every custom validation message was discarded, and clients got Zod's English defaults.** The
   Zod schemas called `t()` at module scope, and ES module semantics guarantee every import is fully
   evaluated _before_ the first statement of `app.ts`'s body — where `i18next.init()` lives. `t()`
