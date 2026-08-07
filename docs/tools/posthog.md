@@ -27,6 +27,7 @@ If PostHog is not configured, the app still works.
 
 ## Related pages
 
+- [Events & Logging](./events-and-logging.md) — analytics vs audit vs logs, and when to use which
 - [Request Flow](../theory/request-flow.md)
 - [Prometheus](./prometheus.md)
 - [Grafana](./grafana.md)

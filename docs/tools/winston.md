@@ -60,6 +60,40 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 }
 ```
 
+The `action` vocabulary is a TypeScript enum, not free strings — an alert built on
+`auth.login.failed` cannot be defeated by a typo at a call site.
+
+### Where an audit entry ends up
+
+Two destinations, from the single `emitAuditEvent` call:
+
+| Destination            | Role                                                              | Fails how                                                     |
+| ---------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `auditLogger` → stdout | the compliance record — append-only, shipped to [Loki](./loki.md) | a broken logger is a real problem                             |
+| Mongo `auditlogs`      | the queryable copy behind `GET /observability/audit`              | silently, into a warning — never fails the triggering request |
+
+The Mongo write goes through an `IAuditSink` port that `app.ts` registers after the database
+connects. `src/core/**` may not import `@repositories/*`, so the dependency is inverted rather
+than smuggled — and the 53 `emitAuditEvent` call sites know about neither destination.
+
+Before this, the endpoint read a 200-entry in-process ring buffer. It could not answer
+"what has this user done": 200 entries **in total** across every actor, a different slice in each
+cluster worker, and empty after a restart.
+
+### Retention
+
+| Env var                     | Effect                                                                     |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `NODE_AUDIT_RETENTION_DAYS` | how long the Mongo copy survives before its TTL index removes it (def. 90) |
+
+Only the queryable copy expires — log retention is [Loki](./loki.md)'s business.
+
+::: warning Changing the retention window
+Mongo will not alter an existing TTL index's `expireAfterSeconds`. On a database that already has
+the index, changing `NODE_AUDIT_RETENTION_DAYS` does nothing until a `collMod` migration under
+`db/migrations/` runs. A restart will not apply it.
+:::
+
 ## Configuration
 
 | Env var             | Effect                                                                                                   |
@@ -83,6 +117,7 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 ## Related pages
 
+- [Events & Logging](./events-and-logging.md) — how these two streams relate to analytics, metrics and queue jobs
 - [OpenTelemetry](./opentelemetry.md)
 - [Tempo](./tempo.md)
 - [Grafana](./grafana.md)

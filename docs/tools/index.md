@@ -60,11 +60,12 @@ flowchart LR
 | Core          | **[Runtime](./runtime.md)**                                 | Express 5, Zod, Multer, i18next, TypeScript, tsx: the framework-level packages that make the app run.                          |
 | Core          | **[Security](./security.md)**                               | Helmet, CORS, rate limiting, JWT split-token auth, bcrypt: every guardrail between the internet and your controllers.          |
 | Core          | **[MongoDB & Mongoose](./mongodb-mongoose.md)**             | Document store, schema/model layer, migrations, and seeds.                                                                     |
-| Core          | **[Redis Cache](./redis-cache.md)**                         | Optional in-memory response cache with tag-based invalidation and multi-instance pub/sub sync.                                 |
+| Core          | **[Redis Cache](./redis-cache.md)**                         | Optional response cache with tag-based invalidation, shared by every instance through one keyspace.                            |
 | Async         | **[Email & PDF Rendering](./email-and-rendering.md)**       | Nodemailer + EJS for transactional email; Puppeteer for async PDF generation (invoices).                                       |
 | Async         | **[RabbitMQ](./rabbitmq.md)**                               | Message queue for fire-and-forget jobs: controllers publish, background workers consume independently.                         |
+| Observability | **[Events & Logging](./events-and-logging.md)**             | Every signal the app emits — logs, audit, analytics, metrics, traces, queue jobs — and which to reach for. Start here.         |
 | Observability | **[Observability Reference](./observability-reference.md)** | Full picture of logs, metrics, traces, and dashboards as one system — start here.                                              |
-| Observability | **[Winston](./winston.md)**                                 | Structured request and app logs forwarded to Loki; `trace_id` injected per request.                                            |
+| Observability | **[Winston & Audit Logs](./winston.md)**                    | Structured request/app logs to Loki, and the audit trail — logged for compliance, stored in Mongo for the admin endpoint.      |
 | Observability | **[Prometheus](./prometheus.md)**                           | Numeric time-series: request rates, latency histograms, business counters, alert rules.                                        |
 | Observability | **[OpenTelemetry](./opentelemetry.md)**                     | Distributed tracing: auto-instruments HTTP, Mongoose, Redis; exports spans to Tempo; injects `trace_id` into every log line.   |
 | Observability | **[Tempo](./tempo.md)**                                     | Stores and queries distributed traces; correlates with Loki logs via shared `trace_id`.                                        |

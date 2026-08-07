@@ -1,13 +1,16 @@
 import {
     emitAuditEvent,
     extractRequestContext,
+    registerAuditSink,
     AuditAction,
-    type IAuditEvent
+    type IAuditEvent,
+    type IAuditEntry
 } from '@core/observability/audit';
 import { auditLogger } from '@core/adapters/logger';
 
 // Spy on auditLogger.log so we don't write to disk during tests.
 jest.spyOn(auditLogger, 'log').mockImplementation(() => auditLogger);
+jest.spyOn(auditLogger, 'warn').mockImplementation(() => auditLogger);
 
 describe('AuditAction constants', () => {
     it('defines all required auth action keys', () => {
@@ -113,6 +116,70 @@ describe('emitAuditEvent', () => {
 
         const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, ...unknown[]];
         expect(call[0]).toBe('warn');
+    });
+});
+
+describe('registerAuditSink', () => {
+    beforeEach(() => jest.clearAllMocks());
+    // Every test here registers a sink, and the module holds it in a closure — so each one puts
+    // an inert sink back, or it would keep receiving the *next* test's events.
+    afterEach(() => registerAuditSink(() => {}));
+
+    const event: IAuditEvent = {
+        action: AuditAction.AUTH_LOGIN_SUCCEEDED,
+        actor_user_id: 'user-123',
+        actor_role: 'user',
+        outcome: 'success'
+    };
+
+    it('hands the emitted entry to the registered sink', () => {
+        const sink = jest.fn();
+        registerAuditSink(sink);
+
+        emitAuditEvent(event);
+
+        expect(sink).toHaveBeenCalledTimes(1);
+        const entry = sink.mock.calls[0][0] as IAuditEntry;
+        expect(entry.action).toBe(AuditAction.AUTH_LOGIN_SUCCEEDED);
+        expect(entry.actor_user_id).toBe('user-123');
+    });
+
+    it('stamps the entry with a Date timestamp and the outcome-derived level', () => {
+        const sink = jest.fn();
+        registerAuditSink(sink);
+
+        emitAuditEvent({ ...event, outcome: 'failure' });
+
+        const entry = sink.mock.calls[0][0] as IAuditEntry;
+        // A Date, not an ISO string: the model stores it as a BSON date so the TTL index and the
+        // `timestamp: -1` sort work on a real date rather than on lexicographic string order.
+        expect(entry.timestamp).toBeInstanceOf(Date);
+        expect(entry.level).toBe('warn');
+    });
+
+    it('still writes the log line when no sink is registered', () => {
+        // The unregistered state is what unit tests and the queue workers run in — the compliance
+        // record must not depend on persistence being wired up.
+        registerAuditSink(() => {});
+        emitAuditEvent(event);
+
+        expect(auditLogger.log).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not let a throwing sink escape into the caller', () => {
+        // The property the whole audit path rests on: these run while answering requests, so a
+        // broken sink must never turn a successful login into a 500.
+        registerAuditSink(() => {
+            throw new Error('mongo is down');
+        });
+
+        expect(() => emitAuditEvent(event)).not.toThrow();
+        // The failure is reported rather than swallowed silently: the log line, then the warning.
+        expect(auditLogger.log).toHaveBeenCalledTimes(1);
+        expect(auditLogger.warn).toHaveBeenCalledWith(
+            'audit.sink.failed',
+            expect.objectContaining({ error: 'mongo is down' })
+        );
     });
 });
 

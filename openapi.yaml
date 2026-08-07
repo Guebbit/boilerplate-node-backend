@@ -1772,8 +1772,10 @@ paths:
             tags: [Observability]
             summary: Recent audit events
             description: |
-                Returns the most recent audit events from the in-memory ring buffer (up to 200).
+                Returns the most recent audit events, newest first, from the persisted audit trail.
                 Events include auth flows, admin CRUD actions, and security blocks.
+                Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
+                `total` counts every event matching the filters, not just the returned page.
                 Requires admin role.
             operationId: getObservabilityAuditLogs
             security:

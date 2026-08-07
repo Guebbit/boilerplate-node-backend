@@ -24,24 +24,14 @@ export interface IAnonymousSchema8 {
 export interface IAnonymousSchema11 {
   'sseClients': number;
 }
-export interface ICartCheckedOutEvent {
-  'eventName': IAnonymousSchema13;
-  'eventId': string;
-  'occurredAt': string;
-  'cartId': string;
-  'userId': string;
-  'orderId': string;
-  'itemCount': number;
-}
-export type IAnonymousSchema13 = "ecommerce.cart.checked_out";
 export interface IEmailJobPayload {
-  'request': IAnonymousSchema20;
+  'request': IAnonymousSchema13;
   'from'?: string;
   'templateName': string;
   'data': Record<string, unknown>;
   'locale'?: string;
 }
-export interface IAnonymousSchema20 {
+export interface IAnonymousSchema13 {
   'to': string;
   'subject'?: string;
   'text'?: string;
@@ -73,14 +63,6 @@ export const OBSERVABILITY_CHANNELS = {
 
 /* Union of every "observability." channel name */
 export type TObservabilityChannel = (typeof OBSERVABILITY_CHANNELS)[keyof typeof OBSERVABILITY_CHANNELS];
-
-/* Channel names in the "ecommerce." namespace */
-export const ECOMMERCE_CHANNELS = {
-    CART_CHECKED_OUT: 'ecommerce.cart.checked_out',
-} as const;
-
-/* Union of every "ecommerce." channel name */
-export type TEcommerceChannel = (typeof ECOMMERCE_CHANNELS)[keyof typeof ECOMMERCE_CHANNELS];
 
 /* Channel names in the "worker." namespace */
 export const WORKER_CHANNELS = {

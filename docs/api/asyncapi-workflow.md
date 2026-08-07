@@ -10,7 +10,6 @@ For this boilerplate, keep REST and async contracts separate:
 Current scope of `asyncapi.yaml`:
 
 - SSE observability channels (`observability.*`)
-- Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
 - RabbitMQ worker queues (`worker.email.send`, `worker.pdf.generate`)
 
 ## Servers declared
@@ -98,11 +97,13 @@ for the condition that would bring it back.
 
 ## Naming convention
 
-Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`). These names are used as event identifiers at runtime (SSE event names, queue names, domain event names).
+Channels use dot-separated topic-style naming (for example `observability.metrics.updated`). These names are used as event identifiers at runtime (SSE event names, queue names).
+
+Every channel here describes something that actually crosses a process boundary — a frame on an SSE stream, a message on a RabbitMQ queue. An in-process notification is not a channel: an `ecommerce.cart.checked_out` channel was declared here for a checkout event that only ever dispatched to an in-process `EventTarget` with no listeners, and it was removed along with the event rather than left describing a wire nothing travels on.
 
 ## Realtime event names
 
-All SSE and domain event names used at runtime come from the `OBSERVABILITY_CHANNELS` and `ECOMMERCE_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
+All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
 There are no handwritten duplicate string constants — `asyncapi.yaml` is the single source of truth.
 
 ## CI enforcement

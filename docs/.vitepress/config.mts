@@ -68,6 +68,7 @@ export default withMermaid(
                         text: 'Observability',
                         collapsed: false,
                         items: [
+                            { text: 'Events & Logging', link: '/tools/events-and-logging' },
                             { text: 'Winston & Audit Logs', link: '/tools/winston' },
                             {
                                 text: 'Observability Reference',
@@ -83,7 +84,13 @@ export default withMermaid(
                     {
                         text: 'Analytics',
                         collapsed: false,
-                        items: [{ text: 'PostHog', link: '/tools/posthog' }]
+                        items: [
+                            { text: 'PostHog', link: '/tools/posthog' },
+                            {
+                                text: 'Frontend Observability',
+                                link: '/tools/frontend-observability'
+                            }
+                        ]
                     },
                     {
                         text: 'Testing',

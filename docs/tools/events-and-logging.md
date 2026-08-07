@@ -1,0 +1,104 @@
+# Events & Logging
+
+Seven things in this codebase can be described as "recording that something happened", and they
+are easy to confuse — several live side by side in `src/core/observability/`, and three of them
+are declared in the same `asyncapi.yaml`. This page is the map: what each one is, where it ends
+up, who reads it, and which to reach for.
+
+If you only remember one thing: **pick by who reads it**, not by what happened.
+
+## The signals at a glance
+
+| Signal                | Entry point                                                 | Where it goes                                            | Who reads it               | Detailed page                                                       |
+| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| **Application log**   | `logger` — `@core/adapters/logger`                          | stdout → Promtail → Loki                                 | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
+| **Audit trail**       | `emitAuditEvent` — `@core/observability/audit`              | `auditLogger` → stdout → Loki, **and** Mongo `auditlogs` | admins, compliance         | [Winston & Audit Logs](./winston.md#audit-events)                   |
+| **Product analytics** | `emitAnalyticsEvent` — `@core/observability/analytics`      | PostHog                                                  | product, marketing         | [PostHog](./posthog.md)                                             |
+| **Metrics**           | counters in `metrics-http.ts` / `metrics-domain.ts`         | Prometheus registry → `GET /observability/metrics`       | ops, alerting              | [Prometheus](./prometheus.md)                                       |
+| **Traces**            | `withSpan` — `@core/observability/tracer`                   | OTel Collector → Tempo                                   | you, debugging across hops | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md)           |
+| **Live metrics feed** | `streamObservabilityMetrics` — `@core/observability/stream` | SSE frames on `GET /observability/events`                | the admin dashboard        | [Frontend Observability](./frontend-observability.md)               |
+| **Queue jobs**        | `enqueueEmail`, `publishToQueue` — `@core/adapters/*`       | RabbitMQ → `src/workers/*`                               | the workers themselves     | [RabbitMQ](./rabbitmq.md) · [Email & PDF](./email-and-rendering.md) |
+
+Only the last two cross a process boundary. The rest are one-way recordings that never come back.
+
+## Which one do I want?
+
+- **"I need to see what the code did when this broke."** Application log, and the `trace_id` on
+  the line to jump into the trace. Never audit — audit has a closed vocabulary and adding to it
+  for debugging pollutes a compliance record.
+- **"Someone did something security-relevant, and I may need to prove it later."** Audit.
+  Logins, permission denials, admin writes, account deletion.
+- **"I want to know how users behave."** Analytics. Views, searches, funnel steps.
+- **"I want to know how the system is holding up."** Metrics.
+- **"This work should not block the response."** Queue job.
+
+The overlap that catches people out is audit vs analytics. `USER_SIGNED_UP` (analytics) and
+`auth.signup.succeeded` (audit) describe the same instant, and both should exist: one answers
+"how many signups this week", the other answers "who created this account, from which IP". They
+are different questions with different retention rules and different readers.
+
+## Audit is the one with two destinations
+
+Everything else here has a single sink. Audit has two, on purpose:
+
+```
+emitAuditEvent()
+   ├─→ auditLogger (Winston) → stdout → Promtail → Loki      the compliance record
+   └─→ IAuditSink → auditLogService.record → Mongo auditlogs  the queryable copy
+```
+
+The **log** is the source of truth. It is append-only, shipped off the box, and is what an
+auditor is shown.
+
+The **Mongo collection** exists so `GET /observability/audit` can answer "what has actor X done"
+from the API, with no log backend wired up. It carries a TTL index
+(`NODE_AUDIT_RETENTION_DAYS`, default 90 days) and is allowed to fail: if the write rejects, the
+request continues and the log line has already gone out.
+
+Why a sink rather than a direct call — `src/core/**` is the bottom of the dependency graph and
+`no-restricted-imports` forbids it from reaching up into `@repositories/*`. So `audit.ts` declares
+the port and `app.ts` supplies the implementation at boot, the same shape as `IImageStore`. The
+practical payoff: swapping the destination touches one line in `app.ts`, not the 53 call sites.
+
+## There is no in-process domain event bus
+
+There was one — `src/core/observability/events.ts`, an `EventTarget` with a typed channel map and
+one `ecommerce.cart.checked_out` event. It had **zero subscribers** for its whole life, so it
+amounted to a `logger.info` with extra ceremony. It was deleted rather than wired up, and that is
+a decision worth not re-litigating by accident:
+
+- In a single service, an in-process bus costs you the call graph — you lose "find all
+  references", stack traces stop reaching the cause, and the type checker stops telling you a
+  listener broke.
+- It buys none of what a real broker gives you. No durability, no retry, no replay. A crash
+  mid-dispatch loses the event outright.
+- The things that would have subscribed are better off without it. Emails **already** go through
+  RabbitMQ, which is durable — putting a lossy in-process hop in front of a durable queue is
+  backwards. Cache invalidation wants the opposite of async fan-out: it should happen immediately
+  after the write, in the same process.
+
+If cross-process fan-out is ever genuinely needed, the answer is a RabbitMQ topic exchange fed by
+a transactional outbox — not an `EventTarget`. See
+[AsyncAPI Workflow](../api/asyncapi-workflow.md#naming-convention) for why a channel is only
+declared for something that actually travels on a wire.
+
+## Everything carries the same correlation ids
+
+Whatever the signal, two fields let you line them up afterwards:
+
+| Field        | Set by                                   | Joins                                           |
+| ------------ | ---------------------------------------- | ----------------------------------------------- |
+| `request_id` | the request-id middleware                | every log line and audit entry from one request |
+| `trace_id`   | ambient OTel context, read by the tracer | logs and audit entries ↔ the Tempo trace        |
+
+This is what makes the split above workable: an audit entry that looks wrong and the application
+log lines explaining it are one `request_id` query apart.
+
+## Related pages
+
+- [Winston & Audit Logs](./winston.md)
+- [Observability Stack Reference](./observability-reference.md) — the infrastructure the signals land in
+- [Observability Endpoints](../api/observability.md)
+- [PostHog](./posthog.md)
+- [Prometheus](./prometheus.md)
+- [RabbitMQ](./rabbitmq.md)

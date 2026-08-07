@@ -494,7 +494,6 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
     - `npm run genasyncapi`
 - This contract documents:
     - SSE observability channels (`observability.*`)
-    - Ecommerce cart checkout events (`ecommerce.cart.checked_out`)
     - RabbitMQ worker job queues (`worker.*`)
 - All SSE/domain-event/queue code imports types and channel-name constants from `src/types`
 

@@ -14,7 +14,6 @@ info:
 
         Implemented:
         - SSE observability events over `/observability/events`
-        - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
         - RabbitMQ worker job queues (`worker.*`)
 defaultContentType: application/json
 tags:
@@ -48,12 +47,6 @@ channels:
             operationId: sseHeartbeat
             message:
                 $ref: '#/components/messages/HeartbeatEvent'
-    ecommerce.cart.checked_out:
-        description: Cart checkout domain event emitted after a successful order creation.
-        subscribe:
-            operationId: ecommerceCartCheckedOut
-            message:
-                $ref: '#/components/messages/CartCheckedOutEvent'
     worker.email.send:
         description: Email job queue — producers enqueue email requests, the email worker consumes them.
         servers:
@@ -102,12 +95,6 @@ components:
             title: Observability heartbeat
             payload:
                 $ref: '#/components/schemas/ObservabilityMetricsPayload'
-        CartCheckedOutEvent:
-            name: CartCheckedOutEvent
-            messageId: ecommerce.cart.checked_out
-            title: Ecommerce example - cart checked out
-            payload:
-                $ref: '#/components/schemas/CartCheckedOutEvent'
         EmailJobMessage:
             name: EmailJobMessage
             messageId: worker.email.send
@@ -255,35 +242,4 @@ components:
                 outputPath:
                     type: string
                     description: Filesystem path where the generated PDF will be written.
-            additionalProperties: false
-        CartCheckedOutEvent:
-            type: object
-            required:
-                - eventName
-                - eventId
-                - occurredAt
-                - cartId
-                - userId
-                - orderId
-                - itemCount
-            properties:
-                eventName:
-                    type: string
-                    enum:
-                        - ecommerce.cart.checked_out
-                eventId:
-                    type: string
-                    format: uuid
-                occurredAt:
-                    type: string
-                    format: date-time
-                cartId:
-                    type: string
-                userId:
-                    type: string
-                orderId:
-                    type: string
-                itemCount:
-                    type: integer
-                    minimum: 1
             additionalProperties: false

@@ -92,6 +92,35 @@ its own tests.
 
 ### Added
 
+- **A persisted audit trail behind `GET /observability/audit`.** The endpoint answered from a
+  200-entry in-process ring buffer, and it already advertised `?actor=<userId>` — "show me this
+  user's history" — which the buffer could not answer. 200 entries is a total across every actor,
+  so a busy hour evicts a user's actions within minutes; the buffer is per-worker, so with
+  `NODE_ENABLE_CLUSTERING=1` each request lands on a random worker and sees roughly `1/N` of the
+  events, and a refresh returns a different list; and it empties on restart. Entries now go to a
+  Mongo `auditlogs` collection as well, with compound indexes on `{ actor, timestamp }` and
+  `{ action, timestamp }` matching the two filters that are not full scans, and a TTL index on
+  `timestamp` driven by `NODE_AUDIT_RETENTION_DAYS` (default 90) so the one collection here that
+  only ever grows does not. The audit _log_ is unchanged and remains the compliance record: this
+  is the queryable copy, and it is allowed to fail — a rejected write becomes a warning, never a
+  failed request, because these run while answering logins and permission denials.
+
+    None of the 53 `emitAuditEvent` call sites across 21 files changed. `src/core/**` may not import
+    `@repositories/*` (`no-restricted-imports`), so rather than route around the rule,
+    `@core/observability/audit` declares an `IAuditSink` port and `app.ts` registers
+    `auditLogService.record` against it once the database connects — the same inversion as
+    `IImageStore`. Swapping the destination for a log-backend writer later is one line in `app.ts`.
+
+- **`docs/tools/events-and-logging.md`** — the map of every signal the application emits.
+  Application log, audit trail, product analytics, metrics, traces, the SSE metrics feed and queue
+  jobs are seven separate mechanisms, four of them neighbours in `src/core/observability/` and
+  three declared in the same `asyncapi.yaml`, which is enough adjacency to make them read as one
+  system they are not. The page states what each is, where it ends up, who reads it, and which to
+  reach for — the audit-vs-analytics overlap in particular, where `USER_SIGNED_UP` and
+  `auth.signup.succeeded` describe the same instant and both belong. Linked from the tools index,
+  from `winston.md`, `posthog.md` and `observability-reference.md`, and added to the sidebar
+  alongside `frontend-observability.md`, which existed but had never been listed in it.
+
 - **`DELETE /products/{id}/hard` and `DELETE /users/{id}/hard`** — the same operation as
   `DELETE /{resource}/{id}?hardDelete=true`, with the flag spelled in the path instead of the
   query. Neither form is canonical; accepting one value several ways is the point of the input
@@ -338,6 +367,11 @@ its own tests.
 
 ### Changed
 
+- **`total` in the audit response counts every matching event, not the page just returned.** It
+  was `limited.length` — the size of the slice — so it always equalled `items.length` and told an
+  admin nothing. The admin dashboard has rendered it as a count since it was built. Same field,
+  same type, no contract change; the number is now true.
+
 - **`GET /products` now filters by `id`, the parameter it always read.** The query parameter was
   declared `productId` while the controller read `id`, so the generated client sent a name the API
   ignores and filtering the catalogue by id over the GET quietly returned the unfiltered list. The
@@ -571,6 +605,21 @@ its own tests.
   list endpoint rather than only `GET /feedback`.
 
 ### Fixed
+
+- **`GET /observability/audit` mishandled two of its own query parameters.** `?limit=abc` reached
+  `Math.min(NaN, 200)`, and `NaN` survives it — the page size then arrived at the data layer
+  undefined. `?limit=-5` passed the upper bound with no lower one to stop it. Both are clamped to
+  `[1, 200]` now, matching what `openapi.yaml` declares. Separately, an `?outcome=` outside the
+  `success | failure` enum was dropped by an `if` and silently became "no filter", so a typo
+  returned everything while looking like a filtered view; it is now dropped explicitly, before the
+  query is built.
+
+- **`docs/api/observability.md` described `/observability/events` and `/observability/metrics` as
+  public.** They were authenticated in `96c1665` — an admin cookie for the SSE stream, since
+  `EventSource` cannot set an `Authorization` header, and a `Bearer $NODE_METRICS_TOKEN` scrape
+  credential for the exposition endpoint, which refuses every request with 503 when the variable is
+  unset. The page had kept saying otherwise, which is the one kind of documentation error worth
+  treating as a defect: it reads as an invitation to expose them.
 
 - **`npm run test:mutation` leaked ~200 MB of `/tmp` per killed worker, and eventually took the rest
   of the machine with it.** Every test file that calls `setupTestDb()` starts a
@@ -830,6 +879,34 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   means restoring data that 404s.
 
 ### Removed
+
+- **The in-process domain event bus (`src/core/observability/events.ts`), and with it the AsyncAPI
+  channel `ecommerce.cart.checked_out`.** It described itself as "a decoupling mechanism, not just
+  a recording one" and had **zero subscribers** for its entire life — one channel, one emit site in
+  `post-checkout.ts`, and an `EventTarget` nothing listened to, which made `emitDomainEvent` a
+  `logger.info` behind a typed payload map, a derived name union and a generic emitter.
+
+    It was deleted rather than wired up. In a single service an in-process bus costs the call graph —
+    no "find all references", stack traces that stop short of the cause, no type error when a
+    listener breaks — and buys none of what a broker gives you: no durability, no retry, no replay, a
+    crash mid-dispatch losing the event outright. The three things that would have subscribed are
+    better served without it: email already goes through RabbitMQ, which is durable, so an in-process
+    hop in front of it can only lose messages; cache invalidation wants the opposite of async fan-out,
+    happening immediately after the write in the same process; and most analytics events here are UX
+    facts (`product_viewed`, `cart_viewed`) where nothing in the business changed. If cross-process
+    fan-out is ever needed the answer is a RabbitMQ topic exchange fed by a transactional outbox, not
+    an `EventTarget`.
+
+    `ICartCheckedOutEvent`, `ECOMMERCE_CHANNELS` and `TEcommerceChannel` leave the generated
+    `src/types/asyncapi.ts`; types were regenerated with `npm run genasyncapi` rather than
+    hand-edited. The paired frontend mirrors the contract and carries the same generated types —
+    nothing there imported them. `docs/api/asyncapi-workflow.md` gains the rule this is an instance
+    of: a channel is declared for something that crosses a process boundary, not for an in-process
+    notification, so a wire nothing travels on is not left described.
+
+- **The 200-entry audit ring buffer**, and `getAuditBuffer` with it. Replaced by the Mongo
+  collection above. Keeping both would have meant two stores of the same events, able to disagree,
+  with the endpoint reading whichever it happened to be pointed at.
 
 - **The Redis pub/sub cache invalidation, and with it the AsyncAPI channel
   `cache.tags.invalidated`.** It never invalidated anything. The cached responses and their tag

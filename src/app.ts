@@ -14,6 +14,8 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { start } from '@core/bootstrap/database';
+import { registerAuditSink } from '@core/observability/audit';
+import { auditLogService } from '@services/audit-logs';
 import { startCache } from '@core/adapters/cache';
 import { startQueue } from '@core/adapters/queue';
 import { registerWorkers } from './workers';
@@ -75,34 +77,41 @@ const getPort = () => {
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
-    return Promise.resolve()
-        .then(() => validateRequiredEnvironment())
-        .then(() => start())
-        .then(() => startCache())
-        .then(() => startQueue())
-        .then(() => registerWorkers())
-        .then(() =>
-            // Every dictionary in src/locales is registered, so dropping in a file is the only
-            // step needed to add a language — the middleware negotiates against the same list.
-            i18next.init({
-                lng: getDefaultLocale(),
-                fallbackLng: getFallbackLocale(),
-                supportedLngs: listSupportedLocales(),
-                resources: loadLocaleResources()
-            })
-        )
-        .then(
-            () =>
-                new Promise<Server>((resolve) => {
-                    const port = getPort();
-                    logger.info('------------- SERVER START -------------');
-                    const server = app.listen(port, () => {
-                        logger.info(`Server listening on port ${port}`);
-                        activeServer = server;
-                        resolve(server);
-                    });
+    return (
+        Promise.resolve()
+            .then(() => validateRequiredEnvironment())
+            .then(() => start())
+            // After the database, before anything can serve a request: from here on every
+            // `emitAuditEvent` is also stored, not just logged. Registered rather than imported by
+            // `@core/observability/audit` itself, which sits below `@services/*` and may not reach up
+            // to it — see `IAuditSink`.
+            .then(() => registerAuditSink(auditLogService.record))
+            .then(() => startCache())
+            .then(() => startQueue())
+            .then(() => registerWorkers())
+            .then(() =>
+                // Every dictionary in src/locales is registered, so dropping in a file is the only
+                // step needed to add a language — the middleware negotiates against the same list.
+                i18next.init({
+                    lng: getDefaultLocale(),
+                    fallbackLng: getFallbackLocale(),
+                    supportedLngs: listSupportedLocales(),
+                    resources: loadLocaleResources()
                 })
-        );
+            )
+            .then(
+                () =>
+                    new Promise<Server>((resolve) => {
+                        const port = getPort();
+                        logger.info('------------- SERVER START -------------');
+                        const server = app.listen(port, () => {
+                            logger.info(`Server listening on port ${port}`);
+                            activeServer = server;
+                            resolve(server);
+                        });
+                    })
+            )
+    );
 };
 
 /*
