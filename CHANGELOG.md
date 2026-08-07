@@ -131,9 +131,6 @@ its own tests.
   the tests run this at all", which is the cheap check and belongs in CI, where mutation testing
   does not. Current figures clear it comfortably: `core/http` 99.66%, `models` 100%, `services`
   97.29%, `middlewares` 91.9%.
-- **`TODO.md`** — deliberate deferrals, each recording what is true today and why, so picking one
-  up does not begin by re-deriving the reasoning.
-
 - **`src/core/totals.ts`** — `sumLineItems()` and `toCents()`, the one implementation of "sum a list
   of `{ quantity, product: { price } }`". Orders and carts had grown a copy each, and they had
   already drifted: the order copy rounded to cents, the cart copy did not. The two still name their
@@ -289,8 +286,8 @@ its own tests.
   validated, so a file that was about to be rejected was reachable while it was being rejected.
   Now nothing is reachable until the request has earned it. The staging step is also the thing that
   makes storing images outside the container possible at all: a remote store takes a finished file,
-  not a stream being parsed — see `TODO.md`, which is also where the consequence of _not_ doing it
-  is written down (a container rebuild deletes every upload).
+  not a stream being parsed. The TODO above `imageStore` records the remaining work, and the reason
+  it matters: uploads live inside the container, so rebuilding it deletes every one of them.
   Two smaller consequences: `moveFile` handles the `EXDEV` a staging directory on a different
   filesystem produces (a tmpfs `/tmp` with the public directory on disk is the normal case, not an
   exotic one), and a multi-file upload that partially fails now removes the images it did manage to
@@ -301,7 +298,7 @@ its own tests.
   whether that names a file under `public/`, an object in a bucket, or nothing it owns. Previously
   five call sites — `productService.update`, `productService.remove` and a `deleteUpload` closure in
   each of the three write controllers — each rebuilt a filesystem path out of an `imageUrl`, which
-  is why the object-storage migration in `TODO.md` reads as a rewrite rather than an adapter swap.
+  is why moving images out of the container read as a rewrite rather than an adapter swap.
   Behaviour is unchanged: the shipped implementation is the same filesystem delete, and an
   S3-compatible one is a second implementation of the same interface. Two consequences worth
   knowing: an absolute URL (the `NODE_DEFAULT_IMAGE_*` defaults) is now recognised as not-ours
@@ -334,8 +331,8 @@ its own tests.
   and `src/models/user-validation.ts` carried a hand-written override putting it back to a plain
   string. The spec now states what the code does and both overrides are gone. Tightening the
   implementation instead was the alternative and is the wrong one: an absolute URL in the database
-  bakes the current host into every row, so a domain change or a staging copy strands them (see
-  `TODO.md`).
+  bakes the current host into every row, so a domain change or a staging copy strands them (see the
+  TODO above `imageStore` in `src/core/adapters/image-store.ts`).
 - **`userService.validateData` validates the whole schema** rather than a `.pick()` of
   email/username/password, and takes `unknown` — it is the boundary that _establishes_ the type, so
   a narrower parameter only forces its callers to cast on the way in. `productService.validateData`
@@ -715,6 +712,24 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 
 ### Removed
 
+- **`TODO.md`**, added earlier in this same unreleased cycle and now redundant. Both entries it
+  carried are settled: the `/tmp` leak is fixed (see _Fixed_), and the remaining image-storage work
+  is written where the work is, as the TODO above `imageStore` in
+  `src/core/adapters/image-store.ts` — a file the compiler, the reviewer and the person about to
+  change that module all open anyway, unlike a document at the repository root that drifts out of
+  step with the code the moment either moves. Nothing was dropped in the move: the consequence of
+  deferring it (a container rebuild deletes every uploaded image), the url prefix change, the
+  legacy rows that must keep working, and the orphaned-object question all live in that comment,
+  with the operational summary in the README's _Uploaded images_ section.
+
+- **The remote image store's configuration**, `NODE_IMAGE_STORE_BUCKET` and its four companions,
+  together with the backend selection they drove and the boot check that refused to start without
+  an implementation. They described a decision that has not been made — the plan is a personal CDN,
+  not necessarily an S3 bucket — and configuration that selects a backend nobody has written is a
+  way to get a half-migrated deployment rather than a head start on one. The seam they hung from
+  stays: `IImageStore`, its local implementation, and a `imageStore` binding that a second backend
+  redirects in one line.
+
 - **The commented-out SendGrid transport block** in `src/core/adapters/mailer.ts`. It could not have
   compiled if uncommented: `nodemailer-sendgrid-transport` was never a dependency,
   `sendgridTransport` was never imported, and `NODE_APIKEY_SENDGRID` appeared nowhere else in the
@@ -851,15 +866,6 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 
 ### Known issues
 
-- **`npm run test:mutation` strands roughly 200 MB of `/tmp` per killed worker.** Every suite using
-  `setupTestDb()` starts a `mongodb-memory-server`, whose data directory is removed on a graceful
-  shutdown only — and Stryker kills its runners by design, once per timed-out mutant and again at
-  the end of a run. A run here filled a 16 GB tmpfs, at which point everything on the machine that
-  writes to `/tmp` began failing with ENOSPC, including tools with nothing to do with this project.
-  `TODO.md` carries the cleanup command and the fix — an age-filtered prune from a jest
-  `globalSetup`, which has to avoid deleting a live sibling's directory while several Stryker jest
-  instances run at once.
-
 - **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/core/http/errors.ts`). It
   returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a
   schema type name — so a malformed ObjectId in a URL yields an HTTP status of `NaN` and a message
@@ -884,8 +890,8 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - **`getFormFiles` contradicts its own docblock** (`src/core/http/uploads.ts`). It promises
   "present but empty → `undefined` so callers have one falsy case to check", but only the
   `.fields()` branch does it; the `.array()` branch returns `[]`, which is truthy. Harmless today —
-  the sole caller is `resolveImageUrl`, whose `?.[0]` absorbs both — but hiding that difference is
-  the function's entire reason to exist.
+  both callers (`validateUploadedImages` and `storeUploadedImages`) test `length === 0` as well as
+  falsiness — but hiding that difference is the function's entire reason to exist.
 
 - **`tokenRemoveAll()` is a silent no-op** on a user document whose `select: false` `tokens` were
   never loaded: it filters an empty array and saves nothing. The service layer gets this right by
@@ -895,10 +901,11 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - The two `openapi.yaml` copies (this repo and the frontend's) are hand-synced. They are byte-identical
   as of this entry, but nothing enforces that — keeping them so is still a manual step on every
   contract change.
-- **None of the image serving has been exercised against a running stack.** The `express.static`
-  mount, the separator normalisation and the repair migration are all verified statically and by
-  unit tests; nobody has uploaded a file, requested the returned `imageUrl` and seen a `200`, and
-  the migration has been written but never run against a live database.
+- **The image pipeline has not been exercised against a running stack.** The integration suite does
+  drive the whole loop over HTTP — upload, take the returned `imageUrl`, `GET` it, assert an image
+  content type — but through supertest against the app object, not against a container with a
+  mounted volume behind it. The repair migration has likewise been written and never run against a
+  live database.
 - `.env-example`'s JWT secrets are literal placeholders that `validateRequiredEnvironment` accepts,
   since it only checks for non-emptiness.
 - **The `:host` scripts have not been run against a live database since being rewritten.** The

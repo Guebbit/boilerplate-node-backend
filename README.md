@@ -181,7 +181,8 @@ compose down -v`, a redeploy, a move to another host. Only `public/images/seed/`
 committed to the repository. Two replicas do not share what they store either: an image uploaded to
 one is a 404 on the other. Bind-mounting the directory is the stopgap; storing images somewhere
 outside the container is the fix, and it is a second implementation of the two methods in that file
-— see the TODO there, and `TODO.md`.
+— see the TODO there, which records the key layout, the url prefix change and the questions to
+settle first.
 
 The demo images the fixtures reference are the exception to the ignore rule: they are repository
 content and live in `public/images/seed/`, which is negated in `.gitignore`. Keeping them in their

@@ -143,8 +143,17 @@ export const filesystemImageStore: IImageStore = {
  *     server-relative url to {@link filesystemImageStore} instead: those are the legacy rows and
  *     their files are still on disk. Anything else — an unrelated absolute url, a default image —
  *     stays a no-op.
+ *   - Anything that concatenates a base url onto `imageUrl` — a client renderer, a template, an
+ *     email — has to skip that when the value already carries a scheme, or it produces
+ *     `https://cdn.example.com/https://cdn.example.com/x.png`.
  *   - Decide up front what cleans up an object whose database write then failed. Locally the
  *     failure path deletes it; remotely that same call is a network round trip that can itself
  *     fail, so the durable answer is a lifecycle rule or a reaper job.
+ *
+ * And the reason a CDN url may be absolute when the local one deliberately is not: saving
+ * `https://<current-host>/images/x.png` would bake the deployment's own hostname into every row, so
+ * a domain change, a different proxy or a staging copy of the data would strand them all — a
+ * migration to fix something that is not data. A CDN base url is chosen deliberately and does not
+ * move when the API does, which is what makes it safe to persist.
  */
 export const imageStore: IImageStore = filesystemImageStore;
