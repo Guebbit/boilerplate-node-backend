@@ -7,8 +7,6 @@
  * local development harder for no safety gain.
  */
 
-import { assertImageStoreReady } from '@core/adapters/image-store';
-
 /**
  * JWT signing secrets. Without these the auth layer would silently sign tokens with
  * `undefined`, so they are non-negotiable.
@@ -43,9 +41,4 @@ export const validateRequiredEnvironment = () => {
 
     if (!hasMongoUri && !hasMongoPort)
         throw new Error('Missing database configuration: set NODE_DB_URI or NODE_MONGODB_PORT');
-
-    // Image storage is the one adapter that must NOT degrade gracefully. Asking for a remote store
-    // and getting local disk is not a reduced service, it is images written to two different places
-    // depending on when the request arrived — discovered on the rebuild that loses half of them.
-    assertImageStoreReady();
 };

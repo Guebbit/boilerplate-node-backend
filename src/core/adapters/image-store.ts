@@ -9,16 +9,9 @@
  * whether it names a file under `public/`, an object in a bucket, or something it does not own at
  * all.
  *
- * Two backends exist in principle and one in practice:
- *
- *   - **local** (the default, and what every deployment runs today): the file lands under
- *     `NODE_PUBLIC_PATH/images/` and the stored value is the server-relative `/images/<name>` that
- *     `express.static` answers.
- *   - **remote**: selected when `NODE_IMAGE_STORE_BUCKET` is set, and NOT IMPLEMENTED — see the
- *     TODO on {@link remoteImageStore}. It is wired up to the point of being switched on, and
- *     refuses to run rather than silently falling back, because a half-configured deployment that
- *     quietly kept writing to local disk would scatter images across two places and only tell you
- *     when the container was rebuilt.
+ * One backend exists: the local one below. The file lands under `NODE_PUBLIC_PATH/images/` and the
+ * stored value is the server-relative `/images/<name>` that `express.static` answers. A second
+ * backend is a second object with these two methods — see the TODO above {@link imageStore}.
  */
 
 import path from 'node:path';
@@ -121,92 +114,37 @@ export const filesystemImageStore: IImageStore = {
 };
 
 /**
- * The environment variable that switches storage over. Set it and the remote store is selected;
- * leave it unset and everything runs on local disk exactly as it does today.
- *
- * Named `NODE_IMAGE_STORE_*` rather than `NODE_S3_*` on purpose: the shape below is S3's because
- * every hosted bucket speaks it, but the intended first consumer is a personal CDN, and an
- * environment variable is a bad place to promise a vendor.
- */
-const REMOTE_ENABLED_BY = 'NODE_IMAGE_STORE_BUCKET';
-
-/** The rest of the remote configuration. Listed so a partial one can be reported as such. */
-const REMOTE_REQUIRED = [
-    'NODE_IMAGE_STORE_ENDPOINT',
-    'NODE_IMAGE_STORE_KEY_ID',
-    'NODE_IMAGE_STORE_SECRET',
-    'NODE_IMAGE_STORE_PUBLIC_URL'
-] as const;
-
-/** Whether this deployment is asking for remote storage at all. */
-export const isRemoteStoreConfigured = () => Boolean(process.env[REMOTE_ENABLED_BY]);
-
-/**
- * TODO: implement the remote store — a personal CDN, or any S3-compatible bucket.
- *
- * Everything around it is already in place; this object is the whole of the remaining work. Two
- * methods, mirroring {@link filesystemImageStore}:
- *
- *   - `put(stagedPath)`: upload the staged file under the key `images/<basename>` with the right
- *     `Content-Type` (derive it from the extension — `extensionForImage` in
- *     `@core/adapters/image-signatures` is the mapping, read backwards), delete the staged file,
- *     and return `${NODE_IMAGE_STORE_PUBLIC_URL}/images/<basename>`. That returned value is the
- *     URL PREFIX CHANGE: rows written from here on hold an absolute url, while every existing row
- *     holds `/images/x.png`. Both are legal — `ImageUrl` in `openapi.yaml` is `uri-reference`
- *     precisely so both forms validate — and both must keep working, which is why
- *     `express.static` and the local branch of `remove` stay whatever else changes.
- *   - `remove(imageUrl)`: delete the object when the url is one of ours (starts with
- *     `NODE_IMAGE_STORE_PUBLIC_URL`), and hand a server-relative url to
- *     `filesystemImageStore.remove` instead — those are the legacy rows, and their files are still
- *     on disk. Anything else (an unrelated absolute url, a default image) stays a no-op.
- *
- * Worth deciding before writing it: an upload that succeeds and a database write that then fails
- * leaves an orphaned object. Locally that is cleaned up by `remove` on the failure path; against a
- * bucket the same call is a network round trip that can itself fail, so the durable answer is a
- * lifecycle rule (delete objects under a `staging/` prefix after a day) or a reaper job. Pick one
- * deliberately rather than discovering it as a storage bill.
- *
- * A note on the SDK: `@aws-sdk/client-s3` is not a dependency of this project, and adding it for
- * everyone to serve the few who configure a bucket is the trade this deliberately has not made.
- * Load it lazily here (`await import`) and declare it an optional peer dependency, or sign the two
- * requests by hand — `PUT`/`DELETE` with SigV4 is not much code when it is the only two you need.
- */
-const remoteImageStore: IImageStore = {
-    put: () => Promise.reject(new Error(describeMissingRemoteStore())),
-    remove: () => Promise.reject(new Error(describeMissingRemoteStore()))
-};
-
-const describeMissingRemoteStore = () => {
-    const missing = REMOTE_REQUIRED.filter((name) => !process.env[name]);
-    return (
-        `${REMOTE_ENABLED_BY} is set, but no remote image store is implemented — see the TODO in ` +
-        `src/core/adapters/image-store.ts. Unset ${REMOTE_ENABLED_BY} to use local storage.` +
-        (missing.length > 0 ? ` (Also unset or incomplete: ${missing.join(', ')}.)` : '')
-    );
-};
-
-/**
- * Fail at boot rather than on the first upload.
- *
- * A misconfiguration that only surfaces when someone uploads a picture surfaces in production, on
- * a Tuesday, as a 500 with no obvious cause. Called from `app.ts`, where the process can still
- * refuse to start.
- */
-export const assertImageStoreReady = () => {
-    if (isRemoteStoreConfigured()) throw new Error(describeMissingRemoteStore());
-};
-
-/**
  * The store the application uses.
  *
- * Resolved per call rather than at import: an environment variable read at module load is a
- * variable that cannot be changed by a test, and half the value of this seam is being able to
- * exercise both branches.
+ * TODO: a second implementation, for images that outlive the container.
+ *
+ * Uploads currently land on the container's own filesystem. **Rebuild or remove the container and
+ * every uploaded image goes with it** — `docker compose down -v`, a redeploy, a moved host. Only
+ * `public/images/seed/` survives, because those are committed to the repository. Nothing else is
+ * backed up by anything, and two replicas do not share what they store: an image uploaded to one is
+ * a 404 on the other. A bind-mounted volume is the stopgap and works, but it pins the deployment to
+ * one machine's disk.
+ *
+ * The fix is a second object with the two methods of {@link IImageStore} — a personal CDN is the
+ * plan here, and any S3-compatible bucket would do — selected by whatever configuration it needs
+ * (nothing is wired for that yet: there is no environment variable to set, on purpose, because a
+ * switch that selects a backend nobody has written is a way to get a half-migrated deployment).
+ * Everything else is already in place. When writing it:
+ *
+ *   - `put(stagedPath)` uploads the staged file under `images/<basename>` with the right
+ *     `Content-Type` (derive it from the extension — `extensionForImage` in
+ *     `@core/adapters/image-signatures` is that mapping, read backwards), deletes the staged file,
+ *     and returns the public url of the object. That return value is a URL PREFIX CHANGE: rows
+ *     written from then on hold an absolute url while every existing row holds `/images/x.png`.
+ *     Both are legal — `ImageUrl` in `openapi.yaml` is `uri-reference` precisely so both validate —
+ *     and both must keep working, which is why `express.static` and the local `remove` stay
+ *     whatever else changes.
+ *   - `remove(imageUrl)` deletes the object when the url is one of ours, and hands a
+ *     server-relative url to {@link filesystemImageStore} instead: those are the legacy rows and
+ *     their files are still on disk. Anything else — an unrelated absolute url, a default image —
+ *     stays a no-op.
+ *   - Decide up front what cleans up an object whose database write then failed. Locally the
+ *     failure path deletes it; remotely that same call is a network round trip that can itself
+ *     fail, so the durable answer is a lifecycle rule or a reaper job.
  */
-const activeStore = (): IImageStore =>
-    isRemoteStoreConfigured() ? remoteImageStore : filesystemImageStore;
-
-export const imageStore: IImageStore = {
-    put: (stagedPath) => activeStore().put(stagedPath),
-    remove: (imageUrl) => activeStore().remove(imageUrl)
-};
+export const imageStore: IImageStore = filesystemImageStore;

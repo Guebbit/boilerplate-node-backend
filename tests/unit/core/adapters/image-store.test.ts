@@ -10,12 +10,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import {
-    assertImageStoreReady,
-    filesystemImageStore,
-    imageStore,
-    isRemoteStoreConfigured
-} from '@core/adapters/image-store';
+import { filesystemImageStore, imageStore } from '@core/adapters/image-store';
 
 const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
 
@@ -100,63 +95,6 @@ describe('filesystemImageStore.put', () => {
         const staged = await stageUpload('abc123.png');
 
         await expect(filesystemImageStore.put(staged)).rejects.toThrow();
-    });
-});
-
-/**
- * The remote backend is wired but not written (see the TODO in `@core/adapters/image-store`), and
- * what matters until it is, is that asking for it can never be mistaken for getting it.
- */
-describe('remote store selection', () => {
-    const ORIGINAL_BUCKET = process.env.NODE_IMAGE_STORE_BUCKET;
-
-    afterEach(() => {
-        if (ORIGINAL_BUCKET === undefined) delete process.env.NODE_IMAGE_STORE_BUCKET;
-        else process.env.NODE_IMAGE_STORE_BUCKET = ORIGINAL_BUCKET;
-    });
-
-    it('uses local storage when no bucket is configured', async () => {
-        delete process.env.NODE_IMAGE_STORE_BUCKET;
-        const staging = path.join(root, 'staging');
-        await mkdir(staging, { recursive: true });
-        await writeFile(path.join(staging, 'local.png'), 'bytes');
-
-        expect(isRemoteStoreConfigured()).toBe(false);
-        await expect(imageStore.put(path.join(staging, 'local.png'))).resolves.toBe(
-            '/images/local.png'
-        );
-    });
-
-    it('boots normally when no bucket is configured', () => {
-        delete process.env.NODE_IMAGE_STORE_BUCKET;
-
-        expect(() => assertImageStoreReady()).not.toThrow();
-    });
-
-    /**
-     * Refusing to boot is the deliberate choice. Falling back to local disk would put some images
-     * in the bucket and some on a container filesystem, with nothing to say which is where — a
-     * data-loss bug that only appears on the next rebuild.
-     */
-    it('refuses to boot when a bucket is configured but unimplemented', () => {
-        process.env.NODE_IMAGE_STORE_BUCKET = 'my-cdn-bucket';
-
-        expect(() => assertImageStoreReady()).toThrow(/NODE_IMAGE_STORE_BUCKET is set/);
-    });
-
-    it('names the missing companion variables, so the message is actionable', () => {
-        process.env.NODE_IMAGE_STORE_BUCKET = 'my-cdn-bucket';
-
-        expect(() => assertImageStoreReady()).toThrow(/NODE_IMAGE_STORE_ENDPOINT/);
-    });
-
-    /* Belt and braces: even if a process somehow started, no upload may silently land locally. */
-    it('rejects uploads and deletes instead of falling back to local storage', async () => {
-        process.env.NODE_IMAGE_STORE_BUCKET = 'my-cdn-bucket';
-
-        expect(isRemoteStoreConfigured()).toBe(true);
-        await expect(imageStore.put('/tmp/whatever.png')).rejects.toThrow(/no remote image store/);
-        await expect(imageStore.remove('/images/x.png')).rejects.toThrow(/no remote image store/);
     });
 });
 

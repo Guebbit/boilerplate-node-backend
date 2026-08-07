@@ -174,12 +174,14 @@ The store that ships puts the file in `public/images/`, which `express.static` s
 `src/app.ts`) and `.gitignore` drops — a served directory must not accumulate strangers' files in
 your git history — and returns `/images/<name>`, which is what lands in `imageUrl`.
 
-`@core/adapters/image-store` is the only module that may turn an `imageUrl` into a path. That is
-the rule that keeps the destination swappable: set `NODE_IMAGE_STORE_BUCKET` and the app selects a
-remote store (a personal CDN, or any S3-compatible bucket) instead — which is **not implemented
-yet**, so it refuses to boot rather than silently writing to local disk. See the TODO in that file
-and the matching section of `.env-example`. Everything else is done; unset, you get exactly the
-behaviour described above.
+`@core/adapters/image-store` is the only module that may turn an `imageUrl` into a path. That is the
+rule that keeps the destination swappable, and it matters because of what local storage means:
+**uploaded images live inside the container, so removing or rebuilding it deletes them** — `docker
+compose down -v`, a redeploy, a move to another host. Only `public/images/seed/` survives, being
+committed to the repository. Two replicas do not share what they store either: an image uploaded to
+one is a 404 on the other. Bind-mounting the directory is the stopgap; storing images somewhere
+outside the container is the fix, and it is a second implementation of the two methods in that file
+— see the TODO there, and `TODO.md`.
 
 The demo images the fixtures reference are the exception to the ignore rule: they are repository
 content and live in `public/images/seed/`, which is negated in `.gitignore`. Keeping them in their
