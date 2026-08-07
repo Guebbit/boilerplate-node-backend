@@ -25,7 +25,7 @@ router.use(getAuth);
 router.use(noStore);
 
 // GET /account — current user profile (requires auth)
-router.get('/', setCache(3600, { tags: ['account'] }), isAuth, getAccount);
+router.get('/', setCache(3600, { tags: ['account'], keyParameters: [] }), isAuth, getAccount);
 
 // DELETE /account — request account deletion (requires auth)
 router.delete('/', isAuth, deleteAccountRequest);

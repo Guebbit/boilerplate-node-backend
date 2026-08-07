@@ -10,6 +10,7 @@ import '../helpers/contract';
 import { setupTestDb } from '../helpers/setup-test-db';
 import { api, authenticateAs } from '../helpers/http';
 import { createProduct } from '../helpers/factories/products';
+import { productRepository } from '@repositories/products';
 
 setupTestDb();
 
@@ -45,6 +46,30 @@ describe('GET /products', () => {
         expect(response.body.data.items).toHaveLength(2);
         expect(response).toSatisfyApiSpec();
     });
+
+    // openapi.yaml declares `minimum: 1` / `maximum: 100` on these; an endpoint that quietly
+    // rewrote an out-of-range request instead of rejecting it was advertising a limit it never
+    // applied. Every search endpoint now answers the same way — see @core/http/schemas.
+    it.each(['pageSize=500', 'page=0', 'page=abc', 'page=1.5'])(
+        'rejects out-of-range pagination (%s)',
+        async (queryString) => {
+            const response = await api().get(`/products?${queryString}`);
+
+            expect(response.status).toBe(422);
+            expect(response.body.success).toBe(false);
+            expect(response).toSatisfyApiSpec();
+        }
+    );
+
+    // A blank value is what a form submits for an untouched field, not an attempt to set one.
+    it('treats blank pagination as absent rather than invalid', async () => {
+        await createProduct();
+        const response = await api().get('/products?page=&pageSize=');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.meta.page).toBe(1);
+        expect(response.body.data.meta.pageSize).toBe(10);
+    });
 });
 
 describe('POST /products/search', () => {
@@ -71,5 +96,96 @@ describe('GET /products/{id}', () => {
 
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
+    });
+});
+
+/** Reads the row straight from the collection, so a soft-deleted product is still visible. */
+const stored = (id: string) => productRepository.findByIdRaw(id);
+
+/**
+ * `hardDelete` is a boolean the endpoint accepts three ways — query, body, or the `/hard` path
+ * form. The value cases matter more than the shape here: it used to be read as *presence*, so
+ * `?hardDelete=false` permanently deleted the product because the string 'false' is truthy.
+ */
+describe('DELETE /products/{id}', () => {
+    it('soft-deletes when nothing asks otherwise', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${String(product._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(await stored(String(product._id))).not.toBeNull();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // The regression this whole change exists for: asking NOT to hard-delete used to hard-delete.
+    it('soft-deletes for hardDelete=false, which used to destroy the record', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${String(product._id)}?hardDelete=false`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(await stored(String(product._id))).not.toBeNull();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('hard-deletes for hardDelete=true', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${String(product._id)}?hardDelete=true`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(await stored(String(product._id))).toBeNull();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('rejects a value that is not a boolean rather than guessing at it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${String(product._id)}?hardDelete=maybe`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(await stored(String(product._id))).not.toBeNull();
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('DELETE /products/{id}/hard', () => {
+    it('is the same operation with the flag spelled in the path', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${String(product._id)}/hard`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(await stored(String(product._id))).toBeNull();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // The URL the caller aimed at is the more explicit statement of intent.
+    it('wins over a query parameter that contradicts it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete(`/products/${String(product._id)}/hard?hardDelete=false`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(await stored(String(product._id))).toBeNull();
     });
 });

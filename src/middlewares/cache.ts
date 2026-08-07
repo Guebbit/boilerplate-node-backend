@@ -11,6 +11,16 @@ import {
  */
 type CacheOptions = {
     tags?: string[];
+    /**
+     * The query parameters this endpoint's answer actually depends on.
+     *
+     * Required, and deliberately so: it is the statement that decides which requests share a
+     * cached response, and getting it wrong is a correctness bug, not a missed optimisation.
+     * Most endpoints declare `[]` — a path-only route has no query parameter that changes
+     * anything. The search controllers derive theirs from the same Zod schema they validate
+     * against, so the list cannot drift from what the controller reads.
+     */
+    keyParameters: readonly string[];
 };
 
 /**
@@ -24,16 +34,44 @@ const getCacheScope = (request: Request) => {
 };
 
 /**
- * Build one cache key from method + URL + user scope + language.
+ * Build one cache key from method + path + the declared query parameters + user scope + language.
  *
  * The locale belongs in the key for the same reason the user does: it changes the body. Bodies
  * carry translated `message` / `errors` copy, so an Italian response stored under a locale-blind
  * key is served verbatim to the next English caller of the same URL. `request.locale` is set by
  * the locale middleware, which is mounted before the routes; the fallback keeps this usable in
  * unit tests that exercise the cache middleware in isolation.
+ *
+ * The raw query string is deliberately NOT part of the key. It used to be — the key was built
+ * from `request.originalUrl` — which made the key depend on how a URL was *written* rather than
+ * on what it asked for. Two consequences, and the first is the one that cost something in normal
+ * traffic:
+ *
+ *   - `?page=1&pageSize=10` and `?pageSize=10&page=1` are the same request, and were two
+ *     entries. Query-string order is not stable across HTTP clients, so this was a live cache
+ *     miss, and a second identical Mongo query behind it.
+ *   - `?anything=else` is stripped by the controllers' validators and changes no answer, yet
+ *     each spelling minted its own hour-long entry.
+ *
+ * Building the key from the declared parameters instead fixes both: `keyParameters` is pre-sorted at
+ * route-registration time, and a parameter nobody declared cannot reach the key. A parameter is
+ * included only when the request actually carries it, and its value is JSON-serialized so a
+ * repeated key (`?tag=a&tag=b`, which arrives as an array) stays distinguishable from a single
+ * one.
  */
-const getCacheKey = (request: Request) =>
-    `${request.method}:${request.originalUrl}:${getCacheScope(request)}:${request.locale ?? '-'}`;
+const getCacheKey = (request: Request, sortedKeyParameters: readonly string[]) => {
+    // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
+    // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
+    const [path] = request.originalUrl.split('?');
+    // `Object.hasOwn`, not `in`: the latter walks the prototype chain, so a parameter named
+    // `toString` would count as present on every request.
+    const query = sortedKeyParameters
+        .filter((name) => Object.hasOwn(request.query, name))
+        .map((name) => `${name}=${JSON.stringify(request.query[name])}`)
+        .join('&');
+
+    return `${request.method}:${path}?${query}:${getCacheScope(request)}:${request.locale ?? '-'}`;
+};
 
 /**
  * Cache GET responses in Redis.
@@ -44,9 +82,12 @@ const getCacheKey = (request: Request) =>
  *
  * @param seconds
  */
-export const setCache =
-    (seconds = 0, options: CacheOptions = {}) =>
-    (request: Request, response: Response, next: NextFunction) => {
+export const setCache = (seconds = 0, options: CacheOptions) => {
+    // Sorted once, at route-registration time rather than per request: the declaration is static,
+    // and sorting it is what makes `?a=1&b=2` and `?b=2&a=1` one entry instead of two.
+    const sortedKeyParameters = options.keyParameters.toSorted();
+
+    return (request: Request, response: Response, next: NextFunction) => {
         // Outside production the declared TTL is clamped (see resolveCacheTtl), so that writes
         // which bypass the API — db:seed, migrations, mongosh — cannot leave stale answers
         // around for an hour. Resolved here, before the header, so browsers are told the
@@ -88,7 +129,7 @@ export const setCache =
             return;
         }
 
-        const cacheKey = getCacheKey(request);
+        const cacheKey = getCacheKey(request, sortedKeyParameters);
         return getCacheValue(cacheKey).then((cachedResponse) => {
             // Fast path: Redis already has a response for this exact request.
             if (cachedResponse) {
@@ -117,6 +158,7 @@ export const setCache =
             next();
         });
     };
+};
 
 /**
  * Clear Redis cache groups after successful write operations.

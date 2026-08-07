@@ -1,14 +1,11 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { z } from 'zod';
-import {
-    SearchOrdersBody,
-    searchOrdersBodyPageDefault,
-    searchOrdersBodyPageSizeDefault,
-    searchOrdersBodyPageSizeMax
-} from '@api/schemas.zod';
+import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { mergeBodyQuery } from '@core/http/request';
+import { readInput } from '@core/http/request';
+import { pageSchema, pageSizeSchema } from '@core/http/schemas';
 import type { SearchOrdersRequest } from '@types';
 import type { CastError } from 'mongoose';
 import {
@@ -26,23 +23,23 @@ export type IGetOrdersQuery = Partial<Record<keyof SearchOrdersRequest, string>>
  * Built on the orval-generated SearchOrdersBody (kept in sync with
  * openapi.yaml); page/pageSize are coerced from strings since GET requests
  * carry them as query-string text, not JSON numbers.
+ *
+ * `page`/`pageSize` come from `@core/http/schemas` so all four search endpoints agree on what a
+ * legal one is; absent stays absent, because `normalizePagination` owns the defaults.
  */
 const searchOrdersQuerySchema = SearchOrdersBody.extend({
-    page: z.preprocess(
-        (value) =>
-            value === '' || value === null || value === undefined
-                ? searchOrdersBodyPageDefault
-                : value,
-        z.coerce.number().min(1)
-    ),
-    pageSize: z.preprocess(
-        (value) =>
-            value === '' || value === null || value === undefined
-                ? searchOrdersBodyPageSizeDefault
-                : value,
-        z.coerce.number().min(1).max(searchOrdersBodyPageSizeMax)
-    )
+    page: pageSchema,
+    pageSize: pageSizeSchema
 });
+
+/**
+ * Query parameters that change this endpoint's answer, and therefore its cache key.
+ *
+ * Derived from the schema rather than hand-listed, because the two must not drift: a parameter
+ * the controller reads but the key omits would let two different requests share one cached
+ * response. Anything outside this list is stripped by the validator and changes nothing.
+ */
+export const searchOrdersKeyParameters = Object.keys(searchOrdersQuerySchema.shape);
 
 /**
  * GET /orders
@@ -50,20 +47,18 @@ const searchOrdersQuerySchema = SearchOrdersBody.extend({
  * Non-admin users are automatically scoped to their own orders; the userId filter is ignored for non-admin callers.
  */
 export const getOrders = (
-    request: Request<{ id?: string }, unknown, SearchOrdersRequest, IGetOrdersQuery>,
+    request: Request<ParamsDictionary, unknown, SearchOrdersRequest, IGetOrdersQuery>,
     response: Response
 ) => {
     const isAdmin = Boolean(request.authContext?.admin);
-    const merged = mergeBodyQuery(
-        request.body as Record<string, unknown> | undefined,
-        request.query as Record<string, string> | undefined
-    );
-    // Route param wins over a body/query id; an empty string falls through as if absent.
-    const id = request.params.id || (merged.id as string | undefined);
-    /* Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their own. */
-    const userId = isAdmin ? (merged.userId as string | undefined) : undefined;
+    // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+    const input = readInput(request, { sources: ['body', 'query'], ids: ['id'] });
 
-    const parseResult = searchOrdersQuerySchema.safeParse({ ...merged, id, userId });
+    const parseResult = searchOrdersQuerySchema.safeParse({
+        ...input,
+        /* Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their own. */
+        userId: isAdmin ? (input.userId as string | undefined) : undefined
+    });
     if (!parseResult.success)
         return rejectResponse(
             response,

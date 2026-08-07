@@ -24,7 +24,86 @@ flowchart LR
 - cache is mainly for repeated reads,
 - writes invalidate related tags,
 - user-aware scope helps avoid cross-user leakage,
+- the key is built from declared parameters, not the raw URL (see below),
+- oversized responses are served but not stored (see below),
 - if Redis is unavailable, the app keeps going.
+
+## The key is what the request asked for, not how it was written
+
+Every route declares which query parameters change its answer, and the key is built from those:
+
+```ts
+router.get(
+    '/',
+    setCache(3600, { tags: ['products'], keyParameters: searchProductsKeyParameters }),
+    getProducts
+);
+router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), getProductItem);
+```
+
+`keyParameters` is required rather than optional, because it decides which requests share a cached
+response — a parameter the controller reads but the key omits would serve one search's results
+for another, and that is a correctness bug rather than a missed optimisation. Most routes declare
+`[]`: a path-only route has no query parameter that changes anything. The three search
+controllers export theirs as `Object.keys(schema.shape)`, derived from the very schema they
+validate against, so the list cannot drift from what the controller actually reads.
+
+The key used to be `request.originalUrl`, which made it depend on how a URL was _written_:
+
+| Request                              | Before | Now      |
+| ------------------------------------ | ------ | -------- |
+| `?page=1&pageSize=10`                | key A  | one key  |
+| `?pageSize=10&page=1` (same request) | key B  | one key  |
+| `?page=1&anything=else`              | key C  | same key |
+
+The first two rows are the ones that cost something in ordinary traffic: query-string order is
+not stable across HTTP clients, so the same request arrived under two keys and paid for a second
+Mongo query behind the second one. The third row is why arbitrary parameters can no longer mint
+entries — not a vulnerability, since the app fails open and the rate limiter bounds the volume,
+but there is no reason to store the same body twice.
+
+Note what the key still separates, and must: the path, the caller (`getCacheScope`), the locale,
+and any declared parameter that genuinely differs — including a repeated one (`?tag=a&tag=b`
+arrives as an array) and a blank one, which is not assumed to mean the same as absent.
+
+## Entry size is bounded
+
+Caching turns a cheap request into long-lived server state, and that is a different risk from
+simply answering it: `GET /products` is public and `setCache(3600, …)` keeps its answers for an
+hour. The declared-parameter key above bounds how many entries a caller can mint; this bounds how
+large any one of them may be, at whatever size the endpoint happens to return.
+
+`setCacheValue` therefore refuses to store a body above `NODE_REDIS_CACHE_MAX_BYTES` (default
+`262144`, 256 KB) and logs a warning naming the key and the size. The response is still returned
+normally — skipping is a lost optimisation, not a failure — so the endpoint stays correct and only
+loses its cache.
+
+This is deliberately independent of the request layer's own bounds. `PageSize.maximum` is `100`
+in `openapi.yaml` and a full page of products serializes to roughly 50 KB, so the guard never
+fires in normal traffic; it exists so the property holds regardless of which endpoint is writing,
+and regardless of whether that endpoint's page size is ever raised.
+
+## Memory is capped, and the cap evicts
+
+`docker-compose.yml` starts Redis with `--maxmemory` and `--maxmemory-policy`, both overridable
+from `.env`:
+
+| Variable                      | Default       | What it does                                           |
+| ----------------------------- | ------------- | ------------------------------------------------------ |
+| `NODE_REDIS_MAXMEMORY`        | `256mb`       | Ceiling for the Redis container                        |
+| `NODE_REDIS_MAXMEMORY_POLICY` | `allkeys-lru` | What happens at the ceiling                            |
+| `NODE_REDIS_CACHE_MAX_BYTES`  | `262144`      | Largest single response the app will store (see above) |
+
+Redis' own default is `maxmemory 0` — unlimited — which is the wrong default for a cache: entry
+count here follows traffic rather than data size, since `GET /products` is public and its answers
+live for an hour. Left uncapped, Redis grows until the host or the container limit stops it.
+
+Keep the policy on an `allkeys-` variant. That is what makes the ceiling a cache policy rather
+than an error: Redis evicts the least recently used key and accepts the write. Redis' default,
+`noeviction`, would instead start **refusing** writes at the ceiling — the app fails open so it
+would keep serving correctly, but it would log a warning per request and cache nothing more until
+something expired. `allkeys-` rather than `volatile-` because every key written here carries a
+TTL anyway, so the two would behave alike until they didn't.
 
 ## Writes that bypass the API
 

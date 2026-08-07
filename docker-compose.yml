@@ -143,6 +143,21 @@ services:
     redis:
         image: redis:7
         restart: unless-stopped
+        # Redis defaults to `maxmemory 0` — unlimited — and would grow until the host or the
+        # container limit stops it. That is the wrong default for a cache: entries here are worth
+        # keeping only while they are cheap, and nothing in the app bounds how many accumulate.
+        # `GET /products` is public and its answers live for an hour, so entry count follows
+        # traffic rather than catalogue size.
+        #
+        # `allkeys-lru` is what makes the cap a cache policy rather than an error: at the ceiling
+        # Redis evicts the least recently used key and accepts the write. The default
+        # `noeviction` would instead start REFUSING writes — the app fails open and would keep
+        # serving, but it would log a warning per request and never cache again until something
+        # expired. `allkeys-` (not `volatile-`) because every key here carries a TTL anyway.
+        command: >-
+            redis-server
+            --maxmemory ${NODE_REDIS_MAXMEMORY:-256mb}
+            --maxmemory-policy ${NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}
         ports:
             - '${NODE_REDIS_PORT:-6379}:6379'
 

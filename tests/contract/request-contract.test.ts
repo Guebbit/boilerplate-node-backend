@@ -33,7 +33,7 @@
  *     accepted wrong-typed values because the controllers coerced them (`!!request.body.active`,
  *     `coerceStringArray(...)`) BEFORE validation ran, so an invalid type never reached the check
  *     that would reject it. Coercion now happens only for `multipart/form-data`, which is the
- *     only transport that needs it — see `isMultipartRequest` / `parseFormBoolean`.
+ *     only transport that needs it — see `readInput` and `docs/theory/request-input.md`.
  *   - `POST /users` with a wrong-typed `admin` returned **500**, not 422: `userService
  *     .validateData` applied the schema through a `.pick()` of email/username/password, so the
  *     value reached Mongoose unchecked and threw a CastError on save. It now validates the whole

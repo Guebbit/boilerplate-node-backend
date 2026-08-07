@@ -4,7 +4,8 @@ import { t } from '@core/i18n';
 import type { CastError } from 'mongoose';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { extractAndValidateId, extractHardDelete } from '@core/http/request';
+import { extractAndValidateId, readInput } from '@core/http/request';
+import { hardDeleteSchema } from '@core/http/schemas';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
@@ -16,7 +17,23 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
     const id = extractAndValidateId(request, response, 'deleteProduct');
     if (!id) return Promise.resolve();
 
-    const hardDelete = extractHardDelete(request);
+    // `hardDelete` is a boolean the route accepts three ways — see docs/theory/request-input.md.
+    // The path form (`DELETE /products/:id/hard`) reaches `params` through `routeFlag`.
+    const input = readInput(request, {
+        sources: ['params', 'query', 'body'],
+        booleans: ['hardDelete']
+    });
+    const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
+    if (!parseResult.success)
+        return Promise.resolve(
+            rejectResponse(
+                response,
+                422,
+                'deleteProduct - invalid hardDelete',
+                parseResult.error.issues.map(({ message }) => message)
+            )
+        );
+    const hardDelete = parseResult.data;
 
     return (
         productService

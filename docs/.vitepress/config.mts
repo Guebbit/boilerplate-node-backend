@@ -24,6 +24,7 @@ export default withMermaid(
                             { text: 'Architecture', link: '/theory/architecture' },
                             { text: 'Layers', link: '/theory/layers' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
+                            { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' }
                         ]
                     }

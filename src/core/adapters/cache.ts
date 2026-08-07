@@ -274,8 +274,30 @@ export const getCacheValue = (key: string): Promise<CacheValue | void> =>
         });
 
 /**
+ * Largest response body this cache will store, in bytes.
+ *
+ * A cache turns a cheap request into long-lived server state, which is a different risk from
+ * simply answering it: `GET /products` is public, its responses are held for an hour, and the key
+ * includes the full URL — so an unauthenticated caller can mint a distinct entry per query string
+ * and keep every one of them resident. Bounding the *entry* is what keeps that from being an
+ * amplifier, independently of whatever page size the request layer happens to allow.
+ *
+ * 256 KB leaves generous room for a full page of results (a hundred products serialize to roughly
+ * 50 KB) while refusing anything that could only have come from an endpoint returning far more
+ * than a page.
+ */
+const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
+
+const getMaxCachedBytes = (): number =>
+    Number(process.env.NODE_REDIS_CACHE_MAX_BYTES) || DEFAULT_MAX_CACHED_BYTES;
+
+/**
  * Save one HTTP response in Redis and attach it to one or more "tags".
  * Tags let us delete groups of cached responses later (example: all "products" cache).
+ *
+ * Oversized bodies are skipped rather than stored — see `DEFAULT_MAX_CACHED_BYTES`. Skipping is
+ * not a failure: the caller still gets its response, it just will not be replayed from cache, so
+ * the endpoint stays correct and only loses an optimisation.
  *
  * @param key - the cache key (typically derived from method + URL + auth scope)
  * @param value - status + body envelope to replay on a later hit
@@ -291,6 +313,22 @@ export const setCacheValue = (
     // Guard: Redis rejects `EX` values of 0 or less, and a zero TTL means "don't cache" anyway.
     if (ttlSeconds <= 0) return Promise.resolve();
 
+    // Serialized once, here, so the size check measures exactly what would be written rather
+    // than an estimate of it.
+    const payload = JSON.stringify(value);
+    const maxCachedBytes = getMaxCachedBytes();
+    if (Buffer.byteLength(payload) > maxCachedBytes) {
+        // Logged rather than silent: an endpoint that never caches is worth noticing, and the
+        // usual cause is a response that grew past what its page size was supposed to bound.
+        logger.warn({
+            message: 'Redis cache write skipped: response larger than the per-entry limit.',
+            key,
+            bytes: Buffer.byteLength(payload),
+            maxCachedBytes
+        });
+        return Promise.resolve();
+    }
+
     const cacheKey = prefix(`key:${key}`);
     // `filter(Boolean)` drops empty strings, `new Set` de-duplicates — both would otherwise
     // create junk tag keys and redundant SADD round-trips.
@@ -303,7 +341,7 @@ export const setCacheValue = (
             // Save the response body with a TTL so Redis evicts it automatically later.
             return (
                 redisClient
-                    .set(cacheKey, JSON.stringify(value), {
+                    .set(cacheKey, payload, {
                         // `EX` = expire after N seconds. Redis deletes the key itself, so the cache
                         // is self-trimming and needs no cleanup job.
                         EX: ttlSeconds

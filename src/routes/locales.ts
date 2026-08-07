@@ -16,7 +16,11 @@ import { setCache } from '@middlewares/cache';
 export const router = Router();
 
 // GET /locales — which languages this deployment supports
-router.get('/', setCache(3600, { tags: ['locales'] }), getLocales);
+router.get('/', setCache(3600, { tags: ['locales'], keyParameters: [] }), getLocales);
 
 // GET /locales/:locale — that locale's dictionary, the API's own keys only
-router.get('/:locale', setCache(3600, { tags: ['locales'] }), getLocaleDictionary);
+router.get(
+    '/:locale',
+    setCache(3600, { tags: ['locales'], keyParameters: [] }),
+    getLocaleDictionary
+);

@@ -104,6 +104,23 @@ describe('GET /feedback', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    // This endpoint used to be the odd one out: it validated no pagination at all, so
+    // `?pageSize=500` was silently clamped to 100 here while the other three search endpoints
+    // answered 422 for the very same request.
+    it.each(['pageSize=500', 'page=0'])(
+        'rejects out-of-range pagination like every other search endpoint (%s)',
+        async (queryString) => {
+            const { bearer } = await authenticateAs('admin');
+            const response = await api()
+                .get(`/feedback?${queryString}`)
+                .set('Authorization', bearer);
+
+            expect(response.status).toBe(422);
+            expect(response.body.success).toBe(false);
+            expect(response).toSatisfyApiSpec();
+        }
+    );
+
     it('matches the error contract for a non-admin caller', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api().get('/feedback').set('Authorization', bearer);

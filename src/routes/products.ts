@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 import { upload } from '@core/adapters/storage';
-import { getProducts } from '@controllers/products/get-products';
+import { getProducts, searchProductsKeyParameters } from '@controllers/products/get-products';
 import { writeProducts } from '@controllers/products/write-products';
 import { deleteProducts } from '@controllers/products/delete-products';
 import { getProductItem } from '@controllers/products/get-product-item';
 import { invalidateCache, setCache } from '@middlewares/cache';
+import { routeFlag } from '@middlewares/route-flag';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
@@ -17,7 +18,11 @@ router.use(getAuth);
 router.post('/search', getProducts);
 
 // GET /products — public
-router.get('/', setCache(3600, { tags: ['products'] }), getProducts);
+router.get(
+    '/',
+    setCache(3600, { tags: ['products'], keyParameters: searchProductsKeyParameters }),
+    getProducts
+);
 
 // POST /products — admin only (create)
 router.post(
@@ -43,7 +48,7 @@ router.put(
 router.delete('/', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
 
 // GET /products/:id — public
-router.get('/:id', setCache(3600, { tags: ['products'] }), getProductItem);
+router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), getProductItem);
 
 // PUT /products/:id — admin only (update)
 router.put(
@@ -55,5 +60,15 @@ router.put(
     writeProducts
 );
 
-// DELETE /products/:id — admin only
+// DELETE /products/:id — admin only (soft delete unless ?hardDelete=true)
 router.delete('/:id', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
+
+// DELETE /products/:id/hard — the same operation, with the flag spelled in the path
+router.delete(
+    '/:id/hard',
+    isAuth,
+    isAdmin,
+    invalidateCache(['products']),
+    routeFlag('hardDelete'),
+    deleteProducts
+);

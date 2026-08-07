@@ -716,6 +716,21 @@ export const DeleteUserByIdResponse = zod.object({
 
 
 /**
+ * Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
+ * @summary Permanently delete user
+ */
+export const HardDeleteUserByIdParams = zod.object({
+  "id": zod.string().describe('Resource identifier')
+})
+
+export const HardDeleteUserByIdResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
  * Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
  * @summary Search users (DTO-friendly)
  */
@@ -1155,6 +1170,21 @@ export const DeleteProductByIdQueryParams = zod.object({
 })
 
 export const DeleteProductByIdResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Permanently removes the product identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /products/{id}?hardDelete=true`.
+ * @summary Permanently delete product
+ */
+export const HardDeleteProductByIdParams = zod.object({
+  "id": zod.string().describe('Resource identifier')
+})
+
+export const HardDeleteProductByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string()

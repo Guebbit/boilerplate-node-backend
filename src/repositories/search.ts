@@ -29,23 +29,43 @@ export interface IPaginatedMeta {
 const FALLBACK_PAGE_SIZE = 10;
 
 /**
- * Normalize pagination parameters with safe defaults and bounds.
+ * Upper bound for the deployment-configured page size.
  *
- * The single authority on what "page 1, ten per page, at most a hundred" means. It runs on every
- * search, so any defaulting done earlier in the request path could only be overwritten here —
- * which is why the request layer passes the caller's raw values straight through.
+ * Mirrors `PageSize.maximum` in `openapi.yaml`, which `@core/http/schemas` enforces on caller
+ * input. It is repeated here rather than imported because the two guard different things: a
+ * caller's value is rejected with a 422 at the edge, while `NODE_SETTINGS_PAGINATION_PAGE_SIZE`
+ * never passes through a request schema at all, so a typo in deployment config would otherwise
+ * silently disable paging for every search.
+ */
+const MAX_CONFIGURED_PAGE_SIZE = 100;
+
+/**
+ * Apply pagination defaults and derive the skip.
+ *
+ * The single authority on what "page 1, ten per page" means. It runs on every search, so any
+ * defaulting done earlier in the request path could only be overwritten here — which is why the
+ * request layer leaves an unspecified page absent rather than filling it in.
+ *
+ * It does NOT bound the caller's own values, and deliberately so: `openapi.yaml` declares
+ * `minimum: 1` / `maximum: 100`, `@core/http/schemas` enforces exactly that on every search
+ * endpoint, and an out-of-range request is answered with a 422 rather than being quietly turned
+ * into a different request. Clamping here as well would mean the API advertised a limit it never
+ * actually applied. What remains are the structural guards — a page below 1, or a value that is
+ * not a number at all, would produce a negative or `NaN` skip that Mongo cannot use.
  *
  * `NODE_SETTINGS_PAGINATION_PAGE_SIZE` makes the default deployment-tunable without touching
- * route code. It is a *default*, not a cap: an explicit `pageSize` from the caller still wins,
- * bounded by the same 1-100 range as everything else.
+ * route code. It is a *default*, not a cap: an explicit `pageSize` from the caller still wins.
  */
 export const normalizePagination = (input: IPaginationInput = {}): IPaginationResult => {
     const page = Math.max(1, Number(input.page ?? 1) || 1);
-    const requestedPageSize = input.pageSize ?? process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-    const pageSize = Math.min(
-        100,
-        Math.max(1, Number(requestedPageSize ?? FALLBACK_PAGE_SIZE) || FALLBACK_PAGE_SIZE)
+    // `|| 0` collapses '', null, NaN and 0 alike into "the caller did not ask", which is what
+    // lets the fallback below take over.
+    const requestedPageSize = Number(input.pageSize) || 0;
+    const configuredPageSize = Math.min(
+        MAX_CONFIGURED_PAGE_SIZE,
+        Math.max(1, Number(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE) || FALLBACK_PAGE_SIZE)
     );
+    const pageSize = requestedPageSize > 0 ? requestedPageSize : configuredPageSize;
     return { page, pageSize, skip: (page - 1) * pageSize };
 };
 

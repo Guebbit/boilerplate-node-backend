@@ -9,7 +9,7 @@ import {
     AnalyticsEvent,
     buildAnalyticsBase
 } from '@core/observability/analytics';
-import { extractCustomId, isValidObjectId } from '@core/http/request';
+import { readInput, isValidObjectId } from '@core/http/request';
 
 /**
  * PUT /cart/:productId
@@ -36,7 +36,7 @@ export const putCartItem = (
 
     const { quantity } = parseResult.data;
     // productId travels via path param or body; body shape is already validated above.
-    const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
+    const { productId } = readInput(request, { sources: ['params', 'body'], ids: ['productId'] });
 
     if (!isValidObjectId(productId)) {
         rejectResponse(response, 422, 'updateCartItemById - missing id', [

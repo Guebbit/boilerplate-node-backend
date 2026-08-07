@@ -9,7 +9,7 @@ import {
     buildAnalyticsBase
 } from '@core/observability/analytics';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
-import { extractCustomId, isValidObjectId } from '@core/http/request';
+import { readInput, isValidObjectId } from '@core/http/request';
 
 /**
  * DELETE /cart/:productId
@@ -25,7 +25,8 @@ export const deleteCartItem = (
         return;
     }
     const userId = request.authContext.id;
-    const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
+    // productId travels via path param or body.
+    const { productId } = readInput(request, { sources: ['params', 'body'], ids: ['productId'] });
 
     if (!isValidObjectId(productId)) {
         rejectResponse(response, 422, 'removeCartItem - missing id', [

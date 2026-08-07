@@ -13,6 +13,27 @@ its own tests.
 
 ### ⚠ Breaking
 
+- **`?hardDelete=false` no longer permanently deletes the record.** The flag was read as
+  _presence_ — `!!request.query.hardDelete` — and the query value is the string `'false'`, which
+  is truthy, so a caller could destroy data by explicitly asking not to. `openapi.yaml` has always
+  typed the parameter `boolean` with `default: false`, and it is now read as one: the string
+  spellings a URL can carry (`true`/`1`/`on`/`yes` and `false`/`0`/`off`/`no`) are decoded, an
+  absent or blank value means soft delete, and anything else — `?hardDelete=maybe` — answers 422
+  rather than being guessed at. Any client relying on the old behaviour to hard-delete by sending
+  a non-`true` value must send `true`.
+
+- **Out-of-range pagination is rejected everywhere, and `normalizePagination` no longer clamps.**
+  `?pageSize=500` used to answer 422 on `GET /products`, `/users` and `/orders` — where the
+  controllers' own Zod bounds caught it — and a silently clamped 200 on `GET /feedback`, which
+  validated nothing. `openapi.yaml` declares `minimum: 1` / `maximum: 100`, so all four endpoints
+  now enforce exactly that through one shared schema (`@core/http/schemas`) and answer 422;
+  `?page=0`, `?page=abc` and `?page=1.5` do the same. `normalizePagination` keeps sole ownership
+  of the _defaults_ (page 1, ten per page, or `NODE_SETTINGS_PAGINATION_PAGE_SIZE`) and stops
+  clamping caller values, because an API that advertises a maximum and then quietly rewrites the
+  request instead of rejecting it is honouring neither answer. The env fallback keeps its bound —
+  it is the one number no request schema ever sees. A client that relied on `GET /feedback`
+  accepting `pageSize=500` gets 422 and must ask for 100.
+
 - **Wrong-typed request fields are rejected with `422` instead of being coerced into something
   plausible.** `POST`/`PUT` on `/users` and `/products` ran `!!request.body.active` and
   `coerceStringArray(...)` _before_ validation, so `{"active": "not-a-boolean"}` reached the
@@ -70,6 +91,37 @@ its own tests.
   process with `npm run load:test`.
 
 ### Added
+
+- **`DELETE /products/{id}/hard` and `DELETE /users/{id}/hard`** — the same operation as
+  `DELETE /{resource}/{id}?hardDelete=true`, with the flag spelled in the path instead of the
+  query. Neither form is canonical; accepting one value several ways is the point of the input
+  layer, and it now costs a route line and a `routeFlag('hardDelete')` middleware rather than a
+  second controller. The path form outranks a contradictory query parameter, because the URL a
+  caller aimed at is the more explicit statement of intent.
+
+- **Redis is started with a memory ceiling and an eviction policy** —
+  `--maxmemory ${NODE_REDIS_MAXMEMORY:-256mb} --maxmemory-policy ${NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}`
+  in `docker-compose.yml`, both overridable from `.env`. Redis defaults to unlimited memory, which
+  is the wrong default for a cache whose entry count follows traffic rather than data size: left
+  alone it grows until the host or the container limit stops it. `allkeys-lru` is what makes the
+  ceiling a cache policy instead of an error — at the limit Redis evicts the least recently used
+  key and accepts the write, where the `noeviction` default would start refusing writes and leave
+  the app logging a warning per request while caching nothing.
+
+- **The Redis cache refuses to store oversized responses**, above
+  `NODE_REDIS_CACHE_MAX_BYTES` (default 256 KB). Caching turns a cheap request into long-lived
+  server state: `GET /products` is public, its entries live for an hour, and the key carries the
+  full URL, so an unauthenticated caller could otherwise mint a distinct large entry per query
+  string and keep every one of them resident. The response is still returned — skipping is a lost
+  optimisation, not a failure — and a warning names the key and the size. The page size maximum
+  already bounds this in practice (a hundred products serialize to roughly 50 KB, well under the
+  limit); the guard is what makes the property hold regardless of which endpoint is writing.
+
+- **Nine operations now declare the `422` they have always been able to return.** `GET /products`,
+  `/users`, `/orders`, `/feedback` and five of the delete operations validated their input and
+  answered 422 while `openapi.yaml` listed only 200/401/403/404/500. Declaring it is what lets the
+  contract suite assert those responses at all — until now they were invisible to
+  `toSatisfyApiSpec`.
 
 - **Uploaded images are served.** `public/` is mounted through `express.static`, which it never
   was: uploads were written to `public/images/` and served by nothing, so every `imageUrl` this
@@ -285,6 +337,37 @@ its own tests.
   reaching Redis, which is precisely backwards from the property the cache depends on.
 
 ### Changed
+
+- **The Redis cache key is built from declared query parameters instead of the raw URL.** It was
+  `request.originalUrl`, so the key depended on how a request was _written_ rather than on what it
+  asked for: `?page=1&pageSize=10` and `?pageSize=10&page=1` are the same request and were two
+  entries, and query-string order is not stable across HTTP clients — a live cache miss, with a
+  second identical Mongo query behind it. Each route now declares a `keyParameters` list, required
+  rather than optional because it decides which requests share a response; the three search
+  controllers export theirs as `Object.keys(schema.shape)` so it cannot drift from what the
+  controller reads, and every path-only route declares `[]`. Arbitrary undeclared parameters stop
+  minting entries as a side effect. Nothing about which requests are _kept apart_ changed: path,
+  caller scope, locale, repeated values and blank-versus-absent all still separate.
+
+- **Request input is declared per route instead of re-assembled per controller.** `src/core/http/request.ts`
+  exposed eleven helpers implementing one idea, and every controller wired a different subset in a
+  different order — which is how `hardDelete` ended up reading three sources while `id` read two,
+  each with a precedence that lived in prose rather than being expressed once. `readInput` now
+  takes that precedence as an argument (`sources`, highest first) along with which fields are
+  `ids`, `booleans`, `stringArrays` and `flags`, and `mergeBodyQuery`, `extractRequestPagination`,
+  `extractCustomId`, `extractHardDelete` and `decodeFormFields` are gone; `isMultipartRequest`,
+  `parseFormBoolean` and `FORM_BOOLEANS` became internal to it. `extractAndValidateId` stays,
+  because it _responds_ (422) as well as extracting, and is now built on `readInput`;
+  `isValidObjectId` stays for its type guard. The refactor itself changed no behaviour — the
+  JSON-body asymmetry, the dropped `undefined` keys and the absent-is-not-empty rule all survive
+  intact, guarded by `tests/contract/request-contract.test.ts`, which was not touched. What did
+  change is the transport rule's shape: decoding now applies to whichever _sources_ are strings
+  by construction (params and query always, a body only when multipart) rather than to the whole
+  merged result when the body is multipart, which is what lets `?hardDelete=false` be read as the
+  boolean it is. A `params` source that could never fire on the list controllers is no longer
+  declared, since a declaration naming a source is a claim about the route. The resulting
+  endpoint × parameter table, the rules behind it, and the six ways the controllers and
+  `openapi.yaml` still disagree are written down in `docs/theory/request-input.md`.
 
 - **Uploads are staged privately and committed to a store, instead of being written straight into
   `public/`.** multer now writes to `NODE_UPLOAD_STAGING_PATH` (default: a directory under the
@@ -905,6 +988,20 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   models store.
 
 ### Known issues
+
+- **Five endpoints read input their own contract does not declare**, all recorded with their
+  mechanism in `docs/theory/request-input.md`. The load-bearing one: `GET /products` declares
+  `productId` as its query filter while the controller reads `id`, so the generated client's
+  parameter is silently ignored on the GET and works on `POST /products/search`, which declares
+  `id` in its body. The others are `category`/`tag` accepted from the query though the spec has
+  them body-only; `active`/`admin` decoded on `PUT /users` though no `Update*Request` declares
+  them; `id`/`hardDelete`/`productId` read from bodies the path-form delete and cart-item
+  operations do not declare; and `GET /feedback` declaring a JSON body and no query parameters
+  while the controller reads both. None is fixed by the `readInput` migration, which was
+  behaviour-preserving by design — each needs a decision about which side is wrong, the spec or
+  the code. Nothing verifies the two agree; the cheapest way to start is a test asserting each
+  route's declared `sources` are a subset of what `openapi.yaml` allows, which is written up in
+  the same page.
 
 - **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/core/http/errors.ts`). It
   returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a

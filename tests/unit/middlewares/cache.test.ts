@@ -45,6 +45,23 @@ const createResponse = () => {
     return { response, headers, listeners };
 };
 
+/** Runs the middleware and returns the key it looked up. */
+const keyFor = async (
+    query: Record<string, unknown>,
+    keyParameters: readonly string[],
+    originalUrl = '/products'
+) => {
+    mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+    const middleware = setCache(60, { tags: ['products'], keyParameters });
+    await middleware(
+        { method: 'GET', originalUrl, query, locale: 'en' } as unknown as Request,
+        createResponse().response,
+        jest.fn() as NextFunction
+    );
+    const calls = mockedCache.getCacheValue.mock.calls;
+    return calls.at(-1)?.[0];
+};
+
 describe('setCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -57,18 +74,19 @@ describe('setCache', () => {
             body: { success: true }
         });
 
-        const middleware = setCache(60, { tags: ['products'] });
+        const middleware = setCache(60, { tags: ['products'], keyParameters: ['page'] });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
         const request = {
             method: 'GET',
             originalUrl: '/products?page=1',
+            query: { page: '1' },
             locale: 'en'
-        } as Request;
+        } as unknown as Request;
 
         await middleware(request, response, next);
 
-        expect(mockedCache.getCacheValue).toHaveBeenCalledWith('GET:/products?page=1:guest:en');
+        expect(mockedCache.getCacheValue).toHaveBeenCalledWith('GET:/products?page="1":guest:en');
         expect(headers['x-cache']).toBe('HIT');
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.json).toHaveBeenCalledWith({ success: true });
@@ -78,12 +96,13 @@ describe('setCache', () => {
     it('stores successful uncached responses after the handler runs', async () => {
         mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
 
-        const middleware = setCache(120, { tags: ['products'] });
+        const middleware = setCache(120, { tags: ['products'], keyParameters: [] });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
         const request = {
             method: 'GET',
             originalUrl: '/products',
+            query: {},
             locale: 'en',
             authContext: {
                 id: '507f1f77bcf86cd799439011'
@@ -99,7 +118,7 @@ describe('setCache', () => {
         response.json({ success: true, data: [] });
 
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
-            'GET:/products:user:507f1f77bcf86cd799439011:en',
+            'GET:/products?:user:507f1f77bcf86cd799439011:en',
             {
                 status: 201,
                 body: { success: true, data: [] }
@@ -114,9 +133,13 @@ describe('setCache', () => {
         mockedCache.resolveCacheTtl.mockReturnValue(30);
         mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
 
-        const middleware = setCache(3600, { tags: ['products'] });
+        const middleware = setCache(3600, { tags: ['products'], keyParameters: [] });
         const { response, headers } = createResponse();
-        const request = { method: 'GET', originalUrl: '/products' } as Request;
+        const request = {
+            method: 'GET',
+            originalUrl: '/products',
+            query: {}
+        } as unknown as Request;
 
         await middleware(request, response, jest.fn() as NextFunction);
 
@@ -157,11 +180,15 @@ describe('setCache', () => {
             mockedCache.resolveCacheTtl.mockReturnValue(30);
             mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
 
-            const middleware = setCache(30, { tags: ['products'] });
+            const middleware = setCache(30, {
+                tags: ['products'],
+                keyParameters: ['page', 'pageSize']
+            });
             const { response, headers } = createResponse();
             const request = {
                 method: 'GET',
                 originalUrl: '/products?page=1&pageSize=10',
+                query: { page: '1', pageSize: '10' },
                 ...extraRequest
             } as unknown as Request;
 
@@ -180,28 +207,96 @@ describe('setCache', () => {
         mockedCache.resolveCacheTtl.mockReturnValue(30);
         mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
 
-        const middleware = setCache(30, { tags: ['products'] });
+        const middleware = setCache(30, { tags: ['products'], keyParameters: [] });
 
         for (const locale of ['en', 'it'])
             await middleware(
-                { method: 'GET', originalUrl: '/products', locale } as Request,
+                {
+                    method: 'GET',
+                    originalUrl: '/products',
+                    query: {},
+                    locale
+                } as unknown as Request,
                 createResponse().response,
                 jest.fn() as NextFunction
             );
 
         expect(mockedCache.getCacheValue.mock.calls.map(([key]) => key)).toEqual([
-            'GET:/products:guest:en',
-            'GET:/products:guest:it'
+            'GET:/products?:guest:en',
+            'GET:/products?:guest:it'
         ]);
+    });
+
+    /*
+     * The cache key is built from the DECLARED parameters, not from `request.originalUrl`.
+     *
+     * Keying on the raw URL made the key depend on how a request was written rather than on what
+     * it asked for. The first case below is what that cost in ordinary traffic — query-string
+     * order is not stable across HTTP clients, so the same request arrived under two keys and
+     * paid for a second Mongo query behind the second one.
+     */
+    describe('cache key', () => {
+        it('gives two orderings of the same request one key', async () => {
+            const declared = ['page', 'pageSize'];
+
+            expect(await keyFor({ page: '1', pageSize: '10' }, declared)).toBe(
+                await keyFor({ pageSize: '10', page: '1' }, declared)
+            );
+        });
+
+        it('ignores a parameter nobody declared', async () => {
+            expect(await keyFor({ page: '1', junk: 'a' }, ['page'])).toBe(
+                await keyFor({ page: '1', junk: 'b' }, ['page'])
+            );
+            expect(await keyFor({ junk: 'a' }, ['page'])).toBe(await keyFor({}, ['page']));
+        });
+
+        // The point of the declaration: a parameter that changes the answer must change the key,
+        // or two different searches share one cached response.
+        it('separates requests that differ in a declared parameter', async () => {
+            expect(await keyFor({ page: '1' }, ['page'])).not.toBe(
+                await keyFor({ page: '2' }, ['page'])
+            );
+        });
+
+        // `?tag=a&tag=b` arrives as an array, and must not collide with the single value 'a,b'.
+        it('distinguishes a repeated parameter from a single one', async () => {
+            expect(await keyFor({ tag: ['a', 'b'] }, ['tag'])).not.toBe(
+                await keyFor({ tag: 'a,b' }, ['tag'])
+            );
+        });
+
+        // Absent is not the same request as present-but-blank: the schemas treat them alike, but
+        // the key does not assume that on their behalf.
+        it('distinguishes an absent parameter from a blank one', async () => {
+            expect(await keyFor({}, ['page'])).not.toBe(await keyFor({ page: '' }, ['page']));
+        });
+
+        // The path is still the whole identity of a path-only route.
+        it('keeps different paths apart when no parameter is declared', async () => {
+            expect(await keyFor({}, [], '/products/abc')).not.toBe(
+                await keyFor({}, [], '/products/def')
+            );
+        });
+
+        // `in` walks the prototype chain, so this would otherwise count as present on every
+        // request and put `toString=undefined` into every key.
+        it('does not mistake an inherited property for a supplied parameter', async () => {
+            expect(await keyFor({}, ['toString'])).toBe(await keyFor({}, []));
+        });
     });
 
     it('skips caching entirely when the TTL resolves to zero', async () => {
         mockedCache.resolveCacheTtl.mockReturnValue(0);
 
-        const middleware = setCache(3600, { tags: ['products'] });
+        const middleware = setCache(3600, { tags: ['products'], keyParameters: [] });
         const { response } = createResponse();
         const next = jest.fn() as NextFunction;
-        const request = { method: 'GET', originalUrl: '/products' } as Request;
+        const request = {
+            method: 'GET',
+            originalUrl: '/products',
+            query: {}
+        } as unknown as Request;
 
         await middleware(request, response, next);
 

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
 import { postFeedbackContact } from '@controllers/feedback/post-feedback-contact';
-import { getFeedback } from '@controllers/feedback/get-feedback';
+import { getFeedback, searchFeedbackKeyParameters } from '@controllers/feedback/get-feedback';
 import { putFeedbackStatus } from '@controllers/feedback/put-feedback-status';
 import { invalidateCache, setCache } from '@middlewares/cache';
 
@@ -12,5 +12,9 @@ router.post('/contact', invalidateCache(['feedback']), postFeedbackContact);
 
 router.use(getAuth, isAuth, isAdmin);
 
-router.get('/', setCache(600, { tags: ['feedback'] }), getFeedback);
+router.get(
+    '/',
+    setCache(600, { tags: ['feedback'], keyParameters: searchFeedbackKeyParameters }),
+    getFeedback
+);
 router.put('/:id', invalidateCache(['feedback']), putFeedbackStatus);

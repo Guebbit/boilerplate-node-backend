@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@core/i18n';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@core/http/response';
-import { decodeFormFields } from '@core/http/request';
+import { readInput } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
 import { imageStore } from '@core/adapters/image-store';
 import type {
@@ -27,7 +28,7 @@ import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observabilit
  */
 export const writeUsers = (
     request: Request<
-        { id?: string },
+        ParamsDictionary,
         unknown,
         | CreateUserRequest
         | CreateUserRequestMultipart
@@ -38,18 +39,19 @@ export const writeUsers = (
     >,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as { id?: string }).id;
+    // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+    // `booleans` are the fields whose type a multipart body cannot carry.
+    const { id, admin, active } = readInput(request, {
+        sources: ['params', 'body'],
+        ids: ['id'],
+        booleans: ['admin', 'active']
+    });
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const imageUrlFile = resolveImageUrl(request as Request);
+    const imageUrlFile = resolveImageUrl(request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-
-    // Fields whose type a multipart body cannot carry — see `decodeFormFields`.
-    const { admin, active } = decodeFormFields(request as Request, {
-        booleans: ['admin', 'active']
-    });
     // If problem arises: remove the image THIS request uploaded — `imageUrlFile`, deliberately,
     // and not the merged `imageUrl`: a body-supplied url names an image this request did not
     // create, and deleting it because validation failed would destroy someone else's file.
