@@ -12,7 +12,6 @@ Current scope of `asyncapi.yaml`:
 - SSE observability channels (`observability.*`)
 - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
 - RabbitMQ worker queues (`worker.email.send`, `worker.pdf.generate`)
-- Redis pub/sub cache invalidation (`cache.tags.invalidated`)
 
 ## Servers declared
 
@@ -20,7 +19,6 @@ Current scope of `asyncapi.yaml`:
 |------|----------|---------|
 | `sseLocal` | `http` | SSE observability stream |
 | `rabbitmqLocal` | `amqp` | Async job queues (email, PDF) |
-| `redisLocal` | `redis` | Pub/sub cache invalidation |
 
 ## Generated TypeScript types
 
@@ -29,7 +27,7 @@ They are re-exported from `src/types/index.ts` so all app code can import them c
 
 ```ts
 import type { IObservabilityMetricsPayload, IEmailJobPayload, IPdfJobPayload } from '@types';
-import { WORKER_CHANNELS, CACHE_CHANNELS } from '@types';
+import { WORKER_CHANNELS, OBSERVABILITY_CHANNELS } from '@types';
 ```
 
 Regenerate types after editing `asyncapi.yaml`:
@@ -88,13 +86,15 @@ Worker queues use AMQP (RabbitMQ) for reliable async job processing:
 
 Both use the `IEmailJobPayload` / `IPdfJobPayload` interfaces generated from the contract. The worker types are derived from AsyncAPI — no hand-written duplicates.
 
-## Redis pub/sub channel
+## Why there is no Redis channel here
 
-- **`cache.tags.invalidated`** — broadcasts cache tag invalidations across multiple app instances so each instance can evict stale entries locally.
+Redis is in this stack, but it is not in this contract. It is used as a **shared cache store**,
+not as a message bus: every worker reads and writes the same keys, so a write that deletes them
+is already visible to every other worker. There is nothing to announce.
 
-Uses `ICacheTagsInvalidatedPayload` from the generated types. The publisher/subscriber logic lives in `src/core/adapters/cache.ts`.
-
-The subscriber is started during app boot and stopped during graceful shutdown. The publisher is called by the `invalidateCache` middleware after every successful write. Both are no-ops when Redis is unavailable.
+A `cache.tags.invalidated` channel did live here and was removed — see
+[Redis Cache → Why there is no cross-instance broadcast](../tools/redis-cache.md#why-there-is-no-cross-instance-broadcast)
+for the condition that would bring it back.
 
 ## Naming convention
 

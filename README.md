@@ -496,7 +496,6 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
     - SSE observability channels (`observability.*`)
     - Ecommerce cart checkout events (`ecommerce.cart.checked_out`)
     - RabbitMQ worker job queues (`worker.*`)
-    - Redis pub/sub cache invalidation (`cache.tags.invalidated`)
 - All SSE/domain-event/queue code imports types and channel-name constants from `src/types`
 
 ## Frontend/backend tandem sync discipline

@@ -16,7 +16,6 @@ info:
         - SSE observability events over `/observability/events`
         - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
         - RabbitMQ worker job queues (`worker.*`)
-        - Redis pub/sub cache invalidation (`cache.tags.invalidated`)
 defaultContentType: application/json
 tags:
     - name: implemented
@@ -30,10 +29,6 @@ servers:
         url: localhost:5672
         protocol: amqp
         description: Local RabbitMQ broker for async job queues.
-    redisLocal:
-        url: localhost:6379
-        protocol: redis
-        description: Local Redis for pub/sub cache invalidation.
 channels:
     observability.metrics.snapshot:
         description: Initial metrics snapshot sent on SSE connect.
@@ -87,20 +82,6 @@ channels:
             summary: PDF worker renders template to PDF.
             message:
                 $ref: '#/components/messages/PdfJobConsumeMessage'
-    cache.tags.invalidated:
-        description: Redis pub/sub channel for broadcasting cache tag invalidations across app instances.
-        servers:
-            - redisLocal
-        publish:
-            operationId: cacheTagsInvalidatedPublish
-            summary: An instance broadcasts which cache tags were invalidated.
-            message:
-                $ref: '#/components/messages/CacheTagsInvalidatedMessage'
-        subscribe:
-            operationId: cacheTagsInvalidatedConsume
-            summary: Other instances receive and apply the invalidation locally.
-            message:
-                $ref: '#/components/messages/CacheTagsInvalidatedConsumeMessage'
 components:
     messages:
         MetricsSnapshotEvent:
@@ -139,12 +120,6 @@ components:
             title: PDF generation job
             payload:
                 $ref: '#/components/schemas/PdfJobPayload'
-        CacheTagsInvalidatedMessage:
-            name: CacheTagsInvalidatedMessage
-            messageId: cache.tags.invalidated
-            title: Cache tags invalidation broadcast
-            payload:
-                $ref: '#/components/schemas/CacheTagsInvalidatedPayload'
         EmailJobConsumeMessage:
             name: EmailJobConsumeMessage
             messageId: worker.email.job.consume
@@ -157,12 +132,6 @@ components:
             title: PDF generation job (worker consume)
             payload:
                 $ref: '#/components/schemas/PdfJobPayload'
-        CacheTagsInvalidatedConsumeMessage:
-            name: CacheTagsInvalidatedConsumeMessage
-            messageId: cache.invalidation.broadcast.consume
-            title: Cache tags invalidation broadcast (consumer)
-            payload:
-                $ref: '#/components/schemas/CacheTagsInvalidatedPayload'
     schemas:
         ObservabilityMetricsPayload:
             type: object
@@ -286,26 +255,6 @@ components:
                 outputPath:
                     type: string
                     description: Filesystem path where the generated PDF will be written.
-            additionalProperties: false
-        CacheTagsInvalidatedPayload:
-            type: object
-            required:
-                - tags
-                - origin
-                - timestamp
-            properties:
-                tags:
-                    type: array
-                    items:
-                        type: string
-                    description: Cache tags that were invalidated.
-                origin:
-                    type: string
-                    description: Instance ID that triggered the invalidation.
-                timestamp:
-                    type: string
-                    format: date-time
-                    description: When the invalidation occurred.
             additionalProperties: false
         CartCheckedOutEvent:
             type: object

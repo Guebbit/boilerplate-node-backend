@@ -272,6 +272,17 @@ its own tests.
 - **Tests** — `tests/unit/repositories/search-pagination.test.ts`, nine cases over
   `normalizePagination` covering the defaults, the 1-100 bounds, the env fallback and a non-numeric
   env value, which must not silently disable paging.
+- **`docs/tools/redis-cache.md` — _Redis and the workers_**, replacing the section that documented
+  the pub/sub removed below. Three diagrams, because the question it answers is a spatial one: the
+  cluster topology (one primary, N workers, one connection each, a single shared keyspace and no
+  per-worker copy of anything); a sequence in which a write handled by worker 1 makes worker 2 miss
+  on its very next read, with no message passing between them — the reason a broadcast has nothing
+  left to do; and the queue workers, which are a second meaning of the word, RabbitMQ consumers
+  registered inside every cluster worker and touching no cache at all. That last one earns its place
+  as a warning: a queue worker that writes to Mongo never passes through the `invalidateCache`
+  middleware, which makes it one of the _writes that bypass the API_ documented further up the same
+  page. `docs/theory/clustering.md` is corrected alongside it — its diagram drew only worker 1
+  reaching Redis, which is precisely backwards from the property the cache depends on.
 
 ### Changed
 
@@ -711,6 +722,35 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   means restoring data that 404s.
 
 ### Removed
+
+- **The Redis pub/sub cache invalidation, and with it the AsyncAPI channel
+  `cache.tags.invalidated`.** It never invalidated anything. The cached responses and their tag
+  sets live in shared Redis, so the `SMEMBERS` + `DEL` that the writing instance runs deletes them
+  for every instance at once — a peer's next read already missed, before any message could be
+  sent. What arrived on the channel made the receiver repeat that work against keys that were
+  already gone: `SMEMBERS` on a deleted tag set returns empty, the `DEL` is skipped on the
+  `keys.length > 0` guard, and the second `DEL` targets a key that no longer exists. No state
+  changed, at the cost of a second Redis connection per process held open for its lifetime, a
+  shutdown ordering constraint (`stopCacheSubscriber()` strictly before `stopCache()`), an
+  instance-ID self-echo guard, and three round-trips per write per replica. The file already
+  carried the argument against it: `clearCache`'s docstring explains that shared keys need no
+  broadcast, which is equally true of `invalidateCacheTags`. `broadcastCacheInvalidation`,
+  `subscribeCacheInvalidation` and `stopCacheSubscriber` are gone from
+  `src/core/adapters/cache.ts`, along with their boot and shutdown wiring, the
+  `CacheTagsInvalidatedPayload` schema, its two messages, and the `redisLocal` server entry.
+
+    **This is breaking for anything generated from `asyncapi.yaml`** — `ICacheTagsInvalidatedPayload`
+    / `…Message` / `…ConsumeMessage` and `CACHE_CHANNELS` no longer exist in `src/types/asyncapi.ts`,
+    and the paired frontend must regenerate. Nothing subscribed to the channel: a browser cannot
+    hold a Redis subscription, and the frontend carried only the generated types, unreferenced.
+
+    The mechanism is not wrong in general — it is wrong without the thing it serves. It becomes
+    necessary the moment a worker keeps a **process-local L1 cache** in front of Redis, because then
+    a peer holds a stale copy only a message can reach. There is no such tier today; if one is added,
+    the pub/sub returns in the same commit, with the test asserting that the receiver's in-memory
+    entry is dropped. The two tests deleted here asserted only that a message was published, which is
+    how a no-op stayed green. `docs/tools/redis-cache.md` now documents the worker/Redis relationship
+    that makes the broadcast unnecessary.
 
 - **`TODO.md`**, added earlier in this same unreleased cycle and now redundant. Both entries it
   carried are settled: the `/tmp` leak is fixed (see _Fixed_), and the remaining image-storage work
