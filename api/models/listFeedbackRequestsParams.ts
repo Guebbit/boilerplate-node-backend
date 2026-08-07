@@ -19,14 +19,30 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
-import type { Password } from './password';
+import type { Page } from './page';
+import type { PageParamParameter } from './pageParamParameter';
+import type { PageSize } from './pageSize';
+import type { PageSizeParamParameter } from './pageSizeParamParameter';
+import type { Text } from './text';
+import type { TextParamParameter } from './textParamParameter';
 
-export interface UpdateUserByIdRequestMultipart {
-  email?: Email;
-  password?: Password;
-  username?: string;
-  admin?: boolean;
-  active?: boolean;
-  /** Optional user profile image */
-  imageUpload?: Blob;
-}
+export type ListFeedbackRequestsParams = {
+/**
+ * 1-based page index
+ * @minimum 1
+ */
+page?: PageParamParameter;
+/**
+ * Optional override; server may clamp to a max
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: PageSizeParamParameter;
+/**
+ * Free-text search string
+ * @minLength 1
+ */
+text?: TextParamParameter;
+email?: Email;
+status?: string;
+};

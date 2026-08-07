@@ -19,11 +19,11 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Id } from './id';
+import type { IdParamParameter } from './idParamParameter';
 import type { Page } from './page';
 import type { PageParamParameter } from './pageParamParameter';
 import type { PageSize } from './pageSize';
 import type { PageSizeParamParameter } from './pageSizeParamParameter';
-import type { ProductIdParamParameter } from './productIdParamParameter';
 import type { Text } from './text';
 import type { TextParamParameter } from './textParamParameter';
 
@@ -47,7 +47,9 @@ text?: TextParamParameter;
 /**
  * Resource identifier
  */
-productId?: ProductIdParamParameter;
+id?: IdParamParameter;
+category?: string;
+tag?: string;
 /**
  * @minimum 0
  */

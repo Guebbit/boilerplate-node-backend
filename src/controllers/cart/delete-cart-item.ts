@@ -25,8 +25,11 @@ export const deleteCartItem = (
         return;
     }
     const userId = request.authContext.id;
-    // productId travels via path param or body.
-    const { productId } = readInput(request, { sources: ['params', 'body'], ids: ['productId'] });
+    // Path param only. `DELETE /cart/{productId}` declares no request body, and it could not use
+    // one anyway: the route cannot match without the segment, so the param always wins the
+    // precedence chain and a body `productId` was unreachable rather than merely undocumented.
+    // (`PUT /cart/{productId}` keeps `body` because `UpdateCartItemByIdRequest` does declare it.)
+    const { productId } = readInput(request, { sources: ['params'], ids: ['productId'] });
 
     if (!isValidObjectId(productId)) {
         rejectResponse(response, 422, 'removeCartItem - missing id', [

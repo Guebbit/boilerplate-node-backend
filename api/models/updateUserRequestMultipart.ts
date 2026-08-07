@@ -28,6 +28,8 @@ export interface UpdateUserRequestMultipart {
   email?: Email;
   username?: string;
   password?: Password;
+  admin?: boolean;
+  active?: boolean;
   /** Optional user profile image */
   imageUpload?: Blob;
   locale?: Locale;

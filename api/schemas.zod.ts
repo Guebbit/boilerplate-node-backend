@@ -584,6 +584,8 @@ export const UpdateUserBody = zod.object({
   "email": zod.email().optional(),
   "username": zod.string().optional(),
   "password": zod.string().min(updateUserBodyPasswordMin).optional(),
+  "admin": zod.boolean().optional(),
+  "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(updateUserBodyLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')
 })
@@ -672,6 +674,8 @@ export const UpdateUserByIdBody = zod.object({
   "email": zod.email().optional(),
   "password": zod.string().min(updateUserByIdBodyPasswordMin).optional(),
   "username": zod.string().optional(),
+  "admin": zod.boolean().optional(),
+  "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.')
 })
 
@@ -706,6 +710,12 @@ export const DeleteUserByIdParams = zod.object({
 
 export const DeleteUserByIdQueryParams = zod.object({
   "hardDelete": zod.boolean().optional()
+})
+
+export const deleteUserByIdBodyHardDeleteDefault = false;
+
+export const DeleteUserByIdBody = zod.object({
+  "hardDelete": zod.boolean().default(deleteUserByIdBodyHardDeleteDefault)
 })
 
 export const DeleteUserByIdResponse = zod.object({
@@ -824,6 +834,22 @@ export const CreateFeedbackRequestResponse = zod.object({
  * Returns feedback/contact requests for admin review.
  * @summary List feedback requests
  */
+export const listFeedbackRequestsQueryPageDefault = 1;
+
+export const listFeedbackRequestsQueryPageSizeDefault = 10;
+export const listFeedbackRequestsQueryPageSizeMax = 100;
+
+
+
+
+export const ListFeedbackRequestsQueryParams = zod.object({
+  "page": zod.number().min(1).default(listFeedbackRequestsQueryPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listFeedbackRequestsQueryPageSizeMax).default(listFeedbackRequestsQueryPageSizeDefault),
+  "text": zod.string().min(1).optional(),
+  "email": zod.email().optional(),
+  "status": zod.string().optional()
+})
+
 export const listFeedbackRequestsBodyPageDefault = 1;
 
 export const listFeedbackRequestsBodyPageSizeDefault = 10;
@@ -930,7 +956,9 @@ export const ListProductsQueryParams = zod.object({
   "page": zod.number().min(1).default(listProductsQueryPageDefault).describe('1-based page index'),
   "pageSize": zod.number().min(1).max(listProductsQueryPageSizeMax).default(listProductsQueryPageSizeDefault),
   "text": zod.string().min(1).optional(),
-  "productId": zod.string().optional(),
+  "id": zod.string().optional(),
+  "category": zod.string().optional(),
+  "tag": zod.string().optional(),
   "minPrice": zod.number().min(listProductsQueryMinPriceMin).optional(),
   "maxPrice": zod.number().min(listProductsQueryMaxPriceMin).optional()
 })
@@ -1167,6 +1195,12 @@ export const DeleteProductByIdParams = zod.object({
 
 export const DeleteProductByIdQueryParams = zod.object({
   "hardDelete": zod.boolean().optional()
+})
+
+export const deleteProductByIdBodyHardDeleteDefault = false;
+
+export const DeleteProductByIdBody = zod.object({
+  "hardDelete": zod.boolean().default(deleteProductByIdBodyHardDeleteDefault)
 })
 
 export const DeleteProductByIdResponse = zod.object({

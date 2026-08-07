@@ -18,15 +18,7 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Email } from './email';
-import type { Password } from './password';
 
-export interface UpdateUserByIdRequestMultipart {
-  email?: Email;
-  password?: Password;
-  username?: string;
-  admin?: boolean;
-  active?: boolean;
-  /** Optional user profile image */
-  imageUpload?: Blob;
+export interface HardDeleteRequest {
+  hardDelete?: boolean;
 }

@@ -26,5 +26,7 @@ export interface UpdateUserByIdRequest {
   email?: Email;
   password?: Password;
   username?: string;
+  admin?: boolean;
+  active?: boolean;
   imageUrl?: ImageUrl;
 }

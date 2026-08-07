@@ -900,6 +900,10 @@ components:
                     type: string
                 password:
                     $ref: '#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
                 locale:
@@ -918,6 +922,10 @@ components:
                     type: string
                 password:
                     $ref: '#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUpload:
                     type: string
                     format: binary
@@ -935,6 +943,10 @@ components:
                     $ref: '#/components/schemas/Password'
                 username:
                     type: string
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
 
@@ -948,6 +960,10 @@ components:
                     $ref: '#/components/schemas/Password'
                 username:
                     type: string
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUpload:
                     type: string
                     format: binary
@@ -1155,6 +1171,16 @@ components:
                     type: array
                     items:
                         type: string
+
+        # For the path-form deletes, which need no id — `{id}` already carries it — but do
+        # read the flag from a body as readily as from the query.
+        HardDeleteRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                hardDelete:
+                    type: boolean
+                    default: false
 
         DeleteProductRequest:
             type: object
@@ -2148,6 +2174,12 @@ paths:
                   in: query
                   schema:
                       type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
@@ -2234,6 +2266,23 @@ paths:
             operationId: listFeedbackRequests
             security:
                 - bearerAuth: []
+            # The controller merges query and body, so every filter below is reachable either way.
+            # The body stays declared because it is read; unlike the other three resources this
+            # one has no `POST /feedback/search` sibling to carry the DTO form.
+            parameters:
+                - $ref: '#/components/parameters/PageParam'
+                - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/TextParam'
+                - name: email
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/Email'
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      type: string
             requestBody:
                 required: false
                 content:
@@ -2293,7 +2342,20 @@ paths:
                 - $ref: '#/components/parameters/PageParam'
                 - $ref: '#/components/parameters/PageSizeParam'
                 - $ref: '#/components/parameters/TextParam'
-                - $ref: '#/components/parameters/ProductIdParam'
+                - $ref: '#/components/parameters/IdParam'
+                # Declared here as well as in SearchProductsRequest: the controller merges query
+                # and body, so `GET /products?category=x` and `POST /products/search {category}`
+                # are one filter reached two ways.
+                - name: category
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                - name: tag
+                  in: query
+                  required: false
+                  schema:
+                      type: string
                 - name: minPrice
                   in: query
                   required: false
@@ -2455,6 +2517,12 @@ paths:
                   in: query
                   schema:
                       type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '401': { $ref: '#/components/responses/Unauthorized' }

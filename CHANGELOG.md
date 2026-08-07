@@ -338,6 +338,31 @@ its own tests.
 
 ### Changed
 
+- **`GET /products` now filters by `id`, the parameter it always read.** The query parameter was
+  declared `productId` while the controller read `id`, so the generated client sent a name the API
+  ignores and filtering the catalogue by id over the GET quietly returned the unfiltered list. The
+  paired frontend had built a rename around it — `productId: currentFilters.id`, with a comment
+  asserting the opposite of the truth and a unit test pinning the workaround — all of which is now
+  gone. `POST /products/search` was unaffected: its body schema always said `id`. Any client
+  sending `?productId=` to `GET /products` must switch to `?id=`; it was never being honoured.
+
+- **Four more contract corrections, all widening what the spec declares to match what the API has
+  always accepted.** `category` and `tag` are now declared as query parameters on `GET /products`,
+  not body-only. `active` and `admin` are declared on `UpdateUserRequest`,
+  `UpdateUserByIdRequest` and both multipart variants, which the write controller has always
+  decoded, validated and stored (no privilege change — the `/users` router is admin-only
+  throughout). `DELETE /products/{id}` and `DELETE /users/{id}` declare an optional
+  `HardDeleteRequest` body, carrying only the flag, since `{id}` already supplies the id.
+  `GET /feedback` declares the query parameters it reads alongside the body it already declared.
+  Every one of these was previously a silent superset: the API accepted input its own contract
+  denied, so no generated client could reach it and no contract test could catch a regression.
+
+- **`DELETE /cart/{productId}` stops reading a request body.** The route cannot match without the
+  path segment, so the param always won the precedence chain and a body `productId` was
+  unreachable rather than merely undocumented. Here the spec was already right and the code was
+  making the false claim, so the declaration lost `body` rather than the spec gaining one. No
+  behaviour change. `PUT /cart/{productId}` keeps it — `UpdateCartItemByIdRequest` declares it.
+
 - **The Redis cache key is built from declared query parameters instead of the raw URL.** It was
   `request.originalUrl`, so the key depended on how a request was _written_ rather than on what it
   asked for: `?page=1&pageSize=10` and `?pageSize=10&page=1` are the same request and were two
@@ -988,20 +1013,6 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   models store.
 
 ### Known issues
-
-- **Five endpoints read input their own contract does not declare**, all recorded with their
-  mechanism in `docs/theory/request-input.md`. The load-bearing one: `GET /products` declares
-  `productId` as its query filter while the controller reads `id`, so the generated client's
-  parameter is silently ignored on the GET and works on `POST /products/search`, which declares
-  `id` in its body. The others are `category`/`tag` accepted from the query though the spec has
-  them body-only; `active`/`admin` decoded on `PUT /users` though no `Update*Request` declares
-  them; `id`/`hardDelete`/`productId` read from bodies the path-form delete and cart-item
-  operations do not declare; and `GET /feedback` declaring a JSON body and no query parameters
-  while the controller reads both. None is fixed by the `readInput` migration, which was
-  behaviour-preserving by design — each needs a decision about which side is wrong, the spec or
-  the code. Nothing verifies the two agree; the cheapest way to start is a test asserting each
-  route's declared `sources` are a subset of what `openapi.yaml` allows, which is written up in
-  the same page.
 
 - **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/core/http/errors.ts`). It
   returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a

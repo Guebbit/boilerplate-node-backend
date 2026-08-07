@@ -140,30 +140,42 @@ caught every discrepancy below. If it stays green for a few months the declarati
 stable and codegen becomes mechanical; if it goes red often, that is the answer about whether the
 shape was ready to generate.
 
+It would have caught all five of the disagreements listed below before they shipped, and it is
+what would stop the next one — those were found by reading the spec against the controllers by
+hand, which is not a thing anyone will remember to do twice.
+
 ## Known discrepancies
 
-Found while writing the table, checked against `openapi.yaml`, and recorded here so the next
-change to these endpoints starts from the truth.
-
-1. **`GET /products` declares `productId` in the query, and the controller reads `id`.** The
-   generated client sends `productId`; the controller ignores it. The body schema
-   (`SearchProductsRequest`) says `id`, so `POST /products/search` works and the GET does not.
-2. **`category` and `tag` are body-only in the spec** but the controller accepts them from the
-   query too, on both `GET /products` and `POST /products/search`.
-3. **`active`/`admin` are decoded on every write route,** but `UpdateUserRequest`,
-   `UpdateUserByIdRequest` and their multipart variants declare neither. Only `CreateUserRequest`
-   does. A `PUT /users` carrying `admin: true` is undeclared input that the controller happily
-   validates and stores.
-4. **The delete and cart-item routes accept body fields their path variants do not declare.**
-   `DELETE /products/{id}`, `DELETE /users/{id}` and `DELETE /cart/{productId}` declare no request
-   body in `openapi.yaml`, yet the controllers read `id`/`hardDelete`/`productId` from one if it is
-   sent. Harmless today — the path param wins — but the spec and the code disagree.
-5. **`GET /feedback` declares a JSON request body and no query parameters at all,** while the
-   controller reads both. A GET with a body is unusual enough that the spec is probably what needs
-   correcting.
+None outstanding. The five recorded here were resolved by correcting `openapi.yaml` in both this
+repo and the paired frontend — see the _Closed_ list below, which keeps each one's mechanism
+because every one of them names a way the same class of bug can return.
 
 ### Closed
 
+- **`GET /products` declared `productId` as its query filter while the controller read `id`.**
+  The generated client sent the parameter, the API ignored it, and filtering the catalogue by id
+  over the GET returned the unfiltered list — a filter that looked like it worked. The frontend
+  had grown a rename around it (`productId: currentFilters.id`) with a comment asserting the
+  opposite of the truth, and a unit test pinning the rename. The spec now declares `id`, matching
+  what `SearchProductsRequest` always said for `POST /products/search`; both the workaround and
+  the test that guarded it are gone.
+- **`category` and `tag` were body-only in the spec** while the controller accepted them from the
+  query on both `GET /products` and `POST /products/search`. Now declared as query parameters too.
+- **`active`/`admin` were decoded, validated and stored on every user write route** while only
+  `CreateUserRequest` declared them. Added to `UpdateUserRequest`, `UpdateUserByIdRequest` and
+  both multipart variants. Not a privilege hole — the whole `/users` router is behind
+  `isAuth, isAdmin` — but undeclared input all the same.
+- **The path-form deletes read `hardDelete` from a body they did not declare.** `DELETE
+/products/{id}` and `DELETE /users/{id}` now declare an optional `HardDeleteRequest` body. It
+  carries only the flag: `{id}` already supplies the id and the path param wins, so a body `id`
+  on those routes is unreachable rather than undocumented.
+- **`DELETE /cart/{productId}` read a body it could never use.** Same unreachability, but here the
+  spec was already right and the code was making the false claim, so the declaration lost `body`
+  rather than the spec gaining one. `PUT /cart/{productId}` keeps it, because
+  `UpdateCartItemByIdRequest` genuinely declares `productId`.
+- **`GET /feedback` declared a JSON body and no query parameters** while the controller read both.
+  The query parameters are now declared. The body stays: it is read, and unlike the other three
+  resources this one has no `POST /feedback/search` sibling to carry the DTO form.
 - **`hardDelete` treated presence as the switch,** so `DELETE /products/:id?hardDelete=false`
   permanently deleted the product — the query value is the string `'false'`, which is truthy —
   while the spec typed the parameter `boolean` with `default: false`. A caller could destroy data

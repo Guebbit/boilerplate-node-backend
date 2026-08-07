@@ -29,6 +29,8 @@ export interface UpdateUserRequest {
   email?: Email;
   username?: string;
   password?: Password;
+  admin?: boolean;
+  active?: boolean;
   imageUrl?: ImageUrl;
   locale?: Locale;
 }
