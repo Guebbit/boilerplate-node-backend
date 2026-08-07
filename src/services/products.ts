@@ -7,7 +7,7 @@ import {
     type IResponseReject,
     type IResponseSuccess
 } from '@core/http/response';
-import { deleteFile } from '@core/adapters/filesystem';
+import { imageStore } from '@core/adapters/image-store';
 import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
@@ -118,7 +118,7 @@ export const update = (
     return productRepository.save(product).then((updatedProduct) =>
         // After saving the new image path, delete the old image file
         (newImageUrl && oldImageUrl !== newImageUrl
-            ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
+            ? imageStore.remove(oldImageUrl)
             : Promise.resolve()
         ).then(() => updatedProduct)
     );
@@ -160,7 +160,7 @@ export const remove = (
         return cartService
             .productRemoveFromCartsById(id)
             .then(() => productRepository.deleteOne(product))
-            .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
+            .then(() => imageStore.remove(product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
 
     // If deletedAt already present: it's soft-deleted → RESTORE

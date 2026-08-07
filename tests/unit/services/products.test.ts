@@ -8,10 +8,22 @@ import { userRepository } from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@core/http/response';
 import type { IUserCartDto } from '@services/cart.dto';
 
-// Mock the filesystem helper so tests never touch the real disk.
-jest.mock('@core/adapters/filesystem', () => ({
-    deleteFile: jest.fn().mockResolvedValue(true)
+/**
+ * Mock the image store, not the filesystem underneath it.
+ *
+ * What this service owes its collaborator is a *stored-image handle* — the `imageUrl` value — and
+ * nothing about where those bytes live. Asserting on `deleteFile(publicPath + url)` instead, as
+ * this file used to, pinned the service to the filesystem backend: it would keep passing while
+ * silently doing the wrong thing the moment images move to a bucket. See
+ * `@core/adapters/image-store`.
+ */
+jest.mock('@core/adapters/image-store', () => ({
+    imageStore: { remove: jest.fn().mockResolvedValue(true) }
 }));
+
+const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
+    '@core/adapters/image-store'
+);
 
 setupTestDb();
 
@@ -316,18 +328,37 @@ describe('productService.updateById', () => {
         expect(updated.active).toBe(false);
     });
 
-    it('updates the imageUrl and triggers deleteFile for the old image', async () => {
-        const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
-            '@core/adapters/filesystem'
-        );
-
+    it('updates the imageUrl and removes the old image from the store', async () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id = (product._id as Types.ObjectId).toString();
 
         await productService.updateById(id, { imageUrl: '/images/new.jpg' });
 
-        // The service should delete the OLD image after saving the new one
-        expect(deleteFile).toHaveBeenCalledWith(expect.stringContaining('old.jpg'));
+        // The OLD image goes, and it goes by its stored url — the service must not construct a
+        // path, because under a bucket backend there is none to construct.
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/old.jpg');
+        expect(imageStore.remove).not.toHaveBeenCalledWith('/images/new.jpg');
+    });
+
+    /* The image is only replaced when a new one arrives; every other edit must leave it alone. */
+    it('keeps the image when an update carries no imageUrl', async () => {
+        const product = await createProduct({ imageUrl: '/images/keep.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        const updated = await productService.updateById(id, { title: 'Renamed Product' });
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+        expect(updated.imageUrl).toBe('/images/keep.jpg');
+    });
+
+    /* Re-submitting the same url is not a replacement — deleting here would delete the live image. */
+    it('keeps the image when the update repeats the current imageUrl', async () => {
+        const product = await createProduct({ imageUrl: '/images/same.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        await productService.updateById(id, { imageUrl: '/images/same.jpg' });
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
     });
 
     it('throws when the product does not exist', async () => {
@@ -396,6 +427,29 @@ describe('productService.removeById', () => {
         if (refreshedUser) {
             expect(refreshedUser.cart.items.some((i) => i.product.toString() === pid)).toBe(false);
         }
+    });
+
+    /* Hard delete is the only path that destroys bytes; the row is gone, so nothing else can. */
+    it('removes the image from the store on a hard delete', async () => {
+        const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        await productService.removeById(id, true);
+
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/doomed.jpg');
+    });
+
+    /**
+     * A soft delete is reversible — `removeById(id, false)` on an already-deleted product restores
+     * it — so deleting the image would restore a product with a broken one.
+     */
+    it('keeps the image on a soft delete', async () => {
+        const product = await createProduct({ imageUrl: '/images/survives.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        await productService.removeById(id, false);
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
     });
 
     it('returns a 404 rejection when the product does not exist', async () => {

@@ -4,7 +4,7 @@ import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@core/http/response';
 import { decodeFormFields } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
-import { deleteFile } from '@core/adapters/filesystem';
+import { imageStore } from '@core/adapters/image-store';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
@@ -42,7 +42,7 @@ export const writeProducts = (
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrlFile = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
 
     // Fields whose type a multipart body cannot carry — see `decodeFormFields`.
@@ -50,8 +50,10 @@ export const writeProducts = (
         booleans: ['active'],
         stringArrays: ['categories', 'tags']
     });
-    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
-    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
+    // If problem arises: remove the image THIS request uploaded — `imageUrlFile`, deliberately,
+    // and not the merged `imageUrl`: a body-supplied url names an image this request did not
+    // create, and deleting it because validation failed would destroy someone else's file.
+    const deleteUpload = () => imageStore.remove(imageUrlFile);
 
     /**
      * Validation errors prevent creation end editing

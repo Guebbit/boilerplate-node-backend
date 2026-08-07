@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { authService } from '@services/auth';
 import { successResponse, rejectResponse } from '@core/http/response';
 import { resolveImageUrl } from '@core/http/uploads';
-import { deleteFile } from '@core/adapters/filesystem';
+import { imageStore } from '@core/adapters/image-store';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
 import { databaseErrorInterpreter } from '@core/http/errors';
@@ -30,10 +30,12 @@ export const postSignup = (
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrlFile = resolveImageUrl(request as Request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
-    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
+    // If problem arises: remove the image THIS request uploaded — `imageUrlFile`, deliberately,
+    // and not the merged `imageUrl`: a body-supplied url names an image this request did not
+    // create, and deleting it because validation failed would destroy someone else's file.
+    const deleteUpload = () => imageStore.remove(imageUrlFile);
 
     /**
      * Register

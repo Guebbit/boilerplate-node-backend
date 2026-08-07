@@ -278,6 +278,19 @@ its own tests.
 
 ### Changed
 
+- **Stored images are deleted through a storage port, `@core/adapters/image-store`.** Where the
+  bytes live is now one module's business: callers hand it the `imageUrl` value and it decides
+  whether that names a file under `public/`, an object in a bucket, or nothing it owns. Previously
+  five call sites — `productService.update`, `productService.remove` and a `deleteUpload` closure in
+  each of the three write controllers — each rebuilt a filesystem path out of an `imageUrl`, which
+  is why the object-storage migration in `TODO.md` reads as a rewrite rather than an adapter swap.
+  Behaviour is unchanged: the shipped implementation is the same filesystem delete, and an
+  S3-compatible one is a second implementation of the same interface. Two consequences worth
+  knowing: an absolute URL (the `NODE_DEFAULT_IMAGE_*` defaults) is now recognised as not-ours
+  instead of producing a doomed `public/https://…` unlink, and path containment is enforced — see
+  _Security_. `resolveImageUrl` returns just the URL now, having previously also handed controllers
+  the raw filesystem path purely so they could unlink it.
+
 - **Rate limiting is 100 requests per minute, not 100 per fifteen.** The old budget was a session
   limit wearing a rate limiter's clothes: a single-page app spends 5-15 requests rendering one
   page, and a full pass of the frontend's live e2e suite issues ~150, peaking at 52 in a minute —
@@ -708,6 +721,17 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   with it, as `tests/unit/services/orders-scope.test.ts`.
 
 ### Security
+
+- **An admin could delete any file the API process could reach, by naming it in `imageUrl`.** Every
+  delete of a stored image was `deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + imageUrl)` —
+  a string concatenation, with nothing between the client's value and the unlink. `imageUrl` is
+  client-supplied on `POST`/`PUT /products` and `/users`, the contract declares it
+  `uri-reference`, and `/../../etc/passwd` is a perfectly legal `uri-reference`: it passes
+  `zodProductSchema` unchanged (verified), is stored, and is unlinked on the next hard delete or
+  image replacement. Deleting a stored image now goes through `@core/adapters/image-store`, which
+  resolves the value against the public directory and refuses anything that lands outside it —
+  including the public directory itself. Requires the admin write scope, so it is a privilege
+  escalation from "can edit the catalogue" to "can delete `.env`", not an unauthenticated hole.
 
 - **The stored filename's extension came from the client.** `resolveUploadFilename` randomised the
   stem but carried `originalname`'s extension over, so valid PNG bytes uploaded as `payload.html`

@@ -55,29 +55,26 @@ export function getFormFiles(request: Request): string[] | undefined {
 }
 
 /**
- * Resolve the effective image URL for a request.
- * An uploaded file (via multer) takes priority over a string imageUrl in the body.
- * Returns the raw full path (for file deletion on error) and the relative URL (for storage).
+ * Resolve the URL of the image a request uploaded, or `undefined` if it uploaded none.
  *
- * Both values are returned because they serve different purposes: the absolute path is needed
- * to `deleteFile()` the upload if the surrounding operation later fails, while only the
- * public-relative URL should be persisted — baking the container's filesystem layout into
- * database rows would break the moment the mount path changes.
+ * Only the public-relative URL is returned — never the filesystem path multer produced. That is a
+ * deliberate boundary: baking the container's filesystem layout into database rows breaks the
+ * moment the mount path changes, and a controller holding a real path is a controller that will
+ * eventually unlink one, which is the coupling that makes moving uploads to object storage a
+ * rewrite instead of an adapter swap. Deleting a stored image goes through
+ * `@core/adapters/image-store`, which speaks these URLs; the raw paths stay inside the upload
+ * pipeline, where `getFormFiles` hands them to the content check.
  *
- * Which is also why only ONE of them is separator-normalised. `imageUrlRaw` comes from multer,
- * which builds it with `path.join()`, so on Windows it arrives as `public\images\x.png`. That
- * form is correct for `deleteFile()` and wrong for everything else: a URL path has no
- * backslashes, so persisting it produced rows that `express.static` answers with a 404 —
- * silently, and only on developer machines that happen to run Windows.
+ * The value is separator-normalised, because multer builds it with `path.join()` and on Windows it
+ * arrives as `public\images\x.png`. A URL path has no backslashes, so persisting that form
+ * produced rows `express.static` answers with a 404 — silently, and only on developer machines
+ * that happen to run Windows.
  *
  * @param request - Express request with optional multer file
  */
-export function resolveImageUrl(request: Request): {
-    imageUrlRaw: string | undefined;
-    imageUrl: string | undefined;
-} {
+export function resolveImageUrl(request: Request): string | undefined {
     // `[0]`: these endpoints accept a single image, so ignore any extras.
-    const imageUrlRaw = getFormFiles(request)?.[0];
+    const uploadedPath = getFormFiles(request)?.[0];
     // Normalise BEFORE stripping, and normalise the prefix too, so the two agree on separators
     // whatever mix the platform and `NODE_PUBLIC_PATH` arrive in. Stripping first would leave a
     // Windows-shaped prefix unmatched against a posix-shaped configured path.
@@ -86,6 +83,5 @@ export function resolveImageUrl(request: Request): {
     // path as a browser will request it. Note `String.replace` with a string pattern replaces
     // only the first occurrence — which is what we want, and also why the prefix must not
     // appear again inside the filename (it cannot: names are random hex).
-    const imageUrl = imageUrlRaw && toPosixPath(imageUrlRaw).replace(publicPath, '');
-    return { imageUrlRaw, imageUrl };
+    return uploadedPath && toPosixPath(uploadedPath).replace(publicPath, '');
 }

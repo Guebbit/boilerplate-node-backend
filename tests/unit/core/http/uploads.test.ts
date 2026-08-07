@@ -7,10 +7,10 @@
  * separately here — a regression that handles only two of them would still look fine on the
  * route that happens to use the third.
  *
- * `resolveImageUrl()` returns two values for two different consumers: the absolute path (used to
- * delete the upload if the surrounding operation later fails) and the public-relative URL (the
- * only one safe to persist). Conflating them bakes the container's filesystem layout into
- * database rows.
+ * `resolveImageUrl()` returns the public-relative URL and nothing else. It used to hand back the
+ * filesystem path as well, for controllers to unlink on a failure; deletion now goes through
+ * `@core/adapters/image-store`, which speaks stored URLs, so the path no longer leaves the upload
+ * pipeline. Persisting one would bake the container's filesystem layout into database rows.
  */
 
 import type { Request } from 'express';
@@ -105,17 +105,14 @@ describe('resolveImageUrl', () => {
         else process.env.NODE_PUBLIC_PATH = originalPublicPath;
     });
 
-    it('returns the raw path for deletion and the stripped path for storage', () => {
+    it('strips the public prefix off the uploaded path', () => {
         delete process.env.NODE_PUBLIC_PATH;
 
         const result = resolveImageUrl(requestWith({ file: uploaded('public/images/a.png') }));
 
-        // Two distinct values, for two distinct consumers. If they were ever the same value the
-        // filesystem layout would end up persisted in the database.
-        expect(result).toEqual({
-            imageUrlRaw: 'public/images/a.png',
-            imageUrl: '/images/a.png'
-        });
+        // The stored value is a URL, never the path the file was written to: the filesystem
+        // layout must not end up in the database.
+        expect(result).toBe('/images/a.png');
     });
 
     it('strips a configured NODE_PUBLIC_PATH prefix instead of the default', () => {
@@ -125,16 +122,13 @@ describe('resolveImageUrl', () => {
             requestWith({ file: uploaded('/srv/uploads/images/a.png') })
         );
 
-        expect(result.imageUrlRaw).toBe('/srv/uploads/images/a.png');
-        expect(result.imageUrl).toBe('/images/a.png');
+        expect(result).toBe('/images/a.png');
     });
 
     it('defaults the prefix to "public" when NODE_PUBLIC_PATH is unset', () => {
         delete process.env.NODE_PUBLIC_PATH;
 
-        expect(resolveImageUrl(requestWith({ file: uploaded('public/x.png') })).imageUrl).toBe(
-            '/x.png'
-        );
+        expect(resolveImageUrl(requestWith({ file: uploaded('public/x.png') }))).toBe('/x.png');
     });
 
     it('takes only the first file when several were uploaded', () => {
@@ -146,17 +140,14 @@ describe('resolveImageUrl', () => {
             })
         );
 
-        expect(result.imageUrlRaw).toBe('public/images/first.png');
-        expect(result.imageUrl).toBe('/images/first.png');
+        expect(result).toBe('/images/first.png');
     });
 
-    it('returns both values undefined when no file was uploaded', () => {
-        // Callers distinguish "no image supplied" from "image supplied" on these being undefined,
-        // so an empty string here would read as "an image at the site root".
-        expect(resolveImageUrl(requestWith({}))).toEqual({
-            imageUrlRaw: undefined,
-            imageUrl: undefined
-        });
+    it('returns undefined when no file was uploaded', () => {
+        // Callers distinguish "no image supplied" from "image supplied" on this being undefined,
+        // so an empty string here would read as "an image at the site root" — and, worse, would
+        // make the failure-path cleanup try to delete it.
+        expect(resolveImageUrl(requestWith({}))).toBeUndefined();
     });
 
     it('replaces only the leading occurrence of the prefix', () => {
@@ -166,7 +157,6 @@ describe('resolveImageUrl', () => {
 
         expect(
             resolveImageUrl(requestWith({ file: uploaded('public/images/public-notice.png') }))
-                .imageUrl
         ).toBe('/images/public-notice.png');
     });
 
@@ -187,20 +177,7 @@ describe('resolveImageUrl', () => {
                 requestWith({ file: uploaded(String.raw`public\images\a.png`) })
             );
 
-            expect(result.imageUrl).toBe('/images/a.png');
-        });
-
-        it('leaves imageUrlRaw in the platform-native form the filesystem needs', () => {
-            delete process.env.NODE_PUBLIC_PATH;
-
-            const result = resolveImageUrl(
-                requestWith({ file: uploaded(String.raw`public\images\a.png`) })
-            );
-
-            // Only ONE of the two values is a URL. `imageUrlRaw` goes to `deleteFile()` when the
-            // surrounding operation fails, so normalising it too would break cleanup on Windows —
-            // the exact inverse of the bug being fixed here.
-            expect(result.imageUrlRaw).toBe(String.raw`public\images\a.png`);
+            expect(result).toBe('/images/a.png');
         });
 
         it('matches a posix NODE_PUBLIC_PATH against a backslashed upload path', () => {
@@ -213,7 +190,7 @@ describe('resolveImageUrl', () => {
                 requestWith({ file: uploaded(String.raw`C:\srv\uploads\images\a.png`) })
             );
 
-            expect(result.imageUrl).toBe('/images/a.png');
+            expect(result).toBe('/images/a.png');
         });
 
         it('matches a backslashed NODE_PUBLIC_PATH against a backslashed upload path', () => {
@@ -223,7 +200,7 @@ describe('resolveImageUrl', () => {
                 requestWith({ file: uploaded(String.raw`C:\srv\uploads\images\a.png`) })
             );
 
-            expect(result.imageUrl).toBe('/images/a.png');
+            expect(result).toBe('/images/a.png');
         });
 
         it('never persists a backslash, whatever the inputs look like', () => {
@@ -236,9 +213,7 @@ describe('resolveImageUrl', () => {
                 'C:/srv/images/a.png',
                 String.raw`C:\srv/images\a.png`
             ])
-                expect(resolveImageUrl(requestWith({ file: uploaded(path) })).imageUrl).not.toMatch(
-                    /\\/
-                );
+                expect(resolveImageUrl(requestWith({ file: uploaded(path) }))).not.toMatch(/\\/);
         });
     });
 });
