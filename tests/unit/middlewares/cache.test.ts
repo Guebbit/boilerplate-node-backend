@@ -6,7 +6,6 @@ jest.mock('@core/adapters/cache', () => ({
     getCacheValue: jest.fn(),
     setCacheValue: jest.fn(),
     invalidateCacheTags: jest.fn(),
-    broadcastCacheInvalidation: jest.fn(),
     // Identity by default so the tests below assert the TTL the route declared. The clamping
     // behaviour itself is tested against the real implementation in core/adapters/cache.test.ts.
     resolveCacheTtl: jest.fn((seconds: number) => seconds)
@@ -215,10 +214,9 @@ describe('invalidateCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockedCache.invalidateCacheTags.mockResolvedValue();
-        mockedCache.broadcastCacheInvalidation.mockResolvedValue();
     });
 
-    it('invalidates tags and broadcasts after successful responses finish', async () => {
+    it('invalidates tags after successful responses finish', async () => {
         const middleware = invalidateCache(['orders']);
         const { response, listeners } = createResponse();
         const next = jest.fn() as NextFunction;
@@ -234,7 +232,6 @@ describe('invalidateCache', () => {
         await Promise.resolve();
 
         expect(mockedCache.invalidateCacheTags).toHaveBeenCalledWith(['orders']);
-        expect(mockedCache.broadcastCacheInvalidation).toHaveBeenCalledWith(['orders']);
     });
 
     it('skips invalidation for failed responses', () => {
@@ -247,6 +244,5 @@ describe('invalidateCache', () => {
         listeners.get('finish')?.();
 
         expect(mockedCache.invalidateCacheTags).not.toHaveBeenCalled();
-        expect(mockedCache.broadcastCacheInvalidation).not.toHaveBeenCalled();
     });
 });

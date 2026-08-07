@@ -3,7 +3,6 @@ import {
     getCacheValue,
     invalidateCacheTags,
     setCacheValue,
-    broadcastCacheInvalidation,
     resolveCacheTtl
 } from '@core/adapters/cache';
 
@@ -122,13 +121,17 @@ export const setCache =
 /**
  * Clear Redis cache groups after successful write operations.
  * Example: after creating/updating/deleting a product, clear "products" cache.
+ *
+ * One call covers every app instance: the cached responses and the tag sets live in shared
+ * Redis, so deleting them here is immediately visible to every other worker. No cross-instance
+ * broadcast is involved — there is no process-local cache tier for one to invalidate.
  */
 export const invalidateCache =
     (tags: string[]) => (_request: Request, response: Response, next: NextFunction) => {
         response.on('finish', () => {
             // Only clear cache after a successful write; failed writes should not wipe valid cache.
             if (response.statusCode >= 200 && response.statusCode < 300)
-                void invalidateCacheTags(tags).then(() => broadcastCacheInvalidation(tags));
+                void invalidateCacheTags(tags);
         });
 
         next();
