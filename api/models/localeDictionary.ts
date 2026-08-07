@@ -18,11 +18,14 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ObservabilityLoadTestResult } from './observabilityLoadTestResult';
+import type { Locale } from './locale';
+import type { LocaleDictionaryMessages } from './localeDictionaryMessages';
 
-export interface ObservabilityLoadTestResponseEnvelope {
-  success: true;
-  status: number;
-  message: string;
-  data: ObservabilityLoadTestResult;
+/**
+ * The API's OWN message dictionary for one language — its API-response copy and nothing else. It is never a client's UI dictionary: the two are authored and deployed in separate repositories, and mixing them would put view copy in the API's keyspace. A client that wants these merges them under a namespace it reserves for the API, never at the root.
+ */
+export interface LocaleDictionary {
+  locale: Locale;
+  /** Nested key/value dictionary, the same shape the API loads. */
+  messages: LocaleDictionaryMessages;
 }

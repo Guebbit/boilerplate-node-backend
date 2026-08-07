@@ -1,6 +1,5 @@
-import { Types } from 'mongoose';
+import type { Types } from 'mongoose';
 import { t } from '@core/i18n';
-import type { QueryFilter } from 'mongoose';
 import type { SearchProductsRequest, Product } from '@types';
 import {
     generateReject,
@@ -10,15 +9,9 @@ import {
 } from '@core/http/response';
 import { deleteFile } from '@core/adapters/filesystem';
 import { cartService } from '@services/cart';
-import { zodProductSchema, applyProductTransform } from '@models/products';
+import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
-import {
-    normalizePagination,
-    addTextFilter,
-    paginatedSearch,
-    escapeRegex
-} from '@repositories/search';
 
 /**
  * Product Service
@@ -62,61 +55,11 @@ export const search = (
 ): Promise<{
     items: IProductDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
-}> => {
-    const pagination = normalizePagination(filters);
-    const where: QueryFilter<IProductDocument> = {};
-
-    if (filters.id && String(filters.id).trim() !== '')
-        where._id = new Types.ObjectId(String(filters.id));
-
-    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, [
-        'title',
-        'description'
-    ]);
-
-    // Filter by categories/tags. Escaped for the same reason as every other `$regex` in this
-    // codebase — see `escapeRegex` in @repositories/search: unescaped client text is an
-    // unauthenticated denial of service, and these filters are reachable from the public
-    // product listing.
-    if (filters.category && String(filters.category).trim() !== '')
-        where.categories = {
-            $elemMatch: { $regex: escapeRegex(String(filters.category).trim()), $options: 'i' }
-        };
-    if (filters.tag && String(filters.tag).trim() !== '')
-        where.tags = {
-            $elemMatch: { $regex: escapeRegex(String(filters.tag).trim()), $options: 'i' }
-        };
-
-    // Filter by price range
-    const priceConditions: Record<string, number> = {};
-    if (
-        filters.minPrice !== undefined &&
-        filters.minPrice !== null &&
-        !Number.isNaN(Number(filters.minPrice))
-    )
-        priceConditions.$gte = Number(filters.minPrice);
-    if (
-        filters.maxPrice !== undefined &&
-        filters.maxPrice !== null &&
-        !Number.isNaN(Number(filters.maxPrice))
-    )
-        priceConditions.$lte = Number(filters.maxPrice);
-    if (Object.keys(priceConditions).length > 0) where.price = priceConditions;
-
-    if (!admin) {
-        where.active = true;
-        where.deletedAt = { $exists: false };
-    }
-
-    // findAll is lean — plain objects mislabeled IProductDocument, same as before this change;
-    // applyProductTransform normalizes them since .lean() bypasses the schema's toJSON.
-    return paginatedSearch(productRepository, where, pagination).then((result) => ({
-        ...result,
-        items: (result.items as unknown as Record<string, unknown>[]).map((item) =>
-            applyProductTransform(item)
-        ) as unknown as IProductDocument[]
-    }));
-};
+}> =>
+    // The only product-domain decision left here: admins see everything, everyone else sees the
+    // published catalogue. How `text`/`category`/`tag`/`minPrice`/`maxPrice` become a query is
+    // declared on the repository.
+    productRepository.search(filters, admin ? {} : productRepository.publicScope());
 
 /**
  * Get a single product by ID.
@@ -130,11 +73,7 @@ export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
     if (admin) return productRepository.findById(id);
-    return productRepository.findOne({
-        _id: id,
-        active: true,
-        deletedAt: { $exists: false }
-    });
+    return productRepository.findOne({ _id: id, ...productRepository.publicScope() });
 };
 
 /**

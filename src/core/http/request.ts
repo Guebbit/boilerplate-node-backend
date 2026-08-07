@@ -32,40 +32,6 @@ const getRequestBody = (request: Request<ParamsDictionary>): Record<string, unkn
     (request.body ?? {}) as Record<string, unknown>;
 
 /**
- * Normalize pagination parameters from a pre-merged source object.
- * Falls back to NODE_SETTINGS_PAGINATION_PAGE_SIZE env var.
- *
- * Usage: extractPagination({ page: request.body.page ?? request.query.page, pageSize: ... })
- *
- * Returning `undefined` (rather than 1 / a default size) is deliberate: it lets the data layer
- * distinguish "client asked for page 1" from "client did not paginate at all".
- */
-export const extractPagination = (
-    parameters: { page?: string | number; pageSize?: string | number } = {}
-): { page: number | undefined; pageSize: number | undefined } => {
-    // Env fallback so page size is deployment-tunable without touching route code.
-    const pageSizeRaw = parameters.pageSize ?? process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-    return {
-        // Truthiness check, so '' and 0 both collapse to undefined ("not paginated") — and
-        // `Number()` never gets a chance to turn '' into 0.
-        page: parameters.page ? Number(parameters.page) : undefined,
-        pageSize: pageSizeRaw ? Number(pageSizeRaw) : undefined
-    };
-};
-
-/**
- * Pick the first defined non-empty value across multiple sources in priority order.
- * Usage: extractId(request.parameters.id, request.body.id, request.query.id)
- *
- * `Boolean` as the predicate skips undefined *and* empty strings — an empty `?id=` is not a
- * usable id, so it should fall through to the next source rather than win.
- * Argument order *is* the precedence order.
- */
-export const extractId = (...candidates: (string | undefined)[]): string | undefined =>
-    // Cast because `find` widens to `string | undefined` regardless of the predicate.
-    candidates.find(Boolean) as string | undefined;
-
-/**
  * Merge body and query into a single value, preferring body.
  * Reduces boilerplate in GET/search controllers.
  *
@@ -89,22 +55,25 @@ export const mergeBodyQuery = <T extends Record<string, unknown>>(
 };
 
 /**
- * Extract pagination from request body+query in one call.
- * Convenience wrapper combining mergeBodyQuery + extractPagination.
+ * Read the pagination parameters out of a request's body+query. Body wins, per `mergeBodyQuery`.
  *
- * The single call most list controllers need — body wins over query, per `mergeBodyQuery`.
+ * Deliberately does NOT default or bound anything — it returns exactly what the caller sent, so
+ * `undefined` still means "did not paginate". Defaults, the 1-100 bounds and the
+ * `NODE_SETTINGS_PAGINATION_PAGE_SIZE` fallback all live in `normalizePagination`
+ * (`@repositories/search`), which runs on every search regardless of route. Defaulting here too
+ * would only add a second set that the later one always overwrites.
  */
 export const extractRequestPagination = (
     request: Request<ParamsDictionary>
-): { page: number | undefined; pageSize: number | undefined } => {
+): { page: string | undefined; pageSize: string | undefined } => {
     const merged = mergeBodyQuery(
         getRequestBody(request),
         request.query as Record<string, string> | undefined
     );
-    return extractPagination({
+    return {
         page: merged.page as string | undefined,
         pageSize: merged.pageSize as string | undefined
-    });
+    };
 };
 
 /**
@@ -159,12 +128,16 @@ export const extractCustomId = (
 ): string | undefined => {
     const fromParameters = fields.param ? request.params[fields.param] : undefined;
     const fromBody = fields.body ? getRequestBody(request)[fields.body] : undefined;
-    // Delegates precedence to `extractId`: param before body, first truthy value wins.
-    return extractId(
-        Array.isArray(fromParameters) ? fromParameters[0] : (fromParameters as string | undefined),
-        // Body values are `unknown` (JSON can hold anything), so coerce with String().
-        Array.isArray(fromBody) ? String(fromBody[0]) : (fromBody as string | undefined)
-    );
+    // A repeated key arrives as an array; take the first. Body values are `unknown` (JSON can
+    // hold anything), so coerce with String().
+    const parameterValue = Array.isArray(fromParameters)
+        ? fromParameters[0]
+        : (fromParameters as string | undefined);
+    const bodyValue = Array.isArray(fromBody)
+        ? String(fromBody[0])
+        : (fromBody as string | undefined);
+    // Param before body, and an empty string falls through as if the key were absent.
+    return parameterValue || bodyValue;
 };
 
 /**

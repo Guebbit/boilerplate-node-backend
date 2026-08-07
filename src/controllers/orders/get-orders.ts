@@ -8,9 +8,8 @@ import {
 } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { extractId, mergeBodyQuery } from '@core/http/request';
+import { mergeBodyQuery } from '@core/http/request';
 import type { SearchOrdersRequest } from '@types';
-import { userScope } from '@core/http/scopes';
 import type { CastError } from 'mongoose';
 import {
     emitAnalyticsEvent,
@@ -59,8 +58,9 @@ export const getOrders = (
         request.body as Record<string, unknown> | undefined,
         request.query as Record<string, string> | undefined
     );
-    const id = extractId(request.params.id, merged.id as string | undefined);
-    /* Non-admin callers cannot filter by arbitrary userId; userScope enforces their own. */
+    // Route param wins over a body/query id; an empty string falls through as if absent.
+    const id = request.params.id || (merged.id as string | undefined);
+    /* Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their own. */
     const userId = isAdmin ? (merged.userId as string | undefined) : undefined;
 
     const parseResult = searchOrdersQuerySchema.safeParse({ ...merged, id, userId });
@@ -73,7 +73,7 @@ export const getOrders = (
         );
 
     return orderService
-        .search(parseResult.data, userScope(request))
+        .search(parseResult.data, orderService.callerScope(request.authContext))
         .then((result) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),

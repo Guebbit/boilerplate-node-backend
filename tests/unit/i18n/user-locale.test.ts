@@ -2,7 +2,7 @@ import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
 import * as authService from '@services/auth';
 import * as userService from '@services/users';
-import * as userRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 import { getDefaultLocale, runWithLocale } from '@core/i18n';
 import type { IResponseSuccess } from '@core/http/response';
 import type { IUserDocument } from '@models/users';

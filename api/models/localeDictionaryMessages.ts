@@ -19,7 +19,7 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export interface ObservabilityLoadTestResult {
-  /** Wall-clock time in ms spent on the synthetic CPU load */
-  durationMs: number;
-}
+/**
+ * Nested key/value dictionary, the same shape the API loads.
+ */
+export type LocaleDictionaryMessages = { [key: string]: unknown };

@@ -35,6 +35,60 @@ export const GetHealthResponse = zod.object({
 
 
 /**
+ * Which languages this deployment can answer in, plus its default and fallback.
+ *
+ * Public, unauthenticated and cacheable: it is static copy that changes only on
+ * deploy, and a client that has just failed to reach the API is exactly who needs
+ * it.
+ * @summary Supported languages
+ */
+export const getLocalesResponseDataLocalesItemRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+export const getLocalesResponseDataDefaultRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+export const getLocalesResponseDataFallbackRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const GetLocalesResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "locales": zod.array(zod.string().regex(getLocalesResponseDataLocalesItemRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')).describe('Every supported language tag.'),
+  "default": zod.string().regex(getLocalesResponseDataDefaultRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
+  "fallback": zod.string().regex(getLocalesResponseDataFallbackRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')
+}).describe('Which languages a deployment can answer in. Runtime state, not contract state: it is derived from the dictionaries actually deployed, so it cannot be an enum here.')
+})
+
+
+/**
+ * This API's own dictionary for one language.
+ *
+ * Normally unnecessary — the API resolves its keys itself and puts finished text on
+ * the wire. It earns its place when no response arrives at all (a network failure, a
+ * bare 502) and the client must produce the copy itself, in the active language.
+ * @summary API message dictionary
+ */
+export const getLocaleDictionaryPathLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const GetLocaleDictionaryParams = zod.object({
+  "locale": zod.string().regex(getLocaleDictionaryPathLocaleRegExp).describe('A language tag from `GET \/locales`.')
+})
+
+export const getLocaleDictionaryResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const GetLocaleDictionaryResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "locale": zod.string().regex(getLocaleDictionaryResponseDataLocaleRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
+  "messages": zod.record(zod.string(), zod.unknown()).describe('Nested key\/value dictionary, the same shape the API loads.')
+}).describe('The API\'s OWN message dictionary for one language — its API-response copy and nothing else. It is never a client\'s UI dictionary: the two are authored and deployed in separate repositories, and mixing them would put view copy in the API\'s keyspace. A client that wants these merges them under a namespace it reserves for the API, never at the root.')
+})
+
+
+/**
  * Live Server-Sent Events stream for demo dashboards.
  * Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
  * @summary Observability SSE stream
@@ -221,22 +275,6 @@ export const GetObservabilityAuditLogsResponse = zod.object({
 })),
   "total": zod.number().min(getObservabilityAuditLogsResponseDataDataTotalMin)
 })
-})
-})
-
-
-/**
- * Dev/staging-only endpoint that busy-loops the event loop for a fixed amount of
- * work while emitting log lines, so dashboards and log pipelines can be exercised
- * under load. Not registered when `NODE_ENV=production`. Requires admin role.
- * @summary Synthetic CPU load test
- */
-export const GetObservabilityLoadTestResponse = zod.object({
-  "success": zod.literal(true),
-  "status": zod.number(),
-  "message": zod.string(),
-  "data": zod.object({
-  "durationMs": zod.number().describe('Wall-clock time in ms spent on the synthetic CPU load')
 })
 })
 

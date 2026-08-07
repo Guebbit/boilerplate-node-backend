@@ -50,9 +50,8 @@ export interface IOrderDocument
 
 /**
  * Order Document model type.
- * Business logic (search, getAll) is now handled by the
- * service layer (src/services/orders.ts) and repository layer
- * (src/repositories/orders.ts).
+ * Business logic lives in the service layer (src/services/orders.ts); queries live in the
+ * repository layer (src/repositories/orders.ts).
  */
 export type IOrderModel = Model<IOrderDocument, unknown, unknown>;
 
@@ -107,7 +106,7 @@ export const orderSchema = new Schema<IOrderDocument>(
  * `orderItemSchema`'s `_id: false` took effect still carry one at the BSON
  * level), and recursively normalizes the embedded product snapshot.
  * Exported so aggregate results (which bypass `toJSON`) can be mapped
- * through the same logic — see @services/orders `getAll`/`search`/`getById`.
+ * through the same logic — see `normalize` in @repositories/base.
  */
 export const applyOrderTransform = (
     serialized: Record<string, unknown>

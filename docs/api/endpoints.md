@@ -21,7 +21,6 @@ Endpoints for health checks, metrics, and audit logs. The two public routes feed
 | GET | `/observability/health` | admin | Full health snapshot |
 | GET | `/observability/metrics/overview` | admin | Curated KPI JSON |
 | GET | `/observability/audit` | admin | Recent audit events |
-| GET | `/observability/load-test` | admin, dev/staging only | Synthetic CPU load generator for exercising dashboards/log pipelines |
 
 ## Account & Auth
 

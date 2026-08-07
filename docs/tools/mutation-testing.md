@@ -73,7 +73,7 @@ The generated `api/` directory, config, and infrastructure bootstrapping are exc
 "thresholds": { "high": 65, "low": 42, "break": 38 }
 ```
 
-Measured 2026-08-05: 41.84% total / 60.93% of covered code, 1379 mutants, ~15 minutes. `stryker.config.json`'s own comment is explicit that the gap between those two numbers is itself a finding: several files have **no unit test at all** (`core/http/request.ts`, `scopes.ts`, `uploads.ts`, `errors.ts`; middlewares `authorizations.ts`, `token.ts`, `cookie.ts`, `security.ts`) and nobody noticed, because they're exercised through the integration and contract suites instead — which is exactly why the mutation report's `# no cov` column exists: it names the files line coverage alone would never have flagged.
+Measured 2026-08-05: 41.84% total / 60.93% of covered code, 1379 mutants, ~15 minutes. `stryker.config.json`'s own comment is explicit that the gap between those two numbers is itself a finding: several files have **no unit test at all** (`core/http/request.ts`, `uploads.ts`, `errors.ts`; middlewares `authorizations.ts`, `token.ts`, `cookie.ts`, `security.ts`) and nobody noticed, because they're exercised through the integration and contract suites instead — which is exactly why the mutation report's `# no cov` column exists: it names the files line coverage alone would never have flagged.
 
 `break` sits below the measured score on purpose, to catch a real regression rather than normal run-to-run drift. Raise it when the score rises for real; never lower it to make a run pass.
 

@@ -13,8 +13,6 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import {
-    extractPagination,
-    extractId,
     mergeBodyQuery,
     extractRequestPagination,
     extractAndValidateId,
@@ -69,63 +67,6 @@ const makeTypedRequest = (contentType?: string, body?: unknown) =>
             contentType === undefined ? null : contentType === type ? type : false
     }) as unknown as Request<ParamsDictionary>;
 
-describe('extractPagination', () => {
-    const originalPageSize = process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-
-    afterEach(() => {
-        if (originalPageSize === undefined) delete process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-        else process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = originalPageSize;
-    });
-
-    it('coerces string parameters to numbers', () => {
-        expect(extractPagination({ page: '2', pageSize: '25' })).toEqual({ page: 2, pageSize: 25 });
-    });
-
-    it('leaves both undefined when nothing was asked for', () => {
-        delete process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-
-        expect(extractPagination()).toEqual({ page: undefined, pageSize: undefined });
-    });
-
-    // Deliberate: the data layer has to tell "client asked for page 1" apart from
-    // "client did not paginate", so an empty or zero value must not become a number.
-    it('collapses empty strings and zero to undefined rather than 0', () => {
-        delete process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
-
-        expect(extractPagination({ page: '', pageSize: 0 })).toEqual({
-            page: undefined,
-            pageSize: undefined
-        });
-    });
-
-    it('falls back to the env page size when the caller gives none', () => {
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = '15';
-
-        expect(extractPagination({ page: 1 }).pageSize).toBe(15);
-    });
-
-    it('prefers an explicit page size over the env fallback', () => {
-        process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE = '15';
-
-        expect(extractPagination({ pageSize: 50 }).pageSize).toBe(50);
-    });
-});
-
-describe('extractId', () => {
-    it('returns the first defined non-empty candidate, in argument order', () => {
-        expect(extractId(undefined, 'from-body', 'from-query')).toBe('from-body');
-        expect(extractId('from-param', 'from-body')).toBe('from-param');
-    });
-
-    it('skips empty strings, which are not usable ids', () => {
-        expect(extractId('', 'from-body')).toBe('from-body');
-    });
-
-    it('returns undefined when every candidate is empty', () => {
-        expect(extractId(undefined, '')).toBeUndefined();
-    });
-});
-
 describe('mergeBodyQuery', () => {
     it('lets the body win over the query on conflict', () => {
         expect(mergeBodyQuery({ text: 'body' }, { text: 'query' })).toEqual({ text: 'body' });
@@ -151,17 +92,31 @@ describe('mergeBodyQuery', () => {
     });
 });
 
+/*
+ * Values come back exactly as sent, uncoerced and unbounded. Defaulting belongs to
+ * `normalizePagination` (@repositories/search), which runs on every search — see
+ * `tests/unit/repositories/search-pagination.test.ts`.
+ */
 describe('extractRequestPagination', () => {
     it('reads pagination from the body', () => {
         const request = makeRequest({ body: { page: '3', pageSize: '5' } });
 
-        expect(extractRequestPagination(request)).toEqual({ page: 3, pageSize: 5 });
+        expect(extractRequestPagination(request)).toEqual({ page: '3', pageSize: '5' });
     });
 
     it('reads pagination from the query when the body has none', () => {
         const request = makeRequest({ query: { page: '4', pageSize: '5' } });
 
-        expect(extractRequestPagination(request)).toEqual({ page: 4, pageSize: 5 });
+        expect(extractRequestPagination(request)).toEqual({ page: '4', pageSize: '5' });
+    });
+
+    it('reports absent pagination as undefined, not as a default', () => {
+        const request = makeRequest();
+
+        expect(extractRequestPagination(request)).toEqual({
+            page: undefined,
+            pageSize: undefined
+        });
     });
 
     it('survives a request with no body at all', () => {

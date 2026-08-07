@@ -99,7 +99,8 @@ export default withMermaid(
                                 text: 'Contract-Derived Request Data',
                                 link: '/tools/contract-request-data'
                             },
-                            { text: 'Mutation Testing', link: '/tools/mutation-testing' }
+                            { text: 'Mutation Testing', link: '/tools/mutation-testing' },
+                            { text: 'Load Testing', link: '/tools/load-testing' }
                         ]
                     }
                 ],

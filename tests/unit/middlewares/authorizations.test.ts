@@ -137,8 +137,8 @@ describe('getAuth', () => {
 
     it('resolves a missing admin flag to false rather than undefined', async () => {
         // `admin ?? false`. An undefined `admin` would be falsy at most call sites and so would
-        // "work", but `isAdmin` and `userScope` both branch on it — an explicit false is the
-        // only value that cannot be misread as "unknown".
+        // "work", but `isAdmin` and `orderService.callerScope` both branch on it — an explicit
+        // false is the only value that cannot be misread as "unknown".
         mockedVerifyAccessToken.mockResolvedValue({ id: 'user-2' });
         mockedFindById.mockResolvedValue({
             id: 'user-2',

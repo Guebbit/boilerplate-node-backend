@@ -546,17 +546,6 @@ components:
                 data:
                     $ref: '#/components/schemas/ObservabilityMetricsSummaryResponse'
 
-        ObservabilityLoadTestResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/ObservabilityLoadTestResult'
-
         AuditLogsResponseEnvelope:
             type: object
             additionalProperties: false
@@ -1562,15 +1551,6 @@ components:
                 success: { type: boolean, enum: [true] }
                 data: { $ref: '#/components/schemas/ObservabilityMetricsSummary' }
 
-        ObservabilityLoadTestResult:
-            type: object
-            additionalProperties: false
-            required: [durationMs]
-            properties:
-                durationMs:
-                    type: number
-                    description: Wall-clock time in ms spent on the synthetic CPU load
-
         AuditEventItem:
             type: object
             additionalProperties: false
@@ -1811,28 +1791,6 @@ paths:
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
-                '500': { $ref: '#/components/responses/InternalError' }
-
-    /observability/load-test:
-        get:
-            tags: [Observability]
-            summary: Synthetic CPU load test
-            description: |
-                Dev/staging-only endpoint that busy-loops the event loop for a fixed amount of
-                work while emitting log lines, so dashboards and log pipelines can be exercised
-                under load. Not registered when `NODE_ENV=production`. Requires admin role.
-            operationId: getObservabilityLoadTest
-            security:
-                - bearerAuth: []
-            responses:
-                '200':
-                    description: Load test completed
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ObservabilityLoadTestResponseEnvelope'
-                '401': { $ref: '#/components/responses/Unauthorized' }
-                '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     # --------- Authentication and profile ---------

@@ -15,8 +15,7 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 - Link external services using `.env` variables (for example SMTP/email responders on another server):
     - `NODE_SMTP_HOST`, `NODE_SMTP_PORT`, `NODE_SMTP_USER`, `NODE_SMTP_PASS`, `NODE_SMTP_SENDER`
 - Optional: use Docker/Podman to run the app and its dependencies.
-- IMPORTANT:
-    - Development-only endpoints (e.g. `GET /observability/load-test`) are gated behind `NODE_ENV !== 'production'` and are not registered in production builds.
+- Load is generated from outside the process with `npm run load:test` (autocannon) — see [Load testing](docs/tools/load-testing.md).
 
 ## Quickstart
 

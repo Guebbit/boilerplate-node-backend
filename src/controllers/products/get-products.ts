@@ -11,7 +11,7 @@ import {
 } from '@api/schemas.zod';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { extractId, mergeBodyQuery } from '@core/http/request';
+import { mergeBodyQuery } from '@core/http/request';
 import type { SearchProductsRequest } from '@types';
 import type { CastError } from 'mongoose';
 import {
@@ -72,7 +72,8 @@ export const getProducts = (
     // OpenAPI currently models category/tag as single-value filters; if arrays/CSV are provided we pick the first one.
     const category = coerceStringArray(merged.category)[0];
     const tag = coerceStringArray(merged.tag)[0];
-    const id = extractId(request.params.id, merged.id as string | undefined);
+    // Route param wins over a body/query id; an empty string falls through as if absent.
+    const id = request.params.id || (merged.id as string | undefined);
 
     const parseResult = searchProductsQuerySchema.safeParse({ ...merged, id, category, tag });
     if (!parseResult.success)

@@ -3,8 +3,8 @@ import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct, makeProduct } from '../../helpers/factories/products';
 import * as productService from '@services/products';
-import * as productRepository from '@repositories/products';
-import * as userRepository from '@repositories/users';
+import { productRepository } from '@repositories/products';
+import { userRepository } from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@core/http/response';
 import type { IUserCartDto } from '@services/cart.dto';
 

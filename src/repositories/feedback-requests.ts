@@ -1,31 +1,22 @@
-import { feedbackRequestModel } from '@models/feedback-requests';
+import { feedbackRequestModel, applyFeedbackRequestTransform } from '@models/feedback-requests';
 import type { IFeedbackRequestDocument } from '@models/feedback-requests';
-import type { QueryFilter } from 'mongoose';
-import { createBaseRepository, type IFindAllOptions } from './base';
+import { createBaseRepository } from './base';
 
 /**
  * Feedback Request Repository
- * Standard CRUD via base factory.
+ * Standard CRUD via the base factory.
+ *
+ * `status` is deliberately absent from the search spec: it is a closed enum, and mapping a raw
+ * string onto it is a domain decision the service makes before handing the result down as a scope.
  */
-const base = createBaseRepository<IFeedbackRequestDocument>(feedbackRequestModel);
-
-export const findById = (id: string) => base.findById(id);
-export const findAll = (
-    where: QueryFilter<IFeedbackRequestDocument> = {},
-    options: IFindAllOptions = {}
-) => base.findAll(where, options);
-export const count = (where: QueryFilter<IFeedbackRequestDocument> = {}): Promise<number> =>
-    base.count(where);
-export const create = (
-    data: Partial<IFeedbackRequestDocument>
-): Promise<IFeedbackRequestDocument> => base.create(data);
-export const save = (feedback: IFeedbackRequestDocument): Promise<IFeedbackRequestDocument> =>
-    base.save(feedback);
-
-export const feedbackRequestRepository = {
-    findById,
-    findAll,
-    count,
-    create,
-    save
-};
+export const feedbackRequestRepository = createBaseRepository<IFeedbackRequestDocument>(
+    feedbackRequestModel,
+    {
+        transform: applyFeedbackRequestTransform,
+        searchable: {
+            objectIds: { id: '_id' },
+            regex: { email: 'email' },
+            text: ['name', 'email', 'subject', 'message']
+        }
+    }
+);

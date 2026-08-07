@@ -1,19 +1,11 @@
-import type { QueryFilter } from 'mongoose';
 import {
     FeedbackRequestStatus,
     type SearchFeedbackRequestsRequest,
     type UpdateFeedbackRequestStatusRequest,
     type CreateFeedbackRequest
 } from '@types';
-import { applyFeedbackRequestTransform } from '@models/feedback-requests';
 import type { IFeedbackRequestDocument } from '@models/feedback-requests';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
-import {
-    normalizePagination,
-    addTextFilter,
-    addRegexFilter,
-    paginatedSearch
-} from '@repositories/search';
 import {
     generateReject,
     generateSuccess,
@@ -49,31 +41,25 @@ export const create = (payload: CreateFeedbackRequest): Promise<IFeedbackRequest
     });
 
 export const search = (
-    filters: Omit<SearchFeedbackRequestsRequest, 'status'> & { status?: string } = {}
+    // `page`/`pageSize` are widened to accept strings: they arrive from a query string, and
+    // `normalizePagination` is what coerces and bounds them. `status` stays a raw string until
+    // `toFeedbackStatus` maps it onto the closed enum.
+    filters: Omit<SearchFeedbackRequestsRequest, 'status' | 'page' | 'pageSize'> & {
+        status?: string;
+        page?: string | number;
+        pageSize?: string | number;
+    } = {}
 ): Promise<{
     items: IFeedbackRequestDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
-}> => {
-    const pagination = normalizePagination(filters);
-    const where: QueryFilter<IFeedbackRequestDocument> = {};
-
-    if (filters.status) where.status = toFeedbackStatus(filters.status);
-    addRegexFilter(where as Record<string, unknown>, 'email', filters.email);
-    addTextFilter(where as Record<string, unknown>, filters.text, [
-        'name',
-        'email',
-        'subject',
-        'message'
-    ]);
-
-    // findAll is lean — applyFeedbackRequestTransform normalizes it since .lean() bypasses toJSON.
-    return paginatedSearch(feedbackRequestRepository, where, pagination).then((result) => ({
-        ...result,
-        items: (result.items as unknown as Record<string, unknown>[]).map((item) =>
-            applyFeedbackRequestTransform(item)
-        ) as unknown as IFeedbackRequestDocument[]
-    }));
-};
+}> =>
+    // `status` is mapped here rather than declared on the repository: turning a raw string into
+    // a member of the closed `FeedbackRequestStatus` enum is a domain rule, so it is passed down
+    // as a scope once resolved.
+    feedbackRequestRepository.search(
+        filters,
+        filters.status ? { status: toFeedbackStatus(filters.status) } : {}
+    );
 
 export const updateStatus = (
     feedback: IFeedbackRequestDocument,

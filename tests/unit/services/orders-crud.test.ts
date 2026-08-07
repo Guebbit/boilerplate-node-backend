@@ -1,7 +1,7 @@
 /**
  * Order CRUD — the write half of `src/services/orders.ts`.
  *
- * `orders.test.ts` covers the read/aggregation half (`getAll`, `search`). Everything below it —
+ * `orders.test.ts` covers the read/aggregation half (`search`). Everything below it —
  * `getById`, `create`, `update`, `updateById`, `remove`, `removeById` — had no unit test at all,
  * which the mutation report showed as a block of uncovered mutants rather than as a low score.
  *

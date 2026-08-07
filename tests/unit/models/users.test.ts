@@ -16,7 +16,7 @@
 import { Types } from 'mongoose';
 import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
-import * as userRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 import * as userService from '@services/users';
 import { ETokenType } from '@models/users';
 

@@ -34,13 +34,13 @@ describe('order serialization', () => {
         expect(embeddedProduct._id).toBeUndefined();
     });
 
-    it('normalizes aggregate results (getAll) the same way', async () => {
+    it('normalizes aggregate results (search) the same way', async () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Aggregate Product' });
         await createOrder(user, [toOrderItem(product, 1)]);
 
-        const [order] = await orderService.getAll();
-        const raw = order as unknown as Record<string, unknown>;
+        const { items: orders } = await orderService.search();
+        const raw = orders[0] as unknown as Record<string, unknown>;
 
         expect(raw.id).toMatch(/^[\da-f]{24}$/);
         expect(raw._id).toBeUndefined();

@@ -8,7 +8,7 @@ import {
 } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { extractId, mergeBodyQuery } from '@core/http/request';
+import { mergeBodyQuery } from '@core/http/request';
 import type { SearchUsersRequest } from '@types';
 import type { CastError } from 'mongoose';
 
@@ -55,7 +55,8 @@ export const getUsers = (
         request.body as Record<string, unknown> | undefined,
         request.query as Record<string, string> | undefined
     );
-    const id = extractId(request.params.id, merged.id as string | undefined);
+    // Route param wins over a body/query id; an empty string falls through as if absent.
+    const id = request.params.id || (merged.id as string | undefined);
 
     const parseResult = searchUsersQuerySchema.safeParse({ ...merged, id });
     if (!parseResult.success)

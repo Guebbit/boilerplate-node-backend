@@ -5,8 +5,11 @@
  */
 
 export interface IPaginationInput {
-    page?: number | string | null;
-    pageSize?: number | string | null;
+    // `unknown` rather than `number | string | null`: these values come straight off a request,
+    // where a repeated query key arrives as an array and a JSON body can hold anything. The
+    // coercion below already copes; a narrower type would only force callers to cast.
+    page?: unknown;
+    pageSize?: unknown;
 }
 
 export interface IPaginationResult {
@@ -22,12 +25,27 @@ export interface IPaginatedMeta {
     totalPages: number;
 }
 
+/** Page size used when neither the caller nor the deployment specifies one. */
+const FALLBACK_PAGE_SIZE = 10;
+
 /**
  * Normalize pagination parameters with safe defaults and bounds.
+ *
+ * The single authority on what "page 1, ten per page, at most a hundred" means. It runs on every
+ * search, so any defaulting done earlier in the request path could only be overwritten here —
+ * which is why the request layer passes the caller's raw values straight through.
+ *
+ * `NODE_SETTINGS_PAGINATION_PAGE_SIZE` makes the default deployment-tunable without touching
+ * route code. It is a *default*, not a cap: an explicit `pageSize` from the caller still wins,
+ * bounded by the same 1-100 range as everything else.
  */
 export const normalizePagination = (input: IPaginationInput = {}): IPaginationResult => {
     const page = Math.max(1, Number(input.page ?? 1) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(input.pageSize ?? 10) || 10));
+    const requestedPageSize = input.pageSize ?? process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE;
+    const pageSize = Math.min(
+        100,
+        Math.max(1, Number(requestedPageSize ?? FALLBACK_PAGE_SIZE) || FALLBACK_PAGE_SIZE)
+    );
     return { page, pageSize, skip: (page - 1) * pageSize };
 };
 
@@ -103,38 +121,9 @@ export const addRegexFilter = (
  * particular order among documents whose sort keys are equal. Two identical queries can
  * therefore return tied documents in different orders, which was observed against the real API.
  *
- * That breaks pagination rather than merely shuffling a list: `paginatedSearch` issues `count`
- * and `findAll` as separate queries, so if the tie order changes between them a document can be
- * returned on page 1 AND page 2, or skipped by both. `_id` is unique and monotonic, so adding it
- * makes the sort total and the paging stable.
+ * That breaks pagination rather than merely shuffling a list: a repository's `search` issues its
+ * count and its page as separate queries, so if the tie order changes between them a document can
+ * be returned on page 1 AND page 2, or skipped by both. `_id` is unique and monotonic, so adding
+ * it makes the sort total and the paging stable.
  */
-const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
-
-/**
- * Execute a paginated search: count + findAll + meta assembly.
- * Centralizes the repeated count→findAll→buildPaginatedMeta pattern.
- */
-export const paginatedSearch = <TDocument, TWhere = unknown>(
-    repository: {
-        count: (where: TWhere) => Promise<number>;
-        findAll: (
-            where: TWhere,
-            options: { sort: Record<string, 1 | -1>; skip: number; limit: number }
-        ) => Promise<TDocument[]> | PromiseLike<TDocument[]>;
-    },
-    where: TWhere,
-    pagination: IPaginationResult,
-    sort: Record<string, 1 | -1> = DEFAULT_SORT
-): Promise<{ items: TDocument[]; meta: IPaginatedMeta }> =>
-    repository.count(where).then((totalItems) =>
-        repository
-            .findAll(where, {
-                sort,
-                skip: pagination.skip,
-                limit: pagination.pageSize
-            })
-            .then((items) => ({
-                items,
-                meta: buildPaginatedMeta(pagination, totalItems)
-            }))
-    );
+export const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };

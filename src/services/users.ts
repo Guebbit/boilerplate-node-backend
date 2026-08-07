@@ -1,22 +1,14 @@
-import { Types } from 'mongoose';
 import { t } from '@core/i18n';
-import type { CastError, QueryFilter } from 'mongoose';
 import {
     generateSuccess,
     generateReject,
     type IResponseSuccess,
     type IResponseReject
 } from '@core/http/response';
-import { zodUserSchema, applyUserTransform } from '@models/users';
+import { zodUserSchema } from '@models/users';
 import type { IUserDocument, IUser } from '@models/users';
 import type { SearchUsersRequest } from '@types';
 import { userRepository } from '@repositories/users';
-import {
-    normalizePagination,
-    addTextFilter,
-    addRegexFilter,
-    paginatedSearch
-} from '@repositories/search';
 
 /**
  * User Admin Service
@@ -54,35 +46,7 @@ export const search = (
 ): Promise<{
     items: IUserDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
-}> => {
-    const pagination = normalizePagination(filters);
-    const where: QueryFilter<IUserDocument> = {};
-
-    if (filters.id && String(filters.id).trim() !== '')
-        where._id = new Types.ObjectId(String(filters.id));
-
-    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, [
-        'email',
-        'username'
-    ]);
-    addRegexFilter(where as Record<string, unknown>, 'email', filters.email as string | undefined);
-    addRegexFilter(
-        where as Record<string, unknown>,
-        'username',
-        filters.username as string | undefined
-    );
-
-    if (filters.active !== undefined && filters.active !== null)
-        where.deletedAt = filters.active ? { $exists: false } : { $exists: true, $type: 'date' };
-
-    // findAll is lean — applyUserTransform normalizes it since .lean() bypasses toJSON.
-    return paginatedSearch(userRepository, where, pagination).then((result) => ({
-        ...result,
-        items: (result.items as unknown as Record<string, unknown>[]).map((item) =>
-            applyUserTransform(item)
-        ) as unknown as IUserDocument[]
-    }));
-};
+}> => userRepository.search(filters, userRepository.deletedScope(filters.active));
 
 /**
  * Get a single user by ID.

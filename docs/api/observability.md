@@ -3,8 +3,7 @@
 The `/observability/*` routes expose operational data for dashboards and monitoring tooling.
 
 - **Public** routes: `/observability/events`, `/observability/metrics`
-- **Protected** routes (admin JWT required): `/observability/health`, `/observability/metrics/overview`, `/observability/audit`, `/observability/load-test`
-- **Dev/staging only** (not registered when `NODE_ENV=production`): `/observability/load-test`
+- **Protected** routes (admin JWT required): `/observability/health`, `/observability/metrics/overview`, `/observability/audit`
 
 ## Available endpoints
 
@@ -15,7 +14,6 @@ The `/observability/*` routes expose operational data for dashboards and monitor
 | `GET /observability/health` | admin | Full health snapshot: DB status, memory, CPU, integrations, uptime | [Grafana](../tools/grafana.md) health panels |
 | `GET /observability/metrics/overview` | admin | Curated KPI JSON: HTTP totals, error rate, latency p50/p95, auth & business counters | [Prometheus](../tools/prometheus.md) / [Grafana](../tools/grafana.md) KPI panels |
 | `GET /observability/audit` | admin | Recent audit events from the in-memory ring buffer (max 200) | [Loki](../tools/loki.md) log search |
-| `GET /observability/load-test` | admin, dev/staging only | Busy-loops the event loop and emits log lines, to exercise dashboards/log pipelines under synthetic CPU load | — |
 
 ## Observability API vs Grafana
 

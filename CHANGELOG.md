@@ -59,6 +59,16 @@ its own tests.
 - **`npm run db:cache:clear` now exits `1` when Redis is unreachable** instead of reporting success.
   Any script that ignored its exit code will start failing — correctly.
 
+- **`GET /observability/load-test` is removed**, together with the `ObservabilityLoadTestResult`
+  and `ObservabilityLoadTestResponseEnvelope` schemas and their generated models. It was never
+  registered under `NODE_ENV=production`, so no deployed client could have reached it — but it was
+  declared in `openapi.yaml`, and therefore present in every SDK generated from it. It also did not
+  do its job: it busy-looped emitting 20 000 log lines, which measures Winston rather than the API,
+  and because the loop never yielded it blocked the worker outright, so `/observability/health` and
+  `/observability/metrics` timed out for its whole duration and the dashboards it existed to
+  exercise showed a gap where the spike should have been. Load is now generated from outside the
+  process with `npm run load:test`.
+
 ### Added
 
 - **Uploaded images are served.** `public/` is mounted through `express.static`, which it never
@@ -251,6 +261,21 @@ its own tests.
   table pairing each script with its `:host` twin, `docs/tools/redis-cache.md` _Writes that bypass
   the API_, and `docs/tools/email-and-rendering.md` _Using a hosted provider_.
 
+- **`npm run load:test` and `npm run load:test:search`** — [autocannon](https://github.com/mcollina/autocannon)
+  against a running server, 20 connections for 30 seconds with a latency histogram, honouring
+  `NODE_PORT`. Two scripts because they exercise deliberately different paths: `GET /products` is
+  cached, so it measures Redis and the HTTP stack, while `POST /products/search` is not, so it is
+  the one that moves `http_request_duration_milliseconds` and shows database time inside a trace.
+  Real requests through the real stack are what make the three signals agree — a p95 on a Grafana
+  panel is then a p95 a client actually experienced. `autocannon` is a devDependency; nothing about
+  load testing ships in the server.
+- **`docs/tools/load-testing.md`** — how to run one, what to watch while it runs (the event-loop lag
+  gauge, in-flight requests, Tempo, Loki), and how to read the result: check non-2xx first, because
+  a run reporting excellent latency and 40% `429` is measuring the rate limiter.
+- **Tests** — `tests/unit/repositories/search-pagination.test.ts`, nine cases over
+  `normalizePagination` covering the defaults, the 1-100 bounds, the env fallback and a non-numeric
+  env value, which must not silently disable paging.
+
 ### Changed
 
 - **Rate limiting is 100 requests per minute, not 100 per fifteen.** The old budget was a session
@@ -368,6 +393,35 @@ its own tests.
   `public/` is served by `express.static`, so uploads land in a tracked directory — `.gitignore` now
   drops `public/images/*` and negates `seed/`. Separating the two is what lets that stay two stable
   lines instead of a list of filenames to maintain as fixtures change.
+
+- **Repositories declare what they can be filtered by; services stopped writing Mongo queries.**
+  Each repository now passes a search spec to `createBaseRepository` — filter key to Mongo path,
+  by kind (`objectIds`, `exact`, `regex`, `arrayRegex`, `text`, `ranges`) — and gets a `search()`
+  that does filter, count, page and normalize in one call. Three things that had been copy-pasted
+  into every service moved down with it: the `new Types.ObjectId(...)` coercion of filter ids (four
+  copies), the `.lean()` to `applyXTransform` double cast (three identical copies, three chances to
+  forget it), and the soft-delete scoping, which products and users had spelled two different ways.
+  `productService.search` went from sixty lines to one, and what remains in it is the only rule that
+  was ever product-specific: admins see everything, everyone else sees `publicScope()`. `services/`
+  no longer imports `mongoose` at all. The drift this prevents had already happened — `orderService`
+  had grown its own hand-rolled pagination, so the 100-item cap existed in two places.
+- **`findById` and `findOne` resolve a Promise instead of returning Mongoose's Query builder.** A
+  Query escaping the repository lets any caller chain `.select()`, `.sort()` or `.lean()` onto it,
+  which is the same layering leak the factory exists to close. The one caller that genuinely needed
+  a plain object — the product snapshot embedded in an order, which must keep its `_id` — asks for
+  it explicitly through `findByIdRaw`.
+- **Order read scoping moved from `core/http/scopes.ts` to `orderService.callerScope`**, and now
+  takes the auth context rather than the express `Request`. It builds a database filter, so it had
+  no business at the bottom of the dependency graph; the `no-restricted-imports` rule on
+  `src/core/**` is what says so. All seven documented properties are unchanged and still asserted,
+  including the deliberate throw on a missing or malformed caller id — failing loudly rather than
+  quietly widening the scope to every user's orders.
+- **`normalizePagination` is the only place page defaults and bounds are decided.** Pagination was
+  being normalized twice per request, and only the later one could ever win, so the earlier set of
+  defaults was dead weight that read as authoritative. `extractRequestPagination` now returns
+  exactly what the caller sent, uncoerced, so `undefined` still means "did not paginate".
+  `NODE_SETTINGS_PAGINATION_PAGE_SIZE` moved down with the rest and consequently applies to every
+  list endpoint rather than only `GET /feedback`.
 
 ### Fixed
 
@@ -615,6 +669,17 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   instead of going through the schema's pre-save hook. Migrations now own schema, `db:seed` owns
   data.
 - **`js-yaml` and `@types/js-yaml`** — no remaining consumer.
+
+- **`orderService.getAll`** and the `orderRepository.findAllAggregated` that backed it. It had no
+  production caller — a public service method whose only consumers were its own tests. Those tests
+  were the real asset, since they cover the `totalItems` / `totalQuantity` / `totalPrice` fields
+  that are derived rather than stored; they moved onto `orderService.search`, which runs the
+  identical aggregate-and-normalize path.
+- **`extractId` and `extractPagination`** from `core/http/request.ts`. `extractId` was
+  `candidates.find(Boolean)` behind a cast, inlined at its three call sites. `extractPagination` had
+  no production caller at all: `normalizePagination` re-derived everything it produced.
+- **`src/core/http/scopes.ts`** — its one export moved to `orderService.callerScope`, and its tests
+  with it, as `tests/unit/services/orders-scope.test.ts`.
 
 ### Security
 

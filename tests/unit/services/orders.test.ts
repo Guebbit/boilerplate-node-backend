@@ -14,19 +14,12 @@ type OrderWithTotals = IOrderDocument & {
     totalPrice: number;
 };
 
-describe('orderService.getAll', () => {
-    it('returns all orders when no extra pipeline stages are provided', async () => {
-        const user = await createUser();
-        const product = await createProduct({ price: 10 });
-
-        await createOrder(user, [toOrderItem(product, 1)]);
-        await createOrder(user, [toOrderItem(product, 2)]);
-
-        const orders = await orderService.getAll();
-
-        expect(orders).toHaveLength(2);
-    });
-
+/*
+ * `totalItems`, `totalQuantity` and `totalPrice` are not stored — `applyOrderTransform` derives
+ * them, and `.aggregate()` bypasses the schema's `toJSON`, so the only thing that puts them on a
+ * result is the repository's `normalize` step. These assert that every read path runs it.
+ */
+describe('orderService.search — derived totals', () => {
     it('adds the totalItems computed field (number of distinct product lines)', async () => {
         const user = await createUser();
         const [p1, p2] = await Promise.all([
@@ -37,7 +30,8 @@ describe('orderService.getAll', () => {
         // One order with two product lines
         await createOrder(user, [toOrderItem(p1, 1), toOrderItem(p2, 3)]);
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
 
         // 2 distinct product lines → totalItems = 2
         expect(order.totalItems).toBe(2);
@@ -50,7 +44,8 @@ describe('orderService.getAll', () => {
         // 4 units of the same product
         await createOrder(user, [toOrderItem(product, 4)]);
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
 
         expect(order.totalQuantity).toBe(4);
     });
@@ -61,7 +56,8 @@ describe('orderService.getAll', () => {
 
         await createOrder(user, [toOrderItem(product, 3)]); // 3 × 15 = $45
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
 
         expect(order.totalPrice).toBe(45);
     });
@@ -75,29 +71,12 @@ describe('orderService.getAll', () => {
 
         await createOrder(user, [toOrderItem(p1, 2), toOrderItem(p2, 4)]);
 
-        const [order] = (await orderService.getAll()) as OrderWithTotals[];
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
 
         expect(order.totalItems).toBe(2); // 2 product lines
         expect(order.totalQuantity).toBe(6); // 2 + 4
         expect(order.totalPrice).toBe(40); // 20 + 20
-    });
-
-    it('accepts additional pipeline stages (e.g. $match)', async () => {
-        const user = await createUser();
-        const product = await createProduct({ price: 10 });
-
-        const target = await createOrder(user, [toOrderItem(product, 1)]);
-        await createOrder(user, [toOrderItem(product, 2)]);
-
-        // Only fetch the specific order
-        const orders = await orderService.getAll([{ $match: { _id: target._id } }]);
-
-        expect(orders).toHaveLength(1);
-    });
-
-    it('returns an empty array when there are no orders', async () => {
-        const orders = await orderService.getAll();
-        expect(orders).toHaveLength(0);
     });
 });
 

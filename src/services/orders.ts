@@ -1,8 +1,5 @@
-import { Types } from 'mongoose';
-import type { PipelineStage } from 'mongoose';
 import { t } from '@core/i18n';
 import type { SearchOrdersRequest, CartItem, OrderStatus } from '@types';
-import { applyOrderTransform } from '@models/orders';
 import type { IOrderDocument, IOrderDocumentItem } from '@models/orders';
 import {
     generateReject,
@@ -12,38 +9,15 @@ import {
 } from '@core/http/response';
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
+// `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
+// mode on a malformed id) lives in the repository layer; this is the only import of it here.
+import { toObjectId } from '@repositories/base';
 
 /**
  * Order Service
  * Handles all business logic for the Order entity.
  * Delegates raw database access to Order Repository.
  */
-
-/**
- * Normalize aggregate output into order documents.
- *
- * `aggregate` returns plain JS objects that bypass `toJSON`, so `applyOrderTransform` has to be
- * applied by hand — including the `totalItems`/`totalQuantity`/`totalPrice` it derives. The double
- * cast is unavoidable (aggregate is untyped and the result is document-shaped, not a document);
- * keeping it in one place is what stops each caller from spelling it differently.
- */
-const transformAggregatedOrders = (items: unknown[]): IOrderDocument[] =>
-    (items as Record<string, unknown>[]).map((item) =>
-        applyOrderTransform(item)
-    ) as unknown as IOrderDocument[];
-
-/**
- * Get all orders with optional aggregation pipeline stages.
- * `totalItems`, `totalQuantity` and `totalPrice` are added by `applyOrderTransform`.
- *
- * @param pipeline - Optional stages to apply
- */
-export const getAll = (pipeline: PipelineStage[] = []): Promise<IOrderDocument[]> =>
-    // Mongoose rejects an empty pipeline, and callers are allowed to pass no stages at all, so a
-    // match-everything stage stands in for that case only.
-    orderRepository
-        .aggregate(pipeline.length > 0 ? pipeline : [{ $match: {} }])
-        .then((items) => transformAggregatedOrders(items));
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI.
@@ -64,47 +38,7 @@ export const search = (
 ): Promise<{
     items: IOrderDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
-}> => {
-    const page = Math.max(1, Number(search.page ?? 1) || 1);
-    const pageSize = Math.min(100, Math.max(1, Number(search.pageSize ?? 10) || 10));
-    const skip = (page - 1) * pageSize;
-
-    const match: Record<string, unknown> = { ...scope };
-
-    if (search.id && String(search.id).trim() !== '')
-        match._id = new Types.ObjectId(String(search.id));
-
-    if (search.userId && String(search.userId).trim() !== '')
-        match.userId = new Types.ObjectId(String(search.userId));
-
-    if (search.email && String(search.email).trim() !== '')
-        match.email = String(search.email).trim();
-
-    if (search.productId && String(search.productId).trim() !== '')
-        // Assumes productSchema uses default _id. If you store product.id instead, change to "items.product.id".
-        match['items.product._id'] = new Types.ObjectId(String(search.productId));
-
-    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: { createdAt: -1 } }];
-
-    return orderRepository
-        .aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }])
-        .then(([countAgg]) => {
-            const totalItems = countAgg?.totalItems ?? 0;
-            const totalPages = Math.ceil(totalItems / pageSize);
-
-            return orderRepository
-                .aggregate([...basePipeline, { $skip: skip }, { $limit: pageSize }])
-                .then((items) => ({
-                    items: transformAggregatedOrders(items),
-                    meta: {
-                        page,
-                        pageSize,
-                        totalItems,
-                        totalPages
-                    }
-                }));
-        });
-};
+}> => orderRepository.search(search, scope);
 
 /**
  * Get a single order by ID.
@@ -119,18 +53,7 @@ export const getById = (
 ): Promise<IOrderDocument | undefined> => {
     // eslint-disable-next-line unicorn/no-useless-undefined
     if (!id) return Promise.resolve<IOrderDocument | undefined>(undefined);
-    if (scope) {
-        // Use aggregate so we can apply both _id and scope filters
-        return orderRepository
-            .aggregate([
-                {
-                    $match: { _id: new Types.ObjectId(id), ...scope } as Record<string, unknown>
-                },
-                { $limit: 1 }
-            ])
-            .then(([result]) => (result ? transformAggregatedOrders([result])[0] : undefined));
-    }
-    return orderRepository.findById(id).then((order) => order ?? undefined);
+    return orderRepository.findByIdScoped(id, scope);
 };
 
 /**
@@ -153,10 +76,7 @@ export const create = (
 
     return Promise.all(
         items.map((item) =>
-            productRepository
-                .findById(item.productId)
-                .lean()
-                .then((product) => ({ item, product }))
+            productRepository.findByIdRaw(item.productId).then((product) => ({ item, product }))
         )
     ).then((resolvedItems) => {
         const missingProduct = resolvedItems.some(({ product }) => !product);
@@ -173,7 +93,7 @@ export const create = (
 
         return orderRepository
             .create({
-                userId: new Types.ObjectId(userId),
+                userId: toObjectId(userId),
                 email,
                 items: orderItems
             } as Partial<IOrderDocument>)
@@ -199,15 +119,14 @@ export const update = (
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
     if (data.status !== undefined) order.status = data.status as OrderStatus;
     if (data.email !== undefined) order.email = data.email;
-    if (data.userId !== undefined) order.userId = new Types.ObjectId(data.userId);
+    if (data.userId !== undefined) order.userId = toObjectId(data.userId);
 
     const updateItemsPromise =
         data.items && data.items.length > 0
             ? Promise.all(
                   data.items.map((item) =>
                       productRepository
-                          .findById(item.productId)
-                          .lean()
+                          .findByIdRaw(item.productId)
                           .then((product) => ({ item, product }))
                   )
               ).then((resolvedItems) => {
@@ -276,10 +195,32 @@ export const removeById = (id: string): Promise<IResponseSuccess<undefined> | IR
         return remove(order);
     });
 
+/**
+ * Which orders a caller is allowed to read.
+ *
+ * The authorization boundary for order reads: the difference between a user seeing their own
+ * orders and seeing everyone's. Returns `undefined` for admins, meaning "no restriction", so
+ * callers must spread it (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a
+ * filter.
+ *
+ * Takes the auth context rather than the express `Request`: this is a domain rule about a
+ * caller, not about a request, and the narrower argument is what lets it live below the HTTP
+ * layer: a database filter has no business in `src/core/**`, which the `no-restricted-imports`
+ * rule enforces.
+ *
+ * The `?? ''` is deliberate: an empty string is not a valid ObjectId, so `ownerScope` throws.
+ * That is the safe direction — a request with no auth context errors out instead of quietly
+ * widening the scope to every user's data.
+ */
+export const callerScope = (
+    authContext?: { id?: string; admin?: boolean } | undefined
+): Record<string, unknown> | undefined =>
+    authContext?.admin ? undefined : orderRepository.ownerScope(authContext?.id ?? '');
+
 export const orderService = {
-    getAll,
     search,
     getById,
+    callerScope,
     create,
     update,
     updateById,

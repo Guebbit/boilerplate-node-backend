@@ -5,7 +5,7 @@ import { createProduct } from '../../helpers/factories/products';
 import * as userService from '@services/users';
 import * as authService from '@services/auth';
 import * as cartService from '@services/cart';
-import * as userRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@core/http/response';
 import type { IUserCartDto } from '@services/cart.dto';
 import type { IUserDocument } from '@models/users';

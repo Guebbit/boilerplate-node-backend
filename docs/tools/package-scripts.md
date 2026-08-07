@@ -39,6 +39,8 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 | `test:unit:target`   | placeholder one-file Jest command for focused debugging                                                                             | [Testing & Docs](./testing-and-docs.md)        |
 | `test:prism`         | run a quick Prism mock smoke test from `openapi.yaml`                                                                               | [OpenAPI Workflow](../api/openapi-workflow.md) |
 | `setup:mongod`       | copy a `mongod` binary from a Docker image for restricted test environments                                                         | [Testing & Docs](./testing-and-docs.md)        |
+| `load:test`          | autocannon against `GET /products` — the cached read path                                                                           | [Load Testing](./load-testing.md)              |
+| `load:test:search`   | autocannon against `POST /products/search` — the uncached, database-backed path                                                     | [Load Testing](./load-testing.md)              |
 
 ## Contract and docs scripts
 

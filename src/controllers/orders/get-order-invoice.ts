@@ -3,7 +3,6 @@ import type { Request, Response } from 'express';
 import { getCurrentLocale, t } from '@core/i18n';
 import { orderService } from '@services/orders';
 import { rejectResponse } from '@core/http/response';
-import { userScope } from '@core/http/scopes';
 import ejs from 'ejs';
 import { renderHtmlToPdf } from '@core/adapters/pdf';
 
@@ -17,7 +16,7 @@ import { renderHtmlToPdf } from '@core/adapters/pdf';
  */
 export const getOrderInvoice = (request: Request, response: Response) =>
     orderService
-        .getById(String(request.params.id), userScope(request))
+        .getById(String(request.params.id), orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);

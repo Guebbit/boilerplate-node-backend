@@ -2,7 +2,6 @@ import type { Request, Response } from 'express';
 import { t } from '@core/i18n';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@core/http/response';
-import { userScope } from '@core/http/scopes';
 import type { CastError } from 'mongoose';
 
 /**
@@ -16,7 +15,7 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
      * Only admin can see all orders. Regular users can only see their own.
      */
     orderService
-        .getById(String(request.params.id), userScope(request))
+        .getById(String(request.params.id), orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, 'getOrderItem - not found', [
