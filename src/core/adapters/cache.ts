@@ -10,7 +10,6 @@
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
 // `RedisClientType` is the resulting client's type, needed for the module-level `let` below.
 import { createClient, type RedisClientType } from 'redis';
-import type { ICacheTagsInvalidatedPayload } from '@types';
 import { logger } from '@core/adapters/logger';
 
 /**
@@ -337,6 +336,12 @@ export const setCacheValue = (
 /**
  * Remove all cached responses linked to the given tags.
  * We use this after successful writes so old/stale GET responses disappear.
+ *
+ * Like `clearCache`, this needs no cross-instance broadcast: the entries and their tag sets
+ * live in shared Redis, so one call invalidates them for every worker and every replica. The
+ * next read on any instance misses and re-renders from Mongo. A pub/sub fan-out would only
+ * become necessary if an instance ever kept a process-local (L1) copy in front of Redis —
+ * there is no such tier, and if one is added the broadcast belongs in the same commit as it.
  */
 export const invalidateCacheTags = (tags: string[]): Promise<void> => {
     const cacheTags = [...new Set(tags.filter(Boolean))];
@@ -460,141 +465,3 @@ export const clearCache = (): Promise<IClearCacheResult> =>
             });
             return { deleted: 0, reachable: false };
         });
-
-// ─── Pub/Sub: cross-instance cache invalidation ───────────────────────────────
-//
-// Why this section exists: the *cached data* is shared (one Redis), but each app instance
-// also holds process-local state and, more importantly, only the instance that handled a
-// write knows something changed. Broadcasting the invalidation lets every replica react.
-
-/*
- * Redis pub/sub channel name (matches asyncapi.yaml)
- * Kept in sync with the AsyncAPI contract so the channel is documented alongside the
- * HTTP API rather than living only in code.
- */
-const CACHE_INVALIDATION_CHANNEL = 'cache.tags.invalidated';
-
-/*
- * Unique instance ID to avoid processing own broadcasts
- * Composed of pid + boot timestamp + random suffix: pid alone collides across containers
- * (each gets its own pid namespace), and pid+timestamp can collide when replicas start
- * simultaneously from the same image.
- */
-const INSTANCE_ID = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-/*
- * Separate subscriber client (Redis requires a dedicated connection for subscriptions)
- * A connection in subscribe mode accepts only (un)subscribe commands, so reusing the main
- * `client` here would break every GET/SET in this file.
- */
-let subscriberClient: RedisClientType | undefined;
-
-/**
- * Publish a cache invalidation event so other app instances can evict stale entries.
- *
- * Note this only *notifies*; the calling instance still invalidates locally via
- * `invalidateCacheTags`. Fire-and-forget — a failed broadcast means peers keep a stale
- * entry until its TTL expires, which is acceptable degradation.
- */
-export const broadcastCacheInvalidation = (tags: string[]): Promise<void> => {
-    if (!isCacheEnabled() || tags.length === 0) return Promise.resolve();
-
-    // Shape defined in `@types` and mirrored in asyncapi.yaml.
-    const payload: ICacheTagsInvalidatedPayload = {
-        tags,
-        // Lets receivers discard their own echo (Redis delivers to all subscribers).
-        origin: INSTANCE_ID,
-        // Diagnostic only — useful when tracing propagation lag between replicas.
-        timestamp: new Date().toISOString()
-    };
-
-    return getClient()
-        .then((redisClient) => {
-            if (!redisClient) return;
-            // `publish` = PUBLISH: at-most-once delivery with no persistence. Subscribers that
-            // are down at this moment simply never see the message — which is why TTLs remain
-            // the real correctness backstop.
-            return redisClient.publish(CACHE_INVALIDATION_CHANNEL, JSON.stringify(payload));
-        })
-        .then(() => {})
-        .catch((error) => {
-            logger.warn({
-                message: 'Redis cache invalidation broadcast failed.',
-                error: error instanceof Error ? error.message : String(error)
-            });
-        });
-};
-
-/**
- * Subscribe to cache invalidation broadcasts from other instances.
- * Call once during app startup.
- */
-export const subscribeCacheInvalidation = (): Promise<void> => {
-    if (!isCacheEnabled()) return Promise.resolve();
-
-    const redisUrl = getRedisUrl();
-    if (!redisUrl) return Promise.resolve();
-
-    // Same socket options as the main client: fail fast, no background reconnect loop.
-    subscriberClient = createClient({
-        url: redisUrl,
-        socket: { connectTimeout: 1000, reconnectStrategy: false }
-    });
-
-    // Required listener (an unhandled 'error' event would crash the process). Silent here
-    // because `getClient()` already reports Redis health via `logConnectionWarning`.
-    subscriberClient.on('error', () => {});
-
-    return subscriberClient
-        .connect()
-        .then(() =>
-            // Non-null assertion: `subscriberClient` was just assigned above, but TypeScript
-            // cannot prove a module-level `let` is unchanged across the promise boundary.
-            // `subscribe(channel, listener)` registers a per-channel callback (node-redis v4+)
-            // instead of the older global 'message' event.
-            subscriberClient!.subscribe(CACHE_INVALIDATION_CHANNEL, (message) => {
-                try {
-                    const payload = JSON.parse(message) as ICacheTagsInvalidatedPayload;
-                    // Skip events from this instance (already applied locally).
-                    // Without this check the publisher would re-run its own invalidation and,
-                    // worse, delete the fresh entries it may have just written.
-                    if (payload.origin === INSTANCE_ID) return;
-                    // `void`: the listener is sync, so the invalidation is deliberately floating.
-                    void invalidateCacheTags(payload.tags);
-                } catch {
-                    // Malformed JSON — most likely another app publishing on the same channel
-                    // with a different prefix. Log and drop; never throw inside a listener.
-                    logger.warn({ message: 'Malformed cache invalidation message received.' });
-                }
-            })
-        )
-        .then(() => {
-            logger.info('Redis cache invalidation subscriber active.');
-        })
-        .catch((error) => {
-            logger.warn({
-                message: 'Redis cache invalidation subscriber failed.',
-                error: error instanceof Error ? error.message : String(error)
-            });
-        });
-};
-
-/*
- * Stop the subscriber client during graceful shutdown
- * Runs *before* `stopCache()` in the shutdown chain (see bootstrap/server-lifecycle.ts):
- * an open subscription would otherwise keep receiving events and issuing DEL commands
- * against a client that is being torn down.
- */
-export const stopCacheSubscriber = (): Promise<void> => {
-    if (!subscriberClient?.isOpen) return Promise.resolve();
-    return (
-        subscriberClient
-            // Graceful close; falls back to a hard socket drop if QUIT fails.
-            .quit()
-            .then(() => {})
-            .catch(() => subscriberClient!.disconnect())
-            .finally(() => {
-                subscriberClient = undefined;
-            })
-    );
-};
