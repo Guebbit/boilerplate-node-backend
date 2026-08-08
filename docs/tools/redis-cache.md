@@ -48,19 +48,20 @@ for another, and that is a correctness bug rather than a missed optimisation. Mo
 controllers export theirs as `Object.keys(schema.shape)`, derived from the very schema they
 validate against, so the list cannot drift from what the controller actually reads.
 
-The key used to be `request.originalUrl`, which made it depend on how a URL was _written_:
+Two URLs asking for the same thing therefore land on one entry, and an undeclared parameter
+cannot mint a new one:
 
-| Request                              | Before | Now      |
-| ------------------------------------ | ------ | -------- |
-| `?page=1&pageSize=10`                | key A  | one key  |
-| `?pageSize=10&page=1` (same request) | key B  | one key  |
-| `?page=1&anything=else`              | key C  | same key |
+| Request                              | Key      |
+| ------------------------------------ | -------- |
+| `?page=1&pageSize=10`                | one key  |
+| `?pageSize=10&page=1` (same request) | same key |
+| `?page=1&anything=else`              | same key |
 
-The first two rows are the ones that cost something in ordinary traffic: query-string order is
-not stable across HTTP clients, so the same request arrived under two keys and paid for a second
-Mongo query behind the second one. The third row is why arbitrary parameters can no longer mint
-entries — not a vulnerability, since the app fails open and the rate limiter bounds the volume,
-but there is no reason to store the same body twice.
+The first two rows are what costs something in ordinary traffic: query-string order is not stable
+across HTTP clients, so a URL-derived key stores the same request twice and pays for a second
+Mongo query behind the second copy. The third row is why an arbitrary parameter cannot mint an
+entry — not a vulnerability, since the app fails open and the rate limiter bounds the volume, but
+there is no reason to store the same body twice.
 
 Note what the key still separates, and must: the path, the caller (`getCacheScope`), the locale,
 and any declared parameter that genuinely differs — including a repeated one (`?tag=a&tag=b`

@@ -7,37 +7,29 @@
  * Two bug classes, one per assertion:
  *
  *   - `validPayload()` → expect 2xx. Catches a validator TIGHTER than its own contract — an
- *     endpoint rejecting a payload the spec declares legal. Found while building this file:
- *     `CreateUserRequest.username` and `CreateProductRequest.title` declare no minimum length
- *     in `openapi.yaml`, but `src/models/{users,products}.ts` extend the generated schema with
- *     a hand-added `.min(3)` / `.min(5)` the spec never mentions.
+ *     endpoint rejecting a payload the spec declares legal.
  *   - `invalidPayloads()` → each entry expects 422 and a `ValidationErrorResponse`-shaped body.
  *     Catches a validator LAXER than its contract — the spec promises a constraint that isn't
  *     enforced.
  *
- * Every finding this file made on its first run has since been closed. They are listed here
- * because each one names a mechanism that will produce the same class of bug again, and because
- * the fix went a different way in each case — "tighten the validator" is not always the answer:
+ * Four mechanisms produce that drift, all of them still live in this codebase. They are named
+ * here because each will do it again, and because the right correction differs per case —
+ * "tighten the validator" is not always the answer:
  *
- *   - `imageUrl` (on `CreateUserRequest`, `CreateProductRequest`, `SignupRequest`) was declared
- *     `format: uri` while the field holds a *relative* upload path, so `zodUserSchema` /
- *     `zodProductSchema` each overrode it back to a plain `z.string()`. Fixed by correcting the
- *     SPEC, not the validators: the field is now a shared `ImageUrl` schema with
- *     `format: uri-reference`, which is what it always meant. Tightening the validator instead
- *     would have rejected every upload the API itself produces. Both overrides are now gone.
- *   - `CreateProductRequest.price` declares `minimum: 0`, and the constraint was not enforced at
- *     all — `zodProductSchema` overrode `price` for its i18n message and, because `.extend()`
- *     REPLACES a field, silently dropped the minimum along with it. The override now restates
- *     `.min(0)`. Any `.extend()` on a generated schema carries this hazard.
- *   - `CreateProductRequest.active`/`categories`/`tags` and `CreateUserRequest.active`/`admin`
- *     accepted wrong-typed values because the controllers coerced them (`!!request.body.active`,
- *     `coerceStringArray(...)`) BEFORE validation ran, so an invalid type never reached the check
- *     that would reject it. Coercion now happens only for `multipart/form-data`, which is the
- *     only transport that needs it — see `readInput` and `docs/theory/request-input.md`.
- *   - `POST /users` with a wrong-typed `admin` returned **500**, not 422: `userService
- *     .validateData` applied the schema through a `.pick()` of email/username/password, so the
- *     value reached Mongoose unchecked and threw a CastError on save. It now validates the whole
- *     schema.
+ *   - **A spec format that does not describe the field.** `imageUrl` holds a *relative* upload
+ *     path, so it is a shared `ImageUrl` schema with `format: uri-reference`; declaring it
+ *     `format: uri` would force every validator to override the spec back to a plain
+ *     `z.string()`, and tightening the validators to match instead would reject every upload the
+ *     API itself produces. Correct the spec, not the validator.
+ *   - **`.extend()` on a generated schema REPLACES a field**, dropping every constraint the
+ *     override does not restate. `zodProductSchema` overrides `price` for its i18n message and
+ *     therefore has to restate `.min(0)` to keep the contract's `minimum: 0`.
+ *   - **Coercion running before validation** hides a wrong type from the check that would reject
+ *     it. `!!request.body.active` and `coerceStringArray(...)` run only for `multipart/form-data`,
+ *     the one transport that needs them — see `readInput` and `docs/theory/request-input.md`.
+ *   - **Validating a subset of a schema** lets an unchecked field reach Mongoose and throw a
+ *     CastError, answering 500 where the contract promises 422. `userService.validateData`
+ *     validates the whole schema, not a `.pick()` of it.
  *
  * Generated data is additive, same convention as `tests/helpers/factories/*`: deterministic
  * scenario tests keep using the hand-written factories. This file exists specifically for what

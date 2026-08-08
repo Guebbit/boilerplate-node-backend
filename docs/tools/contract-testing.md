@@ -18,7 +18,7 @@ This is one half of "contract testing" in this codebase. The other half — does
 1. **These schemas are generated non-strict.** They emit `zod.object`, whose default behaviour is to _strip_ unknown keys. `schema.parse(body)` on a response that leaks `password` passes — having silently deleted the evidence first. (Orval _can_ emit `zod.strictObject` via `override.zod.strict` — the frontend turns it on for its MSW mock layer, see that repo's `docs/tools/mocking.md` — so this is a configuration choice here, not a hard limitation of the tool.)
 2. **More decisively: nothing on this side validates a _response_ with Zod at all.** The generated schemas are used for request bodies (see [Contract-Derived Request Data](./contract-request-data.md)). A response never meets them, strict or not.
 
-So the entire over-serialization bug class — the one that already produced a `_id`/`__v` exposure, a `password`/`tokens` leak, and a fully populated `product` object embedded on every cart line — is invisible without a tool that validates against the **spec document itself**. That's what `jest-openapi` does; Zod remains the right tool for field-level checks and for request payloads, just not for this.
+So the entire over-serialization bug class — a `_id`/`__v` reaching a response, a `password`/`tokens` leak, a populated `product` object riding along on a cart line — is invisible without a tool that validates against the **spec document itself**. That's what `jest-openapi` does; Zod remains the right tool for field-level checks and for request payloads, just not for this.
 
 ## Architecture
 

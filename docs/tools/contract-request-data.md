@@ -99,7 +99,7 @@ Both are seeded once per process — not reseeded per call — from `RANDOM_DATA
 
 ### Why `RANDOM_DATA_SEED` and not a name of its own
 
-The paired frontend reads a variable of **exactly this name** to seed its own random-data generator (`tests/mocks/shared/mockProfilesRandom.ts` there, driving `npm run test:e2e:random`). It had a separate name until the two were unified, and that cost something concrete: a seed printed by a failing nightly run on one side was a number nobody on the other side could do anything with.
+The paired frontend reads a variable of **exactly this name** to seed its own random-data generator (`tests/mocks/shared/mockProfilesRandom.ts` there, driving `npm run test:e2e:random`). One name across both repos buys something concrete: a seed printed by a failing nightly run on one side is a number the other side can reproduce.
 
 The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — and given one seed the two produce entirely unrelated values. That is intended, not a defect to fix later. The two generators produce **opposite halves of the same contract** (requests here, responses there) from different schema surfaces (zod `_zod.def` here, orval factories there); making the streams agree would buy nothing and would couple two implementations that are independently correct. What the shared name buys is a shared vocabulary, not shared output.
 

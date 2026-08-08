@@ -54,7 +54,7 @@ Standard CRUD for the product catalogue. Read endpoints are public and Redis-cac
 
 ## Cart
 
-Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart/checkout` converts the cart into an order, clears the cart, and fires a RabbitMQ event for downstream processing.
+Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `CHECKOUT_COMPLETED` analytics event.
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |

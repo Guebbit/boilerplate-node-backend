@@ -726,6 +726,27 @@ its own tests.
 
 ### Fixed
 
+- **Docs and comments that described code which no longer exists.** Five broken references and
+  four passages of narrative history, all found by walking every path mentioned in a tracked file
+  and checking it resolves — in this repo or in the paired frontend, since several are deliberate
+  cross-repo pointers.
+
+    Broken: `src/core/observability/analytics.ts` and `tracer.ts` pointed at `docs/guide/*.md`, a
+    directory this repo does not have (they mean `docs/tools/posthog.md` and
+    `docs/tools/opentelemetry.md`); `stryker.config.json` named `tests/contract/request-contract.ts`
+    without its `.test` infix; `docs/api/endpoints.md` claimed `POST /cart/checkout` "fires a
+    RabbitMQ event for downstream processing", which it has not done since the domain event bus was
+    dropped — it records a metric and emits a PostHog event.
+
+    Rewritten to present tense, keeping the reasoning and dropping the chronology:
+    `docs/tools/events-and-logging.md` opened its "no in-process event bus" section by narrating the
+    bus's deletion; `docs/tools/redis-cache.md` explained the cache key with a Before/Now table;
+    `docs/tools/contract-request-data.md` and `docs/tools/testing-and-docs.md` each justified a
+    current design by what preceded it; `tests/contract/request-contract.test.ts` listed four past
+    findings as history, when what makes them worth keeping is that all four mechanisms are still
+    live. `stryker.config.json`'s mutation-score history is gone outright — three superseded
+    measurements, one of them naming a file that no longer exists.
+
 - **A cart line pointing at a deleted product lost the id of the product it pointed at.**
   `populate('cart.items.product')` replaces the stored `ObjectId` in place, and writes `null` there
   when the reference resolves to nothing. `toIdString` then read the id back off that same field and

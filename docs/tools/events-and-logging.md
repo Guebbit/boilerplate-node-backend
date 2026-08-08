@@ -62,10 +62,7 @@ practical payoff: swapping the destination touches one line in `app.ts`, not the
 
 ## There is no in-process domain event bus
 
-There was one — `src/core/observability/events.ts`, an `EventTarget` with a typed channel map and
-one `ecommerce.cart.checked_out` event. It had **zero subscribers** for its whole life, so it
-amounted to a `logger.info` with extra ceremony. It was deleted rather than wired up, and that is
-a decision worth not re-litigating by accident:
+Deliberately, and it is a decision worth not re-litigating by accident:
 
 - In a single service, an in-process bus costs you the call graph — you lose "find all
   references", stack traces stop reaching the cause, and the type checker stops telling you a
