@@ -1,5 +1,5 @@
 /**
- * Regression guard for PROPOSAL §1 (option A): feedback requests must never leak
+ * Feedback requests must never leak
  * `_id`/`__v`, on either response path — a real document (`toJSON`) or a `.lean()`
  * list result (mapped manually via `applyFeedbackRequestTransform`).
  */

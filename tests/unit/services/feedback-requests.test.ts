@@ -9,10 +9,9 @@
  *   optional instead of "present but blank".
  *
  *   **The status vocabulary.** `STATUS_MAP` is lowercase-only and matches `openapi.yaml`'s
- *   `enum: [new, in_progress, resolved, spam]`. It previously carried uppercase aliases that the
- *   contract never allowed; the module comment records that removal. An unknown status must map
- *   to `undefined` — and, on the search path, that has a consequence the tests below make
- *   explicit rather than assume.
+ *   `enum: [new, in_progress, resolved, spam]` — no uppercase aliases, since the contract does not
+ *   allow them. An unknown status must map to `undefined`, and on the search path that has a
+ *   consequence the tests below make explicit rather than assume.
  *
  *   **`respondedAt` is stamped once.** Re-resolving an already-resolved item must not move the
  *   timestamp, or "when did we answer this" becomes "when did an admin last click something".

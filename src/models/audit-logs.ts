@@ -56,7 +56,7 @@ const retentionDays = Number.parseInt(process.env.NODE_AUDIT_RETENTION_DAYS ?? '
  * audit entry has no addressable endpoint (`GET /observability/audit/:id` does not exist and
  * should not — entries are read as a stream, never individually), so exposing an id would invite
  * one to be built. `timestamp` becomes an ISO-8601 string, matching `format: date-time` in
- * `openapi.yaml` and what the buffer used to return.
+ * `openapi.yaml`.
  */
 export const applyAuditLogTransform = (
     serialized: Record<string, unknown>

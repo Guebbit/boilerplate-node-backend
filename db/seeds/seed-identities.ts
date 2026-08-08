@@ -9,11 +9,10 @@
  *        boilerplate-vue-frontend/tests/mocks/shared/seed-identities.ts
  *
  * Why it exists. The backend seeds Mongo from `./fixtures`; the frontend's MSW layer builds the
- * same dataset in `tests/mocks/shared/mockProfiles.ts`. Both claimed to hold the same records, and
- * that claim was held by a comment ("mirrors db/seeds/index.ts"). It has already broken once and
- * cost real debugging time: the mock returned all 5 products to everyone while the real API
- * returned 3 to non-admins, and the spec asserted the mock's number and passed green. Nothing
- * would have caught it, because nothing compared the two lists.
+ * same dataset in `tests/mocks/shared/mockProfiles.ts`. Without a shared file the claim that they
+ * hold the same records rests on a comment, and a drift is silent: a mock that returns 5 products
+ * to everyone while the real API returns 3 to non-admins still passes every spec that asserts the
+ * mock's number.
  *
  * Why only identities, and not the whole fixture. The two sides need genuinely different SHAPES
  * from the same facts:

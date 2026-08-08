@@ -3,7 +3,7 @@
  * Generates the TypeScript realtime contract types from asyncapi.yaml.
  *
  * SHARED SCRIPT — this file is byte-identical in `boilerplate-node-api-mongodb-mongoose` and
- * `boilerplate-vue-frontend` (PROPOSAL §5, option B). Only the output path differs, and that
+ * `boilerplate-vue-frontend`. Only the output path differs, and that
  * comes from `--out` in each repo's `genasyncapi` script, so the two copies can be compared
  * with a plain `diff`. Change it in one repo and copy it to the other, or the outputs drift.
  *

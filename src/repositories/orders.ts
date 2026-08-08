@@ -91,8 +91,8 @@ const findByIdScoped = (
  * Restrict a query to one user's own orders.
  *
  * The `userId` on an order is an ObjectId, so the caller's id has to be coerced before it can
- * match — a raw string silently matches nothing inside a `$match`, which would read as "this
- * user has no orders" rather than as the bug it is.
+ * match — a raw string silently matches nothing inside a `$match`, which reads as "this user has
+ * no orders" rather than as a mistake.
  */
 const ownerScope = (userId: string): Record<string, unknown> => ({
     userId: toObjectId(userId)

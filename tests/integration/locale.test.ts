@@ -5,9 +5,9 @@
  * so these drive the real middleware stack — `attachLocale`, the routes, the Zod thunks and the
  * error shaping in `rejectResponse` — with no database, Redis or queue.
  *
- * The concurrency case is the one that matters most. It is the regression guard against anyone
- * "simplifying" `@core/i18n` into an `i18next.changeLanguage()` call: that mutates one global and
- * is async, so two overlapping requests in different languages would answer each other's.
+ * The concurrency case is the one that matters most: it is what stops `@core/i18n` being
+ * "simplified" into an `i18next.changeLanguage()` call, which mutates one global and is async, so
+ * two overlapping requests in different languages would answer each other's.
  */
 import { api } from '../helpers/http';
 import enTranslation from '../../src/locales/en.json';

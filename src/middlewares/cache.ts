@@ -42,22 +42,19 @@ const getCacheScope = (request: Request) => {
  * the locale middleware, which is mounted before the routes; the fallback keeps this usable in
  * unit tests that exercise the cache middleware in isolation.
  *
- * The raw query string is deliberately NOT part of the key. It used to be — the key was built
- * from `request.originalUrl` — which made the key depend on how a URL was *written* rather than
- * on what it asked for. Two consequences, and the first is the one that cost something in normal
- * traffic:
+ * The raw query string is deliberately NOT part of the key. Keying off `request.originalUrl` would
+ * make the key depend on how a URL was *written* rather than on what it asked for:
  *
- *   - `?page=1&pageSize=10` and `?pageSize=10&page=1` are the same request, and were two
- *     entries. Query-string order is not stable across HTTP clients, so this was a live cache
- *     miss, and a second identical Mongo query behind it.
- *   - `?anything=else` is stripped by the controllers' validators and changes no answer, yet
- *     each spelling minted its own hour-long entry.
+ *   - `?page=1&pageSize=10` and `?pageSize=10&page=1` are the same request. Query-string order is
+ *     not stable across HTTP clients, so each spelling is a live cache miss and a second identical
+ *     Mongo query behind it.
+ *   - `?anything=else` is stripped by the controllers' validators and changes no answer, yet would
+ *     mint its own hour-long entry.
  *
- * Building the key from the declared parameters instead fixes both: `keyParameters` is pre-sorted at
- * route-registration time, and a parameter nobody declared cannot reach the key. A parameter is
- * included only when the request actually carries it, and its value is JSON-serialized so a
- * repeated key (`?tag=a&tag=b`, which arrives as an array) stays distinguishable from a single
- * one.
+ * `keyParameters` is pre-sorted at route-registration time, and a parameter nobody declared cannot
+ * reach the key. A parameter is included only when the request actually carries it, and its value
+ * is JSON-serialized so a repeated key (`?tag=a&tag=b`, which arrives as an array) stays
+ * distinguishable from a single one.
  */
 const getCacheKey = (request: Request, sortedKeyParameters: readonly string[]) => {
     // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
@@ -185,19 +182,16 @@ export const invalidateCache =
  * Mounted on the account router, because every endpoint there either exchanges credentials or
  * changes auth state, and none of them is safe to keep a copy of.
  *
- * It fixes a real, intermittent logout. Express attaches an `ETag` to responses automatically,
- * and `GET /account/refresh` declared no cache policy — so the browser applied heuristic caching,
- * stored the response, and revalidated later with `If-None-Match`. Express then answered
- * `304 Not Modified`, which by definition carries NO BODY. That endpoint's entire purpose is to
- * return a freshly minted access token *in the body*, so the client received nothing, left its
- * in-memory token undefined, and issued every subsequent request unauthenticated — while still
- * holding a valid refresh cookie, so the UI went on showing the user as signed in. An admin got
- * the anonymous product list under an admin header.
+ * What it prevents is an intermittent silent logout. Express attaches an `ETag` automatically, so
+ * a `GET /account/refresh` without a cache policy is heuristically cached by the browser and
+ * revalidated later with `If-None-Match`; Express answers `304 Not Modified`, which by definition
+ * carries NO BODY. That endpoint's entire purpose is to return a freshly minted access token *in
+ * the body*, so the client gets nothing, leaves its in-memory token undefined, and issues every
+ * subsequent request unauthenticated — while still holding a valid refresh cookie, so the UI goes
+ * on showing the user as signed in.
  *
- * It was intermittent because a JWT embeds its issued-at second: two refreshes inside the same
- * second produce byte-identical bodies, hence the same ETag, hence the 304. Different seconds
- * produce a fresh 200. That is why the frontend's live e2e suite failed on timing rather than on
- * anything it asserted.
+ * It is intermittent because a JWT embeds its issued-at second: two refreshes inside the same
+ * second produce byte-identical bodies, hence the same ETag, hence the 304.
  *
  * `no-store`, not `no-cache`: despite the name, `no-cache` permits storing and merely requires
  * revalidation — which is exactly the 304 path that causes this. RFC 9111 §5.2.2.5 defines

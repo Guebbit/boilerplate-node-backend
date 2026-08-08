@@ -34,11 +34,11 @@ const blankToUndefined = (value: unknown): unknown =>
 /**
  * The soft/hard delete switch.
  *
- * It used to be read as presence rather than value — `!!request.query.hardDelete` — which made
- * `?hardDelete=false` permanently delete the record, because the string `'false'` is truthy. It
- * is a boolean in the contract and it is a boolean here: `readInput` decodes the string spellings
- * a URL can carry, and anything left unrecognised fails this schema and answers 422 rather than
- * being guessed at. Absent means soft delete, which is what the contract's `default: false` says.
+ * Read as a VALUE, never as presence: `!!request.query.hardDelete` would make `?hardDelete=false`
+ * permanently delete the record, because the string `'false'` is truthy. It is a boolean in the
+ * contract and it is a boolean here: `readInput` decodes the string spellings a URL can carry, and
+ * anything left unrecognised fails this schema and answers 422 rather than being guessed at.
+ * Absent means soft delete, which is what the contract's `default: false` says.
  */
 export const hardDeleteSchema = z.preprocess(
     blankToUndefined,
@@ -55,8 +55,7 @@ export const hardDeleteSchema = z.preprocess(
  *
  * Absent stays absent: `normalizePagination` (`@repositories/search`) is the single authority on
  * what "page 1, ten per page" means, and it runs on every search. Defaulting here as well would
- * only add a second set of numbers that the later one always overwrites — which is exactly the
- * dead weight the three list controllers used to carry.
+ * only add a second set of numbers that the later one always overwrites.
  */
 export const pageSchema = z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional());
 

@@ -5,15 +5,13 @@
  * actually ships, because `express.static` (`src/app.ts`) serves them and a browser gets a plain
  * 404 otherwise.
  *
- * This is a regression net for a bug that survived a long time precisely because nothing tested
- * it: the fixtures carried Windows-style `\images\x.jpg`, captured from a `path.join()` on the
- * machine that first uploaded them. A backslash is a literal filename character in a URL, so
- * every seeded product and user pointed at nothing. It was invisible while `public/` was served
- * by nothing at all, and would have become "the images are broken" the moment anyone rendered one.
+ * Nothing else catches a bad one: an `imageUrl` captured from a `path.join()` carries the writing
+ * machine's separators, and a backslash is a literal filename character in a URL, so a Windows-
+ * style `\images\x.jpg` points at nothing and only shows up as "the images are broken".
  *
- * Reading the fixtures rather than the source text is the point — `fixtures.ts` was split out of
- * `db/seeds/index.ts` so this file could import the data without the seeder connecting to a
- * database and writing to it on import.
+ * Reading the fixtures rather than the source text is the point — `fixtures.ts` is split out of
+ * `db/seeds/index.ts` so this file can import the data without the seeder connecting to a database
+ * and writing to it on import.
  */
 
 import { existsSync } from 'node:fs';

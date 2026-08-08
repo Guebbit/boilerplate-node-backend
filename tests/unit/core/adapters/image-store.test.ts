@@ -67,9 +67,7 @@ describe('filesystemImageStore.put', () => {
 
     /**
      * The url is built from literals, not from the destination path, so a Windows separator cannot
-     * reach a stored value however the filesystem spells it. This is the invariant that used to be
-     * defended by normalising multer's path in `resolveImageUrl` — asserted here now that the
-     * construction lives here.
+     * reach a stored value however the filesystem spells it.
      */
     it('returns a url, never a path', async () => {
         const staged = await stageUpload('abc123.png');

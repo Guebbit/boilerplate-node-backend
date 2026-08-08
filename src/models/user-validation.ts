@@ -8,10 +8,8 @@ import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
  * so only fields needing custom i18n messages are overridden — `admin`, `active`
  * and `imageUrl` are inherited from the generated schema and validated with it.
  *
- * `imageUrl` used to be overridden to a plain string because the contract declared it
- * `format: uri` while the field actually holds a relative upload path (see resolveImageUrl).
- * The contract now says `uri-reference`, which is what it always meant, so the override is gone
- * and the two agree at the source instead of being reconciled here.
+ * `imageUrl` needs no override: the contract declares it `uri-reference`, which is what a
+ * relative upload path is (see resolveImageUrl), so the two agree at the source.
  *
  * Every message is a THUNK — `error: () => t('…')`, never `error: t('…')`. This module is
  * evaluated at import time, which ES module semantics guarantee happens before `i18next.init()`

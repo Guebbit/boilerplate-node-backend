@@ -9,9 +9,8 @@
  *
  * The second is the over-serialization guard on `cartGetWithSummary`. `CartItem` in `openapi.yaml`
  * is `additionalProperties: false` over `{ productId, quantity }`, so the populated `product` used
- * to price the cart must be dropped before the response leaves. That has already shipped as a bug
- * once; it is asserted here as well as in the contract suite, because the contract suite only sees
- * it when a route happens to be exercised.
+ * to price the cart must be dropped before the response leaves. Asserted here as well as in the
+ * contract suite, because the contract suite only sees it when a route happens to be exercised.
  *
  * Real Mongo throughout (`setupTestDb`), because most of this module's behaviour is what Mongoose
  * does with a mutated subdocument array — mocking the repository would assert the mock.
@@ -89,8 +88,7 @@ describe('cartGetWithSummary', () => {
 
         const { items } = await cartGetWithSummary(user.id);
 
-        // `CartItem` is additionalProperties:false — an extra key here is a contract violation,
-        // and this exact leak has shipped before.
+        // `CartItem` is additionalProperties:false — an extra key here is a contract violation.
         expect(items).toEqual([{ productId: String(product._id), quantity: 2 }]);
         expect(Object.keys(items[0])).toEqual(['productId', 'quantity']);
     });

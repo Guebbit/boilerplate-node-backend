@@ -35,7 +35,7 @@ export const handleEmailJob = (message: unknown): Promise<boolean> => {
      * finished long ago and may have run in another process entirely, so the store is gone and
      * the ambient `t` would silently fall back to the boot language. `runWithLocale` puts the
      * payload's locale back on THIS chain, which is what the template's `t` then resolves
-     * against. A job from before this field existed has no locale and gets the fallback.
+     * against. A job carrying no locale gets the fallback.
      */
     return runWithLocale(job.locale ?? getFallbackLocale(), () =>
         nodemailer(job.request, job.templateName, job.data ?? {})

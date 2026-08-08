@@ -104,8 +104,8 @@ const stored = (id: string) => productRepository.findByIdRaw(id);
 
 /**
  * `hardDelete` is a boolean the endpoint accepts three ways — query, body, or the `/hard` path
- * form. The value cases matter more than the shape here: it used to be read as *presence*, so
- * `?hardDelete=false` permanently deleted the product because the string 'false' is truthy.
+ * form. The value cases matter more than the shape here: read as *presence*, `?hardDelete=false`
+ * permanently deletes the product, because the string 'false' is truthy.
  */
 describe('DELETE /products/{id}', () => {
     it('soft-deletes when nothing asks otherwise', async () => {
@@ -121,8 +121,7 @@ describe('DELETE /products/{id}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // The regression this whole change exists for: asking NOT to hard-delete used to hard-delete.
-    it('soft-deletes for hardDelete=false, which used to destroy the record', async () => {
+    it('soft-deletes for hardDelete=false rather than destroying the record', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 

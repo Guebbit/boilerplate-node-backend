@@ -99,12 +99,10 @@ export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
  * Exported so lean results (which bypass `toJSON`) can be mapped through the
  * same logic — see @services/users `search()`.
  *
- * `active` and `deletedAt` both pass through untouched, and both are in the `User` contract.
- * Neither used to be: `active` was synthesised here as `!deletedAt` and `deletedAt` was deleted,
- * so one derived flag stood in for two independent facts. Splitting them left deletion with no
- * representation at all — an admin could no longer tell a deleted account from a live one — so
- * `deletedAt` is exposed now, exactly as `Product` has always exposed it. Every route serving a
- * `User` list is admin-only, and `/account` serves the caller their own record.
+ * `active` and `deletedAt` both pass through untouched, and both are in the `User` contract —
+ * they are independent facts, and an admin needs to tell a deleted account from a live one, so
+ * `deletedAt` is exposed exactly as `Product` exposes it. Every route serving a `User` list is
+ * admin-only, and `/account` serves the caller their own record.
  */
 export const applyUserTransform = (
     serialized: Record<string, unknown>
@@ -167,21 +165,14 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
             default: false
         },
         /*
-         * Whether the account is enabled — a real stored column, INDEPENDENT of `deletedAt`.
+         * Whether the account is enabled — a real stored column, INDEPENDENT of `deletedAt`, and
+         * matching products: an account can be deactivated without being deleted, and a
+         * soft-deleted account still carries whatever `active` it had. What the two share is an
+         * effect, not a value — a non-admin sees a record only when it is active AND not
+         * soft-deleted, so from outside a deleted record behaves exactly like an inactive one.
+         * (For users that guard is currently moot: the whole `/users` router is admin-only.)
          *
-         * It used to be neither of those things: there was no column, and `applyUserTransform`
-         * synthesised `active = !deletedAt` on the way out while the search filter reinterpreted
-         * `active` as "has no deletedAt". So the two facts were one field wearing two hats, and a
-         * client could send `active` on create or update — the contract advertised it, the
-         * controller read and validated it — and it went nowhere, silently.
-         *
-         * They are separate facts now, matching products: an account can be deactivated without
-         * being deleted, and a soft-deleted account still carries whatever `active` it had. What
-         * they share is an effect, not a value — a non-admin sees a record only when it is active
-         * AND not soft-deleted, so from outside a deleted record behaves exactly like an inactive
-         * one. (For users that guard is currently moot: the whole `/users` router is admin-only.)
-         *
-         * `default: true`, declared in `openapi.yaml` on both create bodies. Existing rows were
+         * `default: true`, declared in `openapi.yaml` on both create bodies. Existing rows are
          * backfilled by `db/migrations/20260808120000-user-active-column.js`.
          */
         active: {

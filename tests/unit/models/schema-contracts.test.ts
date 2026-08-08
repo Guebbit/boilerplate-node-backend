@@ -13,7 +13,7 @@
  *   later breaks every reader. Asserted per field, since each is an independent one-line flag.
  *
  *   **`select: false`** on credentials is the reason `password` and `tokens` do not leak from an
- *   ordinary read — the over-serialization class this repo has already shipped twice.
+ *   ordinary read.
  *
  * Real Mongo, because these are Mongoose's behaviours rather than ours: a mocked model would
  * assert the mock's opinion of what `default` means.
@@ -85,8 +85,7 @@ describe('user schema', () => {
 
         const found = await userRepository.findById(created.id);
 
-        // `select: false`. This is the exact leak that shipped before — a plain findById must
-        // not be able to hand a caller credentials.
+        // `select: false`: a plain findById must not be able to hand a caller credentials.
         expect(found!.password).toBeUndefined();
         // Undefined rather than an empty array: the field was never selected, which is a
         // stronger guarantee than "selected but blank" — there is nothing to accidentally

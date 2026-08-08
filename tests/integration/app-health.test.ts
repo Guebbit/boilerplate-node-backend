@@ -1,16 +1,13 @@
 /**
  * Integration tests for `/` and `/observability/*`.
  *
- * These drive the **real** application from `src/app.ts` through the shared supertest harness.
- * They used to assemble a private express app from two routers plus a hand-copied request-id
- * middleware, because importing `src/app.ts` failed to compile under the jest tsconfig. That
- * blocker is gone (the mailer no longer uses `import.meta`, and `tsconfig.jest.json` resolves
- * subpath exports), so the duplicate app is gone with it — along with the risk of these tests
- * passing against a middleware stack the real app does not have.
+ * These drive the **real** application from `src/app.ts` through the shared supertest harness,
+ * never a privately-assembled express app — that would risk passing against a middleware stack
+ * the real app does not have.
  *
  * Redis is not started: the routes exercised here do not need it. A database IS, since
- * `/observability/events` now authenticates with an admin session cookie and a session needs a
- * user to belong to.
+ * `/observability/events` authenticates with an admin session cookie and a session needs a user
+ * to belong to.
  */
 import type { IncomingMessage } from 'node:http';
 import { api } from '../helpers/http';
@@ -37,8 +34,8 @@ describe('System routes', () => {
 
 describe('Observability routes', () => {
     it('GET /observability/metrics returns prometheus exposition', async () => {
-        // No longer public — Prometheus scrapes it with a static bearer credential, since it
-        // cannot log in or hold a session. See `isMetricsScraper`.
+        // Prometheus scrapes it with a static bearer credential, since it cannot log in or hold
+        // a session. See `isMetricsScraper`.
         const response = await api()
             .get('/observability/metrics')
             .set('Authorization', `Bearer ${process.env.NODE_METRICS_TOKEN ?? ''}`);
@@ -52,9 +49,8 @@ describe('Observability routes', () => {
     it('GET /observability/events returns an SSE snapshot', async () => {
         // supertest buffers the whole response, so the stream is read by aborting shortly after
         // the first chunk lands rather than by holding the connection open.
-        // No longer public either. `EventSource` cannot set headers, so the stream authenticates
-        // with the session cookie an admin login sets — which is how the frontend already opens
-        // it (`withCredentials: true`).
+        // `EventSource` cannot set headers, so the stream authenticates with the session cookie
+        // an admin login sets — which is how the frontend opens it (`withCredentials: true`).
         const admin = await createAdminUser({ email: 'sse-admin@example.com' });
         const login = await api()
             .post('/account/login')

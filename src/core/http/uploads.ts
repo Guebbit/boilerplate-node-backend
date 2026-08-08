@@ -63,10 +63,9 @@ export function getFormFiles(request: Request): string[] | undefined {
  * controller to work whether the store answered `/images/x.png` or
  * `https://cdn.example.com/images/x.png`.
  *
- * It used to be derived here instead, by stripping `NODE_PUBLIC_PATH` off multer's path, which is
- * why this module carries {@link toPosixPath} and its Windows-separator history. Constructing the
- * url in the store rather than deriving it from a path retires that whole class of bug: there is
- * no longer a filesystem separator anywhere near the value that gets persisted.
+ * Constructing the url in the store, rather than deriving it by stripping `NODE_PUBLIC_PATH` off
+ * multer's path, keeps a filesystem separator away from the value that gets persisted — see
+ * {@link toPosixPath} for what that costs when it does not.
  *
  * @param request - Express request that has been through the upload middleware
  */

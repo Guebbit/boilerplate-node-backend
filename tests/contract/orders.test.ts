@@ -63,8 +63,8 @@ describe('GET /orders', () => {
 });
 
 describe('GET /orders/{id}', () => {
-    // The admin path uses findById and the non-admin path uses an aggregate. They used to
-    // serialize differently; the transform now covers both, and these two tests are the guard.
+    // The admin path uses findById and the non-admin path uses an aggregate — two routes into
+    // the same transform, so both are asserted against the contract.
     it('matches the contract on the admin (unscoped) path', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);

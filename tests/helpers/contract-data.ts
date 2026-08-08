@@ -174,10 +174,10 @@ const randomStringForFormat = (format?: string): string => {
  *
  * Producing a string from an arbitrary regex is a whole library's worth of work and not worth
  * it for a handful of patterns. The important part is not the table — it is that
- * {@link satisfyPattern} REFUSES to return a value it knows is illegal. A `pattern` used to be
- * ignored outright, so `validPayload` could hand an endpoint a payload the contract forbids and
- * the resulting 422 looked like an endpoint bug rather than a generator gap. Adding a pattern to
- * `openapi.yaml` now fails loudly here, with the fix named in the message.
+ * {@link satisfyPattern} REFUSES to return a value it knows is illegal. Ignoring a `pattern`
+ * would let `validPayload` hand an endpoint a payload the contract forbids, and the resulting 422
+ * would read as an endpoint bug rather than a generator gap. Adding a pattern to `openapi.yaml`
+ * fails loudly here instead, with the fix named in the message.
  */
 const PATTERN_SAMPLES: Record<string, string> = {
     // Locale — BCP 47 language tag

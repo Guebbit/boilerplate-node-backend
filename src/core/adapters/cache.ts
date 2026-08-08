@@ -426,7 +426,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
  *
  * Two fields rather than a bare count because "0 keys removed" is ambiguous on its own: it is
  * the honest answer for an empty cache *and* the answer a dead Redis produces. Callers that
- * exist to clear the cache need to tell those apart (PROPOSAL §15, option B).
+ * exist to clear the cache need to tell those apart.
  */
 export interface IClearCacheResult {
     /** Keys actually removed. Always `0` when `reachable` is false. */

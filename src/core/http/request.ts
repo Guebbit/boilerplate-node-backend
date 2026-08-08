@@ -114,12 +114,11 @@ export type IRequestInput<Id extends string> = Record<string, unknown> & {
 /**
  * Read a route's input according to one declaration.
  *
- * What this replaces is re-assembling the rules of the multi-source polymorphism at every call
- * site, which is how `hardDelete` ended up reading three sources while `id` read two, each in an
- * order nothing recorded, and how a new endpoint got it wrong by copying whichever neighbouring
- * controller its author opened first.
+ * One declaration per route, so the rules of the multi-source polymorphism are not re-assembled
+ * at every call site — which is how one field ends up reading three sources and its neighbour two,
+ * in an order nothing records.
  *
- * Four rules, previously spread across five separate helpers:
+ * Four rules:
  *
  * - **Precedence is a `||` chain over `sources`**, highest first, so an empty value falls through
  *   as if the key were absent.

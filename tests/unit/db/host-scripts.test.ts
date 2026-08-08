@@ -2,16 +2,15 @@
  * The `:host` npm scripts, and the two URI resolvers they depend on.
  *
  * `:host` exists so a developer can run the app against the containerised database WITHOUT being
- * in a container. That means overriding one thing — the hostname — and nothing else. It used to
- * override far more: each script spelled out a whole
- * `mongodb://localhost:27017/boilerplate-node-backend`, which meant the database NAME was
- * hardcoded in six places and `NODE_MONGODB_NAME` was ignored. Rename the database in `.env` and
- * `db:seed:host` cheerfully seeded a different one, silently, with no output naming which.
+ * in a container. That means overriding one thing — the hostname — and nothing else. A script that
+ * spells out a whole `mongodb://localhost:27017/boilerplate-node-backend` hardcodes the database
+ * NAME and ignores `NODE_MONGODB_NAME`, so renaming the database in `.env` has `db:seed:host`
+ * cheerfully seed a different one, silently, with no output naming which.
  *
- * The shipped fix is that the scripts blank `NODE_DB_URI` / `NODE_REDIS_URL` and set only
- * `*_HOST=localhost`, letting both resolvers fall through to their host/port/name fragments —
- * which come from `.env`, the single source of truth. Three things have to stay true for that to
- * keep working, and each is asserted below:
+ * So the scripts blank `NODE_DB_URI` / `NODE_REDIS_URL` and set only `*_HOST=localhost`, letting
+ * both resolvers fall through to their host/port/name fragments — which come from `.env`, the
+ * single source of truth. Three things have to stay true for that to keep working, and each is
+ * asserted below:
  *
  *   1. The scripts do not reintroduce a literal URI.
  *   2. An EMPTY URI falls through to the fragments (a `!== undefined` check would not).

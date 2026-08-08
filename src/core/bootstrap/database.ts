@@ -39,7 +39,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * through to the fragments deliberately, and that is load-bearing. It is how the `:host` npm
  * scripts reach a containerised database from the host — they blank the URI and override only
  * `NODE_MONGODB_HOST`, so the database NAME keeps coming from `.env` instead of being spelled
- * out a second time in `package.json` (where it used to drift, and seed the wrong database).
+ * out a second time in `package.json`, where it can drift and seed the wrong database.
  *
  * Exported for `migrate-mongo-config.js`, which cannot import this module — it is CommonJS,
  * loaded by migrate-mongo's own resolver, and this file is TypeScript. It reimplements these

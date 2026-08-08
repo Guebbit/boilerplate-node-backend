@@ -39,10 +39,8 @@ The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml
 
 ### Shared with the frontend
 
-This script is **byte-identical** to `scripts/gen-asyncapi-types.ts` in `boilerplate-vue-frontend`
-(PROPOSAL §5, option B — the frontend's generator was the more capable one and became the shared
-implementation). Only the output path differs, and it comes from `--out` in each repo's
-`genasyncapi` script:
+This script is **byte-identical** to `scripts/gen-asyncapi-types.ts` in `boilerplate-vue-frontend`.
+Only the output path differs, and it comes from `--out` in each repo's `genasyncapi` script:
 
 | Repo | Command |
 | --- | --- |

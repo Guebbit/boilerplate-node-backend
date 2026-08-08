@@ -1,12 +1,9 @@
 /*
  * Repair `imageUrl`s stored with Windows path separators.
  *
- * `resolveImageUrl()` used to persist multer's `file.path` with only the public prefix stripped.
- * multer builds that path with `path.join()`, so on Windows an upload was recorded as
- * `\images\x.jpg`. A URL path has no backslashes — a browser reads them as literal filename
- * characters — so every such row points at a file the server will 404, and `express.static`
- * answering `public/` (added in the same release) cannot help them. The seeder shipped the same
- * shape, having been written from one of those uploads.
+ * Rows written from multer's `file.path` carry `path.join()`'s separator, so on Windows an upload
+ * was recorded as `\images\x.jpg`. A URL path has no backslashes — a browser reads them as
+ * literal filename characters — so every such row points at a file the server will 404.
  *
  * Two separate rewrites, because the two are not the same fix:
  *

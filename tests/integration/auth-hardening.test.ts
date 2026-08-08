@@ -100,7 +100,7 @@ describe('the 500 handler', () => {
     /**
      * An unexpected error is precisely the case where nobody chose the wording: a driver error
      * naming hosts and ports, an ENOENT naming a filesystem layout, a client quoting a URL with a
-     * key in it. It used to be sent to an unauthenticated caller verbatim.
+     * key in it. None of it may reach an unauthenticated caller.
      */
     it('tells the client nothing about what actually threw', async () => {
         const { handleUncaughtError } = await import('../../src/app');

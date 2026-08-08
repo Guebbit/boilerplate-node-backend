@@ -1,10 +1,10 @@
 /**
  * The contract scalars more than one endpoint accepts.
  *
- * Each of these exists because the same question used to get two answers. `hardDelete` was read
- * as presence, so `?hardDelete=false` permanently deleted the record. `pageSize` was bounded by
- * Zod on the three list controllers and not at all on `/feedback`, so the same out-of-range
- * request answered 422 on one endpoint and a clamped 200 on the other.
+ * Each of these exists so the same question cannot get two answers across endpoints: `hardDelete`
+ * read as presence makes `?hardDelete=false` permanently delete the record, and a `pageSize` bound
+ * declared per-controller makes the same out-of-range request answer 422 on one endpoint and a
+ * clamped 200 on the next.
  */
 import { hardDeleteSchema, pageSchema, pageSizeSchema, paginationSchema } from '@core/http/schemas';
 
@@ -15,7 +15,7 @@ describe('hardDeleteSchema', () => {
         expect(hardDeleteSchema.parse(value)).toBe(value);
     });
 
-    // The whole point of the change: this used to be `true`, and permanently deleted the record.
+    // The whole point of the schema: read as presence, this would be `true` and delete the record.
     it('does not treat a decoded false as a request to hard-delete', () => {
         expect(hardDeleteSchema.parse(false)).toBe(false);
     });

@@ -7,11 +7,10 @@
  * separately here — a regression that handles only two of them would still look fine on the
  * route that happens to use the third.
  *
- * `resolveImageUrl()` reads back the url the image store recorded when it committed the upload. It
- * used to derive that url here, by stripping `NODE_PUBLIC_PATH` off multer's path, and to hand the
- * path itself back too so controllers could unlink it on a failure. Both are gone: the store
- * constructs the url and owns the delete, so no filesystem path leaves the upload pipeline and
- * none can reach a database row.
+ * `resolveImageUrl()` reads back the url the image store recorded when it committed the upload —
+ * it neither derives that url from multer's path nor hands the path back. The store constructs the
+ * url and owns the delete, so no filesystem path leaves the upload pipeline and none can reach a
+ * database row.
  */
 
 import type { Request } from 'express';
@@ -100,14 +99,9 @@ describe('getFormFiles', () => {
 
 describe('resolveImageUrl', () => {
     /**
-     * Reads back what the image store committed, and nothing else.
-     *
-     * The url used to be derived here from multer's path, which is why this suite once carried a
-     * whole separator-normalisation section: `public\\images\\x.png` had to become
-     * `/images/x.png` without the backslashes surviving into the database. The store now
-     * CONSTRUCTS the url instead (`@core/adapters/image-store`), so there is no path to normalise
-     * and no way for a separator to reach a stored value — the tests for that property moved with
-     * the behaviour.
+     * Reads back what the image store committed, and nothing else. The store CONSTRUCTS the url
+     * (`@core/adapters/image-store`), so there is no path to normalise here and no way for a
+     * filesystem separator to reach a stored value — `image-store.test.ts` asserts that property.
      */
     it('returns the url the store recorded for the upload', () => {
         expect(resolveImageUrl(requestWith({ storedImageUrls: ['/images/a.png'] }))).toBe(

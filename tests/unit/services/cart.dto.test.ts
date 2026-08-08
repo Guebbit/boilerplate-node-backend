@@ -15,7 +15,7 @@
  *
  *   `toCartItemResponse` is the over-serialization guard: `CartItem` is
  *   `additionalProperties: false` over `{ productId, quantity }`, and the populated product must
- *   not cross the wire. That has shipped as a bug here before.
+ *   not cross the wire.
  */
 
 import { Types } from 'mongoose';

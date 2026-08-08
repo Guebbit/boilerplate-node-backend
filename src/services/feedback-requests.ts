@@ -16,10 +16,9 @@ import {
 /**
  * OCP-compliant status mapping: adding a new status only requires adding one entry here.
  *
- * Lowercase only, matching `openapi.yaml`'s `enum: [new, in_progress, resolved, spam]`. The
- * uppercase aliases this used to carry "for older clients" accepted values the contract has
- * never allowed — dead on `PUT /feedback/:id` (the generated Zod schema 422s them first) and
- * actively wrong on the search path, which had no such guard.
+ * Lowercase only, matching `openapi.yaml`'s `enum: [new, in_progress, resolved, spam]`. Uppercase
+ * aliases would accept values the contract does not allow — dead on `PUT /feedback/:id`, where
+ * the generated Zod schema 422s them first, and actively wrong on the unguarded search path.
  */
 const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
     new: FeedbackRequestStatus.new,

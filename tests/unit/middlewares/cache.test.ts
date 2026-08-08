@@ -157,12 +157,11 @@ describe('setCache', () => {
         );
     });
 
-    // Regression guard. The Redis key is scoped per user, but nothing told the *browser* that the
-    // body depends on who asked: an anonymous `GET /products` answered `public, max-age=30`, the
-    // browser stored it, and an admin hitting the same URL seconds later was served those 3 public
-    // rows from local cache without a request ever reaching the API — admin header, admin row
-    // controls, anonymous data. Both scopes must name `Authorization` in `Vary`, since it is the
-    // only input `getAuth` reads.
+    // The Redis key is scoped per user, but that tells the *browser* nothing about the body
+    // depending on who asked: an anonymous `GET /products` answering `public, max-age=30` is
+    // stored locally and replayed to an admin hitting the same URL seconds later — admin header,
+    // admin row controls, anonymous data, no request reaching the API at all. Both scopes must
+    // name `Authorization` in `Vary`, since it is the only input `getAuth` reads.
     //
     // `Accept-Language` is there for the same reason with a different header: bodies carry
     // translated `message` / `errors` copy, so a cache that does not key on it hands an Italian

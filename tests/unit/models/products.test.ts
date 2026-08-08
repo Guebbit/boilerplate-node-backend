@@ -1,5 +1,5 @@
 /**
- * Regression guard for PROPOSAL §1 (option A): products must never leak `_id`/`__v`,
+ * Products must never leak `_id`/`__v`,
  * on any response path — a real document (`toJSON`) or a `.lean()` list result
  * (mapped manually via `applyProductTransform`, since `.lean()` bypasses `toJSON`).
  */

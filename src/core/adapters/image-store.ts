@@ -103,8 +103,7 @@ export const filesystemImageStore: IImageStore = {
         );
 
         // Containment, not paranoia: `imageUrl` is a client-supplied string on the create/update
-        // endpoints, `uri-reference` permits `/../../etc/passwd`, and the only thing standing
-        // between that value and an unlink was previously a `+`. `path.resolve` has already
+        // endpoints and `uri-reference` permits `/../../etc/passwd`. `path.resolve` has already
         // collapsed the `..` segments, so this compares the real destination. The public directory
         // itself is not a stored image, so equality is a rejection too.
         if (!target.startsWith(root + path.sep)) return Promise.resolve(false);

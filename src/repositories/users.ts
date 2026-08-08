@@ -35,10 +35,8 @@ export const userRepository: IBaseRepository<IUserDocument> & {
             text: ['email', 'username'],
             regex: { email: 'email', username: 'username' },
             /*
-             * `active` filters the real column. It used to be a `deletedScope()` that turned this
-             * filter into `deletedAt: { $exists: … }`, back when users had no `active` column and
-             * the two concepts were one field — so "show me deactivated accounts" and "show me
-             * deleted accounts" were the same query and neither could be asked on its own.
+             * `active` filters the real column, not `deletedAt: { $exists: … }`: "show me
+             * deactivated accounts" and "show me deleted accounts" are different questions.
              */
             booleans: { active: 'active' }
         }

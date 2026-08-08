@@ -2,9 +2,7 @@
  * Initial indexes.
  *
  * Migrations own SCHEMA — indexes, collection options, field renames. Demo DATA belongs to
- * `npm run db:seed` (PROPOSAL §8, option C). This file used to insert users/products/orders
- * as well, with a second, disagreeing copy of the same fixtures; that half now lives only in
- * `db/seeds/index.ts`.
+ * `npm run db:seed` and lives only in `db/seeds/index.ts`.
  *
  * `createIndex` is idempotent, so re-running this against an already-migrated database is a
  * no-op rather than an error.

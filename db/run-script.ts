@@ -1,16 +1,12 @@
 /*
- * Entry-point wrapper for the one-shot scripts in `db/` (PROPOSAL §15, option A).
- *
- * These scripts used to end with `.catch((error) => { throw error; })`, which is a no-op:
- * rethrowing inside a `.catch` produces the same unhandled rejection as having no `.catch` at
- * all. It satisfied a lint rule and nothing else. Three things were actually missing:
+ * Entry-point wrapper for the one-shot scripts in `db/`. Three things a bare promise chain does
+ * not give them:
  *
  *   - A NON-ZERO EXIT CODE on failure, so CI and shell `&&` chains notice. An unhandled
- *     rejection does exit non-zero, but only via a deprecation-warning path, and the stack it
- *     prints is the raw rejection rather than anything the script chose to say.
- *   - CLEANUP ON THE FAILURE PATH. Both scripts closed their Mongo/Redis handles as the last
- *     statement of the happy path, so a throw skipped it entirely: the process kept an open
- *     socket and hung instead of exiting.
+ *     rejection does exit non-zero, but only via a deprecation-warning path, and it prints the
+ *     raw rejection rather than anything the script chose to say.
+ *   - CLEANUP ON THE FAILURE PATH. Closing the Mongo/Redis handles as the last statement of the
+ *     happy path means a throw skips it, and the process hangs on an open socket.
  *   - A READABLE ERROR, logged through the same logger as everything else.
  *
  * `process.exitCode` rather than `process.exit()`: setting the code lets Node drain stdout and

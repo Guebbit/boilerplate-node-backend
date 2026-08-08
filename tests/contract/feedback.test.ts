@@ -104,9 +104,8 @@ describe('GET /feedback', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // This endpoint used to be the odd one out: it validated no pagination at all, so
-    // `?pageSize=500` was silently clamped to 100 here while the other three search endpoints
-    // answered 422 for the very same request.
+    // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
+    // to 100 while the other three search endpoints answer 422 for the very same request.
     it.each(['pageSize=500', 'page=0'])(
         'rejects out-of-range pagination like every other search endpoint (%s)',
         async (queryString) => {

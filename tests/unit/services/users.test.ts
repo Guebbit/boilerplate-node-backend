@@ -55,8 +55,8 @@ describe('authService.signup', () => {
         const result = await authService.signup('not-an-email', 'user', 'Password1!', 'Password1!');
 
         expect(result.success).toBe(false);
-        // 422 across the board for validation failures: auth used to answer 400 here while every
-        // other service used 422, and openapi.yaml declares 422 (it never declares 400 at all).
+        // 422 across the board for validation failures, auth included — that is what
+        // openapi.yaml declares, and it never declares 400 at all.
         expect((result as IResponseReject).status).toBe(422);
     });
 
@@ -354,10 +354,9 @@ describe('userService.validateData', () => {
     });
 
     /**
-     * These four used to pass validation untouched, because the schema was applied through a
-     * `.pick({ email, username, password })` that never looked at the rest of the payload.
-     * `admin` was the worst of them: an unchecked string reached Mongoose and threw a CastError
-     * on save, so `POST /users` answered 500 where its own contract promises 422.
+     * The fields a `.pick({ email, username, password })` would never look at. `admin` is the
+     * costliest: an unchecked string reaches Mongoose and throws a CastError on save, so
+     * `POST /users` answers 500 where its own contract promises 422.
      */
     it.each(['admin', 'active'])('rejects a wrong-typed %s flag', (field) => {
         const errors = userService.validateData({

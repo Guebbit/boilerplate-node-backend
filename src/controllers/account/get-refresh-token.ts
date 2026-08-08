@@ -11,9 +11,9 @@ import { authRefreshTotal } from '@core/observability/metrics-domain';
  * Given the refreshToken from the user's `jwt` cookie, create a new short-lived access token for
  * the following requests.
  *
- * The cookie is the only accepted source. A refresh token in the URL path — which this endpoint
- * also used to accept — lands in browser history, proxy logs and `Referer` headers, and is
- * readable by anything that can see the request line; the `HttpOnly` cookie is not.
+ * The cookie is the only accepted source. A refresh token in the URL path lands in browser
+ * history, proxy logs and `Referer` headers, readable by anything that can see the request line;
+ * the `HttpOnly` cookie is not.
  */
 export const getRefreshToken = (request: Request, response: Response) => {
     /**

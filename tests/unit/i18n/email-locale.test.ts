@@ -157,9 +157,9 @@ describe('the email worker renders in the payload’s locale', () => {
     });
 
     /**
-     * The regression this whole design exists for: the worker must NOT inherit whatever locale
-     * happened to be ambient when it was invoked. Two jobs drained back to back from inside an
-     * unrelated scope must each answer in their own language.
+     * The point of the whole design: the worker must NOT inherit whatever locale happened to be
+     * ambient when it was invoked. Two jobs drained back to back from inside an unrelated scope
+     * must each answer in their own language.
      */
     it('ignores any ambient locale and uses the job’s own', async () => {
         const { handleEmailJob } = await import('../../../src/workers/email.worker');

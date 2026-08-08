@@ -1,21 +1,14 @@
 /**
  * Request input.
  *
- * Written because the first mutation run scored this file 0% — every mutant survived, since no
- * unit test called it at all. It was exercised only through the integration and contract suites,
- * which is precisely how a helper this small ends up with a crash in it.
+ * `readInput` is small enough to look self-evident and is reached by every controller, which is
+ * the combination that leaves a crash in it — the integration and contract suites exercise it
+ * without ever asking it a question of their own.
  *
- * That crash is `readInput`'s "no body at all" cases below: express 5 leaves `request.body`
- * **undefined** when the request carries no body (express 4 defaulted it to `{}`), and the id
- * extraction read a property off it unconditionally. A body-less `DELETE /cart/:productId` —
- * what the frontend actually sends — answered 500.
- *
- * The eleven helpers this file used to cover are now one declaration-driven entry point. Each
- * case that proved something specific about one of them survives here, re-asked of `readInput`:
- * the precedence chain (`mergeBodyQuery`, `extractCustomId`, `extractHardDelete`), the
- * undefined-key pass (`mergeBodyQuery`), the multipart-only transport rule (`decodeFormFields`,
- * `parseFormBoolean`, `isMultipartRequest`) and the no-defaulting rule
- * (`extractRequestPagination`).
+ * The cases cover each rule the declaration encodes: the precedence chain, the undefined-key
+ * pass, the multipart-only transport rule, the no-defaulting rule, and the "no body at all" path
+ * — express 5 leaves `request.body` **undefined** when a request carries none (express 4
+ * defaulted it to `{}`), so a body-less `DELETE /cart/:productId` is a 500 waiting to happen.
  */
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
@@ -163,8 +156,8 @@ describe('readInput', () => {
             ).toBe(OBJECT_ID);
         });
 
-        // The regression that started this file: express 5 gives `undefined` for a body-less
-        // request, and the old helper read the body key before precedence was even applied.
+        // express 5 gives `undefined` for a body-less request, so reading a body key before
+        // precedence is applied throws rather than falling through to `params`.
         it('reads the route param when the request has no body at all', () => {
             const request = makeRequest({ params: { productId: OBJECT_ID } });
 
@@ -333,9 +326,8 @@ describe('readInput', () => {
     /**
      * A route param and a query entry are strings by construction — there is nothing typed in
      * them to destroy — so a declared boolean coming from either is always decoded, whatever the
-     * body's content type happens to be. This is what makes `?hardDelete=false` mean false; it
-     * used to be read as presence, so the string 'false' was truthy and permanently deleted the
-     * record.
+     * body's content type happens to be. This is what makes `?hardDelete=false` mean false rather
+     * than a truthy `'false'` that permanently deletes the record.
      */
     describe('string transports', () => {
         const declaration = {

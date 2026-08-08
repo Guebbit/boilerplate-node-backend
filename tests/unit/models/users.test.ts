@@ -1,8 +1,8 @@
 /**
- * Regression guard for the credential leak fixed in PROPOSAL §2 (option C).
+ * Credentials must never reach a response body.
  *
- * `GET /users` and `GET /users/:id` used to serialise the raw Mongoose document, which carried
- * the bcrypt hash and every live refresh token. Two independent mechanisms now prevent it:
+ * Serialising a raw Mongoose user document would carry the bcrypt hash and every live refresh
+ * token, so two independent mechanisms stand between it and `GET /users` / `GET /users/:id`:
  *
  *   1. `select: false` on the schema — the fields are not even loaded by the normal finders
  *   2. `applyUserTransform` (the schema's `toJSON` transform) — an allowlist of the OpenAPI
@@ -122,12 +122,9 @@ describe('user credential exposure', () => {
         });
 
         /*
-         * `active` and `deletedAt` are independent, and this is the test that says so. It
-         * replaces one asserting the opposite — `active` used to be derived here as
-         * `!deletedAt`, so the two could never disagree and half these cases were unreachable.
-         *
-         * All four combinations are exercised deliberately: a deleted-but-active account and a
-         * live-but-deactivated one are exactly the states the old derivation could not express.
+         * `active` and `deletedAt` are independent, and this is the test that says so. All four
+         * combinations are exercised deliberately: a deleted-but-active account and a
+         * live-but-deactivated one are exactly the states a derived `active` cannot express.
          */
         it('keeps active independent of deletedAt', async () => {
             const cases = [
@@ -151,15 +148,12 @@ describe('user credential exposure', () => {
         });
 
         /*
-         * `deletedAt` used to be stripped on the way out, which was survivable only while `active`
-         * was derived from it — deletion was still legible, through that flag. Once the two became
-         * independent facts, stripping it left deletion with no representation at all: an admin
-         * list could not tell a deleted account from a live one. It is exposed now, as `Product`
-         * has always exposed it.
+         * `deletedAt` is exposed, as `Product` exposes it: with `active` an independent fact,
+         * stripping it would leave deletion with no representation at all and an admin list could
+         * not tell a deleted account from a live one.
          *
-         * The key-list test above still holds, and is the other half of this: an account that was
-         * never deleted has no `deletedAt` key to emit, so the field appears only where it means
-         * something.
+         * The key-list test above is the other half of this: an account that was never deleted has
+         * no `deletedAt` key to emit, so the field appears only where it means something.
          */
         it('exposes deletedAt on a soft-deleted account', async () => {
             const deletedAt = new Date('2026-03-04T05:06:07.000Z');
@@ -172,8 +166,8 @@ describe('user credential exposure', () => {
             const user = await createUser({ email: 'gone-too@example.com', deletedAt: new Date() });
             const serialized = user.toJSON() as Record<string, unknown>;
 
-            // Exposing one previously-stripped field must not have loosened the others: these
-            // three are stripped because they must never leave the server, `deletedAt` was not.
+            // Exposing `deletedAt` must not loosen the others: these three are stripped because
+            // they must never leave the server, which was never true of `deletedAt`.
             expect(serialized.password).toBeUndefined();
             expect(serialized.tokens).toBeUndefined();
             expect(serialized.cart).toBeUndefined();

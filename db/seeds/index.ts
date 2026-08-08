@@ -1,11 +1,9 @@
 /*
  * Demo data seeder.
  *
- * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA (PROPOSAL §8, option C). The two used to
- * both insert these fixtures, with different passwords for `gino@pino.it` — that duplicate is
- * gone, and `./fixtures` is now the single source of the demo dataset. This file is the RUNNER:
- * it holds the connection, the upsert policy and the production gate, and nothing else. The data
- * lives next door precisely so it can be read without any of that happening.
+ * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA. `./fixtures` is the single source of the demo
+ * dataset; this file is the RUNNER — connection, upsert policy and production gate, nothing else.
+ * The data lives next door precisely so it can be read without any of that happening.
  *
  * It runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so
  * it must be:
@@ -110,8 +108,8 @@ async function seed() {
 
 /*
  * Cleanup lives in the runner's `finally`, not at the end of `seed()`: a throw partway through
- * used to skip it, leaving the Mongo and Redis sockets open so the process hung instead of
- * exiting with an error. Both closers are no-ops when their connection was never opened, which
- * covers the production-gate early return above.
+ * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process. Both
+ * closers are no-ops when their connection was never opened, which covers the production-gate
+ * early return above.
  */
 void runScript(seed, () => Promise.all([connection.close(), stopCache()]));

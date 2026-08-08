@@ -7,11 +7,11 @@ import { createUser, createAdminUser, PLAIN_PASSWORD } from '../helpers/factorie
 import { userRepository } from '@repositories/users';
 
 /**
- * The two observability endpoints that used to be public.
+ * The two observability endpoints, and the credentials that reach them.
  *
- * Neither carries user data, which is why they were left open — but both are a map of how the
- * service behaves: request volumes, error rates, latency percentiles, login success and failure
- * counters, uptime and heap. That is reconnaissance worth having if you intend to attack it.
+ * Neither carries user data, but both are a map of how the service behaves: request volumes,
+ * error rates, latency percentiles, login success and failure counters, uptime and heap. That is
+ * reconnaissance worth having if you intend to attack it.
  *
  * They authenticate differently because their callers CAN authenticate differently, and the tests
  * are split the same way.

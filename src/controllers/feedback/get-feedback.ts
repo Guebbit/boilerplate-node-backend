@@ -35,9 +35,9 @@ export const getFeedback = (
         sources: ['body', 'query']
     }) as FeedbackQuery;
 
-    // Only the pagination is validated here — the other filters are free-text and this endpoint
-    // has never constrained them. The shared schema is what makes `?pageSize=500` answer 422 on
-    // this endpoint too, instead of being silently clamped as it used to be.
+    // Only the pagination is validated here — the other filters are free-text and unconstrained.
+    // The shared schema is what makes `?pageSize=500` answer 422 here as it does everywhere else,
+    // rather than being silently clamped.
     const parseResult = paginationSchema.safeParse({ page, pageSize });
     if (!parseResult.success)
         return Promise.resolve(

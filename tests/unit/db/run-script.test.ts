@@ -1,10 +1,9 @@
 /**
- * Script entry-point wrapper — PROPOSAL §15, option A.
+ * Script entry-point wrapper.
  *
- * The three behaviours below are the ones the old `.catch((error) => { throw error; })` did not
- * provide: a non-zero exit code, cleanup on the failure path, and a logged reason. The middle
- * one is the load-bearing case — without it `db:seed` left its Mongo and Redis sockets open on
- * a throw, so the process hung instead of exiting.
+ * The three behaviours a bare promise chain does not provide: a non-zero exit code, cleanup on
+ * the failure path, and a logged reason. The middle one is load-bearing — without it `db:seed`
+ * leaves its Mongo and Redis sockets open on a throw, and the process hangs instead of exiting.
  */
 import { runScript } from '../../../db/run-script';
 import { logger } from '@core/adapters/logger';
@@ -56,7 +55,7 @@ describe('runScript', () => {
         );
     });
 
-    /* The hang. Cleanup used to be the last statement of the happy path, so a throw skipped it. */
+    /* The hang: cleanup as the last statement of the happy path is cleanup a throw skips. */
     it('still runs cleanup when the body throws', async () => {
         const cleanup = jest.fn().mockImplementation(() => Promise.resolve());
 

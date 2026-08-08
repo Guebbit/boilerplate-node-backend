@@ -1,13 +1,13 @@
 /**
  * Cache adapter — two things the seeding/cache tooling depends on.
  *
- * 1. TTL clamping (PROPOSAL §9, option C). Cache invalidation only fires for writes that go
- *    through the API, so anything writing straight to Mongo (`db:seed`, migrations, `mongosh`)
- *    leaves stale answers behind until they expire. Outside production the declared TTL is
- *    clamped so that window is seconds, not an hour.
- * 2. `clearCache`'s reachability reporting (PROPOSAL §15, option B). It still fails open, but
- *    it now distinguishes "nothing to clear" from "could not clear" so `db:cache:clear` can
- *    exit non-zero instead of announcing a success it did not achieve.
+ * 1. TTL clamping. Cache invalidation only fires for writes that go through the API, so anything
+ *    writing straight to Mongo (`db:seed`, migrations, `mongosh`) leaves stale answers behind
+ *    until they expire. Outside production the declared TTL is clamped so that window is
+ *    seconds, not an hour.
+ * 2. `clearCache`'s reachability reporting. It fails open, but distinguishes "nothing to clear"
+ *    from "could not clear" so `db:cache:clear` can exit non-zero instead of announcing a
+ *    success it did not achieve.
  *
  * `resolveCacheTtl` reads `process.env` on every call, so the module does not need re-importing
  * between cases — but NODE_ENV has to be restored, since jest sets it to 'test' globally.
@@ -161,9 +161,9 @@ describe('clearCache', () => {
     });
 
     /*
-     * The regression this whole change exists for. `getClient()` reports a failed connect by
-     * resolving void — the same value it uses for "caching is off" — so before §15 both landed
-     * on `return 0` and `db:cache:clear` printed "0 keys removed" and exited 0 with a full cache.
+     * `getClient()` reports a failed connect by resolving void — the same value it uses for
+     * "caching is off" — so collapsing the two would have `db:cache:clear` print "0 keys removed"
+     * and exit 0 with a full cache.
      */
     it('reports UNREACHABLE when caching is on but Redis refuses the connection', async () => {
         process.env.NODE_REDIS_URL = 'redis://localhost:6379';

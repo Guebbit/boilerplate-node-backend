@@ -350,12 +350,11 @@ export const handleUncaughtError = (
     /*
      * The client is told that something failed, and nothing else.
      *
-     * `errors[].message` used to be `error.message` — whatever threw. That is the one place an
-     * unexpected error's own text reaches an unauthenticated caller, and unexpected is precisely
-     * the case where nobody chose the wording: a Mongoose validation error naming internal field
+     * `errors[]` carries a constant, never `error.message`. An unexpected error is precisely the
+     * case where nobody chose the wording: a Mongoose validation error naming internal field
      * paths, a driver error naming hosts and ports, an ENOENT naming a filesystem layout, a
-     * third-party client quoting a URL with a key in it. Any of those is free reconnaissance,
-     * and none of it means anything to the person reading it.
+     * third-party client quoting a URL with a key in it. Any of those is free reconnaissance for
+     * an unauthenticated caller, and none of it means anything to the person reading it.
      *
      * The detail is not lost — it is logged above with the request id and trace id, which is
      * where an operator can act on it and a stranger cannot. `message` (3rd arg) stays the

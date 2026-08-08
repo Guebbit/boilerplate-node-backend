@@ -1,5 +1,5 @@
 /**
- * Regression guard for PROPOSAL §1 (option A): orders must never leak `_id`/`__v`,
+ * Orders must never leak `_id`/`__v`,
  * on any response path — a real document (`toJSON`) or an `.aggregate()` result
  * (mapped manually via `applyOrderTransform`, since aggregation output is plain
  * JS and bypasses `toJSON` just like `.lean()` does). The embedded product

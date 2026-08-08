@@ -229,8 +229,8 @@ describe('isAuth', () => {
     });
 
     it('rejects with 401 when a context exists but the bearer token is gone', () => {
-        // Both conditions are required. Accepting a context without its token would let a
-        // previously-populated request object stand in for a credential.
+        // Both conditions are required. Accepting a context without its token would let an
+        // already-populated request object stand in for a credential.
         const next = jest.fn();
         const response = makeResponse();
 

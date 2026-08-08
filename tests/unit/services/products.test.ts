@@ -12,10 +12,9 @@ import type { IUserCartDto } from '@services/cart.dto';
  * Mock the image store, not the filesystem underneath it.
  *
  * What this service owes its collaborator is a *stored-image handle* — the `imageUrl` value — and
- * nothing about where those bytes live. Asserting on `deleteFile(publicPath + url)` instead, as
- * this file used to, pinned the service to the filesystem backend: it would keep passing while
- * silently doing the wrong thing the moment images move to a bucket. See
- * `@core/adapters/image-store`.
+ * nothing about where those bytes live. Asserting on `deleteFile(publicPath + url)` instead would
+ * pin the service to the filesystem backend: the test would keep passing while silently covering
+ * the wrong thing the moment images move to a bucket. See `@core/adapters/image-store`.
  */
 jest.mock('@core/adapters/image-store', () => ({
     imageStore: { remove: jest.fn().mockResolvedValue(true) }
@@ -95,9 +94,9 @@ describe('productService.validateData', () => {
         expect(errors).toHaveLength(0);
     });
 
-    // These reach the validator only because the controller stopped coercing JSON bodies:
-    // `!!'not-a-boolean'` and `coerceStringArray(42)` used to turn each of them into a
-    // plausible value before validation ever ran, so the endpoint answered 201.
+    // These reach the validator because the controller does not coerce JSON bodies: `!!'not-a-
+    // boolean'` or `coerceStringArray(42)` would turn each into a plausible value before
+    // validation ran, and the endpoint would answer 201.
     it('rejects a wrong-typed active flag', () => {
         const errors = productService.validateData({
             title: 'A Valid Product',

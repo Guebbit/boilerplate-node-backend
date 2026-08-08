@@ -6,11 +6,9 @@
  * writing to it. Tests need to look at them: `tests/unit/db/seed-fixtures.test.ts` asserts every
  * `imageUrl` is a URL path that resolves to a file this repository actually ships.
  *
- * That test exists because these fixtures shipped Windows-style `\images\x.jpg` paths for a long
- * time. They were captured from a `path.join()` on the machine that first uploaded them, and a
- * browser reads a backslash as a literal filename character, so every seeded product and user
- * pointed at an image the server would 404. Nothing served `public/` at all back then, so the
- * whole class of breakage was invisible.
+ * That test earns its place because nothing else catches a bad path: an `imageUrl` captured from
+ * a `path.join()` carries the writing machine's separators, and a browser reads a backslash as a
+ * literal filename character, so a Windows-style `\images\x.jpg` points at a 404.
  *
  * The facts themselves — ids, emails, admin flags, prices, who has what in their cart — live in
  * `./seed-identities`, which is byte-identical to a copy in the paired frontend so a `diff` catches

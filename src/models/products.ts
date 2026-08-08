@@ -108,10 +108,9 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
          * so from outside a soft-deleted product behaves exactly like an inactive one, while
          * inside they remain distinct states.
          *
-         * Defaults to `true`, and `openapi.yaml` says so on both create bodies. It used to
-         * default to `false` here and to nothing in the contract, which is how the paired
-         * frontend's mock came to default it to `true` — same contract, opposite behaviour, and
-         * no test on either side could see the disagreement.
+         * Defaults to `true`, and `openapi.yaml` says so on both create bodies — an undeclared
+         * default is one the paired frontend's mock has to guess at, and a guess that differs
+         * here is a disagreement no test on either side can see.
          */
         active: {
             type: Boolean,

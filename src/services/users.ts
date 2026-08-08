@@ -20,11 +20,11 @@ import { userRepository } from '@repositories/users';
  * Validate user data for admin create/edit forms.
  * Returns an array of UI-friendly error messages (empty array means valid).
  *
- * Validates the WHOLE schema, not a `.pick()` of email/username/password as it used to. The
- * pick left `admin`, `active` and `imageUrl` unchecked, so a wrong-typed value reached Mongoose
- * untouched: `POST /users` with `admin: 'not-a-boolean'` answered 500 (a CastError on save)
- * instead of the 422 the contract promises, and `active: 'not-a-boolean'` was accepted outright.
- * The schema is not strict, so unrelated body keys (`id` on a PUT) are still ignored.
+ * Validates the WHOLE schema, not a `.pick()` of email/username/password: a pick would leave
+ * `admin`, `active` and `imageUrl` unchecked, so a wrong-typed value reaches Mongoose untouched
+ * and `POST /users` with `admin: 'not-a-boolean'` answers 500 (a CastError on save) instead of
+ * the 422 the contract promises. The schema is not strict, so unrelated body keys (`id` on a PUT)
+ * are still ignored.
  *
  * Takes `unknown` on purpose: this is the boundary that ESTABLISHES the type, so a narrower
  * parameter would only force its callers — all holding raw request bodies — to cast on the way in.
@@ -41,10 +41,8 @@ export const validateData = (userData: unknown, requirePassword = true): string[
  * Search users (DTO-friendly) — admin panel.
  * Uses shared search-helpers for pagination (OCP).
  *
- * No scope argument: `active` is an ordinary searchable column now, handled by the repository's
- * `searchable.booleans` like any other filter. It used to be passed through
- * `userRepository.deletedScope(filters.active)`, which rewrote it into a `deletedAt` existence
- * check — the two facts were one field then, so filtering on one always filtered the other.
+ * No scope argument: `active` is an ordinary searchable column, handled by the repository's
+ * `searchable.booleans` like any other filter, and independent of `deletedAt`.
  */
 export const search = (
     filters: SearchUsersRequest = {}

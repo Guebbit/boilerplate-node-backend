@@ -1,14 +1,9 @@
 /**
  * Guards the email template path.
  *
- * `EMAIL_TEMPLATES_DIR` previously came from a per-file `import.meta.url` shim whose `dirname`
- * was derived from the CommonJS `__filename` it existed to replace. It resolved to
- * `src/views/templates-emails` — a directory that has never existed, since templates live at the
- * repository root — so every templated email failed to render, and no test noticed because
- * nothing asserted the path pointed at a real file.
- *
- * This asserts existence rather than mocking it away: a path bug is only catchable against the
- * real filesystem.
+ * A wrong `EMAIL_TEMPLATES_DIR` breaks every templated email and nothing else — no type catches
+ * it, and a suite that mocks the filesystem away cannot see it either. So this asserts the path
+ * points at real files, and renders them.
  */
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
@@ -86,9 +81,8 @@ describe('email templates render in every supported locale', () => {
     });
 
     /**
-     * The invoice PDF lives outside `templates-emails` but is the same kind of artefact: a
-     * document a customer reads. It used to be hardcoded English while everything around it was
-     * translated.
+     * The invoice PDF lives outside `templates-emails` but is the same kind of artefact — a
+     * document a customer reads — so it is held to the same translation rule.
      */
     it.each(listSupportedLocales())('renders the invoice document in %s', async (locale) => {
         const html = await runWithLocale(locale, () =>

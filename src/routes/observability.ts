@@ -12,7 +12,7 @@ import { logger } from '@core/adapters/logger';
 export const router = Router();
 
 /*
- * Both of these used to be public. Neither carries user data, but both are a map of how the
+ * Both of these are authenticated. Neither carries user data, but both are a map of how the
  * service behaves — request volumes, error rates, latency percentiles, login success/failure
  * counters, uptime and heap — which is reconnaissance worth having if you intend to attack it.
  *

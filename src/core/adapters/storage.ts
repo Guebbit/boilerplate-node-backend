@@ -45,13 +45,13 @@ export function getExtension(filename: string) {
 /**
  * Where an upload is written while the request is still being decided.
  *
- * NOT the public directory, which is what this used to be. Two reasons, in order of importance:
+ * NOT the public directory. Two reasons, in order of importance:
  *
  *   1. A file multer has written is a file that exists; a file in `public/` is a file the world can
- *      fetch. Between those two facts sat every check this API makes — the content check that
- *      catches a disguised upload, the field validation, the database write. An upload that was
- *      about to be rejected was publicly readable while it was being rejected. Now it is not
- *      reachable at all until it is committed by {@link storeUploadedImages}.
+ *      fetch. Between those two facts sits every check this API makes — the content check that
+ *      catches a disguised upload, the field validation, the database write. Staging privately
+ *      means an upload about to be rejected is not reachable while it is being rejected: nothing
+ *      is until {@link storeUploadedImages} commits it.
  *   2. A remote store cannot be written to as bytes stream in; it takes a finished file. Staging
  *      is the step that turns "multer wrote it" and "the store has it" into two separate moments,
  *      which is what lets the second one be a bucket instead of a directory.

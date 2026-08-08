@@ -65,9 +65,9 @@ export const cartGet = (userId: string): Promise<ICartItemDto[]> =>
  *
  * The populated `product` is used to price the cart and is then dropped: `CartItem` in
  * `openapi.yaml` is `additionalProperties: false` over `{ productId, quantity }`, so shipping the
- * whole product per line was over-serialization. No client reads it — the frontend renders the
- * cart from `productId`/`quantity` and looks products up in its own store — and the contract
- * suite fails on it. Use {@link cartGet} where the populated product is actually needed.
+ * whole product per line is over-serialization the contract suite fails on. No client reads it —
+ * the frontend renders the cart from `productId`/`quantity` and looks products up in its own
+ * store. Use {@link cartGet} where the populated product is actually needed.
  */
 export const cartGetWithSummary = (
     userId: string
