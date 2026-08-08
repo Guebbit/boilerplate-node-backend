@@ -23,9 +23,18 @@
  *   validPayload(schema)     — a payload that satisfies the schema
  *   invalidPayloads(schema)  — payloads that each violate exactly one constraint
  *
- * Both draw from a PRNG seeded once per process (`CONTRACT_DATA_SEED`, or a fresh value printed
+ * Both draw from a PRNG seeded once per process (`RANDOM_DATA_SEED`, or a fresh value printed
  * on first use) — not reseeded per call, so repeated calls in one test file draw
  * different-but-reproducible values (distinct emails, ids, ...) from the same seeded stream.
+ *
+ * `RANDOM_DATA_SEED` is deliberately the same name the paired frontend reads for its random mock
+ * profile (`tests/mocks/shared/mockProfilesRandom.ts` there). The two sides keep their own PRNGs
+ * — this Mulberry32 against faker's Mersenne Twister — and given one seed they produce unrelated
+ * values. That is fine and intended: they generate opposite halves of the same contract (requests
+ * here, responses there) from different schema surfaces, so making the streams agree would buy
+ * nothing and would couple two independently-correct implementations. What the shared name buys
+ * is a shared vocabulary — a seed quoted in a failure report is a number both repos understand
+ * how to act on, instead of one that means something in only one of them.
  */
 import type { ZodTypeAny } from 'zod';
 
@@ -47,9 +56,9 @@ const createRandom = (seed: number) => {
 let seeded = false;
 let random = createRandom(0);
 
-/** `CONTRACT_DATA_SEED` when set to a finite number, otherwise a fresh value. */
+/** `RANDOM_DATA_SEED` when set to a finite number, otherwise a fresh value. */
 export const resolveContractDataSeed = (): number => {
-    const raw = process.env.CONTRACT_DATA_SEED;
+    const raw = process.env.RANDOM_DATA_SEED;
     const parsed = raw ? Number(raw) : Number.NaN;
     return Number.isFinite(parsed) ? parsed : Math.floor(Math.random() * 1e9);
 };
@@ -60,9 +69,7 @@ const ensureSeeded = (): void => {
     random = createRandom(seed);
     seeded = true;
     // eslint-disable-next-line no-console
-    console.log(
-        `[contract-data] seed=${seed} (rerun with CONTRACT_DATA_SEED=${seed} to reproduce)`
-    );
+    console.log(`[contract-data] seed=${seed} (rerun with RANDOM_DATA_SEED=${seed} to reproduce)`);
 };
 
 const randomInt = (min: number, max: number): number =>
@@ -113,7 +120,23 @@ const defOf = (schema: ZodTypeAny): IZodDef =>
 const checksOf = (def: IZodDef): IZodCheckDef[] =>
     (def.checks ?? []).map((check) => check._zod.def);
 
-const isOptionalField = (schema: ZodTypeAny): boolean => defOf(schema).type === 'optional';
+/**
+ * Whether the field may be omitted from a payload entirely.
+ *
+ * `default` counts, and that is the whole point of this being a function rather than a `===`.
+ * A field declared `default:` in `openapi.yaml` becomes `zod.boolean().default(…)` — its `_zod.def`
+ * type is `'default'`, not `'optional'`, so the obvious check called it required and
+ * `invalidPayloads()` emitted a "missing required field" case for it. That case asserts a 422 the
+ * API will never give: omitting the field is exactly what a default is for, so the request
+ * succeeds and the test fails while describing the generator's own bug as an API defect.
+ *
+ * `nullable` deliberately does NOT count. A nullable field still has to be present; it may only
+ * hold `null`. Folding it in here would silently drop real "missing required field" coverage.
+ */
+const isOptionalField = (schema: ZodTypeAny): boolean => {
+    const { type } = defOf(schema);
+    return type === 'optional' || type === 'default';
+};
 
 /** Unwraps optional/nullable/default wrappers to the schema whose constraints actually apply. */
 const unwrapField = (schema: ZodTypeAny): ZodTypeAny => {

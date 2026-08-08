@@ -33,4 +33,5 @@ export interface User {
   locale?: Locale;
   createdAt?: string;
   updatedAt?: string;
+  deletedAt?: string;
 }

@@ -40,13 +40,18 @@ export const validateData = (userData: unknown, requirePassword = true): string[
 /**
  * Search users (DTO-friendly) — admin panel.
  * Uses shared search-helpers for pagination (OCP).
+ *
+ * No scope argument: `active` is an ordinary searchable column now, handled by the repository's
+ * `searchable.booleans` like any other filter. It used to be passed through
+ * `userRepository.deletedScope(filters.active)`, which rewrote it into a `deletedAt` existence
+ * check — the two facts were one field then, so filtering on one always filtered the other.
  */
 export const search = (
     filters: SearchUsersRequest = {}
 ): Promise<{
     items: IUserDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
-}> => userRepository.search(filters, userRepository.deletedScope(filters.active));
+}> => userRepository.search(filters);
 
 /**
  * Get a single user by ID.

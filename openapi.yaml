@@ -203,6 +203,33 @@ components:
                 `uri-reference`, not `uri`: an uploaded image is stored and returned as a
                 path relative to the API host, which is not a valid absolute URI.
 
+        # ---------- On the `imageUpload` fields below (and why they carry no limits) ----------
+        #
+        # The six `*Multipart` request bodies each declare `imageUpload` as a bare
+        # `type: string, format: binary` — no `maxLength`, no `contentMediaType`. That is on
+        # purpose, and it is worth knowing why before someone "fixes" it.
+        #
+        # The real limits live in the backend, and only there:
+        #   - accepted mime types → src/core/adapters/storage.ts (image/png, jpg, jpeg, webp)
+        #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
+        # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
+        # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
+        # 422 when the declaration lied. Nothing a client declares can substitute for either gate.
+        #
+        # Declaring the constraints here would document them but generate nothing to read:
+        #   - orval's zod generator short-circuits on `format: binary` straight to
+        #     `zod.instanceof(File)` and emits no length constant for it
+        #     (@orval/zod, the `case "string"` branch);
+        #   - the `zodSchemas` target in orval.config.ts has no `splitByContentType`, so only the
+        #     JSON body of each operation becomes a schema — the multipart bodies never do.
+        # So a `maxLength` added here would reach no generated artefact in either repo, while
+        # looking like it had.
+        #
+        # The frontend therefore restates both numbers in src/utils/uploads.ts, which names
+        # storage.ts as the authority and explains the same thing at its own call site. If the
+        # backend's limits ever change, that file is what has to change with them — nothing will
+        # announce the drift.
+
         # ---------- Meta / envelope ----------
         PaginationMeta:
             type: object
@@ -600,6 +627,9 @@ components:
                     type: string
                 admin:
                     type: boolean
+                # Independent of `deletedAt` below: an account can be deactivated without being
+                # deleted, and a deleted one keeps whatever `active` it had. They share an effect,
+                # not a value — see the note on `CreateProductRequest.active`.
                 active:
                     type: boolean
                 imageUrl:
@@ -610,6 +640,14 @@ components:
                     type: string
                     format: date-time
                 updatedAt:
+                    type: string
+                    format: date-time
+                # Present only on a soft-deleted account, exactly as on `Product`. It was stripped
+                # until `active` became a real column: while `active` was synthesised as
+                # `!deletedAt`, deletion was legible through that flag, and once the two separated
+                # an admin had no way to see it at all. Every route serving a `User` list is
+                # admin-only; `/account` serves the caller their own record.
+                deletedAt:
                     type: string
                     format: date-time
 
@@ -791,6 +829,7 @@ components:
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -842,6 +881,10 @@ components:
                     $ref: '#/components/schemas/Email'
                 username:
                     type: string
+                # Filters the stored `active` column. It does NOT filter soft-deletion: the two
+                # are independent facts, and `deletedAt` is not exposed on `User` at all, so
+                # there is no filter for it here. `active: false` means "deactivated", not
+                # "deleted" — it used to mean both, back when users had no `active` column.
                 active:
                     type: boolean
 
@@ -858,8 +901,13 @@ components:
                     $ref: '#/components/schemas/Password'
                 admin:
                     type: boolean
+                # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
+                # defaulted here because leaving it undeclared is how two implementations came to
+                # disagree about it. Create bodies only — an omitted `active` on an update means
+                # "leave it alone".
                 active:
                     type: boolean
+                    default: true
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
                 locale:
@@ -878,9 +926,12 @@ components:
                     $ref: '#/components/schemas/Password'
                 admin:
                     type: boolean
+                # Same default, same reasoning as `CreateUserRequest.active` above.
                 active:
                     type: boolean
+                    default: true
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -927,6 +978,7 @@ components:
                 active:
                     type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -965,6 +1017,7 @@ components:
                 active:
                     type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -1019,8 +1072,26 @@ components:
                     minimum: 0
                 description:
                     type: string
+                # ---------- On `active`, and why it is declared here but not on the updates ----------
+                #
+                # `active` and `deletedAt` are INDEPENDENT. A record can be active or not regardless
+                # of whether it has been soft-deleted, and the two are stored separately. What they
+                # share is an effect, not a value: a non-admin sees a record only when it is active
+                # AND not soft-deleted (`publicScope()` in the products repository requires both).
+                # So a soft-deleted record behaves exactly like an inactive one from outside, while
+                # remaining a distinct state inside.
+                #
+                # The default is declared because it is a real decision, and leaving it undeclared
+                # is how the two repos ended up disagreeing about it: this spec said only
+                # `type: boolean`, so the API defaulted a created product to `false` while the mock
+                # defaulted it to `true`. Same contract, opposite behaviour, and nothing failed.
+                #
+                # It appears on the CREATE bodies only. On an update, an omitted `active` means
+                # "leave it as it is" — a default there would silently republish a deactivated
+                # record on any unrelated edit.
                 active:
                     type: boolean
+                    default: true
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
                 categories:
@@ -1045,9 +1116,12 @@ components:
                     minimum: 0
                 description:
                     type: string
+                # Same default, same reasoning as `CreateProductRequest.active` above.
                 active:
                     type: boolean
+                    default: true
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -1106,6 +1180,7 @@ components:
                 active:
                     type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -1160,6 +1235,7 @@ components:
                 active:
                     type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image

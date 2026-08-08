@@ -121,15 +121,62 @@ describe('user credential exposure', () => {
             ]);
         });
 
-        it('derives active from deletedAt', async () => {
-            const active = await createUser({ email: 'active@example.com' });
-            const deleted = await createUser({
-                email: 'deleted@example.com',
-                deletedAt: new Date()
-            });
+        /*
+         * `active` and `deletedAt` are independent, and this is the test that says so. It
+         * replaces one asserting the opposite — `active` used to be derived here as
+         * `!deletedAt`, so the two could never disagree and half these cases were unreachable.
+         *
+         * All four combinations are exercised deliberately: a deleted-but-active account and a
+         * live-but-deactivated one are exactly the states the old derivation could not express.
+         */
+        it('keeps active independent of deletedAt', async () => {
+            const cases = [
+                { email: 'live-active@example.com', active: true, deletedAt: undefined },
+                { email: 'live-inactive@example.com', active: false, deletedAt: undefined },
+                { email: 'deleted-active@example.com', active: true, deletedAt: new Date() },
+                { email: 'deleted-inactive@example.com', active: false, deletedAt: new Date() }
+            ];
 
-            expect((active.toJSON() as { active: boolean }).active).toBe(true);
-            expect((deleted.toJSON() as { active: boolean }).active).toBe(false);
+            return Promise.all(cases.map((fixture) => createUser(fixture))).then((users) => {
+                expect(users.map((user) => (user.toJSON() as { active: boolean }).active)).toEqual(
+                    cases.map(({ active }) => active)
+                );
+            });
+        });
+
+        it('defaults active to true when the caller omits it', async () => {
+            const user = await createUser({ email: 'defaulted@example.com', active: undefined });
+
+            expect((user.toJSON() as { active: boolean }).active).toBe(true);
+        });
+
+        /*
+         * `deletedAt` used to be stripped on the way out, which was survivable only while `active`
+         * was derived from it — deletion was still legible, through that flag. Once the two became
+         * independent facts, stripping it left deletion with no representation at all: an admin
+         * list could not tell a deleted account from a live one. It is exposed now, as `Product`
+         * has always exposed it.
+         *
+         * The key-list test above still holds, and is the other half of this: an account that was
+         * never deleted has no `deletedAt` key to emit, so the field appears only where it means
+         * something.
+         */
+        it('exposes deletedAt on a soft-deleted account', async () => {
+            const deletedAt = new Date('2026-03-04T05:06:07.000Z');
+            const user = await createUser({ email: 'gone@example.com', deletedAt });
+
+            expect((user.toJSON() as { deletedAt: Date }).deletedAt).toEqual(deletedAt);
+        });
+
+        it('still never emits credentials or the cart alongside it', async () => {
+            const user = await createUser({ email: 'gone-too@example.com', deletedAt: new Date() });
+            const serialized = user.toJSON() as Record<string, unknown>;
+
+            // Exposing one previously-stripped field must not have loosened the others: these
+            // three are stripped because they must never leave the server, `deletedAt` was not.
+            expect(serialized.password).toBeUndefined();
+            expect(serialized.tokens).toBeUndefined();
+            expect(serialized.cart).toBeUndefined();
         });
 
         it('maps a lean list the same way, via userService.search', async () => {

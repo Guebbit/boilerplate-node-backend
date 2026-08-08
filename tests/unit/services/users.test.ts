@@ -429,6 +429,28 @@ describe('userService.validateData', () => {
     });
 });
 
+/*
+ * Backs the three `active` filter cases below, which replace a pair titled "filters active users
+ * (no deletedAt)" and "filters inactive (soft-deleted) users" — names that record the bug they
+ * were asserting. `active` had no column; the filter was rewritten into a `deletedAt` existence
+ * check, so asking for inactive accounts returned deleted ones and there was no way to ask for
+ * either alone.
+ *
+ * Built so the two facts DISAGREE: the deactivated account is not deleted, and the deleted account
+ * is still active. Under the old behaviour every one of those assertions came out the other way.
+ */
+const seedActiveAndDeleted = () =>
+    Promise.all([
+        createUser({ email: 'enabled@example.com', username: 'enabled', active: true }),
+        createUser({ email: 'disabled@example.com', username: 'disabled', active: false }),
+        createUser({
+            email: 'deleted@example.com',
+            username: 'deleted',
+            active: true,
+            deletedAt: new Date()
+        })
+    ]);
+
 describe('userService.search', () => {
     it('returns all users with default pagination', async () => {
         await createUser({ email: 'a@example.com', username: 'a' });
@@ -467,28 +489,34 @@ describe('userService.search', () => {
         expect(result.items).toHaveLength(1);
     });
 
-    it('filters active users (no deletedAt)', async () => {
-        await createUser({ email: 'active@example.com', username: 'active' });
-        await createUser({
-            email: 'deleted@example.com',
-            username: 'deleted',
-            deletedAt: new Date()
-        });
+    it('filters on the active column, not on soft-deletion', async () => {
+        await seedActiveAndDeleted();
 
         const active = await userService.search({ active: true });
-        expect(active.items).toHaveLength(1);
+
+        // The deleted-but-active account is included: deletion is a separate fact, and this
+        // filter does not ask about it.
+        expect(
+            active.items.map((item) => (item as unknown as { username: string }).username)
+        ).toEqual(expect.arrayContaining(['enabled', 'deleted']));
+        expect(active.items).toHaveLength(2);
     });
 
-    it('filters inactive (soft-deleted) users', async () => {
-        await createUser({ email: 'active@example.com', username: 'active' });
-        await createUser({
-            email: 'deleted@example.com',
-            username: 'deleted',
-            deletedAt: new Date()
-        });
+    it('returns the deactivated account, and only it, for active: false', async () => {
+        await seedActiveAndDeleted();
 
         const inactive = await userService.search({ active: false });
+
         expect(inactive.items).toHaveLength(1);
+        expect((inactive.items[0] as unknown as { username: string }).username).toBe('disabled');
+    });
+
+    it('returns every account when active is not filtered on', async () => {
+        await seedActiveAndDeleted();
+
+        const all = await userService.search({});
+
+        expect(all.items).toHaveLength(3);
     });
 
     it('paginates results correctly', async () => {

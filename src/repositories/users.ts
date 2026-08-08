@@ -21,7 +21,6 @@ const CREDENTIAL_FIELDS = '+password +tokens';
  * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
  */
 export const userRepository: IBaseRepository<IUserDocument> & {
-    deletedScope: (active?: boolean | null) => Record<string, unknown>;
     updateMany: (
         filter: QueryFilter<IUserDocument>,
         update: UpdateQuery<IUserDocument>
@@ -34,23 +33,16 @@ export const userRepository: IBaseRepository<IUserDocument> & {
         searchable: {
             objectIds: { id: '_id' },
             text: ['email', 'username'],
-            regex: { email: 'email', username: 'username' }
+            regex: { email: 'email', username: 'username' },
+            /*
+             * `active` filters the real column. It used to be a `deletedScope()` that turned this
+             * filter into `deletedAt: { $exists: … }`, back when users had no `active` column and
+             * the two concepts were one field — so "show me deactivated accounts" and "show me
+             * deleted accounts" were the same query and neither could be asked on its own.
+             */
+            booleans: { active: 'active' }
         }
     }),
-
-    /**
-     * Restrict a query to live or to soft-deleted users.
-     *
-     * Users have no `active` column — the admin panel's "active" filter means "has no
-     * `deletedAt`", which is a storage detail and so belongs here. Returns an empty scope when
-     * the caller did not filter, so both states come back.
-     */
-    deletedScope: (active?: boolean | null): Record<string, unknown> => {
-        if (active === undefined || active === null) return {};
-        return {
-            deletedAt: active ? { $exists: false } : { $exists: true, $type: 'date' }
-        };
-    },
 
     /**
      * Update multiple user documents matching the filter.

@@ -36,7 +36,13 @@ export interface IToken {
 /**
  * User interface
  */
-export interface IUser extends User {
+/*
+ * `deletedAt` is omitted from the contract type and redeclared, the same way `IProductDocument`
+ * does it: the wire contract carries an ISO string, the document carries a real `Date`. It only
+ * started clashing when `deletedAt` was added to the `User` schema in `openapi.yaml` — before
+ * that the contract had no such field for this one to disagree with.
+ */
+export interface IUser extends Omit<User, 'deletedAt'> {
     /**
      * User attributes
      */
@@ -87,12 +93,18 @@ export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
 
 /**
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from
- * `_id`; strips `_id`/`__v` plus everything that must never leave the server
- * (`password`, `tokens`, `cart`, `deletedAt`); derives `active` from the
- * (now-deleted) `deletedAt`. `password`/`tokens` are also `select: false` on
- * the schema — this is defense in depth, not the only guard.
+ * `_id`; strips `_id`/`__v` plus the credentials and cart that must never leave the server
+ * (`password`, `tokens`, `cart`). `password`/`tokens` are also `select: false` on the schema —
+ * this is defense in depth, not the only guard.
  * Exported so lean results (which bypass `toJSON`) can be mapped through the
  * same logic — see @services/users `search()`.
+ *
+ * `active` and `deletedAt` both pass through untouched, and both are in the `User` contract.
+ * Neither used to be: `active` was synthesised here as `!deletedAt` and `deletedAt` was deleted,
+ * so one derived flag stood in for two independent facts. Splitting them left deletion with no
+ * representation at all — an admin could no longer tell a deleted account from a live one — so
+ * `deletedAt` is exposed now, exactly as `Product` has always exposed it. Every route serving a
+ * `User` list is admin-only, and `/account` serves the caller their own record.
  */
 export const applyUserTransform = (
     serialized: Record<string, unknown>
@@ -105,8 +117,6 @@ export const applyUserTransform = (
     delete serialized.password;
     delete serialized.tokens;
     delete serialized.cart;
-    serialized.active = !serialized.deletedAt;
-    delete serialized.deletedAt;
     return serialized;
 };
 
@@ -155,6 +165,28 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
         admin: {
             type: Boolean,
             default: false
+        },
+        /*
+         * Whether the account is enabled — a real stored column, INDEPENDENT of `deletedAt`.
+         *
+         * It used to be neither of those things: there was no column, and `applyUserTransform`
+         * synthesised `active = !deletedAt` on the way out while the search filter reinterpreted
+         * `active` as "has no deletedAt". So the two facts were one field wearing two hats, and a
+         * client could send `active` on create or update — the contract advertised it, the
+         * controller read and validated it — and it went nowhere, silently.
+         *
+         * They are separate facts now, matching products: an account can be deactivated without
+         * being deleted, and a soft-deleted account still carries whatever `active` it had. What
+         * they share is an effect, not a value — a non-admin sees a record only when it is active
+         * AND not soft-deleted, so from outside a deleted record behaves exactly like an inactive
+         * one. (For users that guard is currently moot: the whole `/users` router is admin-only.)
+         *
+         * `default: true`, declared in `openapi.yaml` on both create bodies. Existing rows were
+         * backfilled by `db/migrations/20260808120000-user-active-column.js`.
+         */
+        active: {
+            type: Boolean,
+            default: true
         },
         cart: {
             // sub documents always have _id

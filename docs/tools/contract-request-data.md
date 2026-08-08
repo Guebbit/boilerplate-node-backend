@@ -46,7 +46,7 @@ const createRandom = (seed: number) => {
 %%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}}}%%
 flowchart TB
     Schema["api/schemas.zod.ts\ne.g. CreateProductBody"] --> Walk["buildValue(schema)\nwalks _zod.def recursively"]
-    Seed["CONTRACT_DATA_SEED\nor a fresh value, printed once"] --> PRNG["Mulberry32\nseeded once per process"]
+    Seed["RANDOM_DATA_SEED\nor a fresh value, printed once"] --> PRNG["Mulberry32\nseeded once per process"]
     PRNG --> Walk
     Walk --> Valid["validPayload()\nevery field populated,\nincluding optional ones"]
     Walk --> Base["one base valid payload"]
@@ -95,7 +95,13 @@ export const invalidPayloads = (schema: ZodTypeAny): IInvalidPayloadCase[] => {
 - an array with fewer than its minimum item count
 - anything else: a wrong-typed value, as a fallback
 
-Both are seeded once per process — not reseeded per call — from `CONTRACT_DATA_SEED` or a fresh value, printed to the console the first time either function runs. Repeated calls in one test file draw different-but-reproducible values from the same seeded stream (so, e.g., two generated users get distinct emails), and a flaky-looking failure reproduces exactly by re-running with the printed `CONTRACT_DATA_SEED=<n>`.
+Both are seeded once per process — not reseeded per call — from `RANDOM_DATA_SEED` or a fresh value, printed to the console the first time either function runs. Repeated calls in one test file draw different-but-reproducible values from the same seeded stream (so, e.g., two generated users get distinct emails), and a flaky-looking failure reproduces exactly by re-running with the printed `RANDOM_DATA_SEED=<n>`.
+
+### Why `RANDOM_DATA_SEED` and not a name of its own
+
+The paired frontend reads a variable of **exactly this name** to seed its own random-data generator (`tests/mocks/shared/mockProfilesRandom.ts` there, driving `npm run test:e2e:random`). It had a separate name until the two were unified, and that cost something concrete: a seed printed by a failing nightly run on one side was a number nobody on the other side could do anything with.
+
+The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — and given one seed the two produce entirely unrelated values. That is intended, not a defect to fix later. The two generators produce **opposite halves of the same contract** (requests here, responses there) from different schema surfaces (zod `_zod.def` here, orval factories there); making the streams agree would buy nothing and would couple two implementations that are independently correct. What the shared name buys is a shared vocabulary, not shared output.
 
 ## Endpoint-specific glue
 
@@ -116,6 +122,14 @@ Running this against the current API surfaced genuine, pre-existing drift betwee
 | `CreateProductRequest.active`/`categories`/`tags`, `CreateUserRequest.active` | boolean / array   | coerced (`!!request.body.active`, `coerceStringArray(...)`) **before** zod validation runs, so a wrong-typed value never reaches the check that would reject it |
 | `POST /users` with a wrong-typed `admin`                                      | should be `422`   | returns **`500`** — malformed input crashing the request instead of being rejected cleanly                                                                      |
 
+### A finding in the generator itself
+
+Adding `default: true` to `active` on the create bodies broke two of these tests, and the defect was here rather than in the API. `isOptionalField` asked `defOf(schema).type === 'optional'`, but a field declared `default:` in `openapi.yaml` generates `zod.boolean().default(…)`, whose `_zod.def` type is `'default'`. So the walker called it required and `invalidPayloads()` emitted a "missing required field" case for it — asserting a 422 the API can never give, since omitting the field is the entire purpose of a default.
+
+The check now accepts `'optional'` and `'default'`. It still rejects `'nullable'` on purpose: a nullable field must be present and may only hold `null`, so folding it in would silently delete real coverage.
+
+Worth remembering when extending the walker: `unwrapField` had handled `'default'` correctly from the start. The two functions disagreed about what a wrapper meant, and nothing compared them — the bug only surfaced when a spec first used the feature.
+
 ## File map
 
 | Path                                      | Contents                                                                                                                                                                                          |
@@ -128,10 +142,10 @@ Running this against the current API surfaced genuine, pre-existing drift betwee
 
 Runs as part of the contract suite — no separate script:
 
-| Command                                        | Effect                                                |
-| ---------------------------------------------- | ----------------------------------------------------- |
-| `npm run test:contract`                        | `jest tests/contract --runInBand`, includes this file |
-| `CONTRACT_DATA_SEED=<n> npm run test:contract` | Reproduce a specific run's generated data             |
+| Command                                      | Effect                                                |
+| -------------------------------------------- | ----------------------------------------------------- |
+| `npm run test:contract`                      | `jest tests/contract --runInBand`, includes this file |
+| `RANDOM_DATA_SEED=<n> npm run test:contract` | Reproduce a specific run's generated data             |
 
 Excluded from [Mutation Testing](./mutation-testing.md) the same way the rest of `tests/contract/` is — Stryker's `testPathIgnorePatterns` already covers the whole directory, so this file needed no extra configuration to stay out of the (unit-only) mutation run.
 

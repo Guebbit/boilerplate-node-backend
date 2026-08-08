@@ -101,9 +101,21 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
             type: [String],
             default: []
         },
+        /*
+         * Independent of `deletedAt`, and deliberately so. A product can be active or not
+         * whether or not it has been soft-deleted; the two are separate facts about it. They
+         * share an effect rather than a value — `publicScope()` requires active AND not deleted,
+         * so from outside a soft-deleted product behaves exactly like an inactive one, while
+         * inside they remain distinct states.
+         *
+         * Defaults to `true`, and `openapi.yaml` says so on both create bodies. It used to
+         * default to `false` here and to nothing in the contract, which is how the paired
+         * frontend's mock came to default it to `true` — same contract, opposite behaviour, and
+         * no test on either side could see the disagreement.
+         */
         active: {
             type: Boolean,
-            default: false
+            default: true
         },
         deletedAt: {
             type: Date

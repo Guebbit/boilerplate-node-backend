@@ -37,8 +37,10 @@ describe('product schema', () => {
         expect(product.description).toBe('');
         expect(product.categories).toEqual([]);
         expect(product.tags).toEqual([]);
-        // Inactive by default: a product must be published deliberately, never by omission.
-        expect(product.active).toBe(false);
+        // Active by default, as `openapi.yaml` declares on both create bodies. `active` and
+        // `deletedAt` are independent: this product is active AND not deleted, and either could
+        // be true without the other.
+        expect(product.active).toBe(true);
         expect(product.deletedAt).toBeUndefined();
         expect(product.imageUrl).toBeTruthy();
     });

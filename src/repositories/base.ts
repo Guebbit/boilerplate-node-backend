@@ -36,6 +36,14 @@ export interface ISearchSpec {
     objectIds?: Record<string, string>;
     /** Filter keys matched verbatim (trimmed). */
     exact?: Record<string, string>;
+    /**
+     * Filter keys matched as a boolean. The value is expected to BE a boolean already — every
+     * search controller decodes its query string before the filters get here (`get-users.ts`
+     * coerces `active`, `readInput`'s `booleans` option does the same for bodies), because a
+     * GET carries `?active=false` as the string `'false'`, which is truthy. Coercing again here
+     * would only hide a controller that forgot to.
+     */
+    booleans?: Record<string, string>;
     /** Filter keys matched case-insensitively against a single field. */
     regex?: Record<string, string>;
     /** Filter keys matched case-insensitively against any element of an array field. */
@@ -93,6 +101,9 @@ const buildWhere = (filters: TSearchFilters, spec: ISearchSpec): Record<string, 
 
     for (const [key, path] of Object.entries(spec.exact ?? {}))
         if (isPresent(bag[key])) where[path] = String(bag[key]).trim();
+
+    for (const [key, path] of Object.entries(spec.booleans ?? {}))
+        if (typeof bag[key] === 'boolean') where[path] = bag[key];
 
     for (const [key, path] of Object.entries(spec.regex ?? {}))
         addRegexFilter(where, path, bag[key] as string | undefined);

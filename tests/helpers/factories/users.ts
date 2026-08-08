@@ -35,12 +35,20 @@ import { userRepository } from '@repositories/users';
  *  authenticate without duplicating this string everywhere. */
 export const PLAIN_PASSWORD = 'Password1!';
 
-/** The minimal shape accepted by userRepository.create(). */
+/**
+ * The minimal shape accepted by userRepository.create().
+ *
+ * `active` is optional and deliberately left out of the defaults below, so `createUser()` with no
+ * arguments exercises the schema default (`true`) rather than pinning it here — a factory that
+ * always sends the field would make the default untestable through it. Override it explicitly to
+ * build a deactivated account; it is independent of `deletedAt`, so any of the four combinations
+ * is constructible.
+ */
 type CreateUserInput = Pick<
     IUser,
     'email' | 'username' | 'password' | 'admin' | 'cart' | 'tokens'
 > &
-    Partial<Pick<IUser, 'imageUrl' | 'deletedAt'>>;
+    Partial<Pick<IUser, 'imageUrl' | 'deletedAt' | 'active'>>;
 
 /**
  * Build a valid user payload.

@@ -13,6 +13,39 @@ its own tests.
 
 ### ⚠ Breaking
 
+- **`users.active` is a real stored column, independent of `deletedAt`.** It was neither: there
+  was no column, `toJSON` synthesised `active = !deletedAt` on the way out, and the admin search
+  filter rewrote `active` into a `deletedAt` existence check. One field wore two hats, so "is this
+  account enabled" and "has this account been soft-deleted" were the same question and neither
+  could be asked alone — and a client could send `active` on create or update (the contract
+  advertised it, the controller read and validated it) with the value going nowhere at all.
+
+    They are separate facts now, matching how products have always worked: an account can be
+    deactivated without being deleted, and a soft-deleted account keeps whatever `active` it had.
+    What they share is an effect, not a value — a non-admin sees a record only when it is active AND
+    not deleted, so from outside a deleted record behaves exactly like an inactive one. Migration
+    `20260808120000-user-active-column.js` backfills every existing row with `true` rather than with
+    `!deletedAt`: nobody has ever set the field, so there is no prior decision to preserve, and
+    copying `deletedAt` into it would re-couple on day one the two things this separates.
+
+    **What changes for a caller:** `GET /users?active=false` now returns deactivated accounts, not
+    soft-deleted ones. `POST`/`PUT` with `active` now actually persists it.
+
+- **`User` exposes `deletedAt`,** exactly as `Product` always has. It was stripped by
+  `applyUserTransform` as something that "must never leave the server" — survivable only while
+  `active` was derived from it, since deletion stayed legible through that flag. Separating the two
+  left deletion with no representation at all: an admin list could not tell a deleted account from
+  a live one. The field appears only on accounts that have one, and every route serving a `User`
+  list is admin-only (`/account` serves the caller their own record). Credentials and the cart are
+  still stripped — that part of the guard did not move.
+
+- **A product created without `active` is now active.** The model defaulted it to `false` while
+  `openapi.yaml` declared no default at all — so the paired frontend's mock defaulted it to
+  `true`, and the same request produced a hidden product here and a public one there, with
+  nothing on either side able to see the disagreement. The contract now declares `default: true`
+  on both create bodies and the model matches it. Update bodies deliberately carry no default: an
+  omitted `active` there still means "leave it as it is", never "republish".
+
 - **`?hardDelete=false` no longer permanently deletes the record.** The flag was read as
   _presence_ — `!!request.query.hardDelete` — and the query value is the string `'false'`, which
   is truthy, so a caller could destroy data by explicitly asking not to. `openapi.yaml` has always
@@ -91,6 +124,26 @@ its own tests.
   process with `npm run load:test`.
 
 ### Added
+
+- **A "where test data comes from" map** in [`docs/tools/testing-and-docs.md`](docs/tools/testing-and-docs.md),
+  answering a question worth asking out loud: seven things across the two repos can hand you an
+  entity, so which are necessary? The page names each one's job, and shows the shape — one
+  hand-maintained dataset, two mappers over it (one per runtime, because mongoose documents and
+  API entities are different shapes of the same truth), and four generators that exist because
+  "the demo data", "some data" and "deliberately illegal data" are three different questions.
+  Merging any two of the four would mean one of those questions stops being asked. The merge that
+  _was_ worth doing — the demo dataset, previously written out by hand in both repos and kept in
+  step by a comment — is `db/seeds/seed-identities.ts`, below.
+
+- **`db/seeds/seed-identities.ts`,** the demo dataset's facts as dependency-free plain data,
+  byte-identical to a copy in the paired frontend on the same convention as
+  `scripts/gen-asyncapi-types.ts`. `db/seeds/fixtures.ts` is now only the mapper into mongoose
+  shape, and the frontend keeps its own mapper into API-entity shape — which is why the shared
+  file holds facts rather than whole records. `diff` between the two copies answers "have the
+  seeds drifted?" in one command. It has to stay import-free: the frontend loads it under
+  Vite/vitest ESM, and a mongoose import would make it unloadable there. The parity it protects
+  is not hypothetical — the frontend's mock once served all 5 products to everyone while this API
+  served 3 to non-admins, and the spec asserted the mock's number and passed.
 
 - **A persisted audit trail behind `GET /observability/audit`.** The endpoint answered from a
   200-entry in-process ring buffer, and it already advertised `?actor=<userId>` — "show me this
@@ -366,6 +419,22 @@ its own tests.
   reaching Redis, which is precisely backwards from the property the cache depends on.
 
 ### Changed
+
+- **The seed dataset is split into facts and mapper.** `db/seeds/seed-identities.ts` now holds the
+  ids, emails, admin flags, titles, prices and cart/order membership as dependency-free plain data;
+  `db/seeds/fixtures.ts` is only the mapper into mongoose shape (`ObjectId`s, `Date`s, the embedded
+  cart, and the denormalised product snapshot each order item carries — now rebuilt by lookup
+  instead of restated, since every snapshot in this dataset is an exact copy of its product).
+  `seed-identities.ts` is byte-identical to a copy in the paired frontend, on the same convention as
+  `scripts/gen-asyncapi-types.ts`, so `diff` answers "have the seeds drifted?" in one command. It
+  must stay import-free — the frontend loads it under Vite/vitest ESM, and a mongoose import would
+  make it unloadable there. Nothing about what gets seeded changed.
+
+- **`CONTRACT_DATA_SEED` is now `RANDOM_DATA_SEED`**, the same name the paired frontend reads for
+  its random mock profile. The PRNGs stay separate (Mulberry32 here, faker's Mersenne Twister
+  there) and one seed still produces unrelated values on the two sides — deliberately, since they
+  generate opposite halves of the same contract from different schema surfaces. What the shared
+  name fixes is that a seed quoted in a failure report used to mean something in only one repo.
 
 - **`total` in the audit response counts every matching event, not the page just returned.** It
   was `limited.length` — the size of the slice — so it always equalled `items.length` and told an
