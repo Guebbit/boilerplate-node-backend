@@ -3,17 +3,24 @@
  *
  * The distinction that carries the most risk here is `set` vs `add`: `cartItemSetById` replaces a
  * line's quantity, `cartItemAddById` increments it. They share one private `upsertCartItem`
- * implementation differing by a single ternary, so a mutation that collapses them is invisible in
- * review and produces a cart that silently multiplies (or loses) what a user asked for. Several
- * tests below exist only to keep those two apart.
+ * implementation, and the whole difference between them is `$set` against `$inc` on one line of
+ * the repository — so a mutation that collapses them is invisible in review and produces a cart
+ * that silently multiplies (or loses) what a user asked for. Several tests below exist only to
+ * keep those two apart.
  *
- * The second is the over-serialization guard on `cartGetWithSummary`. `CartItem` in `openapi.yaml`
- * is `additionalProperties: false` over `{ productId, quantity }`, so the populated `product` used
- * to price the cart must be dropped before the response leaves. Asserted here as well as in the
+ * The second is the over-serialization guard on the cart view. `CartItem` in `openapi.yaml` is
+ * `additionalProperties: false` over `{ productId, quantity }`, so the populated `product` used to
+ * price the cart must be dropped before the response leaves. Asserted here as well as in the
  * contract suite, because the contract suite only sees it when a route happens to be exercised.
  *
- * Real Mongo throughout (`setupTestDb`), because most of this module's behaviour is what Mongoose
- * does with a mutated subdocument array — mocking the repository would assert the mock.
+ * The third is storage: a cart is its own document keyed by `userId`, absent until the first write
+ * and never carrying a per-line `_id`. Those are the facts the whole design rests on, so each has
+ * an assertion of its own rather than being left to whatever a behavioural test happens to notice.
+ *
+ * Real Mongo throughout (`setupTestDb`), because most of this module's behaviour is what Mongo does
+ * with the guarded writes behind `cartRepository.upsertLine` — including the two race tests, which
+ * only mean anything against a server that actually serializes writes to one document. Mocking the
+ * repository would assert the mock.
  */
 
 import { setupTestDb } from '../../helpers/setup-test-db';
@@ -32,7 +39,8 @@ import {
     orderConfirm,
     productRemoveFromCartsById
 } from '@services/cart';
-import { userRepository } from '@repositories/users';
+import { cartRepository } from '@repositories/carts';
+import * as userService from '@services/users';
 import { orderRepository } from '@repositories/orders';
 import type { IResponseReject } from '@core/http/response';
 
@@ -41,13 +49,86 @@ setupTestDb();
 /** An id that is structurally valid but present in no collection. */
 const MISSING_ID = '507f1f77bcf86cd799439011';
 
+/** What every read answers for a user with nothing in their cart. */
+const EMPTY_CART = { items: [], summary: { itemsCount: 0, totalQuantity: 0, total: 0 } };
+
 const asReject = (result: unknown) => result as IResponseReject;
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
 const storedQuantity = async (userId: string, productId: string): Promise<number | undefined> => {
-    const user = await userRepository.findById(userId);
-    return user?.cart.items.find((item) => String(item.product) === productId)?.quantity;
+    const cart = await cartRepository.findByUserId(userId);
+    return cart?.items.find((item) => String(item.productId) === productId)?.quantity;
 };
+
+describe('cart storage', () => {
+    it('holds no cart document until the first write', async () => {
+        // Absence and an empty cart are the same state — nothing creates a placeholder.
+        const user = await createUser();
+
+        await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
+        await expect(cartGetWithSummary(user.id)).resolves.toEqual(EMPTY_CART);
+    });
+
+    it('creates the cart on the first add', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        const cart = await cartRepository.findByUserId(user.id);
+        expect(cart).not.toBeNull();
+        expect(String(cart!.userId)).toBe(user.id);
+    });
+
+    it('stamps createdAt on the cart it creates', async () => {
+        // The cart is born from an upsert rather than from a `create()`, so this is the one
+        // collection whose `createdAt` depends on `timestamps` reaching the insert branch.
+        const user = await createUser();
+        const product = await createProduct();
+
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        const cart = await cartRepository.findByUserId(user.id);
+        expect(cart!.createdAt).toBeInstanceOf(Date);
+    });
+
+    it('stores a line as productId and quantity, with no id of its own', async () => {
+        // `CartItem` is additionalProperties:false, so a generated subdocument `_id` would be a
+        // contract violation the moment anything serialized a cart.
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        const cart = await cartRepository.findByUserId(user.id);
+
+        expect(cart!.toObject().items).toEqual([{ productId: product._id, quantity: 2 }]);
+    });
+
+    it('keeps exactly one cart per user however many writes land', async () => {
+        const user = await createUser();
+        const keyboard = await createProduct({ title: 'Keyboard' });
+        const mouse = await createProduct({ title: 'Mouse' });
+
+        await cartItemSetById(user.id, String(keyboard._id), 1);
+        await cartItemSetById(user.id, String(mouse._id), 1);
+        await cartItemAddById(user.id, String(keyboard._id), 1);
+
+        await expect(cartRepository.count({ userId: user._id })).resolves.toBe(1);
+    });
+
+    it('refreshes the cart timestamp on a write', async () => {
+        const user = await createUser();
+        const keyboard = await createProduct({ title: 'Keyboard' });
+        const mouse = await createProduct({ title: 'Mouse' });
+        await cartItemSetById(user.id, String(keyboard._id), 1);
+        const before = (await cartRepository.findByUserId(user.id))!.updatedAt!;
+
+        await cartItemSetById(user.id, String(mouse._id), 1);
+
+        const after = (await cartRepository.findByUserId(user.id))!.updatedAt!;
+        expect(after.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    });
+});
 
 describe('cartGet', () => {
     it('returns an empty cart for a user who has never added anything', async () => {
@@ -75,6 +156,22 @@ describe('cartGet', () => {
         // This is the variant that deliberately DOES carry the product — it is what prices the
         // cart. See cartGetWithSummary for the one that must not.
         expect(items[0].product).toMatchObject({ title: 'Keyboard' });
+    });
+
+    it('keeps the product id on a line whose product has been deleted', async () => {
+        // `populate()` writes `null` over the reference for a product that no longer exists, so a
+        // caller reading the id off that field would lose it exactly when it matters most.
+        const user = await createUser();
+        const product = await createProduct({ title: 'Discontinued' });
+        await cartItemSetById(user.id, String(product._id), 1);
+        await product.deleteOne();
+
+        const items = await cartGet(user.id);
+
+        expect(items).toHaveLength(1);
+        expect(items[0].productId).toBe(String(product._id));
+        expect(items[0].quantity).toBe(1);
+        expect(items[0].product).toBeNull();
     });
 });
 
@@ -108,10 +205,7 @@ describe('cartGetWithSummary', () => {
     it('reports a zeroed summary for an empty cart', async () => {
         const user = await createUser();
 
-        const { items, summary } = await cartGetWithSummary(user.id);
-
-        expect(items).toEqual([]);
-        expect(summary).toEqual({ itemsCount: 0, totalQuantity: 0, total: 0 });
+        await expect(cartGetWithSummary(user.id)).resolves.toEqual(EMPTY_CART);
     });
 });
 
@@ -120,9 +214,8 @@ describe('cartItemSetById', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await cartItemSetById(user.id, String(product._id), 3);
+        await cartItemSetById(user.id, String(product._id), 3);
 
-        expect(result.success).toBe(true);
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(3);
     });
 
@@ -158,38 +251,27 @@ describe('cartItemSetById', () => {
         await expect(storedQuantity(user.id, String(mouse._id))).resolves.toBe(1);
     });
 
-    it('rejects with 404 for a user that does not exist', async () => {
-        const product = await createProduct();
-
-        const result = await cartItemSetById(MISSING_ID, String(product._id), 1);
-
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(404);
-    });
-
-    it('carries no payload, because every controller re-reads the cart', async () => {
+    it('answers with the updated cart, so no controller has to re-read it', async () => {
         const user = await createUser();
-        const product = await createProduct();
+        const product = await createProduct({ price: 25 });
 
-        const result = await cartItemSetById(user.id, String(product._id), 2);
+        const cart = await cartItemSetById(user.id, String(product._id), 2);
 
-        expect(result.success).toBe(true);
-        expect(result.data).toBeUndefined();
-        // The mutation is observable through the read path, which is what the controllers use.
-        await expect(cartGetWithSummary(user.id)).resolves.toMatchObject({
-            items: [{ productId: String(product._id), quantity: 2 }]
+        expect(cart).toEqual({
+            items: [{ productId: String(product._id), quantity: 2 }],
+            summary: { itemsCount: 1, totalQuantity: 2, total: 50 }
         });
     });
 
-    it('refreshes the cart timestamp', async () => {
-        const user = await createUser();
+    it('touches only the calling user cart', async () => {
+        const first = await createUser({ email: 'first@example.com' });
+        const second = await createUser({ email: 'second@example.com' });
         const product = await createProduct();
-        const before = user.cart.updatedAt;
+        await cartItemSetById(first.id, String(product._id), 1);
 
-        await cartItemSetById(user.id, String(product._id), 1);
+        await cartItemSetById(second.id, String(product._id), 9);
 
-        const reloaded = await userRepository.findById(user.id);
-        expect(reloaded!.cart.updatedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+        await expect(storedQuantity(first.id, String(product._id))).resolves.toBe(1);
     });
 });
 
@@ -226,12 +308,62 @@ describe('cartItemAddById', () => {
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(3);
     });
 
-    it('rejects with 404 for a user that does not exist', async () => {
+    it('loses none of three overlapping increments', async () => {
+        // The increment is evaluated by Mongo against the stored document, so overlapping writes
+        // cannot each compute from the same stale quantity — which is precisely what a
+        // read-modify-write through the user document did.
+        const user = await createUser();
         const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await cartItemAddById(MISSING_ID, String(product._id), 1);
+        await Promise.all([
+            cartItemAddById(user.id, String(product._id), 1),
+            cartItemAddById(user.id, String(product._id), 1),
+            cartItemAddById(user.id, String(product._id), 1)
+        ]);
 
-        expect(asReject(result).status).toBe(404);
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(4);
+    });
+
+    it('gives two racing first-adds one cart holding both lines', async () => {
+        // Nothing exists yet, so both requests reach the `upsert`. Whether they collide on the
+        // unique `userId` index is a matter of timing — usually the second finds the cart the
+        // first inserted and simply appends — so this pins the outcome, not the path. The
+        // duplicate-key retry is exercised deterministically by the same-product case below.
+        const user = await createUser();
+        const keyboard = await createProduct({ title: 'Keyboard' });
+        const mouse = await createProduct({ title: 'Mouse' });
+
+        await Promise.all([
+            cartItemAddById(user.id, String(keyboard._id), 1),
+            cartItemAddById(user.id, String(mouse._id), 1)
+        ]);
+
+        await expect(cartRepository.count({ userId: user._id })).resolves.toBe(1);
+        await expect(storedQuantity(user.id, String(keyboard._id))).resolves.toBe(1);
+        await expect(storedQuantity(user.id, String(mouse._id))).resolves.toBe(1);
+    });
+
+    it('opens one line, not two, when the same new product is added twice at once', async () => {
+        // The race the `$ne` guard exists for: two tabs adding a product the cart has never held.
+        // Both append steps ask Mongo "and only if this product is absent", so the one that loses
+        // matches nothing and comes back through the increment instead of pushing a second line.
+        const user = await createUser();
+        const anchor = await createProduct({ title: 'Anchor' });
+        const product = await createProduct({ title: 'Contested' });
+        // The cart has to exist first — this pins the line-level race, not the cart-level one.
+        await cartItemSetById(user.id, String(anchor._id), 1);
+
+        await Promise.all([
+            cartItemAddById(user.id, String(product._id), 1),
+            cartItemAddById(user.id, String(product._id), 1)
+        ]);
+
+        const cart = await cartRepository.findByUserId(user.id);
+        expect(
+            cart!.items.filter((item) => String(item.productId) === String(product._id))
+        ).toHaveLength(1);
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(2);
     });
 });
 
@@ -258,7 +390,7 @@ describe('cartItemSet / cartItemAdd (document overloads)', () => {
 });
 
 describe('cartItemRemoveById', () => {
-    it('removes the targeted line', async () => {
+    it('removes the targeted line and answers with what is left', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 2);
@@ -266,6 +398,7 @@ describe('cartItemRemoveById', () => {
         const result = await cartItemRemoveById(user.id, String(product._id));
 
         expect(result.success).toBe(true);
+        expect(result.data).toEqual(EMPTY_CART);
         await expect(cartGet(user.id)).resolves.toEqual([]);
     });
 
@@ -287,7 +420,9 @@ describe('cartItemRemoveById', () => {
         // Distinguished from "removed nothing, all good": a client that deletes a line it cannot
         // see needs to know its view is stale.
         const user = await createUser();
+        const other = await createProduct({ title: 'Other' });
         const product = await createProduct();
+        await cartItemSetById(user.id, String(other._id), 1);
 
         const result = await cartItemRemoveById(user.id, String(product._id));
 
@@ -295,10 +430,12 @@ describe('cartItemRemoveById', () => {
         expect(asReject(result).status).toBe(404);
     });
 
-    it('rejects with 404 for a user that does not exist', async () => {
+    it('rejects with 404 when the user has no cart at all', async () => {
+        // One filter covers both misses — no cart and no such line are the same answer.
+        const user = await createUser();
         const product = await createProduct();
 
-        const result = await cartItemRemoveById(MISSING_ID, String(product._id));
+        const result = await cartItemRemoveById(user.id, String(product._id));
 
         expect(asReject(result).status).toBe(404);
     });
@@ -316,30 +453,33 @@ describe('cartItemRemoveById', () => {
 });
 
 describe('cartRemove', () => {
-    it('clears every line', async () => {
+    it('clears every line and answers with the empty cart', async () => {
         const user = await createUser();
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
         await cartItemSetById(user.id, String(keyboard._id), 1);
         await cartItemSetById(user.id, String(mouse._id), 2);
 
-        const result = await cartRemove(user.id);
-
-        expect(result.success).toBe(true);
+        await expect(cartRemove(user.id)).resolves.toEqual(EMPTY_CART);
         await expect(cartGet(user.id)).resolves.toEqual([]);
     });
 
     it('succeeds on an already-empty cart', async () => {
-        // Idempotent by design — clearing twice must not 404.
+        // Idempotent by design — clearing twice must not fail.
         const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+        await cartRemove(user.id);
 
-        await expect(cartRemove(user.id)).resolves.toMatchObject({ success: true });
+        await expect(cartRemove(user.id)).resolves.toEqual(EMPTY_CART);
     });
 
-    it('rejects with 404 for a user that does not exist', async () => {
-        const result = await cartRemove(MISSING_ID);
+    it('writes nothing for a user who never had a cart', async () => {
+        // Clearing must not be the thing that brings a cart document into existence.
+        const user = await createUser();
 
-        expect(asReject(result).status).toBe(404);
+        await expect(cartRemove(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });
 });
 
@@ -383,9 +523,24 @@ describe('orderConfirm', () => {
     });
 
     it('rejects with 404 for a user that does not exist', async () => {
+        // The one cart operation that still needs the user: an order records the address it was
+        // placed from, and there is none to record.
         const result = await orderConfirm(MISSING_ID);
 
         expect(asReject(result).status).toBe(404);
+    });
+
+    it('rejects with 404 when a line points at a deleted product', async () => {
+        // An order embeds a snapshot, and there is nothing to snapshot.
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+        await product.deleteOne();
+
+        const result = await orderConfirm(user.id);
+
+        expect(asReject(result).status).toBe(404);
+        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
     });
 });
 
@@ -427,5 +582,29 @@ describe('productRemoveFromCartsById', () => {
 
         expect(result.success).toBe(true);
         expect(result.message).toContain('0 cart(s)');
+    });
+});
+
+describe('cartDeleteByUserId', () => {
+    it('takes the cart with a hard-deleted account', async () => {
+        // While the cart lived inside the user document this came free. It does not any more, and
+        // a cart is reachable only through its owner — so one left behind is unreadable forever.
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        await userService.remove(user, true);
+
+        await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
+    });
+
+    it('keeps the cart when the account is only soft-deleted', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        await userService.remove(user, false);
+
+        await expect(cartRepository.findByUserId(user.id)).resolves.not.toBeNull();
     });
 });

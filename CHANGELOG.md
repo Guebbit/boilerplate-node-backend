@@ -36,8 +36,8 @@ its own tests.
   `active` was derived from it, since deletion stayed legible through that flag. Separating the two
   left deletion with no representation at all: an admin list could not tell a deleted account from
   a live one. The field appears only on accounts that have one, and every route serving a `User`
-  list is admin-only (`/account` serves the caller their own record). Credentials and the cart are
-  still stripped — that part of the guard did not move.
+  list is admin-only (`/account` serves the caller their own record). Credentials are still
+  stripped — that part of the guard did not move.
 
 - **A product created without `active` is now active.** The model defaulted it to `false` while
   `openapi.yaml` declared no default at all — so the paired frontend's mock defaulted it to
@@ -123,7 +123,64 @@ its own tests.
   exercise showed a gap where the spike should have been. Load is now generated from outside the
   process with `npm run load:test`.
 
+- **The cart is its own `carts` collection, not a subdocument of the user.** Storage only —
+  `CartItem`, `CartResponse`, `CartSummaryResponse` and all four `/cart*` paths are byte-for-byte
+  what they were, which is why both halves ship in one deploy with no dual-read window. Migration
+  `20260808160000-cart-collection.js` copies every non-empty embedded cart into `carts`, `$unset`s
+  `users.cart`, and creates the unique `userId` index — named `userId_1`, matching what Mongoose
+  derives from the schema's `unique: true`, so whichever of the two creators runs second is a
+  no-op rather than a conflict. See "The index rule" below.
+
+    One field carrying two meanings is what paid for the old shape. `ICartItem.product` was an
+    `ObjectId` at rest and a `Product` after `populate()` — the same field, overwritten in place —
+    so `cart` had to be stripped from every user response by hand (unlike `password`/`tokens` it
+    was not even `select: false`, so the `omit` was the only guard), and every cart mutation loaded
+    the whole user, saved it, and was then re-read by its controller.
+
+    A cart line is stored as `{ productId, quantity }` with `_id: false` — the names `openapi.yaml`
+    already uses, so a stored line and a wire line are the same shape and there is nothing to
+    translate. `carts.userId` is `unique`, which makes "the user's cart" a complete address and
+    every mutation a `findOneAndUpdate` keyed by it; adding an item is now one or two writes plus
+    the join that prices the answer, against four round trips before. Each write carries its
+    condition in the filter rather than in a preceding read, so two tabs adding the same product
+    cannot both conclude "absent" and leave one product on two lines — the one that loses hits the
+    unique index, and a duplicate key is retried rather than surfaced.
+
+    Absence and an empty cart are the same state: no document exists until the first write, no
+    empty placeholder is ever created, and clearing a cart nobody has is a success. Deleting a
+    product now `$pull`s across `carts` instead of scanning every user document, and **hard-deleting
+    an account deletes its cart** — that came free while the cart was a field on the user, and has
+    to be asked for now that it is not.
+
+    **What changes for a caller:** nothing on the wire. The one behavioural change is that cart
+    operations no longer 404 for a user id that does not exist — a cart is addressed by `userId`,
+    not fetched through the user. `DELETE /cart` never declared that 404 anyway; `POST /cart`
+    still 404s for a product that does not exist, `DELETE /cart/{productId}` for a line that is
+    not in the cart, and checkout still 404s for a missing account, because an order records the
+    address it was placed from.
+
 ### Added
+
+- **A test that makes the migrations and the models meet** —
+  `tests/unit/db/migration-model-indexes.test.ts`, plus the rule it enforces, written up as
+  "The index rule" in [`docs/tools/mongodb-mongoose.md`](docs/tools/mongodb-mongoose.md).
+
+    Two places here create indexes and both are legitimate: a schema (`unique: true`,
+    `schema.index(...)`, built at boot because `autoIndex` is on) and a migration (explicit DDL via
+    `migrate-mongo`). They collide on names. Mongo treats an index's name as part of its identity,
+    so `createIndex` is a no-op only when name _and_ key spec match what is stored — the same key
+    under a different name is `IndexKeySpecsConflict`, which Mongoose reports at startup as
+    `Index already exists with a different name`.
+
+    No suite could see that. Every test runs on a `mongodb-memory-server` database that has never
+    been migrated, so Mongoose creates each index unopposed and passes; the migrations are plain
+    CommonJS that nothing in the suite executed at all. The two only met on a real deployment.
+
+    This runs every migration and every model's index build against one database, in both orders,
+    twice, and fails on a conflict or on two indexes sharing a key under different names — the
+    quieter version, which costs a write on every insert forever and raises no error. The rule:
+    **an index may be declared on the schema, in a migration, or in both — but if in both, they must
+    name it identically.**
 
 - **A "where test data comes from" map** in [`docs/tools/testing-and-docs.md`](docs/tools/testing-and-docs.md),
   answering a question worth asking out loud: seven things across the two repos can hand you an
@@ -416,6 +473,19 @@ its own tests.
 
 ### Changed
 
+- **Mutation testing covers the repository layer, and its thresholds are bands.** Repositories are
+  where query construction lives — the positional-vs-upsert branch behind a cart write, the filter
+  guards that make concurrent writes safe, `buildWhere`'s filter assembly. A repository reads as
+  thin delegation but decides _which_ document Mongo touches, and getting that wrong is silent.
+  `src/repositories` joins `stryker.config.json`'s `mutate` list, and `jest.config.json`'s
+  `coverageThreshold` gains the same path, since the two are meant to stay in step.
+
+    Thresholds move to `high: 80` / `low: 60` / `break: 60` — green at 80 and up, yellow between,
+    red and a failing exit code below 60. The gate now answers "has something collapsed" rather than
+    "did the number move a little", because the score is a ratio: deleting well-tested code lowers it
+    without any test getting worse. The config records how to read that, so the next dip is checked
+    against the killed/survived/no-coverage counts before it is called a regression.
+
 - **ts-jest's `TS151002` hybrid-module banner is suppressed** via `diagnostics.ignoreCodes` in
   `jest.config.json`. It prints once per test file, so a full `npm test` emitted 72 lines of it —
   and the pre-commit hook runs that suite. `tsconfig.jest.json` already documents why the fix the
@@ -424,6 +494,13 @@ its own tests.
   then fails under jest's CJS VM.
 
 ### Fixed
+
+- **`npm run lint` failed while a mutation run was in flight.** Stryker copies the whole project
+  into `.stryker-tmp/sandbox-*`, and eslint collected the copies — one parser error per generated
+  file, 350 of them, because they sit outside the `tsconfig` project `parserOptions.project`
+  resolves against. A crashed run leaving the directory behind made it permanent.
+  `jest.config.json` already ignored that path for the same reason; `eslint.config.ts` now does
+  too.
 
 - **Docs and comments that described code which no longer exists.** Five broken references and
   four passages of narrative history, all found by walking every path mentioned in a tracked file
@@ -736,6 +813,18 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 
 ### Removed
 
+- **`cart` from the user model, and everything that guarded it.** `IUser.cart`, its schema block,
+  `ICartItem`, and `omit: ['cart']` in the user serializer — the last of which was the only thing
+  keeping a cart out of every user response, since unlike `password` and `tokens` it was never
+  `select: false`. With it go `requireUser` and `clearCartItems` in `@services/cart`: nothing loads
+  a user to reach their cart any more, and clearing one is a write, not a mutation of a document
+  someone else fetched. The four mutating cart controllers lost their follow-up
+  `cartGetWithSummary` call, because the mutation now answers with the cart it produced.
+
+    The duplicated cart coverage inside `tests/unit/services/users.test.ts` went with it —
+    thirteen tests restating what `tests/unit/services/cart.test.ts` already asserts, which only
+    existed because the cart lived in the user document.
+
 - **`src/services/cart.dto.ts`, and the 330-line test that pinned it.** Four of its five exports
   existed to work around one field meaning two things. `ICartItem.product` is declared
   `Types.ObjectId`; `populate()` swaps a product document into it at runtime. Nothing downstream
@@ -965,14 +1054,6 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   models store.
 
 ### Known issues
-
-- **`toCartProductDto`'s field list is dead weight** (`src/services/cart.dto.ts`). It hand-lists
-  ten `Product` fields with a type guard each, and nothing reads nine of them: every cart
-  controller goes through `cartGetWithSummary`, which maps through `toCartItemResponse` and drops
-  `product` entirely, because `CartItem` is `additionalProperties: false` and the contract suite
-  fails on the populated version. Only `price` is consumed, by `sumLineItems`. Left as-is rather
-  than reduced to `{ id, price }` because `cartGet` is exported for the case where a caller does
-  want the populated product, and no such caller exists yet to design against.
 
 - **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/core/http/errors.ts`). It
   returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a

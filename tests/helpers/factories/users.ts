@@ -28,7 +28,7 @@
  *   const loginResult = await userService.login(user.email, PLAIN_PASSWORD);
  */
 
-import type { IUser, IUserDocument, ICartItem } from '@models/users';
+import type { IUser, IUserDocument } from '@models/users';
 import { userRepository } from '@repositories/users';
 
 /** Plain-text password used by the default factory.  Re-export so tests can
@@ -44,10 +44,7 @@ export const PLAIN_PASSWORD = 'Password1!';
  * build a deactivated account; it is independent of `deletedAt`, so any of the four combinations
  * is constructible.
  */
-type CreateUserInput = Pick<
-    IUser,
-    'email' | 'username' | 'password' | 'admin' | 'cart' | 'tokens'
-> &
+type CreateUserInput = Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'tokens'> &
     Partial<Pick<IUser, 'imageUrl' | 'deletedAt' | 'active'>>;
 
 /**
@@ -63,7 +60,6 @@ export const makeUser = (overrides: Partial<CreateUserInput> = {}): CreateUserIn
     username: 'testuser',
     password: PLAIN_PASSWORD, // hashed automatically by the pre-save hook
     admin: false,
-    cart: { items: [] as ICartItem[], updatedAt: new Date() },
     tokens: [],
     ...overrides
 });

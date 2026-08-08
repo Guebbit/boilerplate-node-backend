@@ -29,11 +29,13 @@ import { start, connection } from '@core/bootstrap/database';
 import { userRepository } from '@repositories/users';
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
+import { cartRepository } from '@repositories/carts';
 import type { IOrderDocument } from '@models/orders';
+import type { ICartDocument } from '@models/carts';
 import { clearCache, stopCache } from '@core/adapters/cache';
 import { logger } from '@core/adapters/logger';
 import { runScript } from '../run-script';
-import { users, products, orders } from './fixtures';
+import { users, products, orders, carts } from './fixtures';
 
 const reset = process.argv.includes('--reset');
 
@@ -57,6 +59,23 @@ const upsert = async (
     return 'created';
 };
 
+/*
+ * Upsert one cart fixture by its OWNER.
+ *
+ * Carts are the one collection here with no fixed `_id` to key on: `carts.userId` is unique, a
+ * cart is addressed by whose it is, and no cart id ever reaches the wire — so there is nothing in
+ * `seed-identities.ts` to pin.
+ */
+const upsertCart = async (fixture: {
+    userId: Types.ObjectId;
+    items: { productId: Types.ObjectId; quantity: number }[];
+}): Promise<'created' | 'skipped'> => {
+    const existing = await cartRepository.findByUserId(fixture.userId.toString());
+    if (existing) return 'skipped';
+    await cartRepository.create(fixture as Partial<ICartDocument>);
+    return 'created';
+};
+
 async function seed() {
     /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
     if (process.env.NODE_ENV === 'production') {
@@ -76,7 +95,8 @@ async function seed() {
         ...products.map((product) => upsert(productRepository, product)),
         ...orders.map((order) =>
             upsert(orderRepository, order as Partial<IOrderDocument> & { _id: Types.ObjectId })
-        )
+        ),
+        ...carts.map((cart) => upsertCart(cart))
     ]);
 
     const created = results.filter((result) => result === 'created').length;

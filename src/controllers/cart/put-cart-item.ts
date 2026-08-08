@@ -47,7 +47,6 @@ export const putCartItem = (
 
     return cartService
         .cartItemSetById(userId, productId, quantity)
-        .then(() => cartService.cartGetWithSummary(userId))
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),

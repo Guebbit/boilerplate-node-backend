@@ -13,8 +13,8 @@
  * The facts themselves — ids, emails, admin flags, prices, who has what in their cart — live in
  * `./seed-identities`, which is byte-identical to a copy in the paired frontend so a `diff` catches
  * the two datasets drifting apart. This file is only the mapper from those facts into what
- * mongoose wants: `Types.ObjectId`s, real `Date`s, an embedded cart, and the denormalised product
- * snapshots an order carries.
+ * mongoose wants: `Types.ObjectId`s, real `Date`s, a cart per user in its own collection, and the
+ * denormalised product snapshots an order carries.
  */
 
 import { Types } from 'mongoose';
@@ -38,15 +38,26 @@ export const users = seedUsers.map((user) => ({
     password: user.password,
     imageUrl: user.imageUrl,
     admin: user.admin,
-    cart: {
-        items: user.cart.map((item) => ({
-            product: objectId(item.productId),
-            quantity: item.quantity
-        })),
-        updatedAt: new Date()
-    },
     tokens: []
 }));
+
+/*
+ * Carts are their own collection, keyed by `userId`.
+ *
+ * Only users with something in their cart get a document: absence and an empty cart are the same
+ * state, and the first write upserts one into existence. There is no `_id` to pin either, which is
+ * why `seed-identities.ts` gives a cart no id — a cart is addressed by its owner, and no cart id
+ * ever reaches the wire.
+ */
+export const carts = seedUsers
+    .filter((user) => user.cart.length > 0)
+    .map((user) => ({
+        userId: objectId(user.id),
+        items: user.cart.map((item) => ({
+            productId: objectId(item.productId),
+            quantity: item.quantity
+        }))
+    }));
 
 export const products = seedProducts.map((product) => ({
     _id: objectId(product.id),

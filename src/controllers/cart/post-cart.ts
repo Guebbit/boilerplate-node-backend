@@ -56,17 +56,14 @@ export const postCart = (
                 return;
             }
 
-            return cartService
-                .cartItemSetById(userId, productId, quantity)
-                .then(() => cartService.cartGetWithSummary(userId))
-                .then((cart) => {
-                    emitAnalyticsEvent({
-                        ...buildAnalyticsBase(request),
-                        event: AnalyticsEvent.CART_ITEM_ADDED,
-                        properties: { product_id: productId, quantity }
-                    });
-                    successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
+            return cartService.cartItemSetById(userId, productId, quantity).then((cart) => {
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(request),
+                    event: AnalyticsEvent.CART_ITEM_ADDED,
+                    properties: { product_id: productId, quantity }
                 });
+                successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
+            });
         })
         .catch((error: Error) => {
             rejectResponse(response, 500, 'upsertCartItem', [error.message]);

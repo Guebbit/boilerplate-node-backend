@@ -9,6 +9,7 @@ import { zodUserSchema } from '@models/users';
 import type { IUserDocument, IUser } from '@models/users';
 import type { SearchUsersRequest } from '@types';
 import { userRepository } from '@repositories/users';
+import { cartService } from '@services/cart';
 
 /**
  * User Admin Service
@@ -104,14 +105,19 @@ export const adminUpdateById = (
 /**
  * Remove a user document (soft or hard delete).
  * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
+ *
+ * A hard delete takes the cart with it. The cart is its own document keyed by `userId`, reachable
+ * only through the account, so leaving it behind would strand a row nothing can ever read or
+ * clean up. A soft delete keeps it, the same way it keeps everything else about the account.
  */
 export const remove = (
     user: IUserDocument,
     hardDelete = false
 ): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
     if (hardDelete)
-        return userRepository
-            .deleteOne(user)
+        return cartService
+            .cartDeleteByUserId(user.id)
+            .then(() => userRepository.deleteOne(user))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.user-hard-deleted')));
 
     user.deletedAt = user.deletedAt ? undefined : new Date();

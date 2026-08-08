@@ -93,14 +93,13 @@ describe('user credential exposure', () => {
             expectNoCredentials(user!.toJSON());
         });
 
-        it('strips _id, __v and cart in favour of the contract id', async () => {
+        it('strips _id and __v in favour of the contract id', async () => {
             const user = await withTokens();
             const json = user.toJSON() as Record<string, unknown>;
 
             expect(json.id).toBe((user._id as Types.ObjectId).toString());
             expect(JSON.stringify(json)).not.toContain('_id');
             expect(JSON.stringify(json)).not.toContain('__v');
-            expect(json.cart).toBeUndefined();
         });
 
         it('emits only the OpenAPI User properties', async () => {
@@ -162,15 +161,14 @@ describe('user credential exposure', () => {
             expect((user.toJSON() as { deletedAt: Date }).deletedAt).toEqual(deletedAt);
         });
 
-        it('still never emits credentials or the cart alongside it', async () => {
+        it('still never emits credentials alongside it', async () => {
             const user = await createUser({ email: 'gone-too@example.com', deletedAt: new Date() });
             const serialized = user.toJSON() as Record<string, unknown>;
 
-            // Exposing `deletedAt` must not loosen the others: these three are stripped because
+            // Exposing `deletedAt` must not loosen the others: these two are stripped because
             // they must never leave the server, which was never true of `deletedAt`.
             expect(serialized.password).toBeUndefined();
             expect(serialized.tokens).toBeUndefined();
-            expect(serialized.cart).toBeUndefined();
         });
 
         it('maps a lean list the same way, via userService.search', async () => {

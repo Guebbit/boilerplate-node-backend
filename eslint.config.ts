@@ -20,6 +20,14 @@ export default tseslint.config(
         '**/coverage/**',
         '**/docs/**',
         '**/node_modules/**',
+        /*
+         * Stryker copies the whole project here per run. Without this, `npm run lint` fails with
+         * one parser error per generated file the moment a mutation run is in flight — or forever,
+         * if a crashed run left the directory behind — because the copies sit outside the
+         * `tsconfig` project `parserOptions.project` resolves against. `jest.config.json` ignores
+         * the same path for the same reason; see the note in `stryker.config.json`.
+         */
+        '.stryker-tmp/**',
         '**/eslint.config.ts',
         '**/orval.config.ts',
         '**/migrate-mongo-config.ts',

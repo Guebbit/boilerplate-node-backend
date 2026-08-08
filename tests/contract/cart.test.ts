@@ -5,9 +5,9 @@
  * `CartResponseEnvelope`, which makes this resource the easiest place for a serialization drift
  * to hide: six endpoints, one shape, and until now not one of them crossed HTTP in a test.
  *
- * The cart is built through the API rather than through a factory on purpose. A cart lives
- * *inside* the user document, so a hand-written fixture would be asserting on a shape the
- * application never produces.
+ * The cart is built through the API rather than through a factory on purpose. `CartResponse` is a
+ * view computed from the stored lines and the products they price, not a serialization of the cart
+ * document, so a hand-written fixture would be asserting on a shape the application never produces.
  *
  * Behavioural rules (whose cart, which products) belong to the service suites; the assertions
  * here exist to make sure each contract branch is actually reached.

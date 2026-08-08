@@ -4,7 +4,7 @@ import { createUser } from '../../helpers/factories/users';
 import { createProduct, makeProduct } from '../../helpers/factories/products';
 import * as productService from '@services/products';
 import { productRepository } from '@repositories/products';
-import { userRepository } from '@repositories/users';
+import { cartRepository } from '@repositories/carts';
 import type { IResponseReject } from '@core/http/response';
 
 /**
@@ -402,7 +402,7 @@ describe('productService.removeById', () => {
         expect(restored!.deletedAt).toBeUndefined();
     });
 
-    it('hard-deletes the product and removes it from all user carts', async () => {
+    it('hard-deletes the product and removes it from all carts', async () => {
         const product = await createProduct({ active: true });
         const pid = (product._id as Types.ObjectId).toString();
 
@@ -410,10 +410,9 @@ describe('productService.removeById', () => {
         const user = await createUser();
         const userId = (user._id as Types.ObjectId).toString();
         const cartService = await import('@services/cart');
-        const addResult = await cartService.cartItemSetById(userId, pid, 1);
+        await cartService.cartItemSetById(userId, pid, 1);
 
         // Confirm the cart item was added
-        expect(addResult.success).toBe(true);
         expect(await cartService.cartGet(userId)).toHaveLength(1);
 
         const result = await productService.removeById(pid, true);
@@ -421,11 +420,9 @@ describe('productService.removeById', () => {
         expect(result.success).toBe(true);
         // Product must be gone from DB
         expect(await productRepository.findById(pid)).toBeNull();
-        // User's cart must no longer contain the product
-        const refreshedUser = await userRepository.findById(userId);
-        if (refreshedUser) {
-            expect(refreshedUser.cart.items.some((i) => i.product.toString() === pid)).toBe(false);
-        }
+        // The cart must no longer contain the product
+        const cart = await cartRepository.findByUserId(userId);
+        expect(cart!.items.some((item) => item.productId.toString() === pid)).toBe(false);
     });
 
     /* Hard delete is the only path that destroys bytes; the row is gone, so nothing else can. */

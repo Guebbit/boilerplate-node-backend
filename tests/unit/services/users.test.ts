@@ -1,10 +1,8 @@
 import { Types } from 'mongoose';
 import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '../../helpers/factories/users';
-import { createProduct } from '../../helpers/factories/products';
 import * as userService from '@services/users';
 import * as authService from '@services/auth';
-import * as cartService from '@services/cart';
 import { userRepository } from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@core/http/response';
 import type { IUserDocument } from '@models/users';
@@ -100,157 +98,6 @@ describe('authService.login', () => {
 
         expect(result.success).toBe(false);
         expect((result as IResponseReject).status).toBe(401);
-    });
-});
-
-describe('cartService cart operations', () => {
-    it('cartItemSetById adds a new product to an empty cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        const result = await cartService.cartItemSetById(userId, pid, 3);
-
-        expect(result.success).toBe(true);
-        const items = await cartService.cartGet(userId);
-        expect(items).toHaveLength(1);
-        expect(items[0].quantity).toBe(3);
-    });
-
-    it('cartItemSetById overwrites the quantity when the product is already in the cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const secondResult = await cartService.cartItemSetById(userId, pid, 7);
-
-        expect(secondResult.success).toBe(true);
-        const items = await cartService.cartGet(userId);
-        expect(items).toHaveLength(1);
-        expect(items[0].quantity).toBe(7);
-    });
-
-    it('cartItemAddById increases the quantity of an existing cart item', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const addResult = await cartService.cartItemAddById(userId, pid, 3);
-
-        expect(addResult.success).toBe(true);
-        const items = await cartService.cartGet(userId);
-        expect(items[0].quantity).toBe(5);
-    });
-
-    it('cartItemRemoveById removes the specified product from the cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 1);
-        const removeResult = await cartService.cartItemRemoveById(userId, pid);
-
-        expect(removeResult.success).toBe(true);
-        await expect(cartService.cartGet(userId)).resolves.toHaveLength(0);
-    });
-
-    it('cartRemove empties the entire cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 5);
-        const clearResult = await cartService.cartRemove(userId);
-
-        expect(clearResult.success).toBe(true);
-        await expect(cartService.cartGet(userId)).resolves.toHaveLength(0);
-    });
-
-    it('cartGet returns populated cart items with product details', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct({ title: 'Visible Product' });
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const items = await cartService.cartGet(userId);
-
-        expect(items).toHaveLength(1);
-        expect(items[0].quantity).toBe(2);
-        // The id survives the join, and the product arrives in its own field.
-        expect(items[0].productId).toBe(pid);
-        expect(items[0].product?.title).toBe('Visible Product');
-    });
-
-    it('cartItemSet (by document) is equivalent to cartItemSetById', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-
-        const result = await cartService.cartItemSet(userId, product, 4);
-
-        expect(result.success).toBe(true);
-        const items = await cartService.cartGet(userId);
-        expect(items[0].quantity).toBe(4);
-    });
-
-    it('cartItemAdd (by document) increases quantity', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 1);
-        const addResult = await cartService.cartItemAdd(userId, product, 9);
-
-        expect(addResult.success).toBe(true);
-        const items = await cartService.cartGet(userId);
-        expect(items[0].quantity).toBe(10);
-    });
-
-    it('cartItemRemove (by document) removes the product', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-
-        await cartService.cartItemSet(userId, product, 1);
-        const removeResult = await cartService.cartItemRemove(userId, product);
-
-        expect(removeResult.success).toBe(true);
-        await expect(cartService.cartGet(userId)).resolves.toHaveLength(0);
-    });
-});
-
-describe('cartService.orderConfirm', () => {
-    it('creates an order from the cart and empties the cart afterwards', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct({ price: 20 });
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const orderResult = await cartService.orderConfirm(userId);
-
-        expect(orderResult.success).toBe(true);
-
-        const refreshed = await userRepository.findById(userId);
-        expect(refreshed!.cart.items).toHaveLength(0);
-    });
-
-    it('rejects with 409 when the cart is empty', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const result = await cartService.orderConfirm(userId);
-
-        expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(409);
     });
 });
 
@@ -714,38 +561,5 @@ describe('userService.remove', () => {
         await userService.remove(user, true);
 
         expect(await userRepository.findById(id)).toBeNull();
-    });
-});
-
-describe('cartService.productRemoveFromCartsById', () => {
-    it('removes a product from every user cart that contains it', async () => {
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
-        const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
-        const userId1 = (user1._id as Types.ObjectId).toString();
-        const userId2 = (user2._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId1, pid, 1);
-        await cartService.cartItemSetById(userId2, pid, 2);
-
-        const result = await cartService.productRemoveFromCartsById(pid);
-
-        expect(result.success).toBe(true);
-
-        const refreshed1 = await userRepository.findById(userId1);
-        const refreshed2 = await userRepository.findById(userId2);
-        expect(refreshed1!.cart.items).toHaveLength(0);
-        expect(refreshed2!.cart.items).toHaveLength(0);
-    });
-
-    it('succeeds even when no user has the product in their cart', async () => {
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        const result = await cartService.productRemoveFromCartsById(pid);
-
-        expect(result.success).toBe(true);
     });
 });

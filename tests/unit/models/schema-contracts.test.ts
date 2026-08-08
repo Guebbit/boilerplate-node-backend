@@ -24,6 +24,8 @@ import { productRepository } from '@repositories/products';
 import { userRepository } from '@repositories/users';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
 import { orderRepository } from '@repositories/orders';
+import { cartRepository } from '@repositories/carts';
+import { cartModel } from '@models/carts';
 import { FeedbackRequestStatus } from '@types';
 import { createProduct } from '../../helpers/factories/products';
 import { createUser } from '../../helpers/factories/users';
@@ -120,16 +122,6 @@ describe('user schema', () => {
 
         // Privilege by omission would be the worst possible default here.
         expect(user.admin).toBe(false);
-    });
-
-    it('starts with an empty cart', async () => {
-        const user = await userRepository.create({
-            email: 'cart@example.com',
-            username: 'carty',
-            password: 'Password1!'
-        } as never);
-
-        expect(user.cart.items).toEqual([]);
     });
 
     it('serialises to id, never _id, __v, password or tokens', async () => {
@@ -263,5 +255,89 @@ describe('order schema', () => {
 
         expect(order.createdAt).toBeInstanceOf(Date);
         expect(order.updatedAt).toBeInstanceOf(Date);
+    });
+});
+
+/**
+ * A cart is the one collection addressed by its owner rather than by its own id: `userId` is
+ * `unique`, which is what makes "the user's cart" a complete address and lets every mutation be a
+ * single upsert. The declarations below are the whole of that guarantee.
+ */
+describe('cart schema', () => {
+    it('starts with an empty items array', async () => {
+        const user = await createUser({ email: 'carty@example.com' });
+
+        const cart = await cartRepository.create({ userId: user._id } as never);
+
+        expect(cart.items).toEqual([]);
+    });
+
+    it('requires a userId', async () => {
+        await expect(cartRepository.create({ items: [] } as never)).rejects.toThrow();
+    });
+
+    it('refuses a second cart for the same user', async () => {
+        // The unique index, not a convention every write path has to remember.
+        const user = await createUser({ email: 'twice@example.com' });
+        await cartRepository.create({ userId: user._id } as never);
+        await cartModel.syncIndexes();
+
+        await expect(cartRepository.create({ userId: user._id } as never)).rejects.toThrow();
+    });
+
+    it('refuses a line with no product', async () => {
+        // A line that references nothing prices as zero and renders as a blank row.
+        const user = await createUser({ email: 'noproduct@example.com' });
+
+        await expect(
+            cartRepository.create({ userId: user._id, items: [{ quantity: 1 }] } as never)
+        ).rejects.toThrow();
+    });
+
+    it('refuses a line with no quantity', async () => {
+        const user = await createUser({ email: 'noquantity@example.com' });
+        const product = await createProduct();
+
+        await expect(
+            cartRepository.create({
+                userId: user._id,
+                items: [{ productId: product._id }]
+            } as never)
+        ).rejects.toThrow();
+    });
+
+    it('refuses a line with a quantity below one', async () => {
+        // A zero-quantity line is a removal expressed as a write, and `CartItem` declares
+        // `minimum: 1`.
+        const user = await createUser({ email: 'zero@example.com' });
+        const product = await createProduct();
+
+        await expect(
+            cartRepository.create({
+                userId: user._id,
+                items: [{ productId: product._id, quantity: 0 }]
+            } as never)
+        ).rejects.toThrow();
+    });
+
+    it('gives a line no id of its own', async () => {
+        const user = await createUser({ email: 'lines@example.com' });
+        const product = await createProduct();
+
+        const cart = await cartRepository.create({
+            userId: user._id,
+            items: [{ productId: product._id, quantity: 2 }]
+        } as never);
+
+        expect(cart.toObject().items).toEqual([{ productId: product._id, quantity: 2 }]);
+    });
+
+    it('stamps createdAt and updatedAt', async () => {
+        const user = await createUser({ email: 'stamped@example.com' });
+
+        const cart = await cartRepository.create({ userId: user._id } as never);
+
+        expect(cart.createdAt).toBeInstanceOf(Date);
+        expect(cart.updatedAt).toBeInstanceOf(Date);
     });
 });

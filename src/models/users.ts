@@ -1,4 +1,4 @@
-import { model, Schema, Types } from 'mongoose';
+import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 import { logger } from '@core/adapters/logger';
@@ -12,22 +12,6 @@ export { zodUserSchema } from './user-validation';
 export enum ETokenType {
     REFRESH = 'refresh',
     PASSWORD_RESET = 'password'
-}
-
-/**
- * Cart Item interface
- * Reference to product and quantity
- */
-export interface ICartItem {
-    /**
-     * Reference to the product. Always an id.
-     *
-     * `populate('cart.items.product')` swaps a document in here at runtime, so no consumer may
-     * read this field expecting either shape — `readCartLines` in `@services/cart` is the one
-     * place that populates, and it returns the id and the joined product as separate fields.
-     */
-    product: Types.ObjectId;
-    quantity: number;
 }
 
 /**
@@ -56,14 +40,6 @@ export interface IUser extends Omit<User, 'deletedAt'> {
     password: string;
     // soft delete
     deletedAt?: Date;
-
-    /**
-     * Cart management through items
-     */
-    cart: {
-        items: ICartItem[];
-        updatedAt: Date;
-    };
 
     /**
      * Tokens
@@ -158,30 +134,6 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
         active: {
             type: Boolean,
             default: true
-        },
-        cart: {
-            // sub documents always have _id
-            items: {
-                type: [
-                    {
-                        product: {
-                            type: Schema.Types.ObjectId,
-                            ref: 'Product',
-                            required: true
-                        },
-                        quantity: {
-                            type: Number,
-                            required: true
-                        }
-                    }
-                ],
-                // Guarantee every new user starts with an empty cart.
-                default: []
-            },
-            updatedAt: {
-                type: Date,
-                default: Date.now
-            }
         },
         // sub documents always have _id
         // `select: false` for the same reason as `password` — live refresh tokens are as good as
@@ -279,9 +231,9 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
 
 /**
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from
- * `_id`; strips `_id`/`__v` plus the credentials and cart that must never leave the server
- * (`password`, `tokens`, `cart`). `password`/`tokens` are also `select: false` on the schema —
- * this is defense in depth, not the only guard.
+ * `_id`; strips `_id`/`__v` plus the credentials that must never leave the server (`password`,
+ * `tokens`). Both are also `select: false` on the schema — this is defense in depth, not the only
+ * guard.
  * Exported so lean results (which bypass `toJSON`) can be mapped through the
  * same logic — see @services/users `search()`.
  *
@@ -291,7 +243,7 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
  * admin-only, and `/account` serves the caller their own record.
  */
 export const applyUserTransform = applySerialization(userSchema, {
-    omit: ['password', 'tokens', 'cart']
+    omit: ['password', 'tokens']
 });
 
 /**
