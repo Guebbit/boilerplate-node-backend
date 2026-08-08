@@ -5,8 +5,7 @@ import { createProduct, makeProduct } from '../../helpers/factories/products';
 import * as productService from '@services/products';
 import { productRepository } from '@repositories/products';
 import { userRepository } from '@repositories/users';
-import type { IResponseSuccess, IResponseReject } from '@core/http/response';
-import type { IUserCartDto } from '@services/cart.dto';
+import type { IResponseReject } from '@core/http/response';
 
 /**
  * Mock the image store, not the filesystem underneath it.
@@ -410,11 +409,12 @@ describe('productService.removeById', () => {
         // A user adds the product to their cart
         const user = await createUser();
         const userId = (user._id as Types.ObjectId).toString();
-        // eslint-disable-next-line unicorn/no-await-expression-member
-        const addResult = await (await import('@services/cart')).cartItemSetById(userId, pid, 1);
+        const cartService = await import('@services/cart');
+        const addResult = await cartService.cartItemSetById(userId, pid, 1);
 
         // Confirm the cart item was added
-        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(1);
+        expect(addResult.success).toBe(true);
+        expect(await cartService.cartGet(userId)).toHaveLength(1);
 
         const result = await productService.removeById(pid, true);
 

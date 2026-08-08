@@ -9,18 +9,10 @@ import {
 import { databaseErrorInterpreter } from '@core/http/errors';
 import { sumLineItems } from '@core/totals';
 import type { IOrderDocument } from '@models/orders';
-import type { IUserDocument, ICartItem } from '@models/users';
+import type { IUserDocument } from '@models/users';
 import type { IProductDocument } from '@models/products';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
-import {
-    toUserCartDto,
-    toCartItemDto,
-    toCartItemResponse,
-    toIdString,
-    type ICartItemDto,
-    type IUserCartDto
-} from '@services/cart.dto';
 import type { CartItem } from '@types';
 
 /**
@@ -28,12 +20,46 @@ import type { CartItem } from '@types';
  * Single responsibility: shopping cart operations, identified by userId.
  */
 
-/** Check if a cart item's product field matches the given string id. */
-const matchesProductId = (product: unknown, id: string): boolean => toIdString(product) === id;
+/**
+ * A cart line joined with the product it references.
+ *
+ * `productId` and `product` are separate fields on purpose. `populate()` overwrites the stored
+ * reference in place, and it writes `null` there when the product no longer exists — so reading
+ * the id off that field afterwards loses it exactly when a caller most needs to know which
+ * product a broken line pointed at. {@link readCartLines} captures the id first.
+ */
+export interface ICartLine extends CartItem {
+    /** The joined product, or `null` for a reference that resolves to nothing. */
+    product: IProductDocument | null;
+}
 
-/** Wrap saved user in a success response with an explicit DTO payload. */
-const generateUserSuccess = (user: IUserDocument): IResponseSuccess<IUserCartDto> =>
-    generateSuccess(toUserCartDto(user));
+/** A cart line whose reference resolved — what an order may be built from. */
+type TJoinedCartLine = ICartLine & { product: IProductDocument };
+
+/**
+ * A user's cart after `populate('cart.items.product')`.
+ *
+ * Names what Mongoose swaps into the reference field, so the populated read is typed rather than
+ * cast. Spelled as the whole `cart` key because `populate<T>` merges `T` over the document's
+ * top-level properties — a dotted path is not a key it can merge on.
+ */
+interface IPopulatedCart {
+    cart: {
+        items: { product: IProductDocument | null; quantity: number }[];
+        updatedAt: Date;
+    };
+}
+
+/** Narrow a line to one whose product actually exists. */
+const isJoined = (line: ICartLine): line is TJoinedCartLine => line.product !== null;
+
+/**
+ * Check if a stored cart line points at the given product id.
+ *
+ * Takes the reference as the `ObjectId` it always is on this path: every caller reaches it
+ * through {@link requireUser}, which does not populate.
+ */
+const matchesProductId = (product: Types.ObjectId, id: string): boolean => product.equals(id);
 
 /** Fetch user by string id, resolving 404 as IResponseReject. */
 const requireUser = (userId: string): Promise<IUserDocument | IResponseReject> =>
@@ -42,9 +68,23 @@ const requireUser = (userId: string): Promise<IUserDocument | IResponseReject> =
         return user;
     });
 
-/** Populate cart.items.product on an already-fetched user. */
-const populateCartItems = (user: IUserDocument): Promise<ICartItem[]> =>
-    user.populate('cart.items.product').then(({ cart: { items = [] } }) => items);
+/**
+ * Join a user's cart lines to their products, in one query.
+ *
+ * The ids are read before `populate()` runs, because populate replaces the reference field with
+ * the fetched document — or with `null` for a product that has since been deleted.
+ */
+const readCartLines = (user: IUserDocument): Promise<ICartLine[]> => {
+    const productIds = user.cart.items.map(({ product }) => product.toString());
+
+    return user.populate<IPopulatedCart>('cart.items.product').then(({ cart: { items = [] } }) =>
+        items.map(({ product, quantity }, index) => ({
+            productId: productIds[index],
+            quantity,
+            product
+        }))
+    );
+};
 
 /** Mutate user document to clear the cart in place. */
 const clearCartItems = (user: IUserDocument): void => {
@@ -52,22 +92,22 @@ const clearCartItems = (user: IUserDocument): void => {
 };
 
 /**
- * Get user cart populated with product details.
+ * Get user cart, each line joined with its product.
  */
-export const cartGet = (userId: string): Promise<ICartItemDto[]> =>
+export const cartGet = (userId: string): Promise<ICartLine[]> =>
     userRepository.findById(userId).then((user) => {
         if (!user) return [];
-        return populateCartItems(user).then((items) => items.map((item) => toCartItemDto(item)));
+        return readCartLines(user);
     });
 
 /**
  * Get user cart with computed summary (item count, total quantity, total price).
  *
- * The populated `product` is used to price the cart and is then dropped: `CartItem` in
+ * The joined `product` is used to price the cart and is then dropped: `CartItem` in
  * `openapi.yaml` is `additionalProperties: false` over `{ productId, quantity }`, so shipping the
  * whole product per line is over-serialization the contract suite fails on. No client reads it —
  * the frontend renders the cart from `productId`/`quantity` and looks products up in its own
- * store. Use {@link cartGet} where the populated product is actually needed.
+ * store. Use {@link cartGet} where the joined product is actually needed.
  */
 export const cartGetWithSummary = (
     userId: string
@@ -75,10 +115,13 @@ export const cartGetWithSummary = (
     items: CartItem[];
     summary: { itemsCount: number; totalQuantity: number; total: number };
 }> =>
-    cartGet(userId).then((items) => {
-        const { count, quantity, price } = sumLineItems(items);
+    cartGet(userId).then((lines) => {
+        const { count, quantity, price } = sumLineItems(lines);
         return {
-            items: items.map((item) => toCartItemResponse(item)),
+            items: lines.map(({ productId, quantity: lineQuantity }) => ({
+                productId,
+                quantity: lineQuantity
+            })),
             summary: {
                 itemsCount: count,
                 totalQuantity: quantity,
@@ -87,13 +130,18 @@ export const cartGetWithSummary = (
         };
     });
 
-/** Shared logic for adding/setting a cart item quantity. */
+/**
+ * Shared logic for adding/setting a cart item quantity.
+ *
+ * Resolves an empty success: every cart controller answers with a fresh
+ * {@link cartGetWithSummary}, which is the only cart shape `openapi.yaml` declares.
+ */
 const upsertCartItem = (
     userId: string,
     id: string,
     quantity: number,
     mode: 'set' | 'add'
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
@@ -106,7 +154,7 @@ const upsertCartItem = (
             user.cart.items[cartProductIndex].quantity =
                 mode === 'set' ? quantity : user.cart.items[cartProductIndex].quantity + quantity;
         user.cart.updatedAt = new Date();
-        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
+        return userRepository.save(user).then(() => generateSuccess(undefined, 200));
     });
 
 /**
@@ -116,7 +164,7 @@ export const cartItemSetById = (
     userId: string,
     id: string,
     quantity = 1
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     upsertCartItem(userId, id, quantity, 'set');
 
 /**
@@ -126,7 +174,7 @@ export const cartItemSet = (
     userId: string,
     product: IProductDocument,
     quantity = 1
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     cartItemSetById(userId, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
@@ -136,7 +184,7 @@ export const cartItemAddById = (
     userId: string,
     id: string,
     quantity = 1
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     upsertCartItem(userId, id, quantity, 'add');
 
 /**
@@ -146,7 +194,7 @@ export const cartItemAdd = (
     userId: string,
     product: IProductDocument,
     quantity = 1
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     cartItemAddById(userId, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
@@ -155,18 +203,16 @@ export const cartItemAdd = (
 export const cartItemRemoveById = (
     userId: string,
     id: string
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
         const before = user.cart.items.length;
-        user.cart.items = user.cart.items.filter(
-            ({ product }: ICartItem) => !matchesProductId(product, id)
-        );
+        user.cart.items = user.cart.items.filter(({ product }) => !matchesProductId(product, id));
         if (user.cart.items.length === before)
             return generateReject(404, 'cart - item not found', []);
         user.cart.updatedAt = new Date();
-        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
+        return userRepository.save(user).then(() => generateSuccess(undefined, 200));
     });
 
 /**
@@ -175,7 +221,7 @@ export const cartItemRemoveById = (
 export const cartItemRemove = (
     userId: string,
     product: IProductDocument
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     cartItemRemoveById(userId, (product._id as Types.ObjectId).toString());
 
 /**
@@ -183,16 +229,20 @@ export const cartItemRemove = (
  */
 export const cartRemove = (
     userId: string
-): Promise<IResponseSuccess<IUserCartDto> | IResponseReject> =>
+): Promise<IResponseSuccess<undefined> | IResponseReject> =>
     requireUser(userId).then((result) => {
         if (!('cart' in result)) return result as IResponseReject;
         const user = result as IUserDocument;
         clearCartItems(user);
-        return userRepository.save(user).then((savedUser) => generateUserSuccess(savedUser));
+        return userRepository.save(user).then(() => generateSuccess(undefined, 200));
     });
 
 /**
  * Create order from current user cart and empty the cart.
+ *
+ * A line whose product no longer exists rejects the whole checkout, matching what
+ * `@services/orders` `create()` already does for an unresolvable product id: an order embeds a
+ * snapshot, and there is nothing to snapshot.
  */
 export const orderConfirm = (
     userId: string
@@ -201,15 +251,20 @@ export const orderConfirm = (
         .then((result) => {
             if (!('cart' in result)) return result as IResponseReject;
             const user = result as IUserDocument;
-            return populateCartItems(user).then<IResponseSuccess<IOrderDocument> | IResponseReject>(
-                (products) => {
-                    if (products.length === 0)
+            return readCartLines(user).then<IResponseSuccess<IOrderDocument> | IResponseReject>(
+                (lines) => {
+                    if (lines.length === 0)
                         return generateReject(409, 'empty cart', ['Cart is empty']);
+
+                    const joined = lines.filter((line) => isJoined(line));
+                    if (joined.length !== lines.length)
+                        return generateReject(404, 'checkout - product not found', []);
+
                     return orderRepository
                         .create({
                             userId: new Types.ObjectId(user.id),
                             email: user.email,
-                            items: products as IOrderDocument['items']
+                            items: joined.map(({ product, quantity }) => ({ product, quantity }))
                         } as Partial<IOrderDocument>)
                         .then((order) => {
                             clearCartItems(user);

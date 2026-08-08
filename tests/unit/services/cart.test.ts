@@ -34,8 +34,7 @@ import {
 } from '@services/cart';
 import { userRepository } from '@repositories/users';
 import { orderRepository } from '@repositories/orders';
-import type { IResponseReject, IResponseSuccess } from '@core/http/response';
-import type { IUserCartDto } from '@services/cart.dto';
+import type { IResponseReject } from '@core/http/response';
 
 setupTestDb();
 
@@ -43,7 +42,6 @@ setupTestDb();
 const MISSING_ID = '507f1f77bcf86cd799439011';
 
 const asReject = (result: unknown) => result as IResponseReject;
-const asCartSuccess = (result: unknown) => result as IResponseSuccess<IUserCartDto>;
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
 const storedQuantity = async (userId: string, productId: string): Promise<number | undefined> => {
@@ -169,15 +167,17 @@ describe('cartItemSetById', () => {
         expect(asReject(result).status).toBe(404);
     });
 
-    it('returns the updated cart projected as a DTO', async () => {
+    it('carries no payload, because every controller re-reads the cart', async () => {
         const user = await createUser();
         const product = await createProduct();
 
         const result = await cartItemSetById(user.id, String(product._id), 2);
 
-        expect(asCartSuccess(result).data).toMatchObject({
-            id: user.id,
-            cart: { items: [{ productId: String(product._id), quantity: 2 }] }
+        expect(result.success).toBe(true);
+        expect(result.data).toBeUndefined();
+        // The mutation is observable through the read path, which is what the controllers use.
+        await expect(cartGetWithSummary(user.id)).resolves.toMatchObject({
+            items: [{ productId: String(product._id), quantity: 2 }]
         });
     });
 

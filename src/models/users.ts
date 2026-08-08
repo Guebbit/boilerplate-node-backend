@@ -19,7 +19,13 @@ export enum ETokenType {
  * Reference to product and quantity
  */
 export interface ICartItem {
-    // IProductDocument only after populate()
+    /**
+     * Reference to the product. Always an id.
+     *
+     * `populate('cart.items.product')` swaps a document in here at runtime, so no consumer may
+     * read this field expecting either shape — `readCartLines` in `@services/cart` is the one
+     * place that populates, and it returns the id and the joined product as separate fields.
+     */
     product: Types.ObjectId;
     quantity: number;
 }

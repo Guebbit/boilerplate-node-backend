@@ -420,6 +420,24 @@ its own tests.
 
 ### Changed
 
+- **Cart writes resolve with no payload, and the cart read joins its products without overwriting
+  the reference it joined on.** `cartItemSet`/`cartItemAdd`/`cartItemRemove`/`cartRemove` and their
+  `*ById` forms declared `IResponseSuccess<IUserCartDto>` and assembled one on every call, but no
+  controller had ever read it: all four answer with a fresh `cartGetWithSummary`, which is the only
+  cart shape `openapi.yaml` declares. The projection was built and thrown away once per mutation.
+  They resolve `IResponseSuccess<undefined>` now, and no response body changes.
+
+    `cartGet` returns `ICartLine[]` — `{ productId, quantity, product }` — where `productId` is read
+    from the stored reference _before_ `populate()` runs and `product` carries the join in a field of
+    its own. Both used to be read off the same field after populate had already overwritten it, which
+    is what forced every consumer downstream to accept `unknown` and guess at what it had been handed.
+
+- **`IOrderDocumentItem.product` is `IProductDocument`, not `IProductDocument | Types.ObjectId`.**
+  `orderItemSchema` declares `product: productSchema` with no `ref` — the cart's is the only `ref`
+  in the codebase — so there is nothing for `populate()` to resolve and the `ObjectId` half of that
+  union described a state the collection cannot hold. It was costing two casts at the call sites
+  that build an order from products, both now gone.
+
 - **Every model's `_id` → `id` serialization comes from one function.** The same six-line prologue
   and the same four-line `schema.set('toJSON', …)` block were written out in all five models;
   `src/models/serialize.ts` now holds both, and each model calls `applySerialization(schema, …)`
@@ -708,6 +726,22 @@ its own tests.
 
 ### Fixed
 
+- **A cart line pointing at a deleted product lost the id of the product it pointed at.**
+  `populate('cart.items.product')` replaces the stored `ObjectId` in place, and writes `null` there
+  when the reference resolves to nothing. `toIdString` then read the id back off that same field and
+  returned `''`, so `GET /cart` answered `{ productId: '', quantity }` — a line no client can act on,
+  against a `CartItem` schema that requires `productId`. Checkout fared worse: `orderConfirm` handed
+  the populated items straight to `orderRepository.create()`, embedding `product: null` in the order
+  and persisting an order that does not satisfy its own contract.
+
+    The id is captured before the join now, so a dangling line keeps its `productId` and reports
+    `product: null`. Checkout rejects `404` instead of storing the hole, matching what
+    `@services/orders` `create()` already does for a product id that resolves to nothing.
+
+    Reaching this took a cart line whose product was deleted without going through
+    `productRemoveFromCartsById` — both the hard and the soft delete path call it — so it was not
+    reachable through the API alone.
+
 - **`GET /observability/audit` mishandled two of its own query parameters.** `?limit=abc` reached
   `Math.min(NaN, 200)`, and `NaN` survives it — the page size then arrived at the data layer
   undefined. `?limit=-5` passed the upper bound with no lower one to stop it. Both are clamped to
@@ -981,6 +1015,25 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   means restoring data that 404s.
 
 ### Removed
+
+- **`src/services/cart.dto.ts`, and the 330-line test that pinned it.** Four of its five exports
+  existed to work around one field meaning two things. `ICartItem.product` is declared
+  `Types.ObjectId`; `populate()` swaps a product document into it at runtime. Nothing downstream
+  could trust the declared type, so `toIdString` took `unknown` and probed four shapes (`ObjectId`,
+  `string`, `{id}`, `{_id}` recursively), `toCartProductDto` took `unknown` and rebuilt ten fields
+  behind ten `typeof` guards — a hand-rolled copy of what the product model's own `toJSON` already
+  produces — and `matchesProductId` in `@services/cart` widened to `unknown` to match, despite both
+  of its call sites reaching it through `requireUser`, which does not populate. That one is
+  `product.equals(id)` now: a built-in method that accepts a string.
+
+    The fifth, `toUserCartDto`, was built on the same confusion from the other side. It mapped
+    _un_-populated items through `toCartItemDto`, documented as handling populated ones, so the
+    `product` on every `IUserCartDto` it ever produced was unconditionally `undefined`. Every
+    controller discarded its output regardless.
+
+    What earns its place moved into `@services/cart`: the `ICartLine` type, and the
+    `{ productId, quantity }` projection that keeps `CartItem`'s `additionalProperties: false`
+    satisfied.
 
 - **The in-process domain event bus (`src/core/observability/events.ts`), and with it the AsyncAPI
   channel `ecommerce.cart.checked_out`.** It described itself as "a decoupling mechanism, not just

@@ -13,7 +13,14 @@ import type { Order } from '@types';
  * OrderItem class, because Mongoose embeds the product snapshot directly.
  */
 export interface IOrderDocumentItem {
-    product: IProductDocument | Types.ObjectId;
+    /**
+     * The product snapshot, embedded.
+     *
+     * Not a reference and never an `ObjectId`: `orderItemSchema` declares `product: productSchema`
+     * with no `ref`, so there is nothing for `populate()` to resolve and the un-joined case cannot
+     * occur. An order must keep what was bought, not what the catalogue says today.
+     */
+    product: IProductDocument;
     quantity: number;
 }
 
