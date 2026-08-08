@@ -40,10 +40,14 @@ export const writeProducts = (
 ) => {
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
     // `booleans`/`stringArrays` are the fields whose type a multipart body cannot carry.
-    const { id, active, categories, tags } = readInput(request, {
+    // `price` is declared for the same reason `active` is: the image-carrying variants of these
+    // routes send a multipart body, which has no types, so both arrive as strings and
+    // `zodProductSchema` rejects them.
+    const { id, active, price, categories, tags } = readInput(request, {
         sources: ['params', 'body'],
         ids: ['id'],
         booleans: ['active'],
+        numbers: ['price'],
         stringArrays: ['categories', 'tags']
     });
 
@@ -64,6 +68,7 @@ export const writeProducts = (
         ...request.body,
         imageUrl,
         active,
+        price,
         categories,
         tags
     });
@@ -74,9 +79,9 @@ export const writeProducts = (
 
     // Past the guard above, these have been checked against zodProductSchema — the assertion
     // records what the validator just established rather than assuming it.
-    const validated = { imageUrl, active, categories, tags } as Pick<
+    const validated = { imageUrl, active, price, categories, tags } as Pick<
         Product,
-        'imageUrl' | 'active' | 'categories' | 'tags'
+        'imageUrl' | 'active' | 'price' | 'categories' | 'tags'
     >;
 
     /**

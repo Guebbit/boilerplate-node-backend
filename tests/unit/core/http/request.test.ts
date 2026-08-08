@@ -223,8 +223,52 @@ describe('readInput', () => {
             ).toEqual({ active: false, categories: ['tools'], tags: ['a', 'b'] });
         });
 
+        /*
+         * Numbers, for the same reason as booleans: a multipart body carries no types, so a
+         * numeric field arrives as a string and a schema declaring `z.number()` rejects it. The
+         * only such field in this API is `price`, on the image-carrying product routes.
+         */
+        it('decodes a multipart number', () => {
+            const request = makeRequest({
+                body: { price: '101.5' },
+                contentType: FORM_TYPE
+            });
+
+            expect(readInput(request, { sources: ['body'], numbers: ['price'] })).toEqual({
+                price: 101.5
+            });
+        });
+
+        it('leaves an unparseable number as the string it was', () => {
+            const request = makeRequest({ body: { price: 'abc' }, contentType: FORM_TYPE });
+
+            // Not `NaN`: the validator downstream has to reject the caller's actual input with the
+            // contract's own message, rather than this layer inventing a value to be rejected.
+            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe('abc');
+        });
+
+        it('leaves a blank number alone rather than reading it as zero', () => {
+            const request = makeRequest({ body: { price: '' }, contentType: FORM_TYPE });
+
+            // `Number('')` is 0. An empty form field means "not sent", and a free product is a
+            // legal price — so coercing here would turn a missing value into a valid one.
+            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe('');
+        });
+
+        it('decodes a multipart zero, which is a legal price', () => {
+            const request = makeRequest({ body: { price: '0' }, contentType: FORM_TYPE });
+
+            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe(0);
+        });
+
         // The reason the rule is transport-conditional: a JSON body already carries its types,
         // and decoding it would destroy the type error the validator has to see.
+        it('leaves a JSON number string untouched, so the validator still sees the violation', () => {
+            const request = makeRequest({ body: { price: '101' }, contentType: JSON_TYPE });
+
+            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe('101');
+        });
+
         it('leaves a JSON body untouched, wrong types included', () => {
             const request = makeRequest({
                 body: { active: 'not-a-boolean', categories: 42 },

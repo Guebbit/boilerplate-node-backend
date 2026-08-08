@@ -37,16 +37,41 @@ const SEED_IMAGE_FILENAMES = [
  *
  * Done as read-distinct-then-targeted-update rather than an aggregation pipeline update, so this
  * runs on MongoDB 4.0 as well — a boilerplate should not force a server upgrade to migrate.
+ *
+ * `arrayElement` is mandatory when the field sits inside an array. A dotted path resolves
+ * differently on the two sides of an update: `{ 'items.product.imageUrl': value }` MATCHES fine,
+ * because a query implicitly searches every array element, but `$set` on the same path is
+ * rejected — the server cannot know which element was meant, and answers `Cannot create field
+ * 'product' in element {items: [...]}`, failing the whole migration. Naming the element
+ * (`items.$[item].product.imageUrl`, with an `arrayFilters` entry selecting the matching ones) is
+ * what makes the write addressable. `arrayFilters` is MongoDB 3.6+, so it keeps the 4.0 floor
+ * above intact.
  */
-const rewriteField = async (db, collectionName, field, match, mapper) => {
+const rewriteField = async (db, collectionName, field, match, mapper, arrayElement) => {
     const collection = db.collection(collectionName);
     const values = await collection.distinct(field, match);
 
     for (const value of values) {
         const next = mapper(value);
         if (next === value) continue;
+
+        if (arrayElement) {
+            await collection.updateMany(
+                { [field]: value },
+                { $set: { [arrayElement.path]: next } },
+                { arrayFilters: [{ [arrayElement.filter]: value }] }
+            );
+            continue;
+        }
+
         await collection.updateMany({ [field]: value }, { $set: { [field]: next } });
     }
+};
+
+/* Addresses `imageUrl` inside each element of an order's `items` array. */
+const ORDER_ITEM_ELEMENT = {
+    path: 'items.$[item].product.imageUrl',
+    filter: 'item.product.imageUrl'
 };
 
 const toPosix = (value) => value.replace(/\\/g, '/');
@@ -66,7 +91,8 @@ module.exports = {
             'orders',
             'items.product.imageUrl',
             { 'items.product.imageUrl': backslashed },
-            toPosix
+            toPosix,
+            ORDER_ITEM_ELEMENT
         );
 
         /* Separators first, so a `\images\<fixture>.jpg` row is matched by the move below too. */
@@ -84,7 +110,8 @@ module.exports = {
             'orders',
             'items.product.imageUrl',
             { 'items.product.imageUrl': atImagesRoot },
-            intoSeedDirectory
+            intoSeedDirectory,
+            ORDER_ITEM_ELEMENT
         );
     },
 

@@ -429,14 +429,11 @@ describe('userService.validateData', () => {
 });
 
 /*
- * Backs the three `active` filter cases below, which replace a pair titled "filters active users
- * (no deletedAt)" and "filters inactive (soft-deleted) users" — names that record the bug they
- * were asserting. `active` had no column; the filter was rewritten into a `deletedAt` existence
- * check, so asking for inactive accounts returned deleted ones and there was no way to ask for
- * either alone.
+ * Backs the three `active` filter cases below.
  *
- * Built so the two facts DISAGREE: the deactivated account is not deleted, and the deleted account
- * is still active. Under the old behaviour every one of those assertions came out the other way.
+ * Built so the two facts DISAGREE: the deactivated account is not deleted, and the deleted
+ * account is still active. That is what makes the cases discriminating — a filter that resolved
+ * `active` through `deletedAt` would answer all three the other way round.
  */
 const seedActiveAndDeleted = () =>
     Promise.all([

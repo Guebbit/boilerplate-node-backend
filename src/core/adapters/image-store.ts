@@ -108,6 +108,13 @@ export const filesystemImageStore: IImageStore = {
         // itself is not a stored image, so equality is a rejection too.
         if (!target.startsWith(root + path.sep)) return Promise.resolve(false);
 
+        // Only files this store could have written. `put` always lands a single flat name in
+        // `<public>/images/`, so anything in a SUBDIRECTORY of it belongs to someone else —
+        // `images/seed/` holds the demo fixtures, which are committed repository assets. Replacing
+        // a seeded record's image would otherwise unlink one permanently, leaving every later
+        // re-seed pointing at a 404, and the deletion is unrecoverable outside version control.
+        if (path.dirname(target) !== path.join(root, IMAGES_SEGMENT)) return Promise.resolve(false);
+
         return deleteFile(target);
     }
 };

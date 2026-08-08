@@ -642,11 +642,10 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
-                # Present only on a soft-deleted account, exactly as on `Product`. It was stripped
-                # until `active` became a real column: while `active` was synthesised as
-                # `!deletedAt`, deletion was legible through that flag, and once the two separated
-                # an admin had no way to see it at all. Every route serving a `User` list is
-                # admin-only; `/account` serves the caller their own record.
+                # Present only on a soft-deleted account, exactly as on `Product`. With `active` an
+                # independent fact, this is the only thing that tells a deleted account from a
+                # live one. Safe to expose: every route serving a `User` list is admin-only, and
+                # `/account` serves the caller their own record.
                 deletedAt:
                     type: string
                     format: date-time
@@ -883,8 +882,8 @@ components:
                     type: string
                 # Filters the stored `active` column. It does NOT filter soft-deletion: the two
                 # are independent facts, and `deletedAt` is not exposed on `User` at all, so
-                # there is no filter for it here. `active: false` means "deactivated", not
-                # "deleted" — it used to mean both, back when users had no `active` column.
+                # there is no filter for it here. `active: false` means "deactivated", never
+                # "deleted".
                 active:
                     type: boolean
 
@@ -902,9 +901,8 @@ components:
                 admin:
                     type: boolean
                 # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
-                # defaulted here because leaving it undeclared is how two implementations came to
-                # disagree about it. Create bodies only — an omitted `active` on an update means
-                # "leave it alone".
+                # and defaulted here so both implementations derive it rather than each choosing.
+                # Create bodies only — an omitted `active` on an update means "leave it alone".
                 active:
                     type: boolean
                     default: true
@@ -1081,10 +1079,10 @@ components:
                 # So a soft-deleted record behaves exactly like an inactive one from outside, while
                 # remaining a distinct state inside.
                 #
-                # The default is declared because it is a real decision, and leaving it undeclared
-                # is how the two repos ended up disagreeing about it: this spec said only
-                # `type: boolean`, so the API defaulted a created product to `false` while the mock
-                # defaulted it to `true`. Same contract, opposite behaviour, and nothing failed.
+                # The default is declared rather than left to each implementation. Undeclared, the
+                # API and the paired frontend's mock each pick their own, and the same request
+                # yields a publicly visible product against one and a hidden one against the
+                # other — a disagreement no contract test on either side can see.
                 #
                 # It appears on the CREATE bodies only. On an update, an omitted `active` means
                 # "leave it as it is" — a default there would silently republish a deactivated

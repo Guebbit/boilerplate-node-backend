@@ -123,12 +123,12 @@ const checksOf = (def: IZodDef): IZodCheckDef[] =>
 /**
  * Whether the field may be omitted from a payload entirely.
  *
- * `default` counts, and that is the whole point of this being a function rather than a `===`.
- * A field declared `default:` in `openapi.yaml` becomes `zod.boolean().default(…)` — its `_zod.def`
- * type is `'default'`, not `'optional'`, so the obvious check called it required and
- * `invalidPayloads()` emitted a "missing required field" case for it. That case asserts a 422 the
- * API will never give: omitting the field is exactly what a default is for, so the request
- * succeeds and the test fails while describing the generator's own bug as an API defect.
+ * `default` counts, which is why this is a function rather than a `===`. A field declared
+ * `default:` in `openapi.yaml` becomes `zod.boolean().default(…)`, whose `_zod.def` type is
+ * `'default'` and not `'optional'`. Treating it as required would make `invalidPayloads()` emit a
+ * "missing required field" case asserting a 422 the API cannot give — omitting the field is
+ * exactly what a default is for, so the request succeeds and the failure describes this
+ * generator rather than the API.
  *
  * `nullable` deliberately does NOT count. A nullable field still has to be present; it may only
  * hold `null`. Folding it in here would silently drop real "missing required field" coverage.

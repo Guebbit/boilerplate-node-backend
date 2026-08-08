@@ -158,6 +158,29 @@ describe('filesystemImageStore.remove', () => {
         expect(existsSync(root)).toBe(true);
     });
 
+    /*
+     * `put` lands a flat name in `<public>/images/`, so a subdirectory of it holds files this
+     * store did not write. `images/seed/` is the demo fixtures, committed to the repository:
+     * replacing a seeded record's image must not unlink one, or every later re-seed points at a
+     * 404 and the asset is gone outside version control.
+     */
+    it('refuses to delete a file in a subdirectory of the images directory', async () => {
+        const seedDirectory = path.join(root, 'images', 'seed');
+        await mkdir(seedDirectory, { recursive: true });
+        const fixture = path.join(seedDirectory, 'fixture.jpg');
+        await writeFile(fixture, 'committed asset');
+
+        await expect(filesystemImageStore.remove('/images/seed/fixture.jpg')).resolves.toBe(false);
+        expect(existsSync(fixture)).toBe(true);
+    });
+
+    it('still deletes a file directly in the images directory', async () => {
+        const { file, imageUrl } = await makeImage('flat.png');
+
+        await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(true);
+        expect(existsSync(file)).toBe(false);
+    });
+
     /* Defensive: nothing writes this shape today, but a stored value without its leading slash
        must resolve to `<root>/images/x.png`, not to a hidden file named `.images`. */
     it('accepts a stored url that lost its leading slash', async () => {

@@ -77,6 +77,27 @@ const parseFormBoolean = (value: unknown): unknown => {
     return normalized in FORM_BOOLEANS ? FORM_BOOLEANS[normalized] : value;
 };
 
+/**
+ * Parse a string-transported value as a number.
+ *
+ * The same shape as `parseFormBoolean` and for the same reason: a multipart body carries no
+ * types, so a numeric field arrives as `'101'` and a schema declaring `z.number()` rejects it —
+ * a 422 on every write that happens to carry a file.
+ *
+ * Anything not recognisable as a finite number is returned untouched, so `price=abc` reaches the
+ * validator as the string it was and is rejected with the contract's own message. Coercing it to
+ * `NaN` would also fail, but the failure would describe this helper's guess rather than the
+ * caller's input. An empty string is likewise left alone — `Number('')` is `0`, and a blank field
+ * means "not sent", never "zero".
+ */
+const parseFormNumber = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (trimmed === '') return value;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : value;
+};
+
 /** A repeated key arrives as an array; scalar fields take the first entry. */
 const firstEntry = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value);
 
@@ -98,6 +119,8 @@ export interface IRequestInputDeclaration<Id extends string> {
     ids?: readonly Id[];
     /** Fields declared boolean by the contract — decoded on the string transports. */
     booleans?: readonly string[];
+    /** Fields declared numeric by the contract — decoded on the string transports. */
+    numbers?: readonly string[];
     /** Fields declared `string[]` by the contract — decoded on the string transports. */
     stringArrays?: readonly string[];
 }
@@ -137,8 +160,9 @@ export const readInput = <Id extends string = never>(
     declaration: IRequestInputDeclaration<Id>
 ): IRequestInput<Id> => {
     const booleans = declaration.booleans ?? [];
+    const numbers = declaration.numbers ?? [];
     const stringArrays = declaration.stringArrays ?? [];
-    const decodes = booleans.length > 0 || stringArrays.length > 0;
+    const decodes = booleans.length > 0 || numbers.length > 0 || stringArrays.length > 0;
 
     /**
      * Decoding happens per source rather than on the merged result, because whether a value needs
@@ -149,6 +173,7 @@ export const readInput = <Id extends string = never>(
         const decoded = { ...values };
         for (const key of booleans)
             if (key in decoded) decoded[key] = parseFormBoolean(decoded[key]);
+        for (const key of numbers) if (key in decoded) decoded[key] = parseFormNumber(decoded[key]);
         for (const key of stringArrays)
             if (key in decoded) decoded[key] = coerceStringArray(decoded[key]);
         return decoded;
