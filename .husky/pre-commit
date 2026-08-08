@@ -1,13 +1,10 @@
-# The middle of three gates. `complete:fast` is type-check, lint and format check; this adds the
-# unit suite; `complete:check` adds build, integration and contract on top.
+# The full gate, and the only one: build, unit, integration, contract, lint, format check.
 #
-# Around 35 seconds, which is the point: a hook slow enough to be worth skipping gets skipped, and
-# a hook that gets bypassed protects nothing. The unit suite fits because it mocks its
-# collaborators — 946 tests in ~17s.
+# About 60 seconds, which is why it is not split into tiers. Integration and contract cost 9s and
+# 29s against an in-memory Mongo — there is nothing worth trading away, and one gate is easier to
+# trust than three.
 #
-# What stays out, deliberately: integration and contract. Both run `--runInBand` against a real
-# in-memory Mongo over HTTP, so they cost minutes rather than seconds, and CI already runs each as
-# its own parallel job.
-#
-# Before pushing (or opening a PR), run the full gate by hand: `npm run complete:check`.
-npm run complete:commit
+# Deliberately not here, and run by hand for the occasions that want them: `test:mutation`
+# (re-executes the unit suite once per mutant) and `test:prism` (boots a mock server on a real
+# port).
+npm run complete:check
