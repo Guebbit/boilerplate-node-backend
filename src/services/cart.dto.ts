@@ -23,6 +23,13 @@ export interface IUserCartDto {
 /*
  * Normalize any Mongoose/plain-object ID representation to a plain string.
  * Handles ObjectId instances, string ids, {id}, and {_id} shapes recursively.
+ *
+ * Not a duplicate of the models' `_id` → `id` transform (`@models/serialize`), despite the
+ * overlap: that one rewrites a document that has already been read as a document, while this
+ * reads an id out of a cart item's `product`, which is a bare `ObjectId` reference until
+ * `populate()` runs and may be either shape at any call site. `matchesProductId` in
+ * `@services/cart` compares against exactly that un-populated case, which the model transform
+ * never sees.
  */
 export const toIdString = (value: unknown): string => {
     if (value instanceof Types.ObjectId) return value.toString();

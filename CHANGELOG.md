@@ -420,6 +420,39 @@ its own tests.
 
 ### Changed
 
+- **Every model's `_id` → `id` serialization comes from one function.** The same six-line prologue
+  and the same four-line `schema.set('toJSON', …)` block were written out in all five models;
+  `src/models/serialize.ts` now holds both, and each model calls `applySerialization(schema, …)`
+  once, getting back the transform it exports for the lean/aggregate path. Per-collection
+  behaviour is declared rather than restated: `omit` for the credentials and cart users must never
+  ship, `after` for the order items and totals and the audit entry's ISO timestamp, `dropId` +
+  `virtuals: false` for audit entries, which have no addressable endpoint and so want no `id` at
+  all. Runtime output is unchanged in every case — the model tests and the contract suite pass
+  untouched, which is what makes this safe to call a pure de-duplication.
+
+    It is a plain call, not a `schema.plugin()`: a plugin's return value is discarded, and the
+    transform has to come back out. It also takes a structural `{ set }` parameter rather than a
+    `Schema`, whose generics carry the document type and so cannot name all five schemas at once.
+
+    The motive is the sixth model. Nothing told you a new schema owed the API this transform, and
+    forgetting was silent — the model worked, and simply shipped `_id` and `__v` to clients until
+    a contract test happened to cover it. A missing `applySerialization` line is visible next to
+    the four models that have one.
+
+    Worth recording, since it shrank the job and is not obvious: on the `toJSON` path Mongoose
+    already did two of the three steps. `virtuals: true` supplies `id` (no schema here disables
+    the default `id` virtual) and `versionKey: false` drops `__v`, so only the `_id` deletion was
+    load-bearing there. All three are real on the `.lean()`/`.aggregate()` path, which sees
+    neither virtuals nor `toJSON` options — one function serves both callers, so it keeps all
+    three. The corollary is audit-logs' `virtuals: false`: that collection wants no `id` at all,
+    and the free virtual would put back exactly the field `dropId` removes.
+
+- **`cart.dto.ts` says why `toIdString` is not the same normalization.** Comment only. It reads an
+  id out of a cart item's `product`, which is a bare `ObjectId` reference until `populate()` runs
+  and may be either shape at a given call site — the un-populated case `matchesProductId` compares
+  against, and the one no model transform ever sees. It had been filed as a third copy of the
+  `_id` → `id` logic to delete; it is not one, and the note stops it being re-filed.
+
 - **The seed dataset is split into facts and mapper.** `db/seeds/seed-identities.ts` now holds the
   ids, emails, admin flags, titles, prices and cart/order membership as dependency-free plain data;
   `db/seeds/fixtures.ts` is only the mapper into mongoose shape (`ObjectId`s, `Date`s, the embedded
@@ -1159,6 +1192,14 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   models store.
 
 ### Known issues
+
+- **`toCartProductDto`'s field list is dead weight** (`src/services/cart.dto.ts`). It hand-lists
+  ten `Product` fields with a type guard each, and nothing reads nine of them: every cart
+  controller goes through `cartGetWithSummary`, which maps through `toCartItemResponse` and drops
+  `product` entirely, because `CartItem` is `additionalProperties: false` and the contract suite
+  fails on the populated version. Only `price` is consumed, by `sumLineItems`. Left as-is rather
+  than reduced to `{ id, price }` because `cartGet` is exported for the case where a caller does
+  want the populated product, and no such caller exists yet to design against.
 
 - **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/core/http/errors.ts`). It
   returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a

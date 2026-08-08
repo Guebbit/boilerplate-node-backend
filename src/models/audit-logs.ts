@@ -1,5 +1,6 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, QueryFilter } from 'mongoose';
+import { applySerialization } from './serialize';
 
 /**
  * Persisted audit trail — the durable half of `@core/observability/audit`.
@@ -48,25 +49,6 @@ export type IAuditLogQueryFilter = QueryFilter<IAuditLogDocument>;
  * at startup, from whatever value is configured then — see the note on the index below.
  */
 const retentionDays = Number.parseInt(process.env.NODE_AUDIT_RETENTION_DAYS ?? '90', 10);
-
-/**
- * Serialized shape returned to the admin dashboard.
- *
- * `_id` and `__v` are dropped rather than renamed to `id`: unlike every other collection here, an
- * audit entry has no addressable endpoint (`GET /observability/audit/:id` does not exist and
- * should not — entries are read as a stream, never individually), so exposing an id would invite
- * one to be built. `timestamp` becomes an ISO-8601 string, matching `format: date-time` in
- * `openapi.yaml`.
- */
-export const applyAuditLogTransform = (
-    serialized: Record<string, unknown>
-): Record<string, unknown> => {
-    delete serialized._id;
-    delete serialized.__v;
-    if (serialized.timestamp instanceof Date)
-        serialized.timestamp = serialized.timestamp.toISOString();
-    return serialized;
-};
 
 /** Audit collection schema. */
 export const auditLogSchema = new Schema<IAuditLogDocument, IAuditLogModel>(
@@ -153,10 +135,23 @@ auditLogSchema.index({ action: 1, timestamp: -1 });
  */
 auditLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 * 60 });
 
-auditLogSchema.set('toJSON', {
-    versionKey: false,
-    transform: (_document, serialized) =>
-        applyAuditLogTransform(serialized as unknown as Record<string, unknown>)
+/**
+ * Serialized shape returned to the admin dashboard.
+ *
+ * `_id` and `__v` are dropped rather than renamed to `id`: unlike every other collection here, an
+ * audit entry has no addressable endpoint (`GET /observability/audit/:id` does not exist and
+ * should not — entries are read as a stream, never individually), so exposing an id would invite
+ * one to be built. That is also why `virtuals` is off: Mongoose's free `id` virtual would put
+ * back exactly the field `dropId` exists to remove. `timestamp` becomes an ISO-8601 string,
+ * matching `format: date-time` in `openapi.yaml`.
+ */
+export const applyAuditLogTransform = applySerialization(auditLogSchema, {
+    dropId: true,
+    virtuals: false,
+    after: (serialized) => {
+        if (serialized.timestamp instanceof Date)
+            serialized.timestamp = serialized.timestamp.toISOString();
+    }
 });
 
 /** Audit model entrypoint. */

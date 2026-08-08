@@ -3,6 +3,7 @@ import type { Document, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 import { logger } from '@core/adapters/logger';
 import { type User } from '@types';
+import { applySerialization } from './serialize';
 export { zodUserSchema } from './user-validation';
 
 /**
@@ -89,33 +90,6 @@ export type IUserMethods = {
  */
 export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
     tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
-};
-
-/**
- * Normalizes a serialized user into the OpenAPI `User` contract: `id` from
- * `_id`; strips `_id`/`__v` plus the credentials and cart that must never leave the server
- * (`password`, `tokens`, `cart`). `password`/`tokens` are also `select: false` on the schema —
- * this is defense in depth, not the only guard.
- * Exported so lean results (which bypass `toJSON`) can be mapped through the
- * same logic — see @services/users `search()`.
- *
- * `active` and `deletedAt` both pass through untouched, and both are in the `User` contract —
- * they are independent facts, and an admin needs to tell a deleted account from a live one, so
- * `deletedAt` is exposed exactly as `Product` exposes it. Every route serving a `User` list is
- * admin-only, and `/account` serves the caller their own record.
- */
-export const applyUserTransform = (
-    serialized: Record<string, unknown>
-): Record<string, unknown> => {
-    if (serialized._id) {
-        serialized.id = serialized._id.toString();
-        delete serialized._id;
-    }
-    delete serialized.__v;
-    delete serialized.password;
-    delete serialized.tokens;
-    delete serialized.cart;
-    return serialized;
 };
 
 /**
@@ -297,11 +271,21 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
         });
 });
 
-userSchema.set('toJSON', {
-    virtuals: true,
-    versionKey: false,
-    transform: (_document, serialized) =>
-        applyUserTransform(serialized as unknown as Record<string, unknown>)
+/**
+ * Normalizes a serialized user into the OpenAPI `User` contract: `id` from
+ * `_id`; strips `_id`/`__v` plus the credentials and cart that must never leave the server
+ * (`password`, `tokens`, `cart`). `password`/`tokens` are also `select: false` on the schema —
+ * this is defense in depth, not the only guard.
+ * Exported so lean results (which bypass `toJSON`) can be mapped through the
+ * same logic — see @services/users `search()`.
+ *
+ * `active` and `deletedAt` both pass through untouched, and both are in the `User` contract —
+ * they are independent facts, and an admin needs to tell a deleted account from a live one, so
+ * `deletedAt` is exposed exactly as `Product` exposes it. Every route serving a `User` list is
+ * admin-only, and `/account` serves the caller their own record.
+ */
+export const applyUserTransform = applySerialization(userSchema, {
+    omit: ['password', 'tokens', 'cart']
 });
 
 /**

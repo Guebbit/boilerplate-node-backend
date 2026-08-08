@@ -2,6 +2,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema, applyProductTransform } from './products';
 import type { IProductDocument } from './products';
+import { applySerialization } from './serialize';
 import { sumLineItems, type ILineItem } from '@core/totals';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
@@ -101,32 +102,18 @@ export const orderSchema = new Schema<IOrderDocument>(
 );
 
 /**
- * Normalizes a serialized order: `_id` → `id`, drops `__v`, strips any
- * leftover `_id` on embedded items (pre-existing documents saved before
- * `orderItemSchema`'s `_id: false` took effect still carry one at the BSON
- * level), and recursively normalizes the embedded product snapshot.
- * Exported so aggregate results (which bypass `toJSON`) can be mapped
- * through the same logic — see `normalize` in @repositories/base.
+ * Strips any leftover `_id` on embedded items (pre-existing documents saved before
+ * `orderItemSchema`'s `_id: false` took effect still carry one at the BSON level), and
+ * recursively normalizes the embedded product snapshot.
  */
-export const applyOrderTransform = (
-    serialized: Record<string, unknown>
-): Record<string, unknown> => {
-    if (serialized._id) {
-        serialized.id = serialized._id.toString();
-        delete serialized._id;
+const applyOrderItems = (serialized: Record<string, unknown>) => {
+    if (!Array.isArray(serialized.items)) return;
+
+    for (const item of serialized.items as Record<string, unknown>[]) {
+        delete item._id;
+        if (item.product && typeof item.product === 'object')
+            applyProductTransform(item.product as Record<string, unknown>);
     }
-    delete serialized.__v;
-
-    if (Array.isArray(serialized.items))
-        for (const item of serialized.items as Record<string, unknown>[]) {
-            delete item._id;
-            if (item.product && typeof item.product === 'object')
-                applyProductTransform(item.product as Record<string, unknown>);
-        }
-
-    applyOrderTotals(serialized);
-
-    return serialized;
 };
 
 /**
@@ -149,11 +136,17 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
     serialized.totalPrice = price;
 };
 
-orderSchema.set('toJSON', {
-    virtuals: true,
-    versionKey: false,
-    transform: (_document, serialized) =>
-        applyOrderTransform(serialized as unknown as Record<string, unknown>)
+/**
+ * Normalizes a serialized order: the shared `_id` → `id` and `__v` removal, plus this
+ * collection's own two jobs — cleaning up the embedded items and deriving the totals.
+ * Exported so aggregate results (which bypass `toJSON`) can be mapped
+ * through the same logic — see `normalize` in @repositories/base.
+ */
+export const applyOrderTransform = applySerialization(orderSchema, {
+    after: (serialized) => {
+        applyOrderItems(serialized);
+        applyOrderTotals(serialized);
+    }
 });
 
 /**
