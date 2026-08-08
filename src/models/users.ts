@@ -167,6 +167,29 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
     }
 );
 
+/*
+ * Indexes.
+ *
+ * Declared on the schema, which makes this the one place that decides what is indexed here.
+ * Mongoose creates them when the app connects, so a new index needs nothing but a line below.
+ *
+ * The names are given rather than derived, and that is load-bearing. Mongo identifies an index by
+ * its name as much as by its key: asking for a key it already holds, but under a different name,
+ * is an error rather than a no-op, and it surfaces while the app is starting up. Every name here
+ * is the one the databases already carry, so they recognise these and do nothing. Change a name
+ * and existing deployments stop booting.
+ */
+/* Login and signup both look users up by email. */
+userSchema.index({ email: 1 }, { name: 'users_email' });
+/* Refresh-token verification and the reset/delete flows query by token value. */
+userSchema.index({ 'tokens.token': 1 }, { name: 'users_tokens_token' });
+/*
+ * `deletedAt` is deliberately not indexed. Nothing searches on it: the admin listing filters the
+ * `active` column instead, and the one login query that mentions it also matches on `email`,
+ * which is near-unique and indexed above — so the account is found by address and its deletion
+ * state read from the single document that comes back.
+ */
+
 /**
  * Hook to make edits pre saving
  *

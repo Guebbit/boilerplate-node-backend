@@ -113,12 +113,15 @@ export const auditLogSchema = new Schema<IAuditLogDocument, IAuditLogModel>(
 );
 
 /*
- * Indexes matching the three ways the endpoint is queried. All are compound with `timestamp: -1`
- * because every query sorts newest-first — a plain `{ actor_user_id: 1 }` index would find the
- * matching entries and then sort them in memory, which is the shape that falls over first as the
- * collection grows.
+ * Indexes matching the two filtered ways the endpoint is queried. Both are compound with
+ * `timestamp: -1` because every query sorts newest-first — a plain `{ actor_user_id: 1 }` index
+ * would find the matching entries and then sort them in memory, which is the shape that falls
+ * over first as the collection grows.
+ *
+ * The unfiltered listing sorts on `timestamp` alone, and the TTL index below already covers that:
+ * a single-field index is walked in either direction, so a second one differing only in sort
+ * order would be maintained on every write and answer nothing the first cannot.
  */
-auditLogSchema.index({ timestamp: -1 });
 auditLogSchema.index({ actor_user_id: 1, timestamp: -1 });
 auditLogSchema.index({ action: 1, timestamp: -1 });
 

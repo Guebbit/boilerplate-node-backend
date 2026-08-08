@@ -1,8 +1,14 @@
 /*
  * Initial indexes.
  *
- * Migrations own SCHEMA — indexes, collection options, field renames. Demo DATA belongs to
- * `npm run db:seed` and lives only in `db/seeds/index.ts`.
+ * This is the original bootstrap and it has already run against every database, so it is kept as
+ * written rather than edited. Which indexes a collection should have is decided on its schema
+ * now; the ones still wanted are declared there under these same names, and a later migration
+ * drops the one that is not. The names must stay identical to the schemas': Mongo rejects a
+ * request for a key it already holds under a different name, and the app issues its own request
+ * at startup. A new index belongs on a schema alone.
+ *
+ * Demo DATA belongs to `npm run db:seed`.
  *
  * `createIndex` is idempotent, so re-running this against an already-migrated database is a
  * no-op rather than an error.

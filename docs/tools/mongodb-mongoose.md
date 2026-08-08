@@ -86,13 +86,12 @@ They collide on **names**. Mongo treats an index's name as part of its identity,
 
 > **The rule: an index may be declared on the schema, in a migration, or in both — but if in both, they must give it the same name.**
 
-In practice:
+**Declare indexes on the schema.** That is the rule for anything new: one author, so nothing can disagree. A migration is still the only way to _drop_ an index — a schema can say what should exist, not what should stop existing — and the only way to build one on a deployed database ahead of the code that needs it.
 
-| Where the index lives | What to do                                                                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema only           | Nothing. Mongoose names and builds it. (`feedback-requests`, `audit-logs`)                                                                                          |
-| Migration only        | Nothing. Give it a descriptive name. (`users`, `products`, `orders`)                                                                                                |
-| **Both**              | Match the names. Either name the migration's index the way Mongoose would (`{ userId: 1 }` → `userId_1`), or name it explicitly on **both** sides. (`carts.userId`) |
+| Collection                                 | Where its indexes are declared                                                                                                                                                               |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `carts`, `feedback-requests`, `audit-logs` | Schema only. Mongoose names them.                                                                                                                                                            |
+| `users`, `products`, `orders`              | Schema, **and** `20240101000000-initial-indexes.js` under the same explicit names. That migration is already applied everywhere, so it agrees with the schema rather than competing with it. |
 
 Options count too: same key and name but a different `unique`, `expireAfterSeconds` or partial filter fails the same way.
 

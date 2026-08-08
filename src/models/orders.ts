@@ -70,7 +70,15 @@ export type IOrderModel = Model<IOrderDocument, unknown, unknown>;
  */
 const orderItemSchema = new Schema(
     {
-        product: productSchema,
+        /*
+         * `excludeIndexes` because Mongoose copies an embedded schema's indexes onto whatever
+         * embeds it. Without it, every index the catalogue declares would reappear here pointed
+         * at `items.product.*`, so each order write would maintain a set of indexes describing
+         * how the catalogue is searched — which is nothing anyone asks of an order. These copies
+         * are frozen history; they are read as part of the order that owns them and never
+         * searched on their own.
+         */
+        product: { type: productSchema, excludeIndexes: true },
         quantity: {
             type: Number,
             required: true
@@ -107,6 +115,20 @@ export const orderSchema = new Schema<IOrderDocument>(
         timestamps: true
     }
 );
+
+/*
+ * Indexes.
+ *
+ * Declared on the schema, which makes this the one place that decides what is indexed here.
+ *
+ * The names are given rather than derived: Mongo identifies an index by its name as much as by
+ * its key, so asking for a key it already holds under a different name fails at startup instead
+ * of doing nothing. These are the names the databases already carry.
+ */
+/* "My orders" lookups, newest first. */
+orderSchema.index({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt' });
+/* An order remembers the address it was placed from, which is how guests' orders are found. */
+orderSchema.index({ email: 1 }, { name: 'orders_email' });
 
 /**
  * Strips any leftover `_id` on embedded items (pre-existing documents saved before

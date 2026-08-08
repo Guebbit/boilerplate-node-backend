@@ -53,9 +53,14 @@ export const feedbackRequestSchema = new Schema<IFeedbackRequestDocument, IFeedb
     }
 );
 
-/** Indexes for admin list/search queries. */
+/*
+ * The admin list filters by status and sorts newest-first, which is exactly this key.
+ *
+ * There is deliberately no index on `email`: the only query that touches it matches
+ * case-insensitively and unanchored, and no B-tree index can serve that — the collection is
+ * scanned either way, so an index would be write cost buying nothing.
+ */
 feedbackRequestSchema.index({ status: 1, createdAt: -1 });
-feedbackRequestSchema.index({ email: 1, createdAt: -1 });
 
 /**
  * Normalizes a serialized feedback request: `_id` → `id`, drops `__v`.

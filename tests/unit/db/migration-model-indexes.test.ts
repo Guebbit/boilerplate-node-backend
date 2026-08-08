@@ -13,18 +13,23 @@
  * is not "already done", it is `IndexKeySpecsConflict`, and Mongoose surfaces it as
  * "Index already exists with a different name" while building indexes at startup. Same key and
  * name but different options (`unique`, `expireAfterSeconds`, a partial filter) fails the same way.
- * So a schema saying `unique: true` on `userId` (which Mongoose names `userId_1`) and a migration
- * creating `{ userId: 1 }` as `carts_userId` are a boot failure on every migrated database, and
- * nowhere else.
+ * A schema declaring `unique: true` on a field and a migration creating that same key under a
+ * descriptive name of its own is therefore a boot failure on every migrated database, and nowhere
+ * else.
  *
- * The rule this enforces: an index may be declared on the schema, or in a migration, or in both —
- * but if in both, the two must name it identically. See `docs/tools/mongodb-mongoose.md`.
+ * The rule this enforces: indexes are declared on the schema. One early migration also creates
+ * several of them, under the same explicit names, because it has already run against every
+ * database — agreement, not competition.
+ *
+ * The last case is quieter and has nothing to do with migrations: Mongoose copies an embedded
+ * schema's indexes onto whatever embeds it, so indexing the catalogue can silently index a frozen
+ * product snapshot inside every order too.
  *
  * Deliberately NOT asserted here: that every schema-declared index is also created by a migration.
- * That is a different rule, and this codebase does not follow it — `feedback-requests` and
- * `audit-logs` declare their indexes on the schema only, and rely on `autoIndex` to build them.
- * That is a legitimate choice while `autoIndex` is on; it would become a gap the day it is turned
- * off. Failing on it here would assert a policy nobody has adopted.
+ * That is a different rule, and this codebase does not follow it — most collections declare their
+ * indexes on the schema only, and rely on `autoIndex` to build them. That is a legitimate choice
+ * while `autoIndex` is on; it would become a gap the day it is turned off. Failing on it here
+ * would assert a policy nobody has adopted.
  */
 
 import fs from 'node:fs';
@@ -39,7 +44,7 @@ import { connect, disconnect } from '../../helpers/database';
  */
 import '@models/users';
 import '@models/products';
-import '@models/orders';
+import { orderSchema } from '@models/orders';
 import '@models/carts';
 import '@models/feedback-requests';
 import '@models/audit-logs';
@@ -122,27 +127,58 @@ describe('migrations and models agree about indexes', () => {
         await expect(buildModelIndexes()).resolves.toBeDefined();
     });
 
-    it('leaves exactly one index per key on every collection', async () => {
-        // The subtler failure: no error, but two indexes on the same key under different names,
-        // doubling every write's cost for nothing.
+    it('does not let an embedded schema smuggle its indexes into the parent', async () => {
+        /*
+         * Mongoose copies a nested schema's indexes onto the schema that embeds it, under a
+         * prefixed path. `orderItemSchema` embeds `productSchema`, so an index declared for the
+         * catalogue silently becomes an index on `items.product.*` of every order — paid for on
+         * each insert, and matching no query anyone makes, because an order item is a frozen
+         * snapshot rather than a row of the catalogue. `excludeIndexes` on that path is what
+         * stops it; this is the assertion that notices when it is missing.
+         */
+        const smuggled = orderSchema
+            .indexes()
+            .map(([key]) => Object.keys(key).join(' + '))
+            .filter((paths) => paths.includes('product'));
+
+        expect(smuggled).toEqual([]);
+    });
+
+    it('leaves each collection holding exactly the indexes its schema declares', async () => {
+        /*
+         * The strongest statement available here, and it catches three things at once: an index a
+         * migration creates that no schema knows about, a schema declaration that never reaches
+         * the database, and a migration that drops an index by a name it does not actually have —
+         * which fails silently, because dropping an absent index is deliberately tolerated.
+         *
+         * Compared by key rather than by name, so it does not depend on how a name was derived.
+         */
         await dropAllIndexes();
         await runMigrations();
         await buildModelIndexes();
 
-        const duplicates: string[] = [];
-        for (const collection of await nativeDb().collections()) {
-            const seen = new Map<string, string>();
-            for (const index of await collection.indexes()) {
-                const key = JSON.stringify(index.key);
-                const previous = seen.get(key);
-                if (previous)
-                    duplicates.push(
-                        `${collection.collectionName}: ${key} indexed twice — ${previous} and ${String(index.name)}`
-                    );
-                else seen.set(key, String(index.name));
-            }
+        const mismatches: string[] = [];
+        for (const model of Object.values(mongoose.models)) {
+            const declared = new Set<string>(
+                model.schema
+                    .indexes()
+                    .map(([key]: [Record<string, unknown>, unknown]) => JSON.stringify(key))
+            );
+            const storedIndexes = await model.collection.indexes();
+            const stored = new Set<string>(
+                storedIndexes
+                    .filter((index) => index.name !== '_id_')
+                    .map((index) => JSON.stringify(index.key))
+            );
+
+            for (const key of stored)
+                if (!declared.has(key))
+                    mismatches.push(`${model.collection.name}: ${key} stored, declared by nobody`);
+            for (const key of declared)
+                if (!stored.has(key))
+                    mismatches.push(`${model.collection.name}: ${key} declared, never created`);
         }
 
-        expect(duplicates).toEqual([]);
+        expect(mismatches).toEqual([]);
     });
 });

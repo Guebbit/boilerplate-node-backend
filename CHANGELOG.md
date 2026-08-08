@@ -177,10 +177,11 @@ its own tests.
     CommonJS that nothing in the suite executed at all. The two only met on a real deployment.
 
     This runs every migration and every model's index build against one database, in both orders,
-    twice, and fails on a conflict or on two indexes sharing a key under different names — the
-    quieter version, which costs a write on every insert forever and raises no error. The rule:
-    **an index may be declared on the schema, in a migration, or in both — but if in both, they must
-    name it identically.**
+    twice, and then asserts each collection holds **exactly** the indexes its schema declares. That
+    last check earns its place three times over: it catches an index a migration creates that no
+    schema knows about, a declaration that never reaches the database, and a migration dropping an
+    index by a name it does not have — which otherwise passes silently, since dropping an absent
+    index is deliberately tolerated.
 
 - **A "where test data comes from" map** in [`docs/tools/testing-and-docs.md`](docs/tools/testing-and-docs.md),
   answering a question worth asking out loud: seven things across the two repos can hand you an
@@ -472,6 +473,30 @@ its own tests.
   reaching Redis, which is precisely backwards from the property the cache depends on.
 
 ### Changed
+
+- **Indexes are declared on the schema of the model that owns them.** They were split between the
+  models and a migration, with neither able to see the other. That is not a style preference: Mongo
+  identifies an index by its name as well as its key, so two authors asking for the same key under
+  different names is an error rather than a no-op — and it surfaces while the app is starting,
+  against any database where both have run. No test could reach that state, since every suite runs
+  on a database that has never been migrated.
+
+    Moving them also made them reviewable for the first time, and three turned out to answer no
+    query at all. An index is rebuilt on every insert and update of its collection, so one nothing
+    reads is pure cost. `20260808180000-prune-unused-indexes.js` drops them:
+    - `users.deletedAt` — the admin listing filters the `active` column, a separate field. The one
+      login query mentioning `deletedAt` also matches on `email`, which is near-unique and indexed,
+      so the account is found by address and its deletion state read from the single result.
+    - the descending `auditLogs.timestamp`, alongside the ascending TTL index on the same field. A
+      single-field index is walked in either direction, so the two answered the same questions.
+      The TTL one stays — it also performs the expiry.
+    - `feedbackRequests.email` — the only query touching it matches case-insensitively and
+      unanchored, which no B-tree index can serve. That collection is scanned either way.
+
+    An order embeds a copy of each product bought, and Mongoose copies an embedded schema's indexes
+    onto whatever embeds it — so declaring the catalogue's indexes would have quietly indexed the
+    frozen snapshot inside every order too, paying for it on each order write and matching nothing
+    anyone asks. `excludeIndexes` on that path stops it.
 
 - **Mutation testing covers the repository layer, and its thresholds are bands.** Repositories are
   where query construction lives — the positional-vs-upsert branch behind a cart write, the filter

@@ -110,6 +110,20 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
     }
 );
 
+/*
+ * Indexes.
+ *
+ * Declared on the schema, which makes this the one place that decides what is indexed here.
+ *
+ * The names are given rather than derived: Mongo identifies an index by its name as much as by
+ * its key, so asking for a key it already holds under a different name fails at startup instead
+ * of doing nothing. These are the names the databases already carry.
+ */
+/* Default listing sort. */
+productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
+/* Storefront filters: active + not soft-deleted (`publicScope` in @repositories/products). */
+productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
+
 /**
  * Normalizes a serialized product: `_id` → `id`, drops `__v`.
  * Exported so lean/aggregate results (which bypass `toJSON`) can be mapped

@@ -98,6 +98,16 @@ export const cartSchema = new Schema<ICartDocument>(
     }
 );
 
+/*
+ * Every other query here reaches a cart through `userId`, which `unique: true` above already
+ * indexes. This is the exception: deleting a product has to find every cart holding it, and
+ * without an index that reads the whole collection.
+ *
+ * Left unnamed because nothing else creates it, so Mongoose's derived name is the only name it
+ * will ever have and there is nothing for it to disagree with.
+ */
+cartSchema.index({ 'items.productId': 1 });
+
 /**
  * Normalizes a serialized cart: the shared `_id` → `id` and `__v` removal, nothing else.
  *
