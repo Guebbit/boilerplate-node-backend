@@ -420,6 +420,22 @@ its own tests.
 
 ### Changed
 
+- **The pre-commit hook runs the unit suite.** It was type-check, lint and format check only —
+  seconds, on the reasoning that a hook slow enough to be worth skipping gets skipped. The unit
+  suite mocks its collaborators and costs ~17s for 946 tests, which does not change that calculus,
+  and it catches the class of break the other three cannot see at all.
+
+    `complete:commit` is the new middle tier, and the hook now calls it: `complete:fast` (type-check,
+    lint, format) → `complete:commit` (+ unit) → `complete:check` (+ build, integration, contract).
+    Roughly 35 seconds end to end. Integration and contract stay out — both run `--runInBand`
+    against a real in-memory Mongo over HTTP, costing minutes, and CI runs each as its own parallel
+    job.
+
+    ts-jest's `TS151002` hybrid-module banner is suppressed via `diagnostics.ignoreCodes` in
+    `jest.config.json`. It prints once per test file, so it was 58 lines of noise on every commit;
+    `tsconfig.jest.json` already documents why the suggested fix (`isolatedModules: true`) must not
+    be applied here — it breaks the dynamic `await import()` under jest's CJS VM.
+
 - **Cart writes resolve with no payload, and the cart read joins its products without overwriting
   the reference it joined on.** `cartItemSet`/`cartItemAdd`/`cartItemRemove`/`cartRemove` and their
   `*ById` forms declared `IResponseSuccess<IUserCartDto>` and assembled one on every call, but no

@@ -65,6 +65,7 @@
         "complete": "npm run build && npm run test && npm run lint:fix && npm run prettier:fix",
         "complete:check": "npm run build && npm run test && npm run lint && npm run prettier:check",
         "complete:fast": "npm run ts-check && npm run lint && npm run prettier:check",
+        "complete:commit": "npm run complete:fast && npm run test:unit",
         "publish:public": "npm publish --access public",
         "prepare": "husky"
     },
