@@ -50,7 +50,27 @@ jobs:
               run: npm ci
 
             - name: Run mutation tests
-              run: npm run test:mutation
+              # `continue-on-error` so the per-file check below always gets to run and report.
+              # The global `break` threshold is a backstop for a total collapse; the ratchet is
+              # the gate that says WHICH file got worse, and a run that trips the first would
+              # otherwise never reach it. Both results are folded back in at the end.
+              id: mutation
+              continue-on-error: true
+              # `--concurrency` is passed HERE rather than taken from stryker.config.json, and the
+              # difference matters. Each Stryker worker is a separate process running a full test
+              # runner (and, in the backend, its own in-memory mongod), so the safe number is a
+              # property of the MACHINE, not of the project. The committed config is tuned for a
+              # developer workstation; a standard GitHub-hosted runner is 4 vCPU / 16 GB, where
+              # that number would thrash or run out of memory.
+              run: npm run test:mutation -- --concurrency 3
+
+            - name: Check the per-file baseline
+              # The real gate. Stryker's thresholds are global — a strong file carries a weak one
+              # — so this compares every file against `mutation-baseline.json` and fails naming
+              # the ones that dropped. See scripts/mutationBaseline.ts for why it is a ratchet.
+              id: baseline
+              continue-on-error: true
+              run: npm run test:mutation:check
 
             - name: Upload mutation report
               # Uploaded even on failure: a run that trips the break threshold is exactly the
@@ -62,3 +82,12 @@ jobs:
                   path: reports/mutation/
                   retention-days: 30
                   if-no-files-found: warn
+
+            - name: Fail if either gate tripped
+              # Folded back in here rather than left on the steps above, so the report artifact is
+              # always uploaded first — a failing run is exactly the one whose report is wanted.
+              if: steps.mutation.outcome == 'failure' || steps.baseline.outcome == 'failure'
+              run: |
+                  echo "mutation run: ${{ steps.mutation.outcome }}"
+                  echo "per-file baseline: ${{ steps.baseline.outcome }}"
+                  exit 1

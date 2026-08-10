@@ -36,6 +36,7 @@
         "src/**/*.ts",
         "src/**/*.json",
         "tests/**/*.ts",
-        "db/**/*.ts"
+        "db/**/*.ts",
+        "scripts/**/*.ts"
     ]
 }

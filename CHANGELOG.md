@@ -9,9 +9,79 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 A correctness pass over serialization, seeding, cache invalidation and port allocation, driven by
 running this stack against its paired frontend (`boilerplate-vue-frontend`) rather than only against
-its own tests.
+its own tests — followed by a concurrency pass driven by asking, for the first time, what the write
+paths do when N requests arrive at once.
 
 ### ⚠ Breaking
+
+- **A malformed id is now a 422, not a 500.** Any endpoint taking an id — in the path or as a
+  search filter — used to answer **500** when the value was not a valid ObjectId (`''`, `'%00'`,
+  `'undefined'`, anything not 24 hex characters). Three separate defects combined to produce it:
+    1. `databaseErrorInterpreter` had no branch for the driver's `BSONError`, so it fell through
+       to the catch-all 500 **and echoed the driver's message into the response body**.
+    2. The `CastError` branch returned `[Number.parseInt(error.message), error.kind]` — the two
+       fields swapped relative to their names, so the status was `NaN`. `res.status(NaN)` throws
+       inside Express, producing a 500. This was a documented CAVEAT the module carried
+       deliberately ("callers may already depend on the current shape"); nobody can depend on a
+       NaN status, and it is now 422.
+    3. `search()` in the base repository called `buildWhere` **synchronously** before returning
+       its promise, so the throw escaped the caller's `.then().catch()` chain entirely. A
+       function typed `Promise<T>` must reject, never throw synchronously — the factory and the
+       order repository are both `async` now.
+
+    Reachable **without a token**: `POST /products/search` is public and takes an `id` filter.
+    Found by the new fuzz suite.
+
+    **What changes for a caller:** those requests now answer 422 with a generic
+    `Invalid identifier` instead of 500 with the driver's text. The driver's message is no longer
+    in the response at all — it is logged.
+
+- **`openapi.yaml`: three response schemas were double-wrapped and are corrected.**
+  `ObservabilityHealthResponse`, `ObservabilityMetricsSummaryResponse` and `AuditLogsResponse`
+  each declared an envelope (`{ success, data }`) while being used as the `data` **inside** an
+  envelope. The spec therefore described a payload the API has never sent, for
+  `GET /observability/health`, `/observability/metrics/overview` and `/observability/audit`.
+
+    The API was right; the spec was wrong. The three wrappers are removed, the envelopes now
+    point at the real payload schemas, and the audit page is named `AuditLogsPage`.
+
+    Nobody had noticed because **the contract suite does not cover the observability endpoints at
+    all**. The paired frontend had compensated by reading `response.data.data`, which resolved to
+    `undefined` at runtime — its admin dashboard's health, metrics and audit panels were rendering
+    nothing. Regenerate with `npm run genapi` in both repos.
+
+- **`GET /observability/metrics` and `/observability/events` now document their error responses.**
+  Both declared only a `200` while genuinely returning 401 (and 503 / 403 respectively), so a
+  generated client had no type for the failure it would actually receive.
+
+- **`users.email` is unique at the database level.** Signup was a check-then-insert
+  (`findOne({ email })`, then `create()`), and the collection is free to change between those two
+  statements: two concurrent signups for one address both read "absent" and both inserted. A
+  double-clicked submit button reaches it. No application check can close that, because the gap is
+  between the check and the write — only the index can refuse the second insert.
+
+    Three things landed in order, and the order is the point. `databaseErrorInterpreter` gained an
+    E11000 → **409** branch first, because the index alone would have converted a duplicate account
+    into a 500. Then the schema's `users_email` gained `unique: true`. Then migration
+    `20260808200000-users-email-unique.js`, which **refuses to run** against a database that already
+    holds duplicates and prints every offending address with its account ids, rather than failing
+    halfway through `createIndex` on one of them. Merging accounts is a product decision, so the
+    migration deliberately does not make it.
+
+    **What changes for a caller:** nothing on the happy path. A duplicate signup still answers 409;
+    it just answers 409 under contention too, where it used to answer 201 twice.
+
+- **`POST /cart/checkout` can now answer 409.** Checkout read the cart, wrote an order from it, then
+  emptied the cart, with nothing tying the third step to the first — so two parallel checkouts
+  produced two orders from one cart and charged the customer twice. The cart is now emptied
+  _conditionally_ on the version it was read at (`cartRepository.clearLinesIfUnchanged`), which
+  exactly one participant matches; the loser retracts the order it had already written and answers
+  409 with `ecommerce.cart-changed`. A conditional write rather than a transaction, so no suite has
+  to pay for a replica set to serialise two writes to one document.
+
+- **`userService.consumeToken` returns `boolean`, not the user document.** It reports whether _this_
+  caller was the one that spent the token, which is what lets `POST /account/reset-confirm` reject
+  the second of two simultaneous uses of one reset link. Previously both succeeded.
 
 - **`users.active` is a real stored column, independent of `deletedAt`.** It was neither: there
   was no column, `toJSON` synthesised `active = !deletedAt` on the way out, and the admin search
@@ -160,6 +230,106 @@ its own tests.
     address it was placed from.
 
 ### Added
+
+- **`tests/helpers/express.ts`** — the chainable Express response stub, previously copied into
+  four test files verbatim. Documents when a stub is the right tool (a unit that WRITES a
+  response) and when it is not (anything asking what the API actually returns, which belongs to
+  the supertest harness).
+
+- **Tests for the four agnostic core files that had the weakest ones**, chosen because they are
+  the parts every application built from this boilerplate inherits unchanged rather than the parts
+  that sell products. Each was falsified by breaking the source and confirming the suite goes red:
+    - `services/auth.ts` (53.47% → 76.24%) had **no unit test of its own**; what coverage it had
+      came incidentally from controller suites exercising happy paths. The new cases pin three
+      security properties that read as ordinary branches: the two login failures must be
+      **indistinguishable** (otherwise the endpoint is an account-existence oracle), a
+      **soft-deleted** account must not be able to log in (one key in one filter object), and a
+      password must never be stored as it arrived.
+    - `core/adapters/cache.ts` (48.00% → 68.00%) — the read/write/tag-invalidate path had **zero**
+      executed mutants, because exercising it needs a Redis. Against a fake client the new cases
+      pin fail-open behaviour (a cache is an optimisation, never a dependency), key namespacing
+      (two deployments sharing a Redis must not read each other's entries), the tag reverse-index
+      that makes group invalidation possible at all, and the empty-set guard that keeps `DEL` from
+      being issued with no arguments — a protocol error, not a no-op.
+    - `core/adapters/queue.ts` (53.33% → 71.11%) — the consumer callback was registered by tests
+      and never invoked, so the entire **acknowledgement policy** was unmeasured. The new cases
+      pin all four arms, including the poison-message rule: a message whose bytes will never parse
+      is discarded rather than requeued, because requeueing puts the consumer in a hot loop
+      against the broker, and `requeue` is a single boolean nothing else reads.
+    - `core/adapters/storage.ts` (51.56% → 73.44%) — `validateUploadedImages`, the content check
+      that reads an upload's leading bytes, had no test at all. It is the only control that can
+      catch a disguised upload (`fileFilter` sees the client-supplied `Content-Type` and nothing
+      else), and it has a second rejection that is easy to omit: bytes that ARE an image but not
+      the declared one, which would otherwise be served under the wrong `Content-Type`.
+
+- **Spec-driven fuzzing** (`npm run test:fuzz`, nightly via `fuzz.yml`). Walks `openapi.yaml`,
+  generates spec-valid but hostile requests for every operation it finds, and asserts no 5xx and
+  a spec-conformant response. The endpoint list is **derived, never written down**: a route added
+  to the spec is fuzzed on the next run.
+
+    That auto-discovery is what `schemathesis` would have provided; it is assembled here from
+    four things the repo already had — the spec, `fast-check`, supertest and `jest-openapi` —
+    rather than adding a Python toolchain every copy of this boilerplate would inherit.
+
+    It carries a tripwire on itself: `SUPPORTED_KEYWORDS` fails a test when the spec starts using
+    a JSON Schema keyword the generator ignores, because that failure is otherwise silent and
+    green (an unconstrained field means every request is rejected as 422 and the suite tests the
+    validator instead of the handler). It has already fired once, for `minItems`.
+
+    Its first run found five bugs — see Breaking and Fixed.
+
+- **The per-file mutation ratchet** — `scripts/mutationBaseline.ts`, a committed
+  `mutation-baseline.json`, and `npm run test:mutation:check` / `:baseline`, wired into
+  `mutation.yml`. Stryker's thresholds are GLOBAL (`high`/`low`/`break` and nothing else), which
+  is the pooling failure of a directory-shaped coverage threshold one level up: a strong file
+  carries a weak one and the number that passes is an average nobody can act on. That matters
+  MORE as `mutate` widens, not less.
+
+    A ratchet rather than a wall — improvements are recorded, regressions fail and **cannot be
+    laundered**: `--update` on a regressed file keeps the higher value and still exits non-zero.
+    New files are recorded at whatever they first measure, including `0`.
+
+- **Mutation scope widened** to services, models, repositories, middlewares, jobs and core.
+  Controllers are deliberately still out, and the reason is about the ruler rather than about
+  them: only the unit suite runs under Stryker, while the controllers are covered by
+  `tests/contract/` and `tests/integration/`. Scoring them here would report ~0% for 35 files —
+  not "untested surface" but the wrong instrument, which the ratchet would then defend forever.
+
+- **Property-based tests** (`fast-check`) over `core/totals.ts`, `models/serialize.ts` and
+  `repositories/search.ts` — the pure, total, invariant-rich functions. `escapeRegex` in
+  particular is a denial-of-service control on a public endpoint, and "no user string reaches the
+  regex engine as a pattern" is a claim about every input that a table of metacharacters cannot
+  support. One of these found a live defect (see Fixed).
+
+- **A concurrency suite** — `tests/integration/concurrency/`, 18 cases over the account and cart
+  endpoints, plus a `raceN` helper (`tests/helpers/race.ts`) built on `Promise.allSettled` rather
+  than `Promise.all`: losing is the _normal_ outcome of a race, and `all` discards exactly the
+  results being asserted. It is the one layer mutation testing structurally cannot cover — a
+  mutation run executes one mutant against a serial suite.
+
+    The helper asserts against 429 as well as 5xx, and the reason is worth repeating: the auth
+    limiter is mounted on precisely the endpoints these tests hammer, so at its default budget an
+    N=12 signup race starts returning 429s — and the test still _passes_, because "not two users" is
+    trivially true when two requests never reached the handler. A race truncated by a limiter is a
+    green test that measured nothing. One case keeps a small, freshly-constructed limiter to prove
+    the budget is still enforced rather than switched off.
+
+    Four of the cases found live bugs (see Fixed). The cart cases are the tests
+    `repositories/carts.ts`'s retry never had: the retry branch, the `attemptsLeft` bound and
+    `isDuplicateKey` were all live mutants behind a comment explaining why they were correct.
+
+- **Unit suites for four files that had none** — `middlewares/security.ts`, `middlewares/locale.ts`,
+  `middlewares/auth-jwt.ts` and `services/audit-logs.ts`, all previously at 0% and all invisible
+  behind pooled coverage thresholds (see Changed). `security.ts` is not the bare `rateLimit()`
+  config object it had been assumed to be: it holds `isMetricsScraper`, the credential check on the
+  Prometheus endpoint, whose deny-by-default branch, required `Bearer` scheme and length-guarded
+  `timingSafeEqual` are now each pinned separately.
+
+- **The cross-repo contract check** — `scripts/specIdentity.ts`, `npm run check:spec-identity`, and
+  a `spec-identity` job in `ci.yml` that checks out the paired frontend and compares
+  `openapi.yaml`, `asyncapi.yaml` and `spectral.yaml` by digest. All three exist in both repos,
+  byte-identical, maintained by hand, and were verified by nothing: every existing spec job lints
+  _this_ repo's copy and passes, because a forked spec is still a valid spec.
 
 - **A test that makes the migrations and the models meet** —
   `tests/unit/db/migration-model-indexes.test.ts`, plus the rule it enforces, written up as
@@ -474,6 +644,40 @@ its own tests.
 
 ### Changed
 
+- **Test-infrastructure files now document their own patterns**, so the rules they encode are
+  legible without reverse-engineering them: `jest.config.js` states why per-file coverage globs
+  are not cosmetic and how they pair with stryker's `mutate` list; `tests/helpers/setup.ts`
+  explains why it must run before any test module is imported; `tests/helpers/setup-test-db.ts`
+  states the per-test isolation guarantee and why it is per test rather than per file.
+
+- **`stryker.config.json`'s notes cut from 167 lines to 73.** They now carry only the reasoning
+  behind the settings — scope exclusions, why it never gates a PR, why concurrency is bounded by
+  memory rather than cores — and point at `docs/tools/mutation-testing.md` for the rest.
+
+- **`authService.tokenAdd`/`tokenRemoveAll` now go through the document's own atomic token
+  methods** instead of keeping a second copy of the same logic. The invariant both sides now hold
+  explicitly: the `tokens` array is **appended to and pulled from, never rebuilt**.
+
+    This is hardening rather than a bug fix, and the distinction is worth recording. Mongoose tracks
+    the _change_ rather than the result, so `tokens.push(entry)` followed by `save()` already emits a
+    `$push` and was never the lost-update hazard it resembles. What IS hazardous is rebuilding the
+    array — `user.tokens = [...user.tokens, entry]`, or the filter-and-assign that `tokenRemoveAll`
+    used — because that becomes a `$set` of the whole array and erases anything another request added
+    in between. For "log out everywhere" that means a session the user just revoked coming back.
+
+    Two unit cases now pin the invariant from both directions, and both fail when the append is
+    rewritten as an array rebuild.
+
+- **Coverage thresholds are per-file, and `jest.config.json` became `jest.config.js`.** A threshold
+  key naming a _directory_ (`src/services/`) is applied by Jest to everything beneath it as one
+  pooled total; a key that is a _glob_ is applied to each matching file, and the failure names the
+  file. Under the pooled form this repo passed a 70% floor on `src/middlewares/` while three files
+  sat at 0%, and on `src/services/` while a fourth did — four untested files inside two green gates.
+  All four now have suites, so no exemption was needed; the config records the mechanism for writing
+  one down if it ever is (an exemption must _leave_ the glob, because Jest adds a file to every
+  matching group rather than the most specific one). The rename is because JSON cannot carry a
+  comment and Jest warns on any key it does not recognise.
+
 - **Indexes are declared on the schema of the model that owns them.** They were split between the
   models and a migration, with neither able to see the other. That is not a style preference: Mongo
   identifies an index by its name as well as its key, so two authors asking for the same key under
@@ -519,6 +723,72 @@ its own tests.
   then fails under jest's CJS VM.
 
 ### Fixed
+
+- **`authService.signup` declared an `imageUrl` parameter it could not accept.** The signature said
+  `string | null`, the contract declares a string, and a null reaches zod as "expected string,
+  received null" — so the `?? ''` fallback it appears to guard was unreachable for the only value
+  that would have needed it. Narrowed to `string | undefined`, which is what the sole caller has
+  always passed (`post-signup` coalesces a body-supplied null away before calling). Found by a new
+  test written against the declared type rather than against the implementation.
+
+- **Nine controllers ended their promise chain with `.then()` and no `.catch()`**, so any
+  rejection reached the global handler and was reported as a generic 500 — including ordinary
+  client errors. The global handler now consults `databaseErrorInterpreter` and answers 4xx for
+  the failures that describe the request, falling through to the opaque 500 for anything it does
+  not recognise. Fixed there rather than in the nine controllers deliberately: it covers the ones
+  that exist, the ones added later, and every path that forgets a `.catch()`.
+
+- **Controllers no longer echo `error.message` into the user-facing `errors[]` array.** Eighteen
+  of them did, which both leaked internals (driver text naming encodings, hosts, filesystem
+  layout) and violated this repo's own i18n rule that `errors[]` is translated user-facing copy.
+  They now share `rejectDatabaseError`, which takes the status from the interpreter and sends
+  nothing about a 5xx to the client.
+
+- **`middlewares/authorizations.ts` bypassed the `auth-jwt` barrel**, importing `verifyAccessToken`
+  through it and `verifyRefreshToken` straight from `./token` — while the barrel's own docblock
+  claimed "nothing imports those two directly". The claim was already false. It is now true, and
+  enforced by a test that scans `src/` rather than by prose.
+
+- **`sumLineItems` could return `NaN` after all**, which is exactly what its docblock promised it
+  would not. `Number(x) || 0` rejects `NaN` because `NaN` is falsy — but `Infinity` is truthy and
+  passes straight through, and `Infinity * 0` is `NaN`. One line with an infinite quantity and an
+  unpopulated product therefore poisoned an entire order or cart total, and a `NaN` total reaches
+  the customer as a blank price.
+
+    Found by `tests/unit/core/totals.property.test.ts` on its seventh generated case; the
+    counterexample was `{ quantity: Number.POSITIVE_INFINITY }` with no `product`. Reachable
+    rather than merely conceivable: BSON stores `Infinity` happily, order items arrive as raw
+    aggregate output, and nothing between the database and the sum re-validates them. The
+    coercion is now finite-checked.
+
+- **A password-reset token and an account-deletion token were interchangeable at the lookup layer.**
+  `findByPasswordResetToken` filtered on `{ 'tokens.token': token, 'tokens.type': 'password' }` —
+  two dotted paths, which Mongo applies to the array _independently_, so it matched a user holding
+  the value in one entry and the type in another. A user with both kinds of token, which is the
+  ordinary state during an account deletion, was therefore returned by a lookup for either type.
+  Both controllers happened to re-check the type on the returned document, so it was not reachable
+  as a privilege escalation — but the guard was theirs, not the function's, and a third caller would
+  not have inherited it. Now `$elemMatch`, which requires both conditions on the same entry.
+
+- **Concurrent logins silently lost sessions.** `tokenAdd`/`tokenRemoveAll` mutated the loaded
+  `tokens` array and called `save()`, which writes the whole array as it looked at load time — so
+  two simultaneous logins each wrote N+1 tokens and the second erased the first. Logging in on two
+  devices at once was enough. The user saw a successful login followed by a request that said they
+  were not authenticated, with nothing erroring on either side. Now atomic `$push`/`$pull`, which
+  mongod evaluates against the document at write time, so N logins produce N tokens.
+
+- **Concurrent logins issued the _same_ refresh token.** The payload is `{ id }` and JWT's own
+  claims are second-resolution, so signing twice within a second for one user produced byte-identical
+  tokens: two devices sharing one credential, stored as two rows holding the same string, where
+  revoking either revoked both. Refresh tokens now carry a random `jti`.
+
+- **Two simultaneous uses of one password-reset link both succeeded, and one of them 500'd.**
+  `reset-confirm` saves the same loaded document twice (password, then token consumption), so the
+  second `save()` to arrive hit a `VersionError` that the controller's blanket catch reported as a
+  500 — on a request that had already worked. Consuming the token is now an atomic `$pull` that
+  reports whether _this_ caller spent it, and that is what decides the race; the loser gets the same
+  422 an invented token would get. Validation moved ahead of consumption so a mistyped confirmation
+  cannot burn the link.
 
 - **`npm run lint` failed while a mutation run was in flight.** Stryker copies the whole project
   into `.stryker-tmp/sandbox-*`, and eslint collected the copies — one parser error per generated

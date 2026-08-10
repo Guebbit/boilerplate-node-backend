@@ -343,6 +343,6 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** Without automated tests, every change requires manual verification of every feature. Tests encode expectations about behaviour so regressions are caught automatically — and so future developers can refactor with confidence.
 
-**In this repo.** Two test suites: unit tests (`npm run test:unit`) for isolated logic and integration tests (`npm run test:integration`) for HTTP endpoints against a real database. Config lives in `jest.config.json` and `tsconfig.jest.json`.
+**In this repo.** Two test suites: unit tests (`npm run test:unit`) for isolated logic and integration tests (`npm run test:integration`) for HTTP endpoints against a real database. Config lives in `jest.config.js` and `tsconfig.jest.json`.
 
 → [Testing & Docs](./testing-and-docs.md)

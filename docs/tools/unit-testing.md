@@ -103,7 +103,7 @@ This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imp
 | `tests/helpers/setup-test-db.ts`, `tests/helpers/database.ts` | The `mongodb-memory-server` lifecycle                                            |
 | `tests/helpers/setup.ts`                                      | Global Jest setup (rate-limit override, i18next init, system-mongod detection)   |
 | `tsconfig.jest.json`                                          | The Jest-specific TypeScript config, see above                                   |
-| `jest.config.json`                                            | `testMatch`, path aliases, `setupFiles`                                          |
+| `jest.config.js`                                              | `testMatch`, path aliases, `setupFiles`                                          |
 
 ## Commands
 

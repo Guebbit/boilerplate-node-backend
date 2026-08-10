@@ -8,15 +8,21 @@ This page is the map. Each layer has its own detail page — code, tools, patter
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 60}}}%%
 flowchart TB
     Unit["Unit\nJest, real in-memory Mongo\nservices · repositories · models"]
+    Property["Property\nfast-check\nfor EVERY input, not one"]
     Integration["Integration\nsupertest(app)\nrouting · middleware wiring"]
+    Concurrency["Concurrency\nN requests at once\nraces the serial suite cannot see"]
     ContractResponse["Contract — Response Shape\njest-openapi\nvs openapi.yaml"]
     ContractRequest["Contract — Request Data\nzod-derived generation\nvs openapi.yaml"]
+    Fuzz["Fuzzing\nspec walk + fast-check\nendpoints nobody tested"]
     Mutation["Mutation\nStryker\nchecks the checkers"]
-    LiveFE["Frontend's Live E2E\n(paired repo, run by hand)"]
+    LiveFE["Frontend's Live E2E\n(paired repo)"]
 
     Unit --> Integration
+    Property -.same layer as.-> Unit
+    Integration --> Concurrency
     Integration --> ContractResponse
     Integration --> ContractRequest
+    ContractResponse --> Fuzz
     Mutation -.mutates.-> Unit
     ContractResponse -.target of.-> LiveFE
 
@@ -24,8 +30,8 @@ flowchart TB
     classDef http fill:#ddd6fe,stroke:#7c3aed,color:#111827;
     classDef meta fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef ext fill:#fef3c7,stroke:#d97706,color:#111827;
-    class Unit fast;
-    class Integration,ContractResponse,ContractRequest http;
+    class Unit,Property fast;
+    class Integration,Concurrency,ContractResponse,ContractRequest,Fuzz http;
     class Mutation meta;
     class LiveFE ext;
 ```
@@ -36,6 +42,9 @@ flowchart TB
 | Integration               | Are the units actually wired together?                                                              | Jest + supertest                  | `npm run test:integration`           | [Integration Testing](./integration-testing.md)             |
 | Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | jest-openapi                      | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
 | Contract — Request Data   | Does the API accept every payload the contract declares legal, and reject what it declares illegal? | A zod-v4 AST walker + seeded PRNG | `npm run test:contract` (same suite) | [Contract-Derived Request Data](./contract-request-data.md) |
+| Property                  | Does the rule hold for _every_ input, not just the ones someone thought of?                         | fast-check                        | `npm run test:unit` (same suite)     | [Property Testing](./property-testing.md)                   |
+| Concurrency               | Does it still hold when N requests arrive at once?                                                  | supertest + `Promise.allSettled`  | `npm run test:integration` (same)    | [Concurrency Testing](./concurrency-testing.md)             |
+| Fuzzing                   | Does any spec-valid request produce a 5xx or an undocumented response — on ANY endpoint?            | spec walk + fast-check            | `npm run test:fuzz`                  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
 | Mutation                  | Do the tests notice when the source is wrong?                                                       | Stryker + jest-runner             | `npm run test:mutation`              | [Mutation Testing](./mutation-testing.md)                   |
 
 Each layer answers a question no other layer answers — a layer that duplicates another's question is cost without coverage:
@@ -108,6 +117,9 @@ Merging any two would mean one of those questions stops being asked. The merge t
 | A response leaks an undeclared field, or omits a declared one          | [Contract Testing](./contract-testing.md)                   |
 | A validator rejects a payload its own contract declares legal          | [Contract-Derived Request Data](./contract-request-data.md) |
 | A validator accepts a payload its own contract declares illegal        | [Contract-Derived Request Data](./contract-request-data.md) |
+| A rule that holds for the tested inputs but not for all of them        | [Property Testing](./property-testing.md)                   |
+| A race: two requests interleaving into a state neither would produce   | [Concurrency Testing](./concurrency-testing.md)             |
+| A 5xx or undocumented response on an endpoint nobody wrote a test for  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
 | A test that asserts nothing                                            | [Mutation Testing](./mutation-testing.md)                   |
 | This API's contract silently drifting from the paired frontend's mocks | the frontend's live E2E profile, run by hand — see below    |
 
@@ -165,12 +177,115 @@ flowchart LR
 - [Jest matchers](https://jestjs.io/docs/expect) — assertion reference for writing new tests
 - [Mermaid diagram syntax](https://mermaid.js.org/intro/syntax-reference.html) — needed when adding new diagrams to these docs
 
+## Gate or hunter
+
+Worth naming explicitly, because it decides where a suite runs and how a failure is read.
+
+A **gate** answers a yes/no question fast enough to block a merge. Unit, integration, concurrency and contract are gates: they run on every push, and a failure means "do not merge this".
+
+A **hunter** goes looking for problems nobody has asked about. Mutation and fuzzing are hunters: they are slow, they run nightly, and a failure is usually a **finding to read** rather than a merge to stop. A hunter wired as a gate gets switched off the first week it is inconvenient — which is why both live in their own workflow files where they cannot become PR gates by accident.
+
+The corollary is that a green pull request is not a claim the hunters agree. That is what the nightlies are for.
+
+## Deliberately not done
+
+Four layers were considered for this repository and left out. They are recorded here rather than
+dropped silently, because "absent" and "rejected for a reason" look identical in a codebase, and the
+next person to notice the gap deserves the argument rather than a rediscovery.
+
+Each entry says what the thing **is**, why it is not here, and what would change that answer.
+
+### Scale and performance testing
+
+**What it is.** Everything above asks "is the answer correct?". This family asks "is the answer
+_fast enough_, and does it stay correct under volume?" — behaviour as a function of load and time
+rather than of input. It is usually three distinct activities that get lumped under one name:
+
+| Kind                 | Question                                                                                | Typical tool            |
+| -------------------- | --------------------------------------------------------------------------------------- | ----------------------- |
+| **Load**             | With N concurrent users, do latency and error rates stay inside budget?                 | k6, artillery           |
+| **Soak / endurance** | Under sustained traffic for hours, does memory or a connection pool grow without bound? | the same, run long      |
+| **Micro-benchmark**  | Is this function still O(n log n) rather than O(n²) after the refactor?                 | tinybench, benchmark.js |
+
+A related, cheaper cousin is **query-shape assertion**: not "how fast is this", but "does this
+endpoint still use an index, and does it still issue one query rather than N+1?".
+
+**Why it is not here.** A budget is only meaningful against a workload, and this repository's
+workload is a demo shop with a few dozen seeded rows. A p95 measured against that says nothing about
+a fork's catalogue of two hundred thousand products, so any number committed here would be inherited
+as authoritative while being meaningless — worse than no number.
+
+The environment is the second problem. Load results are a property of the machine, the database
+sizing and the network as much as of the code. Run on a shared CI runner, a load test largely
+measures the runner, and the resulting flakiness is the kind that gets a job disabled.
+
+**What would change it.** In a fork, once real traffic shapes exist: load tests against a
+production-like environment, on a schedule, with budgets derived from that project's own SLOs — not
+from this one's.
+
+The part that WOULD transfer even here is the cheap structural subset, because it is deterministic
+and needs no load rig: assert that a query plan shows an index scan rather than a collection scan
+(`explain()` → `IXSCAN`, not `COLLSCAN`), and assert the number of queries an endpoint issues, which
+is how an N+1 is caught while it is one line old. That is a genuine gap and a reasonable next
+addition; it is simply not "performance testing" in the sense above.
+
+### Diff coverage as a separate gate
+
+**What it is.** A CI gate that ignores the repository's overall coverage and asks only about the
+lines this pull request touched — typically "changed lines must be ≥90% covered". It is the standard
+answer to a codebase whose global number is too low to raise, since it stops the bleeding without
+requiring history to be fixed.
+
+**Why it is not here.** Two gates already cover the same ground from better angles: the **per-file**
+coverage floors (see the `mutate` / `coverageThreshold` pairing) answer "is this code executed at
+all", and the **per-file mutation ratchet** answers the harder question "did the tests get weaker".
+A third gate over the same territory adds CI machinery and a second number to argue about, without
+answering anything the first two miss.
+
+**What would change it.** A large legacy area landing below the floors, where fixing history is not
+realistic. Diff coverage is exactly the right tool for that situation — this repository is simply not
+in it.
+
+### Type-level tests
+
+**What it is.** Assertions about _types_ rather than about runtime values — that a signature has not
+silently widened to `any`, that a generic infers what it should, that an invalid call is rejected by
+the compiler. Written with `expectTypeOf` (Vitest) or `tsd`, and checked by running the type checker
+rather than a test runner.
+
+**Why it is not here.** They earn their place when the types **are** the product, as in a published
+library whose consumers see nothing else. This repository's public surface is `openapi.yaml`, and it
+is already defended from three sides: the contract suite exercises it over real HTTP, the generated
+zod schemas are derived from it rather than hand-written, and `check:spec-identity` proves the
+frontend holds the same file byte for byte. A type-level test would be a fourth check on the
+best-guarded thing here.
+
+**What would change it.** Extracting anything from this repository into a standalone package. At
+that point the exported types become the contract and this is the layer that guards them.
+
+### Incremental mutation mode
+
+**What it is.** Stryker can cache per-mutant results (`incremental: true`) and, on the next run,
+re-test only the mutants a diff could plausibly have affected — turning a full run into a short one.
+
+**Why it is not here.** The full nightly run fits in roughly 36 minutes, which is comfortably inside
+the window it has. Against that, the cache invalidates far more broadly than intuition suggests — a
+change to a widely-imported module re-tests most of its dependents — so the saving is unpredictable
+rather than proportional to the diff. And a stale-but-trusted cache is a quiet failure: it reports
+green for mutants nobody re-ran.
+
+**What would change it.** The run outgrowing its window, or a decision to run mutation on pull
+requests rather than nightly. Both make the trade worth re-examining; neither is true today.
+
 ## Related pages
 
 - [Unit Testing](./unit-testing.md)
 - [Integration Testing](./integration-testing.md)
 - [Contract Testing](./contract-testing.md)
 - [Contract-Derived Request Data](./contract-request-data.md)
+- [Property Testing](./property-testing.md) — generation over enumeration, for pure functions
+- [Concurrency Testing](./concurrency-testing.md) — the four races and the patterns behind them
+- [Spec-Driven Fuzzing](./fuzz-testing.md) — the endpoints nobody wrote a test for
 - [Mutation Testing](./mutation-testing.md)
 - [Theory](../theory/)
 - [API](../api/)
