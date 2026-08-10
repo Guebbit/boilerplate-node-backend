@@ -1,45 +1,12 @@
 /**
  * Filesystem helpers.
- *
- * Mostly an ESM compatibility shim: ES modules have no `__filename`/`__dirname` globals
- * (they are CommonJS-only), so path resolution relative to the current file has to be
- * derived from `import.meta.url` instead.
  */
 
-// `fileURLToPath` converts a `file:///abs/path/mod.ts` URL — the format `import.meta.url`
-// uses — into a plain OS path. Needed because `path.*` cannot operate on URLs, and naive
-// string slicing breaks on Windows drive letters and percent-encoded characters.
-import { fileURLToPath } from 'node:url';
+import { copyFile, rename, unlink } from 'node:fs/promises';
 // Shared toolkit helper: unlinks a file and routes any error to the callback instead of
 // throwing, so callers do not need their own try/catch.
 import { deleteFile as toolkitDeleteFile } from '@guebbit/js-toolkit';
-import path from 'node:path';
 import { logger } from '@core/adapters/logger';
-
-/**
- * Resolve the CommonJS-style `__filename` / `__dirname` pair for an ES module.
- *
- * @param metaUrl - always pass `import.meta.url` from the *calling* module; passing anything
- *                  else defeats the purpose, since the point is to anchor paths to the caller.
- *
- * CAVEAT: `dirname` is currently derived from `__filename` (this module) rather than from the
- * `filename` computed just above, so it always reports *this* file's directory regardless of
- * `metaUrl`. It happens to be correct for the only caller (`adapters/mailer.ts`, same
- * directory) — but a caller elsewhere in the tree would silently get the wrong directory.
- */
-export const getFileUrl = (metaUrl: string) => {
-    const filename = fileURLToPath(metaUrl); // __filename
-    const dirname = path.dirname(__filename); // __dirname
-    return { filename, dirname };
-};
-
-/**
- * Convenience wrapper returning only the directory — the common case, since it is what
- * `path.resolve()` needs as a base for locating templates, views and static assets.
- *
- * @param metaUrl - `import.meta.url` of the calling module
- */
-export const getDirname = (metaUrl: string) => getFileUrl(metaUrl).dirname;
 
 /**
  * Delete target file in the filesystem, logging unexpected failures
@@ -50,6 +17,34 @@ export const getDirname = (metaUrl: string) => getFileUrl(metaUrl).dirname;
  *
  * @param filePath - absolute path as produced by multer (`request.file.path`)
  */
+/**
+ * Move a file, across filesystems if necessary.
+ *
+ * `rename` is atomic and free, and it is also the one call that CANNOT cross a device boundary —
+ * it fails with `EXDEV`. That is not an edge case here: uploads are staged in the system temp
+ * directory, which on Linux is routinely a tmpfs, while the public directory is on the container's
+ * disk or a mounted volume. So the fallback is the normal path in production and the fast path is
+ * the normal one in tests, and both have to work.
+ *
+ * Copy-then-unlink is deliberately in that order: a crash between the two leaves a stale staged
+ * file, which the next cleanup removes, whereas unlink-then-copy would lose the upload outright.
+ *
+ * Unlike {@link deleteFile}, this one THROWS. A cleanup that fails can be swallowed; a move that
+ * fails means the bytes the client sent are not where the database is about to say they are.
+ *
+ * @param source - path to move from
+ * @param destination - path to move to; its directory must exist
+ */
+export const moveFile = async (source: string, destination: string) => {
+    try {
+        await rename(source, destination);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+        await copyFile(source, destination);
+        await unlink(source);
+    }
+};
+
 export const deleteFile = (filePath: string) =>
     // Second argument is the error callback the toolkit invokes instead of rejecting.
     toolkitDeleteFile(filePath, (error) =>

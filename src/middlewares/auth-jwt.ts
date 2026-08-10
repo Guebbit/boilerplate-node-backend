@@ -1,8 +1,9 @@
 /**
  * Auth JWT — barrel module.
- * Re-exports from focused token and cookie modules (SRP).
- * Consumers can import from here for backward compatibility,
- * or directly from @middlewares/token and @middlewares/cookie.
+ *
+ * `./token` and `./cookie` hold the implementations (SRP); this is the import path everything
+ * actually uses, and nothing imports those two directly. Not a compatibility shim — it is the
+ * module's front door, so adding a third concern here means adding a file, not widening one.
  */
 export {
     type ITokenData,

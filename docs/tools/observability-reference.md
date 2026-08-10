@@ -178,6 +178,7 @@ Repo file: [`/.docker/observability/otel-collector.config.yaml`](../../.docker/o
 
 ## Related tool pages
 
+- [Events & Logging](./events-and-logging.md) — what the application emits, before it reaches any of the above
 - [Prometheus](./prometheus.md)
 - [OpenTelemetry](./opentelemetry.md)
 - [Tempo](./tempo.md)

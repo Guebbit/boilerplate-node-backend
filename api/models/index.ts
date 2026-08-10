@@ -5,6 +5,17 @@
  * Stable, codegen-oriented OpenAPI contract.
  * Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
  *
+ * Language: every endpoint honours `Accept-Language` (q-weights and region tags
+ * included). It selects the language of user-facing copy only — `errors[].message` and a
+ * success envelope's `message` — never the response shape, the status code, or a
+ * machine-readable field such as `errors[].code`. An unsupported language falls back
+ * instead of erroring; `Content-Language` states what was used and `Vary:
+ * Accept-Language` is always set. `GET /locales` lists what a deployment supports.
+ *
+ * The header is intentionally not declared per operation: it applies to all of them and
+ * clients set it once in an interceptor, so declaring it 33 times would only add a
+ * redundant argument to every generated function. This paragraph is its contract.
+ *
  * OpenAPI spec version: 2.0.0
  */
 
@@ -14,8 +25,7 @@ export * from './auditEventItemActorRole';
 export * from './auditEventItemLevel';
 export * from './auditEventItemMetadata';
 export * from './auditEventItemOutcome';
-export * from './auditLogsResponse';
-export * from './auditLogsResponseData';
+export * from './auditLogsPage';
 export * from './auditLogsResponseEnvelope';
 export * from './authTokens';
 export * from './authTokensEnvelope';
@@ -27,6 +37,7 @@ export * from './cartSummaryResponseEnvelope';
 export * from './checkoutRequest';
 export * from './checkoutResponse';
 export * from './checkoutResponseEnvelope';
+export * from './conflictResponse';
 export * from './createFeedbackRequest';
 export * from './createOrderRequest';
 export * from './createProductRequest';
@@ -50,12 +61,24 @@ export * from './feedbackRequestStatus';
 export * from './forbiddenResponse';
 export * from './getObservabilityAuditLogsOutcome';
 export * from './getObservabilityAuditLogsParams';
+export * from './hardDeleteRequest';
+export * from './healthPing';
+export * from './healthPingEnvelope';
+export * from './healthPingStatus';
 export * from './id';
 export * from './idParamParameter';
+export * from './imageUrl';
 export * from './internalErrorResponse';
+export * from './listFeedbackRequestsParams';
 export * from './listOrdersParams';
 export * from './listProductsParams';
 export * from './listUsersParams';
+export * from './locale';
+export * from './localeCapabilities';
+export * from './localeCapabilitiesEnvelope';
+export * from './localeDictionary';
+export * from './localeDictionaryEnvelope';
+export * from './localeDictionaryMessages';
 export * from './loginRequest';
 export * from './messageResponse';
 export * from './notFoundResponse';
@@ -64,12 +87,9 @@ export * from './observabilityHealthDatabase';
 export * from './observabilityHealthDatabaseStatus';
 export * from './observabilityHealthIntegrations';
 export * from './observabilityHealthMemory';
-export * from './observabilityHealthResponse';
 export * from './observabilityHealthResponseEnvelope';
 export * from './observabilityHealthStatus';
 export * from './observabilityHealthSystem';
-export * from './observabilityLoadTestResponseEnvelope';
-export * from './observabilityLoadTestResult';
 export * from './observabilityMetricsLatency';
 export * from './observabilityMetricsSummary';
 export * from './observabilityMetricsSummaryAuth';
@@ -77,7 +97,6 @@ export * from './observabilityMetricsSummaryBusiness';
 export * from './observabilityMetricsSummaryDatabase';
 export * from './observabilityMetricsSummaryHttp';
 export * from './observabilityMetricsSummaryProcess';
-export * from './observabilityMetricsSummaryResponse';
 export * from './observabilityMetricsSummaryResponseEnvelope';
 export * from './order';
 export * from './orderEnvelope';
@@ -108,7 +127,6 @@ export * from './searchProductsRequest';
 export * from './searchUsersRequest';
 export * from './signupRequest';
 export * from './signupRequestMultipart';
-export * from './successEnvelope';
 export * from './successResponse';
 export * from './text';
 export * from './textParamParameter';

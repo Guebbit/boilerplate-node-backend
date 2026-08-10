@@ -1,4 +1,3 @@
-import type { QueryFilter } from 'mongoose';
 import {
     FeedbackRequestStatus,
     type SearchFeedbackRequestsRequest,
@@ -8,12 +7,6 @@ import {
 import type { IFeedbackRequestDocument } from '@models/feedback-requests';
 import { feedbackRequestRepository } from '@repositories/feedback-requests';
 import {
-    normalizePagination,
-    addTextFilter,
-    addRegexFilter,
-    paginatedSearch
-} from '@repositories/search';
-import {
     generateReject,
     generateSuccess,
     type IResponseSuccess,
@@ -22,16 +15,15 @@ import {
 
 /**
  * OCP-compliant status mapping: adding a new status only requires adding one entry here.
- * Also accepts legacy uppercase status values from older clients.
+ *
+ * Lowercase only, matching `openapi.yaml`'s `enum: [new, in_progress, resolved, spam]`. Uppercase
+ * aliases would accept values the contract does not allow — dead on `PUT /feedback/:id`, where
+ * the generated Zod schema 422s them first, and actively wrong on the unguarded search path.
  */
 const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
-    NEW: FeedbackRequestStatus.new,
     new: FeedbackRequestStatus.new,
-    IN_PROGRESS: FeedbackRequestStatus.in_progress,
     in_progress: FeedbackRequestStatus.in_progress,
-    RESOLVED: FeedbackRequestStatus.resolved,
     resolved: FeedbackRequestStatus.resolved,
-    SPAM: FeedbackRequestStatus.spam,
     spam: FeedbackRequestStatus.spam
 };
 
@@ -48,25 +40,25 @@ export const create = (payload: CreateFeedbackRequest): Promise<IFeedbackRequest
     });
 
 export const search = (
-    filters: Omit<SearchFeedbackRequestsRequest, 'status'> & { status?: string } = {}
+    // `page`/`pageSize` are widened to accept strings: they arrive from a query string, and
+    // `normalizePagination` is what coerces and bounds them. `status` stays a raw string until
+    // `toFeedbackStatus` maps it onto the closed enum.
+    filters: Omit<SearchFeedbackRequestsRequest, 'status' | 'page' | 'pageSize'> & {
+        status?: string;
+        page?: string | number;
+        pageSize?: string | number;
+    } = {}
 ): Promise<{
     items: IFeedbackRequestDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
-}> => {
-    const pagination = normalizePagination(filters);
-    const where: QueryFilter<IFeedbackRequestDocument> = {};
-
-    if (filters.status) where.status = toFeedbackStatus(filters.status);
-    addRegexFilter(where as Record<string, unknown>, 'email', filters.email);
-    addTextFilter(where as Record<string, unknown>, filters.text, [
-        'name',
-        'email',
-        'subject',
-        'message'
-    ]);
-
-    return paginatedSearch(feedbackRequestRepository, where, pagination);
-};
+}> =>
+    // `status` is mapped here rather than declared on the repository: turning a raw string into
+    // a member of the closed `FeedbackRequestStatus` enum is a domain rule, so it is passed down
+    // as a scope once resolved.
+    feedbackRequestRepository.search(
+        filters,
+        filters.status ? { status: toFeedbackStatus(filters.status) } : {}
+    );
 
 export const updateStatus = (
     feedback: IFeedbackRequestDocument,

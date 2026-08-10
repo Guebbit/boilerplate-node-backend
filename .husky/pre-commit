@@ -1,1 +1,10 @@
+# The full gate, and the only one: build, unit, integration, contract, lint, format check.
+#
+# About 60 seconds, which is why it is not split into tiers. Integration and contract cost 9s and
+# 29s against an in-memory Mongo — there is nothing worth trading away, and one gate is easier to
+# trust than three.
+#
+# Deliberately not here, and run by hand for the occasions that want them: `test:mutation`
+# (re-executes the unit suite once per mutant) and `test:prism` (boots a mock server on a real
+# port).
 npm run complete:check

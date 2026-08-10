@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<%= locale %>">
 <%- include("../layouts/email-template-head.ejs"); %>
 <body>
 <main class="centered">
-    <h1>Welcome aboard <%= name %>!</h1>
-    <p>Registration successful</p>
+    <h1><%= t('email.registration-confirm.title', { name }) %></h1>
+    <p><%= t('email.registration-confirm.body') %></p>
 </main>
 <%- include("../layouts/default-footer.ejs"); %>
 </body>

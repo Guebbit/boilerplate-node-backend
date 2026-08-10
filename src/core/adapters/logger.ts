@@ -16,7 +16,14 @@ import winston from 'winston';
  * Keys are stored lowercase and compared lowercase, which catches `Authorization`,
  * `AUTHORIZATION` and `authorization` with one entry.
  */
-const SENSITIVE_FIELDS = new Set([
+/*
+ * Exported so `tests/unit/core/adapters/logger.test.ts` can drive a case PER ENTRY rather than
+ * sampling a handful. A redaction list is a declarative table, and this repo has already paid
+ * once for testing a declarative table by sampling it: `responseSchemaMap.ts` in the paired
+ * frontend scored 55% with 182 survivors that way. Sampling a security policy is worse — the
+ * entries nobody sampled are the ones that leak.
+ */
+export const SENSITIVE_FIELDS = new Set([
     'password',
     'passwordhash',
     'confirm_password',
@@ -99,7 +106,12 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
  * (`redactFormat()`, below) produces the actual format instance. The transform receives the
  * mutable `info` record and must return it (returning `false` would drop the record entirely).
  */
-const redactFormat = winston.format((info) => {
+/*
+ * Exported for the same reason as `SENSITIVE_FIELDS`: this is the WIRING, and a perfect
+ * `redactSensitiveFields` behind broken wiring redacts nothing in production. Call it as
+ * `redactFormat().transform(info)` to drive it directly.
+ */
+export const redactFormat = winston.format((info) => {
     // `level` and `message` are winston's own reserved fields; separating them means the
     // redaction walk only sees caller-supplied metadata.
     const { level, message, ...rest } = info;
@@ -123,7 +135,8 @@ const redactFormat = winston.format((info) => {
  * setting `info` suppresses everything more verbose. `debug` locally, `info` in production
  * to avoid paying ingestion cost for noise.
  */
-const resolveLogLevel = (): string => {
+/* Exported so the environment matrix can be asserted rather than assumed. */
+export const resolveLogLevel = (): string => {
     if (process.env.NODE_LOG_LEVEL) return process.env.NODE_LOG_LEVEL;
     return process.env.NODE_ENV === 'production' ? 'info' : 'debug';
 };

@@ -1,17 +1,20 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
-import { coerceStringArray } from '@guebbit/js-toolkit';
+import type { ParamsDictionary } from 'express-serve-static-core';
+import { t } from '@core/i18n';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
+import { readInput } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
-import { deleteFile } from '@core/adapters/filesystem';
+import { imageStore } from '@core/adapters/image-store';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
     UpdateProductRequest,
     UpdateProductRequestMultipart,
     UpdateProductByIdRequest,
-    UpdateProductByIdRequestMultipart
+    UpdateProductByIdRequestMultipart,
+    Product
 } from '@types';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
@@ -25,7 +28,7 @@ import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observabilit
  */
 export const writeProducts = (
     request: Request<
-        { id?: string },
+        ParamsDictionary,
         unknown,
         | CreateProductRequest
         | CreateProductRequestMultipart
@@ -36,17 +39,28 @@ export const writeProducts = (
     >,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as { id?: string }).id;
+    // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+    // `booleans`/`stringArrays` are the fields whose type a multipart body cannot carry.
+    // `price` is declared for the same reason `active` is: the image-carrying variants of these
+    // routes send a multipart body, which has no types, so both arrive as strings and
+    // `zodProductSchema` rejects them.
+    const { id, active, price, categories, tags } = readInput(request, {
+        sources: ['params', 'body'],
+        ids: ['id'],
+        booleans: ['active'],
+        numbers: ['price'],
+        stringArrays: ['categories', 'tags']
+    });
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrlFile = resolveImageUrl(request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-    const categories = coerceStringArray((request.body as { categories?: unknown }).categories);
-    const tags = coerceStringArray((request.body as { tags?: unknown }).tags);
-    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
-    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
+    // If problem arises: remove the image THIS request uploaded — `imageUrlFile`, deliberately,
+    // and not the merged `imageUrl`: a body-supplied url names an image this request did not
+    // create, and deleting it because validation failed would destroy someone else's file.
+    const deleteUpload = () => imageStore.remove(imageUrlFile);
 
     /**
      * Validation errors prevent creation end editing
@@ -54,7 +68,8 @@ export const writeProducts = (
     const errors = productService.validateData({
         ...request.body,
         imageUrl,
-        active: !!request.body.active,
+        active,
+        price,
         categories,
         tags
     });
@@ -62,6 +77,13 @@ export const writeProducts = (
         return deleteUpload().then(() => {
             rejectResponse(response, 422, 'writeProduct - validation failed', errors);
         });
+
+    // Past the guard above, these have been checked against zodProductSchema — the assertion
+    // records what the validator just established rather than assuming it.
+    const validated = { imageUrl, active, price, categories, tags } as Pick<
+        Product,
+        'imageUrl' | 'active' | 'price' | 'categories' | 'tags'
+    >;
 
     /**
      * NO ID = new product
@@ -78,10 +100,7 @@ export const writeProducts = (
         return productService
             .create({
                 ...request.body,
-                imageUrl,
-                active: !!request.body.active,
-                categories,
-                tags
+                ...validated
             })
             .then((product) => {
                 emitAuditEvent(
@@ -96,7 +115,7 @@ export const writeProducts = (
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
-                    rejectResponse(response, 500, 'createProduct', [error.message]);
+                    rejectDatabaseError(response, 'createProduct', error);
                 })
             );
     }
@@ -107,10 +126,7 @@ export const writeProducts = (
     return productService
         .updateById(id, {
             ...request.body,
-            imageUrl,
-            active: !!request.body.active,
-            categories,
-            tags
+            ...validated
         })
         .then((product) => {
             emitAuditEvent(
@@ -129,7 +145,7 @@ export const writeProducts = (
                     rejectResponse(response, 404, 'updateProduct - not found', [
                         t('ecommerce.product-not-found')
                     ]);
-                else rejectResponse(response, 500, 'updateProduct', [error.message]);
+                else rejectDatabaseError(response, 'updateProduct', error);
             })
         );
 };

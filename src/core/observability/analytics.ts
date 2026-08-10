@@ -4,7 +4,7 @@
  * Distinct from metrics and tracing: this answers *product* questions ("how many users
  * abandon checkout?") rather than operational ones ("is p95 latency acceptable?").
  *
- * See: docs/guide/product-analytics.md
+ * See: docs/tools/posthog.md
  */
 
 // `PostHog` is the Node server-side client. It buffers events in memory and flushes them in
@@ -63,7 +63,7 @@ export const shutdownAnalytics = async (): Promise<void> => {
 };
 
 // ─── Event taxonomy ───────────────────────────────────────────────────────────
-// See docs/guide/product-analytics.md for the full event catalog.
+// See docs/tools/posthog.md for the full event catalog.
 //
 // A closed enum rather than free-form strings: analytics data is only useful if event names
 // are stable, and a typo ('user_signedup') creates a silent second event that fragments every

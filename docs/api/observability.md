@@ -2,20 +2,23 @@
 
 The `/observability/*` routes expose operational data for dashboards and monitoring tooling.
 
-- **Public** routes: `/observability/events`, `/observability/metrics`
-- **Protected** routes (admin JWT required): `/observability/health`, `/observability/metrics/overview`, `/observability/audit`, `/observability/load-test`
-- **Dev/staging only** (not registered when `NODE_ENV=production`): `/observability/load-test`
+**None of these are public.** `/observability/events` and `/observability/metrics` each carry
+their own guard rather than the admin JWT, because neither caller can present one: an
+`EventSource` cannot set an `Authorization` header, and a Prometheus scraper is not a user.
+
+- **Admin JWT**: `/observability/health`, `/observability/metrics/overview`, `/observability/audit`
+- **Admin cookie**: `/observability/events` (`isAdminViaCookie`)
+- **Scrape credential**: `/observability/metrics` (`isMetricsScraper` — `Bearer $NODE_METRICS_TOKEN`; with the variable unset the route answers 503 to everyone)
 
 ## Available endpoints
 
 | Endpoint | Auth | Description | Observability equivalent |
 | --- | --- | --- | --- |
-| `GET /observability/events` | none | SSE stream: live metrics snapshot every 5 s | — |
-| `GET /observability/metrics` | none | Raw Prometheus exposition (text/plain) | [Prometheus](../tools/prometheus.md) scrape target |
+| `GET /observability/events` | admin cookie | SSE stream: live metrics snapshot every 5 s | [Frontend Observability](../tools/frontend-observability.md) |
+| `GET /observability/metrics` | scraper | Raw Prometheus exposition (text/plain) | [Prometheus](../tools/prometheus.md) scrape target |
 | `GET /observability/health` | admin | Full health snapshot: DB status, memory, CPU, integrations, uptime | [Grafana](../tools/grafana.md) health panels |
 | `GET /observability/metrics/overview` | admin | Curated KPI JSON: HTTP totals, error rate, latency p50/p95, auth & business counters | [Prometheus](../tools/prometheus.md) / [Grafana](../tools/grafana.md) KPI panels |
-| `GET /observability/audit` | admin | Recent audit events from the in-memory ring buffer (max 200) | [Loki](../tools/loki.md) log search |
-| `GET /observability/load-test` | admin, dev/staging only | Busy-loops the event loop and emits log lines, to exercise dashboards/log pipelines under synthetic CPU load | — |
+| `GET /observability/audit` | admin | Recent audit events from the persisted audit trail, newest first | [Loki](../tools/loki.md) log search |
 
 ## Observability API vs Grafana
 

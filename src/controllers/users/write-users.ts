@@ -1,9 +1,12 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import type { ParamsDictionary } from 'express-serve-static-core';
+import { t } from '@core/i18n';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
+import { readInput } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
-import { deleteFile } from '@core/adapters/filesystem';
+import { imageStore } from '@core/adapters/image-store';
 import type {
     CreateUserRequest,
     CreateUserRequestMultipart,
@@ -26,7 +29,7 @@ import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observabilit
  */
 export const writeUsers = (
     request: Request<
-        { id?: string },
+        ParamsDictionary,
         unknown,
         | CreateUserRequest
         | CreateUserRequestMultipart
@@ -37,27 +40,41 @@ export const writeUsers = (
     >,
     response: Response
 ) => {
-    const id = request.params.id ?? (request.body as { id?: string }).id;
+    // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+    // `booleans` are the fields whose type a multipart body cannot carry.
+    const { id, admin, active } = readInput(request, {
+        sources: ['params', 'body'],
+        ids: ['id'],
+        booleans: ['admin', 'active']
+    });
 
     /**
      * Uploaded file takes priority over body imageUrl
      */
-    const { imageUrlRaw, imageUrl: imageUrlFile } = resolveImageUrl(request as Request);
+    const imageUrlFile = resolveImageUrl(request);
     const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-    // If problem arises: remove the uploaded file (that can be missing so nothing happen)
-    const deleteUpload = () => (imageUrlRaw ? deleteFile(imageUrlRaw) : Promise.resolve(true));
+    // If problem arises: remove the image THIS request uploaded — `imageUrlFile`, deliberately,
+    // and not the merged `imageUrl`: a body-supplied url names an image this request did not
+    // create, and deleting it because validation failed would destroy someone else's file.
+    const deleteUpload = () => imageStore.remove(imageUrlFile);
 
     /**
      * Validation errors prevent creation end editing
      */
     const errors = userService.validateData({
         ...request.body,
-        imageUrl
+        imageUrl,
+        admin,
+        active
     });
     if (errors.length > 0)
         return deleteUpload().then(() => {
             rejectResponse(response, 422, 'writeUser - validation failed', errors);
         });
+
+    // Past the guard above, these have been checked against zodUserSchema — the assertion
+    // records what the validator just established rather than assuming it.
+    const validated = { imageUrl, admin, active } as Pick<User, 'imageUrl' | 'admin' | 'active'>;
 
     /**
      * NO ID = new user
@@ -75,7 +92,7 @@ export const writeUsers = (
             .adminCreate({
                 // After validation it will be compatible for sure
                 ...(request.body as IUser),
-                imageUrl
+                ...validated
             })
             .then((user) => {
                 emitAuditEvent(
@@ -86,11 +103,13 @@ export const writeUsers = (
                         target_id: String(user._id)
                     })
                 );
+                // create() returns the in-memory document; the schema's toJSON transform
+                // strips the hashed password before it ever reaches res.json
                 successResponse(response, user, 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
-                    rejectResponse(response, 500, 'writeUser', [error.message]);
+                    rejectDatabaseError(response, 'writeUser', error);
                 })
             );
     }
@@ -98,7 +117,7 @@ export const writeUsers = (
     /**
      * ID = edit user
      */
-    return userService.adminUpdateById(id, { ...request.body, imageUrl }).then((result) => {
+    return userService.adminUpdateById(id, { ...request.body, ...validated }).then((result) => {
         if (!result.success)
             return deleteUpload().then(() => {
                 rejectResponse(response, result.status, result.message, result.errors);

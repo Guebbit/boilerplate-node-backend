@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { CastError } from 'mongoose';
 
 /**
@@ -21,5 +22,5 @@ export const getUserItem = (request: Request, response: Response) =>
         .catch((error: CastError) => {
             if (error.message === '404' || error.kind === 'ObjectId')
                 return rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
-            rejectResponse(response, 500, 'getUserItem', [error.message]);
+            rejectDatabaseError(response, 'getUserItem', error);
         });

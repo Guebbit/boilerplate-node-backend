@@ -3,6 +3,7 @@ import ejs from 'ejs';
 import type { IPdfJobPayload } from '@types';
 import { logger } from '@core/adapters/logger';
 import { renderHtmlToPdf } from '@core/adapters/pdf';
+import { getFallbackLocale, runWithLocale, t } from '@core/i18n';
 
 /*
  * Queue name for PDF generation jobs
@@ -29,15 +30,26 @@ export const handlePdfJob = (message: unknown): Promise<boolean> => {
     /**
      * Create PDF file using the invoice EJS template
      */
-    return ejs
-        .renderFile(path.resolve(job.templatePath), job.templateData ?? {})
-        .then((html) => renderHtmlToPdf(html, { format: 'A4', path: job.outputPath }))
-        .then(() => {
-            logger.info({ message: 'PDF generated.', outputPath: job.outputPath });
-            return true;
-        })
-        .catch((error: Error) => {
-            logger.error({ message: 'PDF worker failed.', error: error.message });
-            return false;
-        });
+    /*
+     * Same boundary as the email worker: the request that enqueued this is long gone, so the
+     * AsyncLocalStorage store is gone with it and the ambient `t` would fall back to the boot
+     * language. The payload's locale is put back on this chain before the template renders.
+     */
+    return runWithLocale(job.locale ?? getFallbackLocale(), () =>
+        ejs
+            .renderFile(path.resolve(job.templatePath), {
+                t,
+                locale: job.locale ?? getFallbackLocale(),
+                ...job.templateData
+            })
+            .then((html) => renderHtmlToPdf(html, { format: 'A4', path: job.outputPath }))
+            .then(() => {
+                logger.info({ message: 'PDF generated.', outputPath: job.outputPath });
+                return true;
+            })
+            .catch((error: Error) => {
+                logger.error({ message: 'PDF worker failed.', error: error.message });
+                return false;
+            })
+    );
 };

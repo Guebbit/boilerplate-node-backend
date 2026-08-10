@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import type { CastError } from 'mongoose';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { extractAndValidateId } from '@core/http/request';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
@@ -35,6 +36,6 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
         .catch((error: CastError) => {
             if (error.message === '404' || error.kind === 'ObjectId')
                 return rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
-            rejectResponse(response, 500, 'deleteOrder', [error.message]);
+            rejectDatabaseError(response, 'deleteOrder', error);
         });
 };

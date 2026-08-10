@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { getCurrentLocale, runWithLocale, t } from '@core/i18n';
 import { userService } from '@services/users';
 import { authService } from '@services/auth';
 import { successResponse, rejectResponse } from '@core/http/response';
@@ -31,19 +31,21 @@ export const deleteAccountRequest = (request: Request, response: Response) => {
             return authService.tokenAdd(user, 'delete', 3_600_000).then((token) => {
                 authAccountDeleteTotal.inc({ status: 'success' });
 
-                void enqueueEmail(
-                    {
-                        to: email,
-                        subject: 'Confirm account deletion'
-                    },
-                    'email-delete-request.ejs',
-                    {
-                        ...response.locals,
-                        pageMetaTitle: 'Account deletion requested',
-                        pageMetaLinks: [],
-                        name: username,
-                        token
-                    }
+                void runWithLocale(user.locale ?? getCurrentLocale(), () =>
+                    enqueueEmail(
+                        {
+                            to: email,
+                            subject: t('email.delete-request.subject')
+                        },
+                        'email-delete-request.ejs',
+                        {
+                            ...response.locals,
+                            pageMetaTitle: t('email.delete-request.meta-title'),
+                            pageMetaLinks: [],
+                            name: username,
+                            token
+                        }
+                    )
                 );
 
                 emitAuditEvent(

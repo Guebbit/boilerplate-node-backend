@@ -5,6 +5,17 @@
  * Stable, codegen-oriented OpenAPI contract.
  * Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
  *
+ * Language: every endpoint honours `Accept-Language` (q-weights and region tags
+ * included). It selects the language of user-facing copy only — `errors[].message` and a
+ * success envelope's `message` — never the response shape, the status code, or a
+ * machine-readable field such as `errors[].code`. An unsupported language falls back
+ * instead of erroring; `Content-Language` states what was used and `Vary:
+ * Accept-Language` is always set. `GET /locales` lists what a deployment supports.
+ *
+ * The header is intentionally not declared per operation: it applies to all of them and
+ * clients set it once in an interceptor, so declaring it 33 times would only add a
+ * redundant argument to every generated function. This paragraph is its contract.
+ *
  * OpenAPI spec version: 2.0.0
  */
 import * as zod from 'zod';
@@ -16,7 +27,64 @@ import * as zod from 'zod';
 export const GetHealthResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
+  "message": zod.string(),
+  "data": zod.object({
+  "status": zod.enum(['ok']).describe('Liveness indicator. Always `ok` when the process is answering.')
+})
+})
+
+
+/**
+ * Which languages this deployment can answer in, plus its default and fallback.
+ *
+ * Public, unauthenticated and cacheable: it is static copy that changes only on
+ * deploy, and a client that has just failed to reach the API is exactly who needs
+ * it.
+ * @summary Supported languages
+ */
+export const getLocalesResponseDataLocalesItemRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+export const getLocalesResponseDataDefaultRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+export const getLocalesResponseDataFallbackRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const GetLocalesResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "locales": zod.array(zod.string().regex(getLocalesResponseDataLocalesItemRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')).describe('Every supported language tag.'),
+  "default": zod.string().regex(getLocalesResponseDataDefaultRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
+  "fallback": zod.string().regex(getLocalesResponseDataFallbackRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')
+}).describe('Which languages a deployment can answer in. Runtime state, not contract state: it is derived from the dictionaries actually deployed, so it cannot be an enum here.')
+})
+
+
+/**
+ * This API's own dictionary for one language.
+ *
+ * Normally unnecessary — the API resolves its keys itself and puts finished text on
+ * the wire. It earns its place when no response arrives at all (a network failure, a
+ * bare 502) and the client must produce the copy itself, in the active language.
+ * @summary API message dictionary
+ */
+export const getLocaleDictionaryPathLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const GetLocaleDictionaryParams = zod.object({
+  "locale": zod.string().regex(getLocaleDictionaryPathLocaleRegExp).describe('A language tag from `GET \/locales`.')
+})
+
+export const getLocaleDictionaryResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const GetLocaleDictionaryResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "locale": zod.string().regex(getLocaleDictionaryResponseDataLocaleRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
+  "messages": zod.record(zod.string(), zod.unknown()).describe('Nested key\/value dictionary, the same shape the API loads.')
+}).describe('The API\'s OWN message dictionary for one language — its API-response copy and nothing else. It is never a client\'s UI dictionary: the two are authored and deployed in separate repositories, and mixing them would put view copy in the API\'s keyspace. A client that wants these merges them under a namespace it reserves for the API, never at the root.')
 })
 
 
@@ -34,23 +102,20 @@ export const GetObservabilityEventsResponse = zod.unknown()
  * Requires admin role.
  * @summary Health snapshot
  */
-export const getObservabilityHealthResponseTwoDataDataUptimeSecondsMin = 0;
+export const getObservabilityHealthResponseDataUptimeSecondsMin = 0;
 
 
 
 export const GetObservabilityHealthResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
-  "data": zod.object({
-  "success": zod.literal(true),
+  "message": zod.string(),
   "data": zod.object({
   "status": zod.enum(['ok', 'degraded']),
   "environment": zod.string(),
   "service": zod.string(),
   "nodeVersion": zod.string(),
-  "uptimeSeconds": zod.number().min(getObservabilityHealthResponseTwoDataDataUptimeSecondsMin),
+  "uptimeSeconds": zod.number().min(getObservabilityHealthResponseDataUptimeSecondsMin),
   "database": zod.object({
   "status": zod.enum(['connected', 'connecting', 'disconnected'])
 }),
@@ -74,7 +139,6 @@ export const GetObservabilityHealthResponse = zod.object({
   "timestamp": zod.iso.datetime({"offset":true})
 })
 })
-}))
 
 
 /**
@@ -92,79 +156,77 @@ export const GetObservabilityMetricsResponse = zod.string()
  * Requires admin role.
  * @summary Metrics overview (JSON)
  */
-export const getObservabilityMetricsOverviewResponseTwoDataDataHttpTotalRequestsMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpTotalRequestsMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataHttpTotalErrorsMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpTotalErrorsMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataHttpErrorRateMin = 0;
-export const getObservabilityMetricsOverviewResponseTwoDataDataHttpErrorRateMax = 1;
+export const getObservabilityMetricsOverviewResponseDataHttpErrorRateMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpErrorRateMax = 1;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataHttpInFlightMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpInFlightMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataAuthLoginSuccessMin = 0;
+export const getObservabilityMetricsOverviewResponseDataAuthLoginSuccessMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataAuthLoginFailureMin = 0;
+export const getObservabilityMetricsOverviewResponseDataAuthLoginFailureMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataAuthSignupSuccessMin = 0;
+export const getObservabilityMetricsOverviewResponseDataAuthSignupSuccessMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataBusinessCheckoutSuccessMin = 0;
+export const getObservabilityMetricsOverviewResponseDataBusinessCheckoutSuccessMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataBusinessOrdersCreatedMin = 0;
+export const getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataDatabaseQueriesTotalMin = 0;
+export const getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataDatabaseErrorsTotalMin = 0;
+export const getObservabilityMetricsOverviewResponseDataDatabaseErrorsTotalMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataProcessUptimeSecondsMin = 0;
+export const getObservabilityMetricsOverviewResponseDataProcessUptimeSecondsMin = 0;
 
-export const getObservabilityMetricsOverviewResponseTwoDataDataProcessHeapUsedMbMin = 0;
+export const getObservabilityMetricsOverviewResponseDataProcessHeapUsedMbMin = 0;
 
 
 
 export const GetObservabilityMetricsOverviewResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
-  "data": zod.object({
-  "success": zod.literal(true),
+  "message": zod.string(),
   "data": zod.object({
   "http": zod.object({
-  "totalRequests": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataHttpTotalRequestsMin),
-  "totalErrors": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataHttpTotalErrorsMin),
-  "errorRate": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataHttpErrorRateMin).max(getObservabilityMetricsOverviewResponseTwoDataDataHttpErrorRateMax).describe('Fraction of requests that returned 4xx\/5xx'),
-  "inFlight": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataHttpInFlightMin),
+  "totalRequests": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpTotalRequestsMin),
+  "totalErrors": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpTotalErrorsMin),
+  "errorRate": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpErrorRateMin).max(getObservabilityMetricsOverviewResponseDataHttpErrorRateMax).describe('Fraction of requests that returned 4xx\/5xx'),
+  "inFlight": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpInFlightMin),
   "latencyMs": zod.object({
   "p50": zod.number().describe('Median latency in ms'),
   "p95": zod.number().describe('95th-percentile latency in ms')
 })
 }),
   "auth": zod.object({
-  "loginSuccess": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataAuthLoginSuccessMin).optional(),
-  "loginFailure": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataAuthLoginFailureMin).optional(),
-  "signupSuccess": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataAuthSignupSuccessMin).optional()
+  "loginSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataAuthLoginSuccessMin).optional(),
+  "loginFailure": zod.number().min(getObservabilityMetricsOverviewResponseDataAuthLoginFailureMin).optional(),
+  "signupSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataAuthSignupSuccessMin).optional()
 }),
   "business": zod.object({
-  "checkoutSuccess": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataBusinessCheckoutSuccessMin).optional(),
-  "ordersCreated": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataBusinessOrdersCreatedMin).optional()
+  "checkoutSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessCheckoutSuccessMin).optional(),
+  "ordersCreated": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin).optional()
 }),
   "database": zod.object({
-  "queriesTotal": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataDatabaseQueriesTotalMin).optional(),
-  "errorsTotal": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataDatabaseErrorsTotalMin).optional()
+  "queriesTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin).optional(),
+  "errorsTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDatabaseErrorsTotalMin).optional()
 }),
   "process": zod.object({
-  "uptimeSeconds": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataProcessUptimeSecondsMin).optional(),
-  "heapUsedMb": zod.number().min(getObservabilityMetricsOverviewResponseTwoDataDataProcessHeapUsedMbMin).optional()
+  "uptimeSeconds": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessUptimeSecondsMin).optional(),
+  "heapUsedMb": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessHeapUsedMbMin).optional()
 }),
   "timestamp": zod.iso.datetime({"offset":true})
 })
 })
-}))
 
 
 /**
- * Returns the most recent audit events from the in-memory ring buffer (up to 200).
+ * Returns the most recent audit events, newest first, from the persisted audit trail.
  * Events include auth flows, admin CRUD actions, and security blocks.
+ * Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
+ * `total` counts every event matching the filters, not just the returned page.
  * Requires admin role.
  * @summary Recent audit events
  */
@@ -181,17 +243,14 @@ export const GetObservabilityAuditLogsQueryParams = zod.object({
   "limit": zod.number().min(1).max(getObservabilityAuditLogsQueryLimitMax).default(getObservabilityAuditLogsQueryLimitDefault).describe('Maximum number of events to return')
 })
 
-export const getObservabilityAuditLogsResponseTwoDataDataTotalMin = 0;
+export const getObservabilityAuditLogsResponseDataTotalMin = 0;
 
 
 
 export const GetObservabilityAuditLogsResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
-  "data": zod.object({
-  "success": zod.literal(true),
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "actor_user_id": zod.string(),
@@ -208,49 +267,35 @@ export const GetObservabilityAuditLogsResponse = zod.object({
   "timestamp": zod.iso.datetime({"offset":true}),
   "level": zod.enum(['info', 'warn'])
 })),
-  "total": zod.number().min(getObservabilityAuditLogsResponseTwoDataDataTotalMin)
+  "total": zod.number().min(getObservabilityAuditLogsResponseDataTotalMin)
 })
 })
-}))
-
-
-/**
- * Dev/staging-only endpoint that busy-loops the event loop for a fixed amount of
- * work while emitting log lines, so dashboards and log pipelines can be exercised
- * under load. Not registered when `NODE_ENV=production`. Requires admin role.
- * @summary Synthetic CPU load test
- */
-export const GetObservabilityLoadTestResponse = zod.object({
-  "success": zod.literal(true),
-  "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
-  "data": zod.object({
-  "durationMs": zod.number().describe('Wall-clock time in ms spent on the synthetic CPU load')
-})
-}))
 
 
 /**
  * Returns the full profile of the currently authenticated user
  * @summary Current user info
  */
+export const getAccountResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
 export const GetAccountResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "email": zod.email(),
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(getAccountResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -295,14 +340,13 @@ export const LoginBody = zod.object({
 export const LoginResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "token": zod.string().describe('Access JWT'),
   "refreshToken": zod.string().optional().describe('Refresh token if returned by backend'),
   "expiresIn": zod.number().optional().describe('Access token expiry in seconds')
 })
-}))
+})
 
 
 /**
@@ -322,25 +366,29 @@ export const SignupBody = zod.object({
   "username": zod.string().min(signupBodyUsernameMin),
   "password": zod.string().min(signupBodyPasswordMin),
   "passwordConfirm": zod.string().min(signupBodyPasswordConfirmMin),
-  "imageUrl": zod.url().optional()
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.')
 })
+
+export const signupResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
 
 export const SignupResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "email": zod.email(),
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(signupResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -380,41 +428,19 @@ export const ConfirmPasswordResetResponse = zod.object({
 
 
 /**
- * Creates a new short-lived access token using a refresh token. The refresh token can be provided as a query parameter, path parameter, or retrieved from the `jwt` cookie.
+ * Creates a new short-lived access token from the refresh token in the `jwt` cookie. The cookie is `HttpOnly`, so the token is never readable by page scripts and never appears in a URL, a proxy log or a `Referer` header.
  * @summary Refresh access token
  */
 export const RefreshTokenResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "token": zod.string().describe('New access JWT'),
   "refreshToken": zod.string().optional().describe('New refresh token if returned by backend'),
   "expiresIn": zod.number().optional().describe('New access token expiry in seconds')
 })
-}))
-
-
-/**
- * Creates a new short-lived access token using a refresh token provided in the URL path.
- * @summary Refresh access token with token in path
- */
-export const RefreshTokenWithPathParams = zod.object({
-  "token": zod.string().describe('Refresh token')
 })
-
-export const RefreshTokenWithPathResponse = zod.object({
-  "success": zod.literal(true),
-  "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
-  "data": zod.object({
-  "token": zod.string().describe('New access JWT'),
-  "refreshToken": zod.string().optional().describe('New refresh token if returned by backend'),
-  "expiresIn": zod.number().optional().describe('New access token expiry in seconds')
-})
-}))
 
 
 /**
@@ -461,22 +487,22 @@ export const ListUsersQueryParams = zod.object({
   "active": zod.boolean().optional()
 })
 
-export const listUsersResponseTwoDataMetaPageDefault = 1;
+export const listUsersResponseDataItemsItemLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+export const listUsersResponseDataMetaPageDefault = 1;
 
-export const listUsersResponseTwoDataMetaPageSizeDefault = 10;
-export const listUsersResponseTwoDataMetaPageSizeMax = 100;
+export const listUsersResponseDataMetaPageSizeDefault = 10;
+export const listUsersResponseDataMetaPageSizeMax = 100;
 
-export const listUsersResponseTwoDataMetaTotalItemsMin = 0;
+export const listUsersResponseDataMetaTotalItemsMin = 0;
 
-export const listUsersResponseTwoDataMetaTotalPagesMin = 0;
+export const listUsersResponseDataMetaTotalPagesMin = 0;
 
 
 
 export const ListUsersResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
@@ -484,18 +510,20 @@ export const ListUsersResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(listUsersResponseDataItemsItemLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
-  "page": zod.number().min(1).default(listUsersResponseTwoDataMetaPageDefault).describe('1-based page index'),
-  "pageSize": zod.number().min(1).max(listUsersResponseTwoDataMetaPageSizeMax).default(listUsersResponseTwoDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
-  "totalItems": zod.number().min(listUsersResponseTwoDataMetaTotalItemsMin),
-  "totalPages": zod.number().min(listUsersResponseTwoDataMetaTotalPagesMin)
+  "page": zod.number().min(1).default(listUsersResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listUsersResponseDataMetaPageSizeMax).default(listUsersResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(listUsersResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(listUsersResponseDataMetaTotalPagesMin)
 })
 })
-}))
+})
 
 
 /**
@@ -504,6 +532,8 @@ export const ListUsersResponse = zod.object({
  */
 export const createUserBodyPasswordMin = 8;
 
+export const createUserBodyActiveDefault = true;
+export const createUserBodyLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
 
 
 export const CreateUserBody = zod.object({
@@ -511,26 +541,31 @@ export const CreateUserBody = zod.object({
   "username": zod.string(),
   "password": zod.string().min(createUserBodyPasswordMin),
   "admin": zod.boolean().optional(),
-  "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional()
+  "active": zod.boolean().default(createUserBodyActiveDefault),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(createUserBodyLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')
 })
+
+export const createUserResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
 
 export const CreateUserResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "email": zod.email(),
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(createUserResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -539,6 +574,7 @@ export const CreateUserResponse = zod.object({
  */
 export const updateUserBodyPasswordMin = 8;
 
+export const updateUserBodyLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
 
 
 export const UpdateUserBody = zod.object({
@@ -546,25 +582,32 @@ export const UpdateUserBody = zod.object({
   "email": zod.email().optional(),
   "username": zod.string().optional(),
   "password": zod.string().min(updateUserBodyPasswordMin).optional(),
-  "imageUrl": zod.url().optional()
+  "admin": zod.boolean().optional(),
+  "active": zod.boolean().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(updateUserBodyLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')
 })
+
+export const updateUserResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
 
 export const UpdateUserResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "email": zod.email(),
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(updateUserResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -593,22 +636,26 @@ export const GetUserByIdParams = zod.object({
   "id": zod.string().describe('Resource identifier')
 })
 
+export const getUserByIdResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
 export const GetUserByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "email": zod.email(),
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(getUserByIdResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -627,25 +674,31 @@ export const UpdateUserByIdBody = zod.object({
   "email": zod.email().optional(),
   "password": zod.string().min(updateUserByIdBodyPasswordMin).optional(),
   "username": zod.string().optional(),
-  "imageUrl": zod.url().optional()
+  "admin": zod.boolean().optional(),
+  "active": zod.boolean().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.')
 })
+
+export const updateUserByIdResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
 
 export const UpdateUserByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "email": zod.email(),
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(updateUserByIdResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -660,7 +713,28 @@ export const DeleteUserByIdQueryParams = zod.object({
   "hardDelete": zod.boolean().optional()
 })
 
+export const deleteUserByIdBodyHardDeleteDefault = false;
+
+export const DeleteUserByIdBody = zod.object({
+  "hardDelete": zod.boolean().default(deleteUserByIdBodyHardDeleteDefault)
+})
+
 export const DeleteUserByIdResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
+ * @summary Permanently delete user
+ */
+export const HardDeleteUserByIdParams = zod.object({
+  "id": zod.string().describe('Resource identifier')
+})
+
+export const HardDeleteUserByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string()
@@ -689,22 +763,22 @@ export const SearchUsersBody = zod.object({
   "active": zod.boolean().optional()
 })
 
-export const searchUsersResponseTwoDataMetaPageDefault = 1;
+export const searchUsersResponseDataItemsItemLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+export const searchUsersResponseDataMetaPageDefault = 1;
 
-export const searchUsersResponseTwoDataMetaPageSizeDefault = 10;
-export const searchUsersResponseTwoDataMetaPageSizeMax = 100;
+export const searchUsersResponseDataMetaPageSizeDefault = 10;
+export const searchUsersResponseDataMetaPageSizeMax = 100;
 
-export const searchUsersResponseTwoDataMetaTotalItemsMin = 0;
+export const searchUsersResponseDataMetaTotalItemsMin = 0;
 
-export const searchUsersResponseTwoDataMetaTotalPagesMin = 0;
+export const searchUsersResponseDataMetaTotalPagesMin = 0;
 
 
 
 export const SearchUsersResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
@@ -712,18 +786,20 @@ export const SearchUsersResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(searchUsersResponseDataItemsItemLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
-  "page": zod.number().min(1).default(searchUsersResponseTwoDataMetaPageDefault).describe('1-based page index'),
-  "pageSize": zod.number().min(1).max(searchUsersResponseTwoDataMetaPageSizeMax).default(searchUsersResponseTwoDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
-  "totalItems": zod.number().min(searchUsersResponseTwoDataMetaTotalItemsMin),
-  "totalPages": zod.number().min(searchUsersResponseTwoDataMetaTotalPagesMin)
+  "page": zod.number().min(1).default(searchUsersResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(searchUsersResponseDataMetaPageSizeMax).default(searchUsersResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(searchUsersResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(searchUsersResponseDataMetaTotalPagesMin)
 })
 })
-}))
+})
 
 
 /**
@@ -740,8 +816,7 @@ export const CreateFeedbackRequestBody = zod.object({
 export const CreateFeedbackRequestResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "name": zod.string().optional(),
@@ -754,13 +829,29 @@ export const CreateFeedbackRequestResponse = zod.object({
   "createdAt": zod.iso.datetime({"offset":true}),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
  * Returns feedback/contact requests for admin review.
  * @summary List feedback requests
  */
+export const listFeedbackRequestsQueryPageDefault = 1;
+
+export const listFeedbackRequestsQueryPageSizeDefault = 10;
+export const listFeedbackRequestsQueryPageSizeMax = 100;
+
+
+
+
+export const ListFeedbackRequestsQueryParams = zod.object({
+  "page": zod.number().min(1).default(listFeedbackRequestsQueryPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listFeedbackRequestsQueryPageSizeMax).default(listFeedbackRequestsQueryPageSizeDefault),
+  "text": zod.string().min(1).optional(),
+  "email": zod.email().optional(),
+  "status": zod.string().optional()
+})
+
 export const listFeedbackRequestsBodyPageDefault = 1;
 
 export const listFeedbackRequestsBodyPageSizeDefault = 10;
@@ -777,22 +868,21 @@ export const ListFeedbackRequestsBody = zod.object({
   "email": zod.email().optional()
 })
 
-export const listFeedbackRequestsResponseTwoDataMetaPageDefault = 1;
+export const listFeedbackRequestsResponseDataMetaPageDefault = 1;
 
-export const listFeedbackRequestsResponseTwoDataMetaPageSizeDefault = 10;
-export const listFeedbackRequestsResponseTwoDataMetaPageSizeMax = 100;
+export const listFeedbackRequestsResponseDataMetaPageSizeDefault = 10;
+export const listFeedbackRequestsResponseDataMetaPageSizeMax = 100;
 
-export const listFeedbackRequestsResponseTwoDataMetaTotalItemsMin = 0;
+export const listFeedbackRequestsResponseDataMetaTotalItemsMin = 0;
 
-export const listFeedbackRequestsResponseTwoDataMetaTotalPagesMin = 0;
+export const listFeedbackRequestsResponseDataMetaTotalPagesMin = 0;
 
 
 
 export const ListFeedbackRequestsResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
@@ -807,13 +897,13 @@ export const ListFeedbackRequestsResponse = zod.object({
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
-  "page": zod.number().min(1).default(listFeedbackRequestsResponseTwoDataMetaPageDefault).describe('1-based page index'),
-  "pageSize": zod.number().min(1).max(listFeedbackRequestsResponseTwoDataMetaPageSizeMax).default(listFeedbackRequestsResponseTwoDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
-  "totalItems": zod.number().min(listFeedbackRequestsResponseTwoDataMetaTotalItemsMin),
-  "totalPages": zod.number().min(listFeedbackRequestsResponseTwoDataMetaTotalPagesMin)
+  "page": zod.number().min(1).default(listFeedbackRequestsResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listFeedbackRequestsResponseDataMetaPageSizeMax).default(listFeedbackRequestsResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(listFeedbackRequestsResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(listFeedbackRequestsResponseDataMetaTotalPagesMin)
 })
 })
-}))
+})
 
 
 /**
@@ -832,8 +922,7 @@ export const UpdateFeedbackRequestStatusBody = zod.object({
 export const UpdateFeedbackRequestStatusResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "name": zod.string().optional(),
@@ -846,7 +935,7 @@ export const UpdateFeedbackRequestStatusResponse = zod.object({
   "createdAt": zod.iso.datetime({"offset":true}),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -869,37 +958,38 @@ export const ListProductsQueryParams = zod.object({
   "page": zod.number().min(1).default(listProductsQueryPageDefault).describe('1-based page index'),
   "pageSize": zod.number().min(1).max(listProductsQueryPageSizeMax).default(listProductsQueryPageSizeDefault),
   "text": zod.string().min(1).optional(),
-  "productId": zod.string().optional(),
+  "id": zod.string().optional(),
+  "category": zod.string().optional(),
+  "tag": zod.string().optional(),
   "minPrice": zod.number().min(listProductsQueryMinPriceMin).optional(),
   "maxPrice": zod.number().min(listProductsQueryMaxPriceMin).optional()
 })
 
-export const listProductsResponseTwoDataItemsItemPriceMin = 0;
+export const listProductsResponseDataItemsItemPriceMin = 0;
 
-export const listProductsResponseTwoDataMetaPageDefault = 1;
+export const listProductsResponseDataMetaPageDefault = 1;
 
-export const listProductsResponseTwoDataMetaPageSizeDefault = 10;
-export const listProductsResponseTwoDataMetaPageSizeMax = 100;
+export const listProductsResponseDataMetaPageSizeDefault = 10;
+export const listProductsResponseDataMetaPageSizeMax = 100;
 
-export const listProductsResponseTwoDataMetaTotalItemsMin = 0;
+export const listProductsResponseDataMetaTotalItemsMin = 0;
 
-export const listProductsResponseTwoDataMetaTotalPagesMin = 0;
+export const listProductsResponseDataMetaTotalPagesMin = 0;
 
 
 
 export const ListProductsResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(listProductsResponseTwoDataItemsItemPriceMin),
+  "price": zod.number().min(listProductsResponseDataItemsItemPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -907,13 +997,13 @@ export const ListProductsResponse = zod.object({
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
-  "page": zod.number().min(1).default(listProductsResponseTwoDataMetaPageDefault).describe('1-based page index'),
-  "pageSize": zod.number().min(1).max(listProductsResponseTwoDataMetaPageSizeMax).default(listProductsResponseTwoDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
-  "totalItems": zod.number().min(listProductsResponseTwoDataMetaTotalItemsMin),
-  "totalPages": zod.number().min(listProductsResponseTwoDataMetaTotalPagesMin)
+  "page": zod.number().min(1).default(listProductsResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listProductsResponseDataMetaPageSizeMax).default(listProductsResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(listProductsResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(listProductsResponseDataMetaTotalPagesMin)
 })
 })
-}))
+})
 
 
 /**
@@ -922,41 +1012,40 @@ export const ListProductsResponse = zod.object({
  */
 export const createProductBodyPriceMin = 0;
 
-
+export const createProductBodyActiveDefault = true;
 
 export const CreateProductBody = zod.object({
   "title": zod.string(),
   "price": zod.number().min(createProductBodyPriceMin),
   "description": zod.string().optional(),
-  "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "active": zod.boolean().default(createProductBodyActiveDefault),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional()
 })
 
-export const createProductResponseTwoDataPriceMin = 0;
+export const createProductResponseDataPriceMin = 0;
 
 
 
 export const CreateProductResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(createProductResponseTwoDataPriceMin),
+  "price": zod.number().min(createProductResponseDataPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -973,34 +1062,33 @@ export const UpdateProductBody = zod.object({
   "description": zod.string().optional(),
   "price": zod.number().min(updateProductBodyPriceMin),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional()
 })
 
-export const updateProductResponseTwoDataPriceMin = 0;
+export const updateProductResponseDataPriceMin = 0;
 
 
 
 export const UpdateProductResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(updateProductResponseTwoDataPriceMin),
+  "price": zod.number().min(updateProductResponseDataPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -1029,29 +1117,28 @@ export const GetProductByIdParams = zod.object({
   "id": zod.string().describe('Resource identifier')
 })
 
-export const getProductByIdResponseTwoDataPriceMin = 0;
+export const getProductByIdResponseDataPriceMin = 0;
 
 
 
 export const GetProductByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(getProductByIdResponseTwoDataPriceMin),
+  "price": zod.number().min(getProductByIdResponseDataPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -1071,34 +1158,33 @@ export const UpdateProductByIdBody = zod.object({
   "description": zod.string().optional(),
   "price": zod.number().min(updateProductByIdBodyPriceMin),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional()
 })
 
-export const updateProductByIdResponseTwoDataPriceMin = 0;
+export const updateProductByIdResponseDataPriceMin = 0;
 
 
 
 export const UpdateProductByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(updateProductByIdResponseTwoDataPriceMin),
+  "price": zod.number().min(updateProductByIdResponseDataPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -1113,7 +1199,28 @@ export const DeleteProductByIdQueryParams = zod.object({
   "hardDelete": zod.boolean().optional()
 })
 
+export const deleteProductByIdBodyHardDeleteDefault = false;
+
+export const DeleteProductByIdBody = zod.object({
+  "hardDelete": zod.boolean().default(deleteProductByIdBodyHardDeleteDefault)
+})
+
 export const DeleteProductByIdResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Permanently removes the product identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /products/{id}?hardDelete=true`.
+ * @summary Permanently delete product
+ */
+export const HardDeleteProductByIdParams = zod.object({
+  "id": zod.string().describe('Resource identifier')
+})
+
+export const HardDeleteProductByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string()
@@ -1147,32 +1254,31 @@ export const SearchProductsBody = zod.object({
   "tag": zod.string().optional()
 })
 
-export const searchProductsResponseTwoDataItemsItemPriceMin = 0;
+export const searchProductsResponseDataItemsItemPriceMin = 0;
 
-export const searchProductsResponseTwoDataMetaPageDefault = 1;
+export const searchProductsResponseDataMetaPageDefault = 1;
 
-export const searchProductsResponseTwoDataMetaPageSizeDefault = 10;
-export const searchProductsResponseTwoDataMetaPageSizeMax = 100;
+export const searchProductsResponseDataMetaPageSizeDefault = 10;
+export const searchProductsResponseDataMetaPageSizeMax = 100;
 
-export const searchProductsResponseTwoDataMetaTotalItemsMin = 0;
+export const searchProductsResponseDataMetaTotalItemsMin = 0;
 
-export const searchProductsResponseTwoDataMetaTotalPagesMin = 0;
+export const searchProductsResponseDataMetaTotalPagesMin = 0;
 
 
 
 export const SearchProductsResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(searchProductsResponseTwoDataItemsItemPriceMin),
+  "price": zod.number().min(searchProductsResponseDataItemsItemPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1180,13 +1286,13 @@ export const SearchProductsResponse = zod.object({
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
-  "page": zod.number().min(1).default(searchProductsResponseTwoDataMetaPageDefault).describe('1-based page index'),
-  "pageSize": zod.number().min(1).max(searchProductsResponseTwoDataMetaPageSizeMax).default(searchProductsResponseTwoDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
-  "totalItems": zod.number().min(searchProductsResponseTwoDataMetaTotalItemsMin),
-  "totalPages": zod.number().min(searchProductsResponseTwoDataMetaTotalPagesMin)
+  "page": zod.number().min(1).default(searchProductsResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(searchProductsResponseDataMetaPageSizeMax).default(searchProductsResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(searchProductsResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(searchProductsResponseDataMetaTotalPagesMin)
 })
 })
-}))
+})
 
 
 /**
@@ -1194,32 +1300,31 @@ export const SearchProductsResponse = zod.object({
  * @summary Get cart
  */
 
-export const getCartResponseTwoDataSummaryItemsCountMin = 0;
+export const getCartResponseDataSummaryItemsCountMin = 0;
 
-export const getCartResponseTwoDataSummaryTotalQuantityMin = 0;
+export const getCartResponseDataSummaryTotalQuantityMin = 0;
 
-export const getCartResponseTwoDataSummaryTotalMin = 0;
+export const getCartResponseDataSummaryTotalMin = 0;
 
 
 
 export const GetCartResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "productId": zod.string().describe('Resource identifier'),
   "quantity": zod.number().min(1)
 })),
   "summary": zod.object({
-  "itemsCount": zod.number().min(getCartResponseTwoDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
-  "totalQuantity": zod.number().min(getCartResponseTwoDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
-  "total": zod.number().min(getCartResponseTwoDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
+  "itemsCount": zod.number().min(getCartResponseDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
+  "totalQuantity": zod.number().min(getCartResponseDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
+  "total": zod.number().min(getCartResponseDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
   "currency": zod.string().optional().describe('ISO-4217 currency code (e.g. USD)')
 })
 })
-}))
+})
 
 
 /**
@@ -1235,32 +1340,31 @@ export const UpsertCartItemBody = zod.object({
 })
 
 
-export const upsertCartItemResponseTwoDataSummaryItemsCountMin = 0;
+export const upsertCartItemResponseDataSummaryItemsCountMin = 0;
 
-export const upsertCartItemResponseTwoDataSummaryTotalQuantityMin = 0;
+export const upsertCartItemResponseDataSummaryTotalQuantityMin = 0;
 
-export const upsertCartItemResponseTwoDataSummaryTotalMin = 0;
+export const upsertCartItemResponseDataSummaryTotalMin = 0;
 
 
 
 export const UpsertCartItemResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "productId": zod.string().describe('Resource identifier'),
   "quantity": zod.number().min(1)
 })),
   "summary": zod.object({
-  "itemsCount": zod.number().min(upsertCartItemResponseTwoDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
-  "totalQuantity": zod.number().min(upsertCartItemResponseTwoDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
-  "total": zod.number().min(upsertCartItemResponseTwoDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
+  "itemsCount": zod.number().min(upsertCartItemResponseDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
+  "totalQuantity": zod.number().min(upsertCartItemResponseDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
+  "total": zod.number().min(upsertCartItemResponseDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
   "currency": zod.string().optional().describe('ISO-4217 currency code (e.g. USD)')
 })
 })
-}))
+})
 
 
 /**
@@ -1272,32 +1376,31 @@ export const ClearCartBody = zod.object({
 })
 
 
-export const clearCartResponseTwoDataSummaryItemsCountMin = 0;
+export const clearCartResponseDataSummaryItemsCountMin = 0;
 
-export const clearCartResponseTwoDataSummaryTotalQuantityMin = 0;
+export const clearCartResponseDataSummaryTotalQuantityMin = 0;
 
-export const clearCartResponseTwoDataSummaryTotalMin = 0;
+export const clearCartResponseDataSummaryTotalMin = 0;
 
 
 
 export const ClearCartResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "productId": zod.string().describe('Resource identifier'),
   "quantity": zod.number().min(1)
 })),
   "summary": zod.object({
-  "itemsCount": zod.number().min(clearCartResponseTwoDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
-  "totalQuantity": zod.number().min(clearCartResponseTwoDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
-  "total": zod.number().min(clearCartResponseTwoDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
+  "itemsCount": zod.number().min(clearCartResponseDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
+  "totalQuantity": zod.number().min(clearCartResponseDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
+  "total": zod.number().min(clearCartResponseDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
   "currency": zod.string().optional().describe('ISO-4217 currency code (e.g. USD)')
 })
 })
-}))
+})
 
 
 /**
@@ -1317,32 +1420,31 @@ export const UpdateCartItemByIdBody = zod.object({
 })
 
 
-export const updateCartItemByIdResponseTwoDataSummaryItemsCountMin = 0;
+export const updateCartItemByIdResponseDataSummaryItemsCountMin = 0;
 
-export const updateCartItemByIdResponseTwoDataSummaryTotalQuantityMin = 0;
+export const updateCartItemByIdResponseDataSummaryTotalQuantityMin = 0;
 
-export const updateCartItemByIdResponseTwoDataSummaryTotalMin = 0;
+export const updateCartItemByIdResponseDataSummaryTotalMin = 0;
 
 
 
 export const UpdateCartItemByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "productId": zod.string().describe('Resource identifier'),
   "quantity": zod.number().min(1)
 })),
   "summary": zod.object({
-  "itemsCount": zod.number().min(updateCartItemByIdResponseTwoDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
-  "totalQuantity": zod.number().min(updateCartItemByIdResponseTwoDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
-  "total": zod.number().min(updateCartItemByIdResponseTwoDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
+  "itemsCount": zod.number().min(updateCartItemByIdResponseDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
+  "totalQuantity": zod.number().min(updateCartItemByIdResponseDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
+  "total": zod.number().min(updateCartItemByIdResponseDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
   "currency": zod.string().optional().describe('ISO-4217 currency code (e.g. USD)')
 })
 })
-}))
+})
 
 
 /**
@@ -1354,58 +1456,56 @@ export const RemoveCartItemParams = zod.object({
 })
 
 
-export const removeCartItemResponseTwoDataSummaryItemsCountMin = 0;
+export const removeCartItemResponseDataSummaryItemsCountMin = 0;
 
-export const removeCartItemResponseTwoDataSummaryTotalQuantityMin = 0;
+export const removeCartItemResponseDataSummaryTotalQuantityMin = 0;
 
-export const removeCartItemResponseTwoDataSummaryTotalMin = 0;
+export const removeCartItemResponseDataSummaryTotalMin = 0;
 
 
 
 export const RemoveCartItemResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "productId": zod.string().describe('Resource identifier'),
   "quantity": zod.number().min(1)
 })),
   "summary": zod.object({
-  "itemsCount": zod.number().min(removeCartItemResponseTwoDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
-  "totalQuantity": zod.number().min(removeCartItemResponseTwoDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
-  "total": zod.number().min(removeCartItemResponseTwoDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
+  "itemsCount": zod.number().min(removeCartItemResponseDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
+  "totalQuantity": zod.number().min(removeCartItemResponseDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
+  "total": zod.number().min(removeCartItemResponseDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
   "currency": zod.string().optional().describe('ISO-4217 currency code (e.g. USD)')
 })
 })
-}))
+})
 
 
 /**
  * Returns a lightweight summary of the authenticated user's cart.
  * @summary Get cart summary
  */
-export const getCartSummaryResponseTwoDataItemsCountMin = 0;
+export const getCartSummaryResponseDataItemsCountMin = 0;
 
-export const getCartSummaryResponseTwoDataTotalQuantityMin = 0;
+export const getCartSummaryResponseDataTotalQuantityMin = 0;
 
-export const getCartSummaryResponseTwoDataTotalMin = 0;
+export const getCartSummaryResponseDataTotalMin = 0;
 
 
 
 export const GetCartSummaryResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
-  "itemsCount": zod.number().min(getCartSummaryResponseTwoDataItemsCountMin).describe('Number of distinct cart lines\/items'),
-  "totalQuantity": zod.number().min(getCartSummaryResponseTwoDataTotalQuantityMin).describe('Sum of quantities across all items'),
-  "total": zod.number().min(getCartSummaryResponseTwoDataTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
+  "itemsCount": zod.number().min(getCartSummaryResponseDataItemsCountMin).describe('Number of distinct cart lines\/items'),
+  "totalQuantity": zod.number().min(getCartSummaryResponseDataTotalQuantityMin).describe('Sum of quantities across all items'),
+  "total": zod.number().min(getCartSummaryResponseDataTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
   "currency": zod.string().optional().describe('ISO-4217 currency code (e.g. USD)')
 })
-}))
+})
 
 
 /**
@@ -1417,18 +1517,21 @@ export const CheckoutBody = zod.object({
   "notes": zod.string().optional().describe('Optional order notes')
 })
 
-export const checkoutResponseTwoDataOrderItemsItemProductPriceMin = 0;
+export const checkoutResponseDataOrderItemsItemProductPriceMin = 0;
 
 
-export const checkoutResponseTwoDataOrderTotalMin = 0;
+export const checkoutResponseDataOrderTotalItemsMin = 0;
+
+export const checkoutResponseDataOrderTotalQuantityMin = 0;
+
+export const checkoutResponseDataOrderTotalPriceMin = 0;
 
 
 
 export const CheckoutResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "order": zod.object({
   "id": zod.string().describe('Resource identifier'),
@@ -1438,10 +1541,10 @@ export const CheckoutResponse = zod.object({
   "product": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(checkoutResponseTwoDataOrderItemsItemProductPriceMin),
+  "price": zod.number().min(checkoutResponseDataOrderItemsItemProductPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1450,7 +1553,9 @@ export const CheckoutResponse = zod.object({
 }),
   "quantity": zod.number().min(1)
 })),
-  "total": zod.number().min(checkoutResponseTwoDataOrderTotalMin),
+  "totalItems": zod.number().min(checkoutResponseDataOrderTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(checkoutResponseDataOrderTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(checkoutResponseDataOrderTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1458,7 +1563,7 @@ export const CheckoutResponse = zod.object({
 }),
   "message": zod.string().optional()
 })
-}))
+})
 
 
 /**
@@ -1482,27 +1587,30 @@ export const ListOrdersQueryParams = zod.object({
   "email": zod.email().optional()
 })
 
-export const listOrdersResponseTwoDataItemsItemItemsItemProductPriceMin = 0;
+export const listOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;
 
 
-export const listOrdersResponseTwoDataItemsItemTotalMin = 0;
+export const listOrdersResponseDataItemsItemTotalItemsMin = 0;
 
-export const listOrdersResponseTwoDataMetaPageDefault = 1;
+export const listOrdersResponseDataItemsItemTotalQuantityMin = 0;
 
-export const listOrdersResponseTwoDataMetaPageSizeDefault = 10;
-export const listOrdersResponseTwoDataMetaPageSizeMax = 100;
+export const listOrdersResponseDataItemsItemTotalPriceMin = 0;
 
-export const listOrdersResponseTwoDataMetaTotalItemsMin = 0;
+export const listOrdersResponseDataMetaPageDefault = 1;
 
-export const listOrdersResponseTwoDataMetaTotalPagesMin = 0;
+export const listOrdersResponseDataMetaPageSizeDefault = 10;
+export const listOrdersResponseDataMetaPageSizeMax = 100;
+
+export const listOrdersResponseDataMetaTotalItemsMin = 0;
+
+export const listOrdersResponseDataMetaTotalPagesMin = 0;
 
 
 
 export const ListOrdersResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
@@ -1512,10 +1620,10 @@ export const ListOrdersResponse = zod.object({
   "product": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(listOrdersResponseTwoDataItemsItemItemsItemProductPriceMin),
+  "price": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1524,20 +1632,22 @@ export const ListOrdersResponse = zod.object({
 }),
   "quantity": zod.number().min(1)
 })),
-  "total": zod.number().min(listOrdersResponseTwoDataItemsItemTotalMin),
+  "totalItems": zod.number().min(listOrdersResponseDataItemsItemTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(listOrdersResponseDataItemsItemTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(listOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
-  "page": zod.number().min(1).default(listOrdersResponseTwoDataMetaPageDefault).describe('1-based page index'),
-  "pageSize": zod.number().min(1).max(listOrdersResponseTwoDataMetaPageSizeMax).default(listOrdersResponseTwoDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
-  "totalItems": zod.number().min(listOrdersResponseTwoDataMetaTotalItemsMin),
-  "totalPages": zod.number().min(listOrdersResponseTwoDataMetaTotalPagesMin)
+  "page": zod.number().min(1).default(listOrdersResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listOrdersResponseDataMetaPageSizeMax).default(listOrdersResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(listOrdersResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(listOrdersResponseDataMetaTotalPagesMin)
 })
 })
-}))
+})
 
 
 /**
@@ -1557,18 +1667,21 @@ export const CreateOrderBody = zod.object({
 })).min(1)
 }).describe('Create a new order.')
 
-export const createOrderResponseTwoDataItemsItemProductPriceMin = 0;
+export const createOrderResponseDataItemsItemProductPriceMin = 0;
 
 
-export const createOrderResponseTwoDataTotalMin = 0;
+export const createOrderResponseDataTotalItemsMin = 0;
+
+export const createOrderResponseDataTotalQuantityMin = 0;
+
+export const createOrderResponseDataTotalPriceMin = 0;
 
 
 
 export const CreateOrderResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "userId": zod.string().describe('Resource identifier'),
@@ -1577,10 +1690,10 @@ export const CreateOrderResponse = zod.object({
   "product": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(createOrderResponseTwoDataItemsItemProductPriceMin),
+  "price": zod.number().min(createOrderResponseDataItemsItemProductPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1589,13 +1702,15 @@ export const CreateOrderResponse = zod.object({
 }),
   "quantity": zod.number().min(1)
 })),
-  "total": zod.number().min(createOrderResponseTwoDataTotalMin),
+  "totalItems": zod.number().min(createOrderResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(createOrderResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(createOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -1617,18 +1732,21 @@ export const UpdateOrderBody = zod.object({
 })).min(1).optional()
 })
 
-export const updateOrderResponseTwoDataItemsItemProductPriceMin = 0;
+export const updateOrderResponseDataItemsItemProductPriceMin = 0;
 
 
-export const updateOrderResponseTwoDataTotalMin = 0;
+export const updateOrderResponseDataTotalItemsMin = 0;
+
+export const updateOrderResponseDataTotalQuantityMin = 0;
+
+export const updateOrderResponseDataTotalPriceMin = 0;
 
 
 
 export const UpdateOrderResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "userId": zod.string().describe('Resource identifier'),
@@ -1637,10 +1755,10 @@ export const UpdateOrderResponse = zod.object({
   "product": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(updateOrderResponseTwoDataItemsItemProductPriceMin),
+  "price": zod.number().min(updateOrderResponseDataItemsItemProductPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1649,13 +1767,15 @@ export const UpdateOrderResponse = zod.object({
 }),
   "quantity": zod.number().min(1)
 })),
-  "total": zod.number().min(updateOrderResponseTwoDataTotalMin),
+  "totalItems": zod.number().min(updateOrderResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(updateOrderResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(updateOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -1694,27 +1814,30 @@ export const SearchOrdersBody = zod.object({
   "email": zod.email().optional()
 })
 
-export const searchOrdersResponseTwoDataItemsItemItemsItemProductPriceMin = 0;
+export const searchOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;
 
 
-export const searchOrdersResponseTwoDataItemsItemTotalMin = 0;
+export const searchOrdersResponseDataItemsItemTotalItemsMin = 0;
 
-export const searchOrdersResponseTwoDataMetaPageDefault = 1;
+export const searchOrdersResponseDataItemsItemTotalQuantityMin = 0;
 
-export const searchOrdersResponseTwoDataMetaPageSizeDefault = 10;
-export const searchOrdersResponseTwoDataMetaPageSizeMax = 100;
+export const searchOrdersResponseDataItemsItemTotalPriceMin = 0;
 
-export const searchOrdersResponseTwoDataMetaTotalItemsMin = 0;
+export const searchOrdersResponseDataMetaPageDefault = 1;
 
-export const searchOrdersResponseTwoDataMetaTotalPagesMin = 0;
+export const searchOrdersResponseDataMetaPageSizeDefault = 10;
+export const searchOrdersResponseDataMetaPageSizeMax = 100;
+
+export const searchOrdersResponseDataMetaTotalItemsMin = 0;
+
+export const searchOrdersResponseDataMetaTotalPagesMin = 0;
 
 
 
 export const SearchOrdersResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
@@ -1724,10 +1847,10 @@ export const SearchOrdersResponse = zod.object({
   "product": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(searchOrdersResponseTwoDataItemsItemItemsItemProductPriceMin),
+  "price": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1736,20 +1859,22 @@ export const SearchOrdersResponse = zod.object({
 }),
   "quantity": zod.number().min(1)
 })),
-  "total": zod.number().min(searchOrdersResponseTwoDataItemsItemTotalMin),
+  "totalItems": zod.number().min(searchOrdersResponseDataItemsItemTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(searchOrdersResponseDataItemsItemTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(searchOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
-  "page": zod.number().min(1).default(searchOrdersResponseTwoDataMetaPageDefault).describe('1-based page index'),
-  "pageSize": zod.number().min(1).max(searchOrdersResponseTwoDataMetaPageSizeMax).default(searchOrdersResponseTwoDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
-  "totalItems": zod.number().min(searchOrdersResponseTwoDataMetaTotalItemsMin),
-  "totalPages": zod.number().min(searchOrdersResponseTwoDataMetaTotalPagesMin)
+  "page": zod.number().min(1).default(searchOrdersResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(searchOrdersResponseDataMetaPageSizeMax).default(searchOrdersResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(searchOrdersResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(searchOrdersResponseDataMetaTotalPagesMin)
 })
 })
-}))
+})
 
 
 /**
@@ -1760,18 +1885,21 @@ export const GetOrderByIdParams = zod.object({
   "id": zod.string().describe('Resource identifier')
 })
 
-export const getOrderByIdResponseTwoDataItemsItemProductPriceMin = 0;
+export const getOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
 
-export const getOrderByIdResponseTwoDataTotalMin = 0;
+export const getOrderByIdResponseDataTotalItemsMin = 0;
+
+export const getOrderByIdResponseDataTotalQuantityMin = 0;
+
+export const getOrderByIdResponseDataTotalPriceMin = 0;
 
 
 
 export const GetOrderByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "userId": zod.string().describe('Resource identifier'),
@@ -1780,10 +1908,10 @@ export const GetOrderByIdResponse = zod.object({
   "product": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(getOrderByIdResponseTwoDataItemsItemProductPriceMin),
+  "price": zod.number().min(getOrderByIdResponseDataItemsItemProductPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1792,13 +1920,15 @@ export const GetOrderByIdResponse = zod.object({
 }),
   "quantity": zod.number().min(1)
 })),
-  "total": zod.number().min(getOrderByIdResponseTwoDataTotalMin),
+  "totalItems": zod.number().min(getOrderByIdResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(getOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(getOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**
@@ -1823,18 +1953,21 @@ export const UpdateOrderByIdBody = zod.object({
 })).min(1).optional()
 })
 
-export const updateOrderByIdResponseTwoDataItemsItemProductPriceMin = 0;
+export const updateOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
 
-export const updateOrderByIdResponseTwoDataTotalMin = 0;
+export const updateOrderByIdResponseDataTotalItemsMin = 0;
+
+export const updateOrderByIdResponseDataTotalQuantityMin = 0;
+
+export const updateOrderByIdResponseDataTotalPriceMin = 0;
 
 
 
 export const UpdateOrderByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
-  "message": zod.string()
-}).and(zod.object({
+  "message": zod.string(),
   "data": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "userId": zod.string().describe('Resource identifier'),
@@ -1843,10 +1976,10 @@ export const UpdateOrderByIdResponse = zod.object({
   "product": zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
-  "price": zod.number().min(updateOrderByIdResponseTwoDataItemsItemProductPriceMin),
+  "price": zod.number().min(updateOrderByIdResponseDataItemsItemProductPriceMin),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.url().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
   "tags": zod.array(zod.string()).optional(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1855,13 +1988,15 @@ export const UpdateOrderByIdResponse = zod.object({
 }),
   "quantity": zod.number().min(1)
 })),
-  "total": zod.number().min(updateOrderByIdResponseTwoDataTotalMin),
+  "totalItems": zod.number().min(updateOrderByIdResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(updateOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(updateOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
-}))
+})
 
 
 /**

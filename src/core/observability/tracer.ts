@@ -4,7 +4,7 @@
  * Thin wrapper around the OpenTelemetry API.
  * Import getTracer() or withSpan() anywhere you want to create a custom span.
  *
- * See: docs/guide/opentelemetry-tracing.md
+ * See: docs/tools/opentelemetry.md
  */
 
 // `@opentelemetry/api` is the *interface* package, deliberately separate from the SDK:

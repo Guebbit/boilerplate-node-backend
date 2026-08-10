@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@middlewares/authorizations';
-import { getOrders } from '@controllers/orders/get-orders';
+import { getOrders, searchOrdersKeyParameters } from '@controllers/orders/get-orders';
 import { postOrders } from '@controllers/orders/post-orders';
 import { putOrders } from '@controllers/orders/put-orders';
 import { deleteOrders } from '@controllers/orders/delete-orders';
@@ -18,7 +18,11 @@ router.use(getAuth, isAuth);
 router.post('/search', getOrders);
 
 // GET /orders — list (non-admin sees own orders only)
-router.get('/', setCache(3600, { tags: ['orders'] }), getOrders);
+router.get(
+    '/',
+    setCache(3600, { tags: ['orders'], keyParameters: searchOrdersKeyParameters }),
+    getOrders
+);
 
 // POST /orders — admin creates order directly
 router.post('/', isAdmin, invalidateCache(['orders']), postOrders);
@@ -30,10 +34,14 @@ router.put('/', isAdmin, invalidateCache(['orders']), putOrders);
 router.delete('/', isAdmin, invalidateCache(['orders']), deleteOrders);
 
 // GET /orders/:id/invoice — must come before /:id
-router.get('/:id/invoice', setCache(3600, { tags: ['orders'] }), getOrderInvoice);
+router.get(
+    '/:id/invoice',
+    setCache(3600, { tags: ['orders'], keyParameters: [] }),
+    getOrderInvoice
+);
 
 // GET /orders/:id
-router.get('/:id', setCache(3600, { tags: ['orders'] }), getOrderItem);
+router.get('/:id', setCache(3600, { tags: ['orders'], keyParameters: [] }), getOrderItem);
 
 // PUT /orders/:id — admin only (update)
 router.put('/:id', isAdmin, invalidateCache(['orders']), putOrders);

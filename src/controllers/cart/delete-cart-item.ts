@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@core/http/response';
 import type { RemoveCartItemRequest } from '@types';
@@ -9,7 +9,7 @@ import {
     buildAnalyticsBase
 } from '@core/observability/analytics';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
-import { extractCustomId, isValidObjectId } from '@core/http/request';
+import { readInput, isValidObjectId } from '@core/http/request';
 
 /**
  * DELETE /cart/:productId
@@ -25,7 +25,11 @@ export const deleteCartItem = (
         return;
     }
     const userId = request.authContext.id;
-    const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
+    // Path param only. `DELETE /cart/{productId}` declares no request body, and it could not use
+    // one anyway: the route cannot match without the segment, so the param always wins the
+    // precedence chain and a body `productId` was unreachable rather than merely undocumented.
+    // (`PUT /cart/{productId}` keeps `body` because `UpdateCartItemByIdRequest` does declare it.)
+    const { productId } = readInput(request, { sources: ['params'], ids: ['productId'] });
 
     if (!isValidObjectId(productId)) {
         rejectResponse(response, 422, 'removeCartItem - missing id', [
@@ -39,23 +43,21 @@ export const deleteCartItem = (
             rejectResponse(response, result.status, result.message, result.errors);
             return;
         }
-        return cartService.cartGetWithSummary(userId).then((cart) => {
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: AuditAction.USER_CART_ITEM_REMOVED,
-                    actor_user_id: userId,
-                    actor_role: 'user',
-                    outcome: 'success',
-                    target_type: 'product',
-                    target_id: productId
-                })
-            );
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: AnalyticsEvent.CART_ITEM_REMOVED,
-                properties: { product_id: productId }
-            });
-            successResponse(response, cart);
+        emitAuditEvent(
+            buildAuditEvent(request, {
+                action: AuditAction.USER_CART_ITEM_REMOVED,
+                actor_user_id: userId,
+                actor_role: 'user',
+                outcome: 'success',
+                target_type: 'product',
+                target_id: productId
+            })
+        );
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(request),
+            event: AnalyticsEvent.CART_ITEM_REMOVED,
+            properties: { product_id: productId }
         });
+        successResponse(response, result.data);
     });
 };

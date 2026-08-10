@@ -1,0 +1,60 @@
+name: Fuzz (spec-driven)
+
+# Spec-driven fuzzing lives in its own workflow, for the same structural reason mutation testing
+# does: it is a HUNTER, not a gate.
+#
+# What it does: walks `openapi.yaml`, generates spec-valid but hostile requests for every
+# operation it finds, and asserts that none produces a 5xx and that every response matches the
+# contract. Because the endpoint list is derived from the spec rather than written down, a route
+# added tomorrow is covered tomorrow, with nobody remembering to add it.
+#
+# Why it is not in `ci.yml`:
+#
+#   - it is slow (a real in-memory Mongo, dozens of generated requests per operation), and
+#   - a failure is normally a FINDING that needs a person to read it, not a red X that should
+#     block a merge. Its first run produced five genuine bugs, one of them an unauthenticated
+#     500 and one a spec error that had made the frontend's admin dashboard silently blank.
+#
+# Nightly, and on demand from the Actions tab before touching the HTTP layer or the spec.
+
+on:
+    schedule:
+        # 03:45 UTC — after the backend's mutation run (03:00) and the frontend's nightlies
+        # (03:00 / 03:15 / 03:30), so the five do not compete for runners.
+        - cron: '45 3 * * *'
+    workflow_dispatch:
+
+concurrency:
+    group: fuzz-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    NODE_VERSION: 22
+
+jobs:
+    fuzz:
+        runs-on: ubuntu-latest
+        # Generous on purpose: the point of a nightly is that it is allowed to be slow, and the
+        # run scales with the number of operations in the spec. It should never be trimmed by
+        # narrowing what gets fuzzed.
+        timeout-minutes: 45
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            # No Mongo service container: the suite uses `mongodb-memory-server`, and the cache
+            # adapter treats an unreachable Redis as a miss — same as the contract suite.
+            - name: Run the fuzzer
+              run: npm run test:fuzz

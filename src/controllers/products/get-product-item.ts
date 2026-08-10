@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { CastError } from 'mongoose';
 import {
     emitAnalyticsEvent,
@@ -35,5 +36,5 @@ export const getProductItem = (request: Request, response: Response) =>
                 return rejectResponse(response, 404, 'getProductItem - not found', [
                     t('ecommerce.product-not-found')
                 ]);
-            rejectResponse(response, 500, 'getProductItem', [error.message]);
+            rejectDatabaseError(response, 'getProductItem', error);
         });

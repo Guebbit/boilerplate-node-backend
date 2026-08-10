@@ -14,9 +14,7 @@ info:
 
         Implemented:
         - SSE observability events over `/observability/events`
-        - Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
         - RabbitMQ worker job queues (`worker.*`)
-        - Redis pub/sub cache invalidation (`cache.tags.invalidated`)
 defaultContentType: application/json
 tags:
     - name: implemented
@@ -30,10 +28,6 @@ servers:
         url: localhost:5672
         protocol: amqp
         description: Local RabbitMQ broker for async job queues.
-    redisLocal:
-        url: localhost:6379
-        protocol: redis
-        description: Local Redis for pub/sub cache invalidation.
 channels:
     observability.metrics.snapshot:
         description: Initial metrics snapshot sent on SSE connect.
@@ -53,12 +47,6 @@ channels:
             operationId: sseHeartbeat
             message:
                 $ref: '#/components/messages/HeartbeatEvent'
-    ecommerce.cart.checked_out:
-        description: Cart checkout domain event emitted after a successful order creation.
-        subscribe:
-            operationId: ecommerceCartCheckedOut
-            message:
-                $ref: '#/components/messages/CartCheckedOutEvent'
     worker.email.send:
         description: Email job queue — producers enqueue email requests, the email worker consumes them.
         servers:
@@ -87,20 +75,6 @@ channels:
             summary: PDF worker renders template to PDF.
             message:
                 $ref: '#/components/messages/PdfJobConsumeMessage'
-    cache.tags.invalidated:
-        description: Redis pub/sub channel for broadcasting cache tag invalidations across app instances.
-        servers:
-            - redisLocal
-        publish:
-            operationId: cacheTagsInvalidatedPublish
-            summary: An instance broadcasts which cache tags were invalidated.
-            message:
-                $ref: '#/components/messages/CacheTagsInvalidatedMessage'
-        subscribe:
-            operationId: cacheTagsInvalidatedConsume
-            summary: Other instances receive and apply the invalidation locally.
-            message:
-                $ref: '#/components/messages/CacheTagsInvalidatedConsumeMessage'
 components:
     messages:
         MetricsSnapshotEvent:
@@ -121,12 +95,6 @@ components:
             title: Observability heartbeat
             payload:
                 $ref: '#/components/schemas/ObservabilityMetricsPayload'
-        CartCheckedOutEvent:
-            name: CartCheckedOutEvent
-            messageId: ecommerce.cart.checked_out
-            title: Ecommerce example - cart checked out
-            payload:
-                $ref: '#/components/schemas/CartCheckedOutEvent'
         EmailJobMessage:
             name: EmailJobMessage
             messageId: worker.email.send
@@ -139,12 +107,6 @@ components:
             title: PDF generation job
             payload:
                 $ref: '#/components/schemas/PdfJobPayload'
-        CacheTagsInvalidatedMessage:
-            name: CacheTagsInvalidatedMessage
-            messageId: cache.tags.invalidated
-            title: Cache tags invalidation broadcast
-            payload:
-                $ref: '#/components/schemas/CacheTagsInvalidatedPayload'
         EmailJobConsumeMessage:
             name: EmailJobConsumeMessage
             messageId: worker.email.job.consume
@@ -157,12 +119,6 @@ components:
             title: PDF generation job (worker consume)
             payload:
                 $ref: '#/components/schemas/PdfJobPayload'
-        CacheTagsInvalidatedConsumeMessage:
-            name: CacheTagsInvalidatedConsumeMessage
-            messageId: cache.invalidation.broadcast.consume
-            title: Cache tags invalidation broadcast (consumer)
-            payload:
-                $ref: '#/components/schemas/CacheTagsInvalidatedPayload'
     schemas:
         ObservabilityMetricsPayload:
             type: object
@@ -254,6 +210,14 @@ components:
                 data:
                     type: object
                     description: Template variables passed to EJS.
+                locale:
+                    type: string
+                    description: >-
+                        Language to render the template in. Carried explicitly because the
+                        request-scoped locale (AsyncLocalStorage, see src/core/i18n.ts) does not
+                        survive the hop onto the queue — the worker may not even be in the same
+                        process. Omitted means NODE_DEFAULT_LOCALE.
+                    example: it
             additionalProperties: false
         PdfJobPayload:
             type: object
@@ -268,58 +232,14 @@ components:
                 templateData:
                     type: object
                     description: Data passed to the EJS template.
+                locale:
+                    type: string
+                    description: >-
+                        Language to render the document in. Carried explicitly for the same
+                        reason as on EmailJobPayload — the request-scoped locale does not survive
+                        the hop onto the queue. Omitted means NODE_FALLBACK_LOCALE.
+                    example: it
                 outputPath:
                     type: string
                     description: Filesystem path where the generated PDF will be written.
-            additionalProperties: false
-        CacheTagsInvalidatedPayload:
-            type: object
-            required:
-                - tags
-                - origin
-                - timestamp
-            properties:
-                tags:
-                    type: array
-                    items:
-                        type: string
-                    description: Cache tags that were invalidated.
-                origin:
-                    type: string
-                    description: Instance ID that triggered the invalidation.
-                timestamp:
-                    type: string
-                    format: date-time
-                    description: When the invalidation occurred.
-            additionalProperties: false
-        CartCheckedOutEvent:
-            type: object
-            required:
-                - eventName
-                - eventId
-                - occurredAt
-                - cartId
-                - userId
-                - orderId
-                - itemCount
-            properties:
-                eventName:
-                    type: string
-                    enum:
-                        - ecommerce.cart.checked_out
-                eventId:
-                    type: string
-                    format: uuid
-                occurredAt:
-                    type: string
-                    format: date-time
-                cartId:
-                    type: string
-                userId:
-                    type: string
-                orderId:
-                    type: string
-                itemCount:
-                    type: integer
-                    minimum: 1
             additionalProperties: false

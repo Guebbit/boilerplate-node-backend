@@ -10,9 +10,7 @@ For this boilerplate, keep REST and async contracts separate:
 Current scope of `asyncapi.yaml`:
 
 - SSE observability channels (`observability.*`)
-- Ecommerce cart checkout event (`ecommerce.cart.checked_out`)
 - RabbitMQ worker queues (`worker.email.send`, `worker.pdf.generate`)
-- Redis pub/sub cache invalidation (`cache.tags.invalidated`)
 
 ## Servers declared
 
@@ -20,7 +18,6 @@ Current scope of `asyncapi.yaml`:
 |------|----------|---------|
 | `sseLocal` | `http` | SSE observability stream |
 | `rabbitmqLocal` | `amqp` | Async job queues (email, PDF) |
-| `redisLocal` | `redis` | Pub/sub cache invalidation |
 
 ## Generated TypeScript types
 
@@ -29,7 +26,7 @@ They are re-exported from `src/types/index.ts` so all app code can import them c
 
 ```ts
 import type { IObservabilityMetricsPayload, IEmailJobPayload, IPdfJobPayload } from '@types';
-import { WORKER_CHANNELS, CACHE_CHANNELS } from '@types';
+import { WORKER_CHANNELS, OBSERVABILITY_CHANNELS } from '@types';
 ```
 
 Regenerate types after editing `asyncapi.yaml`:
@@ -38,7 +35,25 @@ Regenerate types after editing `asyncapi.yaml`:
 npm run genasyncapi
 ```
 
-The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `js-yaml`, converts each `components.schemas` entry into a TypeScript interface, and writes the result to `src/types/asyncapi.ts`.
+The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
+
+### Shared with the frontend
+
+This script is **byte-identical** to `scripts/gen-asyncapi-types.ts` in `boilerplate-vue-frontend`.
+Only the output path differs, and it comes from `--out` in each repo's `genasyncapi` script:
+
+| Repo | Command |
+| --- | --- |
+| Backend | `tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.ts` |
+| Frontend | `tsx scripts/gen-asyncapi-types.ts --out src/types/realtime.generated.ts` |
+
+Because the input (`asyncapi.yaml`) is also identical, the two generated files are identical too —
+`diff` proves it. It emits a superset of what either side uses: the backend consumes
+`OBSERVABILITY_CHANNELS` / `TObservabilityChannel` and the payload interfaces, the frontend
+consumes `ISseEventPayloadMap` for per-event typing. The unused exports are type-only on the
+backend and tree-shaken in the frontend bundle.
+
+**If you change this script, copy it to the other repo.** Nothing enforces it automatically.
 
 ## Tooling used here
 
@@ -68,21 +83,25 @@ Worker queues use AMQP (RabbitMQ) for reliable async job processing:
 
 Both use the `IEmailJobPayload` / `IPdfJobPayload` interfaces generated from the contract. The worker types are derived from AsyncAPI — no hand-written duplicates.
 
-## Redis pub/sub channel
+## Why there is no Redis channel here
 
-- **`cache.tags.invalidated`** — broadcasts cache tag invalidations across multiple app instances so each instance can evict stale entries locally.
+Redis is in this stack, but it is not in this contract. It is used as a **shared cache store**,
+not as a message bus: every worker reads and writes the same keys, so a write that deletes them
+is already visible to every other worker. There is nothing to announce.
 
-Uses `ICacheTagsInvalidatedPayload` from the generated types. The publisher/subscriber logic lives in `src/core/adapters/cache.ts`.
-
-The subscriber is started during app boot and stopped during graceful shutdown. The publisher is called by the `invalidateCache` middleware after every successful write. Both are no-ops when Redis is unavailable.
+A `cache.tags.invalidated` channel did live here and was removed — see
+[Redis Cache → Why there is no cross-instance broadcast](../tools/redis-cache.md#why-there-is-no-cross-instance-broadcast)
+for the condition that would bring it back.
 
 ## Naming convention
 
-Channels use dot-separated topic-style naming (for example `ecommerce.cart.checked_out`). These names are used as event identifiers at runtime (SSE event names, queue names, domain event names).
+Channels use dot-separated topic-style naming (for example `observability.metrics.updated`). These names are used as event identifiers at runtime (SSE event names, queue names).
+
+Every channel here describes something that actually crosses a process boundary — a frame on an SSE stream, a message on a RabbitMQ queue. An in-process notification is not a channel: an `ecommerce.cart.checked_out` channel was declared here for a checkout event that only ever dispatched to an in-process `EventTarget` with no listeners, and it was removed along with the event rather than left describing a wire nothing travels on.
 
 ## Realtime event names
 
-All SSE and domain event names used at runtime come from the `OBSERVABILITY_CHANNELS` and `ECOMMERCE_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
+All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
 There are no handwritten duplicate string constants — `asyncapi.yaml` is the single source of truth.
 
 ## CI enforcement

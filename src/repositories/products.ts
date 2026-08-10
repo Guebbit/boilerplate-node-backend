@@ -1,23 +1,36 @@
-import { productModel } from '@models/products';
+import { productModel, applyProductTransform } from '@models/products';
 import type { IProductDocument } from '@models/products';
-import type { QueryFilter } from 'mongoose';
-import { createBaseRepository, type IFindAllOptions } from './base';
+import { createBaseRepository, type IBaseRepository } from './base';
 
 /**
  * Product Repository
- * Standard CRUD via base factory + model-specific exports.
+ * Standard CRUD via the base factory, plus the catalogue's own query rules.
+ *
+ * The type is written out because Mongoose's generics are too large for TypeScript to serialize
+ * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
  */
-const base = createBaseRepository<IProductDocument>(productModel);
+export const productRepository: IBaseRepository<IProductDocument> & {
+    publicScope: () => Record<string, unknown>;
+} = {
+    ...createBaseRepository<IProductDocument>(productModel, {
+        transform: applyProductTransform,
+        searchable: {
+            objectIds: { id: '_id' },
+            text: ['title', 'description'],
+            arrayRegex: { category: 'categories', tag: 'tags' },
+            ranges: { price: { min: 'minPrice', max: 'maxPrice' } }
+        }
+    }),
 
-export const findById = (id: string) => base.findById(id);
-export const findOne = (where: QueryFilter<IProductDocument>) => base.findOne(where);
-export const findAll = (where: QueryFilter<IProductDocument> = {}, options: IFindAllOptions = {}) =>
-    base.findAll(where, options);
-export const count = (where: QueryFilter<IProductDocument> = {}): Promise<number> =>
-    base.count(where);
-export const create = (data: Partial<IProductDocument>): Promise<IProductDocument> =>
-    base.create(data);
-export const save = (product: IProductDocument): Promise<IProductDocument> => base.save(product);
-export const deleteOne = (product: IProductDocument): Promise<void> => base.deleteOne(product);
-
-export const productRepository = { findById, findOne, findAll, count, create, save, deleteOne };
+    /**
+     * What a non-admin caller is allowed to see: published, not soft-deleted.
+     *
+     * Lives here rather than in the service because it is a rule about which *rows* exist for a
+     * given audience — spread it into any filter (`{ ...publicScope(), price: … }`). Admin
+     * callers pass nothing, which is how they see inactive and soft-deleted rows.
+     */
+    publicScope: (): Record<string, unknown> => ({
+        active: true,
+        deletedAt: { $exists: false }
+    })
+};

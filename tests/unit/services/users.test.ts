@@ -1,13 +1,10 @@
 import { Types } from 'mongoose';
 import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '../../helpers/factories/users';
-import { createProduct } from '../../helpers/factories/products';
 import * as userService from '@services/users';
 import * as authService from '@services/auth';
-import * as cartService from '@services/cart';
-import * as userRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 import type { IResponseSuccess, IResponseReject } from '@core/http/response';
-import type { IUserCartDto } from '@services/cart.dto';
 import type { IUserDocument } from '@models/users';
 
 setupTestDb();
@@ -51,18 +48,20 @@ describe('authService.signup', () => {
         expect((result as IResponseReject).status).toBe(409);
     });
 
-    it('rejects with 400 when the email format is invalid', async () => {
+    it('rejects with 422 when the email format is invalid', async () => {
         const result = await authService.signup('not-an-email', 'user', 'Password1!', 'Password1!');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        // 422 across the board for validation failures, auth included — that is what
+        // openapi.yaml declares, and it never declares 400 at all.
+        expect((result as IResponseReject).status).toBe(422);
     });
 
-    it('rejects with 400 when the password is too short', async () => {
+    it('rejects with 422 when the password is too short', async () => {
         const result = await authService.signup('short@example.com', 'shortpwd', 'abc', 'abc');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        expect((result as IResponseReject).status).toBe(422);
     });
 });
 
@@ -102,145 +101,6 @@ describe('authService.login', () => {
     });
 });
 
-describe('cartService cart operations', () => {
-    it('cartItemSetById adds a new product to an empty cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        const result = await cartService.cartItemSetById(userId, pid, 3);
-
-        expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(1);
-        expect((result as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(3);
-    });
-
-    it('cartItemSetById overwrites the quantity when the product is already in the cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const secondResult = await cartService.cartItemSetById(userId, pid, 7);
-
-        expect((secondResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(1);
-        expect((secondResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(
-            7
-        );
-    });
-
-    it('cartItemAddById increases the quantity of an existing cart item', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const addResult = await cartService.cartItemAddById(userId, pid, 3);
-
-        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(5);
-    });
-
-    it('cartItemRemoveById removes the specified product from the cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 1);
-        const removeResult = await cartService.cartItemRemoveById(userId, pid);
-
-        expect((removeResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(0);
-    });
-
-    it('cartRemove empties the entire cart', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 5);
-        const clearResult = await cartService.cartRemove(userId);
-
-        expect((clearResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(0);
-    });
-
-    it('cartGet returns populated cart items with product details', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct({ title: 'Visible Product' });
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const items = await cartService.cartGet(userId);
-
-        expect(items).toHaveLength(1);
-        expect(items[0].quantity).toBe(2);
-    });
-
-    it('cartItemSet (by document) is equivalent to cartItemSetById', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-
-        const result = await cartService.cartItemSet(userId, product, 4);
-
-        expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(4);
-    });
-
-    it('cartItemAdd (by document) increases quantity', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 1);
-        const addResult = await cartService.cartItemAdd(userId, product, 9);
-
-        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items[0].quantity).toBe(10);
-    });
-
-    it('cartItemRemove (by document) removes the product', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct();
-
-        await cartService.cartItemSet(userId, product, 1);
-        const removeResult = await cartService.cartItemRemove(userId, product);
-
-        expect((removeResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(0);
-    });
-});
-
-describe('cartService.orderConfirm', () => {
-    it('creates an order from the cart and empties the cart afterwards', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const product = await createProduct({ price: 20 });
-        const pid = (product._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId, pid, 2);
-        const orderResult = await cartService.orderConfirm(userId);
-
-        expect(orderResult.success).toBe(true);
-
-        const refreshed = await userRepository.findById(userId);
-        expect(refreshed!.cart.items).toHaveLength(0);
-    });
-
-    it('rejects with 409 when the cart is empty', async () => {
-        const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
-        const result = await cartService.orderConfirm(userId);
-
-        expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(409);
-    });
-});
-
 describe('authService.tokenAdd', () => {
     it('adds a token to the user and returns the token string', async () => {
         const user = await createUser();
@@ -256,7 +116,7 @@ describe('authService.tokenAdd', () => {
 
         await authService.tokenAdd(user, 'email-verify');
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.tokens).toHaveLength(1);
         expect(refreshed!.tokens[0].type).toBe('email-verify');
     });
@@ -268,7 +128,7 @@ describe('authService.tokenAdd', () => {
 
         await authService.tokenAdd(user, 'reset', 3_600_000);
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         const expiration = refreshed!.tokens[0].expiration!;
         expect(expiration.getTime()).toBeGreaterThan(now);
     });
@@ -287,7 +147,7 @@ describe('authService.passwordChange', () => {
         const result = await authService.passwordChange(user, 'NewPassword1!', 'Different1!');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        expect((result as IResponseReject).status).toBe(422);
     });
 
     it('rejects when the new password is too short', async () => {
@@ -295,7 +155,7 @@ describe('authService.passwordChange', () => {
         const result = await authService.passwordChange(user, 'abc', 'abc');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(400);
+        expect((result as IResponseReject).status).toBe(422);
     });
 
     it('actually changes the password so the new one can be used to log in', async () => {
@@ -350,7 +210,100 @@ describe('userService.validateData', () => {
 
         expect(errors).toHaveLength(0);
     });
+
+    /**
+     * The fields a `.pick({ email, username, password })` would never look at. `admin` is the
+     * costliest: an unchecked string reaches Mongoose and throws a CastError on save, so
+     * `POST /users` answers 500 where its own contract promises 422.
+     */
+    it.each(['admin', 'active'])('rejects a wrong-typed %s flag', (field) => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!',
+            [field]: 'not-a-boolean'
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it.each([true, false])('accepts a real boolean admin flag (%s)', (admin) => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!',
+            admin
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // The contract says `uri-reference`, not `uri`: an uploaded avatar is stored as a path
+    // relative to the API host, so requiring an absolute URL here would reject every upload.
+    it('accepts a server-relative upload path as the imageUrl', () => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!',
+            imageUrl: '/uploads/1700000000-avatar.jpg'
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // Not strict: a PUT body legitimately carries `id`, which is not part of the user schema.
+    it('ignores body keys the schema does not declare', () => {
+        const errors = userService.validateData({
+            id: '65dc8a99604c307b702b5ccc',
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: 'Password1!'
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    /**
+     * The messages are what the API sends a client verbatim, so a wrong i18n key is a
+     * user-visible bug — and the assertions above cannot see it, because a missing key makes
+     * i18next return the key itself, which is still a non-empty string.
+     *
+     * That is exactly what had happened: `user-validation.ts` asked for `signup.user-field-*`
+     * while `en.json` defined them under `login.*`, so every user whose email failed validation
+     * was told "signup.user-field-email-invalid". A raw key is recognisable by shape — a dotted
+     * identifier with no spaces — which is what this asserts against, so it keeps working when
+     * the copy is reworded.
+     */
+    it('returns translated messages, never raw i18n keys', () => {
+        const errors = userService.validateData({
+            email: 'not-an-email',
+            username: 'ab',
+            password: 'x'
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+        for (const message of errors) expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
+    });
 });
+
+/*
+ * Backs the three `active` filter cases below.
+ *
+ * Built so the two facts DISAGREE: the deactivated account is not deleted, and the deleted
+ * account is still active. That is what makes the cases discriminating — a filter that resolved
+ * `active` through `deletedAt` would answer all three the other way round.
+ */
+const seedActiveAndDeleted = () =>
+    Promise.all([
+        createUser({ email: 'enabled@example.com', username: 'enabled', active: true }),
+        createUser({ email: 'disabled@example.com', username: 'disabled', active: false }),
+        createUser({
+            email: 'deleted@example.com',
+            username: 'deleted',
+            active: true,
+            deletedAt: new Date()
+        })
+    ]);
 
 describe('userService.search', () => {
     it('returns all users with default pagination', async () => {
@@ -390,28 +343,34 @@ describe('userService.search', () => {
         expect(result.items).toHaveLength(1);
     });
 
-    it('filters active users (no deletedAt)', async () => {
-        await createUser({ email: 'active@example.com', username: 'active' });
-        await createUser({
-            email: 'deleted@example.com',
-            username: 'deleted',
-            deletedAt: new Date()
-        });
+    it('filters on the active column, not on soft-deletion', async () => {
+        await seedActiveAndDeleted();
 
         const active = await userService.search({ active: true });
-        expect(active.items).toHaveLength(1);
+
+        // The deleted-but-active account is included: deletion is a separate fact, and this
+        // filter does not ask about it.
+        expect(
+            active.items.map((item) => (item as unknown as { username: string }).username)
+        ).toEqual(expect.arrayContaining(['enabled', 'deleted']));
+        expect(active.items).toHaveLength(2);
     });
 
-    it('filters inactive (soft-deleted) users', async () => {
-        await createUser({ email: 'active@example.com', username: 'active' });
-        await createUser({
-            email: 'deleted@example.com',
-            username: 'deleted',
-            deletedAt: new Date()
-        });
+    it('returns the deactivated account, and only it, for active: false', async () => {
+        await seedActiveAndDeleted();
 
         const inactive = await userService.search({ active: false });
+
         expect(inactive.items).toHaveLength(1);
+        expect((inactive.items[0] as unknown as { username: string }).username).toBe('disabled');
+    });
+
+    it('returns every account when active is not filtered on', async () => {
+        await seedActiveAndDeleted();
+
+        const all = await userService.search({});
+
+        expect(all.items).toHaveLength(3);
     });
 
     it('paginates results correctly', async () => {
@@ -437,7 +396,7 @@ describe('userService.search', () => {
 });
 
 describe('userService.getById', () => {
-    it('returns a plain object for an existing user', async () => {
+    it('returns a real document for an existing user', async () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
@@ -445,8 +404,8 @@ describe('userService.getById', () => {
 
         expect(found).toBeDefined();
         expect(found!.email).toBe('user@example.com');
-        // Lean object — no Mongoose Document methods
-        expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
+        // A real Mongoose document — schema's toJSON transform normalizes it on the way out
+        expect(typeof (found as unknown as { save: unknown }).save).toBe('function');
     });
 
     it('returns undefined for a non-existent id', async () => {
@@ -509,7 +468,7 @@ describe('userService.adminUpdateById', () => {
 
         await userService.adminUpdateById(id, { password: 'UpdatedPwd1!' });
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).not.toBe(originalHash);
     });
 
@@ -520,7 +479,7 @@ describe('userService.adminUpdateById', () => {
 
         await userService.adminUpdateById(id, { password: '' });
 
-        const refreshed = await userRepository.findById(id);
+        const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).toBe(originalHash);
     });
 
@@ -602,38 +561,5 @@ describe('userService.remove', () => {
         await userService.remove(user, true);
 
         expect(await userRepository.findById(id)).toBeNull();
-    });
-});
-
-describe('cartService.productRemoveFromCartsById', () => {
-    it('removes a product from every user cart that contains it', async () => {
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
-        const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
-        const userId1 = (user1._id as Types.ObjectId).toString();
-        const userId2 = (user2._id as Types.ObjectId).toString();
-
-        await cartService.cartItemSetById(userId1, pid, 1);
-        await cartService.cartItemSetById(userId2, pid, 2);
-
-        const result = await cartService.productRemoveFromCartsById(pid);
-
-        expect(result.success).toBe(true);
-
-        const refreshed1 = await userRepository.findById(userId1);
-        const refreshed2 = await userRepository.findById(userId2);
-        expect(refreshed1!.cart.items).toHaveLength(0);
-        expect(refreshed2!.cart.items).toHaveLength(0);
-    });
-
-    it('succeeds even when no user has the product in their cart', async () => {
-        const product = await createProduct();
-        const pid = (product._id as Types.ObjectId).toString();
-
-        const result = await cartService.productRemoveFromCartsById(pid);
-
-        expect(result.success).toBe(true);
     });
 });

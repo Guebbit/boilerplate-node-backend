@@ -38,6 +38,19 @@ flowchart LR
 
 Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo](./tempo.md) alongside the request that triggered them.
 
+### Using a hosted provider
+
+There is no provider-specific code here, and none is needed: SendGrid, Mailgun, SES, Postmark, Resend and Brevo all expose an SMTP relay, so switching to one is an `.env` change. SendGrid, for example:
+
+```bash
+NODE_SMTP_HOST=smtp.sendgrid.net
+NODE_SMTP_PORT=587
+NODE_SMTP_USER=apikey          # the literal string "apikey"
+NODE_SMTP_PASS=SG.xxxxxxxx     # your API key
+```
+
+Reach for a provider's HTTP SDK instead of its SMTP relay only when you actually need something SMTP cannot give you — most commonly a host that blocks outbound SMTP ports, or provider-side features like batch personalizations and hosted templates (the latter being redundant here, since bodies are rendered from EJS before they reach the transport). Nodemailer accepts any transport object, so that swap is confined to `createTransport(...)` in `mailer.ts`.
+
 ## PDF pipeline
 
 ```mermaid

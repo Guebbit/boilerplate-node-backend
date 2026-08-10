@@ -10,7 +10,6 @@
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
 // `RedisClientType` is the resulting client's type, needed for the module-level `let` below.
 import { createClient, type RedisClientType } from 'redis';
-import type { ICacheTagsInvalidatedPayload } from '@types';
 import { logger } from '@core/adapters/logger';
 
 /**
@@ -81,6 +80,50 @@ let connectionWarningLogged = false;
  * production without tearing down the Redis service itself.
  */
 const isCacheEnabled = () => Boolean(getRedisUrl()) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
+
+/**
+ * Longest TTL allowed outside production, in seconds.
+ *
+ * Cache invalidation only fires for writes that go *through the API*. Anything that writes
+ * straight to Mongo — `db:seed`, a migration, a `mongosh` session — leaves the cache serving
+ * the old answer until it expires on its own. A 3600s route TTL therefore means "up to an hour
+ * of visibly wrong data" the first time you touch the database by hand.
+ *
+ * Capping the TTL in dev bounds the damage from *every* such writer, including the ones nobody
+ * has thought of yet, at the cost of fewer cache hits while developing. The caching layer still
+ * demonstrably works — you just stop losing an afternoon to it. Production keeps the route's
+ * declared TTL, because there the API is the only writer.
+ *
+ * Set `NODE_REDIS_CACHE_DEV_TTL_MAX=0` to disable the cap and use the declared TTLs everywhere.
+ */
+const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
+
+const getDevelopmentTtlMax = (): number => {
+    const raw = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+    if (raw === undefined || raw.trim() === '') return DEFAULT_DEV_TTL_MAX_SECONDS;
+
+    const parsed = Number(raw);
+    // A non-numeric or negative value is a config typo; fall back rather than cache forever.
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_DEV_TTL_MAX_SECONDS;
+};
+
+/**
+ * Clamp a route's declared TTL to the development ceiling.
+ *
+ * Applied where the TTL enters the system (the `setCache` middleware) rather than at write
+ * time, so the `Cache-Control: max-age` header advertises the same lifetime the server will
+ * actually honour.
+ *
+ * @param seconds - TTL declared by the route
+ * @returns the TTL to use, capped outside production
+ */
+export const resolveCacheTtl = (seconds: number): number => {
+    if (process.env.NODE_ENV === 'production') return seconds;
+
+    const max = getDevelopmentTtlMax();
+    if (max <= 0) return seconds;
+    return Math.min(seconds, max);
+};
 
 /**
  * Build one namespaced Redis key.
@@ -231,8 +274,30 @@ export const getCacheValue = (key: string): Promise<CacheValue | void> =>
         });
 
 /**
+ * Largest response body this cache will store, in bytes.
+ *
+ * A cache turns a cheap request into long-lived server state, which is a different risk from
+ * simply answering it: `GET /products` is public, its responses are held for an hour, and the key
+ * includes the full URL — so an unauthenticated caller can mint a distinct entry per query string
+ * and keep every one of them resident. Bounding the *entry* is what keeps that from being an
+ * amplifier, independently of whatever page size the request layer happens to allow.
+ *
+ * 256 KB leaves generous room for a full page of results (a hundred products serialize to roughly
+ * 50 KB) while refusing anything that could only have come from an endpoint returning far more
+ * than a page.
+ */
+const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
+
+const getMaxCachedBytes = (): number =>
+    Number(process.env.NODE_REDIS_CACHE_MAX_BYTES) || DEFAULT_MAX_CACHED_BYTES;
+
+/**
  * Save one HTTP response in Redis and attach it to one or more "tags".
  * Tags let us delete groups of cached responses later (example: all "products" cache).
+ *
+ * Oversized bodies are skipped rather than stored — see `DEFAULT_MAX_CACHED_BYTES`. Skipping is
+ * not a failure: the caller still gets its response, it just will not be replayed from cache, so
+ * the endpoint stays correct and only loses an optimisation.
  *
  * @param key - the cache key (typically derived from method + URL + auth scope)
  * @param value - status + body envelope to replay on a later hit
@@ -248,6 +313,22 @@ export const setCacheValue = (
     // Guard: Redis rejects `EX` values of 0 or less, and a zero TTL means "don't cache" anyway.
     if (ttlSeconds <= 0) return Promise.resolve();
 
+    // Serialized once, here, so the size check measures exactly what would be written rather
+    // than an estimate of it.
+    const payload = JSON.stringify(value);
+    const maxCachedBytes = getMaxCachedBytes();
+    if (Buffer.byteLength(payload) > maxCachedBytes) {
+        // Logged rather than silent: an endpoint that never caches is worth noticing, and the
+        // usual cause is a response that grew past what its page size was supposed to bound.
+        logger.warn({
+            message: 'Redis cache write skipped: response larger than the per-entry limit.',
+            key,
+            bytes: Buffer.byteLength(payload),
+            maxCachedBytes
+        });
+        return Promise.resolve();
+    }
+
     const cacheKey = prefix(`key:${key}`);
     // `filter(Boolean)` drops empty strings, `new Set` de-duplicates — both would otherwise
     // create junk tag keys and redundant SADD round-trips.
@@ -260,7 +341,7 @@ export const setCacheValue = (
             // Save the response body with a TTL so Redis evicts it automatically later.
             return (
                 redisClient
-                    .set(cacheKey, JSON.stringify(value), {
+                    .set(cacheKey, payload, {
                         // `EX` = expire after N seconds. Redis deletes the key itself, so the cache
                         // is self-trimming and needs no cleanup job.
                         EX: ttlSeconds
@@ -293,6 +374,12 @@ export const setCacheValue = (
 /**
  * Remove all cached responses linked to the given tags.
  * We use this after successful writes so old/stale GET responses disappear.
+ *
+ * Like `clearCache`, this needs no cross-instance broadcast: the entries and their tag sets
+ * live in shared Redis, so one call invalidates them for every worker and every replica. The
+ * next read on any instance misses and re-renders from Mongo. A pub/sub fan-out would only
+ * become necessary if an instance ever kept a process-local (L1) copy in front of Redis —
+ * there is no such tier, and if one is added the broadcast belongs in the same commit as it.
  */
 export const invalidateCacheTags = (tags: string[]): Promise<void> => {
     const cacheTags = [...new Set(tags.filter(Boolean))];
@@ -334,140 +421,85 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
         });
 };
 
-// ─── Pub/Sub: cross-instance cache invalidation ───────────────────────────────
-//
-// Why this section exists: the *cached data* is shared (one Redis), but each app instance
-// also holds process-local state and, more importantly, only the instance that handled a
-// write knows something changed. Broadcasting the invalidation lets every replica react.
-
-/*
- * Redis pub/sub channel name (matches asyncapi.yaml)
- * Kept in sync with the AsyncAPI contract so the channel is documented alongside the
- * HTTP API rather than living only in code.
- */
-const CACHE_INVALIDATION_CHANNEL = 'cache.tags.invalidated';
-
-/*
- * Unique instance ID to avoid processing own broadcasts
- * Composed of pid + boot timestamp + random suffix: pid alone collides across containers
- * (each gets its own pid namespace), and pid+timestamp can collide when replicas start
- * simultaneously from the same image.
- */
-const INSTANCE_ID = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-/*
- * Separate subscriber client (Redis requires a dedicated connection for subscriptions)
- * A connection in subscribe mode accepts only (un)subscribe commands, so reusing the main
- * `client` here would break every GET/SET in this file.
- */
-let subscriberClient: RedisClientType | undefined;
-
 /**
- * Publish a cache invalidation event so other app instances can evict stale entries.
+ * Outcome of a {@link clearCache} call.
  *
- * Note this only *notifies*; the calling instance still invalidates locally via
- * `invalidateCacheTags`. Fire-and-forget — a failed broadcast means peers keep a stale
- * entry until its TTL expires, which is acceptable degradation.
+ * Two fields rather than a bare count because "0 keys removed" is ambiguous on its own: it is
+ * the honest answer for an empty cache *and* the answer a dead Redis produces. Callers that
+ * exist to clear the cache need to tell those apart.
  */
-export const broadcastCacheInvalidation = (tags: string[]): Promise<void> => {
-    if (!isCacheEnabled() || tags.length === 0) return Promise.resolve();
-
-    // Shape defined in `@types` and mirrored in asyncapi.yaml.
-    const payload: ICacheTagsInvalidatedPayload = {
-        tags,
-        // Lets receivers discard their own echo (Redis delivers to all subscribers).
-        origin: INSTANCE_ID,
-        // Diagnostic only — useful when tracing propagation lag between replicas.
-        timestamp: new Date().toISOString()
-    };
-
-    return getClient()
-        .then((redisClient) => {
-            if (!redisClient) return;
-            // `publish` = PUBLISH: at-most-once delivery with no persistence. Subscribers that
-            // are down at this moment simply never see the message — which is why TTLs remain
-            // the real correctness backstop.
-            return redisClient.publish(CACHE_INVALIDATION_CHANNEL, JSON.stringify(payload));
-        })
-        .then(() => {})
-        .catch((error) => {
-            logger.warn({
-                message: 'Redis cache invalidation broadcast failed.',
-                error: error instanceof Error ? error.message : String(error)
-            });
-        });
-};
+export interface IClearCacheResult {
+    /** Keys actually removed. Always `0` when `reachable` is false. */
+    deleted: number;
+    /**
+     * Whether the cache is now known to be clear.
+     *
+     * `false` in exactly one case: caching is switched on but Redis could not be reached, so
+     * stale entries survive the call and will be served until their TTL expires. `true` when
+     * the scan-and-delete ran, and also when caching is disabled — there is nothing to reach
+     * and nothing cached to go stale, which makes "clear" trivially true.
+     */
+    reachable: boolean;
+}
 
 /**
- * Subscribe to cache invalidation broadcasts from other instances.
- * Call once during app startup.
+ * Delete every cached response and tag set belonging to this app.
+ *
+ * The escape hatch for writes that bypass the API entirely — `db:seed`, `migrate-mongo`, a
+ * manual `mongosh` edit. Those change Mongo without ever running `invalidateCache`, so the
+ * cached answers survive them; this drops the lot.
+ *
+ * Deliberately **not** `FLUSHALL`: the delete is scoped to `<CACHE_PREFIX>:*`, so a Redis
+ * instance shared with another app (or another environment using a different prefix) is
+ * untouched. `SCAN` iterates in small batches instead of blocking the server the way `KEYS`
+ * would on a large keyspace.
+ *
+ * Because the keys live in shared Redis, one call clears the cache for every app instance —
+ * no pub/sub broadcast needed.
+ *
+ * Still fails open — it never rejects — but it now *reports* the failure instead of hiding it,
+ * so fail-open is a choice each caller makes rather than one baked in here. `db:seed` ignores
+ * `reachable` on purpose (§9: an unreachable Redis must not break seeding); `db:cache:clear`
+ * exits non-zero on it, because clearing the cache is the entire job.
  */
-export const subscribeCacheInvalidation = (): Promise<void> => {
-    if (!isCacheEnabled()) return Promise.resolve();
+export const clearCache = (): Promise<IClearCacheResult> =>
+    getClient()
+        .then((redisClient) => {
+            if (!redisClient) {
+                /*
+                 * Two different situations land here, and `getClient()` cannot distinguish them
+                 * for us: caching is switched off, or it is on and the connect failed —
+                 * `getClient()` reports that by resolving void rather than rejecting, which is
+                 * why the `.catch` below never sees a connection error. `isCacheEnabled()` is
+                 * what separates "nothing to clear" from "could not clear".
+                 */
+                return { deleted: 0, reachable: !isCacheEnabled() };
+            }
 
-    const redisUrl = getRedisUrl();
-    if (!redisUrl) return Promise.resolve();
+            const pattern = prefix('*');
+            let deleted = 0;
 
-    // Same socket options as the main client: fail fast, no background reconnect loop.
-    subscriberClient = createClient({
-        url: redisUrl,
-        socket: { connectTimeout: 1000, reconnectStrategy: false }
-    });
-
-    // Required listener (an unhandled 'error' event would crash the process). Silent here
-    // because `getClient()` already reports Redis health via `logConnectionWarning`.
-    subscriberClient.on('error', () => {});
-
-    return subscriberClient
-        .connect()
-        .then(() =>
-            // Non-null assertion: `subscriberClient` was just assigned above, but TypeScript
-            // cannot prove a module-level `let` is unchanged across the promise boundary.
-            // `subscribe(channel, listener)` registers a per-channel callback (node-redis v4+)
-            // instead of the older global 'message' event.
-            subscriberClient!.subscribe(CACHE_INVALIDATION_CHANNEL, (message) => {
-                try {
-                    const payload = JSON.parse(message) as ICacheTagsInvalidatedPayload;
-                    // Skip events from this instance (already applied locally).
-                    // Without this check the publisher would re-run its own invalidation and,
-                    // worse, delete the fresh entries it may have just written.
-                    if (payload.origin === INSTANCE_ID) return;
-                    // `void`: the listener is sync, so the invalidation is deliberately floating.
-                    void invalidateCacheTags(payload.tags);
-                } catch {
-                    // Malformed JSON — most likely another app publishing on the same channel
-                    // with a different prefix. Log and drop; never throw inside a listener.
-                    logger.warn({ message: 'Malformed cache invalidation message received.' });
+            // `scanIterator` yields batches of keys (node-redis v5), so one DEL per batch.
+            const drain = async () => {
+                for await (const keys of redisClient.scanIterator({
+                    MATCH: pattern,
+                    COUNT: 100
+                })) {
+                    if (keys.length === 0) continue;
+                    deleted += await redisClient.del(keys);
                 }
-            })
-        )
-        .then(() => {
-            logger.info('Redis cache invalidation subscriber active.');
+                return { deleted, reachable: true };
+            };
+
+            return drain();
         })
         .catch((error) => {
+            // Reached when SCAN or DEL fails mid-drain — the socket died partway through, say.
+            // Whatever `deleted` had reached is discarded: the cache is in an unknown state,
+            // which is the same verdict as never having connected.
             logger.warn({
-                message: 'Redis cache invalidation subscriber failed.',
+                message: 'Redis cache clear failed.',
                 error: error instanceof Error ? error.message : String(error)
             });
+            return { deleted: 0, reachable: false };
         });
-};
-
-/*
- * Stop the subscriber client during graceful shutdown
- * Runs *before* `stopCache()` in the shutdown chain (see bootstrap/server-lifecycle.ts):
- * an open subscription would otherwise keep receiving events and issuing DEL commands
- * against a client that is being torn down.
- */
-export const stopCacheSubscriber = (): Promise<void> => {
-    if (!subscriberClient?.isOpen) return Promise.resolve();
-    return (
-        subscriberClient
-            // Graceful close; falls back to a hard socket drop if QUIT fails.
-            .quit()
-            .then(() => {})
-            .catch(() => subscriberClient!.disconnect())
-            .finally(() => {
-                subscriberClient = undefined;
-            })
-    );
-};

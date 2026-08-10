@@ -55,7 +55,7 @@ See [Observability Endpoints](../api/observability.md) for the full list. Key ro
 | `GET /observability/metrics`          | none  | Raw Prometheus exposition (text/plain) — scrape target                                    |
 | `GET /observability/health`           | admin | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
 | `GET /observability/metrics/overview` | admin | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
-| `GET /observability/audit`            | admin | Recent audit events from the in-memory ring buffer (max 200)                              |
+| `GET /observability/audit`            | admin | Recent audit events from the persisted audit trail, newest first                          |
 
 These endpoints return **curated, domain-shaped summaries** — they are the data layer for a custom frontend, not raw Prometheus query results.
 

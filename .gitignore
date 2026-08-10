@@ -1,8 +1,24 @@
 node_modules
 .env*
+!.env-example
 .idea
 dist
 *.log
 src/storage/invoices/*
 src/storage/files/*
 docs/.vitepress/cache
+
+# Uploaded images. `public/` is served by express.static (src/app.ts), so anything a user uploads
+# lands in a tracked directory — committing it would publish strangers' files with the repo.
+# `seed/` is negated because those ARE repository content: the demo fixtures db/seeds/index.ts
+# references. Keeping fixtures in their own directory is what lets this stay two stable lines
+# instead of a list of filenames to maintain.
+public/images/*
+!public/images/seed/
+
+# test output
+coverage
+
+# mutation testing (stryker sandbox + html report)
+.stryker-tmp
+reports/

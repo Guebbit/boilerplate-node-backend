@@ -3,7 +3,7 @@ import { logger } from '@core/adapters/logger';
 import { shutdownAnalytics } from '@core/observability/analytics';
 import { shutdownTracing } from '@core/bootstrap/otel-sdk';
 import { stopDatabase } from '@core/bootstrap/database';
-import { stopCache, stopCacheSubscriber } from '@core/adapters/cache';
+import { stopCache } from '@core/adapters/cache';
 import { stopQueue } from '@core/adapters/queue';
 
 /**
@@ -71,7 +71,6 @@ export const shutdownInfra = (server?: Server) =>
             if (!s?.listening) return;
             return closeServer(s);
         })
-        .then(() => stopCacheSubscriber())
         .then(() => stopCache())
         .then(() => stopQueue())
         .then(() => stopDatabase())

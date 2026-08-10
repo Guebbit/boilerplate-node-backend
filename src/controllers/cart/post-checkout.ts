@@ -1,6 +1,5 @@
-import crypto from 'node:crypto';
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@core/http/response';
 import { cartCheckoutTotal } from '@core/observability/metrics-domain';
@@ -9,7 +8,6 @@ import {
     AnalyticsEvent,
     buildAnalyticsBase
 } from '@core/observability/analytics';
-import { emitDomainEvent } from '@core/observability/events';
 
 /**
  * POST /cart/checkout
@@ -38,15 +36,6 @@ export const postCheckout = (request: Request, response: Response) => {
             ...buildAnalyticsBase(request),
             event: AnalyticsEvent.CHECKOUT_COMPLETED,
             properties: { order_id: orderId }
-        });
-        emitDomainEvent('ecommerce.cart.checked_out', {
-            eventName: 'ecommerce.cart.checked_out',
-            eventId: crypto.randomUUID(),
-            occurredAt: new Date().toISOString(),
-            cartId: `cart_${userId}`,
-            userId,
-            orderId,
-            itemCount: result.data?.items?.length ?? 0
         });
         successResponse(
             response,

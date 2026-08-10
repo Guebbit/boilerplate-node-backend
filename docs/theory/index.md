@@ -38,6 +38,7 @@ flowchart LR
 | Understand the big blocks and boundaries | [Architecture](./architecture.md)        |
 | Read the folder-by-folder explanation    | [Layers](./layers.md)                    |
 | Follow one request end-to-end            | [Request Flow](./request-flow.md)        |
+| Know which sources an endpoint reads     | [Request Input](./request-input.md)      |
 | Understand process model & shutdown      | [Clustering & Shutdown](./clustering.md) |
 | Understand dependency choices            | [Tools](../tools/)                       |
 | Change contract, types, or mocks         | [API](../api/)                           |

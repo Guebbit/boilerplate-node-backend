@@ -1,0 +1,124 @@
+{
+    "login": {
+        "invalid-data": "I dati inseriti non sono validi.",
+        "wrong-data": "Email o password non validi.",
+        "success": "Accesso effettuato."
+    },
+    "signup": {
+        "email-already-used": "L'email è già stata utilizzata.",
+        "registration-successful": "Registrazione completata, conferma via email per accedere.",
+        "password-dont-match": "La password di conferma deve essere uguale alla password.",
+        "user-field-email-required": "L'email è obbligatoria",
+        "user-field-email-invalid": "Email non valida",
+        "user-field-username-required": "Il nome utente è obbligatorio",
+        "user-field-username-min": "Il nome è troppo corto",
+        "user-field-password-required": "La password è obbligatoria",
+        "user-field-password-min": "La password è troppo corta"
+    },
+    "reset": {
+        "email-not-found": "Nessun utente associato all'email inserita è stato trovato.",
+        "token-not-found": "Token non valido o scaduto, riprova.",
+        "email-sent": "È stata inviata un'email con un link, clicca per reimpostare la password.",
+        "success": "Password modificata, accedi con la nuova password."
+    },
+    "delete": {
+        "email-sent": "È stata inviata un'email di conferma. Clicca sul link per confermare l'eliminazione dell'account.",
+        "token-not-found": "Token non valido o scaduto, riprova.",
+        "success": "Account eliminato definitivamente."
+    },
+    "ecommerce": {
+        "product-not-found": "Il prodotto richiesto non è stato trovato.",
+        "product-field-title-required": "Il titolo è obbligatorio",
+        "product-field-title-min": "Il titolo è troppo corto",
+        "product-field-price-invalid": "Il prezzo è mancante o non valido",
+        "product-field-price-min": "Il prezzo non può essere negativo",
+        "product-added-to-cart": "Prodotto aggiunto al carrello.",
+        "product-hard-deleted": "Il prodotto è stato eliminato definitivamente.",
+        "product-soft-deleted": "Il prodotto è stato eliminato logicamente (solo per gli utenti).",
+        "product-was-deleted-from-all-carts": "Il prodotto con ID {{product}} è stato rimosso da {{count}} carrelli.",
+        "user-not-found": "L'utente richiesto non è stato trovato.",
+        "user-hard-deleted": "L'utente è stato eliminato definitivamente.",
+        "user-soft-deleted": "L'utente è stato eliminato logicamente (disattivato).",
+        "order-not-found": "L'ordine richiesto non è stato trovato",
+        "order-deleted": "L'ordine è stato eliminato definitivamente.",
+        "order-creation-success": "Ordine creato con successo.",
+        "order-creation-failure": "Creazione dell'ordine fallita.",
+        "order-invoice-missing": "Nessun file fattura è stato trovato",
+        "cart-product-removed": "Prodotto rimosso dal carrello.",
+        "cart-emptied": "Tutti i prodotti sono stati rimossi dal carrello.",
+        "cart-changed": "Il carrello è cambiato durante la conferma dell’ordine. Controllalo e riprova."
+    },
+    "generic": {
+        "error-unknown": "Qualcosa è andato storto con la richiesta.",
+        "error-invalid-data": "Errore: dati forniti non validi.",
+        "error-missing-data": "Errore: dati mancanti.",
+        "error-internal": "Qualcosa è andato storto dalla nostra parte.",
+        "error-unauthorized": "Non hai effettuato l’accesso, oppure la sessione è scaduta.",
+        "error-forbidden": "Non hai i permessi per farlo."
+    },
+    "observability": {
+        "audit-since-invalid": "Il filtro \"since\" deve essere un timestamp ISO-8601 valido."
+    },
+    "email": {
+        "footer": "Inviata dal team di Ecommerce Demo.",
+        "registration-confirm": {
+            "subject": "Benvenuto — il tuo account è pronto",
+            "meta-title": "Registrazione completata",
+            "title": "Benvenuto a bordo {{name}}!",
+            "body": "La registrazione è andata a buon fine."
+        },
+        "reset-request": {
+            "subject": "Reimpostazione della password",
+            "meta-title": "Reimpostazione della password richiesta",
+            "greeting": "Ciao, {{name}}!",
+            "intro": "Abbiamo ricevuto una richiesta di reimpostazione della password.",
+            "cta": "Clicca su questo link per impostare una nuova password.",
+            "link-label": "Reimposta la password",
+            "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
+        },
+        "reset-confirm": {
+            "subject": "La tua password è stata cambiata",
+            "meta-title": "Password reimpostata",
+            "greeting": "Ciao, {{name}}!",
+            "body": "La tua password è stata reimpostata."
+        },
+        "delete-request": {
+            "subject": "Conferma l'eliminazione dell'account",
+            "meta-title": "Eliminazione dell'account richiesta",
+            "greeting": "Ciao, {{name}}!",
+            "intro": "Abbiamo ricevuto una richiesta di eliminazione definitiva del tuo account.",
+            "cta": "Clicca su questo link per confermare l'eliminazione dell'account.",
+            "link-label": "Conferma l'eliminazione",
+            "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
+        },
+        "delete-confirm": {
+            "subject": "Il tuo account è stato eliminato",
+            "meta-title": "Account eliminato",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo account è stato eliminato definitivamente.",
+            "farewell": "Ci dispiace vederti andare via. Se si è trattato di un errore, contatta l'assistenza."
+        },
+        "order-confirm": {
+            "subject": "Ordine confermato",
+            "meta-title": "Ordine confermato",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo ordine è stato confermato."
+        },
+        "feedback-contact": {
+            "subject": "Nuova richiesta di contatto",
+            "meta-title": "Nuova richiesta di contatto",
+            "title": "Nuova richiesta di contatto",
+            "label-name": "Nome",
+            "label-email": "Email",
+            "label-subject": "Oggetto",
+            "label-message": "Messaggio",
+            "label-created-at": "Creata il",
+            "not-available": "N/D"
+        }
+    },
+    "invoice": {
+        "meta-title": "Fattura — ordine {{order}}",
+        "title": "L'ordine è stato confermato",
+        "line": "{{title}} — {{quantity}} × {{price}}"
+    }
+}

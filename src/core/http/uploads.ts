@@ -8,6 +8,19 @@
 import type { Request } from 'express';
 
 /**
+ * Rewrite a filesystem path as a URL path: every backslash becomes a forward slash.
+ *
+ * `path.posix.normalize()` is deliberately NOT used — it leaves existing backslashes alone,
+ * because on POSIX a backslash is a legal character in a filename rather than a separator. The
+ * problem here is the opposite one: a path produced by `path.join()` on Windows, being read as a
+ * URL. A literal replacement is the only thing that fixes that, and it is safe precisely because
+ * upload filenames are random hex and can never contain a backslash of their own.
+ *
+ * @param value - a path in whatever separator style the platform produced
+ */
+export const toPosixPath = (value: string): string => value.replaceAll('\\', '/');
+
+/**
  * Extract uploaded file paths from a multer-processed request.
  * Handles both single-file (req.file) and multi-file (req.files) uploads.
  * Returns an array of file paths, or undefined if no files were uploaded.
@@ -42,27 +55,21 @@ export function getFormFiles(request: Request): string[] | undefined {
 }
 
 /**
- * Resolve the effective image URL for a request.
- * An uploaded file (via multer) takes priority over a string imageUrl in the body.
- * Returns the raw full path (for file deletion on error) and the relative URL (for storage).
+ * The URL of the image this request uploaded, or `undefined` if it uploaded none.
  *
- * Both values are returned because they serve different purposes: the absolute path is needed
- * to `deleteFile()` the upload if the surrounding operation later fails, while only the
- * public-relative URL should be persisted — baking the container's filesystem layout into
- * database rows would break the moment the mount path changes.
+ * The value is produced by the image store when it commits the staged file (`storeUploadedImages`
+ * in `@core/adapters/storage`), and simply read back here — a controller never learns where the
+ * bytes went. That is the boundary the whole storage seam rests on: it is what allows the same
+ * controller to work whether the store answered `/images/x.png` or
+ * `https://cdn.example.com/images/x.png`.
  *
- * @param request - Express request with optional multer file
+ * Constructing the url in the store, rather than deriving it by stripping `NODE_PUBLIC_PATH` off
+ * multer's path, keeps a filesystem separator away from the value that gets persisted — see
+ * {@link toPosixPath} for what that costs when it does not.
+ *
+ * @param request - Express request that has been through the upload middleware
  */
-export function resolveImageUrl(request: Request): {
-    imageUrlRaw: string | undefined;
-    imageUrl: string | undefined;
-} {
+export function resolveImageUrl(request: Request): string | undefined {
     // `[0]`: these endpoints accept a single image, so ignore any extras.
-    const imageUrlRaw = getFormFiles(request)?.[0];
-    // Strip the public-directory prefix ('public/images/x.png' → '/images/x.png') to get the
-    // path as a browser will request it. Note `String.replace` with a string pattern replaces
-    // only the first occurrence — which is what we want, and also why the prefix must not
-    // appear again inside the filename (it cannot: names are random hex).
-    const imageUrl = imageUrlRaw?.replace(process.env.NODE_PUBLIC_PATH ?? 'public', '');
-    return { imageUrlRaw, imageUrl };
+    return request.storedImageUrls?.[0];
 }

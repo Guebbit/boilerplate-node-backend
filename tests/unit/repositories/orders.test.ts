@@ -4,7 +4,7 @@ import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
 import { createOrder, makeOrder, toOrderItem } from '../../helpers/factories/orders';
 import type { IProductDocument } from '@models/products';
-import * as orderRepository from '@repositories/orders';
+import { orderRepository } from '@repositories/orders';
 
 setupTestDb();
 

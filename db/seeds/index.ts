@@ -1,15 +1,88 @@
+/*
+ * Demo data seeder.
+ *
+ * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA. `./fixtures` is the single source of the demo
+ * dataset; this file is the RUNNER — connection, upsert policy and production gate, nothing else.
+ * The data lives next door precisely so it can be read without any of that happening.
+ *
+ * It runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so
+ * it must be:
+ *
+ *   - IDEMPOTENT — fixed `_id`s are upserted, not created, so a second run is a no-op
+ *   - GATED — refuses to touch a production database
+ *
+ * Note what idempotent means here: `upsert()` SKIPS a fixture whose `_id` already exists, it does
+ * not rewrite it. So re-running this does NOT repair a database seeded before the fixtures' image
+ * URLs were corrected — `db/migrations/20260806140000-image-url-separators.js` does that.
+ *
+ * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
+ * hand here would drift from that hook, and its plaintext would be lost (which is exactly what
+ * happened to the old `gino@pino.it` fixture).
+ *
+ * Usage:
+ *   npm run db:seed          # upsert the fixtures
+ *   npm run db:seed:reset    # drop the database first
+ */
 import 'dotenv/config';
 import { Types } from 'mongoose';
 import { start, connection } from '@core/bootstrap/database';
 import { userRepository } from '@repositories/users';
 import { productRepository } from '@repositories/products';
 import { orderRepository } from '@repositories/orders';
+import { cartRepository } from '@repositories/carts';
 import type { IOrderDocument } from '@models/orders';
+import type { ICartDocument } from '@models/carts';
+import { clearCache, stopCache } from '@core/adapters/cache';
 import { logger } from '@core/adapters/logger';
+import { runScript } from '../run-script';
+import { users, products, orders, carts } from './fixtures';
 
 const reset = process.argv.includes('--reset');
 
+/*
+ * Upsert one fixture by its fixed `_id`.
+ *
+ * Documents go through `save()` rather than `updateOne(..., { upsert: true })` so the model's
+ * pre-save hooks still run — most importantly the bcrypt password hash, which a raw driver
+ * write would skip (that is precisely how the old migration's password drifted).
+ */
+const upsert = async (
+    repository: {
+        findById: (id: string) => PromiseLike<unknown>;
+        create: (data: never) => Promise<unknown>;
+    },
+    fixture: { _id: Types.ObjectId }
+): Promise<'created' | 'skipped'> => {
+    const existing = await repository.findById(fixture._id.toString());
+    if (existing) return 'skipped';
+    await repository.create(fixture as never);
+    return 'created';
+};
+
+/*
+ * Upsert one cart fixture by its OWNER.
+ *
+ * Carts are the one collection here with no fixed `_id` to key on: `carts.userId` is unique, a
+ * cart is addressed by whose it is, and no cart id ever reaches the wire — so there is nothing in
+ * `seed-identities.ts` to pin.
+ */
+const upsertCart = async (fixture: {
+    userId: Types.ObjectId;
+    items: { productId: Types.ObjectId; quantity: number }[];
+}): Promise<'created' | 'skipped'> => {
+    const existing = await cartRepository.findByUserId(fixture.userId.toString());
+    if (existing) return 'skipped';
+    await cartRepository.create(fixture as Partial<ICartDocument>);
+    return 'created';
+};
+
 async function seed() {
+    /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
+    if (process.env.NODE_ENV === 'production') {
+        logger.warn('db:seed refused to run: NODE_ENV is production.');
+        return;
+    }
+
     await start();
 
     if (reset) {
@@ -17,134 +90,46 @@ async function seed() {
         logger.info('Database dropped.');
     }
 
-    await Promise.all([
-        userRepository.create({
-            _id: new Types.ObjectId('65dd2bdb923652b7800fe180'),
-            username: 'root',
-            email: 'root@root.it',
-            // The password can be put plain because there is a pre-save hook that hashes it
-            password: 'rootroot',
-            imageUrl: String.raw`\images\9726c4217f5998511f372afab4800ac8.jpg`,
-            admin: true,
-            cart: {
-                items: [
-                    { product: new Types.ObjectId('65dc8a99604c307b702b5ccc'), quantity: 2 },
-                    { product: new Types.ObjectId('65dcdec2b18ad5e4bd597f0f'), quantity: 3 }
-                ],
-                updatedAt: new Date()
-            },
-            tokens: []
-        }),
-        userRepository.create({
-            _id: new Types.ObjectId('65de646a44f861fd83c13f13'),
-            username: 'ginopinoshow',
-            email: 'gino@pino.it',
-            password: '$2b$12$HwOdA7il/qvuU.psvWDOyuSMJ7ji/qMeFS3ma7DB8W6A/tGfCYEX.',
-            imageUrl: String.raw`\images\96346b77daf138a279677cb75c400ee9.jpg`,
-            admin: false,
-            cart: { items: [], updatedAt: new Date() },
-            tokens: []
-        }),
-
-        productRepository.create({
-            _id: new Types.ObjectId('65dc8a99604c307b702b5ccc'),
-            title: 'Sallyno Panino',
-            price: 100,
-            imageUrl: String.raw`\images\ad2e01890eebf72d06481c4fac3522ac.jpg`,
-            active: true,
-            description: 'Piccolo Sallyno panino. Da mangiare di coccole'
-        }),
-        productRepository.create({
-            _id: new Types.ObjectId('65dc8ad8604c307b702b5cd4'),
-            title: 'Sallyno Carino',
-            price: 50,
-            imageUrl: String.raw`\images\96346b77daf138a279677cb75c400ee9.jpg`,
-            active: true,
-            description:
-                'Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.',
-            deletedAt: new Date('2024-02-26T23:34:44.832Z')
-        }),
-        productRepository.create({
-            _id: new Types.ObjectId('65dc9be92f2794d1c16741e1'),
-            title: 'Miciona inutile',
-            price: 1,
-            imageUrl: String.raw`\images\60de15db7aed7174ef2d53d21e1f57a5.jpg`,
-            active: true,
-            description:
-                'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire'
-        }),
-        productRepository.create({
-            _id: new Types.ObjectId('65dcdec2b18ad5e4bd597f0f'),
-            title: 'Micino pufettino',
-            price: 77,
-            imageUrl: String.raw`\images\f12ba2e44fe347010397f1dcba399808.jpg`,
-            active: true,
-            description: 'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.'
-        }),
-        productRepository.create({
-            _id: new Types.ObjectId('6622c88a5123b1e286f440f8'),
-            title: 'Bundle micini',
-            price: 40,
-            imageUrl: String.raw`\images\043cf5b2517fc99ce9a2c2f84288416d.jpg`,
-            active: false,
-            description: 'Produttori di rumori molesti a tutte le ore. Inactive product.'
-        }),
-
-        orderRepository.create({
-            _id: new Types.ObjectId('65de73a69ca05739be2b5e85'),
-            userId: new Types.ObjectId('65dd2bdb923652b7800fe180'),
-            email: 'oldpsw@root.it',
-            items: [
-                {
-                    product: {
-                        _id: new Types.ObjectId('65dc8a99604c307b702b5ccc'),
-                        title: 'Sallyno Panino',
-                        price: 100,
-                        imageUrl: String.raw`\images\ad2e01890eebf72d06481c4fac3522ac.jpg`,
-                        active: true,
-                        description: 'Piccolo Sallyno panino. Da mangiare di coccole'
-                    },
-                    quantity: 1
-                },
-                {
-                    product: {
-                        _id: new Types.ObjectId('65dc9be92f2794d1c16741e1'),
-                        title: 'Miciona inutile',
-                        price: 1,
-                        imageUrl: String.raw`\images\60de15db7aed7174ef2d53d21e1f57a5.jpg`,
-                        active: true,
-                        description:
-                            'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire'
-                    },
-                    quantity: 10
-                }
-            ]
-        } as Partial<IOrderDocument>),
-        orderRepository.create({
-            _id: new Types.ObjectId('661c795a9e22bcbef63a5832'),
-            userId: new Types.ObjectId('65dd2bdb923652b7800fe180'),
-            email: 'root@root.it',
-            items: [
-                {
-                    product: {
-                        _id: new Types.ObjectId('65dcdec2b18ad5e4bd597f0f'),
-                        title: 'Micino pufettino',
-                        price: 77,
-                        imageUrl: String.raw`\images\f12ba2e44fe347010397f1dcba399808.jpg`,
-                        active: true,
-                        description:
-                            'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.'
-                    },
-                    quantity: 20
-                }
-            ]
-        } as Partial<IOrderDocument>)
+    const results = await Promise.all([
+        ...users.map((user) => upsert(userRepository, user)),
+        ...products.map((product) => upsert(productRepository, product)),
+        ...orders.map((order) =>
+            upsert(orderRepository, order as Partial<IOrderDocument> & { _id: Types.ObjectId })
+        ),
+        ...carts.map((cart) => upsertCart(cart))
     ]);
 
-    await connection.close();
-    logger.info('Seeding complete.');
+    const created = results.filter((result) => result === 'created').length;
+
+    /*
+     * This wrote straight to Mongo, so the API's own invalidation never ran and the cache is
+     * still holding pre-seed answers (usually empty lists). Drop them — otherwise `GET /products`
+     * keeps serving `[]` until the TTL expires. Only worth doing when something actually changed.
+     *
+     * Fails open, deliberately (§9): seeding must succeed against a stack whose Redis is not up.
+     * `reachable` is therefore read but never thrown on — it only decides which line gets
+     * logged, so the fail-open is visible in the output instead of silently looking like a
+     * cache that happened to be empty.
+     */
+    if (created > 0) {
+        const { deleted, reachable } = await clearCache();
+        if (reachable) logger.info(`Cache cleared after seeding: ${deleted} keys removed.`);
+        else
+            logger.warn(
+                'Cache NOT cleared after seeding: Redis is unreachable. Seeding succeeded, but ' +
+                    'pre-seed responses will keep being served until their TTL expires.'
+            );
+    }
+
+    logger.info(
+        `Seeding complete: ${created} created, ${results.length - created} already present.`
+    );
 }
 
-seed().catch((error: unknown) => {
-    throw error;
-});
+/*
+ * Cleanup lives in the runner's `finally`, not at the end of `seed()`: a throw partway through
+ * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process. Both
+ * closers are no-ops when their connection was never opened, which covers the production-gate
+ * early return above.
+ */
+void runScript(seed, () => Promise.all([connection.close(), stopCache()]));

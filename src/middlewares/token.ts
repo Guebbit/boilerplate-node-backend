@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { sign, verify } from 'jsonwebtoken';
 import { userModel as Users, ETokenType } from '@models/users';
 import type { IToken } from '@models/users';
@@ -77,9 +78,24 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
         .select('+tokens')
         .then((user) => {
             if (!user) throw new Error('User not found');
+            /*
+             * `jwtid` is what makes two refresh tokens minted in the same second different.
+             *
+             * The payload is `{ id }` and the claims JWT adds are `iat`/`exp`, both at one-second
+             * resolution — so signing twice within a second for one user produced byte-identical
+             * tokens. Two devices signing in together therefore shared one credential, stored as
+             * two rows holding the same string, and revoking either revoked both: logging out a
+             * phone silently logged out the laptop that had signed in alongside it.
+             *
+             * A random `jti` gives every issued token its own identity, which is what the rest of
+             * the token handling already assumes — `tokens.token` is queried as though it
+             * addressed one session, and now it does. Verification is unaffected: `jti` is a
+             * registered claim that `verify` carries through without checking.
+             */
             const token = sign({ id } as ITokenData, getRefreshTokenSecret(), {
                 expiresIn: getExpiryTime(remember),
-                algorithm: 'HS256'
+                algorithm: 'HS256',
+                jwtid: randomUUID()
             }) as IToken['token'];
             return user.tokenAdd(ETokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });

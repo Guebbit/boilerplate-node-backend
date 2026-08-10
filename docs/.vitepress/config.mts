@@ -24,6 +24,7 @@ export default withMermaid(
                             { text: 'Architecture', link: '/theory/architecture' },
                             { text: 'Layers', link: '/theory/layers' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
+                            { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' }
                         ]
                     }
@@ -67,6 +68,7 @@ export default withMermaid(
                         text: 'Observability',
                         collapsed: false,
                         items: [
+                            { text: 'Events & Logging', link: '/tools/events-and-logging' },
                             { text: 'Winston & Audit Logs', link: '/tools/winston' },
                             {
                                 text: 'Observability Reference',
@@ -80,11 +82,33 @@ export default withMermaid(
                         ]
                     },
                     {
-                        text: 'Analytics & QA',
+                        text: 'Analytics',
                         collapsed: false,
                         items: [
                             { text: 'PostHog', link: '/tools/posthog' },
-                            { text: 'Testing & Docs', link: '/tools/testing-and-docs' }
+                            {
+                                text: 'Frontend Observability',
+                                link: '/tools/frontend-observability'
+                            }
+                        ]
+                    },
+                    {
+                        text: 'Testing',
+                        collapsed: false,
+                        items: [
+                            { text: 'Testing (overview)', link: '/tools/testing-and-docs' },
+                            { text: 'Unit Testing', link: '/tools/unit-testing' },
+                            { text: 'Integration Testing', link: '/tools/integration-testing' },
+                            {
+                                text: 'Contract Testing (Response)',
+                                link: '/tools/contract-testing'
+                            },
+                            {
+                                text: 'Contract-Derived Request Data',
+                                link: '/tools/contract-request-data'
+                            },
+                            { text: 'Mutation Testing', link: '/tools/mutation-testing' },
+                            { text: 'Load Testing', link: '/tools/load-testing' }
                         ]
                     }
                 ],

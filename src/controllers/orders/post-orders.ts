@@ -4,6 +4,7 @@ import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@core/http/response';
 import type { CreateOrderRequest } from '@types';
 import { enqueueEmail } from '@core/adapters/mailer';
+import { t } from '@core/i18n';
 import { orderCreatedTotal } from '@core/observability/metrics-domain';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 import {
@@ -44,12 +45,12 @@ export const postOrders = (
         void enqueueEmail(
             {
                 to: email,
-                subject: 'Order confirmed'
+                subject: t('email.order-confirm.subject')
             },
             'email-order-confirm.ejs',
             {
                 ...response.locals,
-                pageMetaTitle: 'Order confirmed',
+                pageMetaTitle: t('email.order-confirm.meta-title'),
                 pageMetaLinks: [],
                 // Admin-created orders only have email; username is not in the payload.
                 name: email

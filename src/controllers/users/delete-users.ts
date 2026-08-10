@@ -1,10 +1,12 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import type { CastError } from 'mongoose';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { extractAndValidateId, extractHardDelete } from '@core/http/request';
+import { rejectDatabaseError } from '@core/http/errors';
+import { extractAndValidateId, readInput } from '@core/http/request';
+import { hardDeleteSchema } from '@core/http/schemas';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
 /**
@@ -18,7 +20,23 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
     const id = extractAndValidateId(request, response, 'deleteUser');
     if (!id) return Promise.resolve();
 
-    const hardDelete = extractHardDelete(request);
+    // `hardDelete` is a boolean the route accepts three ways — see docs/theory/request-input.md.
+    // The path form (`DELETE /users/:id/hard`) reaches `params` through `routeFlag`.
+    const input = readInput(request, {
+        sources: ['params', 'query', 'body'],
+        booleans: ['hardDelete']
+    });
+    const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
+    if (!parseResult.success)
+        return Promise.resolve(
+            rejectResponse(
+                response,
+                422,
+                'deleteUser - invalid hardDelete',
+                parseResult.error.issues.map(({ message }) => message)
+            )
+        );
+    const hardDelete = parseResult.data;
 
     return (
         userService
@@ -45,7 +63,7 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
                     return rejectResponse(response, 404, 'Not Found', [
                         t('ecommerce.user-not-found')
                     ]);
-                rejectResponse(response, 500, 'deleteUser', [error.message]);
+                rejectDatabaseError(response, 'deleteUser', error);
             })
     );
 };

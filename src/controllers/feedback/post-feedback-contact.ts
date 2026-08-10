@@ -2,7 +2,9 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateFeedbackRequestBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { enqueueEmail } from '@core/adapters/mailer';
+import { getDefaultLocale, runWithLocale, t } from '@core/i18n';
 import { logger } from '@core/adapters/logger';
 import type { CreateFeedbackRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
@@ -44,22 +46,33 @@ export const postFeedbackContact = (
                 process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';
 
             if (notifyEmail)
-                void enqueueEmail(
-                    {
-                        to: notifyEmail,
-                        subject: `New contact request: ${createdFeedbackRequest.subject}`
-                    },
-                    'email-feedback-contact.ejs',
-                    {
-                        ...response.locals,
-                        pageMetaTitle: 'New contact request',
-                        pageMetaLinks: [],
-                        name: createdFeedbackRequest.name,
-                        email: createdFeedbackRequest.email,
-                        subject: createdFeedbackRequest.subject,
-                        message: createdFeedbackRequest.message,
-                        createdAt: createdFeedbackRequest.createdAt?.toISOString()
-                    }
+                /*
+                 * The one email that must NOT follow the request's language.
+                 *
+                 * It goes to the support mailbox, not to the person who filled in the form, so
+                 * it is rendered in `NODE_DEFAULT_LOCALE` — the operator's language. Both the
+                 * subject and the body are resolved inside `runWithLocale`, so the two cannot
+                 * end up in different languages. The customer's own words (`subject`,
+                 * `message`) pass through untouched, as they must.
+                 */
+                void runWithLocale(getDefaultLocale(), () =>
+                    enqueueEmail(
+                        {
+                            to: notifyEmail,
+                            subject: `${t('email.feedback-contact.subject')}: ${createdFeedbackRequest.subject}`
+                        },
+                        'email-feedback-contact.ejs',
+                        {
+                            ...response.locals,
+                            pageMetaTitle: t('email.feedback-contact.meta-title'),
+                            pageMetaLinks: [],
+                            name: createdFeedbackRequest.name,
+                            email: createdFeedbackRequest.email,
+                            subject: createdFeedbackRequest.subject,
+                            message: createdFeedbackRequest.message,
+                            createdAt: createdFeedbackRequest.createdAt?.toISOString()
+                        }
+                    )
                 ).catch((error: Error) =>
                     logger.error({
                         message: 'feedback contact notification email failed',
@@ -69,7 +82,5 @@ export const postFeedbackContact = (
 
             successResponse(response, createdFeedbackRequest, 201);
         })
-        .catch((error: Error) =>
-            rejectResponse(response, 500, 'postFeedbackContact', [error.message])
-        );
+        .catch((error: Error) => rejectDatabaseError(response, 'postFeedbackContact', error));
 };

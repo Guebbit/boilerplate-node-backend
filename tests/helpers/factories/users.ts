@@ -28,19 +28,24 @@
  *   const loginResult = await userService.login(user.email, PLAIN_PASSWORD);
  */
 
-import type { IUser, IUserDocument, ICartItem } from '@models/users';
+import type { IUser, IUserDocument } from '@models/users';
 import { userRepository } from '@repositories/users';
 
 /** Plain-text password used by the default factory.  Re-export so tests can
  *  authenticate without duplicating this string everywhere. */
 export const PLAIN_PASSWORD = 'Password1!';
 
-/** The minimal shape accepted by userRepository.create(). */
-type CreateUserInput = Pick<
-    IUser,
-    'email' | 'username' | 'password' | 'admin' | 'cart' | 'tokens'
-> &
-    Partial<Pick<IUser, 'imageUrl' | 'deletedAt'>>;
+/**
+ * The minimal shape accepted by userRepository.create().
+ *
+ * `active` is optional and deliberately left out of the defaults below, so `createUser()` with no
+ * arguments exercises the schema default (`true`) rather than pinning it here — a factory that
+ * always sends the field would make the default untestable through it. Override it explicitly to
+ * build a deactivated account; it is independent of `deletedAt`, so any of the four combinations
+ * is constructible.
+ */
+type CreateUserInput = Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'tokens'> &
+    Partial<Pick<IUser, 'imageUrl' | 'deletedAt' | 'active'>>;
 
 /**
  * Build a valid user payload.
@@ -55,7 +60,6 @@ export const makeUser = (overrides: Partial<CreateUserInput> = {}): CreateUserIn
     username: 'testuser',
     password: PLAIN_PASSWORD, // hashed automatically by the pre-save hook
     admin: false,
-    cart: { items: [] as ICartItem[], updatedAt: new Date() },
     tokens: [],
     ...overrides
 });

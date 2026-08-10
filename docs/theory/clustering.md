@@ -11,14 +11,19 @@ flowchart TD
     Primary -->|fork| W2[Worker 2]
     Primary -->|fork| Wn[Worker N]
     W1 --> Mongo[(MongoDB)]
-    W1 --> Redis[(Redis)]
     W2 --> Mongo
     Wn --> Mongo
+    W1 --> Redis[(Redis)]
+    W2 --> Redis
+    Wn --> Redis
 ```
 
 - One **primary** supervises the cluster: forks workers, watches exits, and coordinates shutdown.
 - One **worker per CPU core** by default (`os.cpus().length`), each running the full Express app.
 - Workers are independent processes; they do not share memory. State must live in Mongo or Redis.
+- Every worker opens its own connection to each, but they address the **same** database and the
+  **same** Redis keyspace — which is why a cache invalidation done by one worker needs no
+  broadcast to the others. → [Redis and the workers](../tools/redis-cache.md#redis-and-the-workers)
 
 ## Configuration
 

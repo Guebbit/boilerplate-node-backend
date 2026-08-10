@@ -1,15 +1,16 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { UpdateCartItemByIdRequest } from '@types';
 import {
     emitAnalyticsEvent,
     AnalyticsEvent,
     buildAnalyticsBase
 } from '@core/observability/analytics';
-import { extractCustomId, isValidObjectId } from '@core/http/request';
+import { readInput, isValidObjectId } from '@core/http/request';
 
 /**
  * PUT /cart/:productId
@@ -36,7 +37,7 @@ export const putCartItem = (
 
     const { quantity } = parseResult.data;
     // productId travels via path param or body; body shape is already validated above.
-    const productId = extractCustomId(request, { param: 'productId', body: 'productId' });
+    const { productId } = readInput(request, { sources: ['params', 'body'], ids: ['productId'] });
 
     if (!isValidObjectId(productId)) {
         rejectResponse(response, 422, 'updateCartItemById - missing id', [
@@ -47,7 +48,6 @@ export const putCartItem = (
 
     return cartService
         .cartItemSetById(userId, productId, quantity)
-        .then(() => cartService.cartGetWithSummary(userId))
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
@@ -57,6 +57,6 @@ export const putCartItem = (
             successResponse(response, cart);
         })
         .catch((error: Error) => {
-            rejectResponse(response, 500, 'updateCartItemById', [error.message]);
+            rejectDatabaseError(response, 'updateCartItemById', error);
         });
 };

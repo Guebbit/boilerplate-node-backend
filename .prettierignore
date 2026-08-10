@@ -1,3 +1,4 @@
 api
 .prism
 .dev
+src/types/asyncapi.ts

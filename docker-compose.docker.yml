@@ -1,6 +1,9 @@
 # Compose override for Docker.
 # Mounts the Docker host log path so Promtail can tail container log files.
-# Activated by setting COMPOSE_FILE=docker-compose.yml:docker-compose.docker.yml in .env (see .env-example).
+#
+# Applied by the `npm run docker:*` scripts, which pass it with `-f`. Docker Compose would also
+# honour COMPOSE_FILE in .env, but its Podman counterpart does not — so both runtimes select
+# their override the same way, through the scripts. See docker-compose.podman.yml.
 
 services:
     promtail:

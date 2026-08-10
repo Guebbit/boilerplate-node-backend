@@ -5,6 +5,17 @@ info:
     description: |
         Stable, codegen-oriented OpenAPI contract.
         Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
+
+        Language: every endpoint honours `Accept-Language` (q-weights and region tags
+        included). It selects the language of user-facing copy only — `errors[].message` and a
+        success envelope's `message` — never the response shape, the status code, or a
+        machine-readable field such as `errors[].code`. An unsupported language falls back
+        instead of erroring; `Content-Language` states what was used and `Vary:
+        Accept-Language` is always set. `GET /locales` lists what a deployment supports.
+
+        The header is intentionally not declared per operation: it applies to all of them and
+        clients set it once in an interceptor, so declaring it 33 times would only add a
+        redundant argument to every generated function. This paragraph is its contract.
     contact:
         name: API Team
 
@@ -40,6 +51,9 @@ components:
             bearerFormat: JWT
 
     parameters:
+        # `Accept-Language` is honoured by every operation and is documented in
+        # `info.description` rather than declared here — see the note there.
+
         # Common parameters
         PageParam:
             name: page
@@ -104,14 +118,6 @@ components:
                 $ref: '#/components/schemas/Id'
             description: Product identifier
 
-        TokenPathParam:
-            name: token
-            in: path
-            required: true
-            schema:
-                type: string
-            description: Refresh token
-
     responses:
         Success:
             description: Success
@@ -133,6 +139,12 @@ components:
                         $ref: '#/components/schemas/ErrorResponse'
         NotFound:
             description: Resource not found
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        Conflict:
+            description: The request conflicts with the current state of the resource
             content:
                 application/json:
                     schema:
@@ -176,10 +188,52 @@ components:
         Password:
             type: string
             minLength: 8
+        Locale:
+            type: string
+            description: >-
+                BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports
+                is a runtime fact, not a contract one — ask `GET /locales`.
+            pattern: '^[a-z]{2}(-[A-Za-z0-9]+)*$'
+            example: it
+        ImageUrl:
+            type: string
+            format: uri-reference
+            description: >-
+                Absolute URL or server-relative upload path (e.g. `/uploads/abc.jpg`).
+                `uri-reference`, not `uri`: an uploaded image is stored and returned as a
+                path relative to the API host, which is not a valid absolute URI.
+
+        # ---------- On the `imageUpload` fields below (and why they carry no limits) ----------
+        #
+        # The six `*Multipart` request bodies each declare `imageUpload` as a bare
+        # `type: string, format: binary` — no `maxLength`, no `contentMediaType`. That is on
+        # purpose, and it is worth knowing why before someone "fixes" it.
+        #
+        # The real limits live in the backend, and only there:
+        #   - accepted mime types → src/core/adapters/storage.ts (image/png, jpg, jpeg, webp)
+        #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
+        # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
+        # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
+        # 422 when the declaration lied. Nothing a client declares can substitute for either gate.
+        #
+        # Declaring the constraints here would document them but generate nothing to read:
+        #   - orval's zod generator short-circuits on `format: binary` straight to
+        #     `zod.instanceof(File)` and emits no length constant for it
+        #     (@orval/zod, the `case "string"` branch);
+        #   - the `zodSchemas` target in orval.config.ts has no `splitByContentType`, so only the
+        #     JSON body of each operation becomes a schema — the multipart bodies never do.
+        # So a `maxLength` added here would reach no generated artefact in either repo, while
+        # looking like it had.
+        #
+        # The frontend therefore restates both numbers in src/utils/uploads.ts, which names
+        # storage.ts as the authority and explains the same thing at its own call site. If the
+        # backend's limits ever change, that file is what has to change with them — nothing will
+        # announce the drift.
 
         # ---------- Meta / envelope ----------
         PaginationMeta:
             type: object
+            additionalProperties: false
             required: [page, pageSize, totalItems, totalPages]
             properties:
                 page:
@@ -195,20 +249,95 @@ components:
 
         # ---------- System Messages ----------
 
+        # The three `&envelope*` anchors below are the single definition of the success-envelope
+        # preamble. Every *Envelope schema aliases them with `*envelopeSuccess` etc., so the shape
+        # is written once here and the YAML parser expands it everywhere — no allOf, and therefore
+        # no schema that has to stay non-strict. See the note on ErrorResponse for why.
         MessageResponse:
             type: object
+            additionalProperties: false
             required: [success, status, message]
             properties:
-                success:
+                success: &envelopeSuccess
                     type: boolean
                     enum: [true]
-                status:
+                status: &envelopeStatus
                     type: integer
-                message:
+                message: &envelopeMessage
                     type: string
+
+        LocaleCapabilities:
+            type: object
+            additionalProperties: false
+            required: [locales, default, fallback]
+            description: >-
+                Which languages a deployment can answer in. Runtime state, not contract state:
+                it is derived from the dictionaries actually deployed, so it cannot be an enum
+                here.
+            properties:
+                locales:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Locale'
+                    description: Every supported language tag.
+                default:
+                    $ref: '#/components/schemas/Locale'
+                fallback:
+                    $ref: '#/components/schemas/Locale'
+
+        LocaleCapabilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/LocaleCapabilities'
+
+        LocaleDictionary:
+            type: object
+            additionalProperties: false
+            required: [locale, messages]
+            description: >-
+                The API's OWN message dictionary for one language — its API-response copy and
+                nothing else. It is never a client's UI dictionary: the two are authored and
+                deployed in separate repositories, and mixing them would put view copy in the
+                API's keyspace. A client that wants these merges them under a namespace it
+                reserves for the API, never at the root.
+            properties:
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                messages:
+                    type: object
+                    additionalProperties: true
+                    description: Nested key/value dictionary, the same shape the API loads.
+
+        LocaleDictionaryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/LocaleDictionary'
+
+        HealthPing:
+            type: object
+            additionalProperties: false
+            required: [status]
+            properties:
+                status:
+                    type: string
+                    enum: [ok]
+                    description: Liveness indicator. Always `ok` when the process is answering.
 
         ErrorItem:
             type: object
+            additionalProperties: false
             required: [code, message]
             properties:
                 code:
@@ -224,19 +353,24 @@ components:
                     additionalProperties: true
                     description: Optional structured metadata for programmatic handling
 
+        # `additionalProperties: false` cannot live on a schema used as an `allOf` base: the
+        # constraint is evaluated per-subschema, so it would reject the properties a sibling
+        # contributes. Rather than leave the error/success envelopes unconstrained, they are
+        # written flat and share their preamble through YAML anchors.
         ErrorResponse:
             type: object
+            additionalProperties: false
             required: [success, status, message, errors]
             properties:
-                success:
+                success: &errorSuccess
                     type: boolean
                     enum: [false]
-                status:
+                status: &errorStatus
                     type: integer
-                message:
+                message: &errorMessage
                     type: string
                     description: Human-readable summary for this failure
-                errors:
+                errors: &errorErrors
                     type: array
                     minItems: 1
                     items:
@@ -244,13 +378,17 @@ components:
                     description: Structured machine-friendly errors
 
         ValidationErrorResponse:
-            allOf:
-                - $ref: '#/components/schemas/ErrorResponse'
-                - type: object
-                  properties:
-                      message:
-                          type: string
-                          example: Validation failed
+            type: object
+            additionalProperties: false
+            required: [success, status, message, errors]
+            properties:
+                success: *errorSuccess
+                status: *errorStatus
+                message:
+                    type: string
+                    description: Human-readable summary for this failure
+                    example: Validation failed
+                errors: *errorErrors
 
         # ---------- Domain ----------
 
@@ -259,173 +397,196 @@ components:
         # The schemas below describe the "data" payload for each endpoint.
         # Wrapped response schemas below combine the envelope with the domain payload.
 
-        SuccessEnvelope:
+        HealthPingEnvelope:
             type: object
-            required: [success, status, message]
+            additionalProperties: false
+            required: [success, status, message, data]
             properties:
-                success:
-                    type: boolean
-                    enum: [true]
-                status:
-                    type: integer
-                message:
-                    type: string
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/HealthPing'
 
         AuthTokensEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/AuthTokens'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/AuthTokens'
 
         RefreshTokenEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/RefreshTokenResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/RefreshTokenResponse'
 
         UserEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/User'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/User'
 
         UsersResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/UsersResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/UsersResponse'
 
         ProductEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/Product'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Product'
 
         ProductsResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/ProductsResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ProductsResponse'
 
         OrderEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/Order'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Order'
 
         OrdersResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/OrdersResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/OrdersResponse'
 
         FeedbackRequestEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/FeedbackRequest'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/FeedbackRequest'
 
         FeedbackRequestsResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/FeedbackRequestsResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/FeedbackRequestsResponse'
 
         CartResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/CartResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CartResponse'
 
         CartSummaryResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/CartSummaryResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CartSummaryResponse'
 
         CheckoutResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/CheckoutResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CheckoutResponse'
 
         ObservabilityHealthResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/ObservabilityHealthResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ObservabilityHealth'
 
         ObservabilityMetricsSummaryResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/ObservabilityMetricsSummaryResponse'
-
-        ObservabilityLoadTestResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/ObservabilityLoadTestResult'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
 
         AuditLogsResponseEnvelope:
-            allOf:
-                - $ref: '#/components/schemas/SuccessEnvelope'
-                - type: object
-                  required: [data]
-                  properties:
-                      data:
-                          $ref: '#/components/schemas/AuditLogsResponse'
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/AuditLogsPage'
 
         AuthTokens:
             type: object
+            additionalProperties: false
             required: [token]
             properties:
                 token:
@@ -440,6 +601,7 @@ components:
 
         RefreshTokenResponse:
             type: object
+            additionalProperties: false
             required: [token]
             properties:
                 token:
@@ -454,6 +616,7 @@ components:
 
         User:
             type: object
+            additionalProperties: false
             required: [id, email, username]
             properties:
                 id:
@@ -464,20 +627,32 @@ components:
                     type: string
                 admin:
                     type: boolean
+                # Independent of `deletedAt` below: an account can be deactivated without being
+                # deleted, and a deleted one keeps whatever `active` it had. They share an effect,
+                # not a value — see the note on `CreateProductRequest.active`.
                 active:
                     type: boolean
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
                 createdAt:
                     type: string
                     format: date-time
                 updatedAt:
                     type: string
                     format: date-time
+                # Present only on a soft-deleted account, exactly as on `Product`. With `active` an
+                # independent fact, this is the only thing that tells a deleted account from a
+                # live one. Safe to expose: every route serving a `User` list is admin-only, and
+                # `/account` serves the caller their own record.
+                deletedAt:
+                    type: string
+                    format: date-time
 
         Product:
             type: object
+            additionalProperties: false
             required: [id, title, price]
             properties:
                 id:
@@ -493,8 +668,7 @@ components:
                 active:
                     type: boolean
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
                 categories:
                     type: array
                     items:
@@ -515,6 +689,7 @@ components:
 
         FeedbackRequest:
             type: object
+            additionalProperties: false
             required: [id, email, subject, message, status, createdAt]
             properties:
                 id:
@@ -544,6 +719,7 @@ components:
 
         CartItem:
             type: object
+            additionalProperties: false
             required: [productId, quantity]
             properties:
                 productId:
@@ -565,7 +741,8 @@ components:
 
         Order:
             type: object
-            required: [id, userId, email, items, total, status]
+            additionalProperties: false
+            required: [id, userId, email, items, totalItems, totalQuantity, totalPrice, status]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
@@ -577,10 +754,24 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/OrderItem'
-                total:
+                totalItems:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        Number of distinct line items in this order. Not to be confused with
+                        `PaginationMeta.totalItems`, which counts orders matching a search.
+                    example: 2
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of `quantity` across every line item.
+                    example: 5
+                totalPrice:
                     type: number
                     format: double
                     minimum: 0
+                    description: Sum of `product.price × quantity` across every line item.
+                    example: 149.97
                 notes:
                     type: string
                     description: Optional order notes
@@ -620,8 +811,7 @@ components:
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
 
         SignupRequestMultipart:
             type: object
@@ -638,6 +828,7 @@ components:
                 passwordConfirm:
                     $ref: '#/components/schemas/Password'
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -689,6 +880,10 @@ components:
                     $ref: '#/components/schemas/Email'
                 username:
                     type: string
+                # Filters the stored `active` column. It does NOT filter soft-deletion: the two
+                # are independent facts, and `deletedAt` is not exposed on `User` at all, so
+                # there is no filter for it here. `active: false` means "deactivated", never
+                # "deleted".
                 active:
                     type: boolean
 
@@ -705,11 +900,16 @@ components:
                     $ref: '#/components/schemas/Password'
                 admin:
                     type: boolean
+                # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
+                # and defaulted here so both implementations derive it rather than each choosing.
+                # Create bodies only — an omitted `active` on an update means "leave it alone".
                 active:
                     type: boolean
+                    default: true
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         CreateUserRequestMultipart:
             type: object
@@ -724,12 +924,17 @@ components:
                     $ref: '#/components/schemas/Password'
                 admin:
                     type: boolean
+                # Same default, same reasoning as `CreateUserRequest.active` above.
                 active:
                     type: boolean
+                    default: true
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         UpdateUserRequest:
             type: object
@@ -744,9 +949,14 @@ components:
                     type: string
                 password:
                     $ref: '#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         UpdateUserRequestMultipart:
             type: object
@@ -761,10 +971,17 @@ components:
                     type: string
                 password:
                     $ref: '#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         UpdateUserByIdRequest:
             type: object
@@ -776,9 +993,12 @@ components:
                     $ref: '#/components/schemas/Password'
                 username:
                     type: string
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
 
         UpdateUserByIdRequestMultipart:
             type: object
@@ -790,7 +1010,12 @@ components:
                     $ref: '#/components/schemas/Password'
                 username:
                     type: string
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional user profile image
@@ -845,11 +1070,28 @@ components:
                     minimum: 0
                 description:
                     type: string
+                # ---------- On `active`, and why it is declared here but not on the updates ----------
+                #
+                # `active` and `deletedAt` are INDEPENDENT. A record can be active or not regardless
+                # of whether it has been soft-deleted, and the two are stored separately. What they
+                # share is an effect, not a value: a non-admin sees a record only when it is active
+                # AND not soft-deleted (`publicScope()` in the products repository requires both).
+                # So a soft-deleted record behaves exactly like an inactive one from outside, while
+                # remaining a distinct state inside.
+                #
+                # The default is declared rather than left to each implementation. Undeclared, the
+                # API and the paired frontend's mock each pick their own, and the same request
+                # yields a publicly visible product against one and a hidden one against the
+                # other — a disagreement no contract test on either side can see.
+                #
+                # It appears on the CREATE bodies only. On an update, an omitted `active` means
+                # "leave it as it is" — a default there would silently republish a deactivated
+                # record on any unrelated edit.
                 active:
                     type: boolean
+                    default: true
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
                 categories:
                     type: array
                     items:
@@ -872,9 +1114,12 @@ components:
                     minimum: 0
                 description:
                     type: string
+                # Same default, same reasoning as `CreateProductRequest.active` above.
                 active:
                     type: boolean
+                    default: true
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -905,8 +1150,7 @@ components:
                 active:
                     type: boolean
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
                 categories:
                     type: array
                     items:
@@ -934,6 +1178,7 @@ components:
                 active:
                     type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -962,8 +1207,7 @@ components:
                 active:
                     type: boolean
                 imageUrl:
-                    type: string
-                    format: uri
+                    $ref: '#/components/schemas/ImageUrl'
                 categories:
                     type: array
                     items:
@@ -989,6 +1233,7 @@ components:
                 active:
                     type: boolean
                 imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
                     format: binary
                     description: Optional product image
@@ -1000,6 +1245,16 @@ components:
                     type: array
                     items:
                         type: string
+
+        # For the path-form deletes, which need no id — `{id}` already carries it — but do
+        # read the flag from a body as readily as from the query.
+        HardDeleteRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                hardDelete:
+                    type: boolean
+                    default: false
 
         DeleteProductRequest:
             type: object
@@ -1177,6 +1432,7 @@ components:
         # ---------- Response DTOs — envelope items ----------
         UsersResponse:
             type: object
+            additionalProperties: false
             required: [items, meta]
             properties:
                 items:
@@ -1188,6 +1444,7 @@ components:
 
         ProductsResponse:
             type: object
+            additionalProperties: false
             required: [items, meta]
             properties:
                 items:
@@ -1199,6 +1456,7 @@ components:
 
         OrdersResponse:
             type: object
+            additionalProperties: false
             required: [items, meta]
             properties:
                 items:
@@ -1210,6 +1468,7 @@ components:
 
         FeedbackRequestsResponse:
             type: object
+            additionalProperties: false
             required: [items, meta]
             properties:
                 items:
@@ -1222,6 +1481,7 @@ components:
         # ---------- Response DTOs — Cart ----------
         CartSummaryResponse:
             type: object
+            additionalProperties: false
             required: [itemsCount, totalQuantity, total]
             properties:
                 itemsCount:
@@ -1243,6 +1503,7 @@ components:
 
         CartResponse:
             type: object
+            additionalProperties: false
             required: [items, summary]
             properties:
                 items:
@@ -1254,6 +1515,7 @@ components:
 
         CheckoutResponse:
             type: object
+            additionalProperties: false
             required: [order]
             properties:
                 order:
@@ -1265,6 +1527,7 @@ components:
 
         ObservabilityHealthIntegrations:
             type: object
+            additionalProperties: false
             properties:
                 loki: { type: boolean }
                 posthog: { type: boolean }
@@ -1274,6 +1537,7 @@ components:
 
         ObservabilityHealthMemory:
             type: object
+            additionalProperties: false
             required: [heapUsedMb, heapTotalMb, rssMb]
             properties:
                 heapUsedMb: { type: integer }
@@ -1282,6 +1546,7 @@ components:
 
         ObservabilityHealthSystem:
             type: object
+            additionalProperties: false
             required: [platform, cpuCount, loadAvg]
             properties:
                 platform: { type: string }
@@ -1292,6 +1557,7 @@ components:
 
         ObservabilityHealth:
             type: object
+            additionalProperties: false
             required:
                 [status, environment, service, nodeVersion, uptimeSeconds, database, timestamp]
             properties:
@@ -1304,6 +1570,7 @@ components:
                 uptimeSeconds: { type: integer, minimum: 0 }
                 database:
                     type: object
+                    additionalProperties: false
                     required: [status]
                     properties:
                         status:
@@ -1314,15 +1581,9 @@ components:
                 system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
                 timestamp: { type: string, format: date-time }
 
-        ObservabilityHealthResponse:
-            type: object
-            required: [success, data]
-            properties:
-                success: { type: boolean, enum: [true] }
-                data: { $ref: '#/components/schemas/ObservabilityHealth' }
-
         ObservabilityMetricsLatency:
             type: object
+            additionalProperties: false
             required: [p50, p95]
             properties:
                 p50: { type: number, description: Median latency in ms }
@@ -1330,10 +1591,12 @@ components:
 
         ObservabilityMetricsSummary:
             type: object
+            additionalProperties: false
             required: [http, auth, business, database, process, timestamp]
             properties:
                 http:
                     type: object
+                    additionalProperties: false
                     required: [totalRequests, totalErrors, errorRate, inFlight, latencyMs]
                     properties:
                         totalRequests: { type: integer, minimum: 0 }
@@ -1347,44 +1610,43 @@ components:
                         latencyMs: { $ref: '#/components/schemas/ObservabilityMetricsLatency' }
                 auth:
                     type: object
+                    additionalProperties: false
                     properties:
                         loginSuccess: { type: integer, minimum: 0 }
                         loginFailure: { type: integer, minimum: 0 }
                         signupSuccess: { type: integer, minimum: 0 }
                 business:
                     type: object
+                    additionalProperties: false
                     properties:
                         checkoutSuccess: { type: integer, minimum: 0 }
                         ordersCreated: { type: integer, minimum: 0 }
                 database:
                     type: object
+                    additionalProperties: false
                     properties:
                         queriesTotal: { type: integer, minimum: 0 }
                         errorsTotal: { type: integer, minimum: 0 }
                 process:
                     type: object
+                    additionalProperties: false
                     properties:
                         uptimeSeconds: { type: integer, minimum: 0 }
                         heapUsedMb: { type: integer, minimum: 0 }
                 timestamp: { type: string, format: date-time }
 
-        ObservabilityMetricsSummaryResponse:
+        AuditLogsPage:
             type: object
-            required: [success, data]
+            additionalProperties: false
+            required: [items, total]
             properties:
-                success: { type: boolean, enum: [true] }
-                data: { $ref: '#/components/schemas/ObservabilityMetricsSummary' }
-
-        ObservabilityLoadTestResult:
-            type: object
-            required: [durationMs]
-            properties:
-                durationMs:
-                    type: number
-                    description: Wall-clock time in ms spent on the synthetic CPU load
-
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEventItem' }
+                total: { type: integer, minimum: 0 }
         AuditEventItem:
             type: object
+            additionalProperties: false
             required: [actor_user_id, actor_role, action, outcome, timestamp, level]
             properties:
                 actor_user_id: { type: string }
@@ -1413,20 +1675,6 @@ components:
                     type: string
                     enum: [info, warn]
 
-        AuditLogsResponse:
-            type: object
-            required: [success, data]
-            properties:
-                success: { type: boolean, enum: [true] }
-                data:
-                    type: object
-                    required: [items, total]
-                    properties:
-                        items:
-                            type: array
-                            items: { $ref: '#/components/schemas/AuditEventItem' }
-                        total: { type: integer, minimum: 0 }
-
 paths:
     # --------- System ---------
     /:
@@ -1441,7 +1689,56 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/MessageResponse'
+                                $ref: '#/components/schemas/HealthPingEnvelope'
+
+    # --------- Locales ---------
+    /locales:
+        get:
+            tags: [System]
+            summary: Supported languages
+            description: |
+                Which languages this deployment can answer in, plus its default and fallback.
+
+                Public, unauthenticated and cacheable: it is static copy that changes only on
+                deploy, and a client that has just failed to reach the API is exactly who needs
+                it.
+            operationId: getLocales
+            responses:
+                '200':
+                    description: Locale capabilities
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /locales/{locale}:
+        get:
+            tags: [System]
+            summary: API message dictionary
+            description: |
+                This API's own dictionary for one language.
+
+                Normally unnecessary — the API resolves its keys itself and puts finished text on
+                the wire. It earns its place when no response arrives at all (a network failure, a
+                bare 502) and the client must produce the copy itself, in the active language.
+            operationId: getLocaleDictionary
+            parameters:
+                - name: locale
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Locale'
+                  description: A language tag from `GET /locales`.
+            responses:
+                '200':
+                    description: Dictionary for the requested locale
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleDictionaryEnvelope'
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
 
     # --------- Observability ---------
     /observability/events:
@@ -1459,6 +1756,12 @@ paths:
                         text/event-stream:
                             schema:
                                 type: string
+                # Guarded by `isAdminViaCookie`: an EventSource cannot set an Authorization
+                # header, so the HttpOnly refresh cookie is the credential here.
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '403':
+                    $ref: '#/components/responses/Forbidden'
 
     /observability/health:
         get:
@@ -1498,6 +1801,19 @@ paths:
                         text/plain:
                             schema:
                                 type: string
+                # Guarded by `isMetricsScraper`, which takes a static bearer credential rather
+                # than the admin JWT — Prometheus cannot log in or refresh a token.
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '503':
+                    description: |
+                        `NODE_METRICS_TOKEN` is not configured. The endpoint denies by default
+                        rather than opening: an unauthenticated metrics endpoint is not a state
+                        to arrive at by forgetting an environment variable.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
 
     /observability/metrics/overview:
         get:
@@ -1526,8 +1842,10 @@ paths:
             tags: [Observability]
             summary: Recent audit events
             description: |
-                Returns the most recent audit events from the in-memory ring buffer (up to 200).
+                Returns the most recent audit events, newest first, from the persisted audit trail.
                 Events include auth flows, admin CRUD actions, and security blocks.
+                Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
+                `total` counts every event matching the filters, not just the returned page.
                 Requires admin role.
             operationId: getObservabilityAuditLogs
             security:
@@ -1571,28 +1889,6 @@ paths:
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '422': { $ref: '#/components/responses/ValidationError' }
-                '500': { $ref: '#/components/responses/InternalError' }
-
-    /observability/load-test:
-        get:
-            tags: [Observability]
-            summary: Synthetic CPU load test
-            description: |
-                Dev/staging-only endpoint that busy-loops the event loop for a fixed amount of
-                work while emitting log lines, so dashboards and log pipelines can be exercised
-                under load. Not registered when `NODE_ENV=production`. Requires admin role.
-            operationId: getObservabilityLoadTest
-            security:
-                - bearerAuth: []
-            responses:
-                '200':
-                    description: Load test completed
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ObservabilityLoadTestResponseEnvelope'
-                '401': { $ref: '#/components/responses/Unauthorized' }
-                '403': { $ref: '#/components/responses/Forbidden' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     # --------- Authentication and profile ---------
@@ -1689,6 +1985,8 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/UserEnvelope'
+                # Signing up with an email that is already registered.
+                '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1730,28 +2028,9 @@ paths:
         get:
             tags: [Auth]
             summary: Refresh access token
-            description: Creates a new short-lived access token using a refresh token. The refresh token can be provided as a query parameter, path parameter, or retrieved from the `jwt` cookie.
+            description: Creates a new short-lived access token from the refresh token in the `jwt` cookie. The cookie is `HttpOnly`, so the token is never readable by page scripts and never appears in a URL, a proxy log or a `Referer` header.
             operationId: refreshToken
             security: []
-            responses:
-                '200':
-                    description: New access token
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/RefreshTokenEnvelope'
-                '401': { $ref: '#/components/responses/Unauthorized' }
-                '500': { $ref: '#/components/responses/InternalError' }
-
-    /account/refresh/{token}:
-        get:
-            tags: [Auth]
-            summary: Refresh access token with token in path
-            description: Creates a new short-lived access token using a refresh token provided in the URL path.
-            operationId: refreshTokenWithPath
-            security: []
-            parameters:
-                - $ref: '#/components/parameters/TokenPathParam'
             responses:
                 '200':
                     description: New access token
@@ -1824,6 +2103,7 @@ paths:
                                 $ref: '#/components/schemas/UsersResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [Users]
@@ -1897,6 +2177,7 @@ paths:
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     /users/{id}:
@@ -1965,11 +2246,38 @@ paths:
                   in: query
                   schema:
                       type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as DELETE /users/{id}?hardDelete=true — the flag spelled in the path instead of
+    # in the query. Both reach the same handler; neither is the canonical one.
+    /users/{id}/hard:
+        delete:
+            tags: [Users]
+            summary: Permanently delete user
+            description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
+            operationId: hardDeleteUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     # Same as GET /users, but with JSON body, more suitable for DTOs and multi-language codegen
@@ -2030,6 +2338,23 @@ paths:
             operationId: listFeedbackRequests
             security:
                 - bearerAuth: []
+            # The controller merges query and body, so every filter below is reachable either way.
+            # The body stays declared because it is read; unlike the other three resources this
+            # one has no `POST /feedback/search` sibling to carry the DTO form.
+            parameters:
+                - $ref: '#/components/parameters/PageParam'
+                - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/TextParam'
+                - name: email
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/Email'
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      type: string
             requestBody:
                 required: false
                 content:
@@ -2045,6 +2370,7 @@ paths:
                                 $ref: '#/components/schemas/FeedbackRequestsResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     /feedback/{id}:
@@ -2088,7 +2414,20 @@ paths:
                 - $ref: '#/components/parameters/PageParam'
                 - $ref: '#/components/parameters/PageSizeParam'
                 - $ref: '#/components/parameters/TextParam'
-                - $ref: '#/components/parameters/ProductIdParam'
+                - $ref: '#/components/parameters/IdParam'
+                # Declared here as well as in SearchProductsRequest: the controller merges query
+                # and body, so `GET /products?category=x` and `POST /products/search {category}`
+                # are one filter reached two ways.
+                - name: category
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                - name: tag
+                  in: query
+                  required: false
+                  schema:
+                      type: string
                 - name: minPrice
                   in: query
                   required: false
@@ -2110,6 +2449,7 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/ProductsResponseEnvelope'
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [Products]
@@ -2249,10 +2589,36 @@ paths:
                   in: query
                   schema:
                       type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as DELETE /products/{id}?hardDelete=true — the flag spelled in the path instead of
+    # in the query. Both reach the same handler; neither is the canonical one.
+    /products/{id}/hard:
+        delete:
+            tags: [Products]
+            summary: Permanently delete product
+            description: Permanently removes the product identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /products/{id}?hardDelete=true`.
+            operationId: hardDeleteProductById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     # Same as GET /products, but with JSON body, more suitable for DTOs and multi-language codegen
@@ -2316,6 +2682,8 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed product id that matches no product. 422 covers the malformed case.
+                '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         delete:
@@ -2428,6 +2796,9 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/CheckoutResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                # Checking out an empty cart. The implementation has always answered 409;
+                # the spec simply never declared it.
+                '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
@@ -2459,6 +2830,7 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/OrdersResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
         post:
             tags: [Orders]
@@ -2528,6 +2900,7 @@ paths:
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     # Same as GET /orders, but with JSON body, more suitable for DTOs and multi-language codegen
@@ -2622,6 +2995,7 @@ paths:
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     /orders/{id}/invoice:

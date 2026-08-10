@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { t } from 'i18next';
+import { getCurrentLocale, t } from '@core/i18n';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import type { CastError } from 'mongoose';
@@ -31,22 +31,27 @@ export const tokenAdd = (
     expirationTime?: number
 ): Promise<string> => {
     const token = randomBytes(16).toString('hex');
-    user.tokens.push({
-        type,
-        token,
-        expiration: expirationTime ? new Date(Date.now() + expirationTime) : undefined
-    });
-    return userRepository.save(user).then(() => token);
+    // Delegates to the document method the JWT layer already uses, rather than keeping a second
+    // copy of "append a token" here. Both issue a `$push`, which is the property that matters:
+    // the array must be APPENDED TO, never rebuilt. Rebuilding it — `user.tokens = [...]` — makes
+    // mongoose write the whole array back, and a request holding a copy loaded moments earlier
+    // then erases whatever was added in between. `tokens` is exactly the field where that bites,
+    // because two sessions and a reset link are routinely added by different requests at once.
+    return user.tokenAdd(type, expirationTime ?? 0, token);
 };
 
 /**
- * Change user password with validation.
+ * Validate a new-password pair without touching the user.
+ *
+ * Split out of {@link passwordChange} so `reset-confirm` can check the body BEFORE it spends the
+ * one-time token. The order matters: consuming the token is what resolves two simultaneous uses
+ * of one reset link, so it has to happen before the password is written — but a link burned by a
+ * typo'd confirmation would be a poor trade for that. Validating first means only a well-formed
+ * request can spend the token.
+ *
+ * @returns the UI-facing messages, empty when the pair is acceptable
  */
-export const passwordChange = (
-    user: IUserDocument,
-    password = '',
-    passwordConfirm = ''
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+export const validatePasswordChange = (password = '', passwordConfirm = ''): string[] => {
     const parseResult = zodUserSchema
         .pick({
             password: true
@@ -67,14 +72,22 @@ export const passwordChange = (
             passwordConfirm
         });
 
-    if (!parseResult.success)
-        return Promise.resolve(
-            generateReject(
-                400,
-                'passwordChange - bad request',
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+    if (parseResult.success) return [];
+    return parseResult.error.issues.map(({ message }) => message);
+};
+
+/**
+ * Change user password with validation.
+ */
+export const passwordChange = (
+    user: IUserDocument,
+    password = '',
+    passwordConfirm = ''
+): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+    const errors = validatePasswordChange(password, passwordConfirm);
+
+    if (errors.length > 0)
+        return Promise.resolve(generateReject(422, 'passwordChange - bad request', errors));
 
     user.password = password;
     return userRepository
@@ -91,7 +104,10 @@ export const signup = (
     username: string,
     password: string,
     passwordConfirm: string,
-    imageUrl?: string | null
+    // Not `| null`: the contract declares `imageUrl` a string, so a null reaches zod as
+    // "expected string, received null" and is rejected before the `?? ''` below could see it.
+    // The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
+    imageUrl?: string
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
     const parseResult = zodUserSchema
         .extend({
@@ -115,7 +131,7 @@ export const signup = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-                400,
+                422,
                 'signup - bad request',
                 parseResult.error.issues.map(({ message }) => message)
             )
@@ -133,7 +149,11 @@ export const signup = (
                     username,
                     email,
                     imageUrl: imageUrl ?? '',
-                    password
+                    password,
+                    // The language they signed up in, kept for work that happens later without
+                    // a request to read `Accept-Language` from — a queued email, a nightly job.
+                    // Editable afterwards from the user endpoints.
+                    locale: getCurrentLocale()
                 })
                 .then((createdUser) => generateSuccess<IUserDocument>(createdUser));
         })
@@ -155,27 +175,32 @@ export const login = (
     if (!parseResult.success)
         return Promise.resolve(
             generateReject(
-                400,
+                422,
                 'login - bad request',
                 parseResult.error.issues.map(({ message }) => message)
             )
         );
 
-    return userRepository
-        .findOne({ email, deletedAt: undefined })
-        .then((user) => {
-            if (!user)
-                return generateReject(401, 'login - wrong credentials', [t('login.wrong-data')]);
-
-            return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
-                if (!doMatch)
+    return (
+        userRepository
+            // `password` is select:false — this is one of the few flows that legitimately needs it
+            .findOneWithCredentials({ email, deletedAt: undefined })
+            .then((user) => {
+                if (!user)
                     return generateReject(401, 'login - wrong credentials', [
                         t('login.wrong-data')
                     ]);
-                return generateSuccess<IUserDocument>(user);
-            });
-        })
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+
+                return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
+                    if (!doMatch)
+                        return generateReject(401, 'login - wrong credentials', [
+                            t('login.wrong-data')
+                        ]);
+                    return generateSuccess<IUserDocument>(user);
+                });
+            })
+            .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
+    );
 };
 
 /**
@@ -187,7 +212,8 @@ export const tokenRemoveAll = (
     type: ETokenType
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
     userRepository
-        .findById(userId)
+        // `tokens` is select:false — needed here to filter and re-save them
+        .findByIdWithCredentials(userId)
         .then(
             (
                 user
@@ -196,16 +222,20 @@ export const tokenRemoveAll = (
                 | IResponseReject
                 | Promise<IResponseSuccess<IUserDocument>> => {
                 if (!user) return generateReject(404, 'tokenRemoveAll - user not found', []);
-                user.tokens = user.tokens.filter((t) => t.type !== type);
-                return userRepository
-                    .save(user)
-                    .then((saved) => generateSuccess<IUserDocument>(saved));
+                // `$pull` rather than filter-and-save, for the reason above read in the other
+                // direction: `user.tokens = user.tokens.filter(...)` is a rebuild, so it writes
+                // the whole array back and erases anything added between this function's own read
+                // and its write. That window is small and cannot be opened deterministically from
+                // a test, which is the argument for closing it in the implementation rather than
+                // asserting about it — `$pull` describes a change, so there is no window at all.
+                return user.tokenRemoveAll(type).then(() => generateSuccess<IUserDocument>(user));
             }
         )
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
 
 export const authService = {
     tokenAdd,
+    validatePasswordChange,
     passwordChange,
     signup,
     login,

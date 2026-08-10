@@ -195,6 +195,64 @@ jobs:
                       exit 1
                   fi
 
+    spec-identity:
+        # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
+        #
+        # openapi.yaml, asyncapi.yaml and spectral.yaml exist in BOTH repos, byte-identical,
+        # maintained by hand — and until this job existed, checked by nothing. `lint-openapi` and
+        # `lint-asyncapi` lint THIS repo's copy and pass, because a forked spec is still a valid
+        # spec. What nobody could see was the fork itself.
+        #
+        # The sibling is checked out read-only, at its default branch: the question is whether this
+        # PR agrees with what the frontend has actually shipped, not with some pinned older copy.
+        #
+        # A fork in the pair is a genuine failure, but an unreachable sibling is an infrastructure
+        # problem — so `checkout` is allowed to fail and the step below says which of the two
+        # happened. A copy of this boilerplate that has no paired frontend should delete this job
+        # rather than watch it fail forever.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Checkout paired frontend
+              id: sibling
+              continue-on-error: true
+              uses: actions/checkout@v4
+              with:
+                  # Override with a repository variable when the pair lives elsewhere.
+                  repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
+                  path: .spec-sibling
+                  # Only needed when the sibling is private; falls back to this repo's token.
+                  token: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
+
+            - name: Report an unreachable sibling
+              if: steps.sibling.outcome == 'failure'
+              run: |
+                  echo "::error::Could not check out the paired frontend "\
+                  "(${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}). "\
+                  "Set the SPEC_SIBLING_REPO variable, add a SPEC_SIBLING_TOKEN secret if it is "\
+                  "private, or delete this job if this copy has no paired frontend."
+                  exit 1
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Compare the shared contract files
+              env:
+                  FRONTEND_PATH: .spec-sibling
+              run: npm run check:spec-identity
+
     typecheck:
         runs-on: ubuntu-latest
         timeout-minutes: 10
@@ -286,6 +344,38 @@ jobs:
             - name: Run integration tests
               run: npm run test:integration
 
+    test-contract:
+        # Drives the real Express app over HTTP (supertest + in-memory Mongo) and validates every
+        # response against openapi.yaml, including `additionalProperties: false`.
+        #
+        # This is the gate for the over-serialization class — a field appearing on a response
+        # without being declared in the spec fails here. The generated Zod schemas do not cover it:
+        # nothing in this service validates a *response* with Zod (they guard request bodies), and
+        # they are generated non-strict, so unknown keys would be stripped rather than rejected.
+        #
+        # No Mongo/Redis service container is needed: the suite uses mongodb-memory-server, and the
+        # cache adapter treats an unreachable Redis as a miss.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run contract tests
+              run: npm run test:contract
+
     audit:
         # Fail on known high/critical severity vulnerabilities in production dependencies.
         runs-on: ubuntu-latest
@@ -321,10 +411,12 @@ jobs:
             - lint-asyncapi
             - asyncapi-types-freshness
             - api-freshness
+            - spec-identity
             - typecheck
             - build
             - test-unit
             - test-integration
+            - test-contract
             - audit
         runs-on: ubuntu-latest
         timeout-minutes: 5

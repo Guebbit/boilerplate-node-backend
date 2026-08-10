@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
-import { t } from 'i18next';
+import { t } from '@core/i18n';
 import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { UpsertCartItemRequest } from '@types';
 import {
     emitAnalyticsEvent,
@@ -56,19 +57,16 @@ export const postCart = (
                 return;
             }
 
-            return cartService
-                .cartItemSetById(userId, productId, quantity)
-                .then(() => cartService.cartGetWithSummary(userId))
-                .then((cart) => {
-                    emitAnalyticsEvent({
-                        ...buildAnalyticsBase(request),
-                        event: AnalyticsEvent.CART_ITEM_ADDED,
-                        properties: { product_id: productId, quantity }
-                    });
-                    successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
+            return cartService.cartItemSetById(userId, productId, quantity).then((cart) => {
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(request),
+                    event: AnalyticsEvent.CART_ITEM_ADDED,
+                    properties: { product_id: productId, quantity }
                 });
+                successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));
+            });
         })
         .catch((error: Error) => {
-            rejectResponse(response, 500, 'upsertCartItem', [error.message]);
+            rejectDatabaseError(response, 'upsertCartItem', error);
         });
 };

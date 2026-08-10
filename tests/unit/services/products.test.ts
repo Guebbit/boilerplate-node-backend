@@ -3,15 +3,25 @@ import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct, makeProduct } from '../../helpers/factories/products';
 import * as productService from '@services/products';
-import * as productRepository from '@repositories/products';
-import * as userRepository from '@repositories/users';
-import type { IResponseSuccess, IResponseReject } from '@core/http/response';
-import type { IUserCartDto } from '@services/cart.dto';
+import { productRepository } from '@repositories/products';
+import { cartRepository } from '@repositories/carts';
+import type { IResponseReject } from '@core/http/response';
 
-// Mock the filesystem helper so tests never touch the real disk.
-jest.mock('@core/adapters/filesystem', () => ({
-    deleteFile: jest.fn().mockResolvedValue(true)
+/**
+ * Mock the image store, not the filesystem underneath it.
+ *
+ * What this service owes its collaborator is a *stored-image handle* — the `imageUrl` value — and
+ * nothing about where those bytes live. Asserting on `deleteFile(publicPath + url)` instead would
+ * pin the service to the filesystem backend: the test would keep passing while silently covering
+ * the wrong thing the moment images move to a bucket. See `@core/adapters/image-store`.
+ */
+jest.mock('@core/adapters/image-store', () => ({
+    imageStore: { remove: jest.fn().mockResolvedValue(true) }
 }));
+
+const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
+    '@core/adapters/image-store'
+);
 
 setupTestDb();
 
@@ -51,6 +61,96 @@ describe('productService.validateData', () => {
         });
 
         expect(errors.length).toBeGreaterThan(0);
+    });
+
+    /**
+     * `openapi.yaml` declares `CreateProductRequest.price` with `minimum: 0`, and
+     * `zodProductSchema` overrides the field for its i18n message. `.extend()` REPLACES a field,
+     * so the override has to restate every constraint it wants to keep — the previous one did
+     * not, and a negative price was accepted despite the contract forbidding it.
+     */
+    it('rejects a negative price, as the contract minimum requires', () => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: -1,
+            imageUrl: '/uploads/img.jpg',
+            active: true,
+            description: ''
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('accepts a price of exactly 0 — the minimum is inclusive', () => {
+        const errors = productService.validateData({
+            title: 'A Free Product',
+            price: 0,
+            imageUrl: '/uploads/img.jpg',
+            active: true,
+            description: ''
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // These reach the validator because the controller does not coerce JSON bodies: `!!'not-a-
+    // boolean'` or `coerceStringArray(42)` would turn each into a plausible value before
+    // validation ran, and the endpoint would answer 201.
+    it('rejects a wrong-typed active flag', () => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: 10,
+            imageUrl: '/uploads/img.jpg',
+            active: 'not-a-boolean',
+            description: ''
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it.each(['categories', 'tags'])('rejects a wrong-typed %s field', (field) => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: 10,
+            imageUrl: '/uploads/img.jpg',
+            active: true,
+            description: '',
+            [field]: 42
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    // The contract says `uri-reference`, not `uri`: an uploaded image is stored as a path
+    // relative to the API host, so requiring an absolute URL here would reject every upload.
+    it('accepts a server-relative upload path as the imageUrl', () => {
+        const errors = productService.validateData({
+            title: 'A Valid Product',
+            price: 10,
+            imageUrl: '/uploads/1700000000-photo.jpg',
+            active: true,
+            description: ''
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    /**
+     * The messages are what the API sends a client verbatim, so a wrong i18n key is a
+     * user-visible bug — and the assertions above cannot see it, because a missing key makes
+     * i18next return the key itself, which is still a non-empty string.
+     *
+     * That is exactly what had happened: `user-validation.ts` asked for `signup.user-field-*`
+     * while `en.json` defined them under `login.*`, so every user whose email failed validation
+     * was told "signup.user-field-email-invalid". A raw key is recognisable by shape — a dotted
+     * identifier with no spaces — which is what this asserts against, so it keeps working when
+     * the copy is reworded.
+     */
+    it('returns translated messages, never raw i18n keys', () => {
+        const errors = productService.validateData({ title: 'ab', price: -5 });
+
+        expect(errors.length).toBeGreaterThan(0);
+        for (const message of errors) expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
     });
 });
 
@@ -157,8 +257,8 @@ describe('productService.getById', () => {
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
-        // Lean object — no Mongoose save() method
-        expect(typeof (found as unknown as { save?: unknown }).save).toBe('undefined');
+        // A real Mongoose document — schema's toJSON transform normalizes it on the way out
+        expect(typeof (found as unknown as { save: unknown }).save).toBe('function');
     });
 
     it('returns null for an inactive product when called as non-admin', async () => {
@@ -226,18 +326,37 @@ describe('productService.updateById', () => {
         expect(updated.active).toBe(false);
     });
 
-    it('updates the imageUrl and triggers deleteFile for the old image', async () => {
-        const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
-            '@core/adapters/filesystem'
-        );
-
+    it('updates the imageUrl and removes the old image from the store', async () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id = (product._id as Types.ObjectId).toString();
 
         await productService.updateById(id, { imageUrl: '/images/new.jpg' });
 
-        // The service should delete the OLD image after saving the new one
-        expect(deleteFile).toHaveBeenCalledWith(expect.stringContaining('old.jpg'));
+        // The OLD image goes, and it goes by its stored url — the service must not construct a
+        // path, because under a bucket backend there is none to construct.
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/old.jpg');
+        expect(imageStore.remove).not.toHaveBeenCalledWith('/images/new.jpg');
+    });
+
+    /* The image is only replaced when a new one arrives; every other edit must leave it alone. */
+    it('keeps the image when an update carries no imageUrl', async () => {
+        const product = await createProduct({ imageUrl: '/images/keep.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        const updated = await productService.updateById(id, { title: 'Renamed Product' });
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+        expect(updated.imageUrl).toBe('/images/keep.jpg');
+    });
+
+    /* Re-submitting the same url is not a replacement — deleting here would delete the live image. */
+    it('keeps the image when the update repeats the current imageUrl', async () => {
+        const product = await createProduct({ imageUrl: '/images/same.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        await productService.updateById(id, { imageUrl: '/images/same.jpg' });
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
     });
 
     it('throws when the product does not exist', async () => {
@@ -283,29 +402,50 @@ describe('productService.removeById', () => {
         expect(restored!.deletedAt).toBeUndefined();
     });
 
-    it('hard-deletes the product and removes it from all user carts', async () => {
+    it('hard-deletes the product and removes it from all carts', async () => {
         const product = await createProduct({ active: true });
         const pid = (product._id as Types.ObjectId).toString();
 
         // A user adds the product to their cart
         const user = await createUser();
         const userId = (user._id as Types.ObjectId).toString();
-        // eslint-disable-next-line unicorn/no-await-expression-member
-        const addResult = await (await import('@services/cart')).cartItemSetById(userId, pid, 1);
+        const cartService = await import('@services/cart');
+        await cartService.cartItemSetById(userId, pid, 1);
 
         // Confirm the cart item was added
-        expect((addResult as IResponseSuccess<IUserCartDto>).data!.cart.items).toHaveLength(1);
+        expect(await cartService.cartGet(userId)).toHaveLength(1);
 
         const result = await productService.removeById(pid, true);
 
         expect(result.success).toBe(true);
         // Product must be gone from DB
         expect(await productRepository.findById(pid)).toBeNull();
-        // User's cart must no longer contain the product
-        const refreshedUser = await userRepository.findById(userId);
-        if (refreshedUser) {
-            expect(refreshedUser.cart.items.some((i) => i.product.toString() === pid)).toBe(false);
-        }
+        // The cart must no longer contain the product
+        const cart = await cartRepository.findByUserId(userId);
+        expect(cart!.items.some((item) => item.productId.toString() === pid)).toBe(false);
+    });
+
+    /* Hard delete is the only path that destroys bytes; the row is gone, so nothing else can. */
+    it('removes the image from the store on a hard delete', async () => {
+        const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        await productService.removeById(id, true);
+
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/doomed.jpg');
+    });
+
+    /**
+     * A soft delete is reversible — `removeById(id, false)` on an already-deleted product restores
+     * it — so deleting the image would restore a product with a broken one.
+     */
+    it('keeps the image on a soft delete', async () => {
+        const product = await createProduct({ imageUrl: '/images/survives.jpg' });
+        const id = (product._id as Types.ObjectId).toString();
+
+        await productService.removeById(id, false);
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
     });
 
     it('returns a 404 rejection when the product does not exist', async () => {

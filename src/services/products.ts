@@ -1,6 +1,5 @@
-import { Types } from 'mongoose';
-import { t } from 'i18next';
-import type { QueryFilter } from 'mongoose';
+import type { Types } from 'mongoose';
+import { t } from '@core/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
     generateReject,
@@ -8,12 +7,11 @@ import {
     type IResponseReject,
     type IResponseSuccess
 } from '@core/http/response';
-import { deleteFile } from '@core/adapters/filesystem';
+import { imageStore } from '@core/adapters/image-store';
 import { cartService } from '@services/cart';
 import { zodProductSchema } from '@models/products';
 import type { IProductDocument } from '@models/products';
 import { productRepository } from '@repositories/products';
-import { normalizePagination, addTextFilter, paginatedSearch } from '@repositories/search';
 
 /**
  * Product Service
@@ -25,9 +23,13 @@ import { normalizePagination, addTextFilter, paginatedSearch } from '@repositori
  * Validate product data using the Zod schema.
  * Returns an array of UI-friendly error messages (empty array means valid).
  *
+ * Takes `unknown` on purpose: this is the boundary that ESTABLISHES the type. Declaring a
+ * narrower parameter would force every caller — all of which hold raw request bodies — to cast
+ * on the way in, which is precisely the assertion this function exists to replace.
+ *
  * @param productData
  */
-export const validateData = (productData: Omit<Product, 'id'>): string[] => {
+export const validateData = (productData: unknown): string[] => {
     const parseResult = zodProductSchema.safeParse(productData);
     if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
     return [];
@@ -53,52 +55,14 @@ export const search = (
 ): Promise<{
     items: IProductDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
-}> => {
-    const pagination = normalizePagination(filters);
-    const where: QueryFilter<IProductDocument> = {};
-
-    if (filters.id && String(filters.id).trim() !== '')
-        where._id = new Types.ObjectId(String(filters.id));
-
-    addTextFilter(where as Record<string, unknown>, filters.text as string | undefined, [
-        'title',
-        'description'
-    ]);
-
-    // Filter by categories/tags
-    if (filters.category && String(filters.category).trim() !== '')
-        where.categories = {
-            $elemMatch: { $regex: String(filters.category).trim(), $options: 'i' }
-        };
-    if (filters.tag && String(filters.tag).trim() !== '')
-        where.tags = { $elemMatch: { $regex: String(filters.tag).trim(), $options: 'i' } };
-
-    // Filter by price range
-    const priceConditions: Record<string, number> = {};
-    if (
-        filters.minPrice !== undefined &&
-        filters.minPrice !== null &&
-        !Number.isNaN(Number(filters.minPrice))
-    )
-        priceConditions.$gte = Number(filters.minPrice);
-    if (
-        filters.maxPrice !== undefined &&
-        filters.maxPrice !== null &&
-        !Number.isNaN(Number(filters.maxPrice))
-    )
-        priceConditions.$lte = Number(filters.maxPrice);
-    if (Object.keys(priceConditions).length > 0) where.price = priceConditions;
-
-    if (!admin) {
-        where.active = true;
-        where.deletedAt = { $exists: false };
-    }
-
-    return paginatedSearch(productRepository, where, pagination);
-};
+}> =>
+    // The only product-domain decision left here: admins see everything, everyone else sees the
+    // published catalogue. How `text`/`category`/`tag`/`minPrice`/`maxPrice` become a query is
+    // declared on the repository.
+    productRepository.search(filters, admin ? {} : productRepository.publicScope());
 
 /**
- * Get a single product by ID as a lean (plain JS) object.
+ * Get a single product by ID.
  * Admin can see inactive or soft-deleted products; non-admin cannot.
  * Returns undefined if the id is falsy; null if no matching document is found.
  *
@@ -108,14 +72,8 @@ export const search = (
 export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
-    if (admin) return productRepository.findById(id).lean();
-    return productRepository
-        .findOne({
-            _id: id,
-            active: true,
-            deletedAt: { $exists: false }
-        })
-        .lean();
+    if (admin) return productRepository.findById(id);
+    return productRepository.findOne({ _id: id, ...productRepository.publicScope() });
 };
 
 /**
@@ -160,7 +118,7 @@ export const update = (
     return productRepository.save(product).then((updatedProduct) =>
         // After saving the new image path, delete the old image file
         (newImageUrl && oldImageUrl !== newImageUrl
-            ? deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + oldImageUrl)
+            ? imageStore.remove(oldImageUrl)
             : Promise.resolve()
         ).then(() => updatedProduct)
     );
@@ -202,7 +160,7 @@ export const remove = (
         return cartService
             .productRemoveFromCartsById(id)
             .then(() => productRepository.deleteOne(product))
-            .then(() => deleteFile((process.env.NODE_PUBLIC_PATH ?? 'public') + product.imageUrl))
+            .then(() => imageStore.remove(product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('ecommerce.product-hard-deleted')));
 
     // If deletedAt already present: it's soft-deleted → RESTORE

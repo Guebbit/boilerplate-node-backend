@@ -5,10 +5,23 @@
  * Stable, codegen-oriented OpenAPI contract.
  * Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
  *
+ * Language: every endpoint honours `Accept-Language` (q-weights and region tags
+ * included). It selects the language of user-facing copy only — `errors[].message` and a
+ * success envelope's `message` — never the response shape, the status code, or a
+ * machine-readable field such as `errors[].code`. An unsupported language falls back
+ * instead of erroring; `Content-Language` states what was used and `Vary:
+ * Accept-Language` is always set. `GET /locales` lists what a deployment supports.
+ *
+ * The header is intentionally not declared per operation: it applies to all of them and
+ * clients set it once in an interceptor, so declaring it 33 times would only add a
+ * redundant argument to every generated function. This paragraph is its contract.
+ *
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
 import type { Id } from './id';
+import type { ImageUrl } from './imageUrl';
+import type { Locale } from './locale';
 import type { Password } from './password';
 
 export interface UpdateUserRequest {
@@ -16,5 +29,8 @@ export interface UpdateUserRequest {
   email?: Email;
   username?: string;
   password?: Password;
-  imageUrl?: string;
+  admin?: boolean;
+  active?: boolean;
+  imageUrl?: ImageUrl;
+  locale?: Locale;
 }

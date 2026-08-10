@@ -1,113 +1,102 @@
 /**
- * Integration tests for /, /observability/*, and related system routes.
- * No DB or Redis is started; auth middleware responds with 401 for unauthenticated requests.
+ * Integration tests for `/` and `/observability/*`.
+ *
+ * These drive the **real** application from `src/app.ts` through the shared supertest harness,
+ * never a privately-assembled express app — that would risk passing against a middleware stack
+ * the real app does not have.
+ *
+ * Redis is not started: the routes exercised here do not need it. A database IS, since
+ * `/observability/events` authenticates with an admin session cookie and a session needs a user
+ * to belong to.
  */
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import crypto from 'node:crypto';
-import express from 'express';
+import type { IncomingMessage } from 'node:http';
+import { api } from '../helpers/http';
+import { setupTestDb } from '../helpers/setup-test-db';
+import { createAdminUser, PLAIN_PASSWORD } from '../helpers/factories/users';
 
-import { router as systemRoutes } from '../../src/routes';
-import { router as observabilityRoutes } from '../../src/routes/observability';
-import { rejectResponse } from '@core/http/response';
-
-const app = express();
-app.use(express.json());
-app.use((request, response, next) => {
-    const requestId = request.get('x-request-id') ?? crypto.randomUUID();
-    request.requestId = requestId;
-    response.setHeader('x-request-id', requestId);
-    next();
-});
-app.use('/observability', observabilityRoutes);
-app.use('/', systemRoutes);
-app.use((_request, response) => rejectResponse(response, 404, 'Not Found'));
-
-let server: Server;
-let baseUrl = '';
-
-beforeAll(
-    () =>
-        new Promise<void>((resolve) => {
-            server = createServer(app).listen(0, '127.0.0.1', () => {
-                const address = server.address() as AddressInfo;
-                baseUrl = `http://127.0.0.1:${address.port}`;
-                resolve();
-            });
-        })
-);
-
-afterAll(
-    () =>
-        new Promise<void>((resolve, reject) => {
-            server.close((error) => {
-                if (error) return reject(error);
-                resolve();
-            });
-        })
-);
+setupTestDb();
 
 describe('System routes', () => {
     it('GET / returns the welcome payload', async () => {
-        const response = await fetch(`${baseUrl}/`);
-        const body = (await response.json()) as { data: { status: string } };
+        const response = await api().get('/');
+
         expect(response.status).toBe(200);
-        expect(response.headers.get('x-request-id')).toBeTruthy();
-        expect(body.data.status).toBe('ok');
+        expect(response.headers['x-request-id']).toBeTruthy();
+        expect(response.body.data.status).toBe('ok');
     });
 
     it('returns 404 for unknown routes', async () => {
-        const response = await fetch(`${baseUrl}/not-found`);
+        const response = await api().get('/not-found');
+
         expect(response.status).toBe(404);
     });
 });
 
 describe('Observability routes', () => {
     it('GET /observability/metrics returns prometheus exposition', async () => {
-        const response = await fetch(`${baseUrl}/observability/metrics`);
-        const body = await response.text();
+        // Prometheus scrapes it with a static bearer credential, since it cannot log in or hold
+        // a session. See `isMetricsScraper`.
+        const response = await api()
+            .get('/observability/metrics')
+            .set('Authorization', `Bearer ${process.env.NODE_METRICS_TOKEN ?? ''}`);
+
         expect(response.status).toBe(200);
-        expect(response.headers.get('content-type')).toContain('text/plain');
-        expect(body).toContain('http_requests_total');
-        expect(body).toContain('process_uptime_seconds');
+        expect(response.headers['content-type']).toContain('text/plain');
+        expect(response.text).toContain('http_requests_total');
+        expect(response.text).toContain('process_uptime_seconds');
     });
 
     it('GET /observability/events returns an SSE snapshot', async () => {
-        const response = await fetch(`${baseUrl}/observability/events`);
+        // supertest buffers the whole response, so the stream is read by aborting shortly after
+        // the first chunk lands rather than by holding the connection open.
+        // `EventSource` cannot set headers, so the stream authenticates with the session cookie
+        // an admin login sets — which is how the frontend opens it (`withCredentials: true`).
+        const admin = await createAdminUser({ email: 'sse-admin@example.com' });
+        const login = await api()
+            .post('/account/login')
+            .send({ email: admin.email, password: PLAIN_PASSWORD });
+        const cookie = (login.headers['set-cookie'] as unknown as string[]).find((value) =>
+            value.startsWith('jwt=')
+        )!;
+
+        const response = await api()
+            .get('/observability/events')
+            .set('Cookie', cookie)
+            .buffer(true)
+            .parse((res, callback) => {
+                const stream = res as unknown as IncomingMessage;
+                let text = '';
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    // eslint-disable-next-line unicorn/no-null -- superagent's callback contract
+                    callback(null, text);
+                };
+                stream.on('data', (chunk: Buffer) => {
+                    text += chunk.toString();
+                    // The endpoint streams indefinitely; stop as soon as the first event lands,
+                    // otherwise supertest waits for an end that never comes.
+                    if (text.includes('data: ')) stream.destroy();
+                });
+                stream.on('close', finish);
+                stream.on('end', finish);
+            });
+
         expect(response.status).toBe(200);
-        expect(response.headers.get('content-type')).toContain('text/event-stream');
-
-        const reader = response.body?.getReader();
-        expect(reader).toBeDefined();
-        const firstChunk = await reader?.read();
-        const text = new TextDecoder().decode(firstChunk?.value);
-        await reader?.cancel();
-
-        expect(text).toContain('event: observability.metrics.snapshot');
-        expect(text).toContain('data: ');
+        expect(response.headers['content-type']).toContain('text/event-stream');
+        expect(response.body).toContain('event: observability.metrics.snapshot');
+        expect(response.body).toContain('data: ');
     });
 
-    it('GET /observability/health returns 401 without auth', async () => {
-        const response = await fetch(`${baseUrl}/observability/health`);
-        expect(response.status).toBe(401);
-    });
+    // Each of these must answer 401 rather than 404 or 500 — that is what proves the auth
+    // middleware is mounted on the path at all, not merely that the path is unreachable.
+    it.each(['/observability/health', '/observability/metrics/overview', '/observability/audit'])(
+        'GET %s returns 401 without auth',
+        async (path) => {
+            const response = await api().get(path);
 
-    it('GET /observability/metrics/overview returns 401 without auth', async () => {
-        const response = await fetch(`${baseUrl}/observability/metrics/overview`);
-        expect(response.status).toBe(401);
-    });
-
-    it('GET /observability/audit returns 401 without auth', async () => {
-        const response = await fetch(`${baseUrl}/observability/audit`);
-        expect(response.status).toBe(401);
-    });
-
-    it('GET /observability/health is reachable (auth middleware is active)', async () => {
-        /*
-         * Without valid credentials the route must return 401 — not 404 or 500.
-         * This confirms auth enforcement is wired correctly at this path.
-         */
-        const response = await fetch(`${baseUrl}/observability/health`);
-        expect(response.status).toBe(401);
-    });
+            expect(response.status).toBe(401);
+        }
+    );
 });

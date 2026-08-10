@@ -26,7 +26,9 @@ services:
         # Enviroment variables that get injected into the container at runtime
         # If the .env variable change: a rebuild is necessary to apply the change.
         environment:
-            MONGODB_URI: 'mongodb://database:27017/${DB_NAME:-boilerplate_mongodb}' # Mongodb connection string. "database" is the service name of the database service.
+            # The Mongo connection string comes from `.env` (NODE_DB_URI), which already points at
+            # the "database" service hostname. Do not redeclare it here — an entry in this block
+            # shadows `.env` and makes an Atlas/external URI impossible to set without editing compose.
             NODE_ENV: 'development' # Node environment (production or development)
             NODE_REDIS_URL: 'redis://redis:6379'
             NODE_RABBITMQ_URL: '******rabbitmq:5672'
@@ -53,24 +55,45 @@ services:
             # - example-volume:/data/db
 
         # Commands to be executed at RUNTIME when the container starts. Replaces Dockerfile commands (if any)
+        #
+        # `db:bootstrap` runs migrate-mongo (schema/indexes) then the seeder (demo data) before the
+        # server starts, so a fresh `compose up` yields a populated, browsable stack instead of empty
+        # lists that read as "not wired". Both halves are idempotent, so every later boot is a no-op,
+        # and the seeder refuses to run when NODE_ENV=production.
         command:
             [
                 'sh',
                 '-c',
-                'if [ "$${NODE_ENABLE_CLUSTERING:-0}" = "1" ]; then npm run dev:docker:cluster; else npm run dev:docker; fi'
+                'npm run db:bootstrap && if [ "$${NODE_ENABLE_CLUSTERING:-0}" = "1" ]; then npm run dev:docker:cluster; else npm run dev:docker; fi'
             ]
 
         # Containers which this container depends on. Affects container start order.
+        # `database` waits for the healthcheck rather than just for the container to start:
+        # `db:bootstrap` runs before the server and needs Mongo actually accepting connections.
         depends_on:
-            - database
-            - redis
-            - rabbitmq
-            - otel-collector
+            database:
+                condition: service_healthy
+            redis:
+                condition: service_started
+            rabbitmq:
+                condition: service_started
+            otel-collector:
+                condition: service_started
 
         # Health check to verify the container is ready to accept traffic
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
-            test: ['CMD', 'curl', '-f', 'http://localhost:${NODE_PORT:-3000}/healthz']
+            # `node -e`, not `curl -f`: the image is node:*-alpine and does not ship curl, so the
+            # curl form exited non-zero every time and parked the container on `unhealthy` while
+            # the API was answering 200 on `/` throughout. Node's built-in fetch needs nothing
+            # added to the image.
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
             # How often to run the test
             interval: 2m
             # How long to wait for the test to complete
@@ -94,8 +117,8 @@ services:
 
         # Same
         environment:
-            # Name of the database to create
-            MONGO_INITDB_DATABASE: ${DB_NAME:-boilerplate_mongodb}
+            # Name of the database to create. Must match the database in NODE_DB_URI.
+            MONGO_INITDB_DATABASE: ${NODE_MONGODB_NAME:-boilerplate-node-backend}
 
         # Same
         volumes:
@@ -106,12 +129,35 @@ services:
         ports:
             - '${NODE_MONGODB_PORT:-27017}:27017'
 
+        # The app's boot-time db:bootstrap waits on this before it runs.
+        healthcheck:
+            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            interval: 5s
+            timeout: 5s
+            retries: 12
+            start_period: 10s
+
     # Redis is used as an in-memory cache layer. The app stores response data here with a TTL so repeated
     # requests are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is lost),
     # which is fine since Redis here is cache-only, not a primary store.
     redis:
         image: redis:7
         restart: unless-stopped
+        # Redis defaults to `maxmemory 0` — unlimited — and would grow until the host or the
+        # container limit stops it. That is the wrong default for a cache: entries here are worth
+        # keeping only while they are cheap, and nothing in the app bounds how many accumulate.
+        # `GET /products` is public and its answers live for an hour, so entry count follows
+        # traffic rather than catalogue size.
+        #
+        # `allkeys-lru` is what makes the cap a cache policy rather than an error: at the ceiling
+        # Redis evicts the least recently used key and accepts the write. The default
+        # `noeviction` would instead start REFUSING writes — the app fails open and would keep
+        # serving, but it would log a warning per request and never cache again until something
+        # expired. `allkeys-` (not `volatile-`) because every key here carries a TTL anyway.
+        command: >-
+            redis-server
+            --maxmemory ${NODE_REDIS_MAXMEMORY:-256mb}
+            --maxmemory-policy ${NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}
         ports:
             - '${NODE_REDIS_PORT:-6379}:6379'
 
@@ -249,7 +295,9 @@ services:
             # Salt used to hash session IDs. Change this to any random string.
             APP_SECRET: '${UMAMI_APP_SECRET:-change-me-please}'
         ports:
-            - '${UMAMI_PORT:-8090}:3000'
+            # 3080, not 8090: 8080-8099 is the paired frontend's port block (see the port map in
+            # the README) and 8090 is where its docs container lives.
+            - '${UMAMI_PORT:-3080}:3000'
         depends_on:
             umami-db:
                 condition: service_healthy
@@ -299,7 +347,9 @@ services:
             dockerfile: .docker/Dockerfile.docs
         restart: unless-stopped
         ports:
-            - '${DOCS_PORT:-4173}:80'
+            # 3090 sits in this repo's 3000-3099 block. It used to be 4173, which the paired
+            # frontend also claimed — for its own docs AND for its e2e vite server.
+            - '${DOCS_PORT:-3090}:80'
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:

@@ -1,6 +1,6 @@
 import { setupTestDb } from '../../helpers/setup-test-db';
 import { makeUser, createUser } from '../../helpers/factories/users';
-import * as userRepository from '@repositories/users';
+import { userRepository } from '@repositories/users';
 import { userModel as Users, ETokenType, type IUserDocument } from '@models/users';
 import { Types } from 'mongoose';
 
@@ -237,7 +237,7 @@ describe('userRepository', () => {
             });
 
             await user.tokenRemoveAll(ETokenType.REFRESH);
-            const refreshed = await userRepository.findById(
+            const refreshed = await userRepository.findByIdWithCredentials(
                 (user._id as Types.ObjectId).toString()
             );
 
@@ -266,7 +266,7 @@ describe('userRepository', () => {
             });
 
             const result = await Users.tokenRemoveExpired();
-            const refreshed = await userRepository.findById(
+            const refreshed = await userRepository.findByIdWithCredentials(
                 (user._id as Types.ObjectId).toString()
             );
 

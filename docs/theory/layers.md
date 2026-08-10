@@ -43,7 +43,7 @@ layer above, and may never import from them. ESLint enforces this.
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core/bootstrap`     | runs once at startup: env validation, DB connect, [OTel SDK](../tools/opentelemetry.md), graceful shutdown                                                              |
 | `core/adapters`      | clients owning an external connection: [cache](../tools/redis-cache.md), [queue](../tools/rabbitmq.md), mailer, storage, [logger](../tools/winston.md), filesystem, PDF |
-| `core/observability` | [metrics](../tools/prometheus.md), [tracing](../tools/opentelemetry.md) helpers, audit, analytics, domain events, SSE stream                                            |
+| `core/observability` | [metrics](../tools/prometheus.md), [tracing](../tools/opentelemetry.md) helpers, audit, analytics, SSE stream                                                           |
 | `core/http`          | Express-coupled request/response helpers                                                                                                                                |
 
 ## How to read a feature
@@ -101,6 +101,8 @@ Three signals, only one wired end-to-end by default:
 - **Metrics** (`/observability/metrics`, opt-in) — [Prometheus](../tools/prometheus.md) exposition for HTTP rates/latency and a few business counters.
 
 When something breaks, the log line gives you a `trace_id`, you paste it in [Grafana](../tools/grafana.md) → Tempo, and you get the full picture.
+
+Those are the three that leave the process. The application emits four more — audit, analytics, the SSE metrics feed and queue jobs — and [Events & Logging](../tools/events-and-logging.md) is the map of all seven and when to use which.
 
 ## Related pages
 

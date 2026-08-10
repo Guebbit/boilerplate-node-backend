@@ -1,14 +1,12 @@
 import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { z } from 'zod';
-import {
-    SearchUsersBody,
-    searchUsersBodyPageDefault,
-    searchUsersBodyPageSizeDefault,
-    searchUsersBodyPageSizeMax
-} from '@api/schemas.zod';
+import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { extractId, mergeBodyQuery } from '@core/http/request';
+import { rejectDatabaseError } from '@core/http/errors';
+import { readInput } from '@core/http/request';
+import { pageSchema, pageSizeSchema } from '@core/http/schemas';
 import type { SearchUsersRequest } from '@types';
 import type { CastError } from 'mongoose';
 
@@ -21,22 +19,13 @@ export type IGetUsersQuery = Partial<Record<keyof SearchUsersRequest, string>>;
  * Built on the orval-generated SearchUsersBody (kept in sync with
  * openapi.yaml); page/pageSize/active are coerced from strings since GET
  * requests carry them as query-string text, not JSON numbers/booleans.
+ *
+ * `page`/`pageSize` come from `@core/http/schemas` so all four search endpoints agree on what a
+ * legal one is; absent stays absent, because `normalizePagination` owns the defaults.
  */
 const searchUsersQuerySchema = SearchUsersBody.extend({
-    page: z.preprocess(
-        (value) =>
-            value === '' || value === null || value === undefined
-                ? searchUsersBodyPageDefault
-                : value,
-        z.coerce.number().min(1)
-    ),
-    pageSize: z.preprocess(
-        (value) =>
-            value === '' || value === null || value === undefined
-                ? searchUsersBodyPageSizeDefault
-                : value,
-        z.coerce.number().min(1).max(searchUsersBodyPageSizeMax)
-    ),
+    page: pageSchema,
+    pageSize: pageSizeSchema,
     active: z.preprocess(
         (value) => (typeof value === 'string' ? value === 'true' : value),
         z.boolean().optional()
@@ -44,20 +33,26 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
 });
 
 /**
+ * Query parameters that change this endpoint's answer, and therefore its cache key.
+ *
+ * Derived from the schema rather than hand-listed, because the two must not drift: a parameter
+ * the controller reads but the key omits would let two different requests share one cached
+ * response. Anything outside this list is stripped by the validator and changes nothing.
+ */
+export const searchUsersKeyParameters = Object.keys(searchUsersQuerySchema.shape);
+
+/**
  * GET /users
  * List/search users via query parameters (admin only).
  */
 export const getUsers = (
-    request: Request<{ id?: string }, unknown, SearchUsersRequest, IGetUsersQuery>,
+    request: Request<ParamsDictionary, unknown, SearchUsersRequest, IGetUsersQuery>,
     response: Response
 ) => {
-    const merged = mergeBodyQuery(
-        request.body as Record<string, unknown> | undefined,
-        request.query as Record<string, string> | undefined
-    );
-    const id = extractId(request.params.id, merged.id as string | undefined);
+    // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+    const input = readInput(request, { sources: ['body', 'query'], ids: ['id'] });
 
-    const parseResult = searchUsersQuerySchema.safeParse({ ...merged, id });
+    const parseResult = searchUsersQuerySchema.safeParse(input);
     if (!parseResult.success)
         return rejectResponse(
             response,
@@ -72,6 +67,6 @@ export const getUsers = (
             successResponse(response, result);
         })
         .catch((error: CastError) => {
-            rejectResponse(response, 500, 'getUsers', [error.message]);
+            rejectDatabaseError(response, 'getUsers', error);
         });
 };

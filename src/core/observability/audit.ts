@@ -93,30 +93,56 @@ export interface IAuditEvent {
 }
 
 /*
- * Stored audit event — IAuditEvent enriched with timestamp and log level.
+ * Emitted audit event — IAuditEvent enriched with timestamp and log level.
  * The two extra fields are added at emit time rather than being the caller's responsibility.
  */
-export interface IAuditBufferEntry extends IAuditEvent {
-    /** ISO-8601 emit time. */
-    timestamp: string;
-    /** Derived from `outcome`; retained so the buffer view matches what was logged. */
+export interface IAuditEntry extends IAuditEvent {
+    /** When the action happened, not when the write landed. */
+    timestamp: Date;
+    /** Derived from `outcome`; retained so a stored entry matches what was logged. */
     level: 'info' | 'warn';
 }
 
-/*
- * In-memory ring buffer — max 200 entries, oldest evicted first.
+/**
+ * Where emitted entries are persisted, so an admin endpoint can query them back.
  *
- * Purpose: let an admin endpoint show recent security activity without querying the log
- * backend. Two consequences worth being explicit about — it is per-process (with clustering,
- * each worker holds a different slice) and it dies with the process. The durable record is
- * the `auditLogger` output; this is a convenience view, never the source of truth.
+ * A port rather than a direct call, for a structural reason: this module lives in `src/core/**`,
+ * which is the bottom of the dependency graph and is forbidden by `no-restricted-imports` from
+ * reaching up into `@repositories/*` or `@models/*`. Inverting it keeps that rule intact — core
+ * states what it needs, and `app.ts` supplies the implementation at boot. It is the same shape as
+ * `IImageStore` in `@core/adapters/image-store`, and it has the same payoff: the durable store
+ * can be swapped for a log-backend writer without a single audit call site changing.
+ *
+ * Implementations MUST NOT throw and MUST NOT reject. See {@link registerAuditSink}.
  */
-const AUDIT_BUFFER_MAX = 200;
-const auditBuffer: IAuditBufferEntry[] = [];
+export interface IAuditSink {
+    (entry: IAuditEntry): void;
+}
 
-/*
+/**
+ * The registered sink, if any.
+ *
+ * Unregistered is a supported state, not a misconfiguration: unit tests import this module with no
+ * database, and the queue workers audit nothing. In that state `emitAuditEvent` still writes the
+ * log line, which is the compliance record — persistence is the queryable *convenience* on top.
+ */
+let auditSink: IAuditSink | undefined;
+
+/**
+ * Install the persistence sink. Called once from `app.ts` after the database connects.
+ *
+ * The sink is invoked on paths that are already answering a request — every login, every blocked
+ * permission — so it must be fire-and-forget on the caller's side: no awaiting, no rejecting, no
+ * throwing. A failure to *store* an audit entry must never become a failed request, and must never
+ * lose the log line that already went out above it.
+ */
+export const registerAuditSink = (sink: IAuditSink): void => {
+    auditSink = sink;
+};
+
+/**
  * Emit a structured audit event. Failures use 'warn'; successes use 'info'.
- * Also appends to the in-memory ring buffer for admin inspection.
+ * Writes the durable log line, then hands the entry to the persistence sink if one is registered.
  * @param event - fully populated audit event (normally built by `buildAuditEvent`)
  */
 export const emitAuditEvent = (event: IAuditEvent): void => {
@@ -127,20 +153,20 @@ export const emitAuditEvent = (event: IAuditEvent): void => {
     // event object is attached as structured metadata.
     auditLogger.log(level, event.action, event);
 
-    const entry: IAuditBufferEntry = { ...event, timestamp: new Date().toISOString(), level };
-    // Evict from the front before pushing, keeping the buffer bounded — an unbounded array here
-    // would be a slow memory leak in a long-running process.
-    if (auditBuffer.length >= AUDIT_BUFFER_MAX) auditBuffer.shift();
-    auditBuffer.push(entry);
-};
+    if (!auditSink) return;
 
-/*
- * Return a snapshot of the ring buffer, most-recent-first.
- * The spread copies before reversing: `toReversed()` is already non-mutating, but the copy also
- * prevents a caller from mutating the live buffer through the returned reference.
- * @returns readonly array of buffered entries
- */
-export const getAuditBuffer = (): Readonly<IAuditBufferEntry[]> => [...auditBuffer].toReversed();
+    const entry: IAuditEntry = { ...event, timestamp: new Date(), level };
+    // Belt and braces: the sink contract forbids throwing, and this catch is what makes a sink
+    // that breaks the contract anyway unable to take down the request that triggered it.
+    try {
+        auditSink(entry);
+    } catch (error) {
+        auditLogger.warn('audit.sink.failed', {
+            action: event.action,
+            error: error instanceof Error ? error.message : String(error)
+        });
+    }
+};
 
 /*
  * Extract common request fields (ip, user-agent, request-id, trace-id) for audit events.

@@ -21,7 +21,6 @@ Endpoints for health checks, metrics, and audit logs. The two public routes feed
 | GET | `/observability/health` | admin | Full health snapshot |
 | GET | `/observability/metrics/overview` | admin | Curated KPI JSON |
 | GET | `/observability/audit` | admin | Recent audit events |
-| GET | `/observability/load-test` | admin, dev/staging only | Synthetic CPU load generator for exercising dashboards/log pipelines |
 
 ## Account & Auth
 
@@ -32,8 +31,7 @@ JWT-based authentication. Login returns an `accessToken` (short-lived) and a `re
 | POST | `/account/login` | none | Authenticate and get JWT |
 | POST | `/account/signup` | none | Register a new user |
 | GET | `/account` | user | Get current user profile |
-| GET | `/account/refresh` | none | Refresh access token |
-| GET | `/account/refresh/:token` | none | Refresh via token param |
+| GET | `/account/refresh` | none | Refresh access token (uses HttpOnly cookie) |
 | POST | `/account/reset` | none | Request password reset email |
 | POST | `/account/reset-confirm` | none | Confirm password reset |
 | POST | `/account/logout-all` | user | Revoke all refresh tokens |
@@ -56,7 +54,7 @@ Standard CRUD for the product catalogue. Read endpoints are public and Redis-cac
 
 ## Cart
 
-Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart/checkout` converts the cart into an order, clears the cart, and fires a RabbitMQ event for downstream processing.
+Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `CHECKOUT_COMPLETED` analytics event.
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
