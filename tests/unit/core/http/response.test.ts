@@ -23,17 +23,9 @@ import {
     rejectResponse
 } from '@core/http/response';
 import type { Response } from 'express';
+import { makeResponseStub } from '../../../helpers/express';
 
 /** Express response stub with a chainable status().json(). */
-const makeResponse = () => {
-    const response = {
-        status: jest.fn(),
-        json: jest.fn()
-    } as unknown as Response & { status: jest.Mock; json: jest.Mock };
-    response.status.mockReturnValue(response);
-    response.json.mockReturnValue(response);
-    return response;
-};
 
 describe('generateSuccess', () => {
     it('returns plain objects unchanged (no implicit Mongo normalization)', () => {
@@ -222,7 +214,7 @@ describe('generateReject', () => {
 
 describe('successResponse', () => {
     it('applies the same status to the HTTP response and the body', () => {
-        const response = makeResponse();
+        const response = makeResponseStub();
 
         successResponse(response, { id: 'x' }, 201, 'Created');
 
@@ -235,7 +227,7 @@ describe('successResponse', () => {
     });
 
     it('defaults to 200', () => {
-        const response = makeResponse();
+        const response = makeResponseStub();
 
         successResponse(response, { id: 'x' });
 
@@ -245,7 +237,7 @@ describe('successResponse', () => {
 
 describe('rejectResponse', () => {
     it('applies the same status to the HTTP response and the body', () => {
-        const response = makeResponse();
+        const response = makeResponseStub();
 
         rejectResponse(response, 404, 'Not Found', ['No such product']);
 
@@ -260,7 +252,7 @@ describe('rejectResponse', () => {
     });
 
     it('defaults to 400', () => {
-        const response = makeResponse();
+        const response = makeResponseStub();
 
         rejectResponse(response);
 
@@ -270,7 +262,7 @@ describe('rejectResponse', () => {
     it('does not throw, so controllers must return it', () => {
         // Documented: forgetting the `return` lets execution continue and trips Express'
         // "headers already sent". Pinned so the contract cannot change silently.
-        const response = makeResponse();
+        const response = makeResponseStub();
 
         expect(() => rejectResponse(response, 500, 'Boom')).not.toThrow();
     });

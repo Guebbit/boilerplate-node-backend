@@ -137,22 +137,25 @@ describe('user schema', () => {
     });
 
     /**
-     * FINDING — pinned, not endorsed.
+     * `email` is unique at the DATABASE level, and this is the case that says so.
      *
-     * `email` carries a plain index (`db/migrations/…-initial-indexes.js`: `{ email: 1 }`, no
-     * `unique: true`) and no schema-level `unique`. Uniqueness is enforced only by the
-     * application check in `authService.signup` (`findOne({ email })` → 409).
+     * The application check in `authService.signup` (`findOne({ email })` → 409) is not enough on
+     * its own, and cannot be: it is not atomic. Two concurrent signups for one address both pass
+     * the lookup and both insert, and `login` then resolves to whichever document Mongo returns
+     * first, which can change between requests.
      *
-     * That check is not atomic: two concurrent signups for the same address can both pass the
-     * lookup and both insert. `login` then does `findOneWithCredentials({ email })` and gets
-     * whichever document Mongo returns first — so the winner is arbitrary and can change.
-     *
-     * Asserted as-is so the current state is explicit. See the report for the fix.
+     * No application-level check can close that, because the gap is between the check and the
+     * write. The index is what refuses the second insert.
+     * `tests/integration/concurrency/auth-races.test.ts` drives the race itself; this case pins
+     * the constraint the race relies on, so a schema edit that quietly drops `unique` fails here
+     * rather than in a timing-dependent test.
      */
-    it('does NOT enforce email uniqueness at the database level', async () => {
+    it('enforces email uniqueness at the database level', async () => {
         await createUser({ email: 'duplicate@example.com' });
 
-        await expect(createUser({ email: 'duplicate@example.com' })).resolves.toBeDefined();
+        await expect(createUser({ email: 'duplicate@example.com' })).rejects.toThrow(
+            /e11000|duplicate key/i
+        );
     });
 });
 

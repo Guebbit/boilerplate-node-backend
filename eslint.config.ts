@@ -24,7 +24,7 @@ export default tseslint.config(
          * Stryker copies the whole project here per run. Without this, `npm run lint` fails with
          * one parser error per generated file the moment a mutation run is in flight — or forever,
          * if a crashed run left the directory behind — because the copies sit outside the
-         * `tsconfig` project `parserOptions.project` resolves against. `jest.config.json` ignores
+         * `tsconfig` project `parserOptions.project` resolves against. `jest.config.js` ignores
          * the same path for the same reason; see the note in `stryker.config.json`.
          */
         '.stryker-tmp/**',
@@ -32,6 +32,14 @@ export default tseslint.config(
         '**/orval.config.ts',
         '**/migrate-mongo-config.ts',
         '**/migrate-mongo-config.js',
+        /*
+         * Jest's own config, alongside the other tool configs above. It is plain CommonJS and
+         * therefore outside the `tsconfig` project `parserOptions.project` resolves against, so
+         * linting it is a parser error rather than a finding. (It is a `.js` and not the `.json`
+         * it used to be because the per-file coverage thresholds inside it need an explanation
+         * attached, and JSON cannot carry a comment.)
+         */
+        '**/jest.config.js',
         '**/commitlint.config.cjs',
         'db/migrations/**/*.js',
         'docs/**',

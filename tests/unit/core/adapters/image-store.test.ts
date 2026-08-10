@@ -153,6 +153,26 @@ describe('filesystemImageStore.remove', () => {
         }
     });
 
+    /**
+     * The case that separates "rejected because it is remote" from "rejected by a later guard".
+     *
+     * Every other remote url in this file (`https://cdn.example.com/x.png`) would also be refused
+     * with `isRemoteUrl` removed entirely, because read as a local path it lands in a
+     * subdirectory and the images-directory check catches it. So none of them actually pins the
+     * remote check — they pass either way.
+     *
+     * This one does: `//images/flat.png` is protocol-relative (host `images`), but read as a
+     * local path it is exactly `<public>/images/flat.png`, a flat file this store could have
+     * written. If the protocol-relative half of `isRemoteUrl` stops working, someone else's file
+     * is deleted.
+     */
+    it('does not delete a local-looking file named by a protocol-relative url', async () => {
+        const { file } = await makeImage('flat.png');
+
+        await expect(filesystemImageStore.remove('//images/flat.png')).resolves.toBe(false);
+        expect(existsSync(file)).toBe(true);
+    });
+
     it('refuses to delete the public directory itself', async () => {
         await expect(filesystemImageStore.remove('/')).resolves.toBe(false);
         expect(existsSync(root)).toBe(true);

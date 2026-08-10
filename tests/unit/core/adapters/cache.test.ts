@@ -88,6 +88,8 @@ const mockScanIterator = jest.fn();
 const mockDel = jest.fn();
 const mockSet = jest.fn();
 const mockSAdd = jest.fn();
+const mockGet = jest.fn();
+const mockSMembers = jest.fn();
 
 const mockClient = {
     on: mockOn,
@@ -96,6 +98,8 @@ const mockClient = {
     del: mockDel,
     set: mockSet,
     sAdd: mockSAdd,
+    get: mockGet,
+    sMembers: mockSMembers,
     quit: jest.fn(),
     disconnect: jest.fn(),
     // `getClient` short-circuits on `isReady`; keeping it false forces the connect path, which
@@ -256,10 +260,205 @@ describe('setCacheValue size guard', () => {
 
     // The TTL guard runs first and is the cheaper of the two: nothing is serialized for an entry
     // that was never going to be written.
-    it('still refuses a zero TTL before it measures anything', async () => {
-        await freshCache().setCacheValue('GET:/products', { status: 200, body: {} }, 0);
+    it.each([0, -1])(
+        'refuses a TTL of %s before it measures anything, and indexes nothing',
+        async (ttlSeconds) => {
+            // Redis rejects `EX` values of zero or less, and a non-positive TTL means "do not
+            // cache" anyway — so it is caught here rather than sent and refused. Asserting on
+            // `mockConnect` is what pins the ORDER: the guard runs before a client is even asked
+            // for, so an entry that was never going to be written costs no round-trip.
+            await freshCache().setCacheValue(
+                'GET:/products',
+                { status: 200, body: {} },
+                ttlSeconds,
+                ['products']
+            );
 
-        expect(mockSet).not.toHaveBeenCalled();
+            expect(mockSet).not.toHaveBeenCalled();
+            expect(mockSAdd).not.toHaveBeenCalled();
+            expect(mockConnect).not.toHaveBeenCalled();
+        }
+    );
+});
+
+// ─── The read/write/invalidate path ──────────────────────────────────────────
+/**
+ * The three functions the caching middleware actually calls, and the reason they had no tests:
+ * they need a Redis, and the unit suite has none. Every one of their branches was reported as
+ * "no coverage" — not weak assertions, no execution at all — which is why the file sat at 48%.
+ *
+ * Two properties run through all of them and are worth naming once:
+ *
+ *   1. **Fail open.** A cache is an optimisation, never a dependency. Every path below must
+ *      resolve — never reject — when Redis is unreachable, slow, or returns nonsense, because a
+ *      rejection here becomes a 500 on a request that could have been served from Mongo.
+ *   2. **Prefixing.** Every key is namespaced. Two deployments sharing a Redis (staging and
+ *      production, the classic accident) must not read each other's cached responses, and the
+ *      prefix is the only thing preventing it.
+ */
+describe('getCacheValue', () => {
+    beforeEach(() => {
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        mockConnect.mockImplementation(() => Promise.resolve());
+    });
+
+    it('returns the stored envelope on a hit', async () => {
+        mockGet.mockImplementation(() => Promise.resolve('{"status":201,"body":{"id":"7"}}'));
+
+        const value = await freshCache().getCacheValue('GET:/products');
+
+        expect(value).toEqual({ status: 201, body: { id: '7' } });
+    });
+
+    it('reads a namespaced key, so two deployments cannot share entries', async () => {
+        mockGet.mockImplementation(() => Promise.resolve());
+
+        await freshCache().getCacheValue('GET:/products');
+
+        expect(mockGet).toHaveBeenCalledWith(expect.stringContaining(':key:GET:/products'));
+        expect(mockGet).not.toHaveBeenCalledWith('key:GET:/products');
+    });
+
+    it('resolves undefined on a miss', async () => {
+        // node-redis answers `null` for an absent or expired key.
+        // eslint-disable-next-line unicorn/no-null
+        mockGet.mockImplementation(() => Promise.resolve(null));
+
+        await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
+    });
+
+    it('treats a corrupt entry as a miss rather than throwing', async () => {
+        // A half-written or hand-edited value must degrade to "not cached". If the JSON.parse
+        // throw escaped, one bad key would turn a working endpoint into a 500 until someone
+        // noticed and deleted it by hand.
+        mockGet.mockImplementation(() => Promise.resolve('{not json'));
+
+        await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
+    });
+
+    it('resolves undefined when Redis itself fails', async () => {
+        mockGet.mockImplementation(() => Promise.reject(new Error('connection reset')));
+
+        await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
+    });
+
+    it('resolves undefined when caching is switched off, without connecting', async () => {
+        delete process.env.NODE_REDIS_URL;
+
+        await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
         expect(mockConnect).not.toHaveBeenCalled();
+    });
+});
+
+describe('setCacheValue tag index', () => {
+    beforeEach(() => {
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        mockConnect.mockImplementation(() => Promise.resolve());
+        mockSet.mockImplementation(() => Promise.resolve('OK'));
+        mockSAdd.mockImplementation(() => Promise.resolve(1));
+    });
+
+    it('stores the body with the TTL as an expiry Redis enforces itself', async () => {
+        await freshCache().setCacheValue('GET:/products', { status: 200, body: { a: 1 } }, 90);
+
+        expect(mockSet).toHaveBeenCalledWith(
+            expect.stringContaining(':key:GET:/products'),
+            JSON.stringify({ status: 200, body: { a: 1 } }),
+            { EX: 90 }
+        );
+    });
+
+    it('registers the entry under every tag it was given', async () => {
+        // This reverse index is the entire mechanism behind group invalidation: Redis cannot
+        // efficiently delete "every key matching a pattern", so writes have to record their own
+        // membership. A write that skips it produces an entry nothing can ever invalidate — it
+        // just serves stale data until its TTL runs out.
+        await freshCache().setCacheValue('GET:/products', { status: 200, body: {} }, 60, [
+            'products',
+            'catalog'
+        ]);
+
+        expect(mockSAdd).toHaveBeenCalledTimes(2);
+        expect(mockSAdd).toHaveBeenCalledWith(
+            expect.stringContaining(':tag:products'),
+            expect.stringContaining(':key:GET:/products')
+        );
+        expect(mockSAdd).toHaveBeenCalledWith(
+            expect.stringContaining(':tag:catalog'),
+            expect.stringContaining(':key:GET:/products')
+        );
+    });
+
+    it('de-duplicates tags and drops empty ones', async () => {
+        // Both halves matter: a repeated tag is a wasted round-trip, and an empty one creates a
+        // junk `tag:` key that every future invalidation then reads and deletes for nothing.
+        await freshCache().setCacheValue('GET:/products', { status: 200, body: {} }, 60, [
+            'products',
+            'products',
+            '',
+            'catalog'
+        ]);
+
+        expect(mockSAdd).toHaveBeenCalledTimes(2);
+    });
+
+    it('resolves rather than rejecting when the write fails', async () => {
+        mockSet.mockImplementation(() => Promise.reject(new Error('OOM')));
+
+        await expect(
+            freshCache().setCacheValue('GET:/products', { status: 200, body: {} }, 60, ['products'])
+        ).resolves.toBeUndefined();
+    });
+});
+
+describe('invalidateCacheTags', () => {
+    beforeEach(() => {
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        mockConnect.mockImplementation(() => Promise.resolve());
+        mockSMembers.mockImplementation(() => Promise.resolve([]));
+        mockDel.mockImplementation(() => Promise.resolve(1));
+    });
+
+    it('deletes every entry in the tag, then the tag set itself', async () => {
+        mockSMembers.mockImplementation(() => Promise.resolve(['app:key:a', 'app:key:b']));
+
+        await freshCache().invalidateCacheTags(['products']);
+
+        // One variadic DEL for the group rather than one call per key.
+        expect(mockDel).toHaveBeenCalledWith(['app:key:a', 'app:key:b']);
+        // And the index set, which would otherwise keep growing across invalidation cycles.
+        expect(mockDel).toHaveBeenCalledWith(expect.stringContaining(':tag:products'));
+    });
+
+    it('does not issue a DEL with no arguments for an empty tag', async () => {
+        // `DEL` with zero keys is a protocol error, not a no-op, so an empty set has to be
+        // detected here. The tag key itself is still deleted.
+        mockSMembers.mockImplementation(() => Promise.resolve([]));
+
+        await freshCache().invalidateCacheTags(['products']);
+
+        expect(mockDel).toHaveBeenCalledTimes(1);
+        expect(mockDel).toHaveBeenCalledWith(expect.stringContaining(':tag:products'));
+    });
+
+    it('does nothing — not even connect — when every tag is empty', async () => {
+        await freshCache().invalidateCacheTags(['', '']);
+
+        expect(mockConnect).not.toHaveBeenCalled();
+        expect(mockSMembers).not.toHaveBeenCalled();
+    });
+
+    it('reads each distinct tag once', async () => {
+        await freshCache().invalidateCacheTags(['products', 'products', 'catalog']);
+
+        expect(mockSMembers).toHaveBeenCalledTimes(2);
+    });
+
+    it('resolves rather than rejecting when Redis fails mid-invalidation', async () => {
+        // The caller is a write that has already succeeded in Mongo. Rejecting here would turn a
+        // completed write into an error response, and the client would retry a write that landed.
+        mockSMembers.mockImplementation(() => Promise.reject(new Error('connection reset')));
+
+        await expect(freshCache().invalidateCacheTags(['products'])).resolves.toBeUndefined();
     });
 });

@@ -45,12 +45,13 @@ describe('escapeRegex', () => {
         expect(new RegExp(escapeRegex('1.5')).test('1x5')).toBe(false);
     });
 
-    it('never produces an invalid pattern, whatever it is given', () => {
-        // A lone backslash is written with an escape rather than String.raw: a trailing
-        // backslash inside String.raw escapes the closing backtick and never terminates.
-        for (const value of ['(', '[', '\\', '*', '+?', '{2,', '(((', String.raw`\\(`])
-            expect(() => new RegExp(escapeRegex(value))).not.toThrow();
-    });
+    /*
+     * The cases above are the named, memorable ones: a specific metacharacter, a specific
+     * expectation. The general claim — "escapes whatever it is given" — belongs in
+     * `search.property.test.ts`, where it is generated over arbitrary input rather than sampled
+     * over a handful of strings someone thought of. Hand-picked examples cannot support a claim
+     * quantified over all inputs; they only illustrate it.
+     */
 });
 
 describe('the filters that reach MongoDB', () => {

@@ -8,16 +8,24 @@
  *   the default wrong in either direction is costly: log everything and a wrong password becomes
  *   an incident; log nothing and a real bug disappears if a caller swallows the throw.
  *
- *   `databaseErrorInterpreter` — maps a Mongoose error onto a `[httpCode, message]` tuple. Its
- *   CastError branch has a **known defect**, documented in the module's own CAVEAT: it reads the
- *   status from `.message` and the message from `.kind`, i.e. the two are swapped. The tests
- *   below pin that behaviour deliberately and are named so, because the source comment says
- *   callers may already depend on the current shape — see the `KNOWN DEFECT` block.
+ *   `databaseErrorInterpreter` — maps a driver or Mongoose error onto a `[httpCode, message]`
+ *   tuple, and `rejectDatabaseError` turns that into a response. Between them they decide whether
+ *   a failure is the client's fault or the server's, which is the difference between a 4xx a
+ *   client can act on and a 500 that pages someone. Three of its branches exist because a real
+ *   request produced the wrong one: a malformed id answered 500 on a PUBLIC endpoint and echoed
+ *   the driver's prose into the body.
  */
 
-import { ExtendedError, databaseErrorInterpreter } from '@core/http/errors';
+import {
+    ExtendedError,
+    databaseErrorInterpreter,
+    isDuplicateKey,
+    rejectDatabaseError
+} from '@core/http/errors';
+import type { Response } from 'express';
 import { logger } from '@core/adapters/logger';
 import type { CastError } from 'mongoose';
+import { makeResponseStub } from '../../../helpers/express';
 
 jest.mock('@core/adapters/logger', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -150,39 +158,163 @@ describe('databaseErrorInterpreter', () => {
     });
 
     /**
-     * KNOWN DEFECT — pinned, not endorsed.
+     * A CastError means the same thing to a client as a BSONError — "that is not a usable id" —
+     * so both answer 422.
      *
-     * The CastError branch returns `[Number.parseInt(error.message), error.kind]`. Since `.message`
-     * is prose ('Cast to ObjectId failed for value ...'), `parseInt` yields NaN, and `.kind` is a
-     * schema type name ('ObjectId'), not a message. So a malformed ObjectId in a URL produces a
-     * status of NaN and a message of 'ObjectId'.
-     *
-     * These tests assert what the code does today because the module's CAVEAT states the shape is
-     * deliberate-for-now ("callers may already depend on the current shape"). They are written to
-     * FAIL the moment someone fixes the swap — which is the point: the fix should be a conscious
-     * change to this file, not a silent one. See the accompanying report for the suggested fix.
+     * The cases below pin the tuple against the two fields the error itself carries, because
+     * deriving either from them is the tempting mistake: `message` is prose, so a status parsed
+     * out of it is NaN, and `res.status(NaN)` throws inside Express — turning a client error into
+     * a 500. `kind` is a schema type name, not a sentence anyone can act on.
      */
-    describe('CastError branch (known defect — see module CAVEAT)', () => {
-        it('yields NaN as the status, because it parses the prose message', () => {
+    describe('CastError branch', () => {
+        it('answers 422, the status the affected endpoints document', () => {
             const [status] = databaseErrorInterpreter(makeCastError());
 
-            expect(Number.isNaN(status)).toBe(true);
+            expect(status).toBe(422);
         });
 
-        it('yields the schema type name as the message, because it returns `kind`', () => {
+        it('never yields NaN, which Express turns into a 500 when passed to res.status()', () => {
+            const [status] = databaseErrorInterpreter(makeCastError());
+
+            expect(Number.isNaN(status)).toBe(false);
+        });
+
+        it('does not leak the schema type name as the message', () => {
+            // `kind` is 'ObjectId' — internal detail describing how ids are built, and not a
+            // sentence anyone can act on.
             const [, message] = databaseErrorInterpreter(makeCastError());
 
-            expect(message).toBe('ObjectId');
+            expect(message).not.toBe('ObjectId');
         });
 
-        it('parses a leading integer when the message happens to start with one', () => {
-            // Demonstrates the mechanism rather than a realistic Mongoose message: whatever
-            // number the prose starts with becomes the HTTP status.
+        it('ignores any number that happens to lead the prose message', () => {
+            // The old branch read the status out of the message text, so a Mongoose message
+            // starting with a number silently became the HTTP status.
             const castError = Object.assign(new Error('404 not castable'), {
                 kind: 'ObjectId'
             }) as unknown as CastError;
 
-            expect(databaseErrorInterpreter(castError)).toEqual([404, 'ObjectId']);
+            expect(databaseErrorInterpreter(castError)).toEqual([422, 'Invalid identifier']);
         });
+    });
+});
+
+/** Express response stub with a chainable status().json(). */
+
+/** A driver duplicate-key error: the numeric `code` is the discriminator, never the message. */
+const makeDuplicateKeyError = () =>
+    Object.assign(
+        new Error('E11000 duplicate key error collection: app.users index: users_email'),
+        {
+            code: 11_000
+        }
+    );
+
+/** A BSONError-shaped object: identified by `name`, and carrying no `kind`. */
+const makeBsonError = () =>
+    Object.assign(new Error('input must be a 24 character hex string, 12 byte Uint8Array'), {
+        name: 'BSONError'
+    });
+
+describe('isDuplicateKey', () => {
+    it('recognises the driver code', () => {
+        expect(isDuplicateKey(makeDuplicateKeyError())).toBe(true);
+    });
+
+    it('reads the code, not the message', () => {
+        // E11000's text names the index and the duplicated value, so matching on it would break
+        // the first time an index is renamed — and would match a message that merely quotes it.
+        expect(isDuplicateKey(new Error('E11000 duplicate key error'))).toBe(false);
+    });
+
+    it('is false for an ordinary error, and for nothing at all', () => {
+        expect(isDuplicateKey(new Error('connection reset'))).toBe(false);
+        // eslint-disable-next-line unicorn/no-useless-undefined -- the absent error IS the case
+        expect(isDuplicateKey(undefined)).toBe(false);
+    });
+
+    it('does not treat a near-miss code as a duplicate', () => {
+        expect(isDuplicateKey(Object.assign(new Error('x'), { code: 11_001 }))).toBe(false);
+    });
+});
+
+describe('duplicate-key branch', () => {
+    it('answers 409, which is what makes `unique: true` safe to declare', () => {
+        // Without this branch, closing the signup race converts a duplicate account into a 500 —
+        // trading a data bug for an availability bug.
+        expect(databaseErrorInterpreter(makeDuplicateKeyError())).toEqual([409, 'Already exists']);
+    });
+
+    it('does not echo the driver message, which contains user data', () => {
+        // E11000's text carries the duplicated value — an email address, on the index that
+        // produces this in practice.
+        const [, message] = databaseErrorInterpreter(makeDuplicateKeyError());
+
+        expect(message).not.toContain('users_email');
+        expect(message).not.toContain('E11000');
+    });
+});
+
+describe('BSONError branch', () => {
+    it('answers 422 rather than falling through to the catch-all 500', () => {
+        // Without this branch the case is reachable WITHOUT A TOKEN: `POST /products/search` is
+        // public and takes an `id` filter, so `{"id": ""}` produces a server error.
+        //
+        // The fixture is a plain Error carrying `name: 'BSONError'`, and that is the contract:
+        // the branch matches on the NAME, never on `instanceof`. `bson` arrives as a transitive
+        // dependency of two different packages, so an identity check against the wrong copy
+        // returns false and the branch goes dead with nothing to show for it.
+        expect(databaseErrorInterpreter(makeBsonError())).toEqual([422, 'Invalid identifier']);
+    });
+
+    it('does not leak how ids are encoded', () => {
+        const [, message] = databaseErrorInterpreter(makeBsonError());
+
+        expect(message).not.toContain('24 character hex');
+    });
+});
+
+describe('rejectDatabaseError', () => {
+    it('sends the status the interpreter chose, not a hardcoded 500', () => {
+        const response = makeResponseStub();
+
+        rejectDatabaseError(response, 'getProducts', makeBsonError());
+
+        expect(response.status).toHaveBeenCalledWith(422);
+    });
+
+    it('names the reason on a 4xx, because it describes the request', () => {
+        const response = makeResponseStub();
+
+        rejectDatabaseError(response, 'getProducts', makeBsonError());
+
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'getProducts - Invalid identifier' })
+        );
+    });
+
+    it('withholds the detail on a 5xx, where it is the driver talking about the server', () => {
+        // The distinction is the point of the function: a 4xx detail is safe to name, a 5xx one
+        // describes internals and belongs in the log, which `ExtendedError` and the request
+        // logger already handle.
+        const response = makeResponseStub();
+
+        rejectDatabaseError(response, 'getProducts', new Error('connection reset to shard-02'));
+
+        expect(response.status).toHaveBeenCalledWith(500);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'getProducts' })
+        );
+    });
+
+    it('never puts the driver message in the user-facing errors array', () => {
+        // `errors[]` is the translated, user-facing array by this repo's convention. The
+        // driver's prose is neither.
+        const response = makeResponseStub();
+
+        rejectDatabaseError(response, 'getProducts', new Error('connection reset to shard-02'));
+
+        const body = response.json.mock.calls[0]![0] as { errors: unknown[] };
+        expect(JSON.stringify(body.errors)).not.toContain('shard-02');
     });
 });

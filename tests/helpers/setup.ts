@@ -1,3 +1,16 @@
+/**
+ * Global test bootstrap — jest's `setupFiles`, so this runs ONCE per worker BEFORE any test
+ * module is imported.
+ *
+ * That ordering is the whole reason the file exists. Everything configured here is read at
+ * IMPORT time by the module that needs it: `security.ts` builds its rate limiters when it is
+ * first imported, and `@core/i18n` must have its resources loaded before any zod schema
+ * evaluates a message thunk. Setting these in a `beforeAll` would be too late — the modules
+ * under test would already have captured the defaults.
+ *
+ * Note what is NOT here: no database. Mongo is per-suite, through `setupTestDb()`, because not
+ * every suite needs one and starting a mongod for a pure-function test is pure cost.
+ */
 import { existsSync } from 'node:fs';
 import i18next from 'i18next';
 import { getFallbackLocale, listSupportedLocales, loadLocaleResources } from '@core/i18n';
