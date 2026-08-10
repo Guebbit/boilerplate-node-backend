@@ -1,5 +1,8 @@
 name: Fuzz (spec-driven)
 
+# Throws hostile-but-spec-valid requests at every operation in openapi.yaml and asserts none of
+# them 5xxes or answers off-contract. Nightly, not a merge gate.
+#
 # Spec-driven fuzzing lives in its own workflow, for the same structural reason mutation testing
 # does: it is a HUNTER, not a gate.
 #

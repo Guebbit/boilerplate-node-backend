@@ -1,5 +1,8 @@
 name: Mutation
 
+# Deliberately breaks the source in small ways and checks the unit suite notices. Measures how
+# good the TESTS are, not how good the code is. Nightly, not a merge gate.
+#
 # Mutation testing lives in its own workflow, deliberately.
 #
 # It is NOT part of `ci.yml`, and that is structural rather than a convention: a run re-executes

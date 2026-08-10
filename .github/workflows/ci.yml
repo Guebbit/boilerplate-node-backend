@@ -1,5 +1,22 @@
 name: CI
 
+# The merge gate. Everything here runs on every PR and on every push to main, and the aggregate
+# `ci` job at the bottom is the single check branch protection requires.
+#
+# Deliberately many small jobs rather than one `npm run complete:check`: they run in parallel, and
+# a red square names the thing that broke (formatting? contract? integration?) without anyone
+# opening a log. The trade is repeated checkout/setup/install boilerplate in each.
+#
+# The jobs fall into four groups:
+#   - style           commitlint, lint, prettier
+#   - contract        lint-openapi, lint-asyncapi, api-freshness, asyncapi-types-freshness,
+#                     spec-identity — the spec is valid, its generated output is committed and
+#                     current, and the paired frontend still agrees with it
+#   - correctness     typecheck, build, test-unit, test-integration, test-contract
+#   - supply chain    audit
+#
+# The slow suites live elsewhere on a nightly schedule: mutation.yml and fuzz.yml.
+
 on:
     # Run on every PR and on direct pushes to main.
     # This gives fast feedback for feature branches and protects main.
@@ -51,6 +68,8 @@ jobs:
               run: npx commitlint --from ${{ github.event.before }} --to ${{ github.event.after }} --verbose
 
     lint:
+        # ESLint over the whole repo, including the layering rules in eslint.config.ts that
+        # forbid src/core/** from importing the application layers.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -73,6 +92,8 @@ jobs:
               run: npm run lint
 
     prettier:
+        # Formatting only — a separate job from `lint` so "you forgot to format" and "you wrote
+        # a lint error" are two different red squares.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -95,6 +116,8 @@ jobs:
               run: npm run prettier:check
 
     lint-openapi:
+        # Spectral lints openapi.yaml against spectral.yaml, the ruleset the paired frontend
+        # lints its identical copy under.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -117,6 +140,7 @@ jobs:
               run: npm run lint:openapi
 
     lint-asyncapi:
+        # The same, for the realtime contract that drives the SSE types.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -263,6 +287,8 @@ jobs:
               run: npm run check:spec-identity
 
     typecheck:
+        # `tsc --noEmit` — types only. `build` below repeats it as part of its own script; this
+        # job exists so a type error is reported as one, not as a build failure.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -285,6 +311,7 @@ jobs:
               run: npm run ts-check
 
     build:
+        # Proves the project still builds from a clean checkout.
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
@@ -307,6 +334,7 @@ jobs:
               run: npm run build-only
 
     test-unit:
+        # The fast suite: pure functions, services and repositories against in-memory Mongo.
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
