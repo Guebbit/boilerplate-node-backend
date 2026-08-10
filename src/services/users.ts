@@ -6,7 +6,7 @@ import {
     type IResponseReject
 } from '@core/http/response';
 import { zodUserSchema } from '@models/users';
-import type { IUserDocument, IUser } from '@models/users';
+import type { IUserDocument, IUser, IToken } from '@models/users';
 import type { SearchUsersRequest } from '@types';
 import { userRepository } from '@repositories/users';
 import { cartService } from '@services/cart';
@@ -139,6 +139,30 @@ export const findByEmail = (email: string): Promise<IUserDocument | undefined | 
     userRepository.findOneWithCredentials({ email });
 
 /**
+ * Find a user that holds a token of the given type.
+ * Returns the document if found, or undefined/null if no match.
+ *
+ * `$elemMatch` rather than two dotted paths, and that is the whole point of the helper. Written
+ * as `{ 'tokens.token': token, 'tokens.type': type }`, Mongo applies each condition to the array
+ * independently: it matches a user holding the value in ONE entry and the type in ANOTHER. A user
+ * with both a reset token and a delete token — the ordinary state during an account deletion —
+ * is therefore returned by a lookup for either type, whichever token was supplied.
+ *
+ * `$elemMatch` requires both conditions to hold on the SAME entry, which is what "holds a
+ * password-reset token" means. Both controllers re-check the type on the returned document, so
+ * the loose filter was not reachable as a privilege escalation — but the guard was theirs, not
+ * this function's, and a third caller would not have inherited it.
+ *
+ * Credentials included: `tokens` carries `select: false`, and every caller reads the matching
+ * entry's expiration straight off the returned document.
+ */
+const findByToken = (
+    token: string,
+    type: IToken['type']
+): Promise<IUserDocument | undefined | null> =>
+    userRepository.findOneWithCredentials({ tokens: { $elemMatch: { token, type } } });
+
+/**
  * Find a user that holds a password-reset token.
  * Returns the document if found, or undefined/null if no match.
  *
@@ -146,9 +170,7 @@ export const findByEmail = (email: string): Promise<IUserDocument | undefined | 
  */
 export const findByPasswordResetToken = (
     token: string
-): Promise<IUserDocument | undefined | null> =>
-    // Credentials included: the caller inspects the matching token entry's expiration.
-    userRepository.findOneWithCredentials({ 'tokens.token': token, 'tokens.type': 'password' });
+): Promise<IUserDocument | undefined | null> => findByToken(token, 'password');
 
 /**
  * Find a user that holds an account-deletion token.
@@ -158,21 +180,37 @@ export const findByPasswordResetToken = (
  */
 export const findByAccountDeleteToken = (
     token: string
-): Promise<IUserDocument | undefined | null> =>
-    // Credentials included: the caller inspects the matching token entry's expiration.
-    userRepository.findOneWithCredentials({ 'tokens.token': token, 'tokens.type': 'delete' });
+): Promise<IUserDocument | undefined | null> => findByToken(token, 'delete');
 
 /**
  * Remove the given token from the user document and persist it.
  * Used to consume a one-time password-reset token after the reset completes.
  *
- * @param user
- * @param token
+ * An atomic `$pull`, not a read-modify-write, for the same reason as `tokenAdd`/`tokenRemoveAll`
+ * in `@models/users` — and here the read-modify-write was not merely lossy, it was a 500.
+ *
+ * `POST /account/reset-confirm` loads the user, changes the password (one `save()`), then calls
+ * this (a second `save()` of the same loaded document). Two simultaneous confirms of one token
+ * therefore both loaded the document at version V, and the second `save()` to arrive found the
+ * version had moved: Mongoose raised a `VersionError`, the controller's blanket `.catch()` turned
+ * it into a 500, and a user who clicked a reset link twice saw a server error on a request that
+ * had, in fact, already worked.
+ *
+ * `$pull` is evaluated by mongod against the document as it exists at write time, so a second
+ * consume of an already-spent token is a no-op rather than a conflict — which is what "one-time"
+ * should mean at the storage layer, rather than being enforced only by whoever read first.
+ *
+ * @param user - the loaded document, kept in step with the write for callers that read it back
+ * @param token - the token value to spend
  */
-export const consumeToken = (user: IUserDocument, token: string): Promise<IUserDocument> => {
-    user.tokens = user.tokens.filter((tk) => tk.token !== token);
-    return userRepository.save(user);
-};
+export const consumeToken = (user: IUserDocument, token: string): Promise<boolean> =>
+    userRepository.tokenRemove(user.id, token).then(({ modifiedCount }) => {
+        user.tokens = user.tokens.filter((tk) => tk.token !== token);
+        // `true` only for the caller whose write actually removed it. Two simultaneous uses of one
+        // reset link both pass the earlier "does this token exist" read, so this is the only
+        // point at which they can be told apart — see `postResetConfirm`.
+        return modifiedCount > 0;
+    });
 
 /**
  * Remove a user by ID (soft or hard delete).

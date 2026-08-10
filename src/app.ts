@@ -53,7 +53,7 @@ import { router as localeRoutes } from './routes/locales';
 import { router as systemRoutes } from './routes';
 
 import { MulterError } from 'multer';
-import { ExtendedError } from '@core/http/errors';
+import { ExtendedError, databaseErrorInterpreter } from '@core/http/errors';
 
 /**
  * Server start
@@ -347,6 +347,34 @@ export const handleUncaughtError = (
         ]);
     if (error instanceof ExtendedError)
         return rejectResponse(response, error.httpCode, error.name, error.errors);
+    /*
+     * A database error that is really a CLIENT error — a malformed ObjectId, a duplicate key.
+     *
+     * `databaseErrorInterpreter` is the single place that decides which driver failures describe
+     * the request rather than the server. Anything it maps to a 4xx is answered as one; anything
+     * it leaves at 500 falls through to the generic branch below, so an unrecognised error still
+     * leaks nothing.
+     *
+     * This branch exists because NINE controllers end their promise chain with `.then()` and no
+     * `.catch()`, so their rejections arrive here. Before it, `POST /orders` with a malformed
+     * `productId` answered 500 — an ordinary bad request reported as a server fault. Found by
+     * `tests/fuzz/endpoints.fuzz.test.ts`.
+     *
+     * Fixing it here rather than in the nine controllers is deliberate: it covers the ones that
+     * exist, the ones added later, and every path that forgets a `.catch()` — which is the
+     * failure mode worth defending against, since forgetting is silent.
+     *
+     * The message is the interpreter's own constant ('Invalid identifier'), never the driver's,
+     * and `errors[]` carries translated copy — same rule as the 500 branch below.
+     */
+    const [databaseStatus, databaseMessage] = databaseErrorInterpreter(error);
+    if (databaseStatus < 500)
+        return rejectResponse(response, databaseStatus, databaseMessage, [
+            {
+                code: 'INVALID_REQUEST',
+                message: t('generic.error-unknown')
+            }
+        ]);
     /*
      * The client is told that something failed, and nothing else.
      *

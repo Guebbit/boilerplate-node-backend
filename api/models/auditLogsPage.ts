@@ -20,8 +20,8 @@
  */
 import type { AuditEventItem } from './auditEventItem';
 
-export type AuditLogsResponseData = {
+export interface AuditLogsPage {
   items: AuditEventItem[];
   /** @minimum 0 */
   total: number;
-};
+}

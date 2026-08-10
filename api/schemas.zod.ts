@@ -102,7 +102,7 @@ export const GetObservabilityEventsResponse = zod.unknown()
  * Requires admin role.
  * @summary Health snapshot
  */
-export const getObservabilityHealthResponseDataDataUptimeSecondsMin = 0;
+export const getObservabilityHealthResponseDataUptimeSecondsMin = 0;
 
 
 
@@ -111,13 +111,11 @@ export const GetObservabilityHealthResponse = zod.object({
   "status": zod.number(),
   "message": zod.string(),
   "data": zod.object({
-  "success": zod.literal(true),
-  "data": zod.object({
   "status": zod.enum(['ok', 'degraded']),
   "environment": zod.string(),
   "service": zod.string(),
   "nodeVersion": zod.string(),
-  "uptimeSeconds": zod.number().min(getObservabilityHealthResponseDataDataUptimeSecondsMin),
+  "uptimeSeconds": zod.number().min(getObservabilityHealthResponseDataUptimeSecondsMin),
   "database": zod.object({
   "status": zod.enum(['connected', 'connecting', 'disconnected'])
 }),
@@ -141,7 +139,6 @@ export const GetObservabilityHealthResponse = zod.object({
   "timestamp": zod.iso.datetime({"offset":true})
 })
 })
-})
 
 
 /**
@@ -159,32 +156,32 @@ export const GetObservabilityMetricsResponse = zod.string()
  * Requires admin role.
  * @summary Metrics overview (JSON)
  */
-export const getObservabilityMetricsOverviewResponseDataDataHttpTotalRequestsMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpTotalRequestsMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataHttpTotalErrorsMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpTotalErrorsMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataHttpErrorRateMin = 0;
-export const getObservabilityMetricsOverviewResponseDataDataHttpErrorRateMax = 1;
+export const getObservabilityMetricsOverviewResponseDataHttpErrorRateMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpErrorRateMax = 1;
 
-export const getObservabilityMetricsOverviewResponseDataDataHttpInFlightMin = 0;
+export const getObservabilityMetricsOverviewResponseDataHttpInFlightMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataAuthLoginSuccessMin = 0;
+export const getObservabilityMetricsOverviewResponseDataAuthLoginSuccessMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataAuthLoginFailureMin = 0;
+export const getObservabilityMetricsOverviewResponseDataAuthLoginFailureMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataAuthSignupSuccessMin = 0;
+export const getObservabilityMetricsOverviewResponseDataAuthSignupSuccessMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataBusinessCheckoutSuccessMin = 0;
+export const getObservabilityMetricsOverviewResponseDataBusinessCheckoutSuccessMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataBusinessOrdersCreatedMin = 0;
+export const getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataDatabaseQueriesTotalMin = 0;
+export const getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataDatabaseErrorsTotalMin = 0;
+export const getObservabilityMetricsOverviewResponseDataDatabaseErrorsTotalMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataProcessUptimeSecondsMin = 0;
+export const getObservabilityMetricsOverviewResponseDataProcessUptimeSecondsMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataDataProcessHeapUsedMbMin = 0;
+export const getObservabilityMetricsOverviewResponseDataProcessHeapUsedMbMin = 0;
 
 
 
@@ -193,37 +190,34 @@ export const GetObservabilityMetricsOverviewResponse = zod.object({
   "status": zod.number(),
   "message": zod.string(),
   "data": zod.object({
-  "success": zod.literal(true),
-  "data": zod.object({
   "http": zod.object({
-  "totalRequests": zod.number().min(getObservabilityMetricsOverviewResponseDataDataHttpTotalRequestsMin),
-  "totalErrors": zod.number().min(getObservabilityMetricsOverviewResponseDataDataHttpTotalErrorsMin),
-  "errorRate": zod.number().min(getObservabilityMetricsOverviewResponseDataDataHttpErrorRateMin).max(getObservabilityMetricsOverviewResponseDataDataHttpErrorRateMax).describe('Fraction of requests that returned 4xx\/5xx'),
-  "inFlight": zod.number().min(getObservabilityMetricsOverviewResponseDataDataHttpInFlightMin),
+  "totalRequests": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpTotalRequestsMin),
+  "totalErrors": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpTotalErrorsMin),
+  "errorRate": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpErrorRateMin).max(getObservabilityMetricsOverviewResponseDataHttpErrorRateMax).describe('Fraction of requests that returned 4xx\/5xx'),
+  "inFlight": zod.number().min(getObservabilityMetricsOverviewResponseDataHttpInFlightMin),
   "latencyMs": zod.object({
   "p50": zod.number().describe('Median latency in ms'),
   "p95": zod.number().describe('95th-percentile latency in ms')
 })
 }),
   "auth": zod.object({
-  "loginSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataDataAuthLoginSuccessMin).optional(),
-  "loginFailure": zod.number().min(getObservabilityMetricsOverviewResponseDataDataAuthLoginFailureMin).optional(),
-  "signupSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataDataAuthSignupSuccessMin).optional()
+  "loginSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataAuthLoginSuccessMin).optional(),
+  "loginFailure": zod.number().min(getObservabilityMetricsOverviewResponseDataAuthLoginFailureMin).optional(),
+  "signupSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataAuthSignupSuccessMin).optional()
 }),
   "business": zod.object({
-  "checkoutSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataDataBusinessCheckoutSuccessMin).optional(),
-  "ordersCreated": zod.number().min(getObservabilityMetricsOverviewResponseDataDataBusinessOrdersCreatedMin).optional()
+  "checkoutSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessCheckoutSuccessMin).optional(),
+  "ordersCreated": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin).optional()
 }),
   "database": zod.object({
-  "queriesTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDataDatabaseQueriesTotalMin).optional(),
-  "errorsTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDataDatabaseErrorsTotalMin).optional()
+  "queriesTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin).optional(),
+  "errorsTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDatabaseErrorsTotalMin).optional()
 }),
   "process": zod.object({
-  "uptimeSeconds": zod.number().min(getObservabilityMetricsOverviewResponseDataDataProcessUptimeSecondsMin).optional(),
-  "heapUsedMb": zod.number().min(getObservabilityMetricsOverviewResponseDataDataProcessHeapUsedMbMin).optional()
+  "uptimeSeconds": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessUptimeSecondsMin).optional(),
+  "heapUsedMb": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessHeapUsedMbMin).optional()
 }),
   "timestamp": zod.iso.datetime({"offset":true})
-})
 })
 })
 
@@ -249,7 +243,7 @@ export const GetObservabilityAuditLogsQueryParams = zod.object({
   "limit": zod.number().min(1).max(getObservabilityAuditLogsQueryLimitMax).default(getObservabilityAuditLogsQueryLimitDefault).describe('Maximum number of events to return')
 })
 
-export const getObservabilityAuditLogsResponseDataDataTotalMin = 0;
+export const getObservabilityAuditLogsResponseDataTotalMin = 0;
 
 
 
@@ -257,8 +251,6 @@ export const GetObservabilityAuditLogsResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string(),
-  "data": zod.object({
-  "success": zod.literal(true),
   "data": zod.object({
   "items": zod.array(zod.object({
   "actor_user_id": zod.string(),
@@ -275,8 +267,7 @@ export const GetObservabilityAuditLogsResponse = zod.object({
   "timestamp": zod.iso.datetime({"offset":true}),
   "level": zod.enum(['info', 'warn'])
 })),
-  "total": zod.number().min(getObservabilityAuditLogsResponseDataDataTotalMin)
-})
+  "total": zod.number().min(getObservabilityAuditLogsResponseDataTotalMin)
 })
 })
 

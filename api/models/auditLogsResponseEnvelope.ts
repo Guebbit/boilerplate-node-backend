@@ -18,11 +18,11 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { AuditLogsResponse } from './auditLogsResponse';
+import type { AuditLogsPage } from './auditLogsPage';
 
 export interface AuditLogsResponseEnvelope {
   success: true;
   status: number;
   message: string;
-  data: AuditLogsResponse;
+  data: AuditLogsPage;
 }

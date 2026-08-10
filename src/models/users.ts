@@ -62,8 +62,12 @@ export interface IUserDocument extends IUser, IUserMethods, Document {
  * User Document instance methods.
  */
 export type IUserMethods = {
-    tokenAdd: (type: ETokenType, expirationMs: number, token: string) => Promise<string>;
-    tokenRemoveAll: (type: ETokenType) => Promise<void>;
+    // `IToken['type']` rather than `ETokenType`: the enum names the two token types the JWT
+    // layer knows about, while `tokens` also carries the account-deletion type the account
+    // endpoints issue. The stored field is a string, and the method has to accept every value
+    // that legitimately appears in it.
+    tokenAdd: (type: IToken['type'], expirationMs: number, token: string) => Promise<string>;
+    tokenRemoveAll: (type: IToken['type']) => Promise<void>;
 };
 
 /**
@@ -179,8 +183,33 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
  * is the one the databases already carry, so they recognise these and do nothing. Change a name
  * and existing deployments stop booting.
  */
-/* Login and signup both look users up by email. */
-userSchema.index({ email: 1 }, { name: 'users_email' });
+/*
+ * Login and signup both look users up by email.
+ *
+ * UNIQUE, and that is a correctness constraint rather than a performance one. `authService.signup`
+ * is a check-then-insert: `findOne({ email })`, and if that finds nothing, `create()`. Between
+ * those two statements the collection is free to change, so two concurrent signups for one address
+ * both read "absent" and both insert. The window is small and entirely reachable — a double-clicked
+ * submit button is enough — and the result is two accounts on one address, with login resolving to
+ * whichever `findOne` happens to return first.
+ *
+ * No application-level check can close that, because the gap is between the check and the write.
+ * Only the database can refuse the second insert, and only an index makes it able to.
+ *
+ * Two things had to come first, in this order:
+ *   1. `databaseErrorInterpreter` gained an E11000 branch (`@core/http/errors`). Without it the
+ *      loser of the race gets a 500 instead of the 409 it already gets when the check catches it —
+ *      the race would be closed and the symptom would be worse.
+ *   2. `db/migrations/20260808200000-users-email-unique.js` refuses to build the index on a
+ *      database that already holds duplicates, rather than failing halfway with a driver error.
+ *      A deployed database may well hold accounts created by this very race.
+ *
+ * The name is unchanged, and that is deliberate — but note that Mongo will not silently upgrade an
+ * existing non-unique `users_email` to unique. The migration drops and rebuilds it; a database
+ * that skipped the migration fails at startup with an index-options conflict, which is the loud
+ * outcome rather than the quiet one.
+ */
+userSchema.index({ email: 1 }, { name: 'users_email', unique: true });
 /* Refresh-token verification and the reset/delete flows query by token value. */
 userSchema.index({ 'tokens.token': 1 }, { name: 'users_tokens_token' });
 /*
@@ -203,29 +232,59 @@ userSchema.pre('save', function () {
     });
 });
 
+/*
+ * Token writes are ATOMIC UPDATES, not read-modify-write.
+ *
+ * The alternative — mutating `this.tokens` and calling `this.save()` — sends the array as it
+ * looked when the document was LOADED. Two concurrent logins each load N tokens, each append one,
+ * and each write back N+1, so the second overwrites the first and one session is dead on arrival.
+ * The user sees a login that succeeded and a next request that says they are not authenticated.
+ *
+ * Logging in on two devices at once is enough to reach it, and the lost write is silent on both
+ * sides. (Under `optimisticConcurrency` it is not silent — it is a `VersionError`, i.e. a 500 on a
+ * correct login. Neither outcome is acceptable, which is why the write shape carries the guarantee
+ * rather than the error handling.)
+ *
+ * `$push` and `$pull` are evaluated by mongod against the document as it exists at write time, so
+ * concurrent operations compose instead of clobbering: N logins produce N tokens.
+ *
+ * The local `this.tokens` is kept in step by hand afterwards, because callers do read it back
+ * (`post-login` reads the array to build its response). `timestamps: false` on the update keeps a
+ * token write from touching `updatedAt`, which is about the account, not its sessions.
+ */
+
 /**
  * Add a token to this user document and persist it.
  * Returns the token string so callers can use it directly.
  */
 userSchema.methods.tokenAdd = function (
-    type: ETokenType,
+    type: IToken['type'],
     expirationMs: number,
     token: string
 ): Promise<string> {
-    this.tokens.push({
+    const entry: IToken = {
         type,
         token,
         expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
-    });
-    return this.save().then(() => token);
+    };
+
+    return (this.constructor as IUserModel)
+        .updateOne({ _id: this._id }, { $push: { tokens: entry } }, { timestamps: false })
+        .then(() => {
+            this.tokens.push(entry);
+            return token;
+        });
 };
 
 /**
  * Remove all tokens of the given type from this user document and persist it.
  */
-userSchema.methods.tokenRemoveAll = function (type: ETokenType) {
-    this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
-    return this.save().then(() => {});
+userSchema.methods.tokenRemoveAll = function (type: IToken['type']) {
+    return (this.constructor as IUserModel)
+        .updateOne({ _id: this._id }, { $pull: { tokens: { type } } }, { timestamps: false })
+        .then(() => {
+            this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
+        });
 };
 
 /**

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateFeedbackRequestBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { enqueueEmail } from '@core/adapters/mailer';
 import { getDefaultLocale, runWithLocale, t } from '@core/i18n';
 import { logger } from '@core/adapters/logger';
@@ -81,7 +82,5 @@ export const postFeedbackContact = (
 
             successResponse(response, createdFeedbackRequest, 201);
         })
-        .catch((error: Error) =>
-            rejectResponse(response, 500, 'postFeedbackContact', [error.message])
-        );
+        .catch((error: Error) => rejectDatabaseError(response, 'postFeedbackContact', error));
 };

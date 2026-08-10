@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { auditLogService } from '@services/audit-logs';
 import { t } from '@core/i18n';
 
@@ -39,9 +40,7 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
             limit: limitNumber
         })
         .then(({ items, total }) => successResponse(response, { items, total }))
-        .catch((error: Error) =>
-            rejectResponse(response, 500, 'getObservabilityAuditLogs', [error.message])
-        );
+        .catch((error: Error) => rejectDatabaseError(response, 'getObservabilityAuditLogs', error));
 };
 
 export default getObservabilityAuditLogs;

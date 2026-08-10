@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { rejectResponse, successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { readInput } from '@core/http/request';
 import { pageSchema, pageSizeSchema } from '@core/http/schemas';
 import type { SearchOrdersRequest } from '@types';
@@ -77,6 +78,6 @@ export const getOrders = (
             successResponse(response, result);
         })
         .catch((error: CastError) => {
-            rejectResponse(response, 500, 'getOrders', [error.message]);
+            rejectDatabaseError(response, 'getOrders', error);
         });
 };

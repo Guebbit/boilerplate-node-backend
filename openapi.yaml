@@ -560,7 +560,7 @@ components:
                 status: *envelopeStatus
                 message: *envelopeMessage
                 data:
-                    $ref: '#/components/schemas/ObservabilityHealthResponse'
+                    $ref: '#/components/schemas/ObservabilityHealth'
 
         ObservabilityMetricsSummaryResponseEnvelope:
             type: object
@@ -571,7 +571,7 @@ components:
                 status: *envelopeStatus
                 message: *envelopeMessage
                 data:
-                    $ref: '#/components/schemas/ObservabilityMetricsSummaryResponse'
+                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
 
         AuditLogsResponseEnvelope:
             type: object
@@ -582,7 +582,7 @@ components:
                 status: *envelopeStatus
                 message: *envelopeMessage
                 data:
-                    $ref: '#/components/schemas/AuditLogsResponse'
+                    $ref: '#/components/schemas/AuditLogsPage'
 
         AuthTokens:
             type: object
@@ -1581,14 +1581,6 @@ components:
                 system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
                 timestamp: { type: string, format: date-time }
 
-        ObservabilityHealthResponse:
-            type: object
-            additionalProperties: false
-            required: [success, data]
-            properties:
-                success: { type: boolean, enum: [true] }
-                data: { $ref: '#/components/schemas/ObservabilityHealth' }
-
         ObservabilityMetricsLatency:
             type: object
             additionalProperties: false
@@ -1643,14 +1635,15 @@ components:
                         heapUsedMb: { type: integer, minimum: 0 }
                 timestamp: { type: string, format: date-time }
 
-        ObservabilityMetricsSummaryResponse:
+        AuditLogsPage:
             type: object
             additionalProperties: false
-            required: [success, data]
+            required: [items, total]
             properties:
-                success: { type: boolean, enum: [true] }
-                data: { $ref: '#/components/schemas/ObservabilityMetricsSummary' }
-
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEventItem' }
+                total: { type: integer, minimum: 0 }
         AuditEventItem:
             type: object
             additionalProperties: false
@@ -1681,22 +1674,6 @@ components:
                 level:
                     type: string
                     enum: [info, warn]
-
-        AuditLogsResponse:
-            type: object
-            additionalProperties: false
-            required: [success, data]
-            properties:
-                success: { type: boolean, enum: [true] }
-                data:
-                    type: object
-                    additionalProperties: false
-                    required: [items, total]
-                    properties:
-                        items:
-                            type: array
-                            items: { $ref: '#/components/schemas/AuditEventItem' }
-                        total: { type: integer, minimum: 0 }
 
 paths:
     # --------- System ---------
@@ -1779,6 +1756,12 @@ paths:
                         text/event-stream:
                             schema:
                                 type: string
+                # Guarded by `isAdminViaCookie`: an EventSource cannot set an Authorization
+                # header, so the HttpOnly refresh cookie is the credential here.
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '403':
+                    $ref: '#/components/responses/Forbidden'
 
     /observability/health:
         get:
@@ -1818,6 +1801,19 @@ paths:
                         text/plain:
                             schema:
                                 type: string
+                # Guarded by `isMetricsScraper`, which takes a static bearer credential rather
+                # than the admin JWT — Prometheus cannot log in or refresh a token.
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '503':
+                    description: |
+                        `NODE_METRICS_TOKEN` is not configured. The endpoint denies by default
+                        rather than opening: an unauthenticated metrics endpoint is not a state
+                        to arrive at by forgetting an environment variable.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
 
     /observability/metrics/overview:
         get:

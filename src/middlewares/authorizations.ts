@@ -1,8 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { userRepository } from '@repositories/users';
 import type { IToken } from '@models/users';
-import { verifyAccessToken } from './auth-jwt';
-import { verifyRefreshToken } from './token';
+import { verifyAccessToken, verifyRefreshToken } from './auth-jwt';
 import { t } from '@core/i18n';
 import { rejectResponse } from '@core/http/response';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';

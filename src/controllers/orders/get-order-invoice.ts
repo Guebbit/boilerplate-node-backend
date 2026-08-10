@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { getCurrentLocale, t } from '@core/i18n';
 import { orderService } from '@services/orders';
 import { rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import ejs from 'ejs';
 import { renderHtmlToPdf } from '@core/adapters/pdf';
 
@@ -48,5 +49,5 @@ export const getOrderInvoice = (request: Request, response: Response) =>
                 });
         })
         .catch((error: Error) => {
-            rejectResponse(response, 500, 'Invoice generation failed', [error.message]);
+            rejectDatabaseError(response, 'Invoice generation failed', error);
         });

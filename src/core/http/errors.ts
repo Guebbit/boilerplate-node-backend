@@ -3,9 +3,11 @@
  */
 
 import { logger } from '@core/adapters/logger';
+import { rejectResponse } from './response';
 // `CastError` is what Mongoose throws when a value cannot be coerced to its schema type —
 // most commonly a malformed ObjectId in a URL parameter.
 import type { CastError } from 'mongoose';
+import type { Response } from 'express';
 
 /**
  * Extension of Error class with some customization
@@ -69,14 +71,35 @@ export class ExtendedError extends Error {
 }
 
 /**
+ * Mongo's duplicate-key error (E11000): a write that a unique index refused.
+ *
+ * One definition, two very different consumers, and they are the reason it lives here rather than
+ * next to either of them:
+ *
+ *   - `repositories/carts.ts` treats it as "the world moved between my two steps" and RETRIES.
+ *     A contended upsert is expected to lose sometimes, and looking again converges.
+ *   - `databaseErrorInterpreter` below treats it as "the caller asked for something already
+ *     taken" and answers 409.
+ *
+ * Both readings are correct for their layer; what would be wrong is two spellings of the test
+ * drifting apart, because the second reading is what keeps the first from surfacing as a 500 when
+ * the retry budget runs out.
+ *
+ * The code is checked, not the message: E11000's text names the index and the duplicated value,
+ * so matching on it would break the first time an index is renamed.
+ */
+export const isDuplicateKey = (error: unknown): boolean =>
+    (error as { code?: number } | undefined)?.code === 11_000;
+
+/**
  * Interpret mongoose operation error
  *
  * @returns a `[httpCode, message]` tuple for the response layer
  *
- * CAVEAT: the CastError branch reads the status from `error.message` and the message from
- * `error.kind`, i.e. the two are swapped relative to their names — `kind` holds the expected
- * schema type ('ObjectId'), and `message` is prose, so `parseInt` on it yields NaN. Documented
- * rather than changed, since callers may already depend on the current shape.
+ * A `CastError` and a `BSONError` both mean the same thing to a client — "that value is not a
+ * usable id" — and both answer 422. They arrive by different routes: Mongoose raises `CastError`
+ * when a value fails a schema path's cast, the driver raises `BSONError` when
+ * `new ObjectId(...)` itself refuses.
  *
  * @param error - anything Mongoose threw
  */
@@ -84,9 +107,92 @@ export function databaseErrorInterpreter(error: CastError | Error): [number, str
     // `hasOwnProperty` via `Object.prototype.call` rather than `error.hasOwnProperty(...)`:
     // works even on objects with a null prototype or a shadowed `hasOwnProperty`.
     // `kind` is present only on CastError, so it acts as the discriminator.
-    if (Object.prototype.hasOwnProperty.call(error, 'kind'))
-        return [Number.parseInt((error as CastError).message), (error as CastError).kind];
+    /*
+     * A malformed value for a schema path — nearly always an ObjectId in a URL or a filter.
+     *
+     * Both halves of the tuple are literals, deliberately. Neither of the error's own fields can
+     * supply one: `message` is prose ('Cast to ObjectId failed for value ...'), so parsing a
+     * status out of it yields NaN, and `res.status(NaN)` throws inside Express — a client error
+     * arriving as a 500. `kind` is a schema type name ('ObjectId'), which describes how ids are
+     * built rather than what the caller did wrong.
+     *
+     * 422 matches the `BSONError` branch below, and every affected endpoint documents it.
+     */
+    if (Object.prototype.hasOwnProperty.call(error, 'kind')) return [422, 'Invalid identifier'];
+    /*
+     * A unique index refused the write, which is a statement about the REQUEST, not about the
+     * server: something with that value already exists. 409, not the 500 an unrecognised driver
+     * error falls through to.
+     *
+     * This branch is what makes `unique: true` on `users.email` safe to declare. Without it,
+     * closing the signup race (two concurrent signups for one address both passing a
+     * check-then-insert) would merely convert a duplicate account into a 500 — trading a data
+     * bug for an availability bug and an alert at three in the morning.
+     *
+     * The message is deliberately not the driver's: E11000's text carries the index name and the
+     * duplicated value, and the value is user-supplied data (an email address) that has no
+     * business being echoed into a response body.
+     */
+    if (isDuplicateKey(error)) return [409, 'Already exists'];
+    /*
+     * A malformed id. The driver refused to build an ObjectId from the string a client sent —
+     * `''`, `'%00'`, `'undefined'`, anything that is not 24 hex characters.
+     *
+     * This is a statement about the REQUEST, so it is a 422, which every affected endpoint
+     * already documents. Without this branch it reaches the 500 below, and that is reachable
+     * WITHOUT A TOKEN: `POST /products/search` is public and takes an `id` filter, so
+     * `{"id": ""}` becomes an unauthenticated request producing a server error — an availability
+     * signal as much as a correctness one.
+     *
+     * Detected by `name` rather than by `instanceof BSONError`: the class lives in the `bson`
+     * package, which reaches this process as a transitive dependency of two different packages,
+     * and an `instanceof` against the wrong copy silently returns false.
+     *
+     * NOT the same thing as the `CastError` branch above. Mongoose raises `CastError` when a
+     * value fails a SCHEMA path's cast; the driver raises `BSONError` when `new ObjectId(...)`
+     * itself refuses. The second is what `toObjectId` in `@repositories/base` produces, and it
+     * carries no `kind`, so the discriminator above never saw it.
+     *
+     * The message is deliberately generic: the driver's names the expected encoding, which is
+     * internal detail that tells an attacker how ids are formed.
+     */
+    if ((error as { name?: string }).name === 'BSONError') return [422, 'Invalid identifier'];
     // Anything else is an unknown server-side failure. The `||` guards against Errors
     // constructed with an empty message.
     return [500, error.message || 'Unknown error'];
 }
+
+/**
+ * Answer a failed database operation with the status it actually deserves.
+ *
+ * The single entry point every controller's `.catch` uses, so two rules hold everywhere at once
+ * rather than per handler:
+ *
+ *   - **The status is derived, never assumed.** {@link databaseErrorInterpreter} decides it. A
+ *     hardcoded 500 turns a malformed id into a server error, and on a public endpoint that is an
+ *     availability signal rather than a client mistake.
+ *   - **The driver never speaks to the client.** `errors[]` is the user-facing, translated array
+ *     by this repo's convention (see the i18n note in `@core/http/request`); a driver message is
+ *     neither, and describes internals. It is logged by `ExtendedError`'s constructor and by the
+ *     request logger, which is where an operator looks.
+ *
+ * @param response - the express response
+ * @param context - developer-facing operation name, e.g. `'getProducts'`
+ * @param error - whatever the driver or Mongoose threw
+ */
+export const rejectDatabaseError = (
+    response: Response,
+    context: string,
+    error: CastError | Error
+) => {
+    const [status, detail] = databaseErrorInterpreter(error);
+
+    return rejectResponse(
+        response,
+        status,
+        // A 4xx detail describes the REQUEST and is safe to name; a 5xx detail is the driver
+        // talking about the server, and stays out of the response entirely.
+        status >= 500 ? context : `${context} - ${detail}`,
+        []
+    );
+};

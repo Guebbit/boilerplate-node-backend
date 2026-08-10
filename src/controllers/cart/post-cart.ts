@@ -4,6 +4,7 @@ import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { UpsertCartItemRequest } from '@types';
 import {
     emitAnalyticsEvent,
@@ -66,6 +67,6 @@ export const postCart = (
             });
         })
         .catch((error: Error) => {
-            rejectResponse(response, 500, 'upsertCartItem', [error.message]);
+            rejectDatabaseError(response, 'upsertCartItem', error);
         });
 };

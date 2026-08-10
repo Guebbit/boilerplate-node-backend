@@ -42,8 +42,12 @@ const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promise<T[]> 
  * The `$match` is built from the same declared spec the other repositories use, so id coercion
  * stays in one place. `$match` does NOT cast the way `find()` does, which is exactly why the
  * coercion has to happen before the pipeline is assembled.
+ *
+ * `async` for the same reason as the base factory's `search`: `buildWhere` runs synchronously and
+ * can throw on a malformed id, and a function typed `Promise<T>` must reject rather than throw —
+ * otherwise the caller's `.catch()` is bypassed and the client gets a 500 instead of a 422.
  */
-const search = (
+const search = async (
     filters: TSearchFilters = {},
     scope: Record<string, unknown> = {}
 ): Promise<{ items: IOrderDocument[]; meta: IPaginatedMeta }> => {

@@ -4,6 +4,7 @@ import { t } from '@core/i18n';
 import type { CastError } from 'mongoose';
 import { productService } from '@services/products';
 import { rejectResponse, successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { extractAndValidateId, readInput } from '@core/http/request';
 import { hardDeleteSchema } from '@core/http/schemas';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
@@ -60,7 +61,7 @@ export const deleteProducts = (request: Request<ParamsDictionary>, response: Res
                     return rejectResponse(response, 404, 'deleteProduct - not found', [
                         t('ecommerce.product-not-found')
                     ]);
-                rejectResponse(response, 500, 'deleteProduct', [error.message]);
+                rejectDatabaseError(response, 'deleteProduct', error);
             })
     );
 };

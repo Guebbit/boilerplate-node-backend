@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { readInput } from '@core/http/request';
 import { pageSchema, pageSizeSchema } from '@core/http/schemas';
 import type { SearchUsersRequest } from '@types';
@@ -66,6 +67,6 @@ export const getUsers = (
             successResponse(response, result);
         })
         .catch((error: CastError) => {
-            rejectResponse(response, 500, 'getUsers', [error.message]);
+            rejectDatabaseError(response, 'getUsers', error);
         });
 };

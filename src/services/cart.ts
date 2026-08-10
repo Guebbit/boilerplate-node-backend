@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 import type { CastError } from 'mongoose';
+import { t } from '@core/i18n';
 import {
     generateSuccess,
     generateReject,
@@ -226,6 +227,23 @@ export const cartRemove = (userId: string): Promise<ICartView> =>
  * A line whose product no longer exists rejects the whole checkout, matching what
  * `@services/orders` `create()` already does for an unresolvable product id: an order embeds a
  * snapshot, and there is nothing to snapshot.
+ *
+ * CONCURRENCY. Read cart → write order → empty cart is three statements, and until the cart write
+ * was made conditional, nothing tied the third to the first. Two parallel `POST /cart/checkout`
+ * both read the same lines, both wrote an order, and both emptied an already-empty cart: one cart,
+ * two orders, the customer charged twice. A double-clicked button is enough to reach it.
+ *
+ * So the cart is emptied CONDITIONALLY, on the `__v` it was read at, and that write is what
+ * decides the race — exactly one of the two matches. The loser has already created an order by
+ * then, which is the cost of not using a transaction, so it deletes it and answers 409. That
+ * ordering matters: the order is written first and retracted on failure, rather than the cart
+ * being cleared first, because an order that briefly exists and is removed is recoverable while a
+ * cart emptied without an order is a customer's basket silently thrown away.
+ *
+ * The 409 is deliberate rather than a retry. The loser's cart is empty and its lines are on the
+ * winner's order — the request has been superseded, not defeated, and re-running it would produce
+ * "empty cart" anyway. `@repositories/carts` `clearLinesIfUnchanged` documents why the guard is a
+ * conditional write rather than a transaction.
  */
 export const orderConfirm = (
     userId: string
@@ -235,24 +253,44 @@ export const orderConfirm = (
         .then<IResponseSuccess<IOrderDocument> | IResponseReject>((user) => {
             if (!user) return generateReject(404, 'cart - user not found', []);
 
-            return cartGet(userId).then((lines) => {
-                if (lines.length === 0) return generateReject(409, 'empty cart', ['Cart is empty']);
+            return cartRepository.findByUserId(userId).then((cart) => {
+                // The version the lines below are read at, and the condition the cart is emptied
+                // under. Captured before the join, so anything that touches the cart while the
+                // products are being resolved invalidates this checkout rather than being missed.
+                const version = cart?.__v ?? 0;
 
-                const joined = lines.filter((line) => isJoined(line));
-                if (joined.length !== lines.length)
-                    return generateReject(404, 'checkout - product not found', []);
+                return readCartLines(cart).then((lines) => {
+                    if (lines.length === 0)
+                        return generateReject(409, 'empty cart', ['Cart is empty']);
 
-                return orderRepository
-                    .create({
-                        userId: new Types.ObjectId(user.id),
-                        email: user.email,
-                        items: joined.map(({ product, quantity }) => ({ product, quantity }))
-                    } as Partial<IOrderDocument>)
-                    .then((order) =>
-                        cartRepository
-                            .clearLines(userId)
-                            .then(() => generateSuccess<IOrderDocument>(order))
-                    );
+                    const joined = lines.filter((line) => isJoined(line));
+                    if (joined.length !== lines.length)
+                        return generateReject(404, 'checkout - product not found', []);
+
+                    return orderRepository
+                        .create({
+                            userId: new Types.ObjectId(user.id),
+                            email: user.email,
+                            items: joined.map(({ product, quantity }) => ({ product, quantity }))
+                        } as Partial<IOrderDocument>)
+                        .then((order) =>
+                            cartRepository
+                                .clearLinesIfUnchanged(userId, version)
+                                .then((clearedCart) => {
+                                    if (clearedCart) return generateSuccess<IOrderDocument>(order);
+
+                                    // Lost the race: retract the order this request wrote, so the
+                                    // cart's contents end up on exactly one of them.
+                                    return orderRepository
+                                        .deleteOne(order)
+                                        .then(() =>
+                                            generateReject(409, 'checkout - cart changed', [
+                                                t('ecommerce.cart-changed')
+                                            ])
+                                        );
+                                })
+                        );
+                });
             });
         })
         .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));

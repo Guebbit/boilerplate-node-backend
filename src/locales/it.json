@@ -45,7 +45,8 @@
         "order-creation-failure": "Creazione dell'ordine fallita.",
         "order-invoice-missing": "Nessun file fattura è stato trovato",
         "cart-product-removed": "Prodotto rimosso dal carrello.",
-        "cart-emptied": "Tutti i prodotti sono stati rimossi dal carrello."
+        "cart-emptied": "Tutti i prodotti sono stati rimossi dal carrello.",
+        "cart-changed": "Il carrello è cambiato durante la conferma dell’ordine. Controllalo e riprova."
     },
     "generic": {
         "error-unknown": "Qualcosa è andato storto con la richiesta.",

@@ -3,6 +3,7 @@ import { t } from '@core/i18n';
 import { UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '@services/orders';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
@@ -59,6 +60,6 @@ export const putOrders = (
                 rejectResponse(response, 404, 'updateOrder - not found', [
                     t('ecommerce.order-not-found')
                 ]);
-            else rejectResponse(response, 500, 'updateOrder', [error.message]);
+            else rejectDatabaseError(response, 'updateOrder', error);
         });
 };

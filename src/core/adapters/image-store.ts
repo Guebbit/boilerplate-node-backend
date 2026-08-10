@@ -64,8 +64,8 @@ const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public');
  * Two forms qualify: an absolute URL with a scheme (`https://cdn.example.com/x.png`, which is what
  * `NODE_DEFAULT_IMAGE_USER` / `NODE_DEFAULT_IMAGE_PRODUCT` hold, and what a remote store will start
  * writing) and a protocol-relative one (`//cdn.example.com/x.png`). Deleting a product whose image
- * is the configured default must not attempt to unlink `public/https://…`, which is what the
- * concatenation this replaces did — harmlessly, because the stat fails, but only by accident.
+ * is the configured default must not resolve it against the public directory and try to unlink
+ * `public/https://…` — a path that only fails to do damage because the stat happens to miss.
  *
  * `URL.canParse` is not used: it accepts `mailto:` and every other scheme, and rejects the
  * protocol-relative form, so it answers a different question than the one being asked.
@@ -102,10 +102,16 @@ export const filesystemImageStore: IImageStore = {
             '.' + (relative.startsWith('/') ? relative : '/' + relative)
         );
 
-        // Containment, not paranoia: `imageUrl` is a client-supplied string on the create/update
-        // endpoints and `uri-reference` permits `/../../etc/passwd`. `path.resolve` has already
-        // collapsed the `..` segments, so this compares the real destination. The public directory
-        // itself is not a stored image, so equality is a rejection too.
+        // Containment: `imageUrl` is a client-supplied string on the create/update endpoints and
+        // `uri-reference` permits `/../../etc/passwd`. `path.resolve` has already collapsed the
+        // `..` segments, so this compares the real destination. The public directory itself is not
+        // a stored image, so equality is a rejection too.
+        //
+        // Defence in depth, and deliberately kept as such: the directory check immediately below
+        // is strictly stronger — it requires the parent to BE `<public>/images` — so removing this
+        // line changes no observable behaviour today, and no test can isolate it. It stays because
+        // it states the coarse invariant directly, and the check below is the one likely to be
+        // relaxed later (nested keys, per-user folders) at which point this becomes load-bearing.
         if (!target.startsWith(root + path.sep)) return Promise.resolve(false);
 
         // Only files this store could have written. `put` always lands a single flat name in

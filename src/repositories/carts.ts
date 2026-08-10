@@ -1,14 +1,11 @@
 import type { UpdateWriteOpResult } from 'mongoose';
 import { cartModel, applyCartTransform } from '@models/carts';
 import type { ICartDocument } from '@models/carts';
+import { isDuplicateKey } from '@core/http/errors';
 import { createBaseRepository, toObjectId, type IBaseRepository } from './base';
 
 /** How {@link upsertLine} treats a quantity for a line already in the cart. */
 export type TCartLineMode = 'set' | 'add';
-
-/** Mongo's duplicate-key error — the only failure {@link upsertLine} answers by looking again. */
-const isDuplicateKey = (error: unknown): boolean =>
-    (error as { code?: number } | undefined)?.code === 11_000;
 
 /**
  * Set or increment one cart line, creating the cart if the user has none.
@@ -84,6 +81,7 @@ export const cartRepository: IBaseRepository<ICartDocument> & {
     ) => Promise<ICartDocument>;
     removeLine: (userId: string, productId: string) => Promise<ICartDocument | null>;
     clearLines: (userId: string) => Promise<ICartDocument | null>;
+    clearLinesIfUnchanged: (userId: string, version: number) => Promise<ICartDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
@@ -125,6 +123,44 @@ export const cartRepository: IBaseRepository<ICartDocument> & {
                 { userId: toObjectId(userId) },
                 { $set: { items: [] } },
                 { returnDocument: 'after' }
+            )
+            .exec(),
+
+    /**
+     * Empty a user's cart ONLY IF it still holds exactly the lines the caller read.
+     *
+     * The conditional-write half of checkout. `orderConfirm` reads the cart, snapshots every line
+     * into an order, and then empties the cart; nothing between those steps stops a second
+     * checkout doing the same thing with the same lines, so two parallel `POST /cart/checkout`
+     * produce two orders from one cart and the customer is charged twice.
+     *
+     * The fix is to make emptying the cart the thing that can fail. `version` carries the
+     * `__v` the caller read, so mongod evaluates "is this still the cart I saw?" while holding the
+     * document. Exactly one of two concurrent checkouts matches; the other gets `null` and its
+     * caller undoes the order it had already written.
+     *
+     * `$inc: { __v: 1 }` is what makes the guard usable more than once — without it, a cart
+     * emptied and refilled would still be at the version an in-flight checkout is holding.
+     * Mongoose's own optimistic concurrency is not used because it only applies to `save()` on a
+     * loaded document, and every write here is a `findOneAndUpdate`.
+     *
+     * A transaction would also close this, and was not chosen: it would make `MongoMemoryReplSet`
+     * a requirement of every suite that touches a cart, to serialise two writes to ONE document —
+     * which is what a conditional update already does, without the replset.
+     *
+     * @param userId - whose cart
+     * @param version - the `__v` the caller read the cart at
+     * @returns the emptied cart, or `null` when the cart moved and the caller lost the race
+     */
+    clearLinesIfUnchanged: (userId: string, version: number) =>
+        cartModel
+            .findOneAndUpdate(
+                /* `__v` below is Mongoose's version key; the name belongs to the driver. */
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                { userId: toObjectId(userId), __v: version },
+                // eslint-disable-next-line @typescript-eslint/naming-convention
+                { $set: { items: [] }, $inc: { __v: 1 } },
+                { returnDocument: 'after', timestamps: false }
             )
             .exec(),
 

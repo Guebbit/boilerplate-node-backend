@@ -40,9 +40,26 @@ export interface ILineItemTotals {
 export const toCents = (value: number): number => Math.round(value * 100) / 100;
 
 /**
+ * Coerce anything to a FINITE number, or 0.
+ *
+ * `Number(x) || 0` is not enough, and the difference is not theoretical. `||` rejects `NaN`
+ * because `NaN` is falsy, but `Infinity` is truthy and sails straight through — and
+ * `Infinity * 0` is `NaN`, so a single line with an infinite quantity and an unpopulated product
+ * poisons the whole total. The shape that reaches it is a line with an infinite quantity and no
+ * populated product — `{ quantity: Number.POSITIVE_INFINITY }` with `product` absent.
+ *
+ * Reachable rather than merely possible: BSON stores `Infinity` happily, order items arrive as
+ * raw aggregate output, and nothing between the database and here re-validates them.
+ */
+const toFiniteNumber = (value: unknown): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/**
  * Sum a list of priced line items.
  *
- * `Number(…) || 0` absorbs undefined, null and unparseable values: a line whose product failed to
+ * Absorbs undefined, null, unparseable values and non-finite ones: a line whose product failed to
  * populate contributes nothing rather than turning the whole total into `NaN`.
  */
 export const sumLineItems = (items: readonly ILineItem[]): ILineItemTotals => {
@@ -50,8 +67,8 @@ export const sumLineItems = (items: readonly ILineItem[]): ILineItemTotals => {
     let price = 0;
 
     for (const item of items) {
-        const itemQuantity = Number(item.quantity) || 0;
-        const itemPrice = Number((item.product as { price?: unknown } | undefined)?.price) || 0;
+        const itemQuantity = toFiniteNumber(item.quantity);
+        const itemPrice = toFiniteNumber((item.product as { price?: unknown } | undefined)?.price);
         quantity += itemQuantity;
         price += itemPrice * itemQuantity;
     }

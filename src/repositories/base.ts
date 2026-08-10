@@ -274,7 +274,24 @@ export function createBaseRepository<TDocument extends Document>(
      * `count` and `findAll` are separate queries, so the sort has to be total or a tied
      * document can appear on two pages — see `DEFAULT_SORT`.
      */
-    const search = (
+    /**
+     * `async` rather than a plain arrow, and that keyword is load-bearing.
+     *
+     * The two lines below run SYNCHRONOUSLY, before any promise exists, and `buildWhere` can
+     * throw: `toObjectId` hands a client-supplied string to `new Types.ObjectId(...)`, which
+     * rejects anything that is not 24 hex characters. Without `async` that throw escapes the
+     * function entirely — the caller's `.then(...).catch(...)` chain is never even constructed,
+     * so every controller's error handling is bypassed and Express answers 500.
+     *
+     * That was reachable without a token: `POST /products/search` is public and takes an `id`
+     * filter, so `{"id": ""}` produced an unauthenticated 500. Found by
+     * `tests/fuzz/endpoints.fuzz.test.ts`.
+     *
+     * The general rule this restores: a function whose signature says `Promise<T>` must REJECT,
+     * never throw synchronously. Callers are entitled to assume that, and every repository in
+     * this codebase is built on this factory.
+     */
+    const search = async (
         filters: TSearchFilters = {},
         scope: Record<string, unknown> = {},
         sort: Record<string, 1 | -1> = DEFAULT_SORT

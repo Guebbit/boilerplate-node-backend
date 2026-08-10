@@ -3,6 +3,7 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@core/i18n';
 import { productService } from '@services/products';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { readInput } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
 import { imageStore } from '@core/adapters/image-store';
@@ -114,7 +115,7 @@ export const writeProducts = (
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
-                    rejectResponse(response, 500, 'createProduct', [error.message]);
+                    rejectDatabaseError(response, 'createProduct', error);
                 })
             );
     }
@@ -144,7 +145,7 @@ export const writeProducts = (
                     rejectResponse(response, 404, 'updateProduct - not found', [
                         t('ecommerce.product-not-found')
                     ]);
-                else rejectResponse(response, 500, 'updateProduct', [error.message]);
+                else rejectDatabaseError(response, 'updateProduct', error);
             })
         );
 };

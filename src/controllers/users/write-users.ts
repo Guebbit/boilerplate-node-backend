@@ -3,6 +3,7 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@core/i18n';
 import { userService } from '@services/users';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { readInput } from '@core/http/request';
 import { resolveImageUrl } from '@core/http/uploads';
 import { imageStore } from '@core/adapters/image-store';
@@ -108,7 +109,7 @@ export const writeUsers = (
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
-                    rejectResponse(response, 500, 'writeUser', [error.message]);
+                    rejectDatabaseError(response, 'writeUser', error);
                 })
             );
     }

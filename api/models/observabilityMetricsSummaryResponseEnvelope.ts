@@ -18,11 +18,11 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ObservabilityMetricsSummaryResponse } from './observabilityMetricsSummaryResponse';
+import type { ObservabilityMetricsSummary } from './observabilityMetricsSummary';
 
 export interface ObservabilityMetricsSummaryResponseEnvelope {
   success: true;
   status: number;
   message: string;
-  data: ObservabilityMetricsSummaryResponse;
+  data: ObservabilityMetricsSummary;
 }

@@ -45,6 +45,18 @@ export interface ICartDocument extends Document {
     items: ICartItem[];
     createdAt?: Date;
     updatedAt?: Date;
+    /**
+     * Mongoose's version key, declared here because this is the one document whose version is
+     * READ by application code rather than only maintained by the driver.
+     *
+     * Checkout empties the cart conditionally on the version it read the lines at — see
+     * `clearLinesIfUnchanged` in `@repositories/carts` — which is what stops two parallel
+     * checkouts turning one cart into two orders. `Document` types it as `any`, so naming it
+     * gives the comparison an actual type and gives the field somewhere to be explained.
+     */
+    /* `__v` is Mongoose's own version key: the name belongs to the driver, not to this codebase. */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    __v: number;
 }
 
 /** Cart Document model type. Queries live in @repositories/carts, rules in @services/cart. */

@@ -3,6 +3,7 @@ import { t } from '@core/i18n';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { UpdateCartItemByIdRequest } from '@types';
 import {
     emitAnalyticsEvent,
@@ -56,6 +57,6 @@ export const putCartItem = (
             successResponse(response, cart);
         })
         .catch((error: Error) => {
-            rejectResponse(response, 500, 'updateCartItemById', [error.message]);
+            rejectDatabaseError(response, 'updateCartItemById', error);
         });
 };

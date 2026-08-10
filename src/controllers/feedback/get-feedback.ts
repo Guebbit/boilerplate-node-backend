@@ -5,6 +5,7 @@ import type { SearchFeedbackRequestsRequest } from '@types';
 import { readInput } from '@core/http/request';
 import { paginationSchema } from '@core/http/schemas';
 import { rejectResponse, successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { feedbackRequestService } from '@services/feedback-requests';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 
@@ -66,5 +67,5 @@ export const getFeedback = (
             );
             return successResponse(response, result);
         })
-        .catch((error: CastError) => rejectResponse(response, 500, 'getFeedback', [error.message]));
+        .catch((error: CastError) => rejectDatabaseError(response, 'getFeedback', error));
 };

@@ -45,7 +45,8 @@
         "order-creation-failure": "No se ha podido crear el pedido.",
         "order-invoice-missing": "No se ha encontrado ningún archivo de factura",
         "cart-product-removed": "Producto eliminado del carrito.",
-        "cart-emptied": "Se han eliminado todos los productos del carrito."
+        "cart-emptied": "Se han eliminado todos los productos del carrito.",
+        "cart-changed": "Tu carrito cambió mientras se realizaba el pedido. Revísalo e inténtalo de nuevo."
     },
     "generic": {
         "error-unknown": "Algo ha salido mal con la solicitud.",

@@ -4,6 +4,7 @@ import { t } from '@core/i18n';
 import type { CastError } from 'mongoose';
 import { userService } from '@services/users';
 import { rejectResponse, successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { extractAndValidateId, readInput } from '@core/http/request';
 import { hardDeleteSchema } from '@core/http/schemas';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
@@ -62,7 +63,7 @@ export const deleteUsers = (request: Request<ParamsDictionary>, response: Respon
                     return rejectResponse(response, 404, 'Not Found', [
                         t('ecommerce.user-not-found')
                     ]);
-                rejectResponse(response, 500, 'deleteUser', [error.message]);
+                rejectDatabaseError(response, 'deleteUser', error);
             })
     );
 };
