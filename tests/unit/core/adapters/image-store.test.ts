@@ -230,4 +230,36 @@ describe('filesystemImageStore.remove', () => {
         process.env.NODE_PUBLIC_PATH = root;
         await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(true);
     });
+
+    /**
+     * The `?? 'public'` fallback, exercised with the variable genuinely absent.
+     *
+     * Every other case here SETS `NODE_PUBLIC_PATH` — reasonably, since deployments do — which left
+     * the default itself untested: nothing here distinguished `'public'` from any other string, or
+     * from none. It showed up as a mutation-score flip that depended on cross-test environment
+     * state rather than on the code.
+     *
+     * `process.chdir` rather than writing into the repository's own `public/`: the fallback is
+     * relative, so it resolves against the working directory, and moving that is what lets a real
+     * file stand in for a real deployment without touching a committed directory.
+     */
+    it('falls back to ./public relative to the working directory', async () => {
+        const originalCwd = process.cwd();
+        const publicImages = path.join(root, 'public', 'images');
+        await mkdir(publicImages, { recursive: true });
+        const file = path.join(publicImages, 'default-root.png');
+        await writeFile(file, 'not really a png');
+
+        try {
+            delete process.env.NODE_PUBLIC_PATH;
+            process.chdir(root);
+
+            await expect(filesystemImageStore.remove('/images/default-root.png')).resolves.toBe(
+                true
+            );
+            expect(existsSync(file)).toBe(false);
+        } finally {
+            process.chdir(originalCwd);
+        }
+    });
 });

@@ -93,6 +93,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   controller starts a promise chain without handling rejection. It covers controllers that do not
   exist yet, which per-controller fixtures would not.
 
+- A case for `publicRoot`'s `./public` fallback in `image-store.test.ts`. Every other case sets
+  `NODE_PUBLIC_PATH`, reasonably, which left the default itself unexercised — nothing
+  distinguished `'public'` from any other string. It moves the working directory rather than
+  writing into the repository's own `public/`, since the fallback is relative.
+
 - Locale keys `ecommerce.cart-empty`, `ecommerce.cart-product-unavailable` and
   `generic.error-not-found`, in all three dictionaries.
 
