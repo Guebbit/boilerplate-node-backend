@@ -70,9 +70,7 @@ export const create = (
     items: CartItem[]
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
     if (!items || items.length === 0)
-        return Promise.resolve(
-            generateReject(422, 'create order - empty items', [t('generic.error-missing-data')])
-        );
+        return Promise.resolve(generateReject(422, [t('generic.error-missing-data')]));
 
     return Promise.all(
         items.map((item) =>
@@ -80,10 +78,7 @@ export const create = (
         )
     ).then((resolvedItems) => {
         const missingProduct = resolvedItems.some(({ product }) => !product);
-        if (missingProduct)
-            return generateReject(404, 'create order - product not found', [
-                t('ecommerce.product-not-found')
-            ]);
+        if (missingProduct) return generateReject(404, [t('ecommerce.product-not-found')]);
 
         const orderItems: IOrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
             // lean() returns a plain object compatible with IProductDocument at runtime
@@ -132,9 +127,7 @@ export const update = (
               ).then((resolvedItems) => {
                   const missingProduct = resolvedItems.some(({ product }) => !product);
                   if (missingProduct)
-                      return generateReject(404, 'update order - product not found', [
-                          t('ecommerce.product-not-found')
-                      ]);
+                      return generateReject(404, [t('ecommerce.product-not-found')]);
 
                   order.items = resolvedItems.map(({ item, product }) => ({
                       // lean() returns a plain object compatible with IProductDocument at runtime
@@ -167,7 +160,7 @@ export const updateById = (
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
     orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, 'Not Found', [t('ecommerce.order-not-found')]);
+        if (!order) return generateReject(404, [t('ecommerce.order-not-found')]);
         return update(order, data);
     });
 
@@ -213,7 +206,7 @@ export const removeById = (
     hardDelete = false
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseSuccess<undefined> | IResponseReject> =>
     orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, 'Not Found', [t('ecommerce.order-not-found')]);
+        if (!order) return generateReject(404, [t('ecommerce.order-not-found')]);
         return remove(order, hardDelete);
     });
 

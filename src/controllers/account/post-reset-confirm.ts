@@ -23,7 +23,6 @@ export const postResetConfirm = (
         return rejectResponse(
             response,
             422,
-            'reset-confirm - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 
@@ -37,9 +36,7 @@ export const postResetConfirm = (
         .then((user) => {
             // Wrong token
             if (!user) {
-                rejectResponse(response, 422, 'reset-confirm - invalid token', [
-                    t('reset.token-not-found')
-                ]);
+                rejectResponse(response, 422, [t('reset.token-not-found')]);
                 return;
             }
 
@@ -47,9 +44,7 @@ export const postResetConfirm = (
                 (tk) => tk.token === token && tk.type === 'password'
             );
             if (!tokenEntry || (tokenEntry.expiration && tokenEntry.expiration < new Date())) {
-                rejectResponse(response, 422, 'reset-confirm - expired token', [
-                    t('reset.token-not-found')
-                ]);
+                rejectResponse(response, 422, [t('reset.token-not-found')]);
                 return;
             }
 
@@ -68,15 +63,13 @@ export const postResetConfirm = (
              */
             const errors = authService.validatePasswordChange(password, passwordConfirm);
             if (errors.length > 0) {
-                rejectResponse(response, 422, 'reset-confirm - bad request', errors);
+                rejectResponse(response, 422, errors);
                 return;
             }
 
             return userService.consumeToken(user, token).then((spentByThisRequest) => {
                 if (!spentByThisRequest) {
-                    rejectResponse(response, 422, 'reset-confirm - token already used', [
-                        t('reset.token-not-found')
-                    ]);
+                    rejectResponse(response, 422, [t('reset.token-not-found')]);
                     return;
                 }
 
@@ -87,7 +80,7 @@ export const postResetConfirm = (
                     .passwordChange(user, password, passwordConfirm)
                     .then((result) => {
                         if (!result.success) {
-                            rejectResponse(response, result.status, result.message, result.errors);
+                            rejectResponse(response, result.status, result.errors);
                             return;
                         }
                         // send confirmation email (no need to wait)
@@ -130,6 +123,6 @@ export const postResetConfirm = (
             });
         })
         .catch(() => {
-            rejectResponse(response, 500, 'resetConfirm', []);
+            rejectResponse(response, 500, []);
         });
 };

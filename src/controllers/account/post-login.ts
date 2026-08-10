@@ -9,13 +9,14 @@ import {
     ERefreshTokenExpiryTime
 } from '@middlewares/auth-jwt';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '@jobs/token-cleanup';
 import { authLoginTotal } from '@core/observability/metrics-domain';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -51,7 +52,7 @@ const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) 
     emitAnalyticsEvent({
         ...buildAnalyticsBase(request),
         distinctId: userId,
-        event: AnalyticsEvent.USER_LOGGED_IN,
+        event: analyticsEvents.USER_LOGGED_IN,
         properties: { role }
     });
 };
@@ -83,7 +84,7 @@ export const postLogin = (
             if (!result.success) {
                 // Record failed login before responding
                 recordLoginFailure(request);
-                rejectResponse(response, result.status, result.message, result.errors);
+                rejectResponse(response, result.status, result.errors);
                 return;
             }
 
@@ -113,5 +114,11 @@ export const postLogin = (
                         'Authentication successful'
                     );
                 });
+        })
+        .catch((error: Error) => {
+            // Covers the token cleanup, the credential check and the three token/cookie steps
+            // after it. A failure in any of them is not a rejected login — the caller may well
+            // have had the right password — so it must not be recorded as one.
+            rejectDatabaseError(response, 'postLogin', error);
         });
 };

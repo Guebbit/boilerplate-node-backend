@@ -14,13 +14,13 @@ export const getUserItem = (request: Request, response: Response) =>
         .getById(String(request.params.id))
         .then((user) => {
             if (!user) {
-                rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
+                rejectResponse(response, 404, [t('ecommerce.user-not-found')]);
                 return;
             }
             successResponse(response, user);
         })
         .catch((error: CastError) => {
-            if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'Not Found', [t('ecommerce.user-not-found')]);
+            if (error.kind === 'ObjectId')
+                return rejectResponse(response, 404, [t('ecommerce.user-not-found')]);
             rejectDatabaseError(response, 'getUserItem', error);
         });

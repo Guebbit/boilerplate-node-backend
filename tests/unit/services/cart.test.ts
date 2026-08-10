@@ -43,6 +43,7 @@ import { cartRepository } from '@repositories/carts';
 import * as userService from '@services/users';
 import { orderRepository } from '@repositories/orders';
 import type { IResponseReject } from '@core/http/response';
+import { t } from '@core/i18n';
 
 setupTestDb();
 
@@ -522,6 +523,22 @@ describe('orderConfirm', () => {
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
     });
 
+    /*
+     * The failure CODE, not just the status. Two of the three reasons share 409, so the status
+     * cannot tell them apart — and `postCheckout` reports this code as the `CHECKOUT_FAILED`
+     * analytics reason, where a translated sentence would vary by locale and a bare 409 would merge
+     * "empty basket" with "someone else changed it". `message` stays translated for the user.
+     */
+    it('names an empty cart CART_EMPTY, with translated copy for the user', async () => {
+        const user = await createUser();
+
+        const result = await orderConfirm(user.id);
+
+        const [error] = asReject(result).errors;
+        expect(error.code).toBe('CART_EMPTY');
+        expect(error.message).toBe(t('ecommerce.cart-empty'));
+    });
+
     it('rejects with 404 for a user that does not exist', async () => {
         // The one cart operation that still needs the user: an order records the address it was
         // placed from, and there is none to record.
@@ -541,6 +558,19 @@ describe('orderConfirm', () => {
 
         expect(asReject(result).status).toBe(404);
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it('names a vanished product CART_PRODUCT_UNAVAILABLE', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+        await product.deleteOne();
+
+        const result = await orderConfirm(user.id);
+
+        const [error] = asReject(result).errors;
+        expect(error.code).toBe('CART_PRODUCT_UNAVAILABLE');
+        expect(error.message).toBe(t('ecommerce.cart-product-unavailable'));
     });
 });
 

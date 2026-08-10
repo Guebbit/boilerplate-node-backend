@@ -7,7 +7,7 @@ import { rejectDatabaseError } from '@core/http/errors';
 import type { UpdateCartItemByIdRequest } from '@types';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 import { readInput, isValidObjectId } from '@core/http/request';
@@ -21,7 +21,7 @@ export const putCartItem = (
     response: Response
 ) => {
     if (!request.authContext) {
-        rejectResponse(response, 401, 'Unauthorized');
+        rejectResponse(response, 401);
         return;
     }
     const userId = request.authContext.id;
@@ -31,18 +31,15 @@ export const putCartItem = (
         return rejectResponse(
             response,
             422,
-            'updateCartItemById - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 
     const { quantity } = parseResult.data;
     // productId travels via path param or body; body shape is already validated above.
-    const { productId } = readInput(request, { sources: ['params', 'body'], ids: ['productId'] });
+    const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
 
     if (!isValidObjectId(productId)) {
-        rejectResponse(response, 422, 'updateCartItemById - missing id', [
-            t('generic.error-missing-data')
-        ]);
+        rejectResponse(response, 422, [t('generic.error-missing-data')]);
         return;
     }
 
@@ -51,7 +48,7 @@ export const putCartItem = (
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: AnalyticsEvent.CART_ITEM_UPDATED,
+                event: analyticsEvents.CART_ITEM_UPDATED,
                 properties: { product_id: productId, quantity }
             });
             successResponse(response, cart);

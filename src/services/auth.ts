@@ -10,7 +10,7 @@ import {
     type IResponseSuccess,
     type IResponseReject
 } from '@core/http/response';
-import { databaseErrorInterpreter } from '@core/http/errors';
+import { rejectDatabaseEnvelope } from '@core/http/errors';
 import { zodUserSchema } from '@models/users';
 import { ETokenType } from '@models/users';
 import type { IUserDocument } from '@models/users';
@@ -86,14 +86,13 @@ export const passwordChange = (
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
 
-    if (errors.length > 0)
-        return Promise.resolve(generateReject(422, 'passwordChange - bad request', errors));
+    if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
     user.password = password;
     return userRepository
         .save(user)
         .then((savedUser) => generateSuccess<IUserDocument>(savedUser))
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 };
 
 /**
@@ -132,7 +131,6 @@ export const signup = (
         return Promise.resolve(
             generateReject(
                 422,
-                'signup - bad request',
                 parseResult.error.issues.map(({ message }) => message)
             )
         );
@@ -140,10 +138,7 @@ export const signup = (
     return userRepository
         .findOne({ email })
         .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
-            if (user)
-                return generateReject(409, 'signup - email already used', [
-                    t('signup.email-already-used')
-                ]);
+            if (user) return generateReject(409, [t('signup.email-already-used')]);
             return userRepository
                 .create({
                     username,
@@ -157,7 +152,7 @@ export const signup = (
                 })
                 .then((createdUser) => generateSuccess<IUserDocument>(createdUser));
         })
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 };
 
 /**
@@ -176,7 +171,6 @@ export const login = (
         return Promise.resolve(
             generateReject(
                 422,
-                'login - bad request',
                 parseResult.error.issues.map(({ message }) => message)
             )
         );
@@ -186,20 +180,14 @@ export const login = (
             // `password` is select:false — this is one of the few flows that legitimately needs it
             .findOneWithCredentials({ email, deletedAt: undefined })
             .then((user) => {
-                if (!user)
-                    return generateReject(401, 'login - wrong credentials', [
-                        t('login.wrong-data')
-                    ]);
+                if (!user) return generateReject(401, [t('login.wrong-data')]);
 
                 return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
-                    if (!doMatch)
-                        return generateReject(401, 'login - wrong credentials', [
-                            t('login.wrong-data')
-                        ]);
+                    if (!doMatch) return generateReject(401, [t('login.wrong-data')]);
                     return generateSuccess<IUserDocument>(user);
                 });
             })
-            .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)))
+            .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
     );
 };
 
@@ -221,7 +209,7 @@ export const tokenRemoveAll = (
                 | IResponseSuccess<IUserDocument>
                 | IResponseReject
                 | Promise<IResponseSuccess<IUserDocument>> => {
-                if (!user) return generateReject(404, 'tokenRemoveAll - user not found', []);
+                if (!user) return generateReject(404, []);
                 // `$pull` rather than filter-and-save, for the reason above read in the other
                 // direction: `user.tokens = user.tokens.filter(...)` is a rebuild, so it writes
                 // the whole array back and erases anything added between this function's own read
@@ -231,7 +219,7 @@ export const tokenRemoveAll = (
                 return user.tokenRemoveAll(type).then(() => generateSuccess<IUserDocument>(user));
             }
         )
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 
 export const authService = {
     tokenAdd,

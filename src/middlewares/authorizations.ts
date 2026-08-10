@@ -67,7 +67,7 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
                 metadata: { route: request.path, method: request.method }
             })
         );
-        rejectResponse(response, 401, 'Unauthorized');
+        rejectResponse(response, 401);
         return;
     }
 
@@ -82,10 +82,22 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * @param next
  */
 export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
+    /*
+     * No credentials at all — 401, not 403.
+     *
+     * The distinction is the client's next move: 401 means "authenticate and try again", which the
+     * frontend acts on by redirecting to login and returning the visitor to where they were aiming;
+     * 403 means "you are known and still refused", where logging in again would only loop. Answering
+     * 403 here sent an expired admin session to the error page instead of the login page.
+     *
+     * Unreachable through the current routes, which all mount `isAuth` first — that is why the
+     * wrong status went unnoticed. It stays as a guard for a future mount that forgets, and it now
+     * agrees with `isAuth` above and `isAdminViaCookie` below, both of which already answer 401.
+     */
     if (!request.authContext) {
         emitAuditEvent(
             buildAuditEvent(request, {
-                action: AuditAction.SECURITY_FORBIDDEN,
+                action: AuditAction.SECURITY_UNAUTHORIZED,
                 actor_user_id: 'anonymous',
                 actor_role: 'anonymous',
                 outcome: 'failure',
@@ -96,7 +108,7 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
                 }
             })
         );
-        rejectResponse(response, 403, 'Forbidden: Access denied.');
+        rejectResponse(response, 401);
         return;
     }
     if (!request.authContext.admin) {
@@ -107,7 +119,7 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
                 metadata: { route: request.path, method: request.method, reason: 'not_admin' }
             })
         );
-        rejectResponse(response, 403, "Forbidden: You don't have permission.");
+        rejectResponse(response, 403);
         return;
     }
     next();
@@ -138,7 +150,7 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
     const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
 
     if (!refreshToken) {
-        rejectResponse(response, 401, 'isAdminViaCookie - no session cookie', [
+        rejectResponse(response, 401, [
             { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
         ]);
         return;
@@ -155,7 +167,7 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
                         outcome: 'failure'
                     })
                 );
-                rejectResponse(response, 403, 'isAdminViaCookie - not an admin', [
+                rejectResponse(response, 403, [
                     { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
                 ]);
                 return;
@@ -171,7 +183,7 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
             next();
         })
         .catch(() =>
-            rejectResponse(response, 401, 'isAdminViaCookie - invalid session', [
+            rejectResponse(response, 401, [
                 { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
             ])
         );

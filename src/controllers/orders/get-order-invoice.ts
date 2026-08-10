@@ -20,7 +20,7 @@ export const getOrderInvoice = (request: Request, response: Response) =>
         .getById(String(request.params.id), orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
-                rejectResponse(response, 404, 'Not Found', [t('ecommerce.order-not-found')]);
+                rejectResponse(response, 404, [t('ecommerce.order-not-found')]);
                 return;
             }
 

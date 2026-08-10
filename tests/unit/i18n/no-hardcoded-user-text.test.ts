@@ -4,17 +4,17 @@ import path from 'node:path';
 /**
  * Guard: user-facing copy must come from a dictionary, not from a string literal in a controller.
  *
- * `rejectResponse(response, status, message, errors)` splits the two audiences — the docblock in
- * `src/core/http/request.ts` puts it as "Developer-oriented text in `message`, translated
- * user-facing text in `errors`". So this checks ONLY the `errors` argument, and within it only
- * the parts a user reads:
+ * `rejectResponse(response, status, errors)` and `generateReject(status, errors)` carry the only
+ * text a user reads — the envelope's own `message` is derived from the status by
+ * `resolveErrorMessage` and cannot be passed. So this checks the `errors` argument of both, and
+ * within it only the parts a user reads:
  *
  * - a bare string element (`['since must be a valid ISO-8601 timestamp']`)
  * - the `message:` of an error object
  *
- * Explicitly NOT flagged, because they are technician-facing by convention: the `message`
- * argument itself, `code:` identifiers, log lines, audit actions, OTel span names and attributes,
- * and thrown `Error` messages. See the i18n section of README.md.
+ * Explicitly NOT flagged, because they are technician-facing by convention: `code:` identifiers,
+ * log lines, audit actions, OTel span names and attributes, and thrown `Error` messages. See the
+ * i18n section of README.md.
  */
 
 const SOURCE_ROOT = path.join(__dirname, '..', '..', '..', 'src');
@@ -83,40 +83,62 @@ const findUserFacingLiterals = (errorsArgument: string): string[] =>
         ...errorsArgument.matchAll(/[,[]\s*(["'`])((?:(?!\1).)*)\1\s*(?=[,\]])/g)
     ].map((match) => match[2]!);
 
-describe('rejectResponse errors[] never carries hardcoded user-facing text', () => {
+/**
+ * The two envelope builders, and which argument of each is the user-facing `errors` array.
+ *
+ * `generateReject` is here because services report failure by returning an envelope rather than
+ * sending one, so half the API's user-facing copy never passes through `rejectResponse` at all.
+ */
+const ENVELOPE_CALLS = [
+    { name: 'rejectResponse', errorsIndex: 2 },
+    { name: 'generateReject', errorsIndex: 1 }
+] as const;
+
+describe('errors[] never carries hardcoded user-facing text', () => {
     const offenders: string[] = [];
 
     for (const filePath of listSourceFiles(SOURCE_ROOT)) {
         const source = readFileSync(filePath, 'utf8');
         const relativePath = path.relative(SOURCE_ROOT, filePath);
 
-        for (const match of source.matchAll(/\brejectResponse\s*\(/g)) {
-            const openIndex = match.index + match[0].length - 1;
-            const errorsArgument = readCallArguments(source, openIndex)[3];
-            if (!errorsArgument) continue;
+        for (const { name, errorsIndex } of ENVELOPE_CALLS)
+            for (const match of source.matchAll(new RegExp(String.raw`\b${name}\s*\(`, 'g'))) {
+                const openIndex = match.index + match[0].length - 1;
+                const errorsArgument = readCallArguments(source, openIndex)[errorsIndex];
+                if (!errorsArgument) continue;
 
-            for (const literal of findUserFacingLiterals(errorsArgument))
-                offenders.push(`${relativePath}: ${literal}`);
-        }
+                for (const literal of findUserFacingLiterals(errorsArgument))
+                    offenders.push(`${relativePath}: ${literal}`);
+            }
     }
 
-    it('finds no hardcoded message in any rejectResponse call', () => {
+    it('finds no hardcoded message in any reject envelope', () => {
         expect(offenders).toEqual([]);
     });
 
-    it('actually parses the calls it claims to check', () => {
-        // A canary: if the scanner silently stopped matching, the guard above would pass
-        // vacuously. `src/app.ts` alone has several rejectResponse calls with an errors array.
-        const source = readFileSync(path.join(SOURCE_ROOT, 'app.ts'), 'utf8');
-        const calls = [...source.matchAll(/\brejectResponse\s*\(/g)];
+    it.each(ENVELOPE_CALLS)(
+        'actually parses the $name calls it claims to check',
+        ({ name, errorsIndex }) => {
+            /*
+             * A canary: if the scanner silently stopped matching — a renamed function, a changed
+             * argument order — the guard above would pass vacuously. It caught exactly that when
+             * `message` was removed from both signatures and `errors` shifted down one position.
+             *
+             * Scans the whole tree rather than one file, so it does not also break the next time a
+             * particular file stops using one of the two.
+             */
+            const withErrors = listSourceFiles(SOURCE_ROOT).flatMap((filePath) => {
+                const source = readFileSync(filePath, 'utf8');
+                return [...source.matchAll(new RegExp(String.raw`\b${name}\s*\(`, 'g'))].filter(
+                    (match) =>
+                        readCallArguments(source, match.index + match[0].length - 1).length >
+                        errorsIndex
+                );
+            });
 
-        expect(calls.length).toBeGreaterThan(0);
-        expect(
-            calls.filter(
-                (match) => readCallArguments(source, match.index + match[0].length - 1).length >= 4
-            ).length
-        ).toBeGreaterThan(0);
-    });
+            expect(withErrors.length).toBeGreaterThan(0);
+        }
+    );
 
     it('flags a literal when there is one', () => {
         expect(findUserFacingLiterals("[{ code: 'X', message: 'Something broke' }]")).toContain(

@@ -23,7 +23,7 @@ Each section links to the dedicated page for configuration details and code poin
 
 **Problem it solves.** Raw Node.js `http` is verbose. Express gives you a clean way to declare routes, chain middleware (auth, logging, validation), and send responses — without locking you into an opinionated full-stack framework.
 
-**In this repo.** Express 5 is the transport layer. Routes match URLs, middlewares handle auth and rate limiting, and controllers convert HTTP input into service calls. Everything lives in `src/app.ts` → `src/routes/` → `src/middlewares/` → `src/controllers/`.
+**In this repo.** Express 5 is the transport layer. Routes match URLs, middlewares handle auth and rate limiting, and controllers convert HTTP input into service calls. Everything lives in `src/app.ts` (which assembles the pipeline from `src/bootstrap/*`) → `src/routes/` → `src/middlewares/` → `src/controllers/`.
 
 → [Runtime](./runtime.md)
 
@@ -71,7 +71,7 @@ Each section links to the dedicated page for configuration details and code poin
 
 **Problem it solves.** Without rate limiting, a single client can flood the API with requests, degrading it for everyone else or escalating a brute-force credential attack.
 
-**In this repo.** Applied globally in `src/app.ts`. Window and max-requests are configurable via `NODE_RATE_LIMIT_WINDOW_MS` and `NODE_RATE_LIMIT_MAX`.
+**In this repo.** Applied globally in `src/bootstrap/security.ts`. Window and max-requests are configurable via `NODE_RATE_LIMIT_WINDOW_MS` and `NODE_RATE_LIMIT_MAX`.
 
 → [Security](./security.md)
 

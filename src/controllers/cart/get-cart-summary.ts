@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 
 /**
  * GET /cart/summary
@@ -8,10 +9,15 @@ import { successResponse, rejectResponse } from '@core/http/response';
  */
 export const getCartSummary = (request: Request, response: Response) => {
     if (!request.authContext) {
-        rejectResponse(response, 401, 'Unauthorized');
+        rejectResponse(response, 401);
         return;
     }
-    return cartService.cartGetWithSummary(request.authContext.id).then((cart) => {
-        successResponse(response, cart.summary);
-    });
+    return cartService
+        .cartGetWithSummary(request.authContext.id)
+        .then((cart) => {
+            successResponse(response, cart.summary);
+        })
+        .catch((error: Error) => {
+            rejectDatabaseError(response, 'getCartSummary', error);
+        });
 };

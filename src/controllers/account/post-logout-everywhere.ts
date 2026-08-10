@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import { ETokenType } from '@models/users';
 import { destroyLoggedCookie, destroyRefreshCookie } from '@middlewares/auth-jwt';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
@@ -12,19 +13,21 @@ import { authService } from '@services/auth';
  */
 export const postLogoutEverywhere = (request: Request, response: Response) => {
     const auth = request.authContext;
-    return (
-        auth ? authService.tokenRemoveAll(auth.id, ETokenType.REFRESH) : Promise.resolve()
-    ).then(() => {
-        destroyRefreshCookie(response);
-        destroyLoggedCookie(response);
+    return (auth ? authService.tokenRemoveAll(auth.id, ETokenType.REFRESH) : Promise.resolve())
+        .then(() => {
+            destroyRefreshCookie(response);
+            destroyLoggedCookie(response);
 
-        emitAuditEvent(
-            buildAuditEvent(request, {
-                action: AuditAction.AUTH_LOGOUT_ALL_SUCCEEDED,
-                outcome: 'success'
-            })
-        );
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.AUTH_LOGOUT_ALL_SUCCEEDED,
+                    outcome: 'success'
+                })
+            );
 
-        successResponse(response, undefined, 200, 'Logged out from all devices');
-    });
+            successResponse(response, undefined, 200, 'Logged out from all devices');
+        })
+        .catch((error: Error) => {
+            rejectDatabaseError(response, 'postLogoutEverywhere', error);
+        });
 };

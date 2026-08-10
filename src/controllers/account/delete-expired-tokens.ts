@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { rejectResponse, successResponse } from '@core/http/response';
-import { databaseErrorInterpreter } from '@core/http/errors';
+import { rejectDatabaseError } from '@core/http/errors';
 import { userModel as Users } from '@models/users';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 import { authTokenCleanupTotal } from '@core/observability/metrics-domain';
@@ -27,8 +27,7 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
             );
             return successResponse(response, undefined, status);
         })
-        .catch((error: CastError | Error) => {
-            const [status, message] = databaseErrorInterpreter(error);
-            return rejectResponse(response, status, message);
-        });
+        .catch((error: CastError | Error) =>
+            rejectDatabaseError(response, 'deleteExpiredTokens', error)
+        );
 };

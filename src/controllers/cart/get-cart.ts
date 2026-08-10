@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import { cartService } from '@services/cart';
 import { successResponse, rejectResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -14,14 +15,19 @@ import {
  */
 export const getCart = (request: Request, response: Response) => {
     if (!request.authContext) {
-        rejectResponse(response, 401, 'Unauthorized');
+        rejectResponse(response, 401);
         return;
     }
-    return cartService.cartGetWithSummary(request.authContext.id).then((cart) => {
-        emitAnalyticsEvent({
-            ...buildAnalyticsBase(request),
-            event: AnalyticsEvent.CART_VIEWED
+    return cartService
+        .cartGetWithSummary(request.authContext.id)
+        .then((cart) => {
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(request),
+                event: analyticsEvents.CART_VIEWED
+            });
+            successResponse(response, cart);
+        })
+        .catch((error: Error) => {
+            rejectDatabaseError(response, 'getCart', error);
         });
-        successResponse(response, cart);
-    });
 };

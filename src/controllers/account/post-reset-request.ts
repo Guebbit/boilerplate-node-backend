@@ -50,7 +50,6 @@ export const postResetRequest = (
         return rejectResponse(
             response,
             422,
-            'reset-request - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 

@@ -6,6 +6,7 @@ import * as productService from '@services/products';
 import { productRepository } from '@repositories/products';
 import { cartRepository } from '@repositories/carts';
 import type { IResponseReject } from '@core/http/response';
+import type { IProductDocument } from '@models/products';
 
 /**
  * Mock the image store, not the filesystem underneath it.
@@ -306,12 +307,14 @@ describe('productService.updateById', () => {
         const product = await createProduct();
         const id = (product._id as Types.ObjectId).toString();
 
-        const updated = await productService.updateById(id, {
+        const result = await productService.updateById(id, {
             title: 'Updated Title',
             price: 49.99,
             description: 'New description'
         });
 
+        expect(result.success).toBe(true);
+        const updated = (result as { data: IProductDocument }).data;
         expect(updated.title).toBe('Updated Title');
         expect(updated.price).toBe(49.99);
         expect(updated.description).toBe('New description');
@@ -321,9 +324,9 @@ describe('productService.updateById', () => {
         const product = await createProduct({ active: true });
         const id = (product._id as Types.ObjectId).toString();
 
-        const updated = await productService.updateById(id, { active: false });
+        const result = await productService.updateById(id, { active: false });
 
-        expect(updated.active).toBe(false);
+        expect((result as { data: IProductDocument }).data.active).toBe(false);
     });
 
     it('updates the imageUrl and removes the old image from the store', async () => {
@@ -343,10 +346,10 @@ describe('productService.updateById', () => {
         const product = await createProduct({ imageUrl: '/images/keep.jpg' });
         const id = (product._id as Types.ObjectId).toString();
 
-        const updated = await productService.updateById(id, { title: 'Renamed Product' });
+        const result = await productService.updateById(id, { title: 'Renamed Product' });
 
         expect(imageStore.remove).not.toHaveBeenCalled();
-        expect(updated.imageUrl).toBe('/images/keep.jpg');
+        expect((result as { data: IProductDocument }).data.imageUrl).toBe('/images/keep.jpg');
     });
 
     /* Re-submitting the same url is not a replacement — deleting here would delete the live image. */
@@ -359,10 +362,18 @@ describe('productService.updateById', () => {
         expect(imageStore.remove).not.toHaveBeenCalled();
     });
 
-    it('throws when the product does not exist', async () => {
-        await expect(
-            productService.updateById('000000000000000000000000', { title: 'X' })
-        ).rejects.toThrow();
+    it('reports a missing product as a 404 envelope, not as a rejection', async () => {
+        /*
+         * Returned, never thrown. Throwing made the one caller recognise the case by
+         * string-matching `error.message === '404'` in a `.catch()`, where a genuine database
+         * failure and a missing row were the same event. The user and order services already
+         * reported it this way; now all three agree, which is what lets one controller shape
+         * serve all of them.
+         */
+        const result = await productService.updateById('000000000000000000000000', { title: 'X' });
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
     });
 });
 

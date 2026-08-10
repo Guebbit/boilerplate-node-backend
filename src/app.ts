@@ -6,54 +6,30 @@ startTracing();
 
 import 'dotenv/config';
 import express from 'express';
-import type { Request, Response, NextFunction } from 'express';
 import type { Server } from 'node:http';
-import crypto from 'node:crypto';
 import i18next from 'i18next';
-import helmet from 'helmet';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
 import { start } from '@core/bootstrap/database';
 import { registerAuditSink } from '@core/observability/audit';
 import { auditLogService } from '@services/audit-logs';
 import { startCache } from '@core/adapters/cache';
 import { startQueue } from '@core/adapters/queue';
 import { registerWorkers } from './workers';
-import { logger, auditLogger } from '@core/adapters/logger';
-import { rateLimiter } from '@middlewares/security';
-import { requestLogger } from '@middlewares/request-logger';
-import { attachObservability } from '@middlewares/observability';
-import { rejectResponse } from '@core/http/response';
+import { logger } from '@core/adapters/logger';
 import { validateRequiredEnvironment } from '@core/bootstrap/environment';
-import {
-    getRouteLabel,
-    recordRequestMetric,
-    incrementInflight,
-    decrementInflight
-} from '@core/observability/metrics-http';
-import { getActiveSpanContext, recordErrorOnActiveSpan } from '@core/observability/tracer';
 import { shutdownInfra, registerSignalHandlers } from '@core/bootstrap/server-lifecycle';
 import {
     getDefaultLocale,
     getFallbackLocale,
     listSupportedLocales,
-    loadLocaleResources,
-    t
+    loadLocaleResources
 } from '@core/i18n';
-import { attachLocale } from '@middlewares/locale';
 
-import { router as productRoutes } from './routes/products';
-import { router as authRoutes } from './routes/account';
-import { router as orderRoutes } from './routes/orders';
-import { router as cartRoutes } from './routes/cart';
-import { router as userRoutes } from './routes/users';
-import { router as observabilityRoutes } from './routes/observability';
-import { router as feedbackRoutes } from './routes/feedback';
-import { router as localeRoutes } from './routes/locales';
-import { router as systemRoutes } from './routes';
-
-import { MulterError } from 'multer';
-import { ExtendedError, databaseErrorInterpreter } from '@core/http/errors';
+import { installSecurity } from './bootstrap/security';
+import { installRequestContext } from './bootstrap/request-context';
+import { installTelemetry } from './bootstrap/telemetry';
+import { installStatic } from './bootstrap/static-assets';
+import { installRoutes } from './bootstrap/routes';
+import { installErrorHandling } from './bootstrap/error-handling';
 
 /**
  * Server start
@@ -128,308 +104,28 @@ export const stopServer = () => {
     return shutdownPromise;
 };
 
-/**
- * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
- * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
- * which can lead to stale data being served.
- * By using strong ETags, we ensure that clients receive updated content when it changes.
- */
-app.set('etag', 'strong');
-
-/**
- * How many reverse proxies sit in front of this process.
- *
- * Everything that identifies a caller by address — the rate limiter's bucket key, the audit
- * log's `ip` — reads `request.ip`, and behind a proxy that is the PROXY's address unless Express
- * is told otherwise. Both failure modes are bad and neither is visible:
- *
- * - **Unset (Express's default) behind a proxy**: every request looks like one client, so the
- *   per-IP limiter becomes one shared bucket. It stops protecting anything, and a single busy
- *   caller 429s everyone else. The audit log records the proxy for every actor.
- * - **`true` (trust everything)**: `X-Forwarded-For` is client-supplied, so a caller sets it to a
- *   random value per request and never hits the limit at all. `true` is strictly worse than
- *   unset for anything security-related, which is why it is not the default here.
- *
- * The correct value is the NUMBER of proxies you actually run, so Express counts back from the
- * right-hand end of `X-Forwarded-For` — the part a client cannot forge. `0` (the default here)
- * means "no proxy, use the socket address", which is right for local development and for the
- * compose stack, where the API is published directly.
- */
-app.set('trust proxy', Number.parseInt(process.env.NODE_TRUST_PROXY_HOPS ?? '0', 10) || 0);
-
-/**
- * Secure headers
- */
-app.use(helmet());
-
-/**
- * Allowed origins, separated by comma if multiple
- */
-const allowedOrigins = new Set(
-    (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
-        .split(',')
-        .map((originValue) => originValue.trim())
-        .filter(Boolean)
-);
-
-/**
- * Strict CORS
- */
-app.use(
-    cors({
-        origin(origin, callback) {
-            // Allow non-browser requests (no Origin header), like curl/healthchecks
-            // eslint-disable-next-line unicorn/no-null
-            if (!origin) return callback(null, true);
-            // eslint-disable-next-line unicorn/no-null
-            if (allowedOrigins.has(origin)) return callback(null, true);
-            return callback(new Error(`CORS blocked for origin: ${origin}`));
-        },
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: [
-            'Content-Type',
-            'Authorization',
-            'X-Requested-With',
-            'x-request-id',
-            'traceparent'
-        ],
-        exposedHeaders: ['x-request-id', 'traceparent']
-    })
-);
-
-app.use(
-    express.urlencoded({
-        extended: true
-    })
-);
-
-app.use(express.json());
-
-app.use(cookieParser());
-
-app.use(rateLimiter);
-
 /*
- * Request ID middleware — reuse client ID or generate new UUID
- */
-app.use((request, response, next) => {
-    const requestId = request.get('x-request-id') ?? crypto.randomUUID();
-    request.requestId = requestId;
-    response.setHeader('x-request-id', requestId);
-    next();
-});
-
-/*
- * Winston access log + OpenTelemetry trace injection
- */
-app.use(requestLogger);
-
-/*
- * Attach observability context — controllers use request.obs instead of singletons
- */
-app.use(attachObservability);
-
-/*
- * Negotiate Accept-Language and run the request inside that locale — must precede the routes,
- * since everything downstream resolves its user-facing copy against it
- */
-app.use(attachLocale);
-
-/*
- * Prometheus HTTP metrics — track latency and in-flight requests
- */
-app.use((request, response, next) => {
-    incrementInflight();
-    const startTime = process.hrtime.bigint();
-    response.once('finish', () => {
-        decrementInflight();
-        const elapsedTimeInMilliseconds = Number(process.hrtime.bigint() - startTime) / 1_000_000;
-        recordRequestMetric({
-            method: request.method,
-            route: getRouteLabel(request),
-            statusCode: response.statusCode,
-            durationMs: elapsedTimeInMilliseconds
-        });
-    });
-    next();
-});
-
-/**
- * Uploaded images and other public assets.
+ * The middleware stack, in the order a request travels it.
  *
- * Uploads were being written to `public/images/` and served by nothing, so every `imageUrl` this
- * API stored pointed at a URL it would not answer — the feature was half-built. Serving it here
- * keeps the guarantees in this repository, where the test suite can hold them, rather than in a
- * reverse proxy config that nothing here can see.
+ * Express applies middleware in registration order, so this sequence IS the behaviour, not a
+ * summary of it. Four dependencies are load-bearing and none of them is visible from a call site:
  *
- * What makes it safe is upstream of this line, not in it: a stored file's extension comes from
- * the declared type (a closed set of `png`/`jpg`/`webp`, see `resolveUploadFilename`), and its
- * bytes are verified to match before the request succeeds. `express.static` derives
- * `Content-Type` from the extension, so those two facts are what stop it ever answering
- * `text/html` from a path a stranger uploaded to.
+ * - security precedes everything, because `trust proxy` decides what `request.ip` means and the
+ *   rate limiter keys its buckets on it;
+ * - request context precedes the routes, because every controller reads the request id, the
+ *   observability handle and the negotiated locale it attaches;
+ * - telemetry precedes the routes so its timer wraps the handler rather than following it;
+ * - error handling comes last, because an express error handler only catches what was mounted
+ *   before it.
  *
- * The options are the rest of it:
- * - `dotfiles: 'ignore'` — nothing beginning with `.` is served, so an `.env` or `.git` that ends
- *   up under `public/` by accident is a 404 rather than a disclosure.
- * - `index: false` — no implicit `index.html`, and no directory listing, so upload names stay
- *   unguessable rather than enumerable.
- * - `Cross-Origin-Resource-Policy: cross-origin` — helmet defaults every response to
- *   `same-origin`, which is right for JSON and wrong for an image the paired frontend loads from
- *   a different port. Without it the browser fetches the bytes and then refuses to render them.
- * - `immutable`, one year — filenames are 128 bits of randomness derived from nothing the client
- *   controls, so a given URL's bytes never change. Re-uploading produces a new name.
+ * Each install owns the ordering *within* its own group and documents it there.
  */
-app.use(
-    express.static(process.env.NODE_PUBLIC_PATH ?? 'public', {
-        dotfiles: 'ignore',
-        index: false,
-        maxAge: '1y',
-        immutable: true,
-        setHeaders: (response) => {
-            response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-        }
-    })
-);
-
-/**
- * REST API routes — domain-driven routing.
- */
-app.use('/account', authRoutes);
-app.use('/products', productRoutes);
-app.use('/orders', orderRoutes);
-app.use('/cart', cartRoutes);
-app.use('/users', userRoutes);
-app.use('/observability', observabilityRoutes);
-app.use('/feedback', feedbackRoutes);
-app.use('/locales', localeRoutes);
-app.use('/', systemRoutes);
-
-/**
- * 404 handler — unmatched routes.
- */
-app.use((request: Request, response: Response) => {
-    rejectResponse(response, 404, 'Not Found');
-});
-
-/**
- * Global error handler — log once, stack in OTel span.
- *
- * Exported so it can be driven directly. Mounted last, after the 404 catch-all, which is what an
- * error handler has to be and also what makes it unreachable from a route registered afterwards
- * — so a test cannot get at it by adding a throwing route to `app`.
- */
-export const handleUncaughtError = (
-    error: Error,
-    request: Request,
-    response: Response,
-    _next: NextFunction
-) => {
-    if (response.headersSent) return;
-
-    recordErrorOnActiveSpan(error);
-
-    const status =
-        error instanceof MulterError ? 400 : error instanceof ExtendedError ? error.httpCode : 500;
-
-    logger.error(`${error.name}: ${error.message}`, {
-        request_id: request.requestId,
-        trace_id: getActiveSpanContext().traceId,
-        status
-    });
-
-    if (error instanceof MulterError)
-        return rejectResponse(response, 400, error.message, [
-            {
-                code: error.code,
-                message: error.message
-            }
-        ]);
-    if (error instanceof ExtendedError)
-        return rejectResponse(response, error.httpCode, error.name, error.errors);
-    /*
-     * A database error that is really a CLIENT error — a malformed ObjectId, a duplicate key.
-     *
-     * `databaseErrorInterpreter` is the single place that decides which driver failures describe
-     * the request rather than the server. Anything it maps to a 4xx is answered as one; anything
-     * it leaves at 500 falls through to the generic branch below, so an unrecognised error still
-     * leaks nothing.
-     *
-     * This branch exists because NINE controllers end their promise chain with `.then()` and no
-     * `.catch()`, so their rejections arrive here. Before it, `POST /orders` with a malformed
-     * `productId` answered 500 — an ordinary bad request reported as a server fault. Found by
-     * `tests/fuzz/endpoints.fuzz.test.ts`.
-     *
-     * Fixing it here rather than in the nine controllers is deliberate: it covers the ones that
-     * exist, the ones added later, and every path that forgets a `.catch()` — which is the
-     * failure mode worth defending against, since forgetting is silent.
-     *
-     * The message is the interpreter's own constant ('Invalid identifier'), never the driver's,
-     * and `errors[]` carries translated copy — same rule as the 500 branch below.
-     */
-    const [databaseStatus, databaseMessage] = databaseErrorInterpreter(error);
-    if (databaseStatus < 500)
-        return rejectResponse(response, databaseStatus, databaseMessage, [
-            {
-                code: 'INVALID_REQUEST',
-                message: t('generic.error-unknown')
-            }
-        ]);
-    /*
-     * The client is told that something failed, and nothing else.
-     *
-     * `errors[]` carries a constant, never `error.message`. An unexpected error is precisely the
-     * case where nobody chose the wording: a Mongoose validation error naming internal field
-     * paths, a driver error naming hosts and ports, an ENOENT naming a filesystem layout, a
-     * third-party client quoting a URL with a key in it. Any of those is free reconnaissance for
-     * an unauthenticated caller, and none of it means anything to the person reading it.
-     *
-     * The detail is not lost — it is logged above with the request id and trace id, which is
-     * where an operator can act on it and a stranger cannot. `message` (3rd arg) stays the
-     * developer-facing constant, per the `rejectResponse` docblock in `core/http/request.ts`.
-     *
-     * Deliberate errors are unaffected: `ExtendedError` carries copy its thrower chose and is
-     * returned verbatim by the branch above.
-     */
-    rejectResponse(response, 500, 'Internal Server Error', [
-        {
-            code: 'INTERNAL_ERROR',
-            message: t('generic.error-internal')
-        }
-    ]);
-};
-
-app.use(handleUncaughtError);
-
-/*
- * Process-level error handlers — audit unhandled rejections/exceptions
- */
-const unhandledRejections = new Map();
-process
-    .on('unhandledRejection', (reason, promise) => {
-        auditLogger.error('process.unhandledRejection', {
-            action: 'process.unhandledRejection',
-            reason:
-                reason instanceof Error
-                    ? { name: reason.name, message: reason.message }
-                    : String(reason)
-        });
-        unhandledRejections.set(promise, reason);
-    })
-    .on('rejectionHandled', (promise) => unhandledRejections.delete(promise))
-    .on('uncaughtException', (error, origin) => {
-        /*
-         * In production, exit immediately to trigger orchestrator restart
-         */
-        if (process.env.NODE_ENV !== 'production') return;
-        auditLogger.error('process.uncaughtException', {
-            action: 'process.uncaughtException',
-            name: error.name,
-            message: error.message,
-            origin
-        });
-        process.exit(1);
-    });
+installSecurity(app);
+installRequestContext(app);
+installTelemetry(app);
+installStatic(app);
+installRoutes(app);
+installErrorHandling(app);
 
 /*
  * Auto-start in non-test environments

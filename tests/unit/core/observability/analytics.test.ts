@@ -2,7 +2,7 @@ import {
     isPostHogEnabled,
     emitAnalyticsEvent,
     shutdownAnalytics,
-    AnalyticsEvent,
+    analyticsEvents,
     type IAnalyticsEvent
 } from '@core/observability/analytics';
 
@@ -62,19 +62,19 @@ describe('isPostHogEnabled()', () => {
     });
 });
 
-describe('AnalyticsEvent enum', () => {
+describe('analyticsEvents catalogue', () => {
     it('defines all expected event names', () => {
-        expect(AnalyticsEvent.USER_SIGNED_UP).toBe('user_signed_up');
-        expect(AnalyticsEvent.USER_LOGGED_IN).toBe('user_logged_in');
-        expect(AnalyticsEvent.PRODUCTS_SEARCHED).toBe('products_searched');
-        expect(AnalyticsEvent.PRODUCT_VIEWED).toBe('product_viewed');
-        expect(AnalyticsEvent.CART_ITEM_ADDED).toBe('cart_item_added');
-        expect(AnalyticsEvent.CART_ITEM_UPDATED).toBe('cart_item_updated');
-        expect(AnalyticsEvent.CART_ITEM_REMOVED).toBe('cart_item_removed');
-        expect(AnalyticsEvent.CART_CLEARED).toBe('cart_cleared');
-        expect(AnalyticsEvent.CHECKOUT_COMPLETED).toBe('checkout_completed');
-        expect(AnalyticsEvent.CHECKOUT_FAILED).toBe('checkout_failed');
-        expect(AnalyticsEvent.ORDER_CREATED).toBe('order_created');
+        expect(analyticsEvents.USER_SIGNED_UP).toBe('user_signed_up');
+        expect(analyticsEvents.USER_LOGGED_IN).toBe('user_logged_in');
+        expect(analyticsEvents.PRODUCTS_SEARCHED).toBe('products_searched');
+        expect(analyticsEvents.PRODUCT_VIEWED).toBe('product_viewed');
+        expect(analyticsEvents.CART_ITEM_ADDED).toBe('cart_item_added');
+        expect(analyticsEvents.CART_ITEM_UPDATED).toBe('cart_item_updated');
+        expect(analyticsEvents.CART_ITEM_REMOVED).toBe('cart_item_removed');
+        expect(analyticsEvents.CART_CLEARED).toBe('cart_cleared');
+        expect(analyticsEvents.CHECKOUT_COMPLETED).toBe('checkout_completed');
+        expect(analyticsEvents.CHECKOUT_FAILED).toBe('checkout_failed');
+        expect(analyticsEvents.ORDER_CREATED).toBe('order_created');
     });
 });
 
@@ -91,7 +91,7 @@ describe('emitAnalyticsEvent()', () => {
         disablePostHog();
         emitAnalyticsEvent({
             distinctId: 'user-1',
-            event: AnalyticsEvent.USER_LOGGED_IN
+            event: analyticsEvents.USER_LOGGED_IN
         });
         expect(mockedPostHog).not.toHaveBeenCalled();
     });
@@ -100,7 +100,7 @@ describe('emitAnalyticsEvent()', () => {
         enablePostHog();
         emitAnalyticsEvent({
             distinctId: 'user-1',
-            event: AnalyticsEvent.USER_LOGGED_IN
+            event: analyticsEvents.USER_LOGGED_IN
         });
         expect(mockedPostHog).toHaveBeenCalledTimes(1);
         expect(mockedPostHog).toHaveBeenCalledWith(
@@ -111,8 +111,8 @@ describe('emitAnalyticsEvent()', () => {
 
     it('reuses the same client on subsequent calls', () => {
         enablePostHog();
-        emitAnalyticsEvent({ distinctId: 'u1', event: AnalyticsEvent.USER_LOGGED_IN });
-        emitAnalyticsEvent({ distinctId: 'u1', event: AnalyticsEvent.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
         expect(mockedPostHog).toHaveBeenCalledTimes(1);
     });
 
@@ -120,7 +120,7 @@ describe('emitAnalyticsEvent()', () => {
         enablePostHog();
         const event: IAnalyticsEvent = {
             distinctId: 'user-42',
-            event: AnalyticsEvent.CART_ITEM_ADDED,
+            event: analyticsEvents.CART_ITEM_ADDED,
             properties: { product_id: 'prod-7', quantity: 2 }
         };
         emitAnalyticsEvent(event);
@@ -141,7 +141,7 @@ describe('emitAnalyticsEvent()', () => {
         enablePostHog();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: AnalyticsEvent.CHECKOUT_COMPLETED,
+            event: analyticsEvents.CHECKOUT_COMPLETED,
             traceId: 'abc123'
         });
 
@@ -155,7 +155,7 @@ describe('emitAnalyticsEvent()', () => {
         enablePostHog();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: AnalyticsEvent.PRODUCT_VIEWED
+            event: analyticsEvents.PRODUCT_VIEWED
         });
 
         const payload = mockCapture.mock.calls[0][0] as {
@@ -176,7 +176,7 @@ describe('shutdownAnalytics()', () => {
 
     it('flushes the client if one has been created', async () => {
         enablePostHog();
-        emitAnalyticsEvent({ distinctId: 'u1', event: AnalyticsEvent.USER_SIGNED_UP });
+        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.USER_SIGNED_UP });
 
         await shutdownAnalytics();
         expect(mockShutdown).toHaveBeenCalledTimes(1);

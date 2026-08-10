@@ -65,7 +65,20 @@ const makeResponse = () => {
 
 describe('readInput', () => {
     describe('precedence', () => {
-        it('resolves sources highest-first, as declared', () => {
+        /**
+         * Every surface, against a request carrying the same key in all three sources.
+         *
+         * This is the table that used to be spelled as ad-hoc `sources` arrays per test. Pinning
+         * all four together is what makes the precedence rule reviewable: it is now a property of
+         * the surface rather than of whichever array a controller passed, so the thing worth
+         * asserting is which source each surface lets win.
+         */
+        it.each([
+            ['search', 'body'],
+            ['write', 'params'],
+            ['delete', 'params'],
+            ['path', 'params']
+        ] as const)('%s resolves to the %s value', (surface, winner) => {
             const request = makeRequest({
                 params: { text: 'params' },
                 body: { text: 'body' },
@@ -73,10 +86,15 @@ describe('readInput', () => {
                 contentType: JSON_TYPE
             });
 
-            expect(readInput(request, { sources: ['params', 'body', 'query'] }).text).toBe(
-                'params'
-            );
-            expect(readInput(request, { sources: ['query', 'params', 'body'] }).text).toBe('query');
+            expect(readInput(request, { surface }).text).toBe(winner);
+        });
+
+        it('reads the lower-precedence source when the higher one is absent', () => {
+            // `write` is params-then-body: the ordering only shows when both are populated, so the
+            // fallback needs its own case or a reversed precedence would still pass above.
+            const request = makeRequest({ body: { text: 'body' }, contentType: JSON_TYPE });
+
+            expect(readInput(request, { surface: 'write' }).text).toBe('body');
         });
 
         it('keeps keys only one source carries', () => {
@@ -86,20 +104,24 @@ describe('readInput', () => {
                 contentType: JSON_TYPE
             });
 
-            expect(readInput(request, { sources: ['body', 'query'] })).toEqual({
+            expect(readInput(request, { surface: 'search' })).toEqual({
                 text: 'body',
                 email: 'a@b.c'
             });
         });
 
-        it('ignores sources the route did not declare', () => {
+        it('ignores sources the surface does not read', () => {
+            // `path` reads params only, so a query the caller sent is not merely lower precedence —
+            // it is invisible. That is what makes `DELETE /cart/{productId}` unable to take an id
+            // from anywhere but its path.
             const request = makeRequest({
+                params: { productId: 'params' },
                 query: { hardDelete: 'true' },
                 body: { text: 'body' },
                 contentType: JSON_TYPE
             });
 
-            expect(readInput(request, { sources: ['body'] })).toEqual({ text: 'body' });
+            expect(readInput(request, { surface: 'path' })).toEqual({ productId: 'params' });
         });
 
         // A spread keeps keys whose value is undefined, and Mongoose would read such a key as a
@@ -111,7 +133,7 @@ describe('readInput', () => {
                 contentType: JSON_TYPE
             });
 
-            const input = readInput(request, { sources: ['body', 'query'] });
+            const input = readInput(request, { surface: 'search' });
 
             expect(input).toEqual({});
             expect(Object.keys(input)).toHaveLength(0);
@@ -120,7 +142,7 @@ describe('readInput', () => {
         it('survives a request with no body at all', () => {
             const request = makeRequest({ query: { page: '1' } });
 
-            expect(readInput(request, { sources: ['body', 'query'] })).toEqual({ page: '1' });
+            expect(readInput(request, { surface: 'search' })).toEqual({ page: '1' });
         });
 
         // Nothing is defaulted or bounded here, so `undefined` still means "did not paginate".
@@ -128,7 +150,7 @@ describe('readInput', () => {
         // in `normalizePagination` (@repositories/search), which runs on every search — see
         // tests/unit/repositories/search-pagination.test.ts.
         it('reports absent pagination as absent, not as a default', () => {
-            const input = readInput(makeRequest(), { sources: ['body', 'query'] });
+            const input = readInput(makeRequest(), { surface: 'search' });
 
             expect(input.page).toBeUndefined();
             expect(input.pageSize).toBeUndefined();
@@ -143,17 +165,17 @@ describe('readInput', () => {
                 contentType: JSON_TYPE
             });
 
-            expect(
-                readInput(request, { sources: ['params', 'body'], ids: ['productId'] }).productId
-            ).toBe(OBJECT_ID);
+            expect(readInput(request, { surface: 'write', ids: ['productId'] }).productId).toBe(
+                OBJECT_ID
+            );
         });
 
         it('falls back to the body when the param is absent', () => {
             const request = makeRequest({ body: { productId: OBJECT_ID }, contentType: JSON_TYPE });
 
-            expect(
-                readInput(request, { sources: ['params', 'body'], ids: ['productId'] }).productId
-            ).toBe(OBJECT_ID);
+            expect(readInput(request, { surface: 'write', ids: ['productId'] }).productId).toBe(
+                OBJECT_ID
+            );
         });
 
         // express 5 gives `undefined` for a body-less request, so reading a body key before
@@ -161,9 +183,9 @@ describe('readInput', () => {
         it('reads the route param when the request has no body at all', () => {
             const request = makeRequest({ params: { productId: OBJECT_ID } });
 
-            expect(
-                readInput(request, { sources: ['params', 'body'], ids: ['productId'] }).productId
-            ).toBe(OBJECT_ID);
+            expect(readInput(request, { surface: 'write', ids: ['productId'] }).productId).toBe(
+                OBJECT_ID
+            );
         });
 
         // The rule the two superseded id helpers spelled differently: `extractCustomId` let an
@@ -175,15 +197,13 @@ describe('readInput', () => {
                 contentType: JSON_TYPE
             });
 
-            expect(readInput(request, { sources: ['params', 'body'], ids: ['id'] }).id).toBe(
-                OBJECT_ID
-            );
+            expect(readInput(request, { surface: 'write', ids: ['id'] }).id).toBe(OBJECT_ID);
         });
 
         it('keeps an empty value when no source carries a better one', () => {
             const request = makeRequest({ query: { id: '' }, contentType: JSON_TYPE });
 
-            expect(readInput(request, { sources: ['body', 'query'], ids: ['id'] }).id).toBe('');
+            expect(readInput(request, { surface: 'search', ids: ['id'] }).id).toBe('');
         });
 
         // Taking the first entry rather than stringifying the whole array: the latter can never
@@ -194,13 +214,13 @@ describe('readInput', () => {
                 contentType: JSON_TYPE
             });
 
-            expect(readInput(request, { sources: ['body'], ids: ['id'] }).id).toBe(OBJECT_ID);
+            expect(readInput(request, { surface: 'search', ids: ['id'] }).id).toBe(OBJECT_ID);
         });
 
         it('leaves the key absent when no source carries it', () => {
             const request = makeRequest({ contentType: JSON_TYPE });
 
-            const input = readInput(request, { sources: ['params', 'body'], ids: ['id'] });
+            const input = readInput(request, { surface: 'write', ids: ['id'] });
 
             expect(input.id).toBeUndefined();
             expect('id' in input).toBe(false);
@@ -216,7 +236,7 @@ describe('readInput', () => {
 
             expect(
                 readInput(request, {
-                    sources: ['body'],
+                    surface: 'search',
                     booleans: ['active'],
                     stringArrays: ['categories', 'tags']
                 })
@@ -234,7 +254,7 @@ describe('readInput', () => {
                 contentType: FORM_TYPE
             });
 
-            expect(readInput(request, { sources: ['body'], numbers: ['price'] })).toEqual({
+            expect(readInput(request, { surface: 'search', numbers: ['price'] })).toEqual({
                 price: 101.5
             });
         });
@@ -244,7 +264,7 @@ describe('readInput', () => {
 
             // Not `NaN`: the validator downstream has to reject the caller's actual input with the
             // contract's own message, rather than this layer inventing a value to be rejected.
-            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe('abc');
+            expect(readInput(request, { surface: 'search', numbers: ['price'] }).price).toBe('abc');
         });
 
         it('leaves a blank number alone rather than reading it as zero', () => {
@@ -252,13 +272,13 @@ describe('readInput', () => {
 
             // `Number('')` is 0. An empty form field means "not sent", and a free product is a
             // legal price — so coercing here would turn a missing value into a valid one.
-            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe('');
+            expect(readInput(request, { surface: 'search', numbers: ['price'] }).price).toBe('');
         });
 
         it('decodes a multipart zero, which is a legal price', () => {
             const request = makeRequest({ body: { price: '0' }, contentType: FORM_TYPE });
 
-            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe(0);
+            expect(readInput(request, { surface: 'search', numbers: ['price'] }).price).toBe(0);
         });
 
         // The reason the rule is transport-conditional: a JSON body already carries its types,
@@ -266,7 +286,7 @@ describe('readInput', () => {
         it('leaves a JSON number string untouched, so the validator still sees the violation', () => {
             const request = makeRequest({ body: { price: '101' }, contentType: JSON_TYPE });
 
-            expect(readInput(request, { sources: ['body'], numbers: ['price'] }).price).toBe('101');
+            expect(readInput(request, { surface: 'search', numbers: ['price'] }).price).toBe('101');
         });
 
         it('leaves a JSON body untouched, wrong types included', () => {
@@ -277,7 +297,7 @@ describe('readInput', () => {
 
             expect(
                 readInput(request, {
-                    sources: ['body'],
+                    surface: 'search',
                     booleans: ['active'],
                     stringArrays: ['categories']
                 })
@@ -289,7 +309,7 @@ describe('readInput', () => {
         it('does not treat a body with no declared content type as a form', () => {
             const request = makeRequest({ body: { active: 'false' } });
 
-            expect(readInput(request, { sources: ['body'], booleans: ['active'] }).active).toBe(
+            expect(readInput(request, { surface: 'search', booleans: ['active'] }).active).toBe(
                 'false'
             );
         });
@@ -308,7 +328,7 @@ describe('readInput', () => {
         ])('reads the multipart spelling %p as %p', (input, expected) => {
             const request = makeRequest({ body: { active: input }, contentType: FORM_TYPE });
 
-            expect(readInput(request, { sources: ['body'], booleans: ['active'] }).active).toBe(
+            expect(readInput(request, { surface: 'search', booleans: ['active'] }).active).toBe(
                 expected
             );
         });
@@ -321,7 +341,7 @@ describe('readInput', () => {
             (value) => {
                 const request = makeRequest({ body: { active: value }, contentType: FORM_TYPE });
 
-                expect(readInput(request, { sources: ['body'], booleans: ['active'] }).active).toBe(
+                expect(readInput(request, { surface: 'search', booleans: ['active'] }).active).toBe(
                     value
                 );
             }
@@ -332,7 +352,7 @@ describe('readInput', () => {
             (value) => {
                 const request = makeRequest({ body: { active: value }, contentType: FORM_TYPE });
 
-                expect(readInput(request, { sources: ['body'], booleans: ['active'] }).active).toBe(
+                expect(readInput(request, { surface: 'search', booleans: ['active'] }).active).toBe(
                     value
                 );
             }
@@ -344,7 +364,7 @@ describe('readInput', () => {
             const request = makeRequest({ body: {}, contentType });
 
             const input = readInput(request, {
-                sources: ['body'],
+                surface: 'search',
                 booleans: ['active'],
                 stringArrays: ['tags']
             });
@@ -360,7 +380,7 @@ describe('readInput', () => {
                 contentType: FORM_TYPE
             });
 
-            expect(readInput(request, { sources: ['body'] })).toEqual({
+            expect(readInput(request, { surface: 'search' })).toEqual({
                 active: 'false',
                 tags: 'a,b'
             });
@@ -375,7 +395,7 @@ describe('readInput', () => {
      */
     describe('string transports', () => {
         const declaration = {
-            sources: ['params', 'query', 'body'],
+            surface: 'delete',
             booleans: ['hardDelete']
         } as const;
 

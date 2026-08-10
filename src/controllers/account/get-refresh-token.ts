@@ -36,7 +36,7 @@ export const getRefreshToken = (request: Request, response: Response) => {
                 metadata: { reason: 'missing_token' }
             })
         );
-        rejectResponse(response, 401, 'Unauthorized');
+        rejectResponse(response, 401);
         return;
     }
 
@@ -66,7 +66,7 @@ export const getRefreshToken = (request: Request, response: Response) => {
                         metadata: { reason: 'invalid_token' }
                     })
                 );
-                rejectResponse(response, 401, 'Unauthorized');
+                rejectResponse(response, 401);
             })
     );
 };

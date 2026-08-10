@@ -5,12 +5,12 @@ import { resolveImageUrl } from '@core/http/uploads';
 import { imageStore } from '@core/adapters/image-store';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
-import { databaseErrorInterpreter } from '@core/http/errors';
+import { rejectDatabaseError } from '@core/http/errors';
 import { authSignupTotal } from '@core/observability/metrics-domain';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -54,7 +54,7 @@ export const postSignup = (
                             outcome: 'failure'
                         })
                     );
-                    rejectResponse(response, result.status, result.message, result.errors);
+                    rejectResponse(response, result.status, result.errors);
                 });
 
             // Registration successful
@@ -71,16 +71,15 @@ export const postSignup = (
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
                 distinctId: newUserId,
-                event: AnalyticsEvent.USER_SIGNED_UP
+                event: analyticsEvents.USER_SIGNED_UP
             });
             // create() returns the in-memory document; the schema's toJSON transform
             // strips the hashed password before it ever reaches res.json
             successResponse(response, result.data, 201);
         })
         .catch((error: CastError | Error) => {
-            const [status, message] = databaseErrorInterpreter(error);
             authSignupTotal.inc({ status: 'failure' });
-            rejectResponse(response, status, message);
+            rejectDatabaseError(response, 'signup', error);
             return deleteUpload();
         });
 };

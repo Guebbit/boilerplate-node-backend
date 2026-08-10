@@ -59,5 +59,5 @@ export const deleteAccountRequest = (request: Request, response: Response) => {
                 return successResponse(response, undefined, 200, t('delete.email-sent'));
             });
         })
-        .catch(() => rejectResponse(response, 500, 'deleteAccountRequest', []));
+        .catch(() => rejectResponse(response, 500, []));
 };

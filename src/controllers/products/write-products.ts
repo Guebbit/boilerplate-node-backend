@@ -45,7 +45,7 @@ export const writeProducts = (
     // routes send a multipart body, which has no types, so both arrive as strings and
     // `zodProductSchema` rejects them.
     const { id, active, price, categories, tags } = readInput(request, {
-        sources: ['params', 'body'],
+        surface: 'write',
         ids: ['id'],
         booleans: ['active'],
         numbers: ['price'],
@@ -75,7 +75,7 @@ export const writeProducts = (
     });
     if (errors.length > 0)
         return deleteUpload().then(() => {
-            rejectResponse(response, 422, 'writeProduct - validation failed', errors);
+            rejectResponse(response, 422, errors);
         });
 
     // Past the guard above, these have been checked against zodProductSchema — the assertion
@@ -91,9 +91,7 @@ export const writeProducts = (
     if (!id) {
         // PUT without an id is invalid
         if (request.method === 'PUT') {
-            rejectResponse(response, 422, 'updateProduct - missing id', [
-                t('generic.error-missing-data')
-            ]);
+            rejectResponse(response, 422, [t('generic.error-missing-data')]);
             return deleteUpload();
         }
 
@@ -128,7 +126,11 @@ export const writeProducts = (
             ...request.body,
             ...validated
         })
-        .then((product) => {
+        .then((result) => {
+            if (!result.success)
+                return deleteUpload().then(() => {
+                    rejectResponse(response, result.status, result.errors);
+                });
             emitAuditEvent(
                 buildAuditEvent(request, {
                     action: AuditAction.ADMIN_PRODUCT_UPDATED,
@@ -137,15 +139,11 @@ export const writeProducts = (
                     target_id: id
                 })
             );
-            successResponse(response, product);
+            successResponse(response, result.data);
         })
         .catch((error: Error) =>
             deleteUpload().then(() => {
-                if (error.message === '404')
-                    rejectResponse(response, 404, 'updateProduct - not found', [
-                        t('ecommerce.product-not-found')
-                    ]);
-                else rejectDatabaseError(response, 'updateProduct', error);
+                rejectDatabaseError(response, 'writeProduct', error);
             })
         );
 };

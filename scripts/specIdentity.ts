@@ -107,6 +107,18 @@ export const SHARED_FILES: readonly ISharedFile[] = [
     },
 
     /*
+     * The analytics event names both sides emit. The backend sends them to PostHog and this app
+     * sends them to its own tracker, and funnels are built ACROSS the two — so a name that exists
+     * on one side only, or is spelled differently on each, silently produces two half-events that
+     * no dashboard adds up. Nothing else compares them: each repo's suite asserts its own copy and
+     * passes. Different paths because the two lint configs disagree on filename case.
+     */
+    {
+        backend: 'src/core/observability/analytics-events.ts',
+        frontend: 'src/stores/analyticsEvents.ts'
+    },
+
+    /*
      * Shared tooling, duplicated rather than packaged for the reason in this file's header. Both
      * are read by CI on both sides, so a fix applied to one copy and not the other is a CI job
      * that behaves differently per repo while claiming to be the same gate.

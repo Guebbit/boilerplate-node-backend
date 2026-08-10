@@ -6,7 +6,7 @@ import { rejectDatabaseError } from '@core/http/errors';
 import type { CastError } from 'mongoose';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -21,20 +21,18 @@ export const getProductItem = (request: Request, response: Response) =>
         .getById(String(request.params.id), request.authContext?.admin === true)
         .then((product) => {
             if (!product) {
-                rejectResponse(response, 404, 'Not Found', [t('ecommerce.product-not-found')]);
+                rejectResponse(response, 404, [t('ecommerce.product-not-found')]);
                 return;
             }
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: AnalyticsEvent.PRODUCT_VIEWED,
+                event: analyticsEvents.PRODUCT_VIEWED,
                 properties: { product_id: String(request.params.id) }
             });
             successResponse(response, product);
         })
         .catch((error: CastError) => {
-            if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'getProductItem - not found', [
-                    t('ecommerce.product-not-found')
-                ]);
+            if (error.kind === 'ObjectId')
+                return rejectResponse(response, 404, [t('ecommerce.product-not-found')]);
             rejectDatabaseError(response, 'getProductItem', error);
         });

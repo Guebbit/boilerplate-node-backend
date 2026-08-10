@@ -94,7 +94,7 @@ export const isMetricsScraper = (request: Request, response: Response, next: Nex
             message:
                 'NODE_METRICS_TOKEN is not set — /observability/metrics is refusing every request.'
         });
-        rejectResponse(response, 503, 'isMetricsScraper - not configured', []);
+        rejectResponse(response, 503, []);
         return;
     }
 
@@ -115,7 +115,7 @@ export const isMetricsScraper = (request: Request, response: Response, next: Nex
         timingSafeEqual(expectedBytes, providedBytes);
 
     if (!matches) {
-        rejectResponse(response, 401, 'isMetricsScraper - bad credentials', []);
+        rejectResponse(response, 401, []);
         return;
     }
 

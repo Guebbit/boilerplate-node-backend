@@ -20,6 +20,7 @@ import {
     ExtendedError,
     databaseErrorInterpreter,
     isDuplicateKey,
+    rejectDatabaseEnvelope,
     rejectDatabaseError
 } from '@core/http/errors';
 import type { Response } from 'express';
@@ -283,27 +284,46 @@ describe('rejectDatabaseError', () => {
         expect(response.status).toHaveBeenCalledWith(422);
     });
 
-    it('names the reason on a 4xx, because it describes the request', () => {
+    it('answers with the status-derived message, naming neither the handler nor the driver', () => {
         const response = makeResponseStub();
 
         rejectDatabaseError(response, 'getProducts', makeBsonError());
 
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'getProducts - Invalid identifier' })
+            expect.objectContaining({ message: 'Unprocessable Entity' })
         );
     });
 
-    it('withholds the detail on a 5xx, where it is the driver talking about the server', () => {
-        // The distinction is the point of the function: a 4xx detail is safe to name, a 5xx one
-        // describes internals and belongs in the log, which `ExtendedError` and the request
-        // logger already handle.
+    it('logs the operation and the interpreter detail, which the response no longer carries', () => {
+        /*
+         * The detail is not dropped, it is relocated. Both halves are developer-facing — the
+         * operation name is internal layout, the detail describes the driver — and the log line is
+         * where an operator can act on them and a stranger cannot. This is what makes it safe for
+         * the response body above to say only 'Unprocessable Entity'.
+         */
+        const response = makeResponseStub();
+
+        rejectDatabaseError(response, 'getProducts', makeBsonError());
+
+        expect(mockedLogger.error).toHaveBeenCalledWith('getProducts - Invalid identifier', {
+            status: 422
+        });
+    });
+
+    it('keeps a 5xx driver message out of the response entirely', () => {
+        // A 5xx detail describes internals: free reconnaissance in a body, useful in a log.
         const response = makeResponseStub();
 
         rejectDatabaseError(response, 'getProducts', new Error('connection reset to shard-02'));
 
         expect(response.status).toHaveBeenCalledWith(500);
         expect(response.json).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'getProducts' })
+            expect.objectContaining({ message: 'Internal Server Error' })
+        );
+        expect(JSON.stringify(response.json.mock.calls[0][0])).not.toContain('shard-02');
+        expect(mockedLogger.error).toHaveBeenCalledWith(
+            'getProducts - connection reset to shard-02',
+            { status: 500 }
         );
     });
 
@@ -316,5 +336,37 @@ describe('rejectDatabaseError', () => {
 
         const body = response.json.mock.calls[0]![0] as { errors: unknown[] };
         expect(JSON.stringify(body.errors)).not.toContain('shard-02');
+    });
+});
+
+describe('rejectDatabaseEnvelope', () => {
+    /*
+     * The counterpart for services, which report failure by RETURNING an envelope and so have no
+     * `Response` to send. Without it, six `.catch` handlers each re-derived the status inline and
+     * spread the interpreter's tuple into the envelope, dropping the detail on the floor.
+     */
+    it('derives the status the interpreter chose', () => {
+        expect(rejectDatabaseEnvelope('login', makeBsonError()).status).toBe(422);
+    });
+
+    it('collapses an unrecognised failure to 500', () => {
+        expect(rejectDatabaseEnvelope('login', new Error('connection reset')).status).toBe(500);
+    });
+
+    it('logs the operation and the interpreter detail, with the status as metadata', () => {
+        // The half a `Response`-less caller would otherwise lose: this is the only record that the
+        // failure happened at all, and the only place the driver's own words are kept.
+        rejectDatabaseEnvelope('login', makeBsonError());
+
+        expect(mockedLogger.error).toHaveBeenCalledWith('login - Invalid identifier', {
+            status: 422
+        });
+    });
+
+    it('keeps the driver message out of the envelope entirely', () => {
+        const envelope = rejectDatabaseEnvelope('cart', new Error('connection reset to shard-02'));
+
+        expect(JSON.stringify(envelope)).not.toContain('shard-02');
+        expect(envelope.message).toBe('Internal Server Error');
     });
 });

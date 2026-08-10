@@ -34,7 +34,6 @@ export const postFeedbackContact = (
         return rejectResponse(
             response,
             422,
-            'Validation Error',
             parseResult.error.issues.map(({ message }) => message)
         );
 

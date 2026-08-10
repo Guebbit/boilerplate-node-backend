@@ -43,7 +43,7 @@ describe('a user’s persisted locale', () => {
     it('is editable afterwards', async () => {
         const user = await createUser({ email: 'switcher@example.com' });
 
-        const updated = await userService.adminUpdateById(String(user._id), { locale: 'it' });
+        const updated = await userService.updateById(String(user._id), { locale: 'it' });
 
         expect(updated.success).toBe(true);
         expect((updated as IResponseSuccess<IUserDocument>).data!.locale).toBe('it');
@@ -51,9 +51,9 @@ describe('a user’s persisted locale', () => {
 
     it('is left alone by an update that does not mention it', async () => {
         const user = await createUser({ email: 'untouched@example.com' });
-        await userService.adminUpdateById(String(user._id), { locale: 'it' });
+        await userService.updateById(String(user._id), { locale: 'it' });
 
-        await userService.adminUpdateById(String(user._id), { username: 'renamed' });
+        await userService.updateById(String(user._id), { username: 'renamed' });
 
         const reloaded = await userRepository.findById(String(user._id));
         expect(reloaded!.locale).toBe('it');
@@ -61,7 +61,7 @@ describe('a user’s persisted locale', () => {
 
     it('reaches the client, since it is part of the User contract', async () => {
         const user = await createUser({ email: 'exposed@example.com' });
-        await userService.adminUpdateById(String(user._id), { locale: 'it' });
+        await userService.updateById(String(user._id), { locale: 'it' });
 
         const reloaded = await userRepository.findById(String(user._id));
 

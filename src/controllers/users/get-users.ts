@@ -50,14 +50,13 @@ export const getUsers = (
     response: Response
 ) => {
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
-    const input = readInput(request, { sources: ['body', 'query'], ids: ['id'] });
+    const input = readInput(request, { surface: 'search', ids: ['id'] });
 
     const parseResult = searchUsersQuerySchema.safeParse(input);
     if (!parseResult.success)
         return rejectResponse(
             response,
             422,
-            'getUsers - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 

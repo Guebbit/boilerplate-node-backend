@@ -9,6 +9,44 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### ⚠ Breaking
 
+- **`rejectResponse` and `generateReject` no longer take a `message`.** The envelope's `message` is
+  derived from the status by `resolveErrorMessage`, so a given status always reads the same way:
+  `rejectResponse(response, 404, [t('…')])`. Two conventions had coexisted — a bare `'Not Found'`
+  and an operation-prefixed `'getProductItem - not found'` — and the prefix leaked the handler
+  layout into every 404. Clients must branch on `errors[].code`, as they always should have; the
+  wording of `message` changed on every error response (a 422 now reads `Unprocessable Entity`).
+
+    `rejectDatabaseError` followed the same convention and so changed too: the interpreter's detail
+    (`Invalid identifier`, a driver message) is now written to the log alongside the operation name
+    instead of into the response body.
+
+- **`readInput` takes a `surface`, not a `sources` array.** A route declares which surface it is —
+  `search`, `write`, `delete`, `path` — and `SURFACE_SOURCES` maps that to the sources and their
+  precedence. The sources themselves are unchanged. Twelve call sites had been spelling the array
+  by hand; they agreed, but nothing required it, and a precedence order chosen by whoever wrote the
+  newest controller is a rule nothing records. A fifth combination now has to be added deliberately.
+
+- **`productService.updateById` returns a reject envelope instead of throwing `Error('404')`.** The
+  user and order services already reported a missing record this way. Throwing forced its one
+  caller to recognise the case by string-matching `error.message`, where a genuine database failure
+  and a missing row were indistinguishable.
+
+- **`userService.adminCreate` / `adminUpdate` / `adminUpdateById` are now `create` / `update` /
+  `updateById`,** matching the product and order services.
+
+- **`isAdmin` answers 401, not 403, when the request carries no credentials.** 401 means
+  "authenticate and retry", which a client acts on by redirecting to login; 403 means "you are
+  known and still refused". Answering 403 sent an expired admin session to the error page instead
+  of the login page. Unreachable through the current routes, which all mount `isAuth` first — which
+  is why it went unnoticed. A known non-admin still gets 403.
+
+- **`handleUncaughtError` moved from `src/app.ts` to `src/bootstrap/error-handling.ts`.**
+
+- **`AnalyticsEvent` (enum) is now `analyticsEvents` (const object).** Values are unchanged;
+  `AnalyticsEvent.PRODUCTS_SEARCHED` becomes `analyticsEvents.PRODUCTS_SEARCHED`. It has to be an
+  object rather than an enum because the file is shared byte-for-byte with the frontend, whose lint
+  config requires enums to be `E`-prefixed while this one does not.
+
 - **`DELETE /orders/{id}` soft-deletes instead of destroying the record.** Orders previously had
   no soft delete at all — `removeById` took no flag and the model had no `deletedAt` — while
   products and users had both. A delete that used to be permanent now sets `deletedAt`; pass
@@ -35,10 +73,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`src/bootstrap/`** — six named installs (`installSecurity`, `installRequestContext`,
+  `installTelemetry`, `installStatic`, `installRoutes`, `installErrorHandling`) that `app.ts` calls
+  in order. It sits outside `src/core/**` because these mount middleware and
+  `no-restricted-imports` forbids core from importing `@middlewares/*`; it is the assembly layer,
+  the only place allowed to reach both. See `docs/theory/layers.md`.
+
+- **`src/core/observability/analytics-events.ts`** — the analytics event names both repos emit,
+  byte-identical with the frontend's `src/stores/analyticsEvents.ts` and guarded by
+  `check:spec-identity`. A name that existed on one side only produced two half-events that no
+  funnel added up, and nothing detected it.
+
+- **`rejectDatabaseEnvelope(context, error)`** in `@core/http/errors` — the counterpart to
+  `rejectDatabaseError` for services, which report failure by _returning_ an envelope and so have
+  no `Response` to send. Six `.catch` handlers had each re-derived the status inline and dropped the
+  interpreter's detail.
+
+- **`tests/unit/controllers/every-controller-catches.test.ts`** — a structural guard asserting no
+  controller starts a promise chain without handling rejection. It covers controllers that do not
+  exist yet, which per-controller fixtures would not.
+
+- Locale keys `ecommerce.cart-empty`, `ecommerce.cart-product-unavailable` and
+  `generic.error-not-found`, in all three dictionaries.
+
 - **`tests/contract/request-sources.test.ts`** — asserts that every controller's `readInput`
   declaration is a subset of the sources `openapi.yaml` allows for the routes it serves, that
   every mounted route exists in the spec, and that every spec operation is mounted. The route
-  table is recovered statically from `src/app.ts` and `src/routes/*.ts`; no server is booted.
+  table is recovered statically from `src/bootstrap/routes.ts` and `src/routes/*.ts`; no
+  server is booted.
   `docs/theory/request-input.md` had proposed this test and listed five contract bugs found by
   doing the comparison by hand; it reproduces all five.
 
@@ -51,10 +113,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **`check:spec-identity` covers ten shared files, not three.** It guarded `openapi.yaml`,
+- **`src/app.ts` is 138 lines, down from 442.** It now reads as the middleware stack in the order a
+  request travels it, with the four load-bearing dependencies between groups stated once above the
+  sequence. Middleware order _is_ behaviour, and it had been 442 lines of interleaved config you had
+  to read start-to-finish to verify. `startServer`/`stopServer` stay: the boot chain is one real
+  dependency ordering. The trust-proxy, `express.static` and error-handler docblocks moved verbatim.
+
+- **The i18n guard also checks `generateReject`.** It only ever inspected `rejectResponse`, so half
+  the API's user-facing copy was unguarded — services return envelopes rather than sending them.
+  Extending it immediately found an untranslated literal (below).
+
+- **`check:spec-identity` covers eleven shared files, not three.** It guarded `openapi.yaml`,
   `asyncapi.yaml` and `spectral.yaml`; it now also guards `db/seeds/seed-identities.ts`, the
   generated realtime types, the three `.dev/` API client collections, and
-  `scripts/check-mutation-baseline.ts` / `scripts/gen-asyncapi-types.ts`.
+  `scripts/check-mutation-baseline.ts` / `scripts/gen-asyncapi-types.ts`, and the shared
+  analytics event names.
 
     The omissions were structural rather than an oversight: `SHARED_SPEC_FILES` was a list of
     **names**, compared at the same relative path in both repos, so any file living at a different
@@ -76,6 +149,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     ignore. `scripts/specIdentity.ts` records the reasoning per entry.
 
 ### Fixed
+
+- **Nine controllers ended their promise chain with no `.catch()`,** relying on the global handler.
+  It answered a correct status, but it cannot clean up or record: `post-checkout` now increments its
+  failure counter, and `write-users`' update branch now deletes the upload it had just written
+  instead of orphaning the file. `post-login`, `post-logout-everywhere`, the five cart controllers
+  and `put-feedback-status` are the rest.
+
+- **`'Feedback request not found'` and `'Cart is empty'` were untranslated English literals** sent
+  to users, in `services/feedback-requests.ts` and `services/cart.ts`. Both are dictionary keys now.
+  The checkout failure reasons also carry explicit `code`s (`CART_EMPTY`,
+  `CART_PRODUCT_UNAVAILABLE`, `CART_CHANGED`), so the analytics event reports a stable machine value
+  rather than a translated sentence.
+
+- **A `Map` of unhandled rejections that nothing ever read.** `app.ts` accumulated every unhandled
+  rejection into a `Map` — Node's documented bookkeeping idiom, copied without the part that drains
+  it on exit. It had no reader in any commit. The audit log line stays.
+
+- **Seven dead branches** checking `error.message === '404'`, left with nothing to match once the
+  product service stopped throwing it. `write-orders` lost the whole conditional (it already handled
+  the case via `result.success`); six others lost the dead disjunct and kept the live `CastError` one.
 
 - **`DELETE /orders` did not declare `hardDelete`** and `Order` did not declare `deletedAt` in
   `openapi.yaml`. Both now do, along with the new `hardDeleteOrderById` operation.

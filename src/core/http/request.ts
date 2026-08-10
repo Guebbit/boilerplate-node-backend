@@ -105,16 +105,52 @@ const firstEntry = (value: unknown): unknown => (Array.isArray(value) ? value[0]
 export type RequestInputSource = 'params' | 'body' | 'query';
 
 /**
+ * Which route surface is reading, which is what determines the sources and their precedence.
+ *
+ * A closed set, and a route names one rather than spelling an array. The sources themselves are
+ * unchanged — writes really do read two and deletes really do read three, because several
+ * spellings of one operation reaching a single controller is a pattern these boilerplates exist
+ * to demonstrate (see `docs/theory/request-input.md`, and the four mechanisms in plan 01).
+ *
+ * What the closed set removes is the freedom to invent a FIFTH combination. Twelve call sites
+ * previously wrote the array by hand; they agreed, but nothing said they had to, and an ordering
+ * chosen by whoever wrote the newest controller is a precedence rule nothing records. Now
+ * precedence is a property of the surface, stated once below, and a new shape has to be added
+ * here deliberately — where it can be reviewed against the spec.
+ */
+export type TRequestSurface = 'search' | 'write' | 'delete' | 'path';
+
+/**
+ * The sources each surface reads, HIGHEST precedence first.
+ *
+ * - `search` — body before query, so `POST /products/search {text}` and `GET /products?text=x`
+ *   are one controller. Never reads `params`: a search has no id in its path.
+ * - `write` — params before body, so `PUT /products/:id` and `PUT /products` (id in body) are one
+ *   controller, and the explicit path id wins when a request carries both.
+ * - `delete` — params, then query, then body: the full delete surface, where `hardDelete` arrives
+ *   as a path segment (via `routeFlag`), a query parameter, or a body field.
+ * - `path` — params only, for a route whose value cannot arrive any other way. `DELETE
+ *   /cart/{productId}` declares no body, and could not use one: the route cannot match without
+ *   the segment, so a body `productId` was unreachable rather than merely undocumented.
+ */
+const SURFACE_SOURCES: Record<TRequestSurface, readonly RequestInputSource[]> = {
+    search: ['body', 'query'],
+    write: ['params', 'body'],
+    delete: ['params', 'query', 'body'],
+    path: ['params']
+};
+
+/**
  * What a route reads, and how.
  *
- * `sources` is the whole precedence rule, written once per route instead of being implied by
- * which extraction helper the controller happened to reach for. The remaining keys do not add
- * sources — every key present in any declared source ends up on the result regardless — they
- * only say how a few specific fields are resolved or decoded on the way in.
+ * `surface` is the whole precedence rule, named once per route instead of being implied by which
+ * extraction helper the controller happened to reach for. The remaining keys do not add sources —
+ * every key present in any source the surface reads ends up on the result regardless — they only
+ * say how a few specific fields are resolved or decoded on the way in.
  */
 export interface IRequestInputDeclaration<Id extends string> {
-    /** Which sources this route reads, HIGHEST precedence first. */
-    sources: readonly RequestInputSource[];
+    /** Which route surface this is, and therefore which sources it reads. */
+    surface: TRequestSurface;
     /** Scalar identifiers: a repeated key collapses to its first entry. */
     ids?: readonly Id[];
     /** Fields declared boolean by the contract — decoded on the string transports. */
@@ -143,8 +179,8 @@ export type IRequestInput<Id extends string> = Record<string, unknown> & {
  *
  * Four rules:
  *
- * - **Precedence is a `||` chain over `sources`**, highest first, so an empty value falls through
- *   as if the key were absent.
+ * - **Precedence is a `||` chain over the surface's sources**, highest first, so an empty value
+ *   falls through as if the key were absent.
  * - **Explicit `undefined` keys are dropped.** An object spread *keeps* them, and such a key
  *   handed to Mongoose becomes a `field: undefined` filter clause rather than being ignored.
  * - **Absent is not empty.** A field nobody sent stays absent, never `false` or `[]`: the service
@@ -191,7 +227,7 @@ export const readInput = <Id extends string = never>(
         body: getRequestBody(request),
         query: request.query as Record<string, unknown>
     };
-    const sources = declaration.sources.map((source) =>
+    const sources = SURFACE_SOURCES[declaration.surface].map((source) =>
         decodes && stringTransport[source] ? decode(values[source]) : values[source]
     );
 
@@ -241,14 +277,12 @@ export const extractAndValidateId = (
     entityLabel: string
 ): string | undefined => {
     // Route param first (`/products/:id`), then body — a param is the more explicit intent.
-    const { id } = readInput(request, { sources: ['params', 'body'], ids: ['id'] });
+    const { id } = readInput(request, { surface: 'write', ids: ['id'] });
     // `Types.ObjectId.isValid` checks the format (24 hex chars / 12 bytes), not existence.
     if (!id || !Types.ObjectId.isValid(id)) {
         // 422 Unprocessable Entity: syntactically valid request, semantically unusable value.
         // Developer-oriented text in `message`, translated user-facing text in `errors`.
-        rejectResponse(response, 422, `${entityLabel} - missing id`, [
-            t('generic.error-missing-data')
-        ]);
+        rejectResponse(response, 422, [t('generic.error-missing-data')]);
         return undefined;
     }
     return id;

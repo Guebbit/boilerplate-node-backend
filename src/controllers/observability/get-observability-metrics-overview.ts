@@ -81,5 +81,5 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
             }
         )
         .catch(() => {
-            rejectResponse(response, 500, 'metrics unavailable');
+            rejectResponse(response, 500);
         });

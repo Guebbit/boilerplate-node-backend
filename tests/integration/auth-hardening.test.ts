@@ -103,7 +103,7 @@ describe('the 500 handler', () => {
      * key in it. None of it may reach an unauthenticated caller.
      */
     it('tells the client nothing about what actually threw', async () => {
-        const { handleUncaughtError } = await import('../../src/app');
+        const { handleUncaughtError } = await import('../../src/bootstrap/error-handling');
         const secret = 'mongodb://admin:hunter2@internal-db:27017';
 
         const throwing = express();
@@ -128,7 +128,7 @@ describe('the 500 handler', () => {
      * would turn every deliberate rejection into a blank 500.
      */
     it('still returns the copy a deliberate error carries', async () => {
-        const { handleUncaughtError } = await import('../../src/app');
+        const { handleUncaughtError } = await import('../../src/bootstrap/error-handling');
         const errors = await import('@core/http/errors');
 
         const throwing = express();

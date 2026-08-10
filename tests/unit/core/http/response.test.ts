@@ -19,6 +19,7 @@
 import {
     generateReject,
     generateSuccess,
+    resolveErrorMessage,
     successResponse,
     rejectResponse
 } from '@core/http/response';
@@ -74,11 +75,11 @@ describe('generateSuccess', () => {
 });
 
 /** The `code` a given status maps to — the single fact every status test below asserts. */
-const codeFor = (status: number) => generateReject(status, 'x', ['y']).errors[0].code;
+const codeFor = (status: number) => generateReject(status, ['y']).errors[0].code;
 
 describe('generateReject', () => {
     it('builds structured error items from plain string errors', () => {
-        const response = generateReject(400, 'Bad Request', ['Field is required']);
+        const response = generateReject(400, ['Field is required']);
 
         expect(response).toEqual({
             success: false,
@@ -95,7 +96,7 @@ describe('generateReject', () => {
     });
 
     it('preserves provided structured error items', () => {
-        const response = generateReject(422, 'Validation failed', [
+        const response = generateReject(422, [
             {
                 code: 'VALIDATION_ERROR',
                 message: 'Invalid email format',
@@ -118,25 +119,56 @@ describe('generateReject', () => {
         const response = generateReject();
 
         expect(response.status).toBe(400);
-        expect(response.errors).toEqual([{ code: 'BAD_REQUEST', message: 'Request failed' }]);
+        expect(response.message).toBe('Bad Request');
+        expect(response.errors).toEqual([{ code: 'BAD_REQUEST', message: 'Bad Request' }]);
     });
 
     it('synthesises an item when no errors are supplied', () => {
-        const response = generateReject(404, 'Not Found');
+        const response = generateReject(404);
 
         expect(response.errors).toEqual([{ code: 'NOT_FOUND', message: 'Not Found' }]);
     });
 
-    it('falls back to generic text when the message is empty too', () => {
-        // `||`, not `??`: '' must fall through, or the client receives an item with no message.
-        const response = generateReject(500, '');
+    /*
+     * The one convention: callers cannot pass a message, so a given status always reads the same
+     * way. Two spellings used to coexist — a bare 'Not Found' and an operation-prefixed
+     * 'getProductItem - not found' — and the prefix leaked the handler layout into every 404.
+     *
+     * Every mapped status is asserted, and the two catch-alls with it. Partial coverage here is
+     * worse than none: an unasserted branch is a wording nobody has ever read, in a field that
+     * reaches the client on every failure.
+     */
+    it.each([
+        [400, 'Bad Request'],
+        [401, 'Unauthorized'],
+        [403, 'Forbidden'],
+        [404, 'Not Found'],
+        [409, 'Conflict'],
+        [422, 'Unprocessable Entity'],
+        [429, 'Too Many Requests'],
+        [500, 'Internal Server Error'],
+        [502, 'Internal Server Error'],
+        [418, 'Request Error'],
+        [499, 'Request Error']
+    ])('%i reads as %s', (status, message) => {
+        expect(generateReject(status).message).toBe(message);
+        expect(resolveErrorMessage(status)).toBe(message);
+    });
 
-        expect(response.errors).toEqual([{ code: 'INTERNAL_ERROR', message: 'Request failed' }]);
+    it('uses the same wording whatever the caller passed as errors', () => {
+        expect(generateReject(404, ['anything']).message).toBe(generateReject(404).message);
+    });
+
+    it('falls back to the status wording for the synthesised error item too', () => {
+        // `normalizeErrors` reuses it when `errors` is empty, so the two cannot drift apart.
+        expect(generateReject(429).errors).toEqual([
+            { code: 'REQUEST_ERROR', message: 'Too Many Requests' }
+        ]);
     });
 
     it('always carries a present-but-undefined data key', () => {
         // Explicitly present so `result.data` type-checks on both branches of the union.
-        const response = generateReject(404, 'Not Found');
+        const response = generateReject(404);
 
         expect(response).toHaveProperty('data');
         expect(response.data).toBeUndefined();
@@ -161,7 +193,7 @@ describe('generateReject', () => {
     it('treats 499 as a client error, not a server one', () => {
         // The `>= 500` boundary from below. With `> 500`, a plain 500 would fall through to
         // REQUEST_ERROR and clients would stop recognising server failures.
-        expect(generateReject(499, 'x', ['y']).errors[0].code).toBe('REQUEST_ERROR');
+        expect(generateReject(499, ['y']).errors[0].code).toBe('REQUEST_ERROR');
     });
 
     it('falls back to REQUEST_ERROR for unmapped 4xx statuses', () => {
@@ -170,7 +202,7 @@ describe('generateReject', () => {
     });
 
     it('normalises a mixed list of strings and structured items', () => {
-        const response = generateReject(422, 'Validation failed', [
+        const response = generateReject(422, [
             'Email is required',
             { code: 'TOO_SHORT', message: 'Password too short' }
         ]);
@@ -182,15 +214,13 @@ describe('generateReject', () => {
     });
 
     it('fills a structured item missing its code from the status', () => {
-        const response = generateReject(409, 'Conflict', [
-            { code: '', message: 'Email already used' }
-        ]);
+        const response = generateReject(409, [{ code: '', message: 'Email already used' }]);
 
         expect(response.errors[0].code).toBe('CONFLICT');
     });
 
     it('fills a structured item missing its message from the envelope message', () => {
-        const response = generateReject(409, 'Conflict', [{ code: 'DUPLICATE', message: '' }]);
+        const response = generateReject(409, [{ code: 'DUPLICATE', message: '' }]);
 
         expect(response.errors[0]).toEqual({ code: 'DUPLICATE', message: 'Conflict' });
     });
@@ -198,13 +228,13 @@ describe('generateReject', () => {
     it('omits details entirely rather than serialising it as undefined', () => {
         // A `"details": undefined` key survives some serialisers as `null` and shows up in
         // contract validation as an undeclared field.
-        const response = generateReject(422, 'Validation failed', [{ code: 'X', message: 'Y' }]);
+        const response = generateReject(422, [{ code: 'X', message: 'Y' }]);
 
         expect(response.errors[0]).not.toHaveProperty('details');
     });
 
     it('keeps details when provided', () => {
-        const response = generateReject(422, 'Validation failed', [
+        const response = generateReject(422, [
             { code: 'X', message: 'Y', details: { field: 'email' } }
         ]);
 
@@ -239,7 +269,7 @@ describe('rejectResponse', () => {
     it('applies the same status to the HTTP response and the body', () => {
         const response = makeResponseStub();
 
-        rejectResponse(response, 404, 'Not Found', ['No such product']);
+        rejectResponse(response, 404, ['No such product']);
 
         expect(response.status).toHaveBeenCalledWith(404);
         expect(response.json).toHaveBeenCalledWith({
@@ -264,6 +294,6 @@ describe('rejectResponse', () => {
         // "headers already sent". Pinned so the contract cannot change silently.
         const response = makeResponseStub();
 
-        expect(() => rejectResponse(response, 500, 'Boom')).not.toThrow();
+        expect(() => rejectResponse(response, 500)).not.toThrow();
     });
 });

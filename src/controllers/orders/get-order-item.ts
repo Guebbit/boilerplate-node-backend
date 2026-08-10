@@ -19,17 +19,13 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
         .getById(String(request.params.id), orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
-                rejectResponse(response, 404, 'getOrderItem - not found', [
-                    t('ecommerce.order-not-found')
-                ]);
+                rejectResponse(response, 404, [t('ecommerce.order-not-found')]);
                 return;
             }
             successResponse(response, order);
         })
         .catch((error: CastError) => {
-            if (error.message === '404' || error.kind === 'ObjectId')
-                return rejectResponse(response, 404, 'getOrderItem - not found', [
-                    t('ecommerce.order-not-found')
-                ]);
+            if (error.kind === 'ObjectId')
+                return rejectResponse(response, 404, [t('ecommerce.order-not-found')]);
             rejectDatabaseError(response, 'getOrderItem', error);
         });

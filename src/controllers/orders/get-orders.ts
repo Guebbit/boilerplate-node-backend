@@ -11,7 +11,7 @@ import type { SearchOrdersRequest } from '@types';
 import type { CastError } from 'mongoose';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -53,7 +53,7 @@ export const getOrders = (
 ) => {
     const isAdmin = Boolean(request.authContext?.admin);
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
-    const input = readInput(request, { sources: ['body', 'query'], ids: ['id'] });
+    const input = readInput(request, { surface: 'search', ids: ['id'] });
 
     const parseResult = searchOrdersQuerySchema.safeParse({
         ...input,
@@ -64,7 +64,6 @@ export const getOrders = (
         return rejectResponse(
             response,
             422,
-            'getOrders - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 
@@ -73,7 +72,7 @@ export const getOrders = (
         .then((result) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: AnalyticsEvent.ORDERS_VIEWED
+                event: analyticsEvents.ORDERS_VIEWED
             });
             successResponse(response, result);
         })

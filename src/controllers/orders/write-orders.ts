@@ -12,7 +12,7 @@ import { orderCreatedTotal } from '@core/observability/metrics-domain';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -37,7 +37,7 @@ export const writeOrders = (
 ) => {
     // One declaration instead of reading `request.params.id` and the body separately — see
     // docs/theory/request-input.md. Orders carry no multipart variant, so nothing needs decoding.
-    const { id } = readInput(request, { sources: ['params', 'body'], ids: ['id'] });
+    const { id } = readInput(request, { surface: 'write', ids: ['id'] });
 
     /**
      * NO ID = new order
@@ -45,9 +45,7 @@ export const writeOrders = (
     if (!id) {
         // PUT without an id is invalid
         if (request.method === 'PUT') {
-            rejectResponse(response, 422, 'updateOrder - missing id', [
-                t('generic.error-missing-data')
-            ]);
+            rejectResponse(response, 422, [t('generic.error-missing-data')]);
             return Promise.resolve();
         }
 
@@ -56,7 +54,6 @@ export const writeOrders = (
             rejectResponse(
                 response,
                 422,
-                'createOrder - invalid data',
                 parseResult.error.issues.map(({ message }) => message)
             );
             return Promise.resolve();
@@ -66,7 +63,7 @@ export const writeOrders = (
 
         return orderService.create(userId, email, items).then((result) => {
             if (!result.success) {
-                rejectResponse(response, result.status, result.message, result.errors);
+                rejectResponse(response, result.status, result.errors);
                 return;
             }
 
@@ -97,7 +94,7 @@ export const writeOrders = (
             );
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: AnalyticsEvent.ORDER_CREATED,
+                event: analyticsEvents.ORDER_CREATED,
                 properties: { order_id: orderId }
             });
             successResponse(response, result.data, 201);
@@ -114,7 +111,6 @@ export const writeOrders = (
         rejectResponse(
             response,
             422,
-            'updateOrder - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
         return Promise.resolve();
@@ -124,7 +120,7 @@ export const writeOrders = (
         .updateById(id, parseResult.data)
         .then((result) => {
             if (!result.success) {
-                rejectResponse(response, result.status, result.message, result.errors);
+                rejectResponse(response, result.status, result.errors);
                 return;
             }
 
@@ -140,10 +136,6 @@ export const writeOrders = (
             successResponse(response, result.data);
         })
         .catch((error: Error) => {
-            if (error.message === '404')
-                rejectResponse(response, 404, 'updateOrder - not found', [
-                    t('ecommerce.order-not-found')
-                ]);
-            else rejectDatabaseError(response, 'updateOrder', error);
+            rejectDatabaseError(response, 'writeOrder', error);
         });
 };

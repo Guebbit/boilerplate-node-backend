@@ -16,7 +16,7 @@ import type { SearchProductsRequest } from '@types';
 import type { CastError } from 'mongoose';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -66,7 +66,7 @@ export const getProducts = (
     response: Response
 ) => {
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
-    const input = readInput(request, { sources: ['body', 'query'], ids: ['id'] });
+    const input = readInput(request, { surface: 'search', ids: ['id'] });
 
     const parseResult = searchProductsQuerySchema.safeParse({
         ...input,
@@ -78,7 +78,6 @@ export const getProducts = (
         return rejectResponse(
             response,
             422,
-            'getProducts - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 
@@ -89,7 +88,7 @@ export const getProducts = (
         .then((result) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: AnalyticsEvent.PRODUCTS_SEARCHED,
+                event: analyticsEvents.PRODUCTS_SEARCHED,
                 properties: {
                     text,
                     // Reported from the result rather than the request: the caller may not have

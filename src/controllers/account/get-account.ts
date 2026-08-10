@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@core/http/response';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 
@@ -12,12 +12,12 @@ import {
  */
 export const getAccount = (request: Request, response: Response): void => {
     if (!request.authContext) {
-        rejectResponse(response, 401, 'Unauthorized');
+        rejectResponse(response, 401);
         return;
     }
     emitAnalyticsEvent({
         ...buildAnalyticsBase(request),
-        event: AnalyticsEvent.USER_PROFILE_VIEWED
+        event: analyticsEvents.USER_PROFILE_VIEWED
     });
     successResponse(response, request.authContext);
 };

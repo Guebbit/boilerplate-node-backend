@@ -33,7 +33,7 @@ export const getFeedback = (
     // cast is the same assertion the `Request` generics above already make: nothing has validated
     // these yet, which is why `status` is still re-checked below.
     const { page, pageSize, text, email, status } = readInput(request, {
-        sources: ['body', 'query']
+        surface: 'search'
     }) as FeedbackQuery;
 
     // Only the pagination is validated here — the other filters are free-text and unconstrained.
@@ -45,7 +45,6 @@ export const getFeedback = (
             rejectResponse(
                 response,
                 422,
-                'getFeedback - invalid data',
                 parseResult.error.issues.map(({ message }) => message)
             )
         );

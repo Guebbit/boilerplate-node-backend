@@ -65,35 +65,16 @@ export const shutdownAnalytics = async (): Promise<void> => {
 // ─── Event taxonomy ───────────────────────────────────────────────────────────
 // See docs/tools/posthog.md for the full event catalog.
 //
-// A closed enum rather than free-form strings: analytics data is only useful if event names
-// are stable, and a typo ('user_signedup') creates a silent second event that fragments every
-// funnel built on it. The naming convention is snake_case `noun_pastTenseVerb`, which is what
-// PostHog's UI sorts and groups well.
+// Re-exported rather than declared here: the names are shared with the paired frontend, which
+// emits the same funnel from the other end. `analytics-events.ts` owns them and is guarded by
+// `check:spec-identity`; this module owns the transport.
 
-export enum AnalyticsEvent {
-    // Auth / onboarding
-    USER_SIGNED_UP = 'user_signed_up',
-    USER_LOGGED_IN = 'user_logged_in',
-    USER_PROFILE_VIEWED = 'user_profile_viewed',
-    ACCOUNT_DELETED = 'account_deleted',
+import { type TSharedAnalyticsEventName } from '@core/observability/analytics-events';
 
-    // Product discovery
-    PRODUCTS_SEARCHED = 'products_searched',
-    PRODUCT_VIEWED = 'product_viewed',
-
-    // Cart
-    CART_VIEWED = 'cart_viewed',
-    CART_ITEM_ADDED = 'cart_item_added',
-    CART_ITEM_UPDATED = 'cart_item_updated',
-    CART_ITEM_REMOVED = 'cart_item_removed',
-    CART_CLEARED = 'cart_cleared',
-
-    // Checkout / orders
-    CHECKOUT_COMPLETED = 'checkout_completed',
-    CHECKOUT_FAILED = 'checkout_failed',
-    ORDER_CREATED = 'order_created',
-    ORDERS_VIEWED = 'orders_viewed'
-}
+export {
+    analyticsEvents,
+    type TSharedAnalyticsEventName
+} from '@core/observability/analytics-events';
 
 // ─── Payload schema ───────────────────────────────────────────────────────────
 
@@ -103,8 +84,8 @@ export enum AnalyticsEvent {
 export interface IAnalyticsEvent {
     /** PostHog distinct_id: authenticated user ID or a session/anonymous ID. */
     distinctId: string;
-    /** Event name from AnalyticsEvent enum. */
-    event: AnalyticsEvent;
+    /** Event name from the shared `analyticsEvents` catalogue. */
+    event: TSharedAnalyticsEventName;
     /** ISO-8601 timestamp; defaults to now if omitted. */
     timestamp?: Date;
     /** OTel trace ID for cross-signal correlation. */
@@ -121,7 +102,7 @@ export interface IAnalyticsEvent {
  *
  * Typed as `Pick<...>` so it stays in lockstep with `IAnalyticsEvent`: renaming a field there
  * breaks this signature at compile time instead of silently producing a wrong shape.
- * Usage: `analytics({ ...buildAnalyticsBase(request), event: AnalyticsEvent.CART_VIEWED })`
+ * Usage: `analytics({ ...buildAnalyticsBase(request), event: analyticsEvents.CART_VIEWED })`
  */
 export const buildAnalyticsBase = (request: {
     authContext?: { id?: string } | null;

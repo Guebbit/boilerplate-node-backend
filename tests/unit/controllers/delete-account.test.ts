@@ -53,7 +53,7 @@ jest.mock('@core/observability/analytics', () => ({
     // eslint-disable-next-line @typescript-eslint/naming-convention
     __esModule: true,
     emitAnalyticsEvent: jest.fn(),
-    AnalyticsEvent: {
+    analyticsEvents: {
         ACCOUNT_DELETED: 'account_deleted'
     }
 }));
@@ -143,7 +143,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
 
         await deleteAccountRequest(req as never, res);
 
-        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500, 'deleteAccountRequest', []);
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500, []);
     });
 });
 
@@ -192,12 +192,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         await deleteAccountConfirm(req as never, res);
 
         expect(mockRemove).not.toHaveBeenCalled();
-        expect(mockRejectResponse).toHaveBeenCalledWith(
-            res,
-            422,
-            'deleteAccountConfirm - invalid token',
-            expect.any(Array)
-        );
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
     });
 
     it('returns 422 when token is expired', async () => {
@@ -219,12 +214,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         await deleteAccountConfirm(req as never, res);
 
         expect(mockRemove).not.toHaveBeenCalled();
-        expect(mockRejectResponse).toHaveBeenCalledWith(
-            res,
-            422,
-            'deleteAccountConfirm - expired token',
-            expect.any(Array)
-        );
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
     });
 
     it('returns 500 when service throws', async () => {
@@ -235,6 +225,6 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
         await deleteAccountConfirm(req as never, res);
 
-        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500, 'deleteAccountConfirm', []);
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500, []);
     });
 });

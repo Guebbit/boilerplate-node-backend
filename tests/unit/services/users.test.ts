@@ -419,9 +419,9 @@ describe('userService.getById', () => {
     });
 });
 
-describe('userService.adminCreate', () => {
+describe('userService.create', () => {
     it('creates a user and returns the Mongoose document', async () => {
-        const user = await userService.adminCreate({
+        const user = await userService.create({
             email: 'created@example.com',
             username: 'createduser',
             password: PLAIN_PASSWORD
@@ -434,7 +434,7 @@ describe('userService.adminCreate', () => {
     });
 
     it('can create an admin user when admin flag is set', async () => {
-        const user = await userService.adminCreate({
+        const user = await userService.create({
             email: 'superadmin@example.com',
             username: 'superadmin',
             password: PLAIN_PASSWORD,
@@ -445,12 +445,12 @@ describe('userService.adminCreate', () => {
     });
 });
 
-describe('userService.adminUpdateById', () => {
+describe('userService.updateById', () => {
     it('updates the username and admin flag of an existing user', async () => {
         const user = await createUser();
         const id = (user._id as Types.ObjectId).toString();
 
-        const result = await userService.adminUpdateById(id, {
+        const result = await userService.updateById(id, {
             username: 'new-name',
             admin: true
         });
@@ -466,7 +466,7 @@ describe('userService.adminUpdateById', () => {
         const id = (user._id as Types.ObjectId).toString();
         const originalHash = user.password;
 
-        await userService.adminUpdateById(id, { password: 'UpdatedPwd1!' });
+        await userService.updateById(id, { password: 'UpdatedPwd1!' });
 
         const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).not.toBe(originalHash);
@@ -477,14 +477,14 @@ describe('userService.adminUpdateById', () => {
         const id = (user._id as Types.ObjectId).toString();
         const originalHash = user.password;
 
-        await userService.adminUpdateById(id, { password: '' });
+        await userService.updateById(id, { password: '' });
 
         const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).toBe(originalHash);
     });
 
     it('returns reject result when the user does not exist', async () => {
-        const result = await userService.adminUpdateById('000000000000000000000000', {
+        const result = await userService.updateById('000000000000000000000000', {
             username: 'x'
         });
         expect(result.success).toBe(false);
@@ -492,11 +492,11 @@ describe('userService.adminUpdateById', () => {
     });
 });
 
-describe('userService.adminUpdate', () => {
+describe('userService.update', () => {
     it('updates an existing user document directly', async () => {
         const user = await createUser();
 
-        const result = await userService.adminUpdate(user, { username: 'direct-update' });
+        const result = await userService.update(user, { username: 'direct-update' });
 
         expect(result.success).toBe(true);
         expect((result as IResponseSuccess<IUserDocument>).data!.username).toBe('direct-update');

@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { UpdateFeedbackRequestStatusBody } from '@api/schemas.zod';
 import { rejectResponse, successResponse } from '@core/http/response';
+import { rejectDatabaseError } from '@core/http/errors';
 import type { UpdateFeedbackRequestStatusRequest } from '@types';
 import { feedbackRequestService } from '@services/feedback-requests';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
@@ -28,15 +29,13 @@ export const putFeedbackStatus = (
         return rejectResponse(
             response,
             422,
-            'Validation Error',
             parseResult.error.issues.map(({ message }) => message)
         );
 
     return feedbackRequestService
         .updateStatusById(request.params.id, parseResult.data)
         .then((result) => {
-            if (!result.success)
-                return rejectResponse(response, result.status, result.message, result.errors);
+            if (!result.success) return rejectResponse(response, result.status, result.errors);
             emitAuditEvent(
                 buildAuditEvent(request, {
                     action: AuditAction.ADMIN_FEEDBACK_STATUS_UPDATED,
@@ -47,5 +46,8 @@ export const putFeedbackStatus = (
                 })
             );
             return successResponse(response, result.data);
+        })
+        .catch((error: Error) => {
+            rejectDatabaseError(response, 'putFeedbackStatus', error);
         });
 };

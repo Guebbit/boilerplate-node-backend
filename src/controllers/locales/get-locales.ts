@@ -47,9 +47,7 @@ export const getLocaleDictionary = (request: Request<{ locale?: string }>, respo
     // it cannot correspond to a file — which makes this both the 404 check and the traversal
     // guard (`../../etc/passwd` is not a supported locale).
     if (!locale || !listSupportedLocales().includes(locale))
-        return rejectResponse(response, 404, 'getLocaleDictionary - unsupported locale', [
-            t('generic.error-invalid-data')
-        ]);
+        return rejectResponse(response, 404, [t('generic.error-invalid-data')]);
 
     return successResponse(response, {
         locale,

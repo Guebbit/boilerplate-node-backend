@@ -43,7 +43,7 @@ export const writeUsers = (
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
     // `booleans` are the fields whose type a multipart body cannot carry.
     const { id, admin, active } = readInput(request, {
-        sources: ['params', 'body'],
+        surface: 'write',
         ids: ['id'],
         booleans: ['admin', 'active']
     });
@@ -69,7 +69,7 @@ export const writeUsers = (
     });
     if (errors.length > 0)
         return deleteUpload().then(() => {
-            rejectResponse(response, 422, 'writeUser - validation failed', errors);
+            rejectResponse(response, 422, errors);
         });
 
     // Past the guard above, these have been checked against zodUserSchema — the assertion
@@ -82,14 +82,12 @@ export const writeUsers = (
     if (!id) {
         // PUT without an id is invalid
         if (request.method === 'PUT') {
-            rejectResponse(response, 422, 'updateUser - missing id', [
-                t('generic.error-missing-data')
-            ]);
+            rejectResponse(response, 422, [t('generic.error-missing-data')]);
             return deleteUpload();
         }
 
         return userService
-            .adminCreate({
+            .create({
                 // After validation it will be compatible for sure
                 ...(request.body as IUser),
                 ...validated
@@ -117,19 +115,28 @@ export const writeUsers = (
     /**
      * ID = edit user
      */
-    return userService.adminUpdateById(id, { ...request.body, ...validated }).then((result) => {
-        if (!result.success)
-            return deleteUpload().then(() => {
-                rejectResponse(response, result.status, result.message, result.errors);
-            });
-        emitAuditEvent(
-            buildAuditEvent(request, {
-                action: AuditAction.ADMIN_USER_UPDATED,
-                outcome: 'success',
-                target_type: 'user',
-                target_id: id
+    return userService
+        .updateById(id, { ...request.body, ...validated })
+        .then((result) => {
+            if (!result.success)
+                return deleteUpload().then(() => {
+                    rejectResponse(response, result.status, result.errors);
+                });
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: AuditAction.ADMIN_USER_UPDATED,
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: id
+                })
+            );
+            successResponse(response, result.data);
+        })
+        .catch((error: Error) =>
+            // Matches the create branch above: an upload this request wrote must not survive a
+            // failed write, or the file is orphaned with nothing referencing it.
+            deleteUpload().then(() => {
+                rejectDatabaseError(response, 'writeUser', error);
             })
         );
-        successResponse(response, result.data);
-    });
 };

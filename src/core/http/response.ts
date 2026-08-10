@@ -106,24 +106,49 @@ const resolveErrorCode = (status: number) => {
 };
 
 /**
+ * The envelope's `message`, derived from the status and nothing else.
+ *
+ * Derived rather than passed, which is the whole point: callers cannot supply one, so there is
+ * exactly one wording per status across the API. Two conventions used to coexist — a bare
+ * `'Not Found'` and an operation-prefixed `'getProductItem - not found'` — and the prefix was a
+ * way to locate the failing handler back when nothing else could. `request_id` and `trace_id` on
+ * every log line do that job now, so the prefix bought nothing and leaked the handler layout to
+ * anyone reading a 404.
+ *
+ * `message` is the developer-facing summary. The user-facing, translated text is `errors[]` — see
+ * the i18n note in `@core/http/request`.
+ *
+ * @param status - HTTP status code
+ * @returns the canonical reason phrase for that status
+ */
+export const resolveErrorMessage = (status: number) => {
+    if (status === 400) return 'Bad Request';
+    if (status === 401) return 'Unauthorized';
+    if (status === 403) return 'Forbidden';
+    if (status === 404) return 'Not Found';
+    if (status === 409) return 'Conflict';
+    if (status === 422) return 'Unprocessable Entity';
+    if (status === 429) return 'Too Many Requests';
+    if (status >= 500) return 'Internal Server Error';
+    return 'Request Error';
+};
+
+/**
  * Normalizes mixed error inputs into the structured API error item shape.
  *
  * Callers may pass plain strings (the common case: a translated message) or fully-formed
  * items. Accepting both keeps call sites terse while guaranteeing the response always
  * carries `{ code, message }` pairs.
  *
- * @param status - used to derive a code when none was supplied
- * @param message - envelope-level message, reused as a fallback
+ * @param status - used to derive both a code and the fallback text when none was supplied
  * @param errors - strings and/or structured items, possibly empty
  * @returns a non-empty array of structured items
  */
 const normalizeErrors = (
     status: number,
-    message: string,
     errors: Array<string | IResponseErrorItem>
 ): IResponseErrorItem[] => {
-    // `||` (not `??`) so an empty string also falls through to the generic text.
-    const fallbackMessage = message || 'Request failed';
+    const fallbackMessage = resolveErrorMessage(status);
     // Guarantee at least one item: a failure response with `errors: []` would force every
     // client to special-case it.
     const inputErrors = errors.length > 0 ? errors : [fallbackMessage];
@@ -153,19 +178,18 @@ const normalizeErrors = (
  * so it can be asserted on directly in tests.
  *
  * Defaults to 400: the most common client-error status, and a safer accidental default than 500.
+ *
+ * There is no `message` parameter on purpose — see {@link resolveErrorMessage}. `errors` is where
+ * a caller says something specific, and it is the half the client is meant to read.
  */
-export const generateReject = (
-    status = 400,
-    message = '',
-    errors: Array<string | IResponseErrorItem> = []
-) =>
+export const generateReject = (status = 400, errors: Array<string | IResponseErrorItem> = []) =>
     ({
         success: false,
         status,
-        message,
+        message: resolveErrorMessage(status),
         // Explicitly present-but-undefined; see `IResponseReject.data`.
         data: undefined,
-        errors: normalizeErrors(status, message, errors)
+        errors: normalizeErrors(status, errors)
     }) as IResponseReject;
 
 /**
@@ -178,9 +202,5 @@ export const generateReject = (
 export const rejectResponse = (
     response: Response,
     status = 400,
-    message = '',
     errors: Array<string | IResponseErrorItem> = []
-) =>
-    response
-        .status(status)
-        .json(generateReject(status, message, errors)) as Response<IResponseReject>;
+) => response.status(status).json(generateReject(status, errors)) as Response<IResponseReject>;

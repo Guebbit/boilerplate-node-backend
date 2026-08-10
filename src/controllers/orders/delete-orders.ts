@@ -22,7 +22,7 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
     // `hardDelete` is a boolean the route accepts three ways — see docs/theory/request-input.md.
     // The path form (`DELETE /orders/:id/hard`) reaches `params` through `routeFlag`.
     const input = readInput(request, {
-        sources: ['params', 'query', 'body'],
+        surface: 'delete',
         booleans: ['hardDelete']
     });
     const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
@@ -31,7 +31,6 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
             rejectResponse(
                 response,
                 422,
-                'deleteOrder - invalid hardDelete',
                 parseResult.error.issues.map(({ message }) => message)
             )
         );
@@ -43,7 +42,7 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
             .removeById(id, hardDelete)
             .then((result) => {
                 if (!result.success) {
-                    rejectResponse(response, result.status, result.message, result.errors);
+                    rejectResponse(response, result.status, result.errors);
                     return;
                 }
                 emitAuditEvent(
@@ -58,10 +57,8 @@ export const deleteOrders = (request: Request<ParamsDictionary>, response: Respo
                 successResponse(response, undefined, 200, result.message);
             })
             .catch((error: CastError) => {
-                if (error.message === '404' || error.kind === 'ObjectId')
-                    return rejectResponse(response, 404, 'Not Found', [
-                        t('ecommerce.order-not-found')
-                    ]);
+                if (error.kind === 'ObjectId')
+                    return rejectResponse(response, 404, [t('ecommerce.order-not-found')]);
                 rejectDatabaseError(response, 'deleteOrder', error);
             })
     );

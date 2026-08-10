@@ -7,7 +7,7 @@ import {
     type IResponseSuccess,
     type IResponseReject
 } from '@core/http/response';
-import { databaseErrorInterpreter } from '@core/http/errors';
+import { rejectDatabaseEnvelope } from '@core/http/errors';
 import { sumLineItems } from '@core/totals';
 import type { IOrderDocument } from '@models/orders';
 import type { ICartDocument } from '@models/carts';
@@ -196,7 +196,7 @@ export const cartItemRemoveById = (
     id: string
 ): Promise<IResponseSuccess<ICartView> | IResponseReject> =>
     cartRepository.removeLine(userId, id).then((cart) => {
-        if (!cart) return generateReject(404, 'cart - item not found', []);
+        if (!cart) return generateReject(404, []);
         return toCartView(cart).then((view) => generateSuccess(view, 200));
     });
 
@@ -251,7 +251,7 @@ export const orderConfirm = (
     userRepository
         .findById(userId)
         .then<IResponseSuccess<IOrderDocument> | IResponseReject>((user) => {
-            if (!user) return generateReject(404, 'cart - user not found', []);
+            if (!user) return generateReject(404, []);
 
             return cartRepository.findByUserId(userId).then((cart) => {
                 // The version the lines below are read at, and the condition the cart is emptied
@@ -260,12 +260,22 @@ export const orderConfirm = (
                 const version = cart?.__v ?? 0;
 
                 return readCartLines(cart).then((lines) => {
+                    // Explicit `code`s rather than bare strings: the checkout-failure analytics
+                    // event reports this code, so it must stay stable and locale-independent
+                    // while `message` is translated for the user.
                     if (lines.length === 0)
-                        return generateReject(409, 'empty cart', ['Cart is empty']);
+                        return generateReject(409, [
+                            { code: 'CART_EMPTY', message: t('ecommerce.cart-empty') }
+                        ]);
 
                     const joined = lines.filter((line) => isJoined(line));
                     if (joined.length !== lines.length)
-                        return generateReject(404, 'checkout - product not found', []);
+                        return generateReject(404, [
+                            {
+                                code: 'CART_PRODUCT_UNAVAILABLE',
+                                message: t('ecommerce.cart-product-unavailable')
+                            }
+                        ]);
 
                     return orderRepository
                         .create({
@@ -281,19 +291,20 @@ export const orderConfirm = (
 
                                     // Lost the race: retract the order this request wrote, so the
                                     // cart's contents end up on exactly one of them.
-                                    return orderRepository
-                                        .deleteOne(order)
-                                        .then(() =>
-                                            generateReject(409, 'checkout - cart changed', [
-                                                t('ecommerce.cart-changed')
-                                            ])
-                                        );
+                                    return orderRepository.deleteOne(order).then(() =>
+                                        generateReject(409, [
+                                            {
+                                                code: 'CART_CHANGED',
+                                                message: t('ecommerce.cart-changed')
+                                            }
+                                        ])
+                                    );
                                 })
                         );
                 });
             });
         })
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error));
 
 /**
  * Delete a user's cart outright, for a hard account deletion.
@@ -320,7 +331,7 @@ export const productRemoveFromCartsById = (
                 `Product ${id} removed from ${result.modifiedCount} cart(s)`
             )
         )
-        .catch((error: CastError | Error) => generateReject(...databaseErrorInterpreter(error)));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error));
 
 export const cartService = {
     cartGet,

@@ -3,7 +3,7 @@
  */
 
 import { logger } from '@core/adapters/logger';
-import { rejectResponse } from './response';
+import { generateReject, rejectResponse } from './response';
 // `CastError` is what Mongoose throws when a value cannot be coerced to its schema type —
 // most commonly a malformed ObjectId in a URL parameter.
 import type { CastError } from 'mongoose';
@@ -177,7 +177,7 @@ export function databaseErrorInterpreter(error: CastError | Error): [number, str
  *     request logger, which is where an operator looks.
  *
  * @param response - the express response
- * @param context - developer-facing operation name, e.g. `'getProducts'`
+ * @param context - developer-facing operation name, e.g. `'getProducts'`, recorded in the log line
  * @param error - whatever the driver or Mongoose threw
  */
 export const rejectDatabaseError = (
@@ -187,12 +187,31 @@ export const rejectDatabaseError = (
 ) => {
     const [status, detail] = databaseErrorInterpreter(error);
 
-    return rejectResponse(
-        response,
-        status,
-        // A 4xx detail describes the REQUEST and is safe to name; a 5xx detail is the driver
-        // talking about the server, and stays out of the response entirely.
-        status >= 500 ? context : `${context} - ${detail}`,
-        []
-    );
+    // `context` and `detail` go to the log, not to the caller. Both are developer-facing: the
+    // operation name is internal layout, and the interpreter's detail describes the driver. The
+    // log line carries the request id and trace id, which is what makes it findable — and what
+    // makes naming the handler in the response body unnecessary.
+    logger.error(`${context} - ${detail}`, { status });
+
+    return rejectResponse(response, status);
+};
+
+/**
+ * The same as {@link rejectDatabaseError}, for code that returns an envelope instead of sending it.
+ *
+ * Services report failure by *returning* `generateReject(...)` — they have no `Response` — so they
+ * cannot call `rejectDatabaseError`. Without this they each re-derived the status inline and
+ * dropped the interpreter's detail on the floor, which is how six `.catch` handlers ended up
+ * spreading the interpreter's tuple straight into the envelope.
+ *
+ * @param context - developer-facing operation name, e.g. `'login'`, recorded in the log line
+ * @param error - whatever the driver or Mongoose threw
+ * @returns the reject envelope for the derived status
+ */
+export const rejectDatabaseEnvelope = (context: string, error: CastError | Error) => {
+    const [status, detail] = databaseErrorInterpreter(error);
+
+    logger.error(`${context} - ${detail}`, { status });
+
+    return generateReject(status);
 };

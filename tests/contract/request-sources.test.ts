@@ -17,8 +17,8 @@
  * declaring a source no controller reads) is not asserted here: `readInput` merges every key it
  * finds, so a route can legitimately accept a declared body it never names a field of.
  *
- * **How the mapping is recovered.** Statically, from the source: `src/app.ts` gives each router's
- * mount prefix, `src/routes/*.ts` gives each mounted path and the controller it calls, and the
+ * **How the mapping is recovered.** Statically, from the source: `src/bootstrap/routes.ts` gives
+ * each router's mount prefix, `src/routes/*.ts` gives each mounted path and the controller it calls, and the
  * controller module gives its `readInput` declarations. No server is booted — the point is to
  * compare two written claims, and a runtime probe would only reveal what one request happened to
  * carry.
@@ -53,7 +53,9 @@ const read = (relative: string): string => readFileSync(path.join(ROOT, relative
 
 /** `app.use('/products', productRoutes)` → which route module sits under which prefix. */
 const readMountPrefixes = (): Map<string, string> => {
-    const app = read('src/app.ts');
+    // `src/bootstrap/routes.ts` is the only place routers are mounted; `app.ts` assembles the
+    // installs and no longer names a domain.
+    const app = read('src/bootstrap/routes.ts');
     const imports = new Map<string, string>();
     for (const [, binding, module] of app.matchAll(
         /import\s+(?:\*\s+as\s+)?{?\s*(?:router\s+as\s+)?(\w+)\s*}?\s+from\s+'([^']*routes[^']*)'/g
@@ -239,7 +241,7 @@ describe('request sources agree with openapi.yaml', () => {
      * The comparison is per CONTROLLER, against the union of every route it serves — because a
      * declaration is per controller and several controllers deliberately serve several operations.
      * `getProducts` serves `GET /products` (query) and `POST /products/search` (body) from one
-     * `sources: ['body', 'query']`; asserting that declaration against either route alone would
+     * `surface: 'search'`; asserting that declaration against either route alone would
      * report the other route's source as undeclared, which is noise, not a bug.
      *
      * What survives the union is the real defect: a controller reading a source that NO route it

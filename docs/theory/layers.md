@@ -25,16 +25,21 @@ flowchart TD
 
 ## Quick map
 
-| Layer        | Folder             | Main job                                              |
-| ------------ | ------------------ | ----------------------------------------------------- |
-| Routes       | `src/routes`       | match URLs and attach middleware                      |
-| Middlewares  | `src/middlewares`  | auth, authorization, rate limit, request guards       |
-| Controllers  | `src/controllers`  | parse request, call services, send response           |
-| Services     | `src/services`     | business rules and orchestration                      |
-| Repositories | `src/repositories` | persistence queries                                   |
-| Models       | `src/models`       | [Mongoose](../tools/mongodb-mongoose.md) schema/types |
-| Jobs         | `src/jobs`         | scheduled/background tasks not tied to a request      |
-| Core         | `src/core`         | technical substrate — see below                       |
+| Layer        | Folder             | Main job                                                               |
+| ------------ | ------------------ | ---------------------------------------------------------------------- |
+| Bootstrap    | `src/bootstrap`    | one `install*(app)` per middleware group; `app.ts` calls them in order |
+| Routes       | `src/routes`       | match URLs and attach middleware                                       |
+| Middlewares  | `src/middlewares`  | auth, authorization, rate limit, request guards                        |
+| Controllers  | `src/controllers`  | parse request, call services, send response                            |
+| Services     | `src/services`     | business rules and orchestration                                       |
+| Repositories | `src/repositories` | persistence queries                                                    |
+| Models       | `src/models`       | [Mongoose](../tools/mongodb-mongoose.md) schema/types                  |
+| Jobs         | `src/jobs`         | scheduled/background tasks not tied to a request                       |
+| Core         | `src/core`         | technical substrate — see below                                        |
+
+`src/bootstrap` is the assembly layer: it is the only place that reaches both `src/core` and the
+application layers, which is why the middleware installs live there rather than under
+`core/bootstrap` — `@middlewares/*` is application code and core may not import it.
 
 `src/core` is the bottom of the dependency graph: it may be imported by any
 layer above, and may never import from them. ESLint enforces this.

@@ -11,8 +11,18 @@ happens to the value on the way in.
 
 ## The table
 
-Read "sources" left-to-right as precedence, highest first — this is exactly the `sources` array
-each controller declares.
+Read "sources" left-to-right as precedence, highest first. A controller does not spell this array:
+it names the **surface** it is (`search`, `write`, `delete`, `path`) and `SURFACE_SOURCES` in
+`@core/http/request` maps that to the row below. The set is closed, so precedence is a property of
+the surface rather than of whichever array the newest controller happened to pass — and a fifth
+combination has to be added there deliberately, where it can be reviewed against the spec.
+
+| Surface  | Sources (highest first) | Used by                                              |
+| -------- | ----------------------- | ---------------------------------------------------- |
+| `search` | body, query             | the four list/search endpoints                       |
+| `write`  | params, body            | `writeProducts`/`writeUsers`/`writeOrders`, cart PUT |
+| `delete` | params, query, body     | the three soft/hard delete controllers               |
+| `path`   | params                  | `DELETE /cart/{productId}`, which declares no body   |
 
 | Endpoint(s)                                                             | Parameter                                       | Sources (highest first) | Treatment                                      |
 | ----------------------------------------------------------------------- | ----------------------------------------------- | ----------------------- | ---------------------------------------------- |
@@ -58,7 +68,7 @@ request is rejected, not quietly turned into a different request.
 
 ## The rules behind the table
 
-**Precedence is a `||` chain over the declared sources.** An empty value falls through as if the
+**Precedence is a `||` chain over the surface's sources.** An empty value falls through as if the
 key were absent, so `?id=` on a route that also has a body `id` reads the body's. This is the one
 place the migration to `readInput` unified two spellings that used to differ: `extractCustomId`
 used `||` (empty falls through) while `extractAndValidateId` used `??` (empty wins). No endpoint's
@@ -91,17 +101,17 @@ The schemas for the scalars more than one endpoint accepts live in `@core/http/s
 
 ```ts
 const input = readInput(request, {
-    // precedence, highest first — explicit, not implied by which helper was reached for
-    sources: ['params', 'body', 'query'],
+    // which surface this is; the sources and their precedence follow from it
+    surface: 'delete',
     ids: ['id'],
     booleans: ['active', 'hardDelete'],
     stringArrays: ['categories', 'tags']
 });
 ```
 
-- `sources` — which of `params`/`body`/`query` this route reads, highest precedence first. Every
-  key found in any of them ends up on the result; the categories below only change how _specific_
-  keys are resolved or typed.
+- `surface` — which route surface this is, and therefore which of `params`/`body`/`query` it reads
+  and in what order (see the surface table above). Every key found in any of them ends up on the
+  result; the categories below only change how _specific_ keys are resolved or typed.
 - `ids` — scalar identifiers. A repeated key arrives as an array, so the first entry is taken, and
   the `||` chain above applies. Typed `string | undefined`; nothing is validated here.
 - `booleans` / `stringArrays` — fields whose type survives a JSON body but not a string transport.
@@ -143,7 +153,7 @@ controller, so their declarations would need unioning; and orval generates clien
 not server-side input declarations, so this would be new machinery to own.
 
 The cheaper first move is a **test**, not a generator, and it exists:
-`tests/contract/request-sources.test.ts`. It recovers the route table statically — `src/app.ts`
+`tests/contract/request-sources.test.ts`. It recovers the route table statically — `src/bootstrap/routes.ts`
 for each router's mount prefix, `src/routes/*.ts` for each mounted path and its controller — reads
 that controller's `readInput` declarations, and asserts they are a subset of what `openapi.yaml`
 allows. It also asserts the two sets of routes match: every mounted route is in the spec, and
@@ -151,7 +161,7 @@ every spec operation is mounted.
 
 The comparison is per **controller**, against the union of every route it serves, and that is the
 concession the first obstacle above forces. `getProducts` serves `GET /products` (query) and
-`POST /products/search` (body) from one `sources: ['body', 'query']`; asserting that declaration
+`POST /products/search` (body) from one `surface: 'search'`; asserting that declaration
 against either route alone would report the other's source as undeclared. What survives the union
 is the real defect — a controller reading a source **no** route it serves declares, which is the
 shape of all five closed discrepancies below. Splitting the declaration per operation is what

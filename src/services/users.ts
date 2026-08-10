@@ -62,18 +62,21 @@ export const getById = (id?: string) => {
 };
 
 /**
- * Create a new user document (admin version — no email confirmation).
+ * Create a new user document, with no email confirmation step.
+ *
+ * The self-service path is `authService.signup`, which confirms an address before the account
+ * works. This one exists for the admin write endpoints, where an operator vouches for the address.
  */
-export const adminCreate = (
+export const create = (
     data: Pick<IUser, 'email' | 'username' | 'password'> &
         Partial<Pick<IUser, 'admin' | 'imageUrl' | 'locale'>>
 ): Promise<IUserDocument> => userRepository.create(data);
 
 /**
- * Update an existing user document (admin version).
- * Returns result union instead of throwing (LSP).
+ * Update an existing user document.
+ * Returns a result envelope instead of throwing (LSP) — the protocol every service here follows.
  */
-export const adminUpdate = (
+export const update = (
     user: IUserDocument,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>>
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
@@ -89,17 +92,17 @@ export const adminUpdate = (
 };
 
 /**
- * Update an existing user by ID (admin version).
- * Fetches the document then delegates to adminUpdate().
+ * Update an existing user by ID.
+ * Fetches the document then delegates to update().
  */
-export const adminUpdateById = (
+export const updateById = (
     id: string,
     data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>>
 ): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.
     userRepository.findByIdWithCredentials(id).then((user) => {
-        if (!user) return generateReject(404, 'Not Found', [t('ecommerce.user-not-found')]);
-        return adminUpdate(user, data);
+        if (!user) return generateReject(404, [t('ecommerce.user-not-found')]);
+        return update(user, data);
     });
 
 /**
@@ -221,7 +224,7 @@ export const removeById = (
     hardDelete = false
 ): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> =>
     userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, 'Not Found', [t('ecommerce.user-not-found')]);
+        if (!user) return generateReject(404, [t('ecommerce.user-not-found')]);
         return remove(user, hardDelete);
     });
 
@@ -229,9 +232,9 @@ export const userService = {
     validateData,
     search,
     getById,
-    adminCreate,
-    adminUpdate,
-    adminUpdateById,
+    create,
+    update,
+    updateById,
     remove,
     removeById,
     findByEmail,

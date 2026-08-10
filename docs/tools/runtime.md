@@ -5,7 +5,7 @@
 | Tool                                                 | Why it is here          | Repo role                                                         |
 | ---------------------------------------------------- | ----------------------- | ----------------------------------------------------------------- |
 | [Node.js](https://nodejs.org/en/docs) (≥ 22)         | JavaScript runtime      | language platform; see also [Clustering](../theory/clustering.md) |
-| [Express 5](https://expressjs.com/)                  | REST transport layer    | routes + middleware pipeline in `src/app.ts`                      |
+| [Express 5](https://expressjs.com/)                  | REST transport layer    | pipeline assembled in `src/app.ts` from `src/bootstrap/*`         |
 | [Zod](https://zod.dev/)                              | validation and coercion | service and schema helpers                                        |
 | [Multer](https://github.com/expressjs/multer#readme) | multipart/file uploads  | upload-aware endpoints via `src/core/adapters/storage.ts`         |
 | [i18next](https://www.i18next.com/)                  | translations/messages   | shared locale-backed text from `src/locales/`                     |

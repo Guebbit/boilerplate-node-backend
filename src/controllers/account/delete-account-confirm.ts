@@ -7,7 +7,7 @@ import { successResponse, rejectResponse } from '@core/http/response';
 import type { AccountDeleteConfirmRequest } from '@types';
 import { enqueueEmail } from '@core/adapters/mailer';
 import { emitAuditEvent, AuditAction, buildAuditEvent } from '@core/observability/audit';
-import { emitAnalyticsEvent, AnalyticsEvent } from '@core/observability/analytics';
+import { emitAnalyticsEvent, analyticsEvents } from '@core/observability/analytics';
 
 /**
  * DELETE /account/delete-confirm
@@ -22,7 +22,6 @@ export const deleteAccountConfirm = (
         return rejectResponse(
             response,
             422,
-            'deleteAccountConfirm - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 
@@ -32,17 +31,13 @@ export const deleteAccountConfirm = (
         .findByAccountDeleteToken(token)
         .then((user) => {
             if (!user) {
-                rejectResponse(response, 422, 'deleteAccountConfirm - invalid token', [
-                    t('delete.token-not-found')
-                ]);
+                rejectResponse(response, 422, [t('delete.token-not-found')]);
                 return;
             }
 
             const tokenEntry = user.tokens.find((tk) => tk.token === token && tk.type === 'delete');
             if (!tokenEntry || (tokenEntry.expiration && tokenEntry.expiration < new Date())) {
-                rejectResponse(response, 422, 'deleteAccountConfirm - expired token', [
-                    t('delete.token-not-found')
-                ]);
+                rejectResponse(response, 422, [t('delete.token-not-found')]);
                 return;
             }
 
@@ -85,7 +80,7 @@ export const deleteAccountConfirm = (
 
                 emitAnalyticsEvent({
                     distinctId: String(_id),
-                    event: AnalyticsEvent.ACCOUNT_DELETED
+                    event: analyticsEvents.ACCOUNT_DELETED
                 });
 
                 destroyRefreshCookie(response);
@@ -93,5 +88,5 @@ export const deleteAccountConfirm = (
                 successResponse(response, undefined, 200, t('delete.success'));
             });
         })
-        .catch(() => rejectResponse(response, 500, 'deleteAccountConfirm', []));
+        .catch(() => rejectResponse(response, 500, []));
 };

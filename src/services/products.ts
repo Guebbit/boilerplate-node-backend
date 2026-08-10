@@ -128,16 +128,21 @@ export const update = (
  * Update an existing product by ID.
  * Fetches the document then delegates to update().
  *
+ * Reports "no such product" by RETURNING a reject envelope, like `removeById` below and like the
+ * order and user services. The alternative — throwing — forced its one caller to recognise the
+ * failure by string-matching `error.message === '404'` inside a `.catch()`, where a genuine
+ * database error was indistinguishable from a missing row.
+ *
  * @param id
  * @param data
  */
 export const updateById = (
     id: string,
     data: Partial<Omit<Product, 'id'>>
-): Promise<IProductDocument> =>
+): Promise<IResponseSuccess<IProductDocument> | IResponseReject> =>
     productRepository.findById(id).then((product) => {
-        if (!product) throw new Error('404');
-        return update(product, data);
+        if (!product) return generateReject(404, [t('ecommerce.product-not-found')]);
+        return update(product, data).then((updated) => generateSuccess(updated));
     });
 
 /**
@@ -187,7 +192,7 @@ export const removeById = (
     hardDelete = false
 ): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> =>
     productRepository.findById(id).then((product) => {
-        if (!product) return generateReject(404, 'Not Found', [t('ecommerce.product-not-found')]);
+        if (!product) return generateReject(404, [t('ecommerce.product-not-found')]);
         return remove(product, hardDelete);
     });
 

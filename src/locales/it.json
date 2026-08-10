@@ -47,7 +47,9 @@
         "order-invoice-missing": "Nessun file fattura è stato trovato",
         "cart-product-removed": "Prodotto rimosso dal carrello.",
         "cart-emptied": "Tutti i prodotti sono stati rimossi dal carrello.",
-        "cart-changed": "Il carrello è cambiato durante la conferma dell’ordine. Controllalo e riprova."
+        "cart-changed": "Il carrello è cambiato durante la conferma dell’ordine. Controllalo e riprova.",
+        "cart-empty": "Il tuo carrello è vuoto.",
+        "cart-product-unavailable": "Uno o più prodotti nel carrello non sono più disponibili."
     },
     "generic": {
         "error-unknown": "Qualcosa è andato storto con la richiesta.",
@@ -55,7 +57,8 @@
         "error-missing-data": "Errore: dati mancanti.",
         "error-internal": "Qualcosa è andato storto dalla nostra parte.",
         "error-unauthorized": "Non hai effettuato l’accesso, oppure la sessione è scaduta.",
-        "error-forbidden": "Non hai i permessi per farlo."
+        "error-forbidden": "Non hai i permessi per farlo.",
+        "error-not-found": "Quella richiesta di assistenza non esiste più."
     },
     "observability": {
         "audit-since-invalid": "Il filtro \"since\" deve essere un timestamp ISO-8601 valido."

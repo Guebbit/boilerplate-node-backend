@@ -8,7 +8,7 @@ import { rejectDatabaseError } from '@core/http/errors';
 import type { UpsertCartItemRequest } from '@types';
 import {
     emitAnalyticsEvent,
-    AnalyticsEvent,
+    analyticsEvents,
     buildAnalyticsBase
 } from '@core/observability/analytics';
 import { isValidObjectId } from '@core/http/request';
@@ -23,7 +23,7 @@ export const postCart = (
     response: Response
 ) => {
     if (!request.authContext) {
-        rejectResponse(response, 401, 'Unauthorized');
+        rejectResponse(response, 401);
         return;
     }
     const userId = request.authContext.id;
@@ -33,7 +33,6 @@ export const postCart = (
         return rejectResponse(
             response,
             422,
-            'upsertCartItem - invalid data',
             parseResult.error.issues.map(({ message }) => message)
         );
 
@@ -41,9 +40,7 @@ export const postCart = (
 
     // OpenAPI models Id as a plain string; Mongo-specific ObjectId format still needs its own check.
     if (!isValidObjectId(productId)) {
-        rejectResponse(response, 422, 'upsertCartItem - missing id', [
-            t('generic.error-missing-data')
-        ]);
+        rejectResponse(response, 422, [t('generic.error-missing-data')]);
         return;
     }
 
@@ -51,16 +48,14 @@ export const postCart = (
         .getById(productId)
         .then((product) => {
             if (!product) {
-                rejectResponse(response, 404, 'upsertCartItem - product not found', [
-                    t('ecommerce.product-not-found')
-                ]);
+                rejectResponse(response, 404, [t('ecommerce.product-not-found')]);
                 return;
             }
 
             return cartService.cartItemSetById(userId, productId, quantity).then((cart) => {
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(request),
-                    event: AnalyticsEvent.CART_ITEM_ADDED,
+                    event: analyticsEvents.CART_ITEM_ADDED,
                     properties: { product_id: productId, quantity }
                 });
                 successResponse(response, cart, 200, t('ecommerce.product-added-to-cart'));

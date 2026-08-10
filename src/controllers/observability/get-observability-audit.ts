@@ -24,9 +24,7 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
     const sinceDate = since ? new Date(since) : undefined;
 
     if (sinceDate !== undefined && Number.isNaN(sinceDate.getTime()))
-        return rejectResponse(response, 422, 'getObservabilityAuditLogs - invalid since', [
-            t('observability.audit-since-invalid')
-        ]);
+        return rejectResponse(response, 422, [t('observability.audit-since-invalid')]);
 
     return auditLogService
         .search({

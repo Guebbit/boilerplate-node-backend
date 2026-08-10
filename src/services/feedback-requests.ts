@@ -12,6 +12,7 @@ import {
     type IResponseSuccess,
     type IResponseReject
 } from '@core/http/response';
+import { t } from '@core/i18n';
 
 /**
  * OCP-compliant status mapping: adding a new status only requires adding one entry here.
@@ -77,7 +78,7 @@ export const updateStatusById = (
     payload: UpdateFeedbackRequestStatusRequest
 ): Promise<IResponseSuccess<IFeedbackRequestDocument> | IResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
-        if (!feedback) return generateReject(404, 'Not Found', ['Feedback request not found']);
+        if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
         return updateStatus(feedback, payload);
     });
 

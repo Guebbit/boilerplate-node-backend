@@ -7,8 +7,9 @@
  *                not "rejected", because it also guards public routes. It must always call
  *                `next()` exactly once, on every path, or the request hangs.
  *   `isAuth`   — *required* identification. Fails closed with 401.
- *   `isAdmin`  — *required* elevation. Fails closed with 403, and distinguishes "not logged in"
- *                from "logged in but not an admin" in the audit trail.
+ *   `isAdmin`  — *required* elevation. Fails closed, and the status says which check refused:
+ *                401 with no credentials at all (as `isAuth` does), 403 for a known non-admin.
+ *                Both bodies stay generic; the reason is recorded in the audit trail only.
  *
  * The response layer is real (not mocked) so the asserted status codes are the ones a client
  * actually receives; only the audit sink and the JWT/DB boundaries are stubbed.
@@ -320,7 +321,7 @@ describe('isAdmin', () => {
         isAdmin(makeRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
-        expect(response.status).toHaveBeenCalledWith(403);
+        expect(response.status).toHaveBeenCalledWith(401);
     });
 
     it('distinguishes not-authenticated from not-admin in the audit trail', () => {
@@ -328,7 +329,9 @@ describe('isAdmin', () => {
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
-                action: AuditAction.SECURITY_FORBIDDEN,
+                // An absent session is an authentication failure, so it is audited as one — the
+                // same action `isAuth` emits, rather than a permission denial.
+                action: AuditAction.SECURITY_UNAUTHORIZED,
                 actor_user_id: 'anonymous',
                 actor_role: 'anonymous',
                 metadata: expect.objectContaining({ reason: 'not_authenticated' })
@@ -354,16 +357,24 @@ describe('isAdmin', () => {
         );
     });
 
-    it('sends distinct messages for the two denial reasons', () => {
+    it('separates "not authenticated" (401) from "not permitted" (403)', () => {
+        /*
+         * The statuses differ because the client's next move differs: 401 means "authenticate and
+         * retry", which the frontend turns into a login redirect that returns the visitor to where
+         * they were aiming; 403 means "you are known and still refused", where logging in again
+         * would only loop. Answering 403 to an expired session sent it to the error page.
+         *
+         * The bodies stay generic and identical — which check refused is recorded in the audit
+         * trail (`reason`, asserted above), not disclosed to whoever is probing.
+         */
         const unauthenticated = makeResponseStub();
         isAdmin(makeRequest(), unauthenticated, jest.fn());
 
         const nonAdmin = makeResponseStub();
         isAdmin(makeRequest({ authContext: { id: 'user-9', admin: false } }), nonAdmin, jest.fn());
 
-        const unauthenticatedBody = unauthenticated.json.mock.calls[0][0];
-        const nonAdminBody = nonAdmin.json.mock.calls[0][0];
-        expect(unauthenticatedBody.message).not.toBe(nonAdminBody.message);
+        expect(unauthenticated.status).toHaveBeenCalledWith(401);
+        expect(nonAdmin.status).toHaveBeenCalledWith(403);
     });
 });
 

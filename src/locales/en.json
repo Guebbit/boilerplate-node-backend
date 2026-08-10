@@ -47,7 +47,9 @@
         "order-invoice-missing": "No invoice file was found",
         "cart-product-removed": "Product removed from cart.",
         "cart-emptied": "All products removed from cart.",
-        "cart-changed": "Your cart changed while the order was being placed. Check it and try again."
+        "cart-changed": "Your cart changed while the order was being placed. Check it and try again.",
+        "cart-empty": "Your cart is empty.",
+        "cart-product-unavailable": "One or more products in your cart are no longer available."
     },
     "generic": {
         "error-unknown": "Something went wrong with the request.",
@@ -55,7 +57,8 @@
         "error-missing-data": "Error: missing data.",
         "error-internal": "Something went wrong on our side.",
         "error-unauthorized": "You are not signed in, or your session has expired.",
-        "error-forbidden": "You do not have permission to do that."
+        "error-forbidden": "You do not have permission to do that.",
+        "error-not-found": "That feedback request no longer exists."
     },
     "observability": {
         "audit-since-invalid": "The \"since\" filter must be a valid ISO-8601 timestamp."
