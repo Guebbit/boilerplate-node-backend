@@ -103,6 +103,24 @@ const ownerScope = (userId: string): Record<string, unknown> => ({
 });
 
 /**
+ * What a non-admin caller is allowed to see: their own orders, not soft-deleted.
+ *
+ * The counterpart of `publicScope` in @repositories/products, and it lives here for the same
+ * reason — it is a rule about which *rows* exist for a given audience, not about a request.
+ *
+ * Two axes, deliberately composed rather than merged: `ownerScope` answers "whose", the
+ * `deletedAt` clause answers "still there". An admin passes no scope at all, which is how they
+ * read both other people's orders and soft-deleted ones.
+ *
+ * `$exists: false` rather than `null`: `remove` unsets the field to restore, so a restored order
+ * has no `deletedAt` key rather than a null one.
+ */
+const visibleScope = (userId: string): Record<string, unknown> => ({
+    ...ownerScope(userId),
+    deletedAt: { $exists: false }
+});
+
+/**
  * `search` is narrower than the base signature (no caller-supplied sort — the pipeline fixes it),
  * so it is omitted from the base contract rather than intersected with it.
  *
@@ -120,10 +138,12 @@ export const orderRepository: Omit<IBaseRepository<IOrderDocument>, 'search'> & 
         scope?: Record<string, unknown>
     ) => Promise<IOrderDocument | undefined>;
     ownerScope: (userId: string) => Record<string, unknown>;
+    visibleScope: (userId: string) => Record<string, unknown>;
 } = {
     ...base,
     aggregate,
     search,
     findByIdScoped,
-    ownerScope
+    ownerScope,
+    visibleScope
 };

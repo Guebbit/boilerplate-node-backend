@@ -14,17 +14,24 @@
  *     the only one that would notice a fork introduced by hand. Where the sibling is missing it
  *     reports as skipped rather than passing quietly, because a check that silently evaporates is
  *     worse than one that is visibly absent.
+ *
+ * The fixtures are built from `SHARED_FILES` rather than from a hardcoded list, so a file added
+ * to the check is covered by every case below without touching this file — and, more to the
+ * point, cannot be added *without* being covered.
  */
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-    SHARED_SPEC_FILES,
-    compareSpecs,
-    formatSpecProblems,
+    SHARED_FILES,
+    THIS_REPO,
+    siblingRole,
+    compareSharedFiles,
+    formatSharedFileProblems,
     hashFile,
-    specProblems
+    sharedFileProblems,
+    type TRepoRole
 } from '../../../scripts/specIdentity';
 import { resolveFrontendPath } from '../../../scripts/frontendPath';
 
@@ -38,8 +45,49 @@ const makeRoot = (files: Record<string, string>): string => {
     return root;
 };
 
-const allSpecs = (suffix = '') =>
-    Object.fromEntries(SHARED_SPEC_FILES.map((file) => [file, `${file} contents${suffix}`]));
+/**
+ * Every shared file as one side spells it, with contents keyed by the pair's *index*.
+ *
+ * Indexed rather than named because the two sides do not agree on names: the seed identities live
+ * at different paths, so contents keyed by path would differ between the repos and every pair
+ * would read as forked. What must match is the bytes, not the filename.
+ */
+const sharedFiles = (role: TRepoRole, suffix = ''): Record<string, string> =>
+    Object.fromEntries(
+        SHARED_FILES.map((shared, index) => [shared[role], `shared-${index} contents${suffix}`])
+    );
+
+/**
+ * The three same-path contract files, as named constants.
+ *
+ * Declared rather than written inline because a filename is not an identifier: `'openapi.yaml'` as
+ * a literal object key trips the naming-convention lint rule in every fixture, while a computed
+ * key built from a variable does not. `sharedFilesWith` and `withoutFile` exist for the same
+ * reason — they are the only two shapes a fixture needs.
+ */
+const OPENAPI = 'openapi.yaml';
+const ASYNCAPI = 'asyncapi.yaml';
+const SPECTRAL = 'spectral.yaml';
+
+/** `sharedFiles(role)` with one entry replaced. */
+const sharedFilesWith = (
+    role: TRepoRole,
+    file: string,
+    contents: string
+): Record<string, string> => ({ ...sharedFiles(role), [file]: contents });
+
+/** `sharedFiles(role)` with one entry removed. */
+const withoutFile = (role: TRepoRole, file: string): Record<string, string> => {
+    const files = sharedFiles(role);
+    delete files[file];
+    return files;
+};
+
+const HERE: TRepoRole = 'backend';
+const THERE: TRepoRole = 'frontend';
+
+/** A pair whose paths differ between the repos — the case a same-path check could not express. */
+const CROSS_PATH = SHARED_FILES.find(({ backend, frontend }) => backend !== frontend)!;
 
 const roots: string[] = [];
 const root = (files: Record<string, string>) => {
@@ -52,107 +100,184 @@ afterAll(() => {
     for (const created of roots) rmSync(created, { recursive: true, force: true });
 });
 
-describe('compareSpecs', () => {
+describe('SHARED_FILES', () => {
+    it('names this repo as the backend', () => {
+        // The one value that differs from the frontend's copy of the module. If it were wrong,
+        // every cross-path pair would be compared against the wrong filename and report missing.
+        expect(THIS_REPO).toBe('backend');
+        expect(siblingRole(THIS_REPO)).toBe('frontend');
+    });
+
+    it('covers the contract, the seed fixtures and the generated realtime types', () => {
+        const backendPaths = new Set(SHARED_FILES.map(({ backend }) => backend));
+
+        expect(backendPaths).toContain(OPENAPI);
+        expect(backendPaths).toContain(ASYNCAPI);
+        expect(backendPaths).toContain(SPECTRAL);
+        // The two that went unguarded until the list could hold differing paths.
+        expect(backendPaths).toContain('db/seeds/seed-identities.ts');
+        expect(backendPaths).toContain('src/types/asyncapi.ts');
+    });
+
+    it('holds at least one pair whose paths differ between the repos', () => {
+        // Guards the reason the list is pairs at all: if this ever became empty, the structure
+        // could quietly collapse back to single names and the seed fixtures would fall out.
+        expect(CROSS_PATH).toBeDefined();
+        expect(CROSS_PATH.backend).not.toBe(CROSS_PATH.frontend);
+    });
+
+    it('lists no file twice on either side', () => {
+        const backendPaths = SHARED_FILES.map(({ backend }) => backend);
+        const frontendPaths = SHARED_FILES.map(({ frontend }) => frontend);
+
+        expect(new Set(backendPaths).size).toBe(backendPaths.length);
+        expect(new Set(frontendPaths).size).toBe(frontendPaths.length);
+    });
+});
+
+describe('compareSharedFiles', () => {
     it('reports every shared file as matching when the two copies are identical', () => {
-        const here = root(allSpecs());
-        const there = root(allSpecs());
+        // Note the two roots are built with DIFFERENT path sets — backend spelling here, frontend
+        // spelling there — which is the whole point of the pair structure.
+        const here = root(sharedFiles(HERE));
+        const there = root(sharedFiles(THERE));
 
-        const comparisons = compareSpecs(there, here);
+        const comparisons = compareSharedFiles(there, here, HERE);
 
-        expect(comparisons).toHaveLength(SHARED_SPEC_FILES.length);
+        expect(comparisons).toHaveLength(SHARED_FILES.length);
         expect(comparisons.every(({ status }) => status === 'match')).toBe(true);
-        expect(specProblems(comparisons)).toEqual([]);
+        expect(sharedFileProblems(comparisons)).toEqual([]);
+    });
+
+    it('matches a cross-path pair across its two different names', () => {
+        // `db/seeds/seed-identities.ts` here, `tests/mocks/shared/seed-identities.ts` there.
+        const here = root(sharedFiles(HERE));
+        const there = root(sharedFiles(THERE));
+
+        const comparison = compareSharedFiles(there, here, HERE).find(
+            ({ file }) => file === CROSS_PATH.backend
+        );
+
+        expect(comparison?.status).toBe('match');
+        expect(comparison?.siblingFile).toBe(CROSS_PATH.frontend);
+    });
+
+    it('reports a cross-path pair as forked when only one side changed', () => {
+        // The bug this pair exists to catch: seed fixtures edited in one repo only. Both suites
+        // stay green — each is consistent with its own copy — and only this notices.
+        const here = root(sharedFiles(HERE));
+        const there = root({
+            ...sharedFiles(THERE),
+            [CROSS_PATH.frontend]: 'edited on one side only'
+        });
+
+        const drifted = compareSharedFiles(there, here, HERE).filter(
+            ({ status }) => status === 'drift'
+        );
+
+        expect(drifted.map(({ file }) => file)).toEqual([CROSS_PATH.backend]);
     });
 
     it('reports a one-byte difference as a fork', () => {
         // The whole point: a spec that still parses, still lints, and no longer agrees.
-        const here = root(allSpecs());
-        const there = root({ ...allSpecs(), 'openapi.yaml': 'openapi.yaml contents ' });
+        const here = root(sharedFiles(HERE));
+        const there = root(sharedFilesWith(THERE, OPENAPI, 'shared-0 contents '));
 
-        const comparisons = compareSpecs(there, here);
-        const drifted = comparisons.filter(({ status }) => status === 'drift');
+        const drifted = compareSharedFiles(there, here, HERE).filter(
+            ({ status }) => status === 'drift'
+        );
 
-        expect(drifted.map(({ file }) => file)).toEqual(['openapi.yaml']);
+        expect(drifted.map(({ file }) => file)).toEqual([OPENAPI]);
         expect(drifted[0]?.ours).not.toBe(drifted[0]?.theirs);
     });
 
     it('names spectral.yaml too, not only the two specs', () => {
         // The ruleset is as shared as the documents it lints — see the note in specIdentity.ts.
-        const here = root(allSpecs());
-        const there = root({ ...allSpecs(), 'spectral.yaml': 'different rules' });
+        const here = root(sharedFiles(HERE));
+        const there = root(sharedFilesWith(THERE, SPECTRAL, 'different rules'));
 
-        expect(specProblems(compareSpecs(there, here)).map(({ file }) => file)).toEqual([
-            'spectral.yaml'
-        ]);
+        expect(
+            sharedFileProblems(compareSharedFiles(there, here, HERE)).map(({ file }) => file)
+        ).toEqual([SPECTRAL]);
     });
 
     it('distinguishes a missing sibling checkout from a forked contract', () => {
         // Every file `missing-there` is what an unchecked-out sibling looks like, and it wants a
         // different message from "your specs disagree". Reported, never thrown.
-        const here = root(allSpecs());
+        const here = root(sharedFiles(HERE));
         const there = root({});
 
-        const comparisons = compareSpecs(there, here);
+        const comparisons = compareSharedFiles(there, here, HERE);
 
         expect(comparisons.every(({ status }) => status === 'missing-there')).toBe(true);
         expect(comparisons.every(({ theirs }) => theirs === undefined)).toBe(true);
     });
 
     it('reports a file deleted on this side', () => {
-        const here = root({ 'openapi.yaml': 'a', 'asyncapi.yaml': 'b' });
-        const there = root(allSpecs());
+        const here = root(withoutFile(HERE, SPECTRAL));
+        const there = root(sharedFiles(THERE));
 
-        const comparisons = compareSpecs(there, here);
+        const comparisons = compareSharedFiles(there, here, HERE);
 
-        expect(comparisons.find(({ file }) => file === 'spectral.yaml')?.status).toBe(
-            'missing-here'
-        );
+        expect(comparisons.find(({ file }) => file === SPECTRAL)?.status).toBe('missing-here');
     });
 
     it('does not throw when neither side has anything', () => {
-        expect(() => compareSpecs(root({}), root({}))).not.toThrow();
+        expect(() => compareSharedFiles(root({}), root({}), HERE)).not.toThrow();
     });
 });
 
 describe('hashFile', () => {
     it('gives identical contents the same digest and different contents a different one', () => {
-        const a = root({ 'openapi.yaml': 'same' });
-        const b = root({ 'openapi.yaml': 'same' });
-        const c = root({ 'openapi.yaml': 'other' });
+        const a = root({ [OPENAPI]: 'same' });
+        const b = root({ [OPENAPI]: 'same' });
+        const c = root({ [OPENAPI]: 'other' });
 
-        expect(hashFile(path.join(a, 'openapi.yaml'))).toBe(hashFile(path.join(b, 'openapi.yaml')));
-        expect(hashFile(path.join(a, 'openapi.yaml'))).not.toBe(
-            hashFile(path.join(c, 'openapi.yaml'))
-        );
+        expect(hashFile(path.join(a, OPENAPI))).toBe(hashFile(path.join(b, OPENAPI)));
+        expect(hashFile(path.join(a, OPENAPI))).not.toBe(hashFile(path.join(c, OPENAPI)));
     });
 });
 
-describe('formatSpecProblems', () => {
+describe('formatSharedFileProblems', () => {
     it('says nothing when there is nothing wrong', () => {
-        const here = root(allSpecs());
-        const there = root(allSpecs());
+        const here = root(sharedFiles(HERE));
+        const there = root(sharedFiles(THERE));
 
-        expect(formatSpecProblems(compareSpecs(there, here), there)).toBe('');
+        expect(formatSharedFileProblems(compareSharedFiles(there, here, HERE), there)).toBe('');
     });
 
     it('names the forked file and both digests', () => {
-        const here = root(allSpecs());
-        const there = root({ ...allSpecs(), 'asyncapi.yaml': 'forked' });
+        const here = root(sharedFiles(HERE));
+        const there = root(sharedFilesWith(THERE, ASYNCAPI, 'forked'));
 
-        const message = formatSpecProblems(compareSpecs(there, here), there);
+        const message = formatSharedFileProblems(compareSharedFiles(there, here, HERE), there);
 
-        expect(message).toContain('asyncapi.yaml');
+        expect(message).toContain(ASYNCAPI);
         expect(message).toContain('FORKED');
         // Both digests, so the message can be pasted into an issue and mean something later.
-        expect(message).toContain(hashFile(path.join(here, 'asyncapi.yaml')));
-        expect(message).toContain(hashFile(path.join(there, 'asyncapi.yaml')));
+        expect(message).toContain(hashFile(path.join(here, ASYNCAPI)));
+        expect(message).toContain(hashFile(path.join(there, ASYNCAPI)));
+    });
+
+    it('names both paths when a cross-path pair forks', () => {
+        // "seed-identities.ts is forked" would send the reader to one of two files with no way to
+        // tell which repo the other one is in.
+        const here = root(sharedFiles(HERE));
+        const there = root({ ...sharedFiles(THERE), [CROSS_PATH.frontend]: 'forked' });
+
+        const message = formatSharedFileProblems(compareSharedFiles(there, here, HERE), there);
+
+        expect(message).toContain(CROSS_PATH.backend);
+        expect(message).toContain(CROSS_PATH.frontend);
     });
 
     it('tells the reader what to do about it', () => {
-        const here = root(allSpecs());
-        const there = root({ ...allSpecs(), 'openapi.yaml': 'forked' });
+        const here = root(sharedFiles(HERE));
+        const there = root(sharedFilesWith(THERE, OPENAPI, 'forked'));
 
-        expect(formatSpecProblems(compareSpecs(there, here), there)).toContain('npm run genapi');
+        expect(formatSharedFileProblems(compareSharedFiles(there, here, HERE), there)).toContain(
+            'npm run genapi'
+        );
     });
 });
 
@@ -163,9 +288,9 @@ const siblingRoot = resolveFrontendPath();
 const describeIfSibling = existsSync(siblingRoot) ? describe : describe.skip;
 
 describeIfSibling(`the paired frontend at ${siblingRoot}`, () => {
-    it('carries byte-identical copies of every shared contract file', () => {
-        const comparisons = compareSpecs(siblingRoot);
+    it('carries byte-identical copies of every shared file', () => {
+        const comparisons = compareSharedFiles(siblingRoot);
 
-        expect(formatSpecProblems(comparisons, siblingRoot)).toBe('');
+        expect(formatSharedFileProblems(comparisons, siblingRoot)).toBe('');
     });
 });

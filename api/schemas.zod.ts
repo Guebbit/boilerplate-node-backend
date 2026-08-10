@@ -1559,7 +1559,8 @@ export const CheckoutResponse = zod.object({
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 }),
   "message": zod.string().optional()
 })
@@ -1638,7 +1639,8 @@ export const ListOrdersResponse = zod.object({
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
   "page": zod.number().min(1).default(listOrdersResponseDataMetaPageDefault).describe('1-based page index'),
@@ -1708,7 +1710,8 @@ export const CreateOrderResponse = zod.object({
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
 })
 
@@ -1773,17 +1776,21 @@ export const UpdateOrderResponse = zod.object({
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
 })
 
 
 /**
- * Permanently removes the order identified by id.
+ * Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record
  * @summary Delete order
  */
+export const deleteOrderBodyHardDeleteDefault = false;
+
 export const DeleteOrderBody = zod.object({
-  "id": zod.string().describe('Resource identifier')
+  "id": zod.string().describe('Resource identifier'),
+  "hardDelete": zod.boolean().default(deleteOrderBodyHardDeleteDefault)
 })
 
 export const DeleteOrderResponse = zod.object({
@@ -1865,7 +1872,8 @@ export const SearchOrdersResponse = zod.object({
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })),
   "meta": zod.object({
   "page": zod.number().min(1).default(searchOrdersResponseDataMetaPageDefault).describe('1-based page index'),
@@ -1926,7 +1934,8 @@ export const GetOrderByIdResponse = zod.object({
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
 })
 
@@ -1994,20 +2003,46 @@ export const UpdateOrderByIdResponse = zod.object({
   "notes": zod.string().optional().describe('Optional order notes'),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
-  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
 })
 })
 
 
 /**
- * Permanently removes the order identified by `id`.
+ * Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /orders`.
  * @summary Delete order
  */
 export const DeleteOrderByIdParams = zod.object({
   "id": zod.string().describe('Resource identifier')
 })
 
+export const DeleteOrderByIdQueryParams = zod.object({
+  "hardDelete": zod.boolean().optional()
+})
+
+export const deleteOrderByIdBodyHardDeleteDefault = false;
+
+export const DeleteOrderByIdBody = zod.object({
+  "hardDelete": zod.boolean().default(deleteOrderByIdBodyHardDeleteDefault)
+})
+
 export const DeleteOrderByIdResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`.
+ * @summary Permanently delete order
+ */
+export const HardDeleteOrderByIdParams = zod.object({
+  "id": zod.string().describe('Resource identifier')
+})
+
+export const HardDeleteOrderByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string()

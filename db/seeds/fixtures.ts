@@ -97,5 +97,6 @@ export const orders = seedOrders.map((order) => ({
     items: order.items.map((item) => ({
         product: snapshotOf(item.productId),
         quantity: item.quantity
-    }))
+    })),
+    ...(order.deletedAt ? { deletedAt: new Date(order.deletedAt) } : {})
 }));

@@ -172,36 +172,58 @@ export const updateById = (
     });
 
 /**
- * Delete an order document (hard delete).
+ * Remove an order document (soft or hard delete).
+ * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
+ *
+ * Unlike a product, an order has no image to clean up and is in nobody's cart, so the hard path
+ * is the bare delete. The soft path is what an order actually wants most of the time: it is a
+ * financial record, and unsetting it from a customer's view is not the same as destroying it.
  *
  * @param order
+ * @param hardDelete
  */
 export const remove = (
-    order: IOrderDocument
-): Promise<IResponseSuccess<undefined> | IResponseReject> =>
-    orderRepository
-        .deleteOne(order)
-        .then(() => generateSuccess(undefined, 200, t('ecommerce.order-deleted')));
+    order: IOrderDocument,
+    hardDelete = false
+): Promise<IResponseSuccess<IOrderDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+    // HARD delete
+    if (hardDelete)
+        return orderRepository
+            .deleteOne(order)
+            .then(() => generateSuccess(undefined, 200, t('ecommerce.order-hard-deleted')));
+
+    // If deletedAt already present: it's soft-deleted → RESTORE
+    order.deletedAt = order.deletedAt ? undefined : new Date();
+
+    // SOFT delete (or restore)
+    return orderRepository
+        .save(order)
+        .then((savedOrder) => generateSuccess(savedOrder, 200, t('ecommerce.order-soft-deleted')));
+};
 
 /**
- * Delete an order by ID (hard delete).
+ * Remove an order by ID (soft or hard delete).
  * Fetches the document then delegates to remove().
  *
  * @param id
+ * @param hardDelete
  */
-export const removeById = (id: string): Promise<IResponseSuccess<undefined> | IResponseReject> =>
+export const removeById = (
+    id: string,
+    hardDelete = false
+): Promise<IResponseSuccess<IOrderDocument> | IResponseSuccess<undefined> | IResponseReject> =>
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, 'Not Found', [t('ecommerce.order-not-found')]);
-        return remove(order);
+        return remove(order, hardDelete);
     });
 
 /**
  * Which orders a caller is allowed to read.
  *
  * The authorization boundary for order reads: the difference between a user seeing their own
- * orders and seeing everyone's. Returns `undefined` for admins, meaning "no restriction", so
- * callers must spread it (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a
- * filter.
+ * orders and seeing everyone's, and between seeing a soft-deleted order and not. Returns
+ * `undefined` for admins, meaning "no restriction", so callers must spread it
+ * (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a filter.
  *
  * Takes the auth context rather than the express `Request`: this is a domain rule about a
  * caller, not about a request, and the narrower argument is what lets it live below the HTTP
@@ -215,7 +237,7 @@ export const removeById = (id: string): Promise<IResponseSuccess<undefined> | IR
 export const callerScope = (
     authContext?: { id?: string; admin?: boolean } | undefined
 ): Record<string, unknown> | undefined =>
-    authContext?.admin ? undefined : orderRepository.ownerScope(authContext?.id ?? '');
+    authContext?.admin ? undefined : orderRepository.visibleScope(authContext?.id ?? '');
 
 export const orderService = {
     search,

@@ -784,6 +784,13 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+                # Unlike a product or a user, an order carries no `active` flag, so this is the
+                # only thing that distinguishes a hidden order from a live one. A non-admin never
+                # sees a record where it is set — `visibleScope` filters them out — so it appears
+                # only on admin reads.
+                deletedAt:
+                    type: string
+                    format: date-time
 
         # ---------- Request DTOs — Auth ----------
         LoginRequest:
@@ -1387,6 +1394,9 @@ components:
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    default: false
 
         CreateFeedbackRequest:
             type: object
@@ -2885,7 +2895,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Permanently removes the order identified by id.
+            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record
             operationId: deleteOrder
             security:
                 - bearerAuth: []
@@ -2981,11 +2991,42 @@ paths:
                 '404': { $ref: '#/components/responses/NotFound' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
+        # Same as DELETE /orders
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Permanently removes the order identified by `id`.
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /orders`.
             operationId: deleteOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+                - name: hardDelete
+                  in: query
+                  schema:
+                      type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HardDeleteRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as DELETE /orders/{id}?hardDelete=true — the flag spelled in the path instead of
+    # in the query. Both reach the same handler; neither is the canonical one.
+    /orders/{id}/hard:
+        delete:
+            tags: [Orders]
+            summary: Permanently delete order
+            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`.
+            operationId: hardDeleteOrderById
             security:
                 - bearerAuth: []
             parameters:

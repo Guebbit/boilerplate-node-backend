@@ -30,7 +30,10 @@ each controller declares.
 |                                                                         | `hardDelete`                                    | params, query, body     | boolean; 422 for anything that is not one      |
 | `DELETE /users`, `DELETE /users/:id`, `DELETE /users/:id/hard`          | `id`                                            | params, body            | validated as an ObjectId, 422 on failure       |
 |                                                                         | `hardDelete`                                    | params, query, body     | boolean; 422 for anything that is not one      |
-| `DELETE /orders`, `DELETE /orders/:id`                                  | `id`                                            | params, body            | validated as an ObjectId, 422 on failure       |
+| `DELETE /orders`, `DELETE /orders/:id`, `DELETE /orders/:id/hard`       | `id`                                            | params, body            | validated as an ObjectId, 422 on failure       |
+|                                                                         | `hardDelete`                                    | params, query, body     | boolean; 422 for anything that is not one      |
+| `POST /orders`, `PUT /orders`, `PUT /orders/:id`                        | `id`                                            | params, body            | first non-empty wins                           |
+|                                                                         | everything else                                 | body                    | untouched                                      |
 | `POST /products`, `PUT /products`, `PUT /products/:id`                  | `id`                                            | params, body            | first non-empty wins                           |
 |                                                                         | `active`                                        | body                    | boolean; decoded only on `multipart/form-data` |
 |                                                                         | `categories`, `tags`                            | body                    | string array; decoded only on multipart        |
@@ -111,6 +114,12 @@ means what `DELETE /products/:id?hardDelete=true` means; the `routeFlag('hardDel
 declaration instead of growing a second entry point. Being a param, it also outranks a query entry
 that contradicts it — the URL a caller aimed at is the more explicit statement of intent.
 
+Every domain that deletes a persisted record offers the same three spellings, and offers them for
+the same reason: the shape is a property of the domain, not a decision three route files each make.
+Products, users and orders all do. Cart and feedback do not, and that is a decision rather than an
+omission — a cart line is session-scoped, so there is no record to keep, and `deleteCartItem`
+narrows its declaration to `['params']` to say so.
+
 Two helpers deliberately stay outside `readInput`:
 
 - `isValidObjectId` — an `id is string` type guard, which is a different job from extraction and
@@ -126,23 +135,32 @@ generating them from the spec would make the discrepancies below _unwritable_: a
 not read a source the contract does not declare, because nobody would be writing the source list.
 
 It is not done, and the order matters. Four things stand in the way, none fatal: one controller
-serves several operations (`writeProducts` covers three operationIds with three different declared
-bodies), so a generated per-operation declaration would have to be wired per route rather than
-per controller; `booleans`/`stringArrays` derive from the _multipart_ schema variant, not the JSON
+serves several operations (`writeProducts`, `writeUsers` and `writeOrders` each cover three
+operationIds with three different declared bodies), so a generated per-operation declaration would
+have to be wired per route rather than per controller; `booleans`/`stringArrays` derive from the _multipart_ schema variant, not the JSON
 one; `GET /products` and `POST /products/search` are two operations deliberately sharing one
 controller, so their declarations would need unioning; and orval generates clients and schemas,
 not server-side input declarations, so this would be new machinery to own.
 
-The cheaper first move is a **test**, not a generator: read `openapi.yaml`, read each route's
-declaration, and assert the declared `sources` are a subset of what the spec allows. That closes
-the "nothing verifies the controller agrees" gap in one file, needs no build step, and would have
-caught every discrepancy below. If it stays green for a few months the declaration shape is
-stable and codegen becomes mechanical; if it goes red often, that is the answer about whether the
-shape was ready to generate.
+The cheaper first move is a **test**, not a generator, and it exists:
+`tests/contract/request-sources.test.ts`. It recovers the route table statically — `src/app.ts`
+for each router's mount prefix, `src/routes/*.ts` for each mounted path and its controller — reads
+that controller's `readInput` declarations, and asserts they are a subset of what `openapi.yaml`
+allows. It also asserts the two sets of routes match: every mounted route is in the spec, and
+every spec operation is mounted.
 
-It would have caught all five of the disagreements listed below before they shipped, and it is
-what would stop the next one — those were found by reading the spec against the controllers by
-hand, which is not a thing anyone will remember to do twice.
+The comparison is per **controller**, against the union of every route it serves, and that is the
+concession the first obstacle above forces. `getProducts` serves `GET /products` (query) and
+`POST /products/search` (body) from one `sources: ['body', 'query']`; asserting that declaration
+against either route alone would report the other's source as undeclared. What survives the union
+is the real defect — a controller reading a source **no** route it serves declares, which is the
+shape of all five closed discrepancies below. Splitting the declaration per operation is what
+would let it tighten to per-route, and is the remaining work.
+
+That test is also what makes generating the router safe. Routes written by hand sit next to a spec
+written by hand, so a mismatch at least shows up in a diff; routes generated from a descriptor do
+not, and a typo would silently mount something the spec never declared and orval never generated a
+client for.
 
 ## Known discrepancies
 

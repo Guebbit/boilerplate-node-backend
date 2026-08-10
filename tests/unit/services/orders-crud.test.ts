@@ -22,7 +22,16 @@ import { Types } from 'mongoose';
 import { setupTestDb } from '../../helpers/setup-test-db';
 import { createUser } from '../../helpers/factories/users';
 import { createProduct } from '../../helpers/factories/products';
-import { getById, create, update, updateById, remove, removeById } from '@services/orders';
+import {
+    getById,
+    create,
+    update,
+    updateById,
+    remove,
+    removeById,
+    search,
+    callerScope
+} from '@services/orders';
 import { orderRepository } from '@repositories/orders';
 import { productRepository } from '@repositories/products';
 import type { IOrderDocument } from '@models/orders';
@@ -319,10 +328,35 @@ describe('updateById', () => {
 });
 
 describe('remove', () => {
-    it('hard-deletes the order', async () => {
+    it('soft-deletes by default, keeping the row', async () => {
         const { order } = await seedOrder();
 
         const result = await remove(order);
+
+        expect(result.success).toBe(true);
+        // The record survives — an order is a financial record, and the default must not destroy
+        // one. This is the assertion that fails if the default flips back to a hard delete.
+        await expect(orderRepository.count({})).resolves.toBe(1);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored!.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('restores an already soft-deleted order', async () => {
+        const { order } = await seedOrder();
+
+        await remove(order);
+        await remove(order);
+
+        const stored = await orderRepository.findById(String(order._id));
+        // `undefined`, not null: the field is unset, which is what `$exists: false` in
+        // `visibleScope` tests for.
+        expect(stored!.deletedAt).toBeUndefined();
+    });
+
+    it('hard-deletes when asked', async () => {
+        const { order } = await seedOrder();
+
+        const result = await remove(order, true);
 
         expect(result.success).toBe(true);
         await expect(orderRepository.count({})).resolves.toBe(0);
@@ -330,10 +364,21 @@ describe('remove', () => {
 });
 
 describe('removeById', () => {
-    it('hard-deletes an existing order', async () => {
+    it('soft-deletes an existing order by default', async () => {
         const { order } = await seedOrder();
 
         const result = await removeById(String(order._id));
+
+        expect(result.success).toBe(true);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored).not.toBeNull();
+        expect(stored!.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('hard-deletes an existing order when asked', async () => {
+        const { order } = await seedOrder();
+
+        const result = await removeById(String(order._id), true);
 
         expect(result.success).toBe(true);
         await expect(orderRepository.findById(String(order._id))).resolves.toBeNull();
@@ -349,8 +394,23 @@ describe('removeById', () => {
     it('deletes nothing when the id does not exist', async () => {
         const { order } = await seedOrder();
 
-        await removeById(MISSING_ID);
+        await removeById(MISSING_ID, true);
 
         await expect(orderRepository.findById(String(order._id))).resolves.not.toBeNull();
+    });
+});
+
+describe('callerScope hides soft-deleted orders', () => {
+    it('excludes a soft-deleted order from its own owner, but not from an admin', async () => {
+        const { order } = await seedOrder();
+        const userId = String(order.userId);
+
+        await removeById(String(order._id));
+
+        const own = await search({}, callerScope({ id: userId, admin: false }));
+        expect(own.items).toHaveLength(0);
+
+        const asAdmin = await search({}, callerScope({ id: userId, admin: true }));
+        expect(asAdmin.items).toHaveLength(1);
     });
 });

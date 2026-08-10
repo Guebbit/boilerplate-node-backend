@@ -198,10 +198,19 @@ jobs:
     spec-identity:
         # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
         #
-        # openapi.yaml, asyncapi.yaml and spectral.yaml exist in BOTH repos, byte-identical,
-        # maintained by hand — and until this job existed, checked by nothing. `lint-openapi` and
-        # `lint-asyncapi` lint THIS repo's copy and pass, because a forked spec is still a valid
-        # spec. What nobody could see was the fork itself.
+        # Ten files exist in BOTH repos, byte-identical, maintained by hand — the two specs and
+        # the spectral ruleset, the seed identities, the generated realtime types, the three API
+        # client collections, and two shared scripts. `scripts/specIdentity.ts` holds the list and
+        # says, per entry, what a fork of it would break.
+        #
+        # Until this job existed they were checked by nothing. `lint-openapi` and `lint-asyncapi`
+        # lint THIS repo's copy and pass, because a forked spec is still a valid spec. What nobody
+        # could see was the fork itself.
+        #
+        # Two of the ten sit at different paths in each repo (the seed identities are production
+        # seed data here and test scaffolding there; the realtime types are named for their
+        # generator here and their consumer there), which is why the list is path *pairs* rather
+        # than names — a same-path check could not express them, so they went unguarded longest.
         #
         # The sibling is checked out read-only, at its default branch: the question is whether this
         # PR agrees with what the frontend has actually shipped, not with some pinned older copy.

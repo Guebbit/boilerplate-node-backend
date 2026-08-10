@@ -44,6 +44,7 @@ export * from './createProductRequest';
 export * from './createProductRequestMultipart';
 export * from './createUserRequest';
 export * from './createUserRequestMultipart';
+export * from './deleteOrderByIdParams';
 export * from './deleteOrderRequest';
 export * from './deleteProductByIdParams';
 export * from './deleteProductRequest';

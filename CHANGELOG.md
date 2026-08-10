@@ -7,6 +7,85 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### ⚠ Breaking
+
+- **`DELETE /orders/{id}` soft-deletes instead of destroying the record.** Orders previously had
+  no soft delete at all — `removeById` took no flag and the model had no `deletedAt` — while
+  products and users had both. A delete that used to be permanent now sets `deletedAt`; pass
+  `?hardDelete=true`, a `{"hardDelete": true}` body, or the new `DELETE /orders/{id}/hard` to get
+  the old behaviour. Calling the soft form twice **restores** the order, matching products.
+
+    This is the multi-spelling delete surface applied to every domain that owns a persisted
+    record, rather than to two of the three. Cart and feedback stay exempt: their records are not
+    entities worth keeping after deletion, and that is now stated in the descriptor rather than
+    implied by an absent route. See `docs/theory/request-input.md`.
+
+- **A non-admin can no longer read their own soft-deleted orders.** `callerScope` composes two
+  axes now — `ownerScope` answers "whose", `deletedAt: { $exists: false }` answers "still there".
+  Admins pass no scope and so still see everything. A soft-deleted order answers **404**, not 403:
+  its existence is not disclosed, the same rule the product item route already followed.
+
+- **`postOrders` and `putOrders` are one `writeOrders` controller.** `POST /orders`,
+  `PUT /orders` and `PUT /orders/:id` now reach a single handler that branches on whether an id
+  was found, exactly as `writeProducts` and `writeUsers` already did. No route, payload or status
+  code changed; the three operationIds are unchanged.
+
+- **`ecommerce.order-deleted` is replaced by `order-hard-deleted` and `order-soft-deleted`** in
+  all three locale files, since the operation now has two outcomes to name.
+
+### Added
+
+- **`tests/contract/request-sources.test.ts`** — asserts that every controller's `readInput`
+  declaration is a subset of the sources `openapi.yaml` allows for the routes it serves, that
+  every mounted route exists in the spec, and that every spec operation is mounted. The route
+  table is recovered statically from `src/app.ts` and `src/routes/*.ts`; no server is booted.
+  `docs/theory/request-input.md` had proposed this test and listed five contract bugs found by
+  doing the comparison by hand; it reproduces all five.
+
+- **`db/migrations/20260810120000-orders-soft-delete.js`** — the `orders_userId_deletedAt` index.
+  No data backfill: `visibleScope` tests `$exists: false`, so every existing order is already in
+  the right state and writing an explicit null would make all of them look soft-deleted.
+
+- A soft-deleted order in `db/seeds/seed-identities.ts`, on the non-admin user, so the "owner
+  cannot see their own soft-deleted order" branch has a fixture behind it.
+
+### Changed
+
+- **`check:spec-identity` covers ten shared files, not three.** It guarded `openapi.yaml`,
+  `asyncapi.yaml` and `spectral.yaml`; it now also guards `db/seeds/seed-identities.ts`, the
+  generated realtime types, the three `.dev/` API client collections, and
+  `scripts/check-mutation-baseline.ts` / `scripts/gen-asyncapi-types.ts`.
+
+    The omissions were structural rather than an oversight: `SHARED_SPEC_FILES` was a list of
+    **names**, compared at the same relative path in both repos, so any file living at a different
+    path in each was uncheckable by construction. `SHARED_FILES` is a list of **path pairs**, and a
+    per-repo `THIS_REPO` constant decides which side this checkout is — the only line that differs
+    from the frontend's copy of the module.
+
+    `seed-identities.ts` is the reason it matters: a fork there leaves both repos green, because
+    each is consistent with its own copy, and surfaces only when the real app meets the real API.
+
+    Renamed with it, since the module no longer handles only specs: `SHARED_SPEC_FILES` →
+    `SHARED_FILES`, `compareSpecs` → `compareSharedFiles`, `formatSpecProblems` →
+    `formatSharedFileProblems`, `specProblems` → `sharedFileProblems`. The npm script and the CI
+    job keep their `spec-identity` names.
+
+    Membership is decided by "would a fork cause a _silent_ bug", not by "do these match today" —
+    a dozen more files do, from favicons to `.prettierrc`, and are deliberately excluded because a
+    gate that fails when one repo legitimately changes its own icon is a gate people learn to
+    ignore. `scripts/specIdentity.ts` records the reasoning per entry.
+
+### Fixed
+
+- **`DELETE /orders` did not declare `hardDelete`** and `Order` did not declare `deletedAt` in
+  `openapi.yaml`. Both now do, along with the new `hardDeleteOrderById` operation.
+
+- **The seed fixtures and the generated realtime types were byte-identical across the two repos by
+  hand, and checked by nothing.** Both are now in the identity gate; a one-line edit to either in
+  one repo alone fails CI on the commit that forks it rather than on the release that ships it.
+
+---
+
 A correctness pass over serialization, seeding, cache invalidation and port allocation, driven by
 running this stack against its paired frontend (`boilerplate-vue-frontend`) rather than only against
 its own tests — followed by a concurrency pass driven by asking, for the first time, what the write

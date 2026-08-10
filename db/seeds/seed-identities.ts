@@ -79,6 +79,12 @@ export interface ISeedOrder {
     userId: string;
     email: string;
     items: ISeedCartItem[];
+    /* ISO 8601, or absent. Present on exactly one order, for the same reason it is on exactly one
+     * product: `isOrderVisibleToCaller` (frontend) and `visibleScope` (backend) both branch on it,
+     * and a branch with no fixture behind it is a branch nothing tests. It sits on the non-admin
+     * user's order specifically, so the case it exercises is "the owner cannot see their own
+     * soft-deleted order" — which ownership-only scoping would wrongly allow. */
+    deletedAt?: string;
 }
 
 export const seedUsers: ISeedUser[] = [
@@ -176,5 +182,12 @@ export const seedOrders: ISeedOrder[] = [
         userId: '65dd2bdb923652b7800fe180',
         email: SEED_ADMIN_EMAIL,
         items: [{ productId: '65dcdec2b18ad5e4bd597f0f', quantity: 20 }]
+    },
+    {
+        id: '66b3f0c14d2e8a91c7d4a015',
+        userId: '65de646a44f861fd83c13f13',
+        email: SEED_USER_EMAIL,
+        items: [{ productId: '65dc8a99604c307b702b5ccc', quantity: 4 }],
+        deletedAt: '2024-08-07T09:12:03.114Z'
     }
 ];

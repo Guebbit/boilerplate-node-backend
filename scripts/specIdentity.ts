@@ -1,12 +1,11 @@
 /**
  * The cross-repo contract check.
  *
- * `openapi.yaml`, `asyncapi.yaml` and `spectral.yaml` exist in BOTH this repo and the paired
- * frontend, byte-for-byte identical, maintained by hand. Codegen on both sides reads them — orval
- * and `gen-asyncapi-types` here, orval and its own generator there — so a one-line edit in one
- * checkout silently forks the contract both sides believe they share. Nothing detected that: each
- * repo's CI lints its own copy and finds it perfectly valid, because a forked spec is still a
- * valid spec.
+ * A set of files exists in BOTH this repo and the paired frontend, byte-for-byte identical,
+ * maintained by hand. Codegen on both sides reads the specs among them — orval and
+ * `gen-asyncapi-types` here, orval and its own generator there — so a one-line edit in one
+ * checkout silently forks what both sides believe they share. Nothing detected that: each repo's
+ * CI lints its own copy and finds it perfectly valid, because a forked spec is still a valid spec.
  *
  * This module is the detector. It is deliberately dumber than a semantic diff: identity, not
  * equivalence. Two specs that mean the same thing but differ in key order or comments are still a
@@ -16,29 +15,120 @@
  * It treats the symptom, and should say so: the cure is one source of truth — a package both
  * repos consume, or a third repo — which is a bigger decision than a CI job (see
  * BETTER_TESTS_PLAN.md §11.5). Until that is made, this fails the build on the commit that forks
- * the spec rather than on the release that ships the mismatch.
+ * a shared file rather than on the release that ships the mismatch.
  *
  * The frontend mirrors this file. The two are separate copies on purpose: a shared package would
- * itself be a cross-repo dependency, which is the problem rather than the fix.
+ * itself be a cross-repo dependency, which is the problem rather than the fix. Only `THIS_REPO`
+ * differs between them — the file list is identical, so a file added on one side is a one-line
+ * copy on the other rather than a translation.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+/** Which of the paired repos a checkout is. */
+export type TRepoRole = 'backend' | 'frontend';
+
+/**
+ * One shared file, named on both sides.
+ *
+ * Two paths rather than one because identity does not imply a shared location: the seed fixtures
+ * are production data here and test scaffolding there, and the generated realtime types are named
+ * for their generator here and for their consumer there. A single-path list could not express
+ * either, which is why they went unguarded.
+ */
+export interface ISharedFile {
+    backend: string;
+    frontend: string;
+}
+
+/** Which side this checkout is. The one value that differs from the frontend's copy. */
+export const THIS_REPO: TRepoRole = 'backend';
+
+/** The other side, whichever this one is. */
+export const siblingRole = (role: TRepoRole): TRepoRole =>
+    role === 'backend' ? 'frontend' : 'backend';
+
 /**
  * The files that must be identical in both checkouts.
  *
- * `spectral.yaml` is here alongside the two specs because it is the ruleset both `lint:openapi`
- * jobs enforce: if the two repos lint the same document under different rules, one of them passes
- * a spec the other would reject, and the disagreement surfaces as a CI failure on whichever side
- * happens to touch the file next.
+ * The test is not "are these the same today" — a dozen more files happen to match, from favicons
+ * to `.prettierrc` — but "does a fork cause a silent bug". Everything here fails quietly: the two
+ * sides keep building, keep passing their own suites, and disagree only in production or in a
+ * live-API run.
+ *
+ * `spectral.yaml` is here alongside the specs because it is the ruleset both `lint:openapi` jobs
+ * enforce: if the two repos lint the same document under different rules, one of them passes a
+ * spec the other would reject.
+ *
+ * Deliberately NOT here: `public/favicon/*`, `.prettierrc`, `.dockerignore`, `.husky/*`,
+ * `.docker/nginx.docs.conf` and `docs/.vitepress/theme/*`. They are identical by convention, not
+ * by requirement — either repo may legitimately change its own icon or formatting width, and a
+ * gate that fails on that trains people to ignore it.
  */
-export const SHARED_SPEC_FILES = ['openapi.yaml', 'asyncapi.yaml', 'spectral.yaml'] as const;
+export const SHARED_FILES: readonly ISharedFile[] = [
+    /* The contract itself, and the ruleset both sides lint it under. */
+    { backend: 'openapi.yaml', frontend: 'openapi.yaml' },
+    { backend: 'asyncapi.yaml', frontend: 'asyncapi.yaml' },
+    { backend: 'spectral.yaml', frontend: 'spectral.yaml' },
+
+    /*
+     * The realtime types, generated from `asyncapi.yaml` by the shared generator below. Identity
+     * here is what proves both sides regenerated after the last spec change: the spec matching
+     * while its output does not means one repo is shipping types for a contract it no longer has.
+     */
+    { backend: 'src/types/asyncapi.ts', frontend: 'src/types/realtime.generated.ts' },
+
+    /*
+     * The seed identities — fixed ids, emails and relationships that the backend seeds into Mongo
+     * and the frontend's MSW mocks reproduce. A fork here is the worst kind: both suites stay
+     * green, because each is consistent with its own copy, and the disagreement surfaces only
+     * when the real app meets the real API. Different paths on each side (production seed data
+     * vs test scaffolding), which is why a same-path check could never have covered it.
+     */
+    { backend: 'db/seeds/seed-identities.ts', frontend: 'tests/mocks/shared/seed-identities.ts' },
+
+    /*
+     * The API client collections. They describe the same endpoints the spec does, by hand, so
+     * they fork the moment an endpoint is added on one side only — and being developer tooling,
+     * nothing else ever reads them closely enough to notice.
+     */
+    {
+        backend: '.dev/Ecommerce Demo API - Bruno.yml',
+        frontend: '.dev/Ecommerce Demo API - Bruno.yml'
+    },
+    {
+        backend: '.dev/Ecommerce Demo API - Insomnia.json',
+        frontend: '.dev/Ecommerce Demo API - Insomnia.json'
+    },
+    {
+        backend: '.dev/Ecommerce Demo API - Mockoon.json',
+        frontend: '.dev/Ecommerce Demo API - Mockoon.json'
+    },
+
+    /*
+     * Shared tooling, duplicated rather than packaged for the reason in this file's header. Both
+     * are read by CI on both sides, so a fix applied to one copy and not the other is a CI job
+     * that behaves differently per repo while claiming to be the same gate.
+     *
+     * `specIdentity.ts` and `mutationBaseline.ts` are NOT here: they carry per-repo prose (this
+     * file names the frontend as its sibling; the frontend's names the backend), so they are
+     * mirrors rather than copies.
+     */
+    {
+        backend: 'scripts/check-mutation-baseline.ts',
+        frontend: 'scripts/check-mutation-baseline.ts'
+    },
+    { backend: 'scripts/gen-asyncapi-types.ts', frontend: 'scripts/gen-asyncapi-types.ts' }
+] as const;
 
 export type TSpecComparisonStatus = 'match' | 'drift' | 'missing-here' | 'missing-there';
 
 export interface ISpecComparison {
+    /** This repo's path for the file — what a reader of the failure message has to go open. */
     file: string;
+    /** The sibling's path. Equal to `file` for everything but the cross-path pairs. */
+    siblingFile: string;
     /** sha256 of this repo's copy, or undefined when the file is absent here. */
     ours?: string;
     /** sha256 of the sibling's copy, or undefined when the file is absent there. */
@@ -55,32 +145,42 @@ export const hashFile = (filePath: string): string =>
     createHash('sha256').update(readFileSync(filePath)).digest('hex');
 
 /**
- * Compare every shared spec against a sibling checkout.
+ * Compare every shared file against a sibling checkout.
  *
- * Never throws on a missing file: an absent spec is reported as its own status, so the caller can
- * tell "the sibling checkout is not where I looked" (every file `missing-there`) from "someone
- * deleted asyncapi.yaml" (one file). Those want different messages, and a thrown ENOENT gives
+ * Never throws on a missing file: an absent file is reported as its own status, so the caller can
+ * tell "the sibling checkout is not where I looked" (everything `missing-there`) from "someone
+ * deleted asyncapi.yaml" (one entry). Those want different messages, and a thrown ENOENT gives
  * neither.
  *
  * @param siblingRoot - absolute path to the other repo's checkout
  * @param here - absolute path to this repo's root; defaults to the working directory
+ * @param role - which side `here` is; defaults to this repo's own role
  */
-export const compareSpecs = (
+export const compareSharedFiles = (
     siblingRoot: string,
-    here: string = process.cwd()
+    here: string = process.cwd(),
+    role: TRepoRole = THIS_REPO
 ): ISpecComparison[] =>
-    SHARED_SPEC_FILES.map((file) => {
+    SHARED_FILES.map((shared) => {
+        const file = shared[role];
+        const siblingFile = shared[siblingRole(role)];
         const ourPath = path.join(here, file);
-        const theirPath = path.join(siblingRoot, file);
+        const theirPath = path.join(siblingRoot, siblingFile);
 
-        if (!existsSync(ourPath)) return { file, status: 'missing-here' as const };
+        if (!existsSync(ourPath)) return { file, siblingFile, status: 'missing-here' as const };
         if (!existsSync(theirPath))
-            return { file, ours: hashFile(ourPath), status: 'missing-there' as const };
+            return {
+                file,
+                siblingFile,
+                ours: hashFile(ourPath),
+                status: 'missing-there' as const
+            };
 
         const ours = hashFile(ourPath);
         const theirs = hashFile(theirPath);
         return {
             file,
+            siblingFile,
             ours,
             theirs,
             status: ours === theirs ? ('match' as const) : ('drift' as const)
@@ -88,22 +188,29 @@ export const compareSpecs = (
     });
 
 /** Every comparison that is not a clean match — i.e. everything worth printing. */
-export const specProblems = (comparisons: ISpecComparison[]): ISpecComparison[] =>
+export const sharedFileProblems = (comparisons: ISpecComparison[]): ISpecComparison[] =>
     comparisons.filter(({ status }) => status !== 'match');
+
+/** How a pair is named in a message: one path, or both when they differ between the repos. */
+const describe = ({ file, siblingFile }: ISpecComparison): string =>
+    file === siblingFile ? file : `${file} ↔ ${siblingFile}`;
 
 /**
  * Render the problems as the message a human needs: which file, which side, and what to do.
  * Returns an empty string when there is nothing wrong, so callers can branch on truthiness.
  */
-export const formatSpecProblems = (comparisons: ISpecComparison[], siblingRoot: string): string => {
-    const problems = specProblems(comparisons);
+export const formatSharedFileProblems = (
+    comparisons: ISpecComparison[],
+    siblingRoot: string
+): string => {
+    const problems = sharedFileProblems(comparisons);
     if (problems.length === 0) return '';
 
     const lines = problems.map((problem) => {
         switch (problem.status) {
             case 'drift': {
                 return (
-                    `  ${problem.file}: FORKED\n` +
+                    `  ${describe(problem)}: FORKED\n` +
                     `    here    ${problem.ours}\n` +
                     `    sibling ${problem.theirs}`
                 );
@@ -112,14 +219,14 @@ export const formatSpecProblems = (comparisons: ISpecComparison[], siblingRoot: 
                 return `  ${problem.file}: absent from this repo, present in the sibling`;
             }
             default: {
-                return `  ${problem.file}: absent from ${siblingRoot}`;
+                return `  ${problem.siblingFile}: absent from ${siblingRoot}`;
             }
         }
     });
 
     return (
         `Shared contract mismatch against ${siblingRoot}:\n${lines.join('\n')}\n\n` +
-        `  Both repos must carry byte-identical copies of: ${SHARED_SPEC_FILES.join(', ')}.\n` +
+        `  Both repos must carry byte-identical copies of ${SHARED_FILES.length} files.\n` +
         `  Decide which side is right, copy it over the other, then regenerate in BOTH repos:\n` +
         `    npm run genapi && npm run genasyncapi`
     );

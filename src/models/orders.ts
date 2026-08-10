@@ -32,6 +32,9 @@ export interface IOrderDocumentItem {
  * `totalItems`, `totalQuantity` and `totalPrice` are omitted rather than inherited: they are
  * required on the wire but never persisted — `applyOrderTransform` derives them at serialization
  * time — so declaring them here would claim a stored field that does not exist.
+ *
+ * `deletedAt` is omitted and redeclared for the same reason it is in `IProductDocument` and
+ * `IUser`: the contract types it as an ISO string, the schema stores a `Date`.
  */
 export interface IOrderDocument
     extends
@@ -46,6 +49,7 @@ export interface IOrderDocument
             | 'totalPrice'
             | 'createdAt'
             | 'updatedAt'
+            | 'deletedAt'
         >,
         Document {
     userId: Types.ObjectId;
@@ -54,6 +58,7 @@ export interface IOrderDocument
     items: IOrderDocumentItem[];
     createdAt?: Date;
     updatedAt?: Date;
+    deletedAt?: Date;
 }
 
 /**
@@ -108,6 +113,14 @@ export const orderSchema = new Schema<IOrderDocument>(
         },
         notes: {
             type: String
+        },
+        /*
+         * Set when an order is soft-deleted. Orders carry no `active` flag, so unlike a product
+         * this is the only fact that hides one: `visibleScope` requires its absence, and an admin
+         * passes no scope at all, which is how a soft-deleted order stays readable to them.
+         */
+        deletedAt: {
+            type: Date
         }
     },
     {
@@ -129,6 +142,8 @@ export const orderSchema = new Schema<IOrderDocument>(
 orderSchema.index({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt' });
 /* An order remembers the address it was placed from, which is how guests' orders are found. */
 orderSchema.index({ email: 1 }, { name: 'orders_email' });
+/* Non-admin reads exclude soft-deleted rows (`visibleScope` in @repositories/orders). */
+orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt' });
 
 /**
  * Strips any leftover `_id` on embedded items (pre-existing documents saved before

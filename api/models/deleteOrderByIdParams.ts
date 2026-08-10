@@ -18,9 +18,7 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Id } from './id';
 
-export interface DeleteOrderRequest {
-  id: Id;
-  hardDelete?: boolean;
-}
+export type DeleteOrderByIdParams = {
+hardDelete?: boolean;
+};

@@ -55,7 +55,7 @@ Controllers using it:
 
 - `post-reset-request.ts` — password reset email
 - `post-reset-confirm.ts` — password change confirmation
-- `post-orders.ts` — order confirmation email
+- `write-orders.ts` — order confirmation email
 - `post-feedback-contact.ts` — contact form notification
 
 ### PDF generation (async)
