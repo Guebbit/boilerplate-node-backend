@@ -1,10 +1,10 @@
 import express from 'express';
 import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
-import { api } from '../helpers/http';
-import { setupTestDb } from '../helpers/setup-test-db';
-import { createUser, createAdminUser, PLAIN_PASSWORD } from '../helpers/factories/users';
-import { userRepository } from '@repositories/users';
+import { api } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
+import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { userRepository } from '@modules/users';
 
 /**
  * The two observability endpoints, and the credentials that reach them.
@@ -87,7 +87,7 @@ describe('GET /observability/metrics', () => {
         if (token === undefined) delete process.env.NODE_METRICS_TOKEN;
         else process.env.NODE_METRICS_TOKEN = token;
 
-        const { isMetricsScraper } = await import('@middlewares/security');
+        const { isMetricsScraper } = await import('@infrastructure/http/middlewares/security');
         const guarded = express();
         guarded.use(cookieParser());
         guarded.get('/metrics', isMetricsScraper, (_request, response) => {

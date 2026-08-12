@@ -1,0 +1,516 @@
+      {
+        "uuid": "cb1de770-ca78-475d-8c6c-d46b427020a0",
+        "type": "http",
+        "documentation": "Observability SSE stream",
+        "method": "get",
+        "endpoint": "observability/events",
+        "responses": [
+          {
+            "uuid": "3ab4a1dc-2377-42e5-834c-d2af8cb25e1f",
+            "body": "",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "Server-Sent Events stream",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "917c09f9-a09d-48e5-81e8-e47abfac7d33",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "9a0c670d-c00d-45c7-87e4-a32adae5603f",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "960644f1-0854-4488-8080-7096e4e0f8fd",
+        "type": "http",
+        "documentation": "Health snapshot",
+        "method": "get",
+        "endpoint": "observability/health",
+        "responses": [
+          {
+            "uuid": "365360cc-3fab-4b1e-8dc8-69f8212252bb",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Health summary\",\n  \"data\": {\n    \"status\": \"ok\",\n    \"environment\": \"string\",\n    \"service\": \"string\",\n    \"nodeVersion\": \"string\",\n    \"uptimeSeconds\": 0,\n    \"database\": {\n      \"status\": \"connected\"\n    },\n    \"integrations\": {\n      \"loki\": true,\n      \"posthog\": true,\n      \"otelEnabled\": true,\n      \"umami\": true,\n      \"faro\": true\n    },\n    \"memory\": {\n      \"heapUsedMb\": 1,\n      \"heapTotalMb\": 1,\n      \"rssMb\": 1\n    },\n    \"system\": {\n      \"platform\": \"string\",\n      \"cpuCount\": 1,\n      \"loadAvg\": [\n        1\n      ]\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "Health summary",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "a661dac8-b827-4e8f-8b95-e977857833e1",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "ebd0a67b-a972-42f2-81c7-7252caae129f",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "868b8be4-39c1-4bc2-83f4-b399011605c5",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "afa42562-c851-40b7-88c7-bc6d814ed74b",
+        "type": "http",
+        "documentation": "Prometheus metrics",
+        "method": "get",
+        "endpoint": "observability/metrics",
+        "responses": [
+          {
+            "uuid": "599b24b2-408c-4171-803e-1a02d6a0f854",
+            "body": "",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "Prometheus exposition text",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "20f16ca3-4840-40b0-8d3f-5b0657d13d6a",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "2aae66e0-b15a-4cda-8fbc-1e7a94fbe9c2",
+            "body": "{\n  \"success\": false,\n  \"status\": 503,\n  \"message\": \"`NODE_METRICS_TOKEN` is not configured. The endpoint denies by default\\nrather than opening: an unauthenticated metrics endpoint is not a state\\nto arrive at by forgetting an environment variable.\\n\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 503,
+            "label": "`NODE_METRICS_TOKEN` is not configured. The endpoint denies by default\nrather than opening: an unauthenticated metrics endpoint is not a state\nto arrive at by forgetting an environment variable.\n",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "cab6e0eb-4cfc-4d51-88a3-81ac4f0a9c14",
+        "type": "http",
+        "documentation": "Metrics overview (JSON)",
+        "method": "get",
+        "endpoint": "observability/metrics/overview",
+        "responses": [
+          {
+            "uuid": "92fb9299-14b8-431c-828e-c2c73f42004c",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Metrics overview\",\n  \"data\": {\n    \"http\": {\n      \"totalRequests\": 0,\n      \"totalErrors\": 0,\n      \"errorRate\": 0,\n      \"inFlight\": 0,\n      \"latencyMs\": {\n        \"p50\": 1,\n        \"p95\": 1\n      }\n    },\n    \"auth\": {\n      \"loginSuccess\": 0,\n      \"loginFailure\": 0,\n      \"signupSuccess\": 0\n    },\n    \"business\": {\n      \"checkoutSuccess\": 0,\n      \"ordersCreated\": 0\n    },\n    \"database\": {\n      \"queriesTotal\": 0,\n      \"errorsTotal\": 0\n    },\n    \"process\": {\n      \"uptimeSeconds\": 0,\n      \"heapUsedMb\": 0\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "Metrics overview",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "39254cf9-ddad-4d04-8cd4-c4f7321ee037",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "f6130504-c92d-432e-8f1a-0b3aed3d192b",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "83ee1cb1-1167-48a8-8325-d4db693d384f",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "d8a815f7-0864-4e01-8af3-b7c965c46918",
+        "type": "http",
+        "documentation": "Recent audit events",
+        "method": "get",
+        "endpoint": "observability/audit",
+        "responses": [
+          {
+            "uuid": "9fa2556e-d031-403f-8f1a-759ae9f3b17c",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Audit events\",\n  \"data\": {\n    \"items\": [\n      {\n        \"actor_user_id\": \"string\",\n        \"actor_role\": \"admin\",\n        \"action\": \"string\",\n        \"outcome\": \"success\",\n        \"ip\": \"string\",\n        \"user_agent\": \"string\",\n        \"request_id\": \"string\",\n        \"trace_id\": \"string\",\n        \"target_type\": \"string\",\n        \"target_id\": \"string\",\n        \"metadata\": \"string\",\n        \"timestamp\": \"2026-01-01T00:00:00.000Z\",\n        \"level\": \"info\"\n      }\n    ],\n    \"total\": 0\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "Audit events",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "2c5bee59-8a74-4932-805a-26483cd937eb",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "45f9c2d0-ff93-44fb-8831-d33fbda89417",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "93023eb5-772a-405f-86b0-2ab7d9645376",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "e026b5db-8828-4006-8087-e8ac880cd71f",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      }

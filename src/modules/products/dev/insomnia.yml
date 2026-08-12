@@ -1,0 +1,450 @@
+  - name: Products
+    meta:
+      id: fld_fbdc4f23f93125bbeeae800c4fc78f89
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 6000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/products"
+        name: List products (paginated)
+        meta:
+          id: req_794086abb0a325d517402a02a7f2bced
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: List products (paginated)
+          sortKey: 6001
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products"
+        name: Create product
+        meta:
+          id: req_0cc65a6f4915e4924beef709df02a074
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Create product
+          sortKey: 6002
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "title": "Sallyno Panino",
+              "price": 100,
+              "description": "Piccolo Sallyno panino. Da mangiare di coccole",
+              "active": true,
+              "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+              "categories": [
+                "string"
+              ],
+              "tags": [
+                "string"
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products"
+        name: Edit product
+        meta:
+          id: req_cfb6919eca26deae938f8faec8bbc6c6
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Edit product
+          sortKey: 6003
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": "65dc8a99604c307b702b5ccc",
+              "title": "Sallyno Panino",
+              "description": "Piccolo Sallyno panino. Da mangiare di coccole",
+              "price": 100,
+              "active": true,
+              "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+              "categories": [
+                "string"
+              ],
+              "tags": [
+                "string"
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products"
+        name: Delete product
+        meta:
+          id: req_e8820e6c9759365bb3198360a76f11c1
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Delete product
+          sortKey: 6004
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": "65dc8a99604c307b702b5ccc",
+              "hardDelete": false
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/65dc8a99604c307b702b5ccc"
+        name: Product details
+        meta:
+          id: req_17c157157855cc8e82db06846026063a
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Product details
+          sortKey: 6005
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/65dc8a99604c307b702b5ccc"
+        name: Edit product
+        meta:
+          id: req_18d57c7cd4a273ccaaf2cb642e63f482
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Edit product
+          sortKey: 6006
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "title": "Sallyno Panino",
+              "description": "Piccolo Sallyno panino. Da mangiare di coccole",
+              "price": 100,
+              "active": true,
+              "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+              "categories": [
+                "string"
+              ],
+              "tags": [
+                "string"
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/65dc8a99604c307b702b5ccc"
+        name: Delete product
+        meta:
+          id: req_377ee6ae7690a310885ce804ceb2e736
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Delete product
+          sortKey: 6007
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "hardDelete": false
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/65dc8a99604c307b702b5ccc/hard"
+        name: Permanently delete product
+        meta:
+          id: req_a0aeae42315dbbefa097288f1b1df234
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Permanently delete product
+          sortKey: 6008
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/search"
+        name: Search products (DTO-friendly)
+        meta:
+          id: req_4f312dd533afca32b131d51c26824de3
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Search products (DTO-friendly)
+          sortKey: 6009
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "page": 1,
+              "pageSize": 10,
+              "text": "Sallyno Panino",
+              "id": "65dc8a99604c307b702b5ccc",
+              "minPrice": 0,
+              "maxPrice": 0,
+              "category": "string",
+              "tag": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products"
+        name: "Probe: 422 on a body that violates the schema"
+        meta:
+          id: req_0cc65a6f4915e4924beef709df02a074
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: An empty title and a negative price, each breaking one declared constraint. A contract describes valid requests; the one payload that proves the validation envelope works is the one it forbids. Compare the `errors[]` entries against the fields sent.
+          sortKey: 6010
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "title": "",
+              "description": "",
+              "price": -1
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/65dc8a99604c307b702b5ccc"
+        name: "Probe: the same product in Italian"
+        meta:
+          id: req_436550b41d49d5ac89bf7d42a8e0d10a
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: "`Accept-Language` is deliberately not declared per operation — it applies to all of them and clients set it once in an interceptor — so no generator emits it, yet it changes every user-facing message. Send this beside the generated request and diff `message`."
+          sortKey: 6011
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+          - name: Accept-Language
+            value: it
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products?page=1&pageSize=5&minPrice=1&maxPrice=100&active=true"
+        name: "Probe: the optional filters, all at once"
+        meta:
+          id: req_21284a3b1f65b81979c78ce0477ce7bc
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Generated requests carry only REQUIRED query parameters, so the filters — the half worth testing — appear nowhere. This exercises paging, price bounds and the active flag together, which is also the combination most likely to expose a bad index.
+          sortKey: 6012
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/65dc8ad8604c307b702b5cd4"
+        name: "Probe: the soft-deleted product, anonymously"
+        meta:
+          id: req_4271eb4b08f4d603049a9a1a4f50774a
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: The dataset carries exactly one soft-deleted product so the scoping branches have a fixture behind them. An anonymous caller must get 404 here and an admin must get the record — send this one twice, with and without the admin token, and compare.
+          sortKey: 6013
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/products/6622c88a5123b1e286f440f8"
+        name: "Probe: the inactive product, anonymously"
+        meta:
+          id: req_bbf14a624e954e08add73b9f6cf6dd28
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: "The other half of the pair: inactive is not deleted. `active: false` and a set `deletedAt` are different states with different visibility rules, and the dataset holds one of each so the difference is observable rather than argued about."
+          sortKey: 6014
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

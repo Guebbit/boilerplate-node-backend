@@ -163,7 +163,7 @@ components:
                         $ref: '#/components/schemas/ErrorResponse'
 
     schemas:
-        # ---------- Commons ----------
+        # ---------- Shared — scalars, envelopes and the entities more than one module references. ----------
         Page:
             type: integer
             minimum: 1
@@ -210,7 +210,7 @@ components:
         # purpose, and it is worth knowing why before someone "fixes" it.
         #
         # The real limits live in the backend, and only there:
-        #   - accepted mime types → src/core/adapters/storage.ts (image/png, jpg, jpeg, webp)
+        #   - accepted mime types → src/infrastructure/adapters/storage.ts (image/png, jpg, jpeg, webp)
         #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
         # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
         # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
@@ -225,12 +225,11 @@ components:
         # So a `maxLength` added here would reach no generated artefact in either repo, while
         # looking like it had.
         #
-        # The frontend therefore restates both numbers in src/utils/uploads.ts, which names
+        # The frontend therefore restates both numbers in src/infrastructure/uploads.ts, which names
         # storage.ts as the authority and explains the same thing at its own call site. If the
         # backend's limits ever change, that file is what has to change with them — nothing will
         # announce the drift.
 
-        # ---------- Meta / envelope ----------
         PaginationMeta:
             type: object
             additionalProperties: false
@@ -265,75 +264,6 @@ components:
                     type: integer
                 message: &envelopeMessage
                     type: string
-
-        LocaleCapabilities:
-            type: object
-            additionalProperties: false
-            required: [locales, default, fallback]
-            description: >-
-                Which languages a deployment can answer in. Runtime state, not contract state:
-                it is derived from the dictionaries actually deployed, so it cannot be an enum
-                here.
-            properties:
-                locales:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/Locale'
-                    description: Every supported language tag.
-                default:
-                    $ref: '#/components/schemas/Locale'
-                fallback:
-                    $ref: '#/components/schemas/Locale'
-
-        LocaleCapabilitiesEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/LocaleCapabilities'
-
-        LocaleDictionary:
-            type: object
-            additionalProperties: false
-            required: [locale, messages]
-            description: >-
-                The API's OWN message dictionary for one language — its API-response copy and
-                nothing else. It is never a client's UI dictionary: the two are authored and
-                deployed in separate repositories, and mixing them would put view copy in the
-                API's keyspace. A client that wants these merges them under a namespace it
-                reserves for the API, never at the root.
-            properties:
-                locale:
-                    $ref: '#/components/schemas/Locale'
-                messages:
-                    type: object
-                    additionalProperties: true
-                    description: Nested key/value dictionary, the same shape the API loads.
-
-        LocaleDictionaryEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/LocaleDictionary'
-
-        HealthPing:
-            type: object
-            additionalProperties: false
-            required: [status]
-            properties:
-                status:
-                    type: string
-                    enum: [ok]
-                    description: Liveness indicator. Always `ok` when the process is answering.
 
         ErrorItem:
             type: object
@@ -397,39 +327,6 @@ components:
         # The schemas below describe the "data" payload for each endpoint.
         # Wrapped response schemas below combine the envelope with the domain payload.
 
-        HealthPingEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/HealthPing'
-
-        AuthTokensEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/AuthTokens'
-
-        RefreshTokenEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/RefreshTokenResponse'
-
         UserEnvelope:
             type: object
             additionalProperties: false
@@ -440,179 +337,6 @@ components:
                 message: *envelopeMessage
                 data:
                     $ref: '#/components/schemas/User'
-
-        UsersResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/UsersResponse'
-
-        ProductEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/Product'
-
-        ProductsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/ProductsResponse'
-
-        OrderEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/Order'
-
-        OrdersResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/OrdersResponse'
-
-        FeedbackRequestEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/FeedbackRequest'
-
-        FeedbackRequestsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/FeedbackRequestsResponse'
-
-        CartResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/CartResponse'
-
-        CartSummaryResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/CartSummaryResponse'
-
-        CheckoutResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/CheckoutResponse'
-
-        ObservabilityHealthResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/ObservabilityHealth'
-
-        ObservabilityMetricsSummaryResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
-
-        AuditLogsResponseEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success: *envelopeSuccess
-                status: *envelopeStatus
-                message: *envelopeMessage
-                data:
-                    $ref: '#/components/schemas/AuditLogsPage'
-
-        AuthTokens:
-            type: object
-            additionalProperties: false
-            required: [token]
-            properties:
-                token:
-                    type: string
-                    description: Access JWT
-                refreshToken:
-                    type: string
-                    description: Refresh token if returned by backend
-                expiresIn:
-                    type: integer
-                    description: Access token expiry in seconds
-
-        RefreshTokenResponse:
-            type: object
-            additionalProperties: false
-            required: [token]
-            properties:
-                token:
-                    type: string
-                    description: New access JWT
-                refreshToken:
-                    type: string
-                    description: New refresh token if returned by backend
-                expiresIn:
-                    type: integer
-                    description: New access token expiry in seconds
 
         User:
             type: object
@@ -684,36 +408,6 @@ components:
                     type: string
                     format: date-time
                 deletedAt:
-                    type: string
-                    format: date-time
-
-        FeedbackRequest:
-            type: object
-            additionalProperties: false
-            required: [id, email, subject, message, status, createdAt]
-            properties:
-                id:
-                    $ref: '#/components/schemas/Id'
-                name:
-                    type: string
-                email:
-                    $ref: '#/components/schemas/Email'
-                subject:
-                    type: string
-                message:
-                    type: string
-                status:
-                    type: string
-                    enum: [new, in_progress, resolved, spam]
-                adminNotes:
-                    type: string
-                respondedAt:
-                    type: string
-                    format: date-time
-                createdAt:
-                    type: string
-                    format: date-time
-                updatedAt:
                     type: string
                     format: date-time
 
@@ -792,7 +486,335 @@ components:
                     type: string
                     format: date-time
 
-        # ---------- Request DTOs — Auth ----------
+        # For the path-form deletes, which need no id — `{id}` already carries it — but do
+        # read the flag from a body as readily as from the query.
+        HardDeleteRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                hardDelete:
+                    type: boolean
+                    default: false
+
+        # ---------- system — the schemas only this module's paths reference. ----------
+        HealthPing:
+            type: object
+            additionalProperties: false
+            required: [status]
+            properties:
+                status:
+                    type: string
+                    enum: [ok]
+                    description: Liveness indicator. Always `ok` when the process is answering.
+
+        HealthPingEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/HealthPing'
+
+        # ---------- locales — the schemas only this module's paths reference. ----------
+        LocaleCapabilities:
+            type: object
+            additionalProperties: false
+            required: [locales, default, fallback]
+            description: >-
+                Which languages a deployment can answer in. Runtime state, not contract state:
+                it is derived from the dictionaries actually deployed, so it cannot be an enum
+                here.
+            properties:
+                locales:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Locale'
+                    description: Every supported language tag.
+                default:
+                    $ref: '#/components/schemas/Locale'
+                fallback:
+                    $ref: '#/components/schemas/Locale'
+
+        LocaleCapabilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/LocaleCapabilities'
+
+        LocaleDictionary:
+            type: object
+            additionalProperties: false
+            required: [locale, messages]
+            description: >-
+                The API's OWN message dictionary for one language — its API-response copy and
+                nothing else. It is never a client's UI dictionary: the two are authored and
+                deployed in separate repositories, and mixing them would put view copy in the
+                API's keyspace. A client that wants these merges them under a namespace it
+                reserves for the API, never at the root.
+            properties:
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                messages:
+                    type: object
+                    additionalProperties: true
+                    description: Nested key/value dictionary, the same shape the API loads.
+
+        LocaleDictionaryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/LocaleDictionary'
+
+        # ---------- observability — the schemas only this module's paths reference. ----------
+        ObservabilityHealthResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ObservabilityHealth'
+
+        ObservabilityMetricsSummaryResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
+
+        AuditLogsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/AuditLogsPage'
+
+        ObservabilityHealthIntegrations:
+            type: object
+            additionalProperties: false
+            properties:
+                loki: { type: boolean }
+                posthog: { type: boolean }
+                otelEnabled: { type: boolean }
+                umami: { type: boolean }
+                faro: { type: boolean }
+
+        ObservabilityHealthMemory:
+            type: object
+            additionalProperties: false
+            required: [heapUsedMb, heapTotalMb, rssMb]
+            properties:
+                heapUsedMb: { type: integer }
+                heapTotalMb: { type: integer }
+                rssMb: { type: integer }
+
+        ObservabilityHealthSystem:
+            type: object
+            additionalProperties: false
+            required: [platform, cpuCount, loadAvg]
+            properties:
+                platform: { type: string }
+                cpuCount: { type: integer }
+                loadAvg:
+                    type: array
+                    items: { type: number }
+
+        ObservabilityHealth:
+            type: object
+            additionalProperties: false
+            required:
+                [status, environment, service, nodeVersion, uptimeSeconds, database, timestamp]
+            properties:
+                status:
+                    type: string
+                    enum: [ok, degraded]
+                environment: { type: string }
+                service: { type: string }
+                nodeVersion: { type: string }
+                uptimeSeconds: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    additionalProperties: false
+                    required: [status]
+                    properties:
+                        status:
+                            type: string
+                            enum: [connected, connecting, disconnected]
+                integrations: { $ref: '#/components/schemas/ObservabilityHealthIntegrations' }
+                memory: { $ref: '#/components/schemas/ObservabilityHealthMemory' }
+                system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
+                timestamp: { type: string, format: date-time }
+
+        ObservabilityMetricsLatency:
+            type: object
+            additionalProperties: false
+            required: [p50, p95]
+            properties:
+                p50: { type: number, description: Median latency in ms }
+                p95: { type: number, description: 95th-percentile latency in ms }
+
+        ObservabilityMetricsSummary:
+            type: object
+            additionalProperties: false
+            required: [http, auth, business, database, process, timestamp]
+            properties:
+                http:
+                    type: object
+                    additionalProperties: false
+                    required: [totalRequests, totalErrors, errorRate, inFlight, latencyMs]
+                    properties:
+                        totalRequests: { type: integer, minimum: 0 }
+                        totalErrors: { type: integer, minimum: 0 }
+                        errorRate:
+                            type: number
+                            minimum: 0
+                            maximum: 1
+                            description: Fraction of requests that returned 4xx/5xx
+                        inFlight: { type: integer, minimum: 0 }
+                        latencyMs: { $ref: '#/components/schemas/ObservabilityMetricsLatency' }
+                auth:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        loginSuccess: { type: integer, minimum: 0 }
+                        loginFailure: { type: integer, minimum: 0 }
+                        signupSuccess: { type: integer, minimum: 0 }
+                business:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        checkoutSuccess: { type: integer, minimum: 0 }
+                        ordersCreated: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        queriesTotal: { type: integer, minimum: 0 }
+                        errorsTotal: { type: integer, minimum: 0 }
+                process:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        uptimeSeconds: { type: integer, minimum: 0 }
+                        heapUsedMb: { type: integer, minimum: 0 }
+                timestamp: { type: string, format: date-time }
+
+        AuditLogsPage:
+            type: object
+            additionalProperties: false
+            required: [items, total]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEventItem' }
+                total: { type: integer, minimum: 0 }
+        AuditEventItem:
+            type: object
+            additionalProperties: false
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id: { type: string }
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                action:
+                    {
+                        type: string,
+                        description: 'Dot-notation action name (e.g. auth.login.succeeded)'
+                    }
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip: { type: string }
+                user_agent: { type: string }
+                request_id: { type: string }
+                trace_id: { type: string }
+                target_type: { type: string }
+                target_id: { type: string }
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp: { type: string, format: date-time }
+                level:
+                    type: string
+                    enum: [info, warn]
+
+        # ---------- account — the schemas only this module's paths reference. ----------
+        AuthTokensEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/AuthTokens'
+
+        RefreshTokenEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/RefreshTokenResponse'
+
+        AuthTokens:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: Access JWT
+                refreshToken:
+                    type: string
+                    description: Refresh token if returned by backend
+                expiresIn:
+                    type: integer
+                    description: Access token expiry in seconds
+
+        RefreshTokenResponse:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: New access JWT
+                refreshToken:
+                    type: string
+                    description: New refresh token if returned by backend
+                expiresIn:
+                    type: integer
+                    description: New access token expiry in seconds
+
         LoginRequest:
             type: object
             additionalProperties: false
@@ -870,7 +892,18 @@ components:
                     type: string
                     description: One-time account deletion token (NOT a JWT).
 
-        # ---------- Request DTOs — Users ----------
+        # ---------- users — the schemas only this module's paths reference. ----------
+        UsersResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/UsersResponse'
+
         SearchUsersRequest:
             type: object
             additionalProperties: false
@@ -1038,7 +1071,146 @@ components:
                     type: boolean
                     default: false
 
-        # ---------- Request DTOs — Products ----------
+        UsersResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/User'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+        # ---------- feedback — the schemas only this module's paths reference. ----------
+        FeedbackRequestEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/FeedbackRequest'
+
+        FeedbackRequestsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/FeedbackRequestsResponse'
+
+        FeedbackRequest:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status, createdAt]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                adminNotes:
+                    type: string
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        CreateFeedbackRequest:
+            type: object
+            additionalProperties: false
+            required: [email, subject, message]
+            properties:
+                name:
+                    type: string
+                email:
+                    $ref: '#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+
+        SearchFeedbackRequestsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                text:
+                    $ref: '#/components/schemas/Text'
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                email:
+                    $ref: '#/components/schemas/Email'
+
+        UpdateFeedbackRequestStatusRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                adminNotes:
+                    type: string
+
+        FeedbackRequestsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FeedbackRequest'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+        # ---------- products — the schemas only this module's paths reference. ----------
+        ProductEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Product'
+
+        ProductsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ProductsResponse'
+
         SearchProductsRequest:
             type: object
             additionalProperties: false
@@ -1253,16 +1425,6 @@ components:
                     items:
                         type: string
 
-        # For the path-form deletes, which need no id — `{id}` already carries it — but do
-        # read the flag from a body as readily as from the query.
-        HardDeleteRequest:
-            type: object
-            additionalProperties: false
-            properties:
-                hardDelete:
-                    type: boolean
-                    default: false
-
         DeleteProductRequest:
             type: object
             additionalProperties: false
@@ -1274,7 +1436,52 @@ components:
                     type: boolean
                     default: false
 
-        # ---------- Request DTOs — Cart ----------
+        ProductsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Product'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+        # ---------- cart — the schemas only this module's paths reference. ----------
+        CartResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CartResponse'
+
+        CartSummaryResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CheckoutResponse'
+
         UpsertCartItemRequest:
             type: object
             additionalProperties: false
@@ -1314,7 +1521,75 @@ components:
                     type: string
                     description: Optional order notes
 
-        # ---------- Request DTOs — Orders ----------
+        CartSummaryResponse:
+            type: object
+            additionalProperties: false
+            required: [itemsCount, totalQuantity, total]
+            properties:
+                itemsCount:
+                    type: integer
+                    minimum: 0
+                    description: Number of distinct cart lines/items
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of quantities across all items
+                total:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of item prices * quantity (before tax/shipping/discounts)
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. USD)
+
+        CartResponse:
+            type: object
+            additionalProperties: false
+            required: [items, summary]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+                summary:
+                    $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponse:
+            type: object
+            additionalProperties: false
+            required: [order]
+            properties:
+                order:
+                    $ref: '#/components/schemas/Order'
+                message:
+                    type: string
+
+        # ---------- Observability ----------
+
+        # ---------- orders — the schemas only this module's paths reference. ----------
+        OrderEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Order'
+
+        OrdersResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/OrdersResponse'
+
         SearchOrdersRequest:
             type: object
             additionalProperties: false
@@ -1398,72 +1673,6 @@ components:
                     type: boolean
                     default: false
 
-        CreateFeedbackRequest:
-            type: object
-            additionalProperties: false
-            required: [email, subject, message]
-            properties:
-                name:
-                    type: string
-                email:
-                    $ref: '#/components/schemas/Email'
-                subject:
-                    type: string
-                message:
-                    type: string
-
-        SearchFeedbackRequestsRequest:
-            type: object
-            additionalProperties: false
-            properties:
-                page:
-                    $ref: '#/components/schemas/Page'
-                pageSize:
-                    $ref: '#/components/schemas/PageSize'
-                text:
-                    $ref: '#/components/schemas/Text'
-                status:
-                    type: string
-                    enum: [new, in_progress, resolved, spam]
-                email:
-                    $ref: '#/components/schemas/Email'
-
-        UpdateFeedbackRequestStatusRequest:
-            type: object
-            additionalProperties: false
-            properties:
-                status:
-                    type: string
-                    enum: [new, in_progress, resolved, spam]
-                adminNotes:
-                    type: string
-
-        # --------------- RESPONSES ---------------
-        # ---------- Response DTOs — envelope items ----------
-        UsersResponse:
-            type: object
-            additionalProperties: false
-            required: [items, meta]
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/User'
-                meta:
-                    $ref: '#/components/schemas/PaginationMeta'
-
-        ProductsResponse:
-            type: object
-            additionalProperties: false
-            required: [items, meta]
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/Product'
-                meta:
-                    $ref: '#/components/schemas/PaginationMeta'
-
         OrdersResponse:
             type: object
             additionalProperties: false
@@ -1475,215 +1684,6 @@ components:
                         $ref: '#/components/schemas/Order'
                 meta:
                     $ref: '#/components/schemas/PaginationMeta'
-
-        FeedbackRequestsResponse:
-            type: object
-            additionalProperties: false
-            required: [items, meta]
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/FeedbackRequest'
-                meta:
-                    $ref: '#/components/schemas/PaginationMeta'
-
-        # ---------- Response DTOs — Cart ----------
-        CartSummaryResponse:
-            type: object
-            additionalProperties: false
-            required: [itemsCount, totalQuantity, total]
-            properties:
-                itemsCount:
-                    type: integer
-                    minimum: 0
-                    description: Number of distinct cart lines/items
-                totalQuantity:
-                    type: integer
-                    minimum: 0
-                    description: Sum of quantities across all items
-                total:
-                    type: number
-                    format: double
-                    minimum: 0
-                    description: Sum of item prices * quantity (before tax/shipping/discounts)
-                currency:
-                    type: string
-                    description: ISO-4217 currency code (e.g. USD)
-
-        CartResponse:
-            type: object
-            additionalProperties: false
-            required: [items, summary]
-            properties:
-                items:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/CartItem'
-                summary:
-                    $ref: '#/components/schemas/CartSummaryResponse'
-
-        CheckoutResponse:
-            type: object
-            additionalProperties: false
-            required: [order]
-            properties:
-                order:
-                    $ref: '#/components/schemas/Order'
-                message:
-                    type: string
-
-        # ---------- Observability ----------
-
-        ObservabilityHealthIntegrations:
-            type: object
-            additionalProperties: false
-            properties:
-                loki: { type: boolean }
-                posthog: { type: boolean }
-                otelEnabled: { type: boolean }
-                umami: { type: boolean }
-                faro: { type: boolean }
-
-        ObservabilityHealthMemory:
-            type: object
-            additionalProperties: false
-            required: [heapUsedMb, heapTotalMb, rssMb]
-            properties:
-                heapUsedMb: { type: integer }
-                heapTotalMb: { type: integer }
-                rssMb: { type: integer }
-
-        ObservabilityHealthSystem:
-            type: object
-            additionalProperties: false
-            required: [platform, cpuCount, loadAvg]
-            properties:
-                platform: { type: string }
-                cpuCount: { type: integer }
-                loadAvg:
-                    type: array
-                    items: { type: number }
-
-        ObservabilityHealth:
-            type: object
-            additionalProperties: false
-            required:
-                [status, environment, service, nodeVersion, uptimeSeconds, database, timestamp]
-            properties:
-                status:
-                    type: string
-                    enum: [ok, degraded]
-                environment: { type: string }
-                service: { type: string }
-                nodeVersion: { type: string }
-                uptimeSeconds: { type: integer, minimum: 0 }
-                database:
-                    type: object
-                    additionalProperties: false
-                    required: [status]
-                    properties:
-                        status:
-                            type: string
-                            enum: [connected, connecting, disconnected]
-                integrations: { $ref: '#/components/schemas/ObservabilityHealthIntegrations' }
-                memory: { $ref: '#/components/schemas/ObservabilityHealthMemory' }
-                system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
-                timestamp: { type: string, format: date-time }
-
-        ObservabilityMetricsLatency:
-            type: object
-            additionalProperties: false
-            required: [p50, p95]
-            properties:
-                p50: { type: number, description: Median latency in ms }
-                p95: { type: number, description: 95th-percentile latency in ms }
-
-        ObservabilityMetricsSummary:
-            type: object
-            additionalProperties: false
-            required: [http, auth, business, database, process, timestamp]
-            properties:
-                http:
-                    type: object
-                    additionalProperties: false
-                    required: [totalRequests, totalErrors, errorRate, inFlight, latencyMs]
-                    properties:
-                        totalRequests: { type: integer, minimum: 0 }
-                        totalErrors: { type: integer, minimum: 0 }
-                        errorRate:
-                            type: number
-                            minimum: 0
-                            maximum: 1
-                            description: Fraction of requests that returned 4xx/5xx
-                        inFlight: { type: integer, minimum: 0 }
-                        latencyMs: { $ref: '#/components/schemas/ObservabilityMetricsLatency' }
-                auth:
-                    type: object
-                    additionalProperties: false
-                    properties:
-                        loginSuccess: { type: integer, minimum: 0 }
-                        loginFailure: { type: integer, minimum: 0 }
-                        signupSuccess: { type: integer, minimum: 0 }
-                business:
-                    type: object
-                    additionalProperties: false
-                    properties:
-                        checkoutSuccess: { type: integer, minimum: 0 }
-                        ordersCreated: { type: integer, minimum: 0 }
-                database:
-                    type: object
-                    additionalProperties: false
-                    properties:
-                        queriesTotal: { type: integer, minimum: 0 }
-                        errorsTotal: { type: integer, minimum: 0 }
-                process:
-                    type: object
-                    additionalProperties: false
-                    properties:
-                        uptimeSeconds: { type: integer, minimum: 0 }
-                        heapUsedMb: { type: integer, minimum: 0 }
-                timestamp: { type: string, format: date-time }
-
-        AuditLogsPage:
-            type: object
-            additionalProperties: false
-            required: [items, total]
-            properties:
-                items:
-                    type: array
-                    items: { $ref: '#/components/schemas/AuditEventItem' }
-                total: { type: integer, minimum: 0 }
-        AuditEventItem:
-            type: object
-            additionalProperties: false
-            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
-            properties:
-                actor_user_id: { type: string }
-                actor_role:
-                    type: string
-                    enum: [admin, user, anonymous]
-                action:
-                    {
-                        type: string,
-                        description: 'Dot-notation action name (e.g. auth.login.succeeded)'
-                    }
-                outcome:
-                    type: string
-                    enum: [success, failure]
-                ip: { type: string }
-                user_agent: { type: string }
-                request_id: { type: string }
-                trace_id: { type: string }
-                target_type: { type: string }
-                target_id: { type: string }
-                metadata:
-                    type: object
-                    additionalProperties: true
-                timestamp: { type: string, format: date-time }
-                level:
-                    type: string
-                    enum: [info, warn]
 
 paths:
     # --------- System ---------

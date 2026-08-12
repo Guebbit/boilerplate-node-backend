@@ -209,15 +209,11 @@ components:
                     description: EJS template name to render.
                 data:
                     type: object
-                    description: Template variables passed to EJS.
-                locale:
-                    type: string
                     description: >-
-                        Language to render the template in. Carried explicitly because the
-                        request-scoped locale (AsyncLocalStorage, see src/core/i18n.ts) does not
-                        survive the hop onto the queue — the worker may not even be in the same
-                        process. Omitted means NODE_DEFAULT_LOCALE.
-                    example: it
+                        Everything the template prints, already translated by the producer —
+                        including the `<html lang>` value and the footer line. The consumer
+                        interpolates it and resolves nothing, which is why no locale travels
+                        with the job.
             additionalProperties: false
         PdfJobPayload:
             type: object
@@ -231,14 +227,10 @@ components:
                     description: Path to the EJS template file.
                 templateData:
                     type: object
-                    description: Data passed to the EJS template.
-                locale:
-                    type: string
                     description: >-
-                        Language to render the document in. Carried explicitly for the same
-                        reason as on EmailJobPayload — the request-scoped locale does not survive
-                        the hop onto the queue. Omitted means NODE_FALLBACK_LOCALE.
-                    example: it
+                        Everything the template prints, already translated by the producer —
+                        same contract as EmailJobPayload.data, and the same reason no locale
+                        travels with the job.
                 outputPath:
                     type: string
                     description: Filesystem path where the generated PDF will be written.

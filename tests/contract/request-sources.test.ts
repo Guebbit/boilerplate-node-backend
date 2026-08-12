@@ -7,9 +7,9 @@
  * `docs/theory/request-input.md` lists five contract bugs found by reading them against each
  * other **by hand** — which is not a thing anyone will remember to do twice.
  *
- * This is that comparison, automated. It is the guard rail plan 02's generated `createResourceRouter`
- * depends on: once routes are produced from a descriptor rather than written out, a typo silently
- * mounts a route the spec never declared, and this test is the only thing that would notice.
+ * This is that comparison, automated. It is also what keeps the module registry honest: a domain
+ * mounts itself from its own manifest, so a wrong `basePath` or a module missing from
+ * `src/modules.ts` makes real operations unreachable, and this test is the only thing that notices.
  *
  * **Direction of the assertion.** Declared sources must be a SUBSET of what the spec allows. A
  * controller reading a source the contract does not declare is undocumented input — the class of
@@ -17,11 +17,12 @@
  * declaring a source no controller reads) is not asserted here: `readInput` merges every key it
  * finds, so a route can legitimately accept a declared body it never names a field of.
  *
- * **How the mapping is recovered.** Statically, from the source: `src/bootstrap/routes.ts` gives
- * each router's mount prefix, `src/routes/*.ts` gives each mounted path and the controller it calls, and the
- * controller module gives its `readInput` declarations. No server is booted — the point is to
- * compare two written claims, and a runtime probe would only reveal what one request happened to
- * carry.
+ * **How the mapping is recovered.** Statically, from the source: `src/modules.ts` and each
+ * `src/modules/<name>/module.ts` give the enabled modules and their base paths, `src/app/routes.ts`
+ * gives the prefix for the system router, the router files give each mounted path and the
+ * controller it calls, and the controller module gives its `readInput` declarations. No server is
+ * booted — the point is to compare two written claims, and a runtime probe would only reveal what
+ * one request happened to carry.
  */
 
 import { readFileSync } from 'node:fs';
@@ -51,33 +52,71 @@ interface IMountedRoute {
 
 const read = (relative: string): string => readFileSync(path.join(ROOT, relative), 'utf8');
 
-/** `app.use('/products', productRoutes)` → which route module sits under which prefix. */
+/**
+ * Every router file the app mounts, with the prefix it is mounted under.
+ *
+ * Every domain mounts itself: `src/modules/<name>/module.ts` declares a `basePath` and a router,
+ * and `src/modules.ts` decides which modules are enabled. `src/app/routes.ts` mounts exactly one
+ * thing by name — the system router, which belongs to no domain — and that is read too, so
+ * `GET /` is held to the contract like everything else.
+ */
 const readMountPrefixes = (): Map<string, string> => {
-    // `src/bootstrap/routes.ts` is the only place routers are mounted; `app.ts` assembles the
-    // installs and no longer names a domain.
-    const app = read('src/bootstrap/routes.ts');
+    const prefixes = new Map<string, string>();
+
+    // Enabled modules only. A module folder that exists but is absent from the `enabledModules`
+    // array is absent from the build, so its routes must not count as mounted — which is exactly
+    // the mistake this check should catch rather than paper over.
+    const registry = read('src/modules.ts');
+    const listed = new Set(
+        (/enabledModules[^=]*=\s*\[([^\]]*)]/.exec(registry)?.[1] ?? '')
+            .split(',')
+            .map((entry) => entry.trim())
+            .filter(Boolean)
+    );
+
+    for (const [, binding, name] of registry.matchAll(
+        /import\s+(\w+)\s+from\s+'\.\/modules\/([^'/]+)\/module'/g
+    )) {
+        if (!listed.has(binding)) continue;
+        const basePath = /basePath:\s*'([^']*)'/.exec(read(`src/modules/${name}/module.ts`))?.[1];
+        if (basePath !== undefined)
+            prefixes.set(`src/modules/${name}/routes.ts`, basePath === '/' ? '' : basePath);
+    }
+
+    // The one router `src/app/routes.ts` still names, resolved through its import so a rename of
+    // the file is caught rather than silently dropping `GET /` from this check.
+    const app = read('src/app/routes.ts');
     const imports = new Map<string, string>();
     for (const [, binding, module] of app.matchAll(
-        /import\s+(?:\*\s+as\s+)?{?\s*(?:router\s+as\s+)?(\w+)\s*}?\s+from\s+'([^']*routes[^']*)'/g
+        /import\s+(?:\*\s+as\s+)?{?\s*(?:router\s+as\s+)?(\w+)\s*}?\s+from\s+'([^']*)'/g
     ))
         imports.set(binding, module);
 
-    const prefixes = new Map<string, string>();
     for (const [, prefix, binding] of app.matchAll(/app\.use\('([^']*)',\s*(\w+)\)/g)) {
         const module = imports.get(binding);
-        if (module) prefixes.set(path.basename(module), prefix === '/' ? '' : prefix);
+        if (!module) continue;
+        prefixes.set(`src/app/${path.basename(module)}.ts`, prefix === '/' ? '' : prefix);
     }
+
     return prefixes;
 };
 
-/** `import { deleteOrders } from '@controllers/orders/delete-orders'` → binding → file path. */
-const readControllerImports = (source: string): Map<string, string> => {
+/**
+ * Maps each controller binding a router imports to the file that defines it.
+ *
+ * Every router reaches its own controllers relatively (`./controllers/get-products`), so the owning
+ * directory is what resolves them. That is the only form there is: a controller belongs to the
+ * module whose router calls it, and the module boundary forbids reaching for anyone else's.
+ */
+const readControllerImports = (source: string, routeFile: string): Map<string, string> => {
     const imports = new Map<string, string>();
+
     for (const [, bindings, module] of source.matchAll(
-        /import\s*{([^}]+)}\s*from\s*'@controllers\/([^']+)'/g
+        /import\s*{([^}]+)}\s*from\s*'\.\/controllers\/([^']+)'/g
     ))
         for (const binding of bindings.split(','))
-            imports.set(binding.trim(), `src/controllers/${module}.ts`);
+            imports.set(binding.trim(), `${path.dirname(routeFile)}/controllers/${module}.ts`);
+
     return imports;
 };
 
@@ -92,21 +131,14 @@ const readMountedRoutes = (): IMountedRoute[] => {
     const prefixes = readMountPrefixes();
     const routes: IMountedRoute[] = [];
 
-    for (const [file, prefix] of prefixes) {
-        // `import { router } from './routes'` is a directory import — the system router is
-        // `src/routes/index.ts`, not `src/routes/routes.ts`.
-        const candidates = file === 'routes' ? ['src/routes/index.ts'] : [`src/routes/${file}.ts`];
+    for (const [routeFile, prefix] of prefixes) {
         let source: string | undefined;
-        for (const candidate of candidates) {
-            try {
-                source = read(candidate);
-                break;
-            } catch {
-                continue;
-            }
+        try {
+            source = read(routeFile);
+        } catch {
+            continue;
         }
-        if (!source) continue;
-        const imports = readControllerImports(source);
+        const imports = readControllerImports(source, routeFile);
 
         for (const [, method, routePath, argumentList] of source.matchAll(
             /router\.(get|post|put|delete|patch)\(\s*'([^']*)',([\S\s]*?)\);/g

@@ -1,0 +1,64 @@
+{
+    "account": {
+        "login": {
+            "invalid-data": "Los datos introducidos no son válidos.",
+            "wrong-data": "Correo electrónico o contraseña incorrectos.",
+            "success": "Sesión iniciada."
+        },
+        "signup": {
+            "email-already-used": "El correo electrónico ya está en uso.",
+            "password-dont-match": "La contraseña de confirmación debe coincidir con la contraseña.",
+            "registration-successful": "Registro completado, confirma por correo para iniciar sesión."
+        },
+        "reset": {
+            "email-not-found": "No se encontró ningún usuario con ese correo electrónico.",
+            "token-not-found": "Token no válido o caducado, inténtalo de nuevo.",
+            "email-sent": "Se ha enviado un correo con un enlace, haz clic para restablecer la contraseña.",
+            "success": "Contraseña cambiada, inicia sesión con la nueva contraseña."
+        },
+        "delete": {
+            "email-sent": "Se ha enviado un correo de confirmación. Haz clic en el enlace para confirmar la eliminación de la cuenta.",
+            "token-not-found": "Token no válido o caducado, inténtalo de nuevo.",
+            "success": "Cuenta eliminada definitivamente."
+        },
+        "email": {
+            "registration-confirm": {
+                "subject": "Bienvenido — tu cuenta está lista",
+                "meta-title": "Registro completado",
+                "title": "¡Bienvenido a bordo {{name}}!",
+                "body": "Tu registro se ha completado correctamente."
+            },
+            "reset-request": {
+                "subject": "Restablecer la contraseña",
+                "meta-title": "Restablecimiento de contraseña solicitado",
+                "greeting": "¡Hola, {{name}}!",
+                "intro": "Hemos recibido una solicitud para restablecer tu contraseña.",
+                "cta": "Haz clic en este enlace para establecer una nueva contraseña.",
+                "link-label": "Restablecer mi contraseña",
+                "ignore": "Si no has sido tú, puedes ignorar este correo."
+            },
+            "reset-confirm": {
+                "subject": "Tu contraseña ha cambiado",
+                "meta-title": "Contraseña restablecida",
+                "greeting": "¡Hola, {{name}}!",
+                "body": "Tu contraseña se ha restablecido."
+            },
+            "delete-request": {
+                "subject": "Confirma la eliminación de la cuenta",
+                "meta-title": "Eliminación de cuenta solicitada",
+                "greeting": "¡Hola, {{name}}!",
+                "intro": "Hemos recibido una solicitud para eliminar definitivamente tu cuenta.",
+                "cta": "Haz clic en este enlace para confirmar la eliminación de la cuenta.",
+                "link-label": "Confirmar la eliminación",
+                "ignore": "Si no has sido tú, puedes ignorar este correo."
+            },
+            "delete-confirm": {
+                "subject": "Tu cuenta ha sido eliminada",
+                "meta-title": "Cuenta eliminada",
+                "greeting": "¡Hola, {{name}}!",
+                "body": "Tu cuenta se ha eliminado definitivamente.",
+                "farewell": "Sentimos verte marchar. Si ha sido un error, ponte en contacto con el soporte."
+            }
+        }
+    }
+}

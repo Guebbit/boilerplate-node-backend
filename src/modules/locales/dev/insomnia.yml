@@ -1,0 +1,58 @@
+  - name: Locales
+    meta:
+      id: fld_86aeaf8b02747cdecdb29ee87a018a9a
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 1000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/locales"
+        name: Supported languages
+        meta:
+          id: req_6ab806a3287db5e4af09417ba8831d2e
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Supported languages
+          sortKey: 1001
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en"
+        name: API message dictionary
+        meta:
+          id: req_b5f56f7f11ed79c32c83cb12caabfbf3
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: API message dictionary
+          sortKey: 1002
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

@@ -13,7 +13,7 @@ happens to the value on the way in.
 
 Read "sources" left-to-right as precedence, highest first. A controller does not spell this array:
 it names the **surface** it is (`search`, `write`, `delete`, `path`) and `SURFACE_SOURCES` in
-`@core/http/request` maps that to the row below. The set is closed, so precedence is a property of
+`@infrastructure/http/request` maps that to the row below. The set is closed, so precedence is a property of
 the surface rather than of whichever array the newest controller happened to pass — and a fifth
 combination has to be added there deliberately, where it can be reviewed against the spec.
 
@@ -58,10 +58,10 @@ combination has to be added there deliberately, where it can be reviewed against
 | `GET /feedback`                                                         | `page`, `pageSize`                              | body, query             | merged, then the shared pagination schema      |
 |                                                                         | `text`, `email`, `status`                       | body, query             | merged, passed through as strings              |
 
-Pagination has exactly two authorities, and they answer different questions. `@core/http/schemas`
+Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
 owns the **bounds** — `openapi.yaml` declares `minimum: 1` / `maximum: 100`, and every one of the
 four search endpoints answers 422 for anything outside that, `GET /feedback` included.
-`normalizePagination` (`@repositories/search`) owns the **defaults** — page 1, ten per page, or
+`normalizePagination` (`@infrastructure/persistence/search`) owns the **defaults** — page 1, ten per page, or
 `NODE_SETTINGS_PAGINATION_PAGE_SIZE` — and it runs on every search, which is why a controller
 leaves an unspecified page absent rather than filling it in. Neither clamps: an out-of-range
 request is rejected, not quietly turned into a different request.
@@ -93,11 +93,11 @@ perfectly good `true` and answered 201 where the contract promises 422.
 
 **Decoding is not validation.** Whatever the decoder could not recognise is passed through
 unchanged, so `?hardDelete=maybe` reaches a schema and answers 422 rather than being guessed at.
-The schemas for the scalars more than one endpoint accepts live in `@core/http/schemas`.
+The schemas for the scalars more than one endpoint accepts live in `@infrastructure/http/schemas`.
 
 ## Declaring it
 
-`readInput` (`@core/http/request`) takes the row of the table above as an argument:
+`readInput` (`@infrastructure/http/request`) takes the row of the table above as an argument:
 
 ```ts
 const input = readInput(request, {
@@ -153,8 +153,9 @@ controller, so their declarations would need unioning; and orval generates clien
 not server-side input declarations, so this would be new machinery to own.
 
 The cheaper first move is a **test**, not a generator, and it exists:
-`tests/contract/request-sources.test.ts`. It recovers the route table statically — `src/bootstrap/routes.ts`
-for each router's mount prefix, `src/routes/*.ts` for each mounted path and its controller — reads
+`tests/contract/request-sources.test.ts`. It recovers the route table statically — `src/modules.ts` and each
+`module.ts` for the enabled modules and their base paths, `src/app/routes.ts` for the system
+router it still mounts by name, the router files for each mounted path and its controller — reads
 that controller's `readInput` declarations, and asserts they are a subset of what `openapi.yaml`
 allows. It also asserts the two sets of routes match: every mounted route is in the spec, and
 every spec operation is mounted.
@@ -211,7 +212,7 @@ because every one of them names a way the same class of bug can return.
   an uninterpretable value answers 422 rather than defaulting to the destructive option.
 - **Pagination was bounded on three endpoints and not on the fourth.** `?pageSize=500` answered
   422 on `GET /products`, `/users` and `/orders` and a silently clamped 200 on `GET /feedback`,
-  and neither answer was written down anywhere. All four now share `@core/http/schemas`.
+  and neither answer was written down anywhere. All four now share `@infrastructure/http/schemas`.
 - **`request.params.id` was read by every list controller.** `GET /products/:id`,
   `GET /users/:id` and `GET /orders/:id` route to the _item_ controllers;
   `getProducts`/`getUsers`/`getOrders` are only ever mounted on the collection and on `/search`,

@@ -1,0 +1,5 @@
+{
+    "observability": {
+        "audit-since-invalid": "El filtro «since» debe ser una marca de tiempo ISO-8601 válida."
+    }
+}

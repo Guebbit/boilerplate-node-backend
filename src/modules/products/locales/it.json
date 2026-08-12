@@ -1,0 +1,12 @@
+{
+    "products": {
+        "not-found": "Il prodotto richiesto non è stato trovato.",
+        "field-title-required": "Il titolo è obbligatorio",
+        "field-title-min": "Il titolo è troppo corto",
+        "field-price-invalid": "Il prezzo è mancante o non valido",
+        "field-price-min": "Il prezzo non può essere negativo",
+        "hard-deleted": "Il prodotto è stato eliminato definitivamente.",
+        "soft-deleted": "Il prodotto è stato eliminato logicamente (solo per gli utenti).",
+        "was-deleted-from-all-carts": "Il prodotto con ID {{product}} è stato rimosso da {{count}} carrelli."
+    }
+}

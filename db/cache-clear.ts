@@ -14,8 +14,8 @@
  *   npm run db:cache:clear:host    # against localhost
  */
 import 'dotenv/config';
-import { clearCache, stopCache } from '@core/adapters/cache';
-import { logger } from '@core/adapters/logger';
+import { clearCache, stopCache } from '@infrastructure/adapters/cache';
+import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from './run-script';
 
 void runScript(

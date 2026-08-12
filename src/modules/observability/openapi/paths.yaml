@@ -1,0 +1,151 @@
+    # --------- Observability ---------
+    /observability/events:
+        get:
+            tags: [Observability]
+            summary: Observability SSE stream
+            description: |
+                Live Server-Sent Events stream for demo dashboards.
+                Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
+            operationId: getObservabilityEvents
+            responses:
+                '200':
+                    description: Server-Sent Events stream
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                # Guarded by `isAdminViaCookie`: an EventSource cannot set an Authorization
+                # header, so the HttpOnly refresh cookie is the credential here.
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '403':
+                    $ref: '#/components/responses/Forbidden'
+
+    /observability/health:
+        get:
+            tags: [Observability]
+            summary: Health snapshot
+            description: |
+                Full JSON health snapshot for dashboard use.
+                Includes uptime, database status, memory, integrations, and system info.
+                Requires admin role.
+            operationId: getObservabilityHealth
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Health summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ObservabilityHealthResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /observability/metrics:
+        get:
+            tags: [Observability]
+            summary: Prometheus metrics
+            description: |
+                Raw Prometheus text (exposition format 0.0.4).
+                Intended for Prometheus scraping, not for browser clients.
+                Use `GET /observability/metrics/overview` for a JSON summary suitable for dashboards.
+            operationId: getObservabilityMetrics
+            responses:
+                '200':
+                    description: Prometheus exposition text
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+                # Guarded by `isMetricsScraper`, which takes a static bearer credential rather
+                # than the admin JWT — Prometheus cannot log in or refresh a token.
+                '401':
+                    $ref: '#/components/responses/Unauthorized'
+                '503':
+                    description: |
+                        `NODE_METRICS_TOKEN` is not configured. The endpoint denies by default
+                        rather than opening: an unauthenticated metrics endpoint is not a state
+                        to arrive at by forgetting an environment variable.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+
+    /observability/metrics/overview:
+        get:
+            tags: [Observability]
+            summary: Metrics overview (JSON)
+            description: |
+                Key operational metrics derived from Prometheus counters/histograms,
+                returned as structured JSON for dashboard KPI cards and charts.
+                Requires admin role.
+            operationId: getObservabilityMetricsOverview
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Metrics overview
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ObservabilityMetricsSummaryResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /observability/audit:
+        get:
+            tags: [Observability]
+            summary: Recent audit events
+            description: |
+                Returns the most recent audit events, newest first, from the persisted audit trail.
+                Events include auth flows, admin CRUD actions, and security blocks.
+                Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
+                `total` counts every event matching the filters, not just the returned page.
+                Requires admin role.
+            operationId: getObservabilityAuditLogs
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: actor
+                  in: query
+                  schema: { type: string }
+                  description: Filter by actor user ID
+                - name: action
+                  in: query
+                  schema: { type: string }
+                  description: 'Filter by action name (e.g. auth.login.failed)'
+                - name: outcome
+                  in: query
+                  schema:
+                      type: string
+                      enum: [success, failure]
+                  description: Filter by outcome
+                - name: since
+                  in: query
+                  schema:
+                      type: string
+                      format: date-time
+                  description: Return events after this ISO-8601 timestamp
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 200
+                      default: 50
+                  description: Maximum number of events to return
+            responses:
+                '200':
+                    description: Audit events
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuditLogsResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+

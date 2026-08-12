@@ -1,0 +1,374 @@
+  - name: Orders
+    meta:
+      id: fld_9658403816409e66eba2175f8eff8b53
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 8000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/orders"
+        name: List orders (paginated)
+        meta:
+          id: req_29f9d39956619a7745c853ed2dc4d07d
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: List orders (paginated)
+          sortKey: 8001
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders"
+        name: Create order
+        meta:
+          id: req_cc8882df37bd91a776195f34df0a4f10
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Create order
+          sortKey: 8002
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "userId": "65de646a44f861fd83c13f13",
+              "email": "gino@pino.it",
+              "items": [
+                {
+                  "productId": "65dc8a99604c307b702b5ccc",
+                  "quantity": 2
+                }
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders"
+        name: Update order
+        meta:
+          id: req_26bc18bb7504302c0383302f57f20f75
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Update order
+          sortKey: 8003
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": "65dc8a99604c307b702b5ccc",
+              "status": "pending",
+              "userId": "65de646a44f861fd83c13f13",
+              "email": "gino@pino.it",
+              "items": [
+                {
+                  "productId": "65dc8a99604c307b702b5ccc",
+                  "quantity": 2
+                }
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders"
+        name: Delete order
+        meta:
+          id: req_9aa77678255cbf4c83bb819bb4bef2c5
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Delete order
+          sortKey: 8004
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": "65dc8a99604c307b702b5ccc",
+              "hardDelete": false
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/search"
+        name: Search orders (DTO-friendly)
+        meta:
+          id: req_8bb808928f7984cabc22cc104e5d80c6
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Search orders (DTO-friendly)
+          sortKey: 8005
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "page": 1,
+              "pageSize": 10,
+              "id": "65dc8a99604c307b702b5ccc",
+              "userId": "65de646a44f861fd83c13f13",
+              "productId": "65dc8a99604c307b702b5ccc",
+              "email": "gino@pino.it"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/65de73a69ca05739be2b5e85"
+        name: Order details
+        meta:
+          id: req_7d529f3251ac14c03145667c552d3725
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Order details
+          sortKey: 8006
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/65de73a69ca05739be2b5e85"
+        name: Edit order
+        meta:
+          id: req_d3ac5faa112d550d06d62871bbf3892c
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Edit order
+          sortKey: 8007
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "status": "pending",
+              "userId": "65de646a44f861fd83c13f13",
+              "email": "gino@pino.it",
+              "items": [
+                {
+                  "productId": "65dc8a99604c307b702b5ccc",
+                  "quantity": 2
+                }
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/65de73a69ca05739be2b5e85"
+        name: Delete order
+        meta:
+          id: req_00ed73b5b0dfa64291eae0acca652965
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Delete order
+          sortKey: 8008
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "hardDelete": false
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/65de73a69ca05739be2b5e85/hard"
+        name: Permanently delete order
+        meta:
+          id: req_141acf074d7a76c3ec292b3e18649009
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Permanently delete order
+          sortKey: 8009
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/65de73a69ca05739be2b5e85/invoice"
+        name: Download order invoice (PDF)
+        meta:
+          id: req_4a871dc0f14c6b6d96ae6706c273dfc4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Download order invoice (PDF)
+          sortKey: 8010
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/66b3f0c14d2e8a91c7d4a015"
+        name: "Probe: the owner asking for their own soft-deleted order"
+        meta:
+          id: req_1da8f95b19294c4f271b372f3a7ab766
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: "The dataset puts its one soft-deleted order on the NON-admin user for exactly this case, and the case is subtle: ownership-only scoping would allow it, and correct scoping refuses. Log in as the non-admin first (see the account probes), then send this — it must not return the order. An admin token on the same URL must."
+          sortKey: 8011
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/65de73a69ca05739be2b5e85"
+        name: "Probe: another user's order"
+        meta:
+          id: req_b4ce4f1de15231b6f6c85887d44c83f7
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: The seeded admin's order, requested with whatever token the collection holds. As the non-admin this is the cross-tenant read the API must refuse; as the admin it is a legitimate one. Same URL, two answers — which is the whole of role scoping in one request.
+          sortKey: 8012
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

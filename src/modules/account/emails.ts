@@ -1,0 +1,123 @@
+/**
+ * The copy of every email this module sends, resolved into finished strings.
+ *
+ * Templates do not translate. They interpolate — `<%= greeting %>`, never `<%= t('…') %>` — and
+ * these builders are what produces the values. The reason is the queue: an email is rendered by
+ * `workers/email.worker.ts`, possibly in another process, hours after the request that asked for
+ * it ended. Anything left unresolved at that point has no request, no `Accept-Language` and no
+ * locale store to resolve against.
+ *
+ * The language is an argument, not an ambient scope. A builder binds its own `t` to the locale it
+ * was handed, so a caller sending to someone else — the common case here, since these go out in
+ * the *recipient's* language rather than the requester's — states that in the call rather than
+ * wrapping it in a locale scope and hoping everything inside reads the same store.
+ *
+ * Each builder returns the whole `IEmailContent`: the template name, the subject and the complete
+ * render context, down to the `locale` the markup puts in `<html lang>` and the footer line the
+ * shared partial prints. Template and copy therefore change together, in this file.
+ */
+
+import type { IEmailContent } from '@infrastructure/adapters/mailer';
+import { translator } from '@infrastructure/i18n';
+
+/**
+ * Absolute URL for a one-time account link.
+ *
+ * Built here rather than in the template, where it would be assembled from `process.env`
+ * mid-markup. A template that only interpolates cannot reach for configuration, which is the
+ * property that makes it renderable from a worker with nothing but the payload.
+ */
+const accountLink = (route: string, token: string): string =>
+    `${process.env.NODE_URL ?? ''}account/${route}/${token}`;
+
+/** Welcome email, sent once the account exists. */
+export const registrationConfirmEmail = (locale: string, name: string): IEmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'email-registration-confirm.ejs',
+        subject: t('account.email.registration-confirm.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.registration-confirm.meta-title'),
+            pageMetaLinks: [],
+            title: t('account.email.registration-confirm.title', { name }),
+            body: t('account.email.registration-confirm.body'),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/** Password reset: the email carrying the one-time link. */
+export const resetRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'email-reset-request.ejs',
+        subject: t('account.email.reset-request.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.reset-request.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.reset-request.greeting', { name }),
+            intro: t('account.email.reset-request.intro'),
+            linkLabel: t('account.email.reset-request.link-label'),
+            linkUrl: accountLink('reset', token),
+            ignore: t('account.email.reset-request.ignore'),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/** Password reset: the confirmation, after the password actually changed. */
+export const resetConfirmEmail = (locale: string, name: string): IEmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'email-reset-confirm.ejs',
+        subject: t('account.email.reset-confirm.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.reset-confirm.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.reset-confirm.greeting', { name }),
+            body: t('account.email.reset-confirm.body'),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/** Account deletion: the email carrying the one-time confirmation link. */
+export const deleteRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'email-delete-request.ejs',
+        subject: t('account.email.delete-request.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.delete-request.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.delete-request.greeting', { name }),
+            intro: t('account.email.delete-request.intro'),
+            linkLabel: t('account.email.delete-request.link-label'),
+            linkUrl: accountLink('delete', token),
+            ignore: t('account.email.delete-request.ignore'),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/** Account deletion: the goodbye, sent after the row is gone. */
+export const deleteConfirmEmail = (locale: string, name: string): IEmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'email-delete-confirm.ejs',
+        subject: t('account.email.delete-confirm.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.delete-confirm.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.delete-confirm.greeting', { name }),
+            body: t('account.email.delete-confirm.body'),
+            farewell: t('account.email.delete-confirm.farewell'),
+            footer: t('email.footer')
+        }
+    };
+};

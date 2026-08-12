@@ -12,6 +12,29 @@ Current scope of `asyncapi.yaml`:
 - SSE observability channels (`observability.*`)
 - RabbitMQ worker queues (`worker.email.send`, `worker.pdf.generate`)
 
+## Where to edit it
+
+`asyncapi.yaml` at the repo root is **assembled from fragments** — do not hand-edit it. Each
+section owns its channels, its messages and its payload schemas:
+
+```
+src/modules/observability/asyncapi/{channels,messages,schemas}.yaml   the SSE stream
+contracts/shared/asyncapi.workers.{channels,messages,schemas}.yaml    the RabbitMQ queues
+contracts/shared/asyncapi.{header,channels.header,components.header,schemas.header}.yaml
+```
+
+The worker queues are shared rather than owned by a module because the email and PDF workers are
+substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by whichever domain
+needs a mail sent.
+
+```bash
+npm run contracts:bundle        # rebuild asyncapi.yaml (and every other bundle) from fragments
+npm run check:contracts-bundle  # fail if a committed bundle is stale
+```
+
+See [Contract Ownership & Fragmentation](./contract-fragmentation.md) for the whole picture,
+including why the bundler never parses YAML.
+
 ## Servers declared
 
 | Name | Protocol | Purpose |
@@ -78,8 +101,8 @@ npm run docs:asyncapi   # open AsyncAPI Studio in browser
 
 Worker queues use AMQP (RabbitMQ) for reliable async job processing:
 
-- **`worker.email.send`** — email delivery jobs consumed by `src/workers/email.worker.ts`
-- **`worker.pdf.generate`** — PDF render jobs consumed by `src/workers/pdf.worker.ts`
+- **`worker.email.send`** — email delivery jobs consumed by `src/infrastructure/adapters/email.worker.ts`
+- **`worker.pdf.generate`** — PDF render jobs consumed by `src/infrastructure/adapters/pdf.worker.ts`
 
 Both use the `IEmailJobPayload` / `IPdfJobPayload` interfaces generated from the contract. The worker types are derived from AsyncAPI — no hand-written duplicates.
 

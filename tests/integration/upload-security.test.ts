@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { api } from '../helpers/http';
-import { setupTestDb } from '../helpers/setup-test-db';
+import { api } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
 
 /**
  * What actually reaches the disk.

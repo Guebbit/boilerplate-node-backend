@@ -20,12 +20,12 @@
  * broken one — the failure mode the repository comment names is "a cart with one product on two
  * lines", which a single-product race cannot tell apart from correct behaviour.
  */
-import { api, authenticateAs } from '../../helpers/http';
-import { setupTestDb } from '../../helpers/setup-test-db';
-import { createProduct } from '../../helpers/factories/products';
-import { cartModel } from '@models/carts';
-import { orderModel } from '@models/orders';
-import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '../../helpers/race';
+import { api, authenticateAs } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
+import { createProduct } from '@modules/products/tests/factory';
+import { cartModel } from '@modules/cart';
+import { orderModel } from '@modules/orders';
+import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
 setupTestDb();
 
@@ -237,7 +237,7 @@ describe('account deletion racing a cart write', () => {
         // Whatever the interleaving, a cart may only exist while its owner does.
         const carts = await cartModel.find({ userId: user._id });
         if (carts.length > 0) {
-            const { userModel } = await import('@models/users');
+            const { userModel } = await import('@modules/users');
             expect(await userModel.countDocuments({ _id: user._id })).toBe(1);
         }
     });

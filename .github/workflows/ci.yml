@@ -69,7 +69,7 @@ jobs:
 
     lint:
         # ESLint over the whole repo, including the layering rules in eslint.config.ts that
-        # forbid src/core/** from importing the application layers.
+        # forbid src/infrastructure/** from importing the application layers.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -222,10 +222,16 @@ jobs:
     spec-identity:
         # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
         #
-        # Ten files exist in BOTH repos, byte-identical, maintained by hand — the two specs and
-        # the spectral ruleset, the seed identities, the generated realtime types, the three API
-        # client collections, and two shared scripts. `scripts/specIdentity.ts` holds the list and
-        # says, per entry, what a fork of it would break.
+        # Eleven files exist in BOTH repos, byte-identical — the two specs and the spectral
+        # ruleset, the seed identities, the generated realtime types, the analytics event names,
+        # the three API client collections, and two shared scripts. `scripts/specIdentity.ts`
+        # holds the list and says, per entry, what a fork of it would break.
+        #
+        # Seven of them are ASSEMBLED HERE from per-module fragments and copied to the frontend,
+        # so for those this job asks whether the copy over there is still the bundle built here.
+        # `tests/cross-cutting/contract-bundles.test.ts` asks the other half of the question —
+        # whether the bundle here still matches the fragments it is built from — and runs in the
+        # test job, so a fragment edited without re-bundling fails before this job is reached.
         #
         # Until this job existed they were checked by nothing. `lint-openapi` and `lint-asyncapi`
         # lint THIS repo's copy and pass, because a forked spec is still a valid spec. What nobody
@@ -355,6 +361,24 @@ jobs:
 
             - name: Run unit tests
               run: npm run test:unit
+
+            # The per-file floors in `jest.config.js` are enforced here and NOT in the pre-commit
+            # hook: coverage runs the suite again under `--runInBand`, which is minutes rather than
+            # the ~60s the hook is designed around (see .husky/pre-commit). A gate that makes the
+            # hook unusable gets bypassed with --no-verify, which is worse than one that runs here.
+            #
+            # `test:unit:coverage` fails the step on its own when a file drops below its floor —
+            # jest exits non-zero on a threshold miss, so no extra check is needed.
+            - name: Run unit tests with coverage thresholds
+              run: npm run test:unit:coverage
+
+            - name: Upload coverage report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-report
+                  path: coverage/
+                  retention-days: 14
 
     test-integration:
         # No Mongo/Redis service is started here: today's integration suite only

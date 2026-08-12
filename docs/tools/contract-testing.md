@@ -13,7 +13,7 @@ This is one half of "contract testing" in this codebase. The other half — does
 
 ## Why not Zod
 
-`api/schemas.zod.ts` is generated from the same spec, and it's tempting to reach for `schema.parse(response.body)` instead of a second library. `tests/helpers/contract.ts` explains in detail why that doesn't work here:
+`api/schemas.zod.ts` is generated from the same spec, and it's tempting to reach for `schema.parse(response.body)` instead of a second library. `tests/support/contract.ts` explains in detail why that doesn't work here:
 
 1. **These schemas are generated non-strict.** They emit `zod.object`, whose default behaviour is to _strip_ unknown keys. `schema.parse(body)` on a response that leaks `password` passes — having silently deleted the evidence first. (Orval _can_ emit `zod.strictObject` via `override.zod.strict` — the frontend turns it on for its MSW mock layer, see that repo's `docs/tools/mocking.md` — so this is a configuration choice here, not a hard limitation of the tool.)
 2. **More decisively: nothing on this side validates a _response_ with Zod at all.** The generated schemas are used for request bodies (see [Contract-Derived Request Data](./contract-request-data.md)). A response never meets them, strict or not.
@@ -25,7 +25,7 @@ So the entire over-serialization bug class — a `_id`/`__v` reaching a response
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart TB
-    Spec[("openapi.yaml")] --> JestOpenAPI["jest-openapi(openapi.yaml)\ntests/helpers/contract.ts"]
+    Spec[("openapi.yaml")] --> JestOpenAPI["jest-openapi(openapi.yaml)\ntests/support/contract.ts"]
     Real["Real HTTP response\nvia supertest(app)"] --> Assert["expect(response).toSatisfyApiSpec()"]
     JestOpenAPI --> Assert
     Assert --> Check{"status + body match\nthe declared operation?"}
@@ -72,7 +72,7 @@ Three recurring shapes across `tests/contract/*.test.ts`:
 
 | Path                                      | Contents                                                                                                     |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `tests/helpers/contract.ts`               | Registers `jest-openapi` against `openapi.yaml`; the "why not Zod" reasoning lives in this file's own header |
+| `tests/support/contract.ts`               | Registers `jest-openapi` against `openapi.yaml`; the "why not Zod" reasoning lives in this file's own header |
 | `tests/contract/system.test.ts`           | `/`, `/observability/*`                                                                                      |
 | `tests/contract/users.test.ts`            | `/users`, `/account` — the credential-leak guard                                                             |
 | `tests/contract/products.test.ts`         | `/products`                                                                                                  |
@@ -80,7 +80,7 @@ Three recurring shapes across `tests/contract/*.test.ts`:
 | `tests/contract/cart.test.ts`             | `/cart`                                                                                                      |
 | `tests/contract/feedback.test.ts`         | `/feedback`, `/feedback/contact` — the one genuinely public write endpoint                                   |
 | `tests/contract/request-contract.test.ts` | The other half — see [Contract-Derived Request Data](./contract-request-data.md)                             |
-| `tests/helpers/http.ts`                   | `api()`, `authenticateAs()` — shared with [Integration Testing](./integration-testing.md)                    |
+| `tests/support/http.ts`                   | `api()`, `authenticateAs()` — shared with [Integration Testing](./integration-testing.md)                    |
 
 ## Commands
 

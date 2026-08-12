@@ -3,9 +3,9 @@
 <%- include("../layouts/email-template-head.ejs"); %>
 <body>
     <main class="centered">
-        <h1><%= t('email.delete-confirm.greeting', { name }) %></h1>
-        <p><%= t('email.delete-confirm.body') %></p>
-        <p><%= t('email.delete-confirm.farewell') %></p>
+        <h1><%= greeting %></h1>
+        <p><%= body %></p>
+        <p><%= farewell %></p>
     </main>
     <%- include("../layouts/default-footer.ejs"); %>
 </body>

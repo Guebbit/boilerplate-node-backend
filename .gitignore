@@ -21,4 +21,7 @@ coverage
 
 # mutation testing (stryker sandbox + html report)
 .stryker-tmp
+
+# per-run in-memory Mongo data directories (see tests/support/global-setup.ts)
+.tmp
 reports/

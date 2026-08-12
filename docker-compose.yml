@@ -31,8 +31,18 @@ services:
             # shadows `.env` and makes an Atlas/external URI impossible to set without editing compose.
             NODE_ENV: 'development' # Node environment (production or development)
             NODE_REDIS_URL: 'redis://redis:6379'
-            NODE_RABBITMQ_URL: '******rabbitmq:5672'
+            NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
+            # Per-IP rate limits, sized for one person browsing. A live E2E run drives the whole
+            # frontend suite from a single address and exceeds both budgets, at which point the API
+            # answers 429 and the failures read as "login is broken" rather than "out of allowance".
+            # Declared here so a run can raise them from the shell — `NODE_RATE_LIMIT_MAX=1000
+            # NODE_AUTH_RATE_LIMIT_MAX=1000 npm run podman:restart` — instead of editing `.env`.
+            # The defaults match `.env`, so an ordinary `up` is unchanged. Two buckets, deliberately
+            # decoupled: the auth one is what makes password guessing expensive, so widening the
+            # global one must never widen it. Never raise either in a deployed environment.
+            NODE_RATE_LIMIT_MAX: '${NODE_RATE_LIMIT_MAX:-100}'
+            NODE_AUTH_RATE_LIMIT_MAX: '${NODE_AUTH_RATE_LIMIT_MAX:-10}'
             # Observability: send traces to OTel Collector, which fans out to backends.
             OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'

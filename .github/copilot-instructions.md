@@ -15,12 +15,19 @@ Single package. REST API. Express. MongoDB. Mongoose.
 - Keep code DRY.
 - Keep code KISS.
 - Future proof beats clever.
+- Four tiers, dependencies one way, enforced per tier by `no-restricted-imports`:
+  `infrastructure` (substrate, never knows modules exist) → `kernel` (the module system only) →
+  `modules` (one domain each) → `app` (assembles this application).
 - Small layers: route -> middleware -> controller -> service -> repository -> model.
+- A module may carry `domain/`: pure rules, lint-guaranteed free of mongoose, express, every tier
+  and its own module's outer files. A rule returns a verdict; the service maps it to a status code.
+  Optional — most modules have none. See [docs/theory/domain-layer.md](../docs/theory/domain-layer.md).
+- Past ~300 lines, `service.ts` becomes `services/` with a barrel, split by what operations do.
 - `openapi.yaml` first. Contract and types start there.
 - Prefer promise chaining when readable.
 - Avoid `async` / `await` + `try/catch` unless necessary.
 - Comments short. ADHD friendly. Explain function/constant/block fast.
-- **All functions and important code blocks must have a JSDoc comment** in multi-line `/* \n * ... \n */` block format (not `/** */`). Include `@param` and `@returns` where useful. One line per tag.
+- **All functions and important code blocks must have a JSDoc comment** in multi-line `/** \n * ... \n */` block format. Use `/**`, never a plain `/*` block: TypeScript only attaches docs to a symbol from `/**`, so `/*` loses the editor tooltip, the hover signature and `@param` hints at call sites. Include `@param` and `@returns` where useful. One line per tag.
 - Do not dump long essays in code comments. Put detail in docs.
 
 ## Docs brain

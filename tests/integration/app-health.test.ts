@@ -10,9 +10,9 @@
  * to belong to.
  */
 import type { IncomingMessage } from 'node:http';
-import { api } from '../helpers/http';
-import { setupTestDb } from '../helpers/setup-test-db';
-import { createAdminUser, PLAIN_PASSWORD } from '../helpers/factories/users';
+import { api } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
+import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 
 setupTestDb();
 
@@ -70,7 +70,6 @@ describe('Observability routes', () => {
                 const finish = () => {
                     if (settled) return;
                     settled = true;
-                    // eslint-disable-next-line unicorn/no-null -- superagent's callback contract
                     callback(null, text);
                 };
                 stream.on('data', (chunk: Buffer) => {

@@ -3,12 +3,12 @@
  * If you don't need clusters, you can just change the MAIN attribute in the "package.json" and use "app.ts"
  */
 // OTel must initialize before any other module is loaded.
-import { startTracing } from '@core/bootstrap/otel-sdk';
+import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();
 
 import os from 'node:os';
 import cluster from 'node:cluster';
-import { logger } from '@core/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 
 /**
  * Cluster management

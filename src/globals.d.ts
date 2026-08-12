@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { IAuthContext } from './types/auth-context';
-import type { IObservabilityContext } from '@core/observability/context';
+import type { IObservabilityContext } from '@infrastructure/observability/context';
 
 declare module 'express-serve-static-core' {
     interface Request {
@@ -19,7 +19,7 @@ declare module 'express-serve-static-core' {
         locale?: string;
         /**
          * `t` bound to `request.locale`. The explicit form of the ambient `t` exported by
-         * `@core/i18n`, which resolves to this same binding for anything on the request's
+         * `@infrastructure/i18n`, which resolves to this same binding for anything on the request's
          * async chain.
          */
         t?: TFunction;

@@ -4,9 +4,9 @@
  * `GET /` was typed as `MessageResponse` while actually returning `data: { status: 'ok' }`;
  * hardening the spec surfaced that, and it is now `HealthPingEnvelope`.
  */
-import '../helpers/contract';
-import { setupTestDb } from '../helpers/setup-test-db';
-import { api } from '../helpers/http';
+import '@tests/contract';
+import { setupTestDb } from '@tests/setup-test-db';
+import { api } from '@tests/http';
 
 setupTestDb();
 

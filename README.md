@@ -174,7 +174,7 @@ The store that ships puts the file in `public/images/`, which `express.static` s
 `src/app.ts`) and `.gitignore` drops — a served directory must not accumulate strangers' files in
 your git history — and returns `/images/<name>`, which is what lands in `imageUrl`.
 
-`@core/adapters/image-store` is the only module that may turn an `imageUrl` into a path. That is the
+`@infrastructure/adapters/image-store` is the only module that may turn an `imageUrl` into a path. That is the
 rule that keeps the destination swappable, and it matters because of what local storage means:
 **uploaded images live inside the container, so removing or rebuilding it deletes them** — `docker
 compose down -v`, a redeploy, a move to another host. Only `public/images/seed/` survives, being
@@ -274,11 +274,11 @@ header. There is no global "current language" the API holds between requests.
 
 ### How it works
 
-| Piece        | Where                       | Job                                                                                                                                                        |
-| ------------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| dictionaries | `src/locales/*.json`        | one file per language; the directory listing IS the supported list                                                                                         |
-| negotiation  | `src/middlewares/locale.ts` | picks the best supported language, sets `request.locale` / `request.t`, answers with `Content-Language` and `Vary: Accept-Language`                        |
-| ambient `t`  | `src/core/i18n.ts`          | an `AsyncLocalStorage`-backed re-export of `t`, so anything on the request's async chain resolves in that request's language without `t` being passed down |
+| Piece        | Where                        | Job                                                                                                                                                        |
+| ------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dictionaries | `src/locales/*.json`         | one file per language; the directory listing IS the supported list                                                                                         |
+| negotiation  | `src/middlewares/locale.ts`  | picks the best supported language, sets `request.locale` / `request.t`, answers with `Content-Language` and `Vary: Accept-Language`                        |
+| ambient `t`  | `src/infrastructure/i18n.ts` | an `AsyncLocalStorage`-backed re-export of `t`, so anything on the request's async chain resolves in that request's language without `t` being passed down |
 
 Adding a language is one step: drop `src/locales/xx.json` next to `en.json`. `i18next.init()`
 and the negotiator both read the same directory. `NODE_SUPPORTED_LOCALES` overrides the listing

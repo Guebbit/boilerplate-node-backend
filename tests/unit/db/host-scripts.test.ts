@@ -23,7 +23,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { getDatabaseUri } from '@core/bootstrap/database';
+import { getDatabaseUri } from '@infrastructure/runtime/database';
 
 /**
  * `migrate-mongo-config.js` calls `dotenv.config()` at load. That would let this machine's `.env`

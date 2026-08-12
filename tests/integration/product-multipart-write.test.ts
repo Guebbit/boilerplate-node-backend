@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { api, authenticateAs } from '../helpers/http';
-import { setupTestDb } from '../helpers/setup-test-db';
+import { api, authenticateAs } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
 
 /**
  * Writing a product through the MULTIPART body, which is the only way to send one with an image.

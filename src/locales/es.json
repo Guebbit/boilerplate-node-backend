@@ -1,56 +1,4 @@
 {
-    "login": {
-        "invalid-data": "Los datos introducidos no son válidos.",
-        "wrong-data": "Correo electrónico o contraseña incorrectos.",
-        "success": "Sesión iniciada."
-    },
-    "signup": {
-        "email-already-used": "El correo electrónico ya está en uso.",
-        "registration-successful": "Registro completado, confirma por correo para iniciar sesión.",
-        "password-dont-match": "La contraseña de confirmación debe coincidir con la contraseña.",
-        "user-field-email-required": "El correo electrónico es obligatorio",
-        "user-field-email-invalid": "Correo electrónico no válido",
-        "user-field-username-required": "El nombre de usuario es obligatorio",
-        "user-field-username-min": "El nombre es demasiado corto",
-        "user-field-password-required": "La contraseña es obligatoria",
-        "user-field-password-min": "La contraseña es demasiado corta"
-    },
-    "reset": {
-        "email-not-found": "No se encontró ningún usuario con ese correo electrónico.",
-        "token-not-found": "Token no válido o caducado, inténtalo de nuevo.",
-        "email-sent": "Se ha enviado un correo con un enlace, haz clic para restablecer la contraseña.",
-        "success": "Contraseña cambiada, inicia sesión con la nueva contraseña."
-    },
-    "delete": {
-        "email-sent": "Se ha enviado un correo de confirmación. Haz clic en el enlace para confirmar la eliminación de la cuenta.",
-        "token-not-found": "Token no válido o caducado, inténtalo de nuevo.",
-        "success": "Cuenta eliminada definitivamente."
-    },
-    "ecommerce": {
-        "product-not-found": "No se ha encontrado el producto solicitado.",
-        "product-field-title-required": "El título es obligatorio",
-        "product-field-title-min": "El título es demasiado corto",
-        "product-field-price-invalid": "Falta el precio o no es válido",
-        "product-field-price-min": "El precio no puede ser negativo",
-        "product-added-to-cart": "Producto añadido al carrito.",
-        "product-hard-deleted": "El producto se ha eliminado definitivamente.",
-        "product-soft-deleted": "El producto se ha eliminado lógicamente (solo para usuarios).",
-        "product-was-deleted-from-all-carts": "El producto con ID {{product}} se ha eliminado de {{count}} carritos.",
-        "user-not-found": "No se ha encontrado el usuario solicitado.",
-        "user-hard-deleted": "El usuario se ha eliminado definitivamente.",
-        "user-soft-deleted": "El usuario se ha eliminado lógicamente (desactivado).",
-        "order-not-found": "No se ha encontrado el pedido solicitado",
-        "order-hard-deleted": "El pedido se ha eliminado definitivamente.",
-        "order-soft-deleted": "El pedido se ha eliminado lógicamente (oculto para el cliente).",
-        "order-creation-success": "Pedido creado correctamente.",
-        "order-creation-failure": "No se ha podido crear el pedido.",
-        "order-invoice-missing": "No se ha encontrado ningún archivo de factura",
-        "cart-product-removed": "Producto eliminado del carrito.",
-        "cart-emptied": "Se han eliminado todos los productos del carrito.",
-        "cart-changed": "Tu carrito cambió mientras se realizaba el pedido. Revísalo e inténtalo de nuevo.",
-        "cart-empty": "Tu carrito está vacío.",
-        "cart-product-unavailable": "Uno o más productos de tu carrito ya no están disponibles."
-    },
     "generic": {
         "error-unknown": "Algo ha salido mal con la solicitud.",
         "error-invalid-data": "Error: datos no válidos.",
@@ -58,71 +6,9 @@
         "error-internal": "Algo ha salido mal por nuestra parte.",
         "error-unauthorized": "No has iniciado sesión, o tu sesión ha caducado.",
         "error-forbidden": "No tienes permiso para hacer eso.",
-        "error-not-found": "Esa solicitud de soporte ya no existe."
-    },
-    "observability": {
-        "audit-since-invalid": "El filtro «since» debe ser una marca de tiempo ISO-8601 válida."
+        "error-not-found": "Ese elemento ya no existe."
     },
     "email": {
-        "footer": "Enviado por el equipo de Ecommerce Demo.",
-        "registration-confirm": {
-            "subject": "Bienvenido — tu cuenta está lista",
-            "meta-title": "Registro completado",
-            "title": "¡Bienvenido a bordo {{name}}!",
-            "body": "Tu registro se ha completado correctamente."
-        },
-        "reset-request": {
-            "subject": "Restablecer la contraseña",
-            "meta-title": "Restablecimiento de contraseña solicitado",
-            "greeting": "¡Hola, {{name}}!",
-            "intro": "Hemos recibido una solicitud para restablecer tu contraseña.",
-            "cta": "Haz clic en este enlace para establecer una nueva contraseña.",
-            "link-label": "Restablecer mi contraseña",
-            "ignore": "Si no has sido tú, puedes ignorar este correo."
-        },
-        "reset-confirm": {
-            "subject": "Tu contraseña ha cambiado",
-            "meta-title": "Contraseña restablecida",
-            "greeting": "¡Hola, {{name}}!",
-            "body": "Tu contraseña se ha restablecido."
-        },
-        "delete-request": {
-            "subject": "Confirma la eliminación de la cuenta",
-            "meta-title": "Eliminación de cuenta solicitada",
-            "greeting": "¡Hola, {{name}}!",
-            "intro": "Hemos recibido una solicitud para eliminar definitivamente tu cuenta.",
-            "cta": "Haz clic en este enlace para confirmar la eliminación de la cuenta.",
-            "link-label": "Confirmar la eliminación",
-            "ignore": "Si no has sido tú, puedes ignorar este correo."
-        },
-        "delete-confirm": {
-            "subject": "Tu cuenta ha sido eliminada",
-            "meta-title": "Cuenta eliminada",
-            "greeting": "¡Hola, {{name}}!",
-            "body": "Tu cuenta se ha eliminado definitivamente.",
-            "farewell": "Sentimos verte marchar. Si ha sido un error, ponte en contacto con el soporte."
-        },
-        "order-confirm": {
-            "subject": "Pedido confirmado",
-            "meta-title": "Pedido confirmado",
-            "greeting": "¡Hola, {{name}}!",
-            "body": "Tu pedido se ha confirmado."
-        },
-        "feedback-contact": {
-            "subject": "Nueva solicitud de contacto",
-            "meta-title": "Nueva solicitud de contacto",
-            "title": "Nueva solicitud de contacto",
-            "label-name": "Nombre",
-            "label-email": "Correo electrónico",
-            "label-subject": "Asunto",
-            "label-message": "Mensaje",
-            "label-created-at": "Creada el",
-            "not-available": "N/D"
-        }
-    },
-    "invoice": {
-        "meta-title": "Factura — pedido {{order}}",
-        "title": "El pedido ha sido confirmado",
-        "line": "{{title}} — {{quantity}} × {{price}}"
+        "footer": "Enviado por el equipo de Ecommerce Demo."
     }
 }

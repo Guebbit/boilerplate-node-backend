@@ -2,14 +2,18 @@
  * The demo dataset's IDENTITIES — the half of the seed both repos have to agree on.
  *
  * SHARED FILE — this file is byte-identical in `boilerplate-node-api-mongodb-mongoose` and
- * `boilerplate-vue-frontend`, on the same convention as `scripts/gen-asyncapi-types.ts`: change it
- * in one repo, copy it to the other, and let `diff` answer "have the seeds drifted?":
+ * `boilerplate-vue-frontend`, and `diff` answers "have the seeds drifted?":
  *
  *   diff boilerplate-node-api-mongodb-mongoose/db/seeds/seed-identities.ts \
- *        boilerplate-vue-frontend/tests/mocks/shared/seed-identities.ts
+ *        boilerplate-vue-frontend/tests/support/mocks/seed-identities.ts
+ *
+ * ASSEMBLED FROM FRAGMENTS — do not hand-edit. The backend authors it: each domain owns its own
+ * records in `src/modules/<name>/seed-identities.fragment.ts`, so deleting a module takes its half
+ * of the dataset with it, and `npm run contracts:bundle` rebuilds this file. The frontend receives
+ * the result as a copy and authors nothing.
  *
  * Why it exists. The backend seeds Mongo from `./fixtures`; the frontend's MSW layer builds the
- * same dataset in `tests/mocks/shared/mockProfiles.ts`. Without a shared file the claim that they
+ * same dataset in `tests/support/mocks/mockProfiles.ts`. Without a shared file the claim that they
  * hold the same records rests on a comment, and a drift is silent: a mock that returns 5 products
  * to everyone while the real API returns 3 to non-admins still passes every spec that asserts the
  * mock's number.
@@ -61,32 +65,6 @@ export interface ISeedUser {
     cart: ISeedCartItem[];
 }
 
-export interface ISeedProduct {
-    id: string;
-    title: string;
-    description: string;
-    price: number;
-    active: boolean;
-    imageUrl: string;
-    /* ISO 8601, or absent. Present on exactly one product: the role-scoping branches in
-     * `isVisibleToCaller` (frontend) and the repositories' soft-delete filters (backend) need one
-     * soft-deleted and one inactive record to have anything to exercise. */
-    deletedAt?: string;
-}
-
-export interface ISeedOrder {
-    id: string;
-    userId: string;
-    email: string;
-    items: ISeedCartItem[];
-    /* ISO 8601, or absent. Present on exactly one order, for the same reason it is on exactly one
-     * product: `isOrderVisibleToCaller` (frontend) and `visibleScope` (backend) both branch on it,
-     * and a branch with no fixture behind it is a branch nothing tests. It sits on the non-admin
-     * user's order specifically, so the case it exercises is "the owner cannot see their own
-     * soft-deleted order" — which ownership-only scoping would wrongly allow. */
-    deletedAt?: string;
-}
-
 export const seedUsers: ISeedUser[] = [
     {
         id: '65dd2bdb923652b7800fe180',
@@ -110,6 +88,19 @@ export const seedUsers: ISeedUser[] = [
         cart: []
     }
 ];
+
+export interface ISeedProduct {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    active: boolean;
+    imageUrl: string;
+    /* ISO 8601, or absent. Present on exactly one product: the role-scoping branches in
+     * `isVisibleToCaller` (frontend) and the repositories' soft-delete filters (backend) need one
+     * soft-deleted and one inactive record to have anything to exercise. */
+    deletedAt?: string;
+}
 
 export const seedProducts: ISeedProduct[] = [
     {
@@ -154,6 +145,19 @@ export const seedProducts: ISeedProduct[] = [
         imageUrl: '/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg'
     }
 ];
+
+export interface ISeedOrder {
+    id: string;
+    userId: string;
+    email: string;
+    items: ISeedCartItem[];
+    /* ISO 8601, or absent. Present on exactly one order, for the same reason it is on exactly one
+     * product: `isOrderVisibleToCaller` (frontend) and `visibleScope` (backend) both branch on it,
+     * and a branch with no fixture behind it is a branch nothing tests. It sits on the non-admin
+     * user's order specifically, so the case it exercises is "the owner cannot see their own
+     * soft-deleted order" — which ownership-only scoping would wrongly allow. */
+    deletedAt?: string;
+}
 
 /*
  * Orders reference products by id and quantity only.

@@ -1,35 +1,37 @@
 #!/usr/bin/env node
 
 // OTel must initialize before express/http/mongoose are imported.
-import { startTracing } from '@core/bootstrap/otel-sdk';
+import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();
 
 import 'dotenv/config';
 import express from 'express';
 import type { Server } from 'node:http';
 import i18next from 'i18next';
-import { start } from '@core/bootstrap/database';
-import { registerAuditSink } from '@core/observability/audit';
-import { auditLogService } from '@services/audit-logs';
-import { startCache } from '@core/adapters/cache';
-import { startQueue } from '@core/adapters/queue';
-import { registerWorkers } from './workers';
-import { logger } from '@core/adapters/logger';
-import { validateRequiredEnvironment } from '@core/bootstrap/environment';
-import { shutdownInfra, registerSignalHandlers } from '@core/bootstrap/server-lifecycle';
+import { start } from '@infrastructure/runtime/database';
+import { startCache } from '@infrastructure/adapters/cache';
+import { startQueue } from '@infrastructure/adapters/queue';
+import { registerWorkers } from '@app/workers';
+import { logger } from '@infrastructure/adapters/logger';
+import { validateRequiredEnvironment } from '@infrastructure/runtime/environment';
+import { shutdownInfra, registerSignalHandlers } from '@infrastructure/runtime/server-lifecycle';
 import {
     getDefaultLocale,
     getFallbackLocale,
     listSupportedLocales,
-    loadLocaleResources
-} from '@core/i18n';
+    loadLocaleResources,
+    registerLocaleDirectories
+} from '@infrastructure/i18n';
 
-import { installSecurity } from './bootstrap/security';
-import { installRequestContext } from './bootstrap/request-context';
-import { installTelemetry } from './bootstrap/telemetry';
-import { installStatic } from './bootstrap/static-assets';
-import { installRoutes } from './bootstrap/routes';
-import { installErrorHandling } from './bootstrap/error-handling';
+import { registerModules } from '@kernel/registry';
+import { enabledModules } from './modules';
+
+import { installSecurity } from '@app/security';
+import { installRequestContext } from '@app/request-context';
+import { installTelemetry } from '@app/telemetry';
+import { installStatic } from '@app/static-assets';
+import { installRoutes } from '@app/routes';
+import { installErrorHandling } from '@app/error-handling';
 
 /**
  * Server start
@@ -53,41 +55,44 @@ const getPort = () => {
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
-    return (
-        Promise.resolve()
-            .then(() => validateRequiredEnvironment())
-            .then(() => start())
-            // After the database, before anything can serve a request: from here on every
-            // `emitAuditEvent` is also stored, not just logged. Registered rather than imported by
-            // `@core/observability/audit` itself, which sits below `@services/*` and may not reach up
-            // to it — see `IAuditSink`.
-            .then(() => registerAuditSink(auditLogService.record))
-            .then(() => startCache())
-            .then(() => startQueue())
-            .then(() => registerWorkers())
-            .then(() =>
-                // Every dictionary in src/locales is registered, so dropping in a file is the only
-                // step needed to add a language — the middleware negotiates against the same list.
-                i18next.init({
-                    lng: getDefaultLocale(),
-                    fallbackLng: getFallbackLocale(),
-                    supportedLngs: listSupportedLocales(),
-                    resources: loadLocaleResources()
+    return Promise.resolve()
+        .then(() => validateRequiredEnvironment())
+        .then(() => start())
+        .then(() => startCache())
+        .then(() => startQueue())
+        .then(() => registerWorkers())
+        .then(() => {
+            // Modules carry their own copy, so deleting one deletes its strings. `infrastructure` sits
+            // below every module and cannot go looking for them, so the paths are handed in —
+            // and they must be handed in BEFORE `init`, which reads the merged result.
+            registerLocaleDirectories(
+                enabledModules
+                    .map((appModule) => appModule.locales)
+                    .filter((directory) => directory !== undefined)
+            );
+        })
+        .then(() =>
+            // Every dictionary in src/locales is registered, so dropping in a file is the only
+            // step needed to add a language — the middleware negotiates against the same list.
+            i18next.init({
+                lng: getDefaultLocale(),
+                fallbackLng: getFallbackLocale(),
+                supportedLngs: listSupportedLocales(),
+                resources: loadLocaleResources()
+            })
+        )
+        .then(
+            () =>
+                new Promise<Server>((resolve) => {
+                    const port = getPort();
+                    logger.info('------------- SERVER START -------------');
+                    const server = app.listen(port, () => {
+                        logger.info(`Server listening on port ${port}`);
+                        activeServer = server;
+                        resolve(server);
+                    });
                 })
-            )
-            .then(
-                () =>
-                    new Promise<Server>((resolve) => {
-                        const port = getPort();
-                        logger.info('------------- SERVER START -------------');
-                        const server = app.listen(port, () => {
-                            logger.info(`Server listening on port ${port}`);
-                            activeServer = server;
-                            resolve(server);
-                        });
-                    })
-            )
-    );
+        );
 };
 
 /*
@@ -120,6 +125,13 @@ export const stopServer = () => {
  *
  * Each install owns the ordering *within* its own group and documents it there.
  */
+/*
+ * Validate the module registry and attach every module's domain-event handlers before the first
+ * route exists. A cycle or a missing dependency stops the boot here, with the offending path named,
+ * rather than surfacing as a 500 on whichever request happens to cross the gap first.
+ */
+registerModules(enabledModules);
+
 installSecurity(app);
 installRequestContext(app);
 installTelemetry(app);

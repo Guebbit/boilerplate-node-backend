@@ -1,0 +1,49 @@
+    # --------- Locales ---------
+    /locales:
+        get:
+            tags: [System]
+            summary: Supported languages
+            description: |
+                Which languages this deployment can answer in, plus its default and fallback.
+
+                Public, unauthenticated and cacheable: it is static copy that changes only on
+                deploy, and a client that has just failed to reach the API is exactly who needs
+                it.
+            operationId: getLocales
+            responses:
+                '200':
+                    description: Locale capabilities
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /locales/{locale}:
+        get:
+            tags: [System]
+            summary: API message dictionary
+            description: |
+                This API's own dictionary for one language.
+
+                Normally unnecessary — the API resolves its keys itself and puts finished text on
+                the wire. It earns its place when no response arrives at all (a network failure, a
+                bare 502) and the client must produce the copy itself, in the active language.
+            operationId: getLocaleDictionary
+            parameters:
+                - name: locale
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Locale'
+                  description: A language tag from `GET /locales`.
+            responses:
+                '200':
+                    description: Dictionary for the requested locale
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleDictionaryEnvelope'
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+

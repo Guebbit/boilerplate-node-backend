@@ -7,7 +7,90 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-13
+
+The modular release, and the first one cut. Everything below is a single arc told in waves —
+separated by `---`, newest first, each with its own preamble: a layered single-app layout became
+nine self-registering modules over a four-tier substrate (`infrastructure`, `kernel`, `app`,
+`modules`); the shared contracts became per-module fragments assembled into committed bundles; and
+every derived artefact — client collections, seed identities, analytics events, realtime types —
+is generated from those bundles rather than maintained by hand. The measurement that the
+architecture delivers what it promises is `DELETABILITY_TEST.md`. A wave's "Known issues" records
+what was true when that wave closed; later waves above it document the fixes.
+
 ### ⚠ Breaking
+
+- **Modules may now carry a `domain/` folder: pure business rules, lint-guaranteed framework-free.**
+  Nothing in `src/modules/*/domain/**` may import mongoose, express, any tier alias, a sibling
+  module, or its own module's outer files — so a rule cannot quietly acquire a dependency on how it
+  is stored or delivered. `orders/domain/` holds `totals.ts` (moved from `orders/totals.ts`) plus a
+  new `rules.ts`; `cart/domain/` holds the checkout verdict.
+
+    The shape is **return a verdict, not a rejection**: `checkOrderLines()` answers `no-lines` or
+    `product-missing` and knows nothing of 422, 404 or i18n, while `service.ts` maps the verdict to an
+    envelope. Same for `evaluateCheckout()` in cart, `nextDeletionState()` (the soft-delete toggle,
+    taking the clock as an argument), and `readScope()` (returns `all`/`own`; the repository turns it
+    into a Mongo filter). The behaviour of every one of these is unchanged — they were extracted from
+    where they already ran.
+
+    The folder is **optional**, and most modules do not have one. See `docs/theory/domain-layer.md`
+    for what earns a place there, and `DDD_EXPLORATION.md` for what it would take to go to full
+    tactical DDD, costed — neither of which is implemented.
+
+- **The two substrate tiers were renamed: `src/core` → `src/infrastructure`, `src/platform` →
+  `src/kernel`.** Aliases follow: `@core/*` → `@infrastructure/*`, `@platform/*` → `@kernel/*`. Nothing about
+  the dependency rule changed — the same four tiers, the same arrows, the same per-tier lint blocks
+  — only the two names that were carrying the wrong meaning.
+
+    `core` was the problem name. It is not unusual, it is **overloaded**: Nest and Angular use it for
+    the DI container, Spring and Backstage for the substrate, and this repo for the substrate, which
+    meant `docs/theory/modules.md` had to carry a standing disclaimer that `core` did not mean what a
+    reader arriving from Nest would assume. A novel name makes someone look it up; an overloaded one
+    makes them think they already know, and that failure is silent. `infrastructure` is the hexagonal
+    term for exactly what the folder holds — adapters, HTTP plumbing, persistence, runtime — and needs
+    no disclaimer. `common` and `base` were rejected for describing nothing, which is how the old
+    `src/utils/` became a dumping ground.
+
+    `platform` moved for a weaker but real reason: in current usage the word means the base layer
+    everything runs on (platform engineering), which is this repo's `infrastructure` — so the two old
+    names read as pointing at each other's contents. The four files under it are a **microkernel**: a
+    small fixed host that loads, validates and connects plugins it has never heard of. `kernel` says
+    that; VS Code's `vs/platform` precedent was weighed and is a _service/DI layer_, a third meaning
+    again. Full reasoning in `docs/theory/modules.md`, "Why these names".
+
+- **`core/totals.ts` is now `modules/orders/totals.ts`**, exported from the orders barrel. Line-item
+  money — sum, rounding, what a missing price counts as — is a business rule, and the substrate tier
+  holds none: it is what the application runs ON, and none of it knows what a price is. It had been
+  pushed down because two modules needed it, which is the pressure that erodes this kind of tier over
+  time. The owning question is not "who uses it" but "whose rule is it": a cart summary is a preview
+  of the total checkout will charge, so the number is orders' to define and cart's to display. `cart`
+  already declared `dependsOn: ['orders']`. Renaming the tier is what made the leak obvious.
+
+- **`modules/cart/service.ts` is now `modules/cart/services/`** — `view.ts`, `items.ts`,
+  `checkout.ts`, `cleanup.ts` and a barrel. Import sites move from `../service` to `../services`;
+  `cartService` and every named export are unchanged. This is a size rule, now written down in
+  `docs/theory/layers.md`: a module's service stays one file until roughly 300 lines, then becomes a
+  `services/` folder split by what the operations do. Cart was the only module past the threshold.
+
+- **Products and cart are modules; their layer files moved.** `@models/products`,
+  `@repositories/products`, `@services/products`, `@controllers/products/*` and `src/routes/products.ts`
+  are now `src/modules/products/` — `model.ts`, `repository.ts`, `service.ts`, `controllers/*`,
+  `routes.ts` — reachable only through the barrel `@modules/products`. The same for carts under
+  `@modules/cart`. A module declares its own mount point in `module.ts` and is enabled by one line
+  in `src/modules.ts`; `src/bootstrap/routes.ts` no longer names either domain. Lint rejects an
+  import of another module's internals.
+
+- **The persistence substrate moved into `core`.** `@models/serialize` → `@infrastructure/persistence/serialize`,
+  `@repositories/base` → `@infrastructure/persistence/base-repository`, `@repositories/search` →
+  `@infrastructure/persistence/search`. All three only ever imported mongoose; leaving them in the layer
+  directories would have made every module import a layer to reach them.
+
+- **Deleting a product emits `product.deleted` instead of calling the cart service.** The catalogue
+  and the cart referenced each other — `productService.remove` emptied carts while the cart priced
+  lines from the catalogue — which is a cycle no dependency graph can express. Products now emits
+  and the cart module subscribes, so the arrow points cart → products only. Handlers are awaited, so
+  the cart is still emptied before the row disappears; a handler that throws is logged and does not
+  fail the delete.
 
 - **`rejectResponse` and `generateReject` no longer take a `message`.** The envelope's `message` is
   derived from the status by `resolveErrorMessage`, so a given status always reads the same way:
@@ -73,18 +156,95 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`DELETABILITY_TEST.md` — the acceptance test the modular layout exists to pass, actually run.**
+  Two throwaway copies of the working tree: three domains removed (`products`, `cart`, `orders`),
+  then a tenth added. The claim under test — deleting a domain is `rm -rf` of one folder plus one
+  registry line, and `complete:check` stays green — holds for `src/**` and fails in exactly seven
+  places, all of them test or script code, every one the same mistake in a different costume: a
+  count or a name that was easier to write down than to derive. The document records what broke by
+  class, a ranked fix list, and the commands to re-run the measurement — anything that fails and is
+  not on the list is coupling that arrived later.
+
+- **`docs/theory/known-gaps.md` — what is deliberately unfinished, written down.** Barrel exports
+  nobody imports (the `feedback` barrel entirely), the coverage floors still keyed to the
+  pre-migration layout (§4, which `jest.config.js` now points at), and the rest of what the
+  migration chose not to resolve — each with enough context to act on later without re-deriving
+  it, and dated so a future reader knows to re-verify before trusting it.
+
+- **The three API client collections are generated from the contract.** They were hand-written
+  restatements of `openapi.yaml` and had rotted: Bruno and Mockoon each covered 37 of the contract's
+  56 operations and named no `feedback`, `locales` or `observability` endpoint, while 30 of
+  Insomnia's 39 requests pointed at URLs the application stopped serving (`POST /products/add`,
+  `GET /products/details/{id}`, `GET /heavy`). Mockoon's bodies predated the response envelope, so
+  it mocked a bare user for `GET /account` where the API returns `UserEnvelope` and every error body
+  was the old `{ success, error, traceId }` shape — a mock server serving what the frontend cannot
+  parse.
+
+    `scripts/contracts/generateCollections.ts` now writes their per-module fragments:
+    shapes from `openapi.yaml`, values from `seed-identities.ts` (so `GET /products/{id}` asks for a
+    product the database holds and `POST /account/login` sends credentials that work), and ownership
+    from the OpenAPI fragments, so the module → path mapping stays recorded once. Identifiers are
+    hashed from method and path rather than generated fresh, so a regeneration rewrites only what
+    changed. All three now carry all 56 operations, and two assertions keep them there: the
+    committed fragments must equal a fresh run, and each collection must hold one request per
+    declared operation.
+
+    **What a contract cannot describe now has a home: `src/modules/<name>/dev/probes.yml`.** A
+    collection is also where the requests that prove the API _rejects_ things live, and a spec
+    describes valid calls, so no generator can derive them. 14 probes are declared as data and
+    generated into Bruno and Insomnia (not Mockoon — a mock server answers requests, it does not
+    send them): a non-admin login, a bogus token, a duplicate signup, the rate limiter, a body that
+    breaks two constraints, `Accept-Language: it`, every optional filter at once, the soft-deleted
+    and the inactive product, checkout on an empty cart, an unowned product id, a zero quantity,
+    and the two order-scoping cases the seed dataset exists to make reachable. They refer to seed
+    records as `{{seedSoftDeletedProductId}}` — derived, never pasted — so a fixture that changes
+    takes its probe with it.
+
+- **Every shared, domain-shaped document is assembled from per-module fragments.** Seven files
+  exist in both this repo and the paired frontend and list every domain the app has: `openapi.yaml`,
+  `asyncapi.yaml`, `src/infrastructure/observability/analytics-events.ts`, `db/seeds/seed-identities.ts` and
+  the three `.dev/` API client collections. Each is now a bundle: a module owns its slice —
+  `openapi/`, `asyncapi/`, `analytics.fragment.ts`, `seed-identities.fragment.ts`, `dev/` — and
+  `npm run contracts:bundle` concatenates them into the committed document that spectral, orval,
+  Prism, the seed runner, Bruno, Insomnia and Mockoon all read. Deleting a domain deletes its
+  endpoints, its events, its analytics names, its demo records and its saved requests with it.
+
+    The bundler never parses. `openapi.yaml` alone carries 149 comment lines that a `js-yaml` round
+    trip drops (3453 lines out of 3062, zero comments), and the bundle has to stay byte-identical
+    with the frontend's copy — so a fragment is a verbatim slice of the original lines and bundling
+    is string concatenation. The one exception is list separators: JSON arrays and TypeScript object
+    literals need a comma between slices and none after the last, so those fragments are joined
+    rather than pasted, which keeps a module fragment from having to know whether it is last.
+
+    `scripts/contracts/` holds the registry, `npm run check:contracts-bundle` reports staleness, and
+    `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
+    every run. The frontend authors none of them and receives finished files, as it already did for
+    `openapi.yaml`.
+
+- **`src/kernel/registry.ts` — the module registry.** `src/modules.ts` lists the enabled modules;
+  the registry validates them before anything is mounted. A duplicate name, a dependency that is
+  not enabled, or a dependency cycle stops the boot with the offending path named, instead of
+  surfacing as a 500 on whichever request first crosses the gap. Adding a domain is one folder plus
+  one line; removing one is `rm -rf` plus deleting that line.
+
+- **`src/kernel/events.ts` — domain events.** The sanctioned channel for two modules that cannot
+  own each other. Modules declare their own events by augmenting `IDomainEventMap` from inside
+  their own folder, so the catalogue grows with the domains that own it and no shared file
+  enumerates them. Handlers are awaited in registration order; a throwing handler is logged and
+  does not fail the emitter, because a listener must not roll back an operation it never authorised.
+
 - **`src/bootstrap/`** — six named installs (`installSecurity`, `installRequestContext`,
   `installTelemetry`, `installStatic`, `installRoutes`, `installErrorHandling`) that `app.ts` calls
-  in order. It sits outside `src/core/**` because these mount middleware and
+  in order. It sits outside `src/infrastructure/**` because these mount middleware and
   `no-restricted-imports` forbids core from importing `@middlewares/*`; it is the assembly layer,
   the only place allowed to reach both. See `docs/theory/layers.md`.
 
-- **`src/core/observability/analytics-events.ts`** — the analytics event names both repos emit,
+- **`src/infrastructure/observability/analytics-events.ts`** — the analytics event names both repos emit,
   byte-identical with the frontend's `src/stores/analyticsEvents.ts` and guarded by
   `check:spec-identity`. A name that existed on one side only produced two half-events that no
   funnel added up, and nothing detected it.
 
-- **`rejectDatabaseEnvelope(context, error)`** in `@core/http/errors` — the counterpart to
+- **`rejectDatabaseEnvelope(context, error)`** in `@infrastructure/http/errors` — the counterpart to
   `rejectDatabaseError` for services, which report failure by _returning_ an envelope and so have
   no `Response` to send. Six `.catch` handlers had each re-derived the status inline and dropped the
   interpreter's detail.
@@ -117,6 +277,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cannot see their own soft-deleted order" branch has a fixture behind it.
 
 ### Changed
+
+- **`docker-compose.yml` passes the two rate-limit budgets through as variables** —
+  `NODE_RATE_LIMIT_MAX` (default 100) and `NODE_AUTH_RATE_LIMIT_MAX` (default 10). A live E2E run
+  drives the whole paired frontend suite from a single address and exceeds both, at which point the
+  API answers 429 and the failures read as "login is broken" rather than "out of allowance". A run
+  can now raise them from the shell (`NODE_RATE_LIMIT_MAX=1000 NODE_AUTH_RATE_LIMIT_MAX=1000
+npm run podman:restart`) instead of editing `.env`; an ordinary `up` is unchanged, and the two
+  buckets stay decoupled so widening the global one never cheapens password guessing.
+
+- **Mutation testing reset onto the module layout.** `stryker.config.json`'s `mutate` still listed
+  `src/services/**`, `src/models/**`, `src/repositories/**`, `src/middlewares/**` and `src/jobs/**` —
+  five globs matching nothing since the migration — and excluded `src/infrastructure/bootstrap/**`, which is
+  now `src/infrastructure/runtime/**`. It is now `core` (less `runtime/**` and the OTel tracer), `app`,
+  `platform` and every module's own `.ts`, less each module's barrel, `module.ts`, `seeds.ts`,
+  `controllers/` and `tests/`: 92 files, with every glob verified to match something. Controllers
+  stay out for the reason they always did — only the unit suite runs under Stryker, so every
+  controller mutant would survive and the ratchet would then defend those zeros forever.
+
+    Keeping them out needed a second fix, found by running the dry run rather than by reading the
+    config: `testPathIgnorePatterns` excluded `tests/contract/` but not the co-located
+    `src/modules/<name>/tests/contract/`, so those suites were still collected and Stryker aborted
+    with "There were failed tests in the initial test run" — they drive the real app over HTTP and
+    have no database in the sandbox. Contract tests have had two homes since the migration; the
+    ignore list now covers both.
+
+    `mutation-baseline.json` is **deleted rather than rewritten**. It keyed every migrated file by
+    its pre-migration path, and `check-mutation-baseline.ts` already seeds a fresh baseline when the
+    file is absent, so hand-editing it would have been inventing per-file scores for a scope nothing
+    has measured. `break` is `null` for the same reason: the old `60` came from a population that no
+    longer exists. The first full run supplies both, in that order — `npm run test:mutation`, then
+    `npm run test:mutation:check`, which now exits 0 instead of failing on stale keys.
+
+    The config's notes lost the superseded "current state" run figures and now carry only reasoning
+    that still applies; `docs/tools/mutation-testing.md` was un-frozen and matches, and
+    `jest.config.js` no longer claims its coverage keys mirror `mutate` exactly — they were never
+    going to, since a file with no coverage is free to mutate and expensive to floor. Stryker
+    itself, the ratchet scripts and the nightly workflow are untouched.
 
 - **`src/app.ts` is 138 lines, down from 442.** It now reads as the middleware stack in the order a
   request travels it, with the four load-bearing dependencies between groups stated once above the
@@ -306,7 +503,7 @@ paths do when N requests arrive at once.
   `?pageSize=500` used to answer 422 on `GET /products`, `/users` and `/orders` — where the
   controllers' own Zod bounds caught it — and a silently clamped 200 on `GET /feedback`, which
   validated nothing. `openapi.yaml` declares `minimum: 1` / `maximum: 100`, so all four endpoints
-  now enforce exactly that through one shared schema (`@core/http/schemas`) and answer 422;
+  now enforce exactly that through one shared schema (`@infrastructure/http/schemas`) and answer 422;
   `?page=0`, `?page=abc` and `?page=1.5` do the same. `normalizePagination` keeps sole ownership
   of the _defaults_ (page 1, ten per page, or `NODE_SETTINGS_PAGINATION_PAGE_SIZE`) and stops
   clamping caller values, because an API that advertises a maximum and then quietly rewrites the
@@ -563,15 +760,15 @@ paths do when N requests arrive at once.
   is the queryable copy, and it is allowed to fail — a rejected write becomes a warning, never a
   failed request, because these run while answering logins and permission denials.
 
-    None of the 53 `emitAuditEvent` call sites across 21 files changed. `src/core/**` may not import
+    None of the 53 `emitAuditEvent` call sites across 21 files changed. `src/infrastructure/**` may not import
     `@repositories/*` (`no-restricted-imports`), so rather than route around the rule,
-    `@core/observability/audit` declares an `IAuditSink` port and `app.ts` registers
+    `@infrastructure/observability/audit` declares an `IAuditSink` port and `app.ts` registers
     `auditLogService.record` against it once the database connects — the same inversion as
     `IImageStore`. Swapping the destination for a log-backend writer later is one line in `app.ts`.
 
 - **`docs/tools/events-and-logging.md`** — the map of every signal the application emits.
   Application log, audit trail, product analytics, metrics, traces, the SSE metrics feed and queue
-  jobs are seven separate mechanisms, four of them neighbours in `src/core/observability/` and
+  jobs are seven separate mechanisms, four of them neighbours in `src/infrastructure/observability/` and
   three declared in the same `asyncapi.yaml`, which is enough adjacency to make them read as one
   system they are not. The page states what each is, where it ends up, who reads it, and which to
   reach for — the audit-vs-analytics overlap in particular, where `USER_SIGNED_UP` and
@@ -622,7 +819,7 @@ paths do when N requests arrive at once.
 - **Per-request language.** Every endpoint honours `Accept-Language` — q-weights, region tags
   (`en-GB` → `en`), `*`, and a fallback rather than an error for anything unsupported. The
   negotiated language is stated back in `Content-Language`, and `Vary: Accept-Language` is set so
-  no shared cache can hand one language's body to another language's request. `src/core/i18n.ts`
+  no shared cache can hand one language's body to another language's request. `src/infrastructure/i18n.ts`
   carries it down the request's async chain with `AsyncLocalStorage`, so a Zod thunk twelve calls
   deep resolves in the caller's language without `t` being threaded through twelve signatures.
   Never `i18next.changeLanguage()`, which mutates one global and is async: two overlapping
@@ -655,7 +852,7 @@ paths do when N requests arrive at once.
   rendering. One deliberate exception: the contact-form notification goes to the support mailbox,
   not to the person who filled in the form, so it renders in `NODE_DEFAULT_LOCALE`.
 
-- **`decodeFormFields()`** in `src/core/http/request.ts`, over `isMultipartRequest()` and
+- **`decodeFormFields()`** in `src/infrastructure/http/request.ts`, over `isMultipartRequest()` and
   `parseFormBoolean()`. A write controller declares _which_ of its fields are booleans and which
   are string arrays; how either is spelled on the wire stops being the controller's business. Both
   write controllers had grown a copy of that rule, and the two copies' comments had already
@@ -666,7 +863,7 @@ paths do when N requests arrive at once.
   the tests run this at all", which is the cheap check and belongs in CI, where mutation testing
   does not. Current figures clear it comfortably: `core/http` 99.66%, `models` 100%, `services`
   97.29%, `middlewares` 91.9%.
-- **`src/core/totals.ts`** — `sumLineItems()` and `toCents()`, the one implementation of "sum a list
+- **`src/infrastructure/totals.ts`** — `sumLineItems()` and `toCents()`, the one implementation of "sum a list
   of `{ quantity, product: { price } }`". Orders and carts had grown a copy each, and they had
   already drifted: the order copy rounded to cents, the cart copy did not. The two still name their
   outputs differently because `openapi.yaml` does (`totalItems`/`totalQuantity`/`totalPrice` against
@@ -679,7 +876,7 @@ paths do when N requests arrive at once.
   suites / 20 tests to 6 / 58, and the cart suite failed three different ways on its first run —
   see _Fixed_.
 - **Mutation testing** — Stryker with the jest runner, `npm run test:mutation`, scoped to
-  `src/services/`, `src/models/`, `src/middlewares/` and `src/core/http/`. It runs in its own
+  `src/services/`, `src/models/`, `src/middlewares/` and `src/infrastructure/http/`. It runs in its own
   workflow (`.github/workflows/mutation.yml`, nightly + on demand) and deliberately **not** in
   `ci.yml`: a run re-executes the unit suite once per mutant, so keeping it out of the `ci`
   aggregate is structural rather than a convention. Thresholds come from real runs, not from
@@ -706,7 +903,7 @@ paths do when N requests arrive at once.
 
 - **Unit tests for every module the first mutation run named as uncovered.** The unit suite went
   from 28 files / 424 tests to **40 / 577**. New files:
-  `tests/unit/core/http/{scopes,errors,uploads}.test.ts`,
+  `tests/unit/infrastructure/http/{scopes,errors,uploads}.test.ts`,
   `tests/unit/middlewares/{authorizations,cookie,token,observability}.test.ts`,
   `tests/unit/services/{auth-tokens,cart,feedback-requests,orders-crud}.test.ts` and
   `tests/unit/models/schema-contracts.test.ts`; `cart.dto.test.ts` and `core/http/response.test.ts`
@@ -721,7 +918,7 @@ paths do when N requests arrive at once.
     a single ternary; `schema-contracts.test.ts` pins the defaults and `select: false` credentials
     that the over-serialization fixes below depend on.
 
-- **`tests/unit/core/http/request.test.ts`** (27 tests), the first unit coverage that file has had.
+- **`tests/unit/infrastructure/http/request.test.ts`** (27 tests), the first unit coverage that file has had.
   It is where the `DELETE /cart/{productId}` crash below lived.
 - **`test:unit:coverage` and `test:all` scripts**, plus `collectCoverageFrom` in
   `jest.config.json` so coverage measures `src/` rather than the generated `api/`.
@@ -759,7 +956,7 @@ paths do when N requests arrive at once.
 - **Credential-scoped repository finders.** `findByIdWithCredentials` / `findOneWithCredentials` in
   `src/repositories/users.ts` — the only sanctioned way to re-select `password` and `tokens`. The
   `+password +tokens` selector is written down exactly once.
-- **`clearCache()`** in `src/core/adapters/cache.ts` — `SCAN` + `DEL` over `<CACHE_PREFIX>:*`,
+- **`clearCache()`** in `src/infrastructure/adapters/cache.ts` — `SCAN` + `DEL` over `<CACHE_PREFIX>:*`,
   deliberately not `FLUSHALL`, so a Redis shared with another app or environment is untouched.
   Returns `{ deleted, reachable }`.
 - **`resolveCacheTtl()`** in the same adapter, plus `NODE_REDIS_CACHE_DEV_TTL_MAX` (default `30`s):
@@ -785,7 +982,7 @@ paths do when N requests arrive at once.
   connections rather than merely started.
 - **Tests — 284 → 297.** `tests/unit/models/{users,products,orders,feedback-requests}.test.ts`
   (serialization regression guards, on both `.toJSON()` output and lean/aggregate reads),
-  `tests/unit/core/adapters/cache.test.ts` (six cases over `clearCache`, including the refused
+  `tests/unit/infrastructure/adapters/cache.test.ts` (six cases over `clearCache`, including the refused
   connection that is the regression gate for the silent-success bug), and
   `tests/unit/db/run-script.test.ts` (seven cases, including that cleanup still runs when the body
   throws).
@@ -932,7 +1129,7 @@ paths do when N requests arrive at once.
   unpopulated product therefore poisoned an entire order or cart total, and a `NaN` total reaches
   the customer as a blank price.
 
-    Found by `tests/unit/core/totals.property.test.ts` on its seventh generated case; the
+    Found by `tests/unit/infrastructure/totals.property.test.ts` on its seventh generated case; the
     counterexample was `{ quantity: Number.POSITIVE_INFINITY }` with no `product`. Reachable
     rather than merely conceivable: BSON stores `Infinity` happily, order items arrive as raw
     aggregate output, and nothing between the database and the sum re-validates them. The
@@ -979,7 +1176,7 @@ paths do when N requests arrive at once.
   and checking it resolves — in this repo or in the paired frontend, since several are deliberate
   cross-repo pointers.
 
-    Broken: `src/core/observability/analytics.ts` and `tracer.ts` pointed at `docs/guide/*.md`, a
+    Broken: `src/infrastructure/observability/analytics.ts` and `tracer.ts` pointed at `docs/guide/*.md`, a
     directory this repo does not have (they mean `docs/tools/posthog.md` and
     `docs/tools/opentelemetry.md`); `stryker.config.json` named `tests/contract/request-contract.ts`
     without its `.test` infix; `docs/api/endpoints.md` claimed `POST /cart/checkout` "fires a
@@ -1221,7 +1418,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   `src/views/templates-emails`, a directory that has never existed (templates live at the repo
   root), so signup confirmation, password reset, order confirmation, feedback and account-deletion
   mails all failed to render. Paths now come from `EMAIL_TEMPLATES_DIR`, and
-  `tests/unit/core/adapters/mailer-templates.test.ts` asserts each template resolves to a real
+  `tests/unit/infrastructure/adapters/mailer-templates.test.ts` asserts each template resolves to a real
   file.
 
 - **`GET /orders/{id}` returned a different shape depending on the caller's role.** The scoped
@@ -1316,7 +1513,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
     `{ productId, quantity }` projection that keeps `CartItem`'s `additionalProperties: false`
     satisfied.
 
-- **The in-process domain event bus (`src/core/observability/events.ts`), and with it the AsyncAPI
+- **The in-process domain event bus (`src/infrastructure/observability/events.ts`), and with it the AsyncAPI
   channel `ecommerce.cart.checked_out`.** It described itself as "a decoupling mechanism, not just
   a recording one" and had **zero subscribers** for its entire life — one channel, one emit site in
   `post-checkout.ts`, and an `EventTarget` nothing listened to, which made `emitDomainEvent` a
@@ -1357,7 +1554,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   carried the argument against it: `clearCache`'s docstring explains that shared keys need no
   broadcast, which is equally true of `invalidateCacheTags`. `broadcastCacheInvalidation`,
   `subscribeCacheInvalidation` and `stopCacheSubscriber` are gone from
-  `src/core/adapters/cache.ts`, along with their boot and shutdown wiring, the
+  `src/infrastructure/adapters/cache.ts`, along with their boot and shutdown wiring, the
   `CacheTagsInvalidatedPayload` schema, its two messages, and the `redisLocal` server entry.
 
     **This is breaking for anything generated from `asyncapi.yaml`** — `ICacheTagsInvalidatedPayload`
@@ -1376,7 +1573,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - **`TODO.md`**, added earlier in this same unreleased cycle and now redundant. Both entries it
   carried are settled: the `/tmp` leak is fixed (see _Fixed_), and the remaining image-storage work
   is written where the work is, as the TODO above `imageStore` in
-  `src/core/adapters/image-store.ts` — a file the compiler, the reviewer and the person about to
+  `src/infrastructure/adapters/image-store.ts` — a file the compiler, the reviewer and the person about to
   change that module all open anyway, unlike a document at the repository root that drifts out of
   step with the code the moment either moves. Nothing was dropped in the move: the consequence of
   deferring it (a container rebuild deletes every uploaded image), the url prefix change, the
@@ -1391,7 +1588,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   stays: `IImageStore`, its local implementation, and a `imageStore` binding that a second backend
   redirects in one line.
 
-- **The commented-out SendGrid transport block** in `src/core/adapters/mailer.ts`. It could not have
+- **The commented-out SendGrid transport block** in `src/infrastructure/adapters/mailer.ts`. It could not have
   compiled if uncommented: `nodemailer-sendgrid-transport` was never a dependency,
   `sendgridTransport` was never imported, and `NODE_APIKEY_SENDGRID` appeared nowhere else in the
   repository. The affordance moved to `docs/tools/email-and-rendering.md`, which records what is
@@ -1411,7 +1608,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - **`extractId` and `extractPagination`** from `core/http/request.ts`. `extractId` was
   `candidates.find(Boolean)` behind a cast, inlined at its three call sites. `extractPagination` had
   no production caller at all: `normalizePagination` re-derived everything it produced.
-- **`src/core/http/scopes.ts`** — its one export moved to `orderService.callerScope`, and its tests
+- **`src/infrastructure/http/scopes.ts`** — its one export moved to `orderService.callerScope`, and its tests
   with it, as `tests/unit/services/orders-scope.test.ts`.
 
 ### Security
@@ -1422,7 +1619,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   client-supplied on `POST`/`PUT /products` and `/users`, the contract declares it
   `uri-reference`, and `/../../etc/passwd` is a perfectly legal `uri-reference`: it passes
   `zodProductSchema` unchanged (verified), is stored, and is unlinked on the next hard delete or
-  image replacement. Deleting a stored image now goes through `@core/adapters/image-store`, which
+  image replacement. Deleting a stored image now goes through `@infrastructure/adapters/image-store`, which
   resolves the value against the public directory and refuses anything that lands outside it —
   including the public directory itself. Requires the admin write scope, so it is a privilege
   escalation from "can edit the catalogue" to "can delete `.env`", not an unauthenticated hole.
@@ -1527,7 +1724,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 
 ### Known issues
 
-- **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/core/http/errors.ts`). It
+- **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/infrastructure/http/errors.ts`). It
   returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a
   schema type name — so a malformed ObjectId in a URL yields an HTTP status of `NaN` and a message
   of `'ObjectId'`. Pinned by tests named as a known defect rather than silently corrected, since
@@ -1548,7 +1745,7 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
   works on the admin path and gets `undefined` on the owner path — role-dependent behaviour that
   survives a green suite because `id` happens to resolve on both (it is a Mongoose virtual).
 
-- **`getFormFiles` contradicts its own docblock** (`src/core/http/uploads.ts`). It promises
+- **`getFormFiles` contradicts its own docblock** (`src/infrastructure/http/uploads.ts`). It promises
   "present but empty → `undefined` so callers have one falsy case to check", but only the
   `.fields()` branch does it; the `.array()` branch returns `[]`, which is truthy. Harmless today —
   both callers (`validateUploadedImages` and `storeUploadedImages`) test `length === 0` as well as

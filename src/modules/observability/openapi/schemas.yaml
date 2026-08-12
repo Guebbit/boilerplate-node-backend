@@ -1,0 +1,184 @@
+        # ---------- observability — the schemas only this module's paths reference. ----------
+        ObservabilityHealthResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ObservabilityHealth'
+
+        ObservabilityMetricsSummaryResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
+
+        AuditLogsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/AuditLogsPage'
+
+        ObservabilityHealthIntegrations:
+            type: object
+            additionalProperties: false
+            properties:
+                loki: { type: boolean }
+                posthog: { type: boolean }
+                otelEnabled: { type: boolean }
+                umami: { type: boolean }
+                faro: { type: boolean }
+
+        ObservabilityHealthMemory:
+            type: object
+            additionalProperties: false
+            required: [heapUsedMb, heapTotalMb, rssMb]
+            properties:
+                heapUsedMb: { type: integer }
+                heapTotalMb: { type: integer }
+                rssMb: { type: integer }
+
+        ObservabilityHealthSystem:
+            type: object
+            additionalProperties: false
+            required: [platform, cpuCount, loadAvg]
+            properties:
+                platform: { type: string }
+                cpuCount: { type: integer }
+                loadAvg:
+                    type: array
+                    items: { type: number }
+
+        ObservabilityHealth:
+            type: object
+            additionalProperties: false
+            required:
+                [status, environment, service, nodeVersion, uptimeSeconds, database, timestamp]
+            properties:
+                status:
+                    type: string
+                    enum: [ok, degraded]
+                environment: { type: string }
+                service: { type: string }
+                nodeVersion: { type: string }
+                uptimeSeconds: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    additionalProperties: false
+                    required: [status]
+                    properties:
+                        status:
+                            type: string
+                            enum: [connected, connecting, disconnected]
+                integrations: { $ref: '#/components/schemas/ObservabilityHealthIntegrations' }
+                memory: { $ref: '#/components/schemas/ObservabilityHealthMemory' }
+                system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
+                timestamp: { type: string, format: date-time }
+
+        ObservabilityMetricsLatency:
+            type: object
+            additionalProperties: false
+            required: [p50, p95]
+            properties:
+                p50: { type: number, description: Median latency in ms }
+                p95: { type: number, description: 95th-percentile latency in ms }
+
+        ObservabilityMetricsSummary:
+            type: object
+            additionalProperties: false
+            required: [http, auth, business, database, process, timestamp]
+            properties:
+                http:
+                    type: object
+                    additionalProperties: false
+                    required: [totalRequests, totalErrors, errorRate, inFlight, latencyMs]
+                    properties:
+                        totalRequests: { type: integer, minimum: 0 }
+                        totalErrors: { type: integer, minimum: 0 }
+                        errorRate:
+                            type: number
+                            minimum: 0
+                            maximum: 1
+                            description: Fraction of requests that returned 4xx/5xx
+                        inFlight: { type: integer, minimum: 0 }
+                        latencyMs: { $ref: '#/components/schemas/ObservabilityMetricsLatency' }
+                auth:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        loginSuccess: { type: integer, minimum: 0 }
+                        loginFailure: { type: integer, minimum: 0 }
+                        signupSuccess: { type: integer, minimum: 0 }
+                business:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        checkoutSuccess: { type: integer, minimum: 0 }
+                        ordersCreated: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        queriesTotal: { type: integer, minimum: 0 }
+                        errorsTotal: { type: integer, minimum: 0 }
+                process:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        uptimeSeconds: { type: integer, minimum: 0 }
+                        heapUsedMb: { type: integer, minimum: 0 }
+                timestamp: { type: string, format: date-time }
+
+        AuditLogsPage:
+            type: object
+            additionalProperties: false
+            required: [items, total]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEventItem' }
+                total: { type: integer, minimum: 0 }
+        AuditEventItem:
+            type: object
+            additionalProperties: false
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id: { type: string }
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                action:
+                    {
+                        type: string,
+                        description: 'Dot-notation action name (e.g. auth.login.succeeded)'
+                    }
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip: { type: string }
+                user_agent: { type: string }
+                request_id: { type: string }
+                trace_id: { type: string }
+                target_type: { type: string }
+                target_id: { type: string }
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp: { type: string, format: date-time }
+                level:
+                    type: string
+                    enum: [info, warn]
+

@@ -27,6 +27,12 @@ flowchart LR
 If the contract changes, start with the contract.
 That keeps backend, generated types, and consumers in sync.
 
+## Who owns this file
+
+This repository owns the contract; the frontend holds a byte-identical copy and never edits it.
+How the file is meant to be split per module and how it travels between the two repos is
+[Contract Ownership & Fragmentation](./contract-fragmentation.md).
+
 ## OpenAPI vs AsyncAPI in this repository
 
 - Use OpenAPI for REST endpoint contracts.
@@ -90,8 +96,12 @@ npm run test:prism        # smoke-test Prism mock server against the spec
 
 Changing the mode to `tags-split` generates one file per OpenAPI tag instead.
 
+Note that this splits the **generated output**, not the spec. Splitting the spec itself is a
+separate idea — see [Contract Ownership & Fragmentation](./contract-fragmentation.md).
+
 ## How this connects to the rest of the docs
 
+- [Contract Ownership & Fragmentation](./contract-fragmentation.md) explains who owns the spec, how it is meant to be split per module, and how the frontend receives it.
 - [Theory / Layers](../theory/layers.md) explains where implementation code lands after the spec changes.
 - [Tools](../tools/) explains the non-OpenAPI dependencies around the API runtime.
 - [API overview](./index.md#rest-patterns-used-here) summarizes the style choices used by the contract.

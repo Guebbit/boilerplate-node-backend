@@ -1,0 +1,56 @@
+        EmailJobPayload:
+            type: object
+            required:
+                - request
+                - templateName
+                - data
+            properties:
+                request:
+                    type: object
+                    description: Nodemailer SendMailOptions subset.
+                    required:
+                        - to
+                    properties:
+                        to:
+                            type: string
+                        subject:
+                            type: string
+                        text:
+                            type: string
+                        html:
+                            type: string
+                    additionalProperties: false
+                from:
+                    type: string
+                    description: Optional sender override.
+                templateName:
+                    type: string
+                    description: EJS template name to render.
+                data:
+                    type: object
+                    description: >-
+                        Everything the template prints, already translated by the producer —
+                        including the `<html lang>` value and the footer line. The consumer
+                        interpolates it and resolves nothing, which is why no locale travels
+                        with the job.
+            additionalProperties: false
+        PdfJobPayload:
+            type: object
+            required:
+                - templatePath
+                - templateData
+                - outputPath
+            properties:
+                templatePath:
+                    type: string
+                    description: Path to the EJS template file.
+                templateData:
+                    type: object
+                    description: >-
+                        Everything the template prints, already translated by the producer —
+                        same contract as EmailJobPayload.data, and the same reason no locale
+                        travels with the job.
+                outputPath:
+                    type: string
+                    description: Filesystem path where the generated PDF will be written.
+            additionalProperties: false

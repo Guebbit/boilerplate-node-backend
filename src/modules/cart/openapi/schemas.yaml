@@ -1,0 +1,119 @@
+        # ---------- cart — the schemas only this module's paths reference. ----------
+        CartResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CartResponse'
+
+        CartSummaryResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CheckoutResponse'
+
+        UpsertCartItemRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        UpdateCartItemByIdRequest:
+            type: object
+            additionalProperties: false
+            required: [quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        RemoveCartItemRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+
+        CheckoutRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                notes:
+                    type: string
+                    description: Optional order notes
+
+        CartSummaryResponse:
+            type: object
+            additionalProperties: false
+            required: [itemsCount, totalQuantity, total]
+            properties:
+                itemsCount:
+                    type: integer
+                    minimum: 0
+                    description: Number of distinct cart lines/items
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of quantities across all items
+                total:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of item prices * quantity (before tax/shipping/discounts)
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. USD)
+
+        CartResponse:
+            type: object
+            additionalProperties: false
+            required: [items, summary]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+                summary:
+                    $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponse:
+            type: object
+            additionalProperties: false
+            required: [order]
+            properties:
+                order:
+                    $ref: '#/components/schemas/Order'
+                message:
+                    type: string
+
+        # ---------- Observability ----------
+

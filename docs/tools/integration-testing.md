@@ -14,7 +14,7 @@ The layer that answers: **are the units actually wired together?** A service, it
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart TB
-    App["src/app.ts\nthe fully mounted Express app"] --> Supertest["supertest(app)\ntests/helpers/http.ts → api()"]
+    App["src/app.ts\nthe fully mounted Express app"] --> Supertest["supertest(app)\ntests/support/http.ts → api()"]
     Supertest --> Integration["tests/integration/**\nrouting · middleware · auth gates"]
     Integration --> NoDB["no database, no Redis —\nthe routes exercised here need neither"]
 
@@ -26,7 +26,7 @@ flowchart TB
     class NoDB note;
 ```
 
-Same harness (`api()` from `tests/helpers/http.ts`) as [Contract Testing](./contract-testing.md) and [Contract-Derived Request Data](./contract-request-data.md) — the difference is what each layer asserts on the response, not how the request is sent. Integration asks "did the right middleware run" (status code, header presence); contract testing asks "does the _shape_ match `openapi.yaml`".
+Same harness (`api()` from `tests/support/http.ts`) as [Contract Testing](./contract-testing.md) and [Contract-Derived Request Data](./contract-request-data.md) — the difference is what each layer asserts on the response, not how the request is sent. Integration asks "did the right middleware run" (status code, header presence); contract testing asks "does the _shape_ match `openapi.yaml`".
 
 ## Why `src/app.ts` and not a hand-assembled test app
 
@@ -51,7 +51,7 @@ Routes that need a persisted user/product/order are exercised through HTTP too, 
 | Path                                   | Contents                                                                         |
 | -------------------------------------- | -------------------------------------------------------------------------------- |
 | `tests/integration/app-health.test.ts` | System + observability routes                                                    |
-| `tests/helpers/http.ts`                | `api()` — the shared `supertest(app)` wrapper, also used by both contract layers |
+| `tests/support/http.ts`                | `api()` — the shared `supertest(app)` wrapper, also used by both contract layers |
 | `src/app.ts`                           | The app under test — auto-start guarded by `NODE_ENV === 'test'`                 |
 
 ## Commands

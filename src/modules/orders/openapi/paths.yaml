@@ -1,0 +1,248 @@
+    /orders:
+        get:
+            tags: [Orders]
+            summary: List orders (paginated)
+            description: |
+                Returns a paginated list of orders.
+                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+            operationId: listOrders
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/PageParam'
+                - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/IdParam'
+                - $ref: '#/components/parameters/UserIdParam'
+                - $ref: '#/components/parameters/ProductIdParam'
+                - name: email
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/Email'
+            responses:
+                '200':
+                    description: Orders page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrdersResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Orders]
+            summary: Create order
+            description: Creates a new order directly from the supplied payload.
+            operationId: createOrder
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateOrderRequest'
+            responses:
+                '201':
+                    description: Created order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Orders]
+            summary: Update order
+            description: Updates an existing order identified by id in the request body.
+            operationId: updateOrder
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateOrderRequest'
+            responses:
+                '200':
+                    description: Updated order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Orders]
+            summary: Delete order
+            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record
+            operationId: deleteOrder
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeleteOrderRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as GET /orders, but with JSON body, more suitable for DTOs and multi-language codegen
+    /orders/search:
+        post:
+            tags: [Orders]
+            summary: Search orders (DTO-friendly)
+            description: |
+                Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
+                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+            operationId: searchOrders
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchOrdersRequest'
+            responses:
+                '200':
+                    description: Orders search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrdersResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /orders/{id}:
+        # Same as GET /orders?id={id}
+        get:
+            tags: [Orders]
+            summary: Order details
+            description: Returns the full details of the order identified by `{id}`. Functionally equivalent to `GET /orders?id={id}`.
+            operationId: getOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Orders]
+            summary: Edit order
+            description: Updates the order identified by `{id}` in the path.
+            operationId: updateOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateOrderByIdRequest'
+            responses:
+                '200':
+                    description: Updated order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        # Same as DELETE /orders
+        delete:
+            tags: [Orders]
+            summary: Delete order
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /orders`.
+            operationId: deleteOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+                - name: hardDelete
+                  in: query
+                  schema:
+                      type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HardDeleteRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as DELETE /orders/{id}?hardDelete=true — the flag spelled in the path instead of
+    # in the query. Both reach the same handler; neither is the canonical one.
+    /orders/{id}/hard:
+        delete:
+            tags: [Orders]
+            summary: Permanently delete order
+            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`.
+            operationId: hardDeleteOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /orders/{id}/invoice:
+        get:
+            tags: [Orders]
+            summary: Download order invoice (PDF)
+            description: Generates and returns the invoice for the order identified by `{id}` as a binary PDF file. The client should save or stream the response with an appropriate `Content-Disposition` header.
+            operationId: getOrderInvoice
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Invoice PDF
+                    content:
+                        application/pdf:
+                            schema:
+                                type: string
+                                format: binary
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }

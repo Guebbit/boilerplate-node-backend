@@ -22,10 +22,13 @@ export default withMermaid(
                         items: [
                             { text: 'Overview', link: '/theory/' },
                             { text: 'Architecture', link: '/theory/architecture' },
+                            { text: 'Modules', link: '/theory/modules' },
                             { text: 'Layers', link: '/theory/layers' },
+                            { text: 'Domain Layer', link: '/theory/domain-layer' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
-                            { text: 'Clustering & Shutdown', link: '/theory/clustering' }
+                            { text: 'Clustering & Shutdown', link: '/theory/clustering' },
+                            { text: 'Known Gaps', link: '/theory/known-gaps' }
                         ]
                     }
                 ],
@@ -120,6 +123,10 @@ export default withMermaid(
                             { text: 'Endpoints', link: '/api/endpoints' },
                             { text: 'Observability Endpoints', link: '/api/observability' },
                             { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
+                            {
+                                text: 'Contract Ownership & Fragmentation',
+                                link: '/api/contract-fragmentation'
+                            },
                             { text: 'AsyncAPI Workflow', link: '/api/asyncapi-workflow' }
                         ]
                     }

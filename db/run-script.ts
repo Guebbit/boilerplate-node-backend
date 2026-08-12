@@ -12,7 +12,7 @@
  * `process.exitCode` rather than `process.exit()`: setting the code lets Node drain stdout and
  * finish pending handles, where `exit()` truncates in-flight log writes.
  */
-import { logger } from '@core/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 
 /**
  * Run a script body to completion, then always clean up.

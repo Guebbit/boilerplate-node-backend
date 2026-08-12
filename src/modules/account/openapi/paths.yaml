@@ -1,0 +1,177 @@
+    # --------- Authentication and profile ---------
+    /account:
+        get:
+            tags: [Account]
+            summary: Current user info
+            description: Returns the full profile of the currently authenticated user
+            operationId: getAccount
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Current user info
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+        delete:
+            tags: [Account]
+            summary: Request account deletion
+            description: Initiates the account-deletion flow for the authenticated user. A one-time confirmation token is sent to the user's email address. The token must then be submitted to `/account/delete-confirm` to complete the deletion.
+            operationId: requestAccountDelete
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/delete-confirm:
+        delete:
+            tags: [Account]
+            summary: Confirm account deletion
+            description: Completes the account-deletion flow. Validates the one-time token issued by `DELETE /account` and, if valid, permanently removes the user account.
+            operationId: confirmAccountDelete
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AccountDeleteConfirmRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/login:
+        post:
+            tags: [Auth]
+            summary: Login
+            description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests.
+            operationId: login
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginRequest'
+            responses:
+                '200':
+                    description: Auth tokens
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/signup:
+        post:
+            tags: [Auth]
+            summary: Signup
+            description: Registers a new user account with optional image upload. Returns the newly created user profile on success.
+            operationId: signup
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SignupRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/SignupRequestMultipart'
+            responses:
+                '201':
+                    description: Created
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                # Signing up with an email that is already registered.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/reset:
+        post:
+            tags: [Auth]
+            operationId: requestPasswordReset
+            description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PasswordResetRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/reset-confirm:
+        post:
+            tags: [Auth]
+            operationId: confirmPasswordReset
+            description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PasswordResetConfirmRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/refresh:
+        get:
+            tags: [Auth]
+            summary: Refresh access token
+            description: Creates a new short-lived access token from the refresh token in the `jwt` cookie. The cookie is `HttpOnly`, so the token is never readable by page scripts and never appears in a URL, a proxy log or a `Referer` header.
+            operationId: refreshToken
+            security: []
+            responses:
+                '200':
+                    description: New access token
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefreshTokenEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/logout-all:
+        post:
+            tags: [Auth]
+            summary: Logout from all devices
+            description: Logs out the authenticated user from ALL devices by removing all refresh tokens from the database and clearing authentication cookies.
+            operationId: logoutAll
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/tokens/expired:
+        delete:
+            tags: [Auth]
+            summary: Remove expired tokens
+            description: Removes all expired tokens (refresh, password-reset, etc.) from every user record in the database. Restricted to administrators.
+            operationId: deleteExpiredTokens
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+

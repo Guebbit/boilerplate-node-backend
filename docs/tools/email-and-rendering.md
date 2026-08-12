@@ -9,12 +9,13 @@ Both are optional: they only activate when the relevant env vars / browser binar
 
 ## Where the code lives
 
-| Concern        | File                                                             |
-| -------------- | ---------------------------------------------------------------- |
-| SMTP transport | `src/core/adapters/mailer.ts`                                    |
-| Email triggers | `src/controllers/account/post-reset-request.ts` (password reset) |
-| HTML templates | `views/*.ejs`                                                    |
-| PDF rendering  | `src/controllers/orders/get-order-invoice.ts`                    |
+| Concern        | File                                                                     |
+| -------------- | ------------------------------------------------------------------------ |
+| SMTP transport | `src/infrastructure/adapters/mailer.ts`                                  |
+| Email triggers | `src/modules/account/controllers/post-reset-request.ts` (password reset) |
+| Email copy     | `src/modules/<name>/emails.ts`                                           |
+| HTML templates | `views/*.ejs`                                                            |
+| PDF rendering  | `src/modules/orders/controllers/get-order-invoice.ts`                    |
 
 ## Email pipeline
 
@@ -37,6 +38,17 @@ flowchart LR
 | `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                |
 
 Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo](./tempo.md) alongside the request that triggered them.
+
+### Templates interpolate, they do not translate
+
+An email is usually rendered by a queue worker, in another process, after the request that asked for it is gone — so there is no locale to resolve a translation key against at that point. The copy is therefore resolved **before** the job is published: a module's `emails.ts` takes the language as an argument, binds its own `t` to it, and returns an `IEmailContent` — the template name, the subject, and every string the template prints, down to the `locale` that fills `<html lang>` and the footer line the shared partial shows. `enqueueEmail` adds nothing and resolves nothing; it publishes exactly what the builder produced.
+
+The consequences are worth knowing:
+
+- Templates contain no `t(...)` calls. `<%= greeting %>`, never `<%= t('…') %>`.
+- The workers import no i18n at all, and cannot silently send an email in the boot language.
+- A template that grows a line grows a field in the one `emails.ts` that builds it — and a variable that is never supplied is an EJS `ReferenceError`, not a blank line.
+- `tests/unit/infrastructure/adapters/mailer-templates.test.ts` renders every template, in every supported locale, through those builders — which is where a missing key surfaces.
 
 ### Using a hosted provider
 

@@ -1,12 +1,12 @@
 # Contract-Derived Request Data
 
-[Contract Testing](./contract-testing.md) answers "does the _response_ match `openapi.yaml`?" This page is the mirror image, and structurally different rather than just "the same idea applied to requests": for every write endpoint, does the API accept every payload its own contract declares legal, and reject exactly what it declares illegal? Neither question can be answered by hand-written factories (`tests/helpers/factories/*`) — they encode one known-good scenario each. This layer generates data **from the contract itself**, so it can ask "for _any_ legal input", not "for this one".
+[Contract Testing](./contract-testing.md) answers "does the _response_ match `openapi.yaml`?" This page is the mirror image, and structurally different rather than just "the same idea applied to requests": for every write endpoint, does the API accept every payload its own contract declares legal, and reject exactly what it declares illegal? Neither question can be answered by hand-written factories (`tests/support/factories/*`) — they encode one known-good scenario each. This layer generates data **from the contract itself**, so it can ask "for _any_ legal input", not "for this one".
 
 ## Tools
 
 | Tool                                                                                              | Role                                                                                                                            |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/helpers/contract-data.ts`                                                                  | An in-repo zod v4 AST walker — `validPayload(schema)` / `invalidPayloads(schema)`                                               |
+| `tests/support/contract-data.ts`                                                                  | An in-repo zod v4 AST walker — `validPayload(schema)` / `invalidPayloads(schema)`                                               |
 | zod v4's `_zod.def`                                                                               | Zod's own typed, public introspection surface (not an implementation-detail hack) — see `node_modules/zod/v4/core/schemas.d.ts` |
 | A hand-rolled Mulberry32 PRNG                                                                     | Deterministic, seeded, reproducible fixture values — see "Why not `@faker-js/faker`"                                            |
 | [Jest](https://jestjs.io/) + [jest-openapi](https://github.com/openapi-library/OpenAPIValidators) | Same runner and response-shape matcher as [Contract Testing](./contract-testing.md)                                             |
@@ -21,7 +21,7 @@ Tried first, and worth documenting because the failure is instructive. `@faker-j
 
 ```
 SyntaxError: Cannot use import statement outside a module
-    at tests/helpers/contract-data.ts:22:1
+    at tests/support/contract-data.ts:22:1
     import { faker } from '@faker-js/faker';
 ```
 
@@ -112,7 +112,7 @@ The walker only knows what a zod schema can express. Two things it structurally 
 
 ## Real findings, left as findings
 
-Running this against the current API surfaced genuine, pre-existing drift between `openapi.yaml` and the hand-written validators layered on top of the generated schemas (`src/models/{users,products}.ts` extend `CreateUserBody`/`CreateProductBody` with additional rules). None are fixed by this test file — closing a spec/validator gap means either loosening the spec or tightening the validator (or, for the one 500, fixing a crash), and that's a call for whoever owns the endpoint, not something a test file should paper over by generating a "nicer" payload to dodge the finding.
+Running this against the current API surfaced genuine, pre-existing drift between `openapi.yaml` and the hand-written validators layered on top of the generated schemas (`src/modules/users/validation.ts` and `src/modules/products/model.ts` extend `CreateUserBody`/`CreateProductBody` with additional rules). None are fixed by this test file — closing a spec/validator gap means either loosening the spec or tightening the validator (or, for the one 500, fixing a crash), and that's a call for whoever owns the endpoint, not something a test file should paper over by generating a "nicer" payload to dodge the finding.
 
 | Endpoint / field                                                              | Spec says         | Validator actually does                                                                                                                                         |
 | ----------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -134,7 +134,7 @@ Worth remembering when extending the walker: `unwrapField` had handled `'default
 
 | Path                                      | Contents                                                                                                                                                                                          |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/helpers/contract-data.ts`          | The walker: `validPayload`, `invalidPayloads`, the PRNG, the zod introspection helpers                                                                                                            |
+| `tests/support/contract-data.ts`          | The walker: `validPayload`, `invalidPayloads`, the PRNG, the zod introspection helpers                                                                                                            |
 | `tests/contract/request-contract.test.ts` | One `describe` per write endpoint (`/users`, `/products`, `/orders`, `/cart`, `/feedback/contact`, `/account/signup`, `/account/login`); the endpoint-specific glue lives here, not in the walker |
 | `api/schemas.zod.ts`                      | The generated `*Body` schemas this file walks                                                                                                                                                     |
 

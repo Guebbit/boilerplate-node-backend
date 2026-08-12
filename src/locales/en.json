@@ -1,56 +1,4 @@
 {
-    "login": {
-        "invalid-data": "Inserted data are invalid.",
-        "wrong-data": "Invalid email or password.",
-        "success": "Login successful."
-    },
-    "signup": {
-        "email-already-used": "Email was already used.",
-        "registration-successful": "Registration successful, confirm via email to login.",
-        "password-dont-match": "Confirmation password must be the same of password.",
-        "user-field-email-required": "Email is required",
-        "user-field-email-invalid": "Not a valid email",
-        "user-field-username-required": "Username is required",
-        "user-field-username-min": "Name is too short",
-        "user-field-password-required": "Password is required",
-        "user-field-password-min": "Password is too short"
-    },
-    "reset": {
-        "email-not-found": "No user associated with the inserted email was found.",
-        "token-not-found": "Invalid or expired token, please try again.",
-        "email-sent": "An email with a link was sent, click to reset password.",
-        "success": "Password changed, login with the new password."
-    },
-    "delete": {
-        "email-sent": "A confirmation email has been sent. Click the link to confirm account deletion.",
-        "token-not-found": "Invalid or expired token, please try again.",
-        "success": "Account permanently deleted."
-    },
-    "ecommerce": {
-        "product-not-found": "The requested product was not found.",
-        "product-field-title-required": "Title is required",
-        "product-field-title-min": "Title is too short",
-        "product-field-price-invalid": "Price is missing or invalid",
-        "product-field-price-min": "Price cannot be negative",
-        "product-added-to-cart": "Product successfully added to cart.",
-        "product-hard-deleted": "Product was permanently deleted.",
-        "product-soft-deleted": "Product was soft deleted (users only).",
-        "product-was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts.",
-        "user-not-found": "The requested user was not found.",
-        "user-hard-deleted": "User was permanently deleted.",
-        "user-soft-deleted": "User was soft deleted (deactivated).",
-        "order-not-found": "The requested order was not found",
-        "order-hard-deleted": "Order was permanently deleted.",
-        "order-soft-deleted": "Order was soft deleted (hidden from the customer).",
-        "order-creation-success": "Order created with success.",
-        "order-creation-failure": "Order creation failed.",
-        "order-invoice-missing": "No invoice file was found",
-        "cart-product-removed": "Product removed from cart.",
-        "cart-emptied": "All products removed from cart.",
-        "cart-changed": "Your cart changed while the order was being placed. Check it and try again.",
-        "cart-empty": "Your cart is empty.",
-        "cart-product-unavailable": "One or more products in your cart are no longer available."
-    },
     "generic": {
         "error-unknown": "Something went wrong with the request.",
         "error-invalid-data": "Error: invalid data provided.",
@@ -58,71 +6,9 @@
         "error-internal": "Something went wrong on our side.",
         "error-unauthorized": "You are not signed in, or your session has expired.",
         "error-forbidden": "You do not have permission to do that.",
-        "error-not-found": "That feedback request no longer exists."
-    },
-    "observability": {
-        "audit-since-invalid": "The \"since\" filter must be a valid ISO-8601 timestamp."
+        "error-not-found": "That item no longer exists."
     },
     "email": {
-        "footer": "Sent by the Ecommerce Demo team.",
-        "registration-confirm": {
-            "subject": "Welcome — your account is ready",
-            "meta-title": "Registration successful",
-            "title": "Welcome aboard {{name}}!",
-            "body": "Your registration was successful."
-        },
-        "reset-request": {
-            "subject": "Password reset",
-            "meta-title": "Password reset requested",
-            "greeting": "Hello, {{name}}!",
-            "intro": "We received a request to reset your password.",
-            "cta": "Click this link to set a new password.",
-            "link-label": "Reset my password",
-            "ignore": "If you did not request this, you can safely ignore this email."
-        },
-        "reset-confirm": {
-            "subject": "Your password was changed",
-            "meta-title": "Password reset",
-            "greeting": "Hello, {{name}}!",
-            "body": "Your password has been reset."
-        },
-        "delete-request": {
-            "subject": "Confirm account deletion",
-            "meta-title": "Account deletion requested",
-            "greeting": "Hello, {{name}}!",
-            "intro": "We received a request to permanently delete your account.",
-            "cta": "Click this link to confirm account deletion.",
-            "link-label": "Confirm deletion",
-            "ignore": "If you did not request this, you can safely ignore this email."
-        },
-        "delete-confirm": {
-            "subject": "Your account has been deleted",
-            "meta-title": "Account deleted",
-            "greeting": "Hello, {{name}}!",
-            "body": "Your account has been permanently deleted.",
-            "farewell": "We're sorry to see you go. If this was a mistake, please contact support."
-        },
-        "order-confirm": {
-            "subject": "Order confirmed",
-            "meta-title": "Order confirmed",
-            "greeting": "Hello, {{name}}!",
-            "body": "Your order has been confirmed."
-        },
-        "feedback-contact": {
-            "subject": "New contact request",
-            "meta-title": "New contact request",
-            "title": "New contact request",
-            "label-name": "Name",
-            "label-email": "Email",
-            "label-subject": "Subject",
-            "label-message": "Message",
-            "label-created-at": "Created at",
-            "not-available": "N/A"
-        }
-    },
-    "invoice": {
-        "meta-title": "Invoice — order {{order}}",
-        "title": "The order has been confirmed",
-        "line": "{{title}} — {{quantity}} × {{price}}"
+        "footer": "Sent by the Ecommerce Demo team."
     }
 }

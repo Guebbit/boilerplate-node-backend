@@ -274,21 +274,42 @@ describe('formatSharedFileProblems', () => {
     it('tells the reader what to do about it', () => {
         const here = root(sharedFiles(HERE));
         const there = root(sharedFilesWith(THERE, OPENAPI, 'forked'));
+        const message = formatSharedFileProblems(compareSharedFiles(there, here, HERE), there);
 
-        expect(formatSharedFileProblems(compareSharedFiles(there, here, HERE), there)).toContain(
-            'npm run genapi'
-        );
+        expect(message).toContain('npm run genapi');
+        // Seven of the eleven are assembled from per-module fragments in the backend, so "copy
+        // whichever side is right" is the wrong instruction for them: the fix is to re-bundle
+        // there and copy the result. A message that omitted that invites a hand-edit the next
+        // `contracts:bundle` silently reverts.
+        expect(message).toContain('npm run contracts:bundle');
     });
 });
 
 /*
- * The live pair. Conditional, and loud about being conditional — see the file header.
+ * The live pair.
+ *
+ * Conditional on the sibling being checked out, because a clone with only this repo is a normal
+ * way to work — but NOT silently. A `describe.skip` reads as green, and the one guard that would
+ * have caught a forked contract is exactly the guard nobody notices going missing.
+ *
+ * So the absence is asserted rather than assumed: locally it says so out loud, and under `CI` it
+ * fails, because a pipeline that checks out one half of a pair and reports success on the shared
+ * contract is reporting something it did not check.
  */
 const siblingRoot = resolveFrontendPath();
-const describeIfSibling = existsSync(siblingRoot) ? describe : describe.skip;
+const siblingPresent = existsSync(siblingRoot);
 
-describeIfSibling(`the paired frontend at ${siblingRoot}`, () => {
-    it('carries byte-identical copies of every shared file', () => {
+describe(`the paired frontend at ${siblingRoot}`, () => {
+    it('is checked out, or this suite is knowingly incomplete', () => {
+        if (siblingPresent) return;
+
+        const message = `Shared-contract checks skipped: no sibling repo at ${siblingRoot}.`;
+        // eslint-disable-next-line no-console
+        if (!process.env.CI) console.warn(`⚠️  ${message}`);
+        expect(process.env.CI ? message : '').toBe('');
+    });
+
+    (siblingPresent ? it : it.skip)('carries byte-identical copies of every shared file', () => {
         const comparisons = compareSharedFiles(siblingRoot);
 
         expect(formatSharedFileProblems(comparisons, siblingRoot)).toBe('');

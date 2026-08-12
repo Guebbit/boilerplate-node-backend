@@ -29,7 +29,6 @@ export interface IEmailJobPayload {
   'from'?: string;
   'templateName': string;
   'data': Record<string, unknown>;
-  'locale'?: string;
 }
 export interface IAnonymousSchema13 {
   'to': string;
@@ -40,7 +39,6 @@ export interface IAnonymousSchema13 {
 export interface IPdfJobPayload {
   'templatePath': string;
   'templateData': Record<string, unknown>;
-  'locale'?: string;
   'outputPath': string;
 }
 

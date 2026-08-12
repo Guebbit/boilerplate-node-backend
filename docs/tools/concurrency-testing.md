@@ -48,7 +48,7 @@ The whole point of a race is that some participants lose, and **losing is the co
 
 **Rate limiting.** `authRateLimiter` is mounted on exactly the endpoints these tests hammer — signup, login, reset — at ten per IP per window. At that budget a ten-participant signup race sits exactly on the limit and twelve starts returning 429s.
 
-The trap is that the test still **passes**: "not two users" is trivially true when two of the requests never reached the handler. So the limits are raised in `tests/helpers/setup.ts`, and the shared assertion rejects a 429 explicitly rather than lumping it into "not a success". One case keeps a small, freshly-constructed limiter to prove the budget is still enforced rather than switched off.
+The trap is that the test still **passes**: "not two users" is trivially true when two of the requests never reached the handler. So the limits are raised in `tests/support/setup.ts`, and the shared assertion rejects a 429 explicitly rather than lumping it into "not a success". One case keeps a small, freshly-constructed limiter to prove the budget is still enforced rather than switched off.
 
 **`--runInBand`.** It serialises test _files_, not the requests inside a test. `Promise.allSettled` is still genuinely concurrent. Removing the flag would not make these "more concurrent" — it would make them flaky for an unrelated reason, because parallel jest workers would share one in-memory Mongo.
 
@@ -110,8 +110,8 @@ A race test that never actually races is a green test that measured nothing. Eac
 | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `tests/integration/concurrency/auth-races.test.ts` | Signup, login, token revocation, one-time reset tokens, and the limiter proof         |
 | `tests/integration/concurrency/cart-races.test.ts` | Cart upsert under contention, checkout, account deletion racing a cart write          |
-| `tests/helpers/race.ts`                            | `raceN`, status helpers, and the shared "no 5xx, no 429, nobody hung up" assertion    |
-| `tests/helpers/setup.ts`                           | Where the rate-limit budgets are raised, and why they are raised rather than disabled |
+| `tests/support/race.ts`                            | `raceN`, status helpers, and the shared "no 5xx, no 429, nobody hung up" assertion    |
+| `tests/support/setup.ts`                           | Where the rate-limit budgets are raised, and why they are raised rather than disabled |
 
 Run with `npm run test:integration` — they are part of the ordinary integration suite, not a separate command, because they gate merges like the rest of it.
 

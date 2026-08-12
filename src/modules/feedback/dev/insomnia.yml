@@ -1,0 +1,113 @@
+  - name: Feedback
+    meta:
+      id: fld_ef15f48c9654b85784a3d96bfb98df6d
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 5000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/feedback/contact"
+        name: Submit contact request
+        meta:
+          id: req_9fe5dd20f7223bb7971d3f9f5e7e71d5
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Submit contact request
+          sortKey: 5001
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "string",
+              "email": "gino@pino.it",
+              "subject": "string",
+              "message": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/feedback"
+        name: List feedback requests
+        meta:
+          id: req_03a59163d0d7551f18d387721447e82d
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: List feedback requests
+          sortKey: 5002
+        method: GET
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "page": 1,
+              "pageSize": 10,
+              "text": "Sallyno Panino",
+              "status": "new",
+              "email": "gino@pino.it"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/feedback/65de73a69ca05739be2b5e85"
+        name: Update feedback request status
+        meta:
+          id: req_1ad754b994545e4663c4c4a3d07248d4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Update feedback request status
+          sortKey: 5003
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "status": "new",
+              "adminNotes": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

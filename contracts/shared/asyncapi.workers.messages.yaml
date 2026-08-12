@@ -1,0 +1,24 @@
+        EmailJobMessage:
+            name: EmailJobMessage
+            messageId: worker.email.send
+            title: Email delivery job
+            payload:
+                $ref: '#/components/schemas/EmailJobPayload'
+        PdfJobMessage:
+            name: PdfJobMessage
+            messageId: worker.pdf.generate
+            title: PDF generation job
+            payload:
+                $ref: '#/components/schemas/PdfJobPayload'
+        EmailJobConsumeMessage:
+            name: EmailJobConsumeMessage
+            messageId: worker.email.job.consume
+            title: Email delivery job (worker consume)
+            payload:
+                $ref: '#/components/schemas/EmailJobPayload'
+        PdfJobConsumeMessage:
+            name: PdfJobConsumeMessage
+            messageId: worker.pdf.job.consume
+            title: PDF generation job (worker consume)
+            payload:
+                $ref: '#/components/schemas/PdfJobPayload'

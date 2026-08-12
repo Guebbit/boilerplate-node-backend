@@ -1,0 +1,33 @@
+  - name: System
+    meta:
+      id: fld_317f1e761f2faa8da781a4762b9dcc2c
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 0
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/"
+        name: API health check
+        meta:
+          id: req_d20f64acc6e70b6079845f2fe3577329
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: API health check
+          sortKey: 1
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

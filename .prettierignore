@@ -2,3 +2,17 @@ api
 .prism
 .dev
 src/types/asyncapi.ts
+
+# Contract fragments are verbatim SLICES of a committed document, not standalone files: each one
+# starts at the indentation it holds inside its parent, and several are not even parseable alone —
+# half an object literal, a folder out of a YAML list, a run of JSON array entries. Prettier would
+# dedent, re-quote and re-comma them, and every bundle is asserted byte-identical against its
+# committed output, so formatting a fragment would corrupt the very thing it builds.
+#
+# The BUNDLES are formatted as normal, which is what keeps the fragments honest: a slice that
+# prettier would have changed shows up as a diff in the document it lands in.
+contracts/shared/*
+src/modules/*/openapi/*.yaml
+src/modules/*/asyncapi/*.yaml
+src/modules/*/dev/*
+**/*.fragment.ts

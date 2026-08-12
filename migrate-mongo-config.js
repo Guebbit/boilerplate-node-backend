@@ -2,14 +2,14 @@ require('dotenv').config();
 
 /**
  * Fallback database name when only host/port are configured.
- * Mirrors `DEFAULT_DATABASE_NAME` in `src/core/bootstrap/database.ts`.
+ * Mirrors `DEFAULT_DATABASE_NAME` in `src/infrastructure/bootstrap/database.ts`.
  */
 const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
 
 /**
  * Resolve the Mongo URI exactly as the application does.
  *
- * This duplicates `getDatabaseUri()` from `src/core/bootstrap/database.ts` because it cannot
+ * This duplicates `getDatabaseUri()` from `src/infrastructure/bootstrap/database.ts` because it cannot
  * import it: migrate-mongo loads this file through its own CommonJS resolver, with no TypeScript
  * in the chain. The duplication is deliberate and pinned — `tests/unit/db/host-scripts.test.ts`
  * runs both implementations over the same env matrix and fails if they ever disagree.

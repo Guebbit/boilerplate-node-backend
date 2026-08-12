@@ -6,13 +6,13 @@
         "paths": {
             "@types": ["./src/types"],
             "@api/*": ["./api/*"],
-            "@controllers/*": ["./src/controllers/*"],
-            "@services/*": ["./src/services/*"],
-            "@repositories/*": ["./src/repositories/*"],
-            "@models/*": ["./src/models/*"],
-            "@middlewares/*": ["./src/middlewares/*"],
-            "@jobs/*": ["./src/jobs/*"],
-            "@core/*": ["./src/core/*"]
+            "@seed-identities": ["./db/seeds/seed-identities"],
+            "@tests/*": ["./tests/support/*"],
+            "@app/*": ["./src/app/*"],
+
+            "@infrastructure/*": ["./src/infrastructure/*"],
+            "@kernel/*": ["./src/kernel/*"],
+            "@modules/*": ["./src/modules/*"]
         },
         "strict": true,
         "composite": true,
@@ -29,7 +29,18 @@
         "types": ["node", "jest"],
         "typeRoots": ["./src/types", "./node_modules/@types"]
     },
-    "exclude": ["node_modules"],
+    /*
+     * Contract fragments are verbatim SLICES of a committed document — a run of object entries, a
+     * group of declarations whose credentials are declared in the header fragment, a handful of
+     * JSON array entries with no array around them — assembled by `npm run contracts:bundle`. They
+     * are text, not modules: nothing imports one, and none is valid alone. The per-module dev
+     * directory needs its own entry — spelled in words here, because a glob's wildcard-then-slash
+     * would close this comment — since `resolveJsonModule` puts `src` JSON in the program too, and
+     * half a Mockoon collection parses as neither JSON nor TypeScript.
+     *
+     * The bundles they build ARE compiled, which is where a broken slice shows up.
+     */
+    "exclude": ["node_modules", "**/*.fragment.ts", "src/modules/*/dev/**"],
     "include": [
         "api/**/*.ts",
         "src/*.ts",

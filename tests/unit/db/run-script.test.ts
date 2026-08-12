@@ -6,11 +6,11 @@
  * leaves its Mongo and Redis sockets open on a throw, and the process hangs instead of exiting.
  */
 import { runScript } from '../../../db/run-script';
-import { logger } from '@core/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 
 // Inline `jest.fn()`s rather than outer consts: `jest.mock` is hoisted above the imports, so a
 // factory closing over a `const` would read it before initialisation.
-jest.mock('@core/adapters/logger', () => ({
+jest.mock('@infrastructure/adapters/logger', () => ({
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 

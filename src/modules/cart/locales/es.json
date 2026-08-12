@@ -1,0 +1,10 @@
+{
+    "cart": {
+        "changed": "Tu carrito cambió mientras se realizaba el pedido. Revísalo e inténtalo de nuevo.",
+        "emptied": "Se han eliminado todos los productos del carrito.",
+        "empty": "Tu carrito está vacío.",
+        "product-removed": "Producto eliminado del carrito.",
+        "product-unavailable": "Uno o más productos de tu carrito ya no están disponibles.",
+        "product-added": "Producto añadido al carrito."
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "orders": {
+        "not-found": "L'ordine richiesto non è stato trovato",
+        "hard-deleted": "L'ordine è stato eliminato definitivamente.",
+        "soft-deleted": "L'ordine è stato eliminato logicamente (nascosto al cliente).",
+        "creation-success": "Ordine creato con successo.",
+        "creation-failure": "Creazione dell'ordine fallita.",
+        "invoice-missing": "Nessun file fattura è stato trovato",
+        "invoice": {
+            "meta-title": "Fattura — ordine {{order}}",
+            "title": "L'ordine è stato confermato",
+            "line": "{{title}} — {{quantity}} × {{price}}"
+        },
+        "email-confirm": {
+            "subject": "Ordine confermato",
+            "meta-title": "Ordine confermato",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo ordine è stato confermato."
+        }
+    }
+}

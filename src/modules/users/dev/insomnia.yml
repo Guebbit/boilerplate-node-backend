@@ -1,0 +1,297 @@
+  - name: Users
+    meta:
+      id: fld_5b7dcd14a4faa2cdd54cf6eb8d4bc35d
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 4000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/users"
+        name: List users (paginated)
+        meta:
+          id: req_8ba2caafd63c17ba2307b4f8f3173662
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: List users (paginated)
+          sortKey: 4001
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users"
+        name: Create user
+        meta:
+          id: req_137fafc179d76e970a73b460949c25ed
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Create user
+          sortKey: 4002
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "gino@pino.it",
+              "username": "ginopinoshow",
+              "password": "password",
+              "admin": false,
+              "active": true,
+              "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+              "locale": "it"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users"
+        name: Edit user
+        meta:
+          id: req_794c78c6dc992305b314312980ad45f2
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Edit user
+          sortKey: 4003
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": "65dc8a99604c307b702b5ccc",
+              "email": "gino@pino.it",
+              "username": "ginopinoshow",
+              "password": "password",
+              "admin": false,
+              "active": true,
+              "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+              "locale": "it"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users"
+        name: Delete user
+        meta:
+          id: req_bc1363c370b5ec3dea31e7a4b0d0120e
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Delete user
+          sortKey: 4004
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "id": "65dc8a99604c307b702b5ccc",
+              "hardDelete": false
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users/65de646a44f861fd83c13f13"
+        name: User details
+        meta:
+          id: req_2a1261aa1755d62535d936c940b5217e
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: User details
+          sortKey: 4005
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users/65de646a44f861fd83c13f13"
+        name: Edit user
+        meta:
+          id: req_7b2e64b71edacfcaa26adc0f61dd2e05
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Edit user
+          sortKey: 4006
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "gino@pino.it",
+              "password": "password",
+              "username": "ginopinoshow",
+              "admin": false,
+              "active": true,
+              "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users/65de646a44f861fd83c13f13"
+        name: Delete user
+        meta:
+          id: req_9b723326889f35317bab7ce4c03492eb
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Delete user
+          sortKey: 4007
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "hardDelete": false
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users/65de646a44f861fd83c13f13/hard"
+        name: Permanently delete user
+        meta:
+          id: req_c43a31920896a82649fd570c2af734d1
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Permanently delete user
+          sortKey: 4008
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/users/search"
+        name: Search users (DTO-friendly)
+        meta:
+          id: req_9072a7725523caf42d6229d94cbfac8a
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Search users (DTO-friendly)
+          sortKey: 4009
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "page": 1,
+              "pageSize": 10,
+              "text": "Sallyno Panino",
+              "id": "65dc8a99604c307b702b5ccc",
+              "email": "gino@pino.it",
+              "username": "ginopinoshow",
+              "active": true
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

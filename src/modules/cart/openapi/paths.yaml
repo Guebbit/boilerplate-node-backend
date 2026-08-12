@@ -1,0 +1,158 @@
+    /cart:
+        get:
+            tags: [Cart]
+            summary: Get cart
+            description: Returns all items currently in the authenticated user's cart along with a computed summary
+            operationId: getCart
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Cart items
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Cart]
+            summary: Add/Edit cart item
+            description: Adds or edit a product to the authenticated user's cart. Returns the updated cart.
+            operationId: upsertCartItem
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertCartItemRequest'
+            responses:
+                '200':
+                    description: Add/Edit to cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed product id that matches no product. 422 covers the malformed case.
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Cart]
+            summary: Empty cart or, if productId is set, remove target cart item
+            description: Clear cart or, ir productId is set, removes a specific product from the authenticated user's cart. Returns the updated cart (can be empty)
+            operationId: clearCart
+            security:
+                - bearerAuth: []
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RemoveCartItemRequest'
+            responses:
+                '200':
+                    description: Cart cleared
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart/{productId}:
+        # Same as POST /cart?productId={productId}
+        put:
+            tags: [Cart]
+            summary: Set cart item quantity
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
+            operationId: updateCartItemById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/ProductIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateCartItemByIdRequest'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Cart]
+            summary: Remove item from cart
+            description: Removes the cart line for the product identified by `{productId}` in the path from the authenticated user's cart. Returns the updated cart.
+            operationId: removeCartItem
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart/summary:
+        get:
+            tags: [Cart]
+            summary: Get cart summary
+            description: Returns a lightweight summary of the authenticated user's cart.
+            operationId: getCartSummary
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Cart summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartSummaryResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart/checkout:
+        post:
+            tags: [Orders]
+            summary: Checkout (place order from cart)
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. An optional email address and order notes can be supplied in the request body. Returns the created order.
+            operationId: checkout
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CheckoutRequest'
+            responses:
+                '201':
+                    description: Order created
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CheckoutResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Checking out an empty cart. The implementation has always answered 409;
+                # the spec simply never declared it.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+

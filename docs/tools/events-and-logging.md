@@ -1,7 +1,7 @@
 # Events & Logging
 
 Seven things in this codebase can be described as "recording that something happened", and they
-are easy to confuse — several live side by side in `src/core/observability/`, and three of them
+are easy to confuse — several live side by side in `src/infrastructure/observability/`, and three of them
 are declared in the same `asyncapi.yaml`. This page is the map: what each one is, where it ends
 up, who reads it, and which to reach for.
 
@@ -9,15 +9,15 @@ If you only remember one thing: **pick by who reads it**, not by what happened.
 
 ## The signals at a glance
 
-| Signal                | Entry point                                                 | Where it goes                                            | Who reads it               | Detailed page                                                       |
-| --------------------- | ----------------------------------------------------------- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| **Application log**   | `logger` — `@core/adapters/logger`                          | stdout → Promtail → Loki                                 | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
-| **Audit trail**       | `emitAuditEvent` — `@core/observability/audit`              | `auditLogger` → stdout → Loki, **and** Mongo `auditlogs` | admins, compliance         | [Winston & Audit Logs](./winston.md#audit-events)                   |
-| **Product analytics** | `emitAnalyticsEvent` — `@core/observability/analytics`      | PostHog                                                  | product, marketing         | [PostHog](./posthog.md)                                             |
-| **Metrics**           | counters in `metrics-http.ts` / `metrics-domain.ts`         | Prometheus registry → `GET /observability/metrics`       | ops, alerting              | [Prometheus](./prometheus.md)                                       |
-| **Traces**            | `withSpan` — `@core/observability/tracer`                   | OTel Collector → Tempo                                   | you, debugging across hops | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md)           |
-| **Live metrics feed** | `streamObservabilityMetrics` — `@core/observability/stream` | SSE frames on `GET /observability/events`                | the admin dashboard        | [Frontend Observability](./frontend-observability.md)               |
-| **Queue jobs**        | `enqueueEmail`, `publishToQueue` — `@core/adapters/*`       | RabbitMQ → `src/workers/*`                               | the workers themselves     | [RabbitMQ](./rabbitmq.md) · [Email & PDF](./email-and-rendering.md) |
+| Signal                | Entry point                                                           | Where it goes                                            | Who reads it               | Detailed page                                                       |
+| --------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| **Application log**   | `logger` — `@infrastructure/adapters/logger`                          | stdout → Promtail → Loki                                 | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
+| **Audit trail**       | `emitAuditEvent` — `@infrastructure/observability/audit`              | `auditLogger` → stdout → Loki, **and** Mongo `auditlogs` | admins, compliance         | [Winston & Audit Logs](./winston.md#audit-events)                   |
+| **Product analytics** | `emitAnalyticsEvent` — `@infrastructure/observability/analytics`      | PostHog                                                  | product, marketing         | [PostHog](./posthog.md)                                             |
+| **Metrics**           | counters in `metrics-http.ts` / each module's `metrics.ts`            | Prometheus registry → `GET /observability/metrics`       | ops, alerting              | [Prometheus](./prometheus.md)                                       |
+| **Traces**            | `withSpan` — `@infrastructure/observability/tracer`                   | OTel Collector → Tempo                                   | you, debugging across hops | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md)           |
+| **Live metrics feed** | `streamObservabilityMetrics` — `@infrastructure/observability/stream` | SSE frames on `GET /observability/events`                | the admin dashboard        | [Frontend Observability](./frontend-observability.md)               |
+| **Queue jobs**        | `enqueueEmail`, `publishToQueue` — `@infrastructure/adapters/*`       | RabbitMQ → `src/infrastructure/adapters/*.worker.ts`     | the workers themselves     | [RabbitMQ](./rabbitmq.md) · [Email & PDF](./email-and-rendering.md) |
 
 Only the last two cross a process boundary. The rest are one-way recordings that never come back.
 
@@ -55,8 +55,9 @@ from the API, with no log backend wired up. It carries a TTL index
 (`NODE_AUDIT_RETENTION_DAYS`, default 90 days) and is allowed to fail: if the write rejects, the
 request continues and the log line has already gone out.
 
-Why a sink rather than a direct call — `src/core/**` is the bottom of the dependency graph and
-`no-restricted-imports` forbids it from reaching up into `@repositories/*`. So `audit.ts` declares
+Why a sink rather than a direct call — `src/infrastructure/**` is the bottom of the dependency graph and
+`no-restricted-imports` forbids it from reaching up into `@modules/*`, where the audit repository
+now lives. So `audit.ts` declares
 the port and `app.ts` supplies the implementation at boot, the same shape as `IImageStore`. The
 practical payoff: swapping the destination touches one line in `app.ts`, not the 53 call sites.
 

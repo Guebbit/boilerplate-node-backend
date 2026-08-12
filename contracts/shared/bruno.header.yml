@@ -1,0 +1,14 @@
+opencollection: 1.0.0
+info:
+  name: Ecommerce Demo API
+config:
+  environments:
+    - name: Local
+      variables:
+        - name: baseUrl
+          value: http://localhost:3000
+    - name: Production
+      variables:
+        - name: baseUrl
+          value: https://api.example.com
+items:

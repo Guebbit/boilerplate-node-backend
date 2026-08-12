@@ -12,15 +12,15 @@
 
 ## Where the code lives
 
-| Concern              | File                                             |
-| -------------------- | ------------------------------------------------ |
-| Connection & helpers | `src/core/adapters/queue.ts`                     |
-| Queue-aware dispatch | `src/core/adapters/mailer.ts` → `enqueueEmail()` |
-| Email worker         | `src/workers/email.worker.ts`                    |
-| PDF worker           | `src/workers/pdf.worker.ts`                      |
-| Worker registration  | `src/workers/index.ts`                           |
-| Startup hook         | `src/app.ts` → `startQueue` + `registerWorkers`  |
-| Shutdown hook        | `src/app.ts` → `stopQueue`                       |
+| Concern              | File                                                       |
+| -------------------- | ---------------------------------------------------------- |
+| Connection & helpers | `src/infrastructure/adapters/queue.ts`                     |
+| Queue-aware dispatch | `src/infrastructure/adapters/mailer.ts` → `enqueueEmail()` |
+| Email worker         | `src/infrastructure/adapters/email.worker.ts`              |
+| PDF worker           | `src/infrastructure/adapters/pdf.worker.ts`                |
+| Worker registration  | `src/app/workers.ts`                                       |
+| Startup hook         | `src/app.ts` → `startQueue` + `registerWorkers`            |
+| Shutdown hook        | `src/app.ts` → `stopQueue`                                 |
 
 ## Architecture
 
@@ -46,7 +46,7 @@ flowchart LR
 
 ### Emails (fire-and-forget)
 
-All controllers that send emails use `enqueueEmail()` from `src/core/adapters/mailer.ts`:
+All controllers that send emails use `enqueueEmail()` from `src/infrastructure/adapters/mailer.ts`:
 
 - **Queue enabled** → the email job is published to the `emails` queue. The `email.worker.ts` consumer picks it up and calls `nodemailer()` in the background.
 - **Queue disabled** → falls back to calling `nodemailer()` directly (same behavior as before).
@@ -109,7 +109,7 @@ The `docker-compose.yml` includes a `rabbitmq` service with the management plugi
 ### Publishing a message
 
 ```ts
-import { publishToQueue } from '@core/adapters/queue';
+import { publishToQueue } from '@infrastructure/adapters/queue';
 
 // Inside a controller or service:
 await publishToQueue({
@@ -121,7 +121,7 @@ await publishToQueue({
 ### Consuming messages
 
 ```ts
-import { consumeFromQueue } from '@core/adapters/queue';
+import { consumeFromQueue } from '@infrastructure/adapters/queue';
 
 consumeFromQueue({
     queue: 'emails',
@@ -156,7 +156,7 @@ consumeFromQueue({
 
 ## External references
 
-- [amqplib channel API](https://amqp-node.github.io/amqplib/channel_api.html) — the client library used in `src/core/adapters/queue.ts`
+- [amqplib channel API](https://amqp-node.github.io/amqplib/channel_api.html) — the client library used in `src/infrastructure/adapters/queue.ts`
 - [RabbitMQ tutorials (Node.js)](https://www.rabbitmq.com/tutorials) — queue patterns with code examples
 
 ## Related pages

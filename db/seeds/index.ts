@@ -1,9 +1,11 @@
 /*
  * Demo data seeder.
  *
- * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA. `./fixtures` is the single source of the demo
- * dataset; this file is the RUNNER — connection, upsert policy and production gate, nothing else.
- * The data lives next door precisely so it can be read without any of that happening.
+ * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA. Each module owns its own slice of the demo
+ * dataset in `src/modules/<name>/seeds.ts`; this file is the RUNNER — connection, production gate
+ * and the walk over `enabledModules`, nothing else. The upsert policy lives in
+ * `@infrastructure/persistence/seed`, and the shared facts behind every fixture live in `./seed-identities`,
+ * which is byte-identical with the paired frontend.
  *
  * It runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so
  * it must be:
@@ -11,8 +13,8 @@
  *   - IDEMPOTENT — fixed `_id`s are upserted, not created, so a second run is a no-op
  *   - GATED — refuses to touch a production database
  *
- * Note what idempotent means here: `upsert()` SKIPS a fixture whose `_id` already exists, it does
- * not rewrite it. So re-running this does NOT repair a database seeded before the fixtures' image
+ * Note what idempotent means here: `upsertById()` SKIPS a fixture whose `_id` already exists, it
+ * does not rewrite it. So re-running this does NOT repair a database seeded before the fixtures' image
  * URLs were corrected — `db/migrations/20260806140000-image-url-separators.js` does that.
  *
  * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
@@ -24,57 +26,13 @@
  *   npm run db:seed:reset    # drop the database first
  */
 import 'dotenv/config';
-import { Types } from 'mongoose';
-import { start, connection } from '@core/bootstrap/database';
-import { userRepository } from '@repositories/users';
-import { productRepository } from '@repositories/products';
-import { orderRepository } from '@repositories/orders';
-import { cartRepository } from '@repositories/carts';
-import type { IOrderDocument } from '@models/orders';
-import type { ICartDocument } from '@models/carts';
-import { clearCache, stopCache } from '@core/adapters/cache';
-import { logger } from '@core/adapters/logger';
+import { start, connection } from '@infrastructure/runtime/database';
+import { clearCache, stopCache } from '@infrastructure/adapters/cache';
+import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
-import { users, products, orders, carts } from './fixtures';
+import { enabledModules } from '../../src/modules';
 
 const reset = process.argv.includes('--reset');
-
-/*
- * Upsert one fixture by its fixed `_id`.
- *
- * Documents go through `save()` rather than `updateOne(..., { upsert: true })` so the model's
- * pre-save hooks still run — most importantly the bcrypt password hash, which a raw driver
- * write would skip (that is precisely how the old migration's password drifted).
- */
-const upsert = async (
-    repository: {
-        findById: (id: string) => PromiseLike<unknown>;
-        create: (data: never) => Promise<unknown>;
-    },
-    fixture: { _id: Types.ObjectId }
-): Promise<'created' | 'skipped'> => {
-    const existing = await repository.findById(fixture._id.toString());
-    if (existing) return 'skipped';
-    await repository.create(fixture as never);
-    return 'created';
-};
-
-/*
- * Upsert one cart fixture by its OWNER.
- *
- * Carts are the one collection here with no fixed `_id` to key on: `carts.userId` is unique, a
- * cart is addressed by whose it is, and no cart id ever reaches the wire — so there is nothing in
- * `seed-identities.ts` to pin.
- */
-const upsertCart = async (fixture: {
-    userId: Types.ObjectId;
-    items: { productId: Types.ObjectId; quantity: number }[];
-}): Promise<'created' | 'skipped'> => {
-    const existing = await cartRepository.findByUserId(fixture.userId.toString());
-    if (existing) return 'skipped';
-    await cartRepository.create(fixture as Partial<ICartDocument>);
-    return 'created';
-};
 
 async function seed() {
     /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
@@ -90,14 +48,19 @@ async function seed() {
         logger.info('Database dropped.');
     }
 
-    const results = await Promise.all([
-        ...users.map((user) => upsert(userRepository, user)),
-        ...products.map((product) => upsert(productRepository, product)),
-        ...orders.map((order) =>
-            upsert(orderRepository, order as Partial<IOrderDocument> & { _id: Types.ObjectId })
-        ),
-        ...carts.map((cart) => upsertCart(cart))
-    ]);
+    /*
+     * Every enabled module seeds its own collection. This runner names no domain: a module that
+     * declares `seeds` in its manifest gets called, one that does not is skipped, and deleting a
+     * module takes its demo data with it without touching this file.
+     *
+     * Concurrent on purpose, and safe to be: no fixture is derived from another fixture's WRITE.
+     * An order embeds a product snapshot built from `seed-identities`, not read back from Mongo,
+     * and a cart references a user id rather than requiring the user row to exist first.
+     */
+    const perModule = await Promise.all(
+        enabledModules.map((appModule) => appModule.seeds?.() ?? [])
+    );
+    const results = perModule.flat();
 
     const created = results.filter((result) => result === 'created').length;
 

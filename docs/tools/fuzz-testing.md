@@ -100,10 +100,10 @@ It also means a green PR is not a promise the fuzzer agrees — that is what the
 | Path                                | Contents                                                                                         |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `tests/fuzz/endpoints.fuzz.test.ts` | The driver: one jest case per operation, the two assertions, the self-tripwire                   |
-| `tests/helpers/spec-walk.ts`        | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
-| `tests/helpers/spec-arbitraries.ts` | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
-| `tests/helpers/http.ts`             | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |
-| `tests/helpers/contract.ts`         | Registers `toSatisfyApiSpec()` against `openapi.yaml` (imported for its side effect)             |
+| `tests/support/spec-walk.ts`        | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
+| `tests/support/spec-arbitraries.ts` | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
+| `tests/support/http.ts`             | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |
+| `tests/support/contract.ts`         | Registers `toSatisfyApiSpec()` against `openapi.yaml` (imported for its side effect)             |
 | `.github/workflows/fuzz.yml`        | The nightly schedule and manual dispatch                                                         |
 
 ## Commands

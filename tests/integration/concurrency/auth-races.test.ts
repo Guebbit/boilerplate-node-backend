@@ -26,15 +26,15 @@
  *   - signup:  20/20 runs saw at least one 409, i.e. the race was contended every time.
  *   - login:   before the R4 fix, 20/20 runs lost at least one token. After it, 0/20.
  *
- * `tests/helpers/race.ts` explains why `Promise.allSettled` and not `Promise.all`, why
+ * `tests/support/race.ts` explains why `Promise.allSettled` and not `Promise.all`, why
  * `--runInBand` is irrelevant to the concurrency inside a test, and why 429 is asserted against.
  */
-import { api } from '../../helpers/http';
-import { setupTestDb } from '../../helpers/setup-test-db';
-import { createUser, PLAIN_PASSWORD } from '../../helpers/factories/users';
-import { userRepository } from '@repositories/users';
-import { userModel, ETokenType } from '@models/users';
-import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '../../helpers/race';
+import { api } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { userRepository } from '@modules/users';
+import { userModel, ETokenType } from '@modules/users';
+import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
 setupTestDb();
 
@@ -200,7 +200,7 @@ describe('one-time tokens under contention', () => {
 
 describe('the limiter is raised for these suites, not disabled', () => {
     it('still refuses an unbounded run of failed logins', async () => {
-        // `tests/helpers/setup.ts` raises NODE_AUTH_RATE_LIMIT_MAX to 1000 so a race is not
+        // `tests/support/setup.ts` raises NODE_AUTH_RATE_LIMIT_MAX to 1000 so a race is not
         // silently truncated into a vacuous pass. This case is what keeps that from quietly
         // becoming "the limiter is off": the budget is large, finite, and still enforced.
         //
@@ -212,7 +212,7 @@ describe('the limiter is raised for these suites, not disabled', () => {
 
         const expressModule = await import('express');
         const supertestModule = await import('supertest');
-        const { authRateLimiter } = await import('@middlewares/security');
+        const { authRateLimiter } = await import('@infrastructure/http/middlewares/security');
         const express = expressModule.default;
         const supertest = supertestModule.default;
 

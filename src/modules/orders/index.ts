@@ -1,0 +1,24 @@
+/**
+ * Orders — public barrel.
+ *
+ * The only surface a sibling module may import. See `modules/products/index.ts` for the rule.
+ *
+ * The schema and its serialization transform are deliberately NOT here. Products exports its own
+ * because an order embeds a product; nothing embeds an order, so the only callers are tests, and
+ * they reach `@modules/orders/model` directly rather than widening a promise made to every module.
+ *
+ * `cart` reaches the repository rather than the service because a checkout writes the order row
+ * itself and rolls it back if clearing the cart fails — that is one transaction the cart owns, not
+ * an order the cart asks for. The service layer would give it a response envelope it would only
+ * have to unwrap.
+ *
+ * `sumLineItems` is the one export that is a rule rather than a handle. Line-item money is orders'
+ * arithmetic; a cart totalling itself independently would show one number and bill another.
+ */
+
+export { orderService } from './service';
+export { orderRepository } from './repository';
+export { orderModel } from './model';
+export type { IOrderDocument, IOrderDocumentItem } from './model';
+export { sumLineItems, toCents } from './domain';
+export type { ILineItem, ILineItemTotals } from './domain';

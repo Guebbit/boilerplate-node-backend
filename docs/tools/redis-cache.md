@@ -5,7 +5,7 @@
 [Redis](https://redis.io/docs/latest/) is used as an **optional server-side cache** for repeated GET responses.
 It makes repeated reads cheaper without becoming required for the API to work.
 
-The repo uses the official [`redis`](https://github.com/redis/node-redis) Node client; cache helpers live in `src/core/adapters/cache.ts`.
+The repo uses the official [`redis`](https://github.com/redis/node-redis) Node client; cache helpers live in `src/infrastructure/adapters/cache.ts`.
 
 ## Cache flow
 
@@ -109,7 +109,7 @@ TTL anyway, so the two would behave alike until they didn't.
 ## Writes that bypass the API
 
 This is **cache-aside**: reads fill the cache, and whoever writes the data is responsible for
-invalidating it. `invalidateCache` (in `src/middlewares/cache.ts`) does that for every write the
+invalidating it. `invalidateCache` (in `src/infrastructure/http/middlewares/cache.ts`) does that for every write the
 API handles.
 
 Nothing does it for writes that never reach Express — `npm run db:seed`, `migrate-mongo`, a
@@ -162,7 +162,7 @@ flowchart TD
     R -.-> Note["No per-worker copy of the data:<br/>every read is a round-trip"]
 ```
 
-Each worker opens **its own connection** (`getClient()` in `src/core/adapters/cache.ts`, one lazy
+Each worker opens **its own connection** (`getClient()` in `src/infrastructure/adapters/cache.ts`, one lazy
 client per process), but every connection addresses the **same keyspace** — same
 `NODE_REDIS_URL`, same `NODE_REDIS_CACHE_PREFIX`. A worker never keeps a local copy of a cached
 response, so there is no such thing as "worker 2's cache" to fall out of date. There is one cache,
@@ -220,7 +220,7 @@ Two consequences worth keeping in mind:
 
 ### Queue workers
 
-`src/workers/` (email, PDF) is a different meaning of the word: those are RabbitMQ consumers, and
+`src/infrastructure/adapters/` (email, PDF) is a different meaning of the word: those are RabbitMQ consumers, and
 `registerWorkers()` runs them **inside every cluster worker**, so N processes consume from the
 same queues. They do not touch the cache at all.
 
@@ -228,7 +228,7 @@ same queues. They do not touch the cache at all.
 flowchart LR
     subgraph W["Each cluster worker process"]
         E["Express routes"] --> Cache[("Redis cache")]
-        Q["Queue consumers<br/>src/workers/*.worker.ts"] --> Rabbit[("RabbitMQ")]
+        Q["Queue consumers<br/>src/infrastructure/adapters/*.worker.ts"] --> Rabbit[("RabbitMQ")]
     end
     Q -. no cache access .-x Cache
 ```

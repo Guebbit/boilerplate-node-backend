@@ -1,0 +1,18 @@
+        MetricsSnapshotEvent:
+            name: MetricsSnapshotEvent
+            messageId: observability.metrics.snapshot
+            title: Initial observability metrics snapshot
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+        MetricsUpdatedEvent:
+            name: MetricsUpdatedEvent
+            messageId: observability.metrics.updated
+            title: Periodic observability metrics update
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+        HeartbeatEvent:
+            name: HeartbeatEvent
+            messageId: observability.heartbeat
+            title: Observability heartbeat
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'

@@ -1,21 +1,21 @@
 <!doctype html>
 <%#
-    Operator-facing notification, not customer-facing: it goes to the support inbox, so it is
-    rendered in NODE_DEFAULT_LOCALE (see post-feedback-contact.ts) rather than in the language
-    of whoever filled in the form.
+    Operator-facing notification, not customer-facing: its copy is resolved in
+    NODE_DEFAULT_LOCALE by `modules/feedback/emails.ts` rather than in the language of
+    whoever filled in the form. The customer's own words arrive untranslated.
 %>
 <html lang="<%= locale %>">
     <head>
         <meta charset="UTF-8" />
-        <title><%= t('email.feedback-contact.meta-title') %></title>
+        <title><%= pageMetaTitle %></title>
     </head>
     <body>
-        <h2><%= t('email.feedback-contact.title') %></h2>
-        <p><strong><%= t('email.feedback-contact.label-name') %>:</strong> <%= name || t('email.feedback-contact.not-available') %></p>
-        <p><strong><%= t('email.feedback-contact.label-email') %>:</strong> <%= email %></p>
-        <p><strong><%= t('email.feedback-contact.label-subject') %>:</strong> <%= subject %></p>
-        <p><strong><%= t('email.feedback-contact.label-message') %>:</strong></p>
+        <h2><%= title %></h2>
+        <p><strong><%= labelName %>:</strong> <%= name %></p>
+        <p><strong><%= labelEmail %>:</strong> <%= email %></p>
+        <p><strong><%= labelSubject %>:</strong> <%= subject %></p>
+        <p><strong><%= labelMessage %>:</strong></p>
         <pre><%= message %></pre>
-        <p><strong><%= t('email.feedback-contact.label-created-at') %>:</strong> <%= createdAt %></p>
+        <p><strong><%= labelCreatedAt %>:</strong> <%= createdAt %></p>
     </body>
 </html>

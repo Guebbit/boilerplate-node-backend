@@ -7,7 +7,7 @@
 | `logger`      | normal application logs (request access logs, errors, warnings)       | JSON in production/test, pretty + colour in dev |
 | `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                     |
 
-Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/core/adapters/logger.ts`.
+Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/infrastructure/adapters/logger.ts`.
 
 ## What an access log looks like
 
@@ -44,7 +44,7 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 ## Audit events
 
-`emitAuditEvent` (in `src/core/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login.succeeded`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
+`emitAuditEvent` (in `src/infrastructure/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login.succeeded`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
 
 ```json
 {
@@ -60,8 +60,16 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 }
 ```
 
-The `action` vocabulary is a TypeScript enum, not free strings — an alert built on
+The `action` vocabulary is a closed union, not free strings — an alert built on
 `auth.login.failed` cannot be defeated by a typo at a call site.
+
+It is assembled rather than declared in one place. Each module owns its own actions in
+`src/modules/<name>/audit.ts` as an `as const` object and augments core's `IAuditActionMap`, the
+same way modules declare domain events; `infrastructure` keeps only the three `security.*` actions emitted by
+the authorization middleware about requests that never reached a domain. So the union narrows when
+you delete a module, and `infrastructure` never names one. `tests/cross-cutting/audit-actions.test.ts` is
+what keeps two modules from claiming the same string, or inventing one that breaks the dotted
+convention log backends filter on.
 
 ### Where an audit entry ends up
 
@@ -73,7 +81,7 @@ Two destinations, from the single `emitAuditEvent` call:
 | Mongo `auditlogs`      | the queryable copy behind `GET /observability/audit`              | silently, into a warning — never fails the triggering request |
 
 The Mongo write goes through an `IAuditSink` port that `app.ts` registers after the database
-connects. `src/core/**` may not import `@repositories/*`, so the dependency is inverted rather
+connects. `src/infrastructure/**` may not import `@modules/*`, so the dependency is inverted rather
 than smuggled — and the 53 `emitAuditEvent` call sites know about neither destination.
 
 Before this, the endpoint read a 200-entry in-process ring buffer. It could not answer

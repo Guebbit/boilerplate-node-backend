@@ -31,19 +31,19 @@
  * become "skipped everything".
  */
 import fc from 'fast-check';
-import { api, authenticateAs } from '../helpers/http';
-import { setupTestDb } from '../helpers/setup-test-db';
+import { api, authenticateAs } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
 // Imported for its side effect: it calls `jestOpenAPI(openapi.yaml)`, which is what
 // registers the `toSatisfyApiSpec()` matcher used below.
-import '../helpers/contract';
-import { listOperations, unsupportedKeywords, type IOperation } from '../helpers/spec-walk';
-import { bodyArbitraryFor } from '../helpers/spec-arbitraries';
+import '@tests/contract';
+import { listOperations, unsupportedKeywords, type IOperation } from '@tests/spec-walk';
+import { bodyArbitraryFor } from '@tests/spec-arbitraries';
 
 setupTestDb();
 
 /**
  * Runs per operation. Deliberately small: 55 operations × N requests × a real in-memory Mongo,
- * and the auth rate limiter is raised but finite (`tests/helpers/setup.ts`). Raise it when
+ * and the auth rate limiter is raised but finite (`tests/support/setup.ts`). Raise it when
  * hunting something specific, not as a default.
  */
 const RUNS_PER_OPERATION = 12;
@@ -54,7 +54,6 @@ const SEED = 20_260_809;
 const OPERATIONS = listOperations();
 
 /** Stands in for "this operation takes no request body". */
-// eslint-disable-next-line unicorn/no-useless-undefined -- the absence IS the generated value
 const NO_BODY = fc.constant(undefined);
 
 /** A syntactically valid ObjectId, so `{id}` paths reach the handler rather than a CastError. */

@@ -1,11 +1,11 @@
-import { setupTestDb } from '../../helpers/setup-test-db';
-import { createUser } from '../../helpers/factories/users';
-import * as authService from '@services/auth';
-import * as userService from '@services/users';
-import { userRepository } from '@repositories/users';
-import { getDefaultLocale, runWithLocale } from '@core/i18n';
-import type { IResponseSuccess } from '@core/http/response';
-import type { IUserDocument } from '@models/users';
+import { setupTestDb } from '@tests/setup-test-db';
+import { createUser } from '@modules/users/tests/factory';
+import * as authService from '@modules/account/service';
+import * as userService from '@modules/users/service';
+import { userRepository } from '@modules/users';
+import { getDefaultLocale, runWithLocale } from '@infrastructure/i18n';
+import type { IResponseSuccess } from '@infrastructure/http/response';
+import type { IUserDocument } from '@modules/users';
 
 /**
  * The persisted `locale` on the user document.

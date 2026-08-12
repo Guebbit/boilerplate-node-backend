@@ -29,7 +29,7 @@ A mutant is **one small, deliberate edit to your source code**. Stryker makes it
 Take a real line from this codebase:
 
 ```ts
-// src/repositories/carts.ts
+// src/modules/cart/repository.ts
 if (attemptsLeft <= 1 || !isDuplicateKey(error)) throw error;
 ```
 
@@ -92,7 +92,7 @@ The source on disk is never left mutated — Stryker works in a throwaway copy u
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 65}}}%%
 flowchart TB
-    Source["src/services · models · repositories\nmiddlewares · jobs · core"] --> Mutate["Stryker mutates one\noperator/condition/return at a time"]
+    Source["src/modules · platform\nservices · models · repositories\nmiddlewares · jobs · core"] --> Mutate["Stryker mutates one\noperator/condition/return at a time"]
     Mutate --> Cov{"any test\ncovers it?"}
     Cov -->|no| NoCov["no coverage\n— reported, nothing run (free)"]
     Cov -->|yes| Run["Jest, unit suite only\n(integration + contract excluded)"]
@@ -183,22 +183,21 @@ flowchart TB
     class Cost out;
 ```
 
-**One static mutant runs the entire suite.** A measured run reported `61.48 tests per mutant on average` over 1646 mutants — about 101,000 test executions. Working backwards, roughly **70–95 static mutants (~5%) account for ~90% of all the work**.
+**One static mutant runs the entire suite.** The share is worth measuring rather than guessing: the run's summary prints `tests per mutant on average`, and the JSON reporter labels each mutant `static`, so counting them per file names the handful that dominate the wall clock. No run has measured the current `mutate` scope yet, so there are no numbers here to read — the first full run is what fills this in.
 
 It also inflates timeouts, because the timeout is derived from how long the tests are expected to take:
 
 ```
 timeout = timeoutFactor × netTime + timeoutMS + overhead
-        = 1.5 × 33,406 + 30,000 + 22,963  ≈ 103 seconds
 ```
 
-for a static mutant, because its `netTime` is the whole suite. This repo's 6 models and 7 repositories all build their objects at module scope, so there is a lot of static surface.
+For a static mutant `netTime` is the whole suite, which is what makes those timeouts minutes rather than seconds. Every module's model and repository builds its objects at module scope, so the static surface here is large by design.
 
 ### What can be done about it — an open question
 
 | Option                                   | Effect                                                            | Status                                                            |
 | ---------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Raise `concurrency`                      | Near-linear speed-up, **changes no measurement**                  | **Done** — 4 → 12                                                 |
+| Raise `concurrency`                      | Near-linear speed-up, **changes no measurement**                  | **Done** — 8 locally, 3 in CI                                     |
 | `incremental: true`                      | PR runs re-mutate only changed files                              | Not done                                                          |
 | Split the nightly into one job per layer | Wall-clock becomes the slowest group, not the sum                 | Not done; probably unnecessary if the cost is fixed at the source |
 | `ignoreStatic: true`                     | Removes the whole-suite reruns — but stops measuring some mutants | **Not enabled. Deliberately undecided — see below.**              |
@@ -217,7 +216,7 @@ The honest position: it is standard and supported, it is probably the right call
 
 Not enabled here yet, but it is the change that would make mutation testing usable on a pull request, so it is worth understanding.
 
-**The problem.** Every run starts from scratch. Change one line in one service, and Stryker still re-mutates all ~2,700 mutants across the whole codebase — including the thousands in files you did not touch, whose results will be identical to last time.
+**The problem.** Every run starts from scratch. Change one line in one service, and Stryker still re-mutates every mutant across the whole codebase — including all the ones in files you did not touch, whose results will be identical to last time.
 
 **The mechanism.** With `incremental: true`, Stryker writes every mutant's result to `reports/stryker-incremental.json` and **you commit that file**. On the next run it compares the new source against what the file remembers:
 
@@ -246,7 +245,7 @@ flowchart TB
     class Merge out;
 ```
 
-**What it changes in practice.** A pull request touching one service goes from ~2,700 mutants to perhaps 30 — seconds instead of an hour. That is what turns mutation testing from "a nightly you read the next morning" into "a check on your PR".
+**What it changes in practice.** A pull request touching one service goes from every mutant in the repo to a few dozen — seconds instead of the full run. That is what turns mutation testing from "a nightly you read the next morning" into "a check on your PR".
 
 **The catch, and why the nightly still runs in full.** The incremental file is a cache, and caches go stale — a refactor that moves code between files, a dependency upgrade, or a merge conflict resolved badly can leave it describing a codebase that no longer exists. So the intended shape is two runs with different jobs:
 
@@ -261,26 +260,41 @@ flowchart TB
 
 ```json
 "mutate": [
-    "src/services/**/*.ts",
-    "src/models/**/*.ts",
-    "src/repositories/**/*.ts",
-    "src/middlewares/**/*.ts",
-    "src/jobs/**/*.ts",
-    "src/core/**/*.ts",
-    "!src/core/bootstrap/**",
-    "!src/core/observability/tracer.ts"
+    "src/infrastructure/**/*.ts",
+    "src/app/**/*.ts",
+    "src/kernel/**/*.ts",
+    "src/modules/*/**/*.ts",
+    "!src/modules/*/index.ts",
+    "!src/modules/*/*.fragment.ts",
+    "!src/modules/*/tests/**"
 ]
 ```
 
-A counterintuitive but important consequence of the table above: **untested files are free to include.** A mutant with no covering test is reported `NoCoverage` without running anything, so `core/adapters/pdf.ts` and `core/observability/stream.ts` at 0% cost nothing and honestly record the gap. The cost lives entirely in _well-covered_ code — especially static-and-covered code.
+A counterintuitive but important consequence of the table above: **untested files are free to include.** A mutant with no covering test is reported `NoCoverage` without running anything, so a file at 0% costs nothing and honestly records the gap. The cost lives entirely in _well-covered_ code — especially static-and-covered code.
 
-So the scope is not narrowed to save time. The two exclusions are about meaning, not cost: `core/bootstrap/**` wires up the process (env parsing, the OTel SDK, server lifecycle) and `tracer.ts` is OTel plumbing — their mutants ask about the runtime's behaviour, not this codebase's.
+That is why the list above is so short. The bar for excluding something is **"a mutant here could not mean anything to anyone"**, not "our tests would not kill it" — an unkilled mutant is a finding, while a file missing from the report is a blind spot, since an absent file reads exactly like a file with no survivors. Only three things clear that bar: `*.fragment.ts` slices, which nothing imports (the assembled bundle is what runs, so a mutant there is unobservable by construction); a module's `index.ts`, a barrel whose mutants ask whether a re-export changed; and `tests/**`, which is not the code under test.
+
+### Reading a 0%, and why it is kept
+
+Everything else stays in scope, including code this runner cannot reach. `src/app/**` — the Express wiring — measured **0.00% across all eight files: 126 mutants, every one `NoCoverage`, not a single survivor.** That zero is kept on purpose, because it is a true statement: the wiring is exercised by `tests/integration` and `tests/contract`, both excluded from this _runner_ by `testPathIgnorePatterns` (they drive the real app against a live database and fail the dry run), and by no unit test at all.
+
+The three outcomes are different findings, and the columns keep them apart:
+
+| Outcome         | What happened                                 | What to do                                 |
+| --------------- | --------------------------------------------- | ------------------------------------------ |
+| **Killed**      | a test ran it and an assertion depended on it | nothing                                    |
+| **Survived**    | a test ran it and nothing noticed             | sharpen the assertion                      |
+| **No coverage** | nothing ran it                                | write a test, or accept the runner's reach |
+
+Two shapes of unreached code show up differently, and it is worth knowing which you are looking at. Code that runs at **import time** — a route table literal, a schema built at module scope — executes as soon as any test imports the module, so its mutants are _covered_ and come back as **survivors**: `users/routes.ts` reports 36 of them. A **function body** only executes when called, so an uncalled one comes back as **no coverage**. Zero survivors alongside a high no-coverage count is the signature of a file nothing invokes.
+
+Controllers illustrate why a blanket exclusion is the wrong instrument. They were once excluded wholesale on the assumption that only contract and integration tests reach them — but several are unit-tested directly as plain functions with fake `req`/`res` objects (`post-login`, `get-refresh-token`, `delete-account-request`, `delete-account-confirm`, `get-observability-metrics-overview`). The exclusion was therefore hiding real, working coverage as well as honest gaps.
 
 ## The per-file ratchet
 
 Stryker's own thresholds are **global** — `high`, `low`, `break`, and nothing else. That is the same pooling failure that directory-shaped coverage thresholds have: a strong file carries a weak one, and the number that passes is an average nobody can act on. It gets worse as `mutate` widens, not better.
 
-So `mutation-baseline.json` records a score **per file**, and `scripts/check-mutation-baseline.ts` compares each run against it:
+So `mutation-baseline.json` records a score **per file**, and `scripts/check-mutation-baseline.ts` compares each run against it. The file is not in the repository right now: the scope was repointed at the current module layout and no run has measured it, so the first `npm run test:mutation:check` after a full run writes it from that report and every run after that compares against it:
 
 - a file that drops below its recorded score **fails**;
 - a file that improves has its baseline **rewritten upward**, locking the gain in;
@@ -346,7 +360,7 @@ anything: **break the source on purpose and confirm the suite goes red.**
 ```bash
 # e.g. make a poison message requeue instead of being discarded
 #   ch.nack(incoming, false, false)  →  ch.nack(incoming, false, true)
-npx jest tests/unit/core/adapters/queue.test.ts     # must FAIL
+npx jest tests/unit/infrastructure/adapters/queue.test.ts     # must FAIL
 ```
 
 Occasionally the mutation cannot be expressed at all — removing the null-delivery guard in
@@ -356,14 +370,16 @@ test is needed to defend it.
 
 ## Thresholds — measured, not invented
 
-Both the band and the per-file baseline come from real runs, dated in `stryker.config.json`. The rule: raise `break` when a score **sustains** a higher band; never lower it to make a run pass. The single sanctioned exception is a change to `mutate` — which changes the population, so old and new numbers are not measurements of the same thing — re-recorded in the same commit with both numbers and the reason.
+`high` and `low` only colour the report. `break` is the one that fails a run, and it comes from a real measurement or it is not set at all — which is why it is currently `null`: the scope was repointed at the current module layout and nothing has measured it yet. The first full run supplies the number, and it goes in below that run's score, so it answers "has something collapsed" rather than "did the number move".
+
+After that the rule is: raise `break` when a score **sustains** a higher band; never lower it to make a run pass. The single sanctioned exception is a change to `mutate` — which changes the population, so old and new numbers are not measurements of the same thing — re-recorded in the same commit with both numbers and the reason.
 
 ## File map
 
 | Path                                 | Contents                                                                       |
 | ------------------------------------ | ------------------------------------------------------------------------------ |
 | `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters |
-| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory.                              |
+| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.  |
 | `scripts/mutationBaseline.ts`        | Ratchet logic — scoring, comparison, the "never lower" rule                    |
 | `scripts/check-mutation-baseline.ts` | CLI for the two commands below                                                 |
 | `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                |

@@ -1,0 +1,260 @@
+        # ---------- products — the schemas only this module's paths reference. ----------
+        ProductEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Product'
+
+        ProductsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ProductsResponse'
+
+        SearchProductsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                text:
+                    $ref: '#/components/schemas/Text'
+                id:
+                    $ref: '#/components/schemas/Id'
+                minPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                maxPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                category:
+                    type: string
+                tag:
+                    type: string
+
+        CreateProductRequest:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                # ---------- On `active`, and why it is declared here but not on the updates ----------
+                #
+                # `active` and `deletedAt` are INDEPENDENT. A record can be active or not regardless
+                # of whether it has been soft-deleted, and the two are stored separately. What they
+                # share is an effect, not a value: a non-admin sees a record only when it is active
+                # AND not soft-deleted (`publicScope()` in the products repository requires both).
+                # So a soft-deleted record behaves exactly like an inactive one from outside, while
+                # remaining a distinct state inside.
+                #
+                # The default is declared rather than left to each implementation. Undeclared, the
+                # API and the paired frontend's mock each pick their own, and the same request
+                # yields a publicly visible product against one and a hidden one against the
+                # other — a disagreement no contract test on either side can see.
+                #
+                # It appears on the CREATE bodies only. On an update, an omitted `active` means
+                # "leave it as it is" — a default there would silently republish a deactivated
+                # record on any unrelated edit.
+                active:
+                    type: boolean
+                    default: true
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        CreateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                # Same default, same reasoning as `CreateProductRequest.active` above.
+                active:
+                    type: boolean
+                    default: true
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        UpdateProductRequest:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        UpdateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        UpdateProductByIdRequest:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        UpdateProductByIdRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [title, price]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        DeleteProductRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    default: false
+
+        ProductsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Product'
+                meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+

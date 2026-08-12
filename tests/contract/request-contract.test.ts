@@ -31,16 +31,16 @@
  *     CastError, answering 500 where the contract promises 422. `userService.validateData`
  *     validates the whole schema, not a `.pick()` of it.
  *
- * Generated data is additive, same convention as `tests/helpers/factories/*`: deterministic
+ * Generated data is additive, same convention as a module's `tests/factory.ts`: deterministic
  * scenario tests keep using the hand-written factories. This file exists specifically for what
  * they can't answer — "does the API honour its own contract for ANY legal input" — never "does
  * this specific scenario behave correctly".
  */
-import '../helpers/contract';
-import { setupTestDb } from '../helpers/setup-test-db';
-import { api, authenticateAs } from '../helpers/http';
-import { createProduct } from '../helpers/factories/products';
-import { validPayload, invalidPayloads } from '../helpers/contract-data';
+import '@tests/contract';
+import { setupTestDb } from '@tests/setup-test-db';
+import { api, authenticateAs } from '@tests/http';
+import { createProduct } from '@modules/products/tests/factory';
+import { validPayload, invalidPayloads } from '@tests/contract-data';
 import {
     CreateUserBody,
     CreateProductBody,

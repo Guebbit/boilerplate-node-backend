@@ -1,0 +1,617 @@
+  - info:
+      name: Observability
+      type: folder
+      seq: 3
+    request:
+      auth: inherit
+    items:
+      - info:
+          name: Observability SSE stream
+          type: http
+          seq: 1
+          tags:
+            - Observability
+        http:
+          method: GET
+          url: "{{baseUrl}}/observability/events"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Server-Sent Events stream
+            request:
+              url: "{{baseUrl}}/observability/events"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/observability/events"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/observability/events"
+              method: GET
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Health snapshot
+          type: http
+          seq: 2
+          tags:
+            - Observability
+        http:
+          method: GET
+          url: "{{baseUrl}}/observability/health"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Health summary
+            request:
+              url: "{{baseUrl}}/observability/health"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Health summary",
+                    "data": {
+                      "status": "ok",
+                      "environment": "string",
+                      "service": "string",
+                      "nodeVersion": "string",
+                      "uptimeSeconds": 0,
+                      "database": {
+                        "status": "connected"
+                      },
+                      "integrations": {
+                        "loki": true,
+                        "posthog": true,
+                        "otelEnabled": true,
+                        "umami": true,
+                        "faro": true
+                      },
+                      "memory": {
+                        "heapUsedMb": 1,
+                        "heapTotalMb": 1,
+                        "rssMb": 1
+                      },
+                      "system": {
+                        "platform": "string",
+                        "cpuCount": 1,
+                        "loadAvg": [
+                          1
+                        ]
+                      },
+                      "timestamp": "2026-01-01T00:00:00.000Z"
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/observability/health"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/observability/health"
+              method: GET
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/observability/health"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Prometheus metrics
+          type: http
+          seq: 3
+          tags:
+            - Observability
+        http:
+          method: GET
+          url: "{{baseUrl}}/observability/metrics"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Prometheus exposition text
+            request:
+              url: "{{baseUrl}}/observability/metrics"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/observability/metrics"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 503 Response
+            description: |
+              `NODE_METRICS_TOKEN` is not configured. The endpoint denies by default
+              rather than opening: an unauthenticated metrics endpoint is not a state
+              to arrive at by forgetting an environment variable.
+            request:
+              url: "{{baseUrl}}/observability/metrics"
+              method: GET
+            response:
+              status: 503
+              statusText: Service Unavailable
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 503,
+                    "message": "`NODE_METRICS_TOKEN` is not configured. The endpoint denies by default\nrather than opening: an unauthenticated metrics endpoint is not a state\nto arrive at by forgetting an environment variable.\n",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Metrics overview (JSON)
+          type: http
+          seq: 4
+          tags:
+            - Observability
+        http:
+          method: GET
+          url: "{{baseUrl}}/observability/metrics/overview"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Metrics overview
+            request:
+              url: "{{baseUrl}}/observability/metrics/overview"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Metrics overview",
+                    "data": {
+                      "http": {
+                        "totalRequests": 0,
+                        "totalErrors": 0,
+                        "errorRate": 0,
+                        "inFlight": 0,
+                        "latencyMs": {
+                          "p50": 1,
+                          "p95": 1
+                        }
+                      },
+                      "auth": {
+                        "loginSuccess": 0,
+                        "loginFailure": 0,
+                        "signupSuccess": 0
+                      },
+                      "business": {
+                        "checkoutSuccess": 0,
+                        "ordersCreated": 0
+                      },
+                      "database": {
+                        "queriesTotal": 0,
+                        "errorsTotal": 0
+                      },
+                      "process": {
+                        "uptimeSeconds": 0,
+                        "heapUsedMb": 0
+                      },
+                      "timestamp": "2026-01-01T00:00:00.000Z"
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/observability/metrics/overview"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/observability/metrics/overview"
+              method: GET
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/observability/metrics/overview"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Recent audit events
+          type: http
+          seq: 5
+          tags:
+            - Observability
+        http:
+          method: GET
+          url: "{{baseUrl}}/observability/audit"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Audit events
+            request:
+              url: "{{baseUrl}}/observability/audit"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Audit events",
+                    "data": {
+                      "items": [
+                        {
+                          "actor_user_id": "string",
+                          "actor_role": "admin",
+                          "action": "string",
+                          "outcome": "success",
+                          "ip": "string",
+                          "user_agent": "string",
+                          "request_id": "string",
+                          "trace_id": "string",
+                          "target_type": "string",
+                          "target_id": "string",
+                          "metadata": "string",
+                          "timestamp": "2026-01-01T00:00:00.000Z",
+                          "level": "info"
+                        }
+                      ],
+                      "total": 0
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/observability/audit"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/observability/audit"
+              method: GET
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/observability/audit"
+              method: GET
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/observability/audit"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }

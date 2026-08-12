@@ -1,0 +1,239 @@
+    # --------- Users ---------
+    /users:
+        get:
+            tags: [Users]
+            summary: List users (paginated)
+            description: Returns a paginated list of user accounts.
+            operationId: listUsers
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/PageParam'
+                - $ref: '#/components/parameters/PageSizeParam'
+                - $ref: '#/components/parameters/TextParam'
+                - $ref: '#/components/parameters/IdParam'
+                - name: email
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/Email'
+                - name: username
+                  in: query
+                  schema:
+                      type: string
+                - name: active
+                  in: query
+                  schema:
+                      type: boolean
+            responses:
+                '200':
+                    description: Users list page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UsersResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Users]
+            summary: Create user
+            description: Creates a new user account with the supplied email, username, and password. Optional image can be uploaded.
+            operationId: createUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateUserRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/CreateUserRequestMultipart'
+            responses:
+                '201':
+                    description: Created user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Users]
+            summary: Edit user
+            description: Updates an existing user's email or password. Optional image can be uploaded.
+            operationId: updateUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequestMultipart'
+            responses:
+                '200':
+                    description: Updated user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Users]
+            summary: Delete user
+            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record.
+            operationId: deleteUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeleteUserRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /users/{id}:
+        # Same as GET /users?id={id}
+        get:
+            tags: [Users]
+            summary: User details
+            description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
+            operationId: getUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: User
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        put:
+            tags: [Users]
+            summary: Edit user
+            description: Updates the email or password of the user identified by `{id}` in the path. Optional image can be uploaded.
+            operationId: updateUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
+            responses:
+                '200':
+                    description: Updated user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        # Same as DELETE /users
+        delete:
+            tags: [Users]
+            summary: Delete user
+            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`.
+            operationId: deleteUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+                - name: hardDelete
+                  in: query
+                  schema:
+                      type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HardDeleteRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as DELETE /users/{id}?hardDelete=true — the flag spelled in the path instead of
+    # in the query. Both reach the same handler; neither is the canonical one.
+    /users/{id}/hard:
+        delete:
+            tags: [Users]
+            summary: Permanently delete user
+            description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
+            operationId: hardDeleteUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    # Same as GET /users, but with JSON body, more suitable for DTOs and multi-language codegen
+    /users/search:
+        post:
+            tags: [Users]
+            summary: Search users (DTO-friendly)
+            description: Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
+            operationId: searchUsers
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchUsersRequest'
+            responses:
+                '200':
+                    description: Users search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UsersResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+

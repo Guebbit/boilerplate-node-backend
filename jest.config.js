@@ -6,11 +6,14 @@
  * key that `stryker.config.json` uses would print validation noise on every run here.
  *
  * ── The two instruments, and why both ────────────────────────────────────────────────────────
- * `coverageThreshold` below answers "is this code EXECUTED by any test". `mutation-baseline.json`
- * answers "do the tests NOTICE when it changes". Coverage is the cheap check and runs in CI;
- * mutation is the expensive one and runs nightly. The `coverageThreshold` keys deliberately
- * mirror stryker's `mutate` globs: code worth mutating is code worth guaranteeing runs at all.
- * Change one list and change the other.
+ * `coverageThreshold` below answers "is this code EXECUTED by any test". The per-file mutation
+ * ratchet answers "do the tests NOTICE when it changes". Coverage is the cheap check and runs in
+ * CI; mutation is the expensive one and runs nightly.
+ *
+ * The two lists are related but not identical: `stryker.config.json`'s `mutate` is the wider of
+ * the two, because a file with no coverage is free to mutate (it is reported without running
+ * anything) and expensive to floor. The keys below are being re-derived per module — see
+ * `docs/theory/known-gaps.md` §4.
  */
 
 module.exports = {
@@ -19,15 +22,35 @@ module.exports = {
     coverageProvider: 'v8',
     testEnvironment: 'node',
     testMatch: ['**/tests/**/*.test.ts'],
-    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/.stryker-tmp/'],
-    modulePathIgnorePatterns: ['<rootDir>/.stryker-tmp/'],
-    collectCoverageFrom: ['src/**/*.ts', '!src/types/**', '!src/**/*.d.ts'],
+    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/.stryker-tmp/', '<rootDir>/.tmp/'],
+    modulePathIgnorePatterns: ['<rootDir>/.stryker-tmp/', '<rootDir>/.tmp/'],
+    collectCoverageFrom: [
+        'src/**/*.ts',
+        '!src/types/**',
+        '!src/**/*.d.ts',
+        // Co-located specs are test code, not covered code. Without this a module's own tests
+        // count towards its coverage and every floor below becomes self-satisfying.
+        '!src/**/tests/**',
+        // Contract fragments are text slices assembled by `npm run contracts:bundle`, not modules:
+        // nothing imports one and most are not valid TypeScript alone, so instrumenting them would
+        // report a permanent 0% for files no test can execute. The bundle they build is covered.
+        '!src/**/*.fragment.ts'
+    ],
     /*
      * PER-FILE floors. The glob syntax is the whole point and it is not cosmetic.
      *
-     * A threshold key that names a DIRECTORY ('src/services/') is applied by Jest to every file
-     * beneath it as ONE POOLED TOTAL. A key that is a GLOB (`src/services` followed by a recursive .ts wildcard) is applied to
-     * each matching file separately, and Jest prints one failure per file, naming it.
+     * A threshold key that names a DIRECTORY ('src/modules/') is applied by Jest to every file
+     * beneath it as ONE POOLED TOTAL. A key that is a GLOB (a path with a wildcard segment, or one
+     * followed by a recursive .ts wildcard) is applied to each matching file separately, and Jest
+     * prints one failure per file, naming it.
+     *
+     * NOTE for whoever edits this comment: a glob written out in full would close the block comment
+     * on its wildcard-then-slash, which is why every example here is spelled in words.
+     *
+     * A second trap, learned when the domains became modules: a threshold key matching NO file is
+     * silently ignored. The old services key stayed in this config after that directory was
+     * emptied, and enforced nothing while reading like a gate. Renaming a source directory means
+     * re-checking these keys — the failure mode is a green run, not an error.
      *
      * The difference is not academic. Under the pooled form this repo passed a 70% floor on
      * src/middlewares/ while auth-jwt.ts, locale.ts and security.ts each sat at 0%, and on
@@ -46,14 +69,24 @@ module.exports = {
      * are measured, not about raising the bar in the same commit. The measured per-path minima on
      * 2026-08-08, for whoever raises it next (statements / branches / functions / lines):
      *
-     *   src/core/http/      100   / 96.29 / 100 / 100
+     *   src/infrastructure/http/      100   / 96.29 / 100 / 100
      *   src/middlewares/     77.09 / 83.33 /  80 /  77.09
      *   src/models/         100   / 75    /  75 / 100
      *   src/repositories/    98.37 / 88.23 / 100 /  98.37
      *   src/services/        88.34 / 90.62 /  80 /  88.34
      *
-     * Kept in step with stryker.config.json's `mutate` array, on the principle that logic worth
-     * mutating is logic worth guaranteeing is executed at all. Add a path to one, add it here.
+     * The last three paths no longer exist: those files are now `src/modules/<name>/model.ts`,
+     * `repository.ts` and `service.ts`, and the keys below follow them. The numbers are left as the
+     * 2026-08-08 record they were taken as — they were never per-module and re-measuring them per
+     * module is the job of whoever raises the floor, not of the move that renamed the paths.
+     *
+     * The principle behind which paths appear here: logic worth mutating is logic worth
+     * guaranteeing is executed at all. A path added to `stryker.config.json`'s `mutate` is a
+     * candidate for a floor here, once it has a measurement to floor it at.
+     *
+     * Co-located specs (`src/modules/<name>/tests/`) are excluded from `collectCoverageFrom`
+     * above. They match `src/**` like any other source file, and counting a module's own tests
+     * towards its coverage would make every floor here self-satisfying.
      *
      * CONTROLLERS ARE DELIBERATELY NOT FLOORED, and it is a decision rather than an oversight.
      * They report ~0% on the UNIT run because they are covered by `tests/contract/` and
@@ -63,53 +96,50 @@ module.exports = {
      * ever need a floor it belongs on a coverage run that includes those suites.
      */
     coverageThreshold: {
-        'src/core/http/**/*.ts': {
+        'src/modules/*/model.ts': {
             statements: 70,
             branches: 70,
             functions: 70,
             lines: 70
         },
-        'src/middlewares/**/*.ts': {
+        'src/modules/*/repository.ts': {
             statements: 70,
             branches: 70,
             functions: 70,
             lines: 70
         },
-        'src/models/**/*.ts': {
+        'src/modules/*/service.ts': {
             statements: 70,
             branches: 70,
             functions: 70,
             lines: 70
         },
-        'src/repositories/**/*.ts': {
+        'src/kernel/**/*.ts': {
             statements: 70,
             branches: 70,
             functions: 70,
             lines: 70
         },
-        'src/services/**/*.ts': {
-            statements: 70,
-            branches: 70,
-            functions: 70,
-            lines: 70
-        },
-        'src/jobs/**/*.ts': { statements: 70, branches: 70, functions: 70, lines: 70 },
-
         /*
          * Core, minus the four files written down below.
          *
          * `bootstrap` and `tracer.ts` are absent here for the same reason they are excluded from
          * `mutate`: their behaviour belongs to the runtime, not to this codebase.
          */
-        'src/core/*.ts': { statements: 70, branches: 70, functions: 70, lines: 70 },
-        'src/core/http/**/*.ts': { statements: 70, branches: 70, functions: 70, lines: 70 },
-        'src/core/adapters/!(pdf|mailer).ts': {
+        'src/infrastructure/*.ts': { statements: 70, branches: 70, functions: 70, lines: 70 },
+        'src/infrastructure/http/**/*.ts': {
             statements: 70,
             branches: 70,
             functions: 70,
             lines: 70
         },
-        'src/core/observability/!(stream|metrics-http|tracer).ts': {
+        'src/infrastructure/adapters/!(pdf|mailer).ts': {
+            statements: 70,
+            branches: 70,
+            functions: 70,
+            lines: 70
+        },
+        'src/infrastructure/observability/!(stream|metrics-http|tracer).ts': {
             statements: 70,
             branches: 70,
             functions: 70,
@@ -123,36 +153,42 @@ module.exports = {
          *
          *   pdf.ts        0% — the puppeteer PDF adapter. Genuinely untested by any suite; it
          *                      launches a browser. The honest zero is now on the record instead
-         *                      of dissolved into the `src/core/` average.
+         *                      of dissolved into the `src/infrastructure/` average.
          *   stream.ts     0% — the SSE broadcast hub. Same: no suite drives it today.
          *   mailer.ts        — transport/template branches; only the happy path is driven.
          *   metrics-http     — several exported helpers are reachable only from a live scrape.
          *
-         * All four are also in `mutate`, so `mutation-baseline.json` records them too and the two
+         * All four are also in `mutate`, so the mutation ratchet records them too and the two
          * instruments move together as they gain tests.
          */
-        'src/core/adapters/pdf.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
-        'src/core/observability/stream.ts': {
+        'src/infrastructure/adapters/pdf.ts': {
             statements: 0,
             branches: 0,
             functions: 0,
             lines: 0
         },
-        'src/core/adapters/mailer.ts': {
+        'src/infrastructure/observability/stream.ts': {
+            statements: 0,
+            branches: 0,
+            functions: 0,
+            lines: 0
+        },
+        'src/infrastructure/adapters/mailer.ts': {
             statements: 85,
             branches: 50,
             functions: 100,
             lines: 85
         },
-        'src/core/observability/metrics-http.ts': {
+        'src/infrastructure/observability/metrics-http.ts': {
             statements: 80,
             branches: 90,
             functions: 60,
             lines: 80
         }
     },
-    globalSetup: '<rootDir>/tests/helpers/global-setup.ts',
-    setupFiles: ['<rootDir>/tests/helpers/setup.ts'],
+    globalSetup: '<rootDir>/tests/support/global-setup.ts',
+    globalTeardown: '<rootDir>/tests/support/global-teardown.ts',
+    setupFiles: ['<rootDir>/tests/support/setup.ts'],
     testTimeout: 30000,
     transform: {
         '^.+\\.tsx?$': [
@@ -168,12 +204,12 @@ module.exports = {
     moduleNameMapper: {
         '^@api/(.*)$': '<rootDir>/api/$1',
         '^@types$': '<rootDir>/src/types',
-        '^@controllers/(.*)$': '<rootDir>/src/controllers/$1',
-        '^@services/(.*)$': '<rootDir>/src/services/$1',
-        '^@repositories/(.*)$': '<rootDir>/src/repositories/$1',
-        '^@models/(.*)$': '<rootDir>/src/models/$1',
-        '^@middlewares/(.*)$': '<rootDir>/src/middlewares/$1',
-        '^@jobs/(.*)$': '<rootDir>/src/jobs/$1',
-        '^@core/(.*)$': '<rootDir>/src/core/$1'
+        '^@seed-identities$': '<rootDir>/db/seeds/seed-identities',
+        '^@tests/(.*)$': '<rootDir>/tests/support/$1',
+        '^@app/(.*)$': '<rootDir>/src/app/$1',
+
+        '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
+        '^@kernel/(.*)$': '<rootDir>/src/kernel/$1',
+        '^@modules/(.*)$': '<rootDir>/src/modules/$1'
     }
 };

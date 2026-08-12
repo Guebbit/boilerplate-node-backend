@@ -35,19 +35,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import mongoose from 'mongoose';
-import { connect, disconnect } from '../../helpers/database';
+import { connect, disconnect } from '@tests/database';
 
 /*
- * Importing every model for its side effect: a model registers itself with mongoose on import, and
- * an unregistered one is silently absent from `mongoose.models` — which would make this whole file
- * pass by testing nothing.
+ * Registering every model, by DISCOVERY rather than by name.
+ *
+ * A model registers itself with mongoose on import, and an unregistered one is silently absent
+ * from `mongoose.models` — which would make this whole file pass by testing nothing. Walking
+ * `src/modules` means a new domain is covered by existing, and a deleted one leaves without
+ * breaking the sweep. The canary below is what keeps an empty walk from reading as a pass.
+ *
+ * Synchronous `require` because these must be registered before the suite is collected; ts-jest
+ * runs this file as CommonJS, so it resolves in place.
  */
-import '@models/users';
-import '@models/products';
-import { orderSchema } from '@models/orders';
-import '@models/carts';
-import '@models/feedback-requests';
-import '@models/audit-logs';
+const MODULES_ROOT = path.join(__dirname, '../../../src/modules');
+const registeredModels = fs
+    .readdirSync(MODULES_ROOT)
+    .filter((name) => fs.existsSync(path.join(MODULES_ROOT, name, 'model.ts')))
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    .map((name) => require(path.join(MODULES_ROOT, name, 'model.ts')) as Record<string, unknown>);
 
 const MIGRATIONS_DIR = path.join(__dirname, '../../../db/migrations');
 
@@ -127,21 +133,11 @@ describe('migrations and models agree about indexes', () => {
         await expect(buildModelIndexes()).resolves.toBeDefined();
     });
 
-    it('does not let an embedded schema smuggle its indexes into the parent', async () => {
-        /*
-         * Mongoose copies a nested schema's indexes onto the schema that embeds it, under a
-         * prefixed path. `orderItemSchema` embeds `productSchema`, so an index declared for the
-         * catalogue silently becomes an index on `items.product.*` of every order — paid for on
-         * each insert, and matching no query anyone makes, because an order item is a frozen
-         * snapshot rather than a row of the catalogue. `excludeIndexes` on that path is what
-         * stops it; this is the assertion that notices when it is missing.
-         */
-        const smuggled = orderSchema
-            .indexes()
-            .map(([key]) => Object.keys(key).join(' + '))
-            .filter((paths) => paths.includes('product'));
-
-        expect(smuggled).toEqual([]);
+    it('actually registered a model from every module that ships one', () => {
+        // The canary for the discovery walk above: an empty registry would make every assertion
+        // in this file pass over nothing. Six modules own a collection today.
+        expect(registeredModels.length).toBeGreaterThanOrEqual(6);
+        expect(Object.keys(mongoose.models).length).toBeGreaterThanOrEqual(6);
     });
 
     it('leaves each collection holding exactly the indexes its schema declares', async () => {

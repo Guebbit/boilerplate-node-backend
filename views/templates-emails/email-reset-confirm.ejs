@@ -3,8 +3,8 @@
 <%- include("../layouts/email-template-head.ejs"); %>
 <body>
 <main class="centered">
-    <h1><%= t('email.reset-confirm.greeting', { name }) %></h1>
-    <p><%= t('email.reset-confirm.body') %></p>
+    <h1><%= greeting %></h1>
+    <p><%= body %></p>
 </main>
 <%- include("../layouts/default-footer.ejs"); %>
 </body>

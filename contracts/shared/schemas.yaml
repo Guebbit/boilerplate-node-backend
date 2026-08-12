@@ -1,0 +1,333 @@
+        # ---------- Shared — scalars, envelopes and the entities more than one module references. ----------
+        Page:
+            type: integer
+            minimum: 1
+            default: 1
+            description: 1-based page index
+        PageSize:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+            description: Optional override; server may clamp to a max
+        Id:
+            type: string
+            description: Resource identifier
+        Text:
+            type: string
+            minLength: 1
+            description: Free-text search string
+        Email:
+            type: string
+            format: email
+        Password:
+            type: string
+            minLength: 8
+        Locale:
+            type: string
+            description: >-
+                BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports
+                is a runtime fact, not a contract one — ask `GET /locales`.
+            pattern: '^[a-z]{2}(-[A-Za-z0-9]+)*$'
+            example: it
+        ImageUrl:
+            type: string
+            format: uri-reference
+            description: >-
+                Absolute URL or server-relative upload path (e.g. `/uploads/abc.jpg`).
+                `uri-reference`, not `uri`: an uploaded image is stored and returned as a
+                path relative to the API host, which is not a valid absolute URI.
+
+        # ---------- On the `imageUpload` fields below (and why they carry no limits) ----------
+        #
+        # The six `*Multipart` request bodies each declare `imageUpload` as a bare
+        # `type: string, format: binary` — no `maxLength`, no `contentMediaType`. That is on
+        # purpose, and it is worth knowing why before someone "fixes" it.
+        #
+        # The real limits live in the backend, and only there:
+        #   - accepted mime types → src/infrastructure/adapters/storage.ts (image/png, jpg, jpeg, webp)
+        #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
+        # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
+        # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
+        # 422 when the declaration lied. Nothing a client declares can substitute for either gate.
+        #
+        # Declaring the constraints here would document them but generate nothing to read:
+        #   - orval's zod generator short-circuits on `format: binary` straight to
+        #     `zod.instanceof(File)` and emits no length constant for it
+        #     (@orval/zod, the `case "string"` branch);
+        #   - the `zodSchemas` target in orval.config.ts has no `splitByContentType`, so only the
+        #     JSON body of each operation becomes a schema — the multipart bodies never do.
+        # So a `maxLength` added here would reach no generated artefact in either repo, while
+        # looking like it had.
+        #
+        # The frontend therefore restates both numbers in src/infrastructure/uploads.ts, which names
+        # storage.ts as the authority and explains the same thing at its own call site. If the
+        # backend's limits ever change, that file is what has to change with them — nothing will
+        # announce the drift.
+
+        PaginationMeta:
+            type: object
+            additionalProperties: false
+            required: [page, pageSize, totalItems, totalPages]
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                totalItems:
+                    type: integer
+                    minimum: 0
+                totalPages:
+                    type: integer
+                    minimum: 0
+
+        # ---------- System Messages ----------
+
+        # The three `&envelope*` anchors below are the single definition of the success-envelope
+        # preamble. Every *Envelope schema aliases them with `*envelopeSuccess` etc., so the shape
+        # is written once here and the YAML parser expands it everywhere — no allOf, and therefore
+        # no schema that has to stay non-strict. See the note on ErrorResponse for why.
+        MessageResponse:
+            type: object
+            additionalProperties: false
+            required: [success, status, message]
+            properties:
+                success: &envelopeSuccess
+                    type: boolean
+                    enum: [true]
+                status: &envelopeStatus
+                    type: integer
+                message: &envelopeMessage
+                    type: string
+
+        ErrorItem:
+            type: object
+            additionalProperties: false
+            required: [code, message]
+            properties:
+                code:
+                    type: string
+                    description: Stable machine-readable error code
+                    example: VALIDATION_ERROR
+                message:
+                    type: string
+                    description: Human-readable error detail
+                    example: Field "email" is required
+                details:
+                    type: object
+                    additionalProperties: true
+                    description: Optional structured metadata for programmatic handling
+
+        # `additionalProperties: false` cannot live on a schema used as an `allOf` base: the
+        # constraint is evaluated per-subschema, so it would reject the properties a sibling
+        # contributes. Rather than leave the error/success envelopes unconstrained, they are
+        # written flat and share their preamble through YAML anchors.
+        ErrorResponse:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, errors]
+            properties:
+                success: &errorSuccess
+                    type: boolean
+                    enum: [false]
+                status: &errorStatus
+                    type: integer
+                message: &errorMessage
+                    type: string
+                    description: Human-readable summary for this failure
+                errors: &errorErrors
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/ErrorItem'
+                    description: Structured machine-friendly errors
+
+        ValidationErrorResponse:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, errors]
+            properties:
+                success: *errorSuccess
+                status: *errorStatus
+                message:
+                    type: string
+                    description: Human-readable summary for this failure
+                    example: Validation failed
+                errors: *errorErrors
+
+        # ---------- Domain ----------
+
+        # All success responses are wrapped in a standard envelope:
+        # { success: true, status: number, message: string, data: <payload> }
+        # The schemas below describe the "data" payload for each endpoint.
+        # Wrapped response schemas below combine the envelope with the domain payload.
+
+        UserEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/User'
+
+        User:
+            type: object
+            additionalProperties: false
+            required: [id, email, username]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                admin:
+                    type: boolean
+                # Independent of `deletedAt` below: an account can be deactivated without being
+                # deleted, and a deleted one keeps whatever `active` it had. They share an effect,
+                # not a value — see the note on `CreateProductRequest.active`.
+                active:
+                    type: boolean
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                # Present only on a soft-deleted account, exactly as on `Product`. With `active` an
+                # independent fact, this is the only thing that tells a deleted account from a
+                # live one. Safe to expose: every route serving a `User` list is admin-only, and
+                # `/account` serves the caller their own record.
+                deletedAt:
+                    type: string
+                    format: date-time
+
+        Product:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                active:
+                    type: boolean
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+
+        CartItem:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        OrderItem:
+            type: object
+            additionalProperties: false
+            required: [product, quantity]
+            properties:
+                product:
+                    $ref: '#/components/schemas/Product'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        Order:
+            type: object
+            additionalProperties: false
+            required: [id, userId, email, items, totalItems, totalQuantity, totalPrice, status]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                userId:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderItem'
+                totalItems:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        Number of distinct line items in this order. Not to be confused with
+                        `PaginationMeta.totalItems`, which counts orders matching a search.
+                    example: 2
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of `quantity` across every line item.
+                    example: 5
+                totalPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of `product.price × quantity` across every line item.
+                    example: 149.97
+                notes:
+                    type: string
+                    description: Optional order notes
+                status:
+                    type: string
+                    enum: [pending, paid, processing, shipped, delivered, cancelled]
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                # Unlike a product or a user, an order carries no `active` flag, so this is the
+                # only thing that distinguishes a hidden order from a live one. A non-admin never
+                # sees a record where it is set — `visibleScope` filters them out — so it appears
+                # only on admin reads.
+                deletedAt:
+                    type: string
+                    format: date-time
+
+        # For the path-form deletes, which need no id — `{id}` already carries it — but do
+        # read the flag from a body as readily as from the query.
+        HardDeleteRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                hardDelete:
+                    type: boolean
+                    default: false
+

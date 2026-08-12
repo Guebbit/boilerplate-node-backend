@@ -23,7 +23,7 @@ Each section links to the dedicated page for configuration details and code poin
 
 **Problem it solves.** Raw Node.js `http` is verbose. Express gives you a clean way to declare routes, chain middleware (auth, logging, validation), and send responses — without locking you into an opinionated full-stack framework.
 
-**In this repo.** Express 5 is the transport layer. Routes match URLs, middlewares handle auth and rate limiting, and controllers convert HTTP input into service calls. Everything lives in `src/app.ts` (which assembles the pipeline from `src/bootstrap/*`) → `src/routes/` → `src/middlewares/` → `src/controllers/`.
+**In this repo.** Express 5 is the transport layer. Routes match URLs, middlewares handle auth and rate limiting, and controllers convert HTTP input into service calls. Everything lives in `src/app.ts` (which assembles the pipeline from `src/app/*`), then a module's own `routes.ts` → `src/kernel/middlewares/` → the module's `controllers/`. Every domain is a module and mounts itself from its manifest; the only router `src/app/routes.ts` still names is the system ping.
 
 → [Runtime](./runtime.md)
 
@@ -71,7 +71,7 @@ Each section links to the dedicated page for configuration details and code poin
 
 **Problem it solves.** Without rate limiting, a single client can flood the API with requests, degrading it for everyone else or escalating a brute-force credential attack.
 
-**In this repo.** Applied globally in `src/bootstrap/security.ts`. Window and max-requests are configurable via `NODE_RATE_LIMIT_WINDOW_MS` and `NODE_RATE_LIMIT_MAX`.
+**In this repo.** Applied globally in `src/app/security.ts`. Window and max-requests are configurable via `NODE_RATE_LIMIT_WINDOW_MS` and `NODE_RATE_LIMIT_MAX`.
 
 → [Security](./security.md)
 
@@ -97,7 +97,7 @@ Each section links to the dedicated page for configuration details and code poin
 
 **Problem it solves.** The raw MongoDB driver accepts anything — no schema enforcement, no typed results. Mongoose adds schema validation, relationships via `ref`, query helpers, and TypeScript types so the persistence layer is typed and predictable.
 
-**In this repo.** Every collection has a Mongoose model in `src/models/`. Repositories in `src/repositories/` use those models exclusively. Controllers never call Mongoose directly.
+**In this repo.** Every collection has a Mongoose model at `src/modules/<name>/model.ts`, and the matching `repository.ts` beside it uses that model exclusively. Controllers never call Mongoose directly. The shared substrate every model builds on lives in `src/infrastructure/persistence/`.
 
 → [MongoDB & Mongoose](./mongodb-mongoose.md)
 
@@ -121,7 +121,7 @@ Each section links to the dedicated page for configuration details and code poin
 
 **Problem it solves.** Some operations (sending email, generating a PDF) are slow or unreliable. Running them inside the HTTP handler means the client waits for them to finish — and if they fail, the request fails too. A message queue decouples the trigger from the work: the handler publishes a job and responds immediately; a separate consumer does the heavy work at its own pace and retries on failure.
 
-**In this repo.** Used for email delivery and async PDF generation. Controllers publish to the `emails` or `pdf` queue via `publishToQueue()`. Workers in `src/workers/` consume those queues. When RabbitMQ is not configured all queue calls silently no-op.
+**In this repo.** Used for email delivery and async PDF generation. Controllers publish to the `emails` or `pdf` queue via `publishToQueue()`. Workers in `src/infrastructure/adapters/` consume those queues. When RabbitMQ is not configured all queue calls silently no-op.
 
 → [RabbitMQ](./rabbitmq.md)
 
@@ -159,9 +159,9 @@ Each section links to the dedicated page for configuration details and code poin
 
 **Problem it solves.** HTTP is request-response: the client asks, the server answers. For live dashboards the server needs to push without waiting for a poll, which is wasteful and adds latency proportional to the poll interval. SSE gets that push for the common server → client case with no new protocol, no upgrade handshake, and no extra dependency.
 
-**In this repo.** `GET /observability/events` streams live process metrics — an initial snapshot, then updates every 5 s and a heartbeat every 15 s. It is an ordinary Express route (`src/core/observability/stream.ts`), so all the usual middleware applies. Event names and payload shapes come from `asyncapi.yaml`.
+**In this repo.** `GET /observability/events` streams live process metrics — an initial snapshot, then updates every 5 s and a heartbeat every 15 s. It is an ordinary Express route (`src/infrastructure/observability/stream.ts`), so all the usual middleware applies. Event names and payload shapes come from `asyncapi.yaml`.
 
-**Why not WebSockets.** This boilerplate has no bidirectional realtime layer on purpose. WebSockets bypass Express entirely (they are handled on the HTTP server's `'upgrade'` event), so auth, rate limiting and request logging all have to be re-implemented for them; and because a connection is pinned to one cluster worker, anything shared between connections needs a Redis/NATS backplane. That is a real architectural commitment, not scaffolding — so it is left to you rather than half-shipped as a demo. If you need it, add `ws` and an `'upgrade'` listener in `src/app.ts`; `src/core/adapters/cache.ts` already has a working Redis pub/sub pair to model the backplane on.
+**Why not WebSockets.** This boilerplate has no bidirectional realtime layer on purpose. WebSockets bypass Express entirely (they are handled on the HTTP server's `'upgrade'` event), so auth, rate limiting and request logging all have to be re-implemented for them; and because a connection is pinned to one cluster worker, anything shared between connections needs a Redis/NATS backplane. That is a real architectural commitment, not scaffolding — so it is left to you rather than half-shipped as a demo. If you need it, add `ws` and an `'upgrade'` listener in `src/app.ts`; `src/infrastructure/adapters/cache.ts` already has a working Redis pub/sub pair to model the backplane on.
 
 → [Observability Endpoints](../api/observability.md)
 

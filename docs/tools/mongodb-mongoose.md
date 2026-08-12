@@ -104,18 +104,18 @@ Options count too: same key and name but a different `unique`, `expireAfterSecon
 Seeds populate the database with **known test data** for local development.
 The seed runner lives in `db/seeds/index.ts` and uses the Mongoose repository layer (not raw Mongo), so pre-save hooks (e.g. password hashing) run normally.
 
-The dataset itself is split across two files next to it, and the split matters:
+The dataset itself is split by ROLE, and the split matters:
 
-| File                          | Holds                                                                                                                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db/seeds/seed-identities.ts` | The **facts** — ids, emails, admin flags, titles, prices, active/deleted state, who has what in their cart and their orders. Dependency-free plain data                        |
-| `db/seeds/fixtures.ts`        | The **mapper** into mongoose shape — `Types.ObjectId`s, real `Date`s, a cart per user in the `carts` collection, and the denormalised product snapshot each order item carries |
+| File                          | Holds                                                                                                                                                                                                                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db/seeds/seed-identities.ts` | The **facts** — ids, emails, admin flags, titles, prices, active/deleted state, who has what in their cart and their orders. Dependency-free plain data. Assembled by `npm run contracts:bundle` from `src/modules/<name>/seed-identities.fragment.ts`, so each domain owns its own records; do not hand-edit it |
+| `src/modules/<name>/seeds.ts` | The **mapper** into mongoose shape, one per module — `Types.ObjectId`s, real `Date`s, a cart per user in the `carts` collection, and the denormalised product snapshot each order item carries. Declared as `seeds` in the module manifest; `db/seeds/index.ts` walks the registry and names no domain           |
 
-`seed-identities.ts` is **byte-identical** to a copy in the paired frontend (`tests/mocks/shared/seed-identities.ts`), on the same convention as `scripts/gen-asyncapi-types.ts`: change it in one repo and copy it to the other. `npm run check:spec-identity` answers "have the seeds drifted?" — it covers this file as a path _pair_, since the two repos keep it in different places, and the `spec-identity` CI job fails the build on the commit that forks it.
+`seed-identities.ts` is **byte-identical** to a copy in the paired frontend (`tests/support/mocks/seed-identities.ts`). This repo authors it and the frontend holds the result, so a fix goes in the fragment here and the rebuilt file is copied over — editing the copy there is reverted by the next bundle. `npm run check:spec-identity` answers "have the seeds drifted?" — it covers this file as a path _pair_, since the two repos keep it in different places, and the `spec-identity` CI job fails the build on the commit that forks it.
 
 ```bash
 diff boilerplate-node-api-mongodb-mongoose/db/seeds/seed-identities.ts \
-     boilerplate-vue-frontend/tests/mocks/shared/seed-identities.ts
+     boilerplate-vue-frontend/tests/support/mocks/seed-identities.ts
 ```
 
 It holds identities rather than whole fixtures because the two sides genuinely need different shapes from the same facts — mongoose documents here, API response entities there — so each repo keeps its own mapper. It must stay dependency-free (no mongoose import, however tempting): the frontend loads it under Vite/vitest ESM, and a single Node-only import would make it unloadable there. The parity it protects is not hypothetical — the frontend's mock once served all 5 products to everyone while this API served 3 to non-admins, and the spec asserted the mock's number and passed.
@@ -146,7 +146,7 @@ Fixed `ObjectId` values are used so the data is repeatable and predictable acros
 
 ## External references
 
-- [Mongoose plugins](https://mongoosejs.com/docs/plugins.html) — used in `src/core/bootstrap/database.ts` for query metrics
+- [Mongoose plugins](https://mongoosejs.com/docs/plugins.html) — used in `src/infrastructure/runtime/database.ts` for query metrics
 - [migrate-mongo usage](https://github.com/seppevs/migrate-mongo#usage)
 
 ## Related pages

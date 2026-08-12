@@ -3,10 +3,10 @@
 <%- include("../layouts/email-template-head.ejs"); %>
 <body>
     <main class="centered">
-        <h1><%= t('email.delete-request.greeting', { name }) %></h1>
-        <p><%= t('email.delete-request.intro') %></p>
-        <p><a href="<%= process.env.NODE_URL + 'account/delete/' + token %>"><%= t('email.delete-request.link-label') %></a></p>
-        <p><%= t('email.delete-request.ignore') %></p>
+        <h1><%= greeting %></h1>
+        <p><%= intro %></p>
+        <p><a href="<%= linkUrl %>"><%= linkLabel %></a></p>
+        <p><%= ignore %></p>
     </main>
     <%- include("../layouts/default-footer.ejs"); %>
 </body>

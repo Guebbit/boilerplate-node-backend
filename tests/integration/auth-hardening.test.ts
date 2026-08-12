@@ -1,8 +1,8 @@
 import express from 'express';
 import supertest from 'supertest';
-import { api } from '../helpers/http';
-import { setupTestDb } from '../helpers/setup-test-db';
-import { createUser, PLAIN_PASSWORD } from '../helpers/factories/users';
+import { api } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 
 /**
  * Two hardening properties that are invisible until someone attacks them.
@@ -15,14 +15,14 @@ setupTestDb();
  *
  * `rateLimit()` reads its options once, at construction, so the module has to be re-evaluated
  * for a different budget to take effect — the suite otherwise runs with the raised limit from
- * `tests/helpers/setup.ts`.
+ * `tests/support/setup.ts`.
  */
 const limiterWithBudget = async (limit: number) => {
     const original = process.env.NODE_AUTH_RATE_LIMIT_MAX;
     process.env.NODE_AUTH_RATE_LIMIT_MAX = String(limit);
     jest.resetModules();
 
-    const { authRateLimiter } = await import('@middlewares/security');
+    const { authRateLimiter } = await import('@infrastructure/http/middlewares/security');
 
     if (original === undefined) delete process.env.NODE_AUTH_RATE_LIMIT_MAX;
     else process.env.NODE_AUTH_RATE_LIMIT_MAX = original;
@@ -103,7 +103,7 @@ describe('the 500 handler', () => {
      * key in it. None of it may reach an unauthenticated caller.
      */
     it('tells the client nothing about what actually threw', async () => {
-        const { handleUncaughtError } = await import('../../src/bootstrap/error-handling');
+        const { handleUncaughtError } = await import('@app/error-handling');
         const secret = 'mongodb://admin:hunter2@internal-db:27017';
 
         const throwing = express();
@@ -128,8 +128,8 @@ describe('the 500 handler', () => {
      * would turn every deliberate rejection into a blank 500.
      */
     it('still returns the copy a deliberate error carries', async () => {
-        const { handleUncaughtError } = await import('../../src/bootstrap/error-handling');
-        const errors = await import('@core/http/errors');
+        const { handleUncaughtError } = await import('@app/error-handling');
+        const errors = await import('@infrastructure/http/errors');
 
         const throwing = express();
         throwing.get('/boom', () => {

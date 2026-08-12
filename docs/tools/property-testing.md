@@ -36,11 +36,11 @@ This repo learned the value the expensive way, before adopting the technique. `p
 
 Pure, total, and rich in invariants:
 
-| Target                   | Invariants worth stating                                                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `core/totals.ts`         | order-independent, non-negative, zero for empty, additive over concatenation, never `NaN`                                             |
-| `models/serialize.ts`    | `_id` → `id` always, `__v` always gone, omitted keys always gone, never mutates its input, idempotent                                 |
-| `repositories/search.ts` | `escapeRegex` never produces an uncompilable pattern, always matches its own input literally, strips every metacharacter of its power |
+| Target                     | Invariants worth stating                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `infrastructure/totals.ts` | order-independent, non-negative, zero for empty, additive over concatenation, never `NaN`                                             |
+| `models/serialize.ts`      | `_id` → `id` always, `__v` always gone, omitted keys always gone, never mutates its input, idempotent                                 |
+| `repositories/search.ts`   | `escapeRegex` never produces an uncompilable pattern, always matches its own input literally, strips every metacharacter of its power |
 
 A function whose only "invariant" is its exact return value for one input is not a property target — write an example.
 
@@ -78,12 +78,12 @@ That second one is worth internalising: a property that fails on your own assert
 
 ## File map
 
-| Path                                              | Contents                                                          |
-| ------------------------------------------------- | ----------------------------------------------------------------- |
-| `tests/unit/core/totals.property.test.ts`         | Arithmetic invariants, totality against hostile line items        |
-| `tests/unit/models/serialize.property.test.ts`    | Serializer guarantees over arbitrary document shapes              |
-| `tests/unit/repositories/search.property.test.ts` | `escapeRegex` as a denial-of-service control; pagination totality |
-| `tests/unit/repositories/search-regex.test.ts`    | The example-based half — timing, named metacharacters, negatives  |
+| Path                                                | Contents                                                          |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| `tests/unit/infrastructure/totals.property.test.ts` | Arithmetic invariants, totality against hostile line items        |
+| `tests/unit/models/serialize.property.test.ts`      | Serializer guarantees over arbitrary document shapes              |
+| `tests/unit/repositories/search.property.test.ts`   | `escapeRegex` as a denial-of-service control; pagination totality |
+| `tests/unit/repositories/search-regex.test.ts`      | The example-based half — timing, named metacharacters, negatives  |
 
 The same technique and the same two rules apply in the paired frontend, over `utils/formatters.ts` and `utils/uploads.ts`.
 

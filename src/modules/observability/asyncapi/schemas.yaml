@@ -1,0 +1,59 @@
+        ObservabilityMetricsPayload:
+            type: object
+            required:
+                - timestamp
+                - uptimeSeconds
+                - memory
+                - http
+                - realtime
+            properties:
+                timestamp:
+                    type: string
+                    format: date-time
+                uptimeSeconds:
+                    type: integer
+                    minimum: 0
+                memory:
+                    type: object
+                    required:
+                        - rss
+                        - heapUsed
+                        - heapTotal
+                        - external
+                    properties:
+                        rss:
+                            type: integer
+                            minimum: 0
+                        heapUsed:
+                            type: integer
+                            minimum: 0
+                        heapTotal:
+                            type: integer
+                            minimum: 0
+                        external:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+                http:
+                    type: object
+                    required:
+                        - totalRequests
+                        - totalErrors
+                    properties:
+                        totalRequests:
+                            type: integer
+                            minimum: 0
+                        totalErrors:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+                realtime:
+                    type: object
+                    required:
+                        - sseClients
+                    properties:
+                        sseClients:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+            additionalProperties: false

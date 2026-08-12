@@ -1,0 +1,429 @@
+  - name: Account
+    meta:
+      id: fld_ca20728d35f00c3a4c21b1fc8b0086b5
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 3000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/account"
+        name: Current user info
+        meta:
+          id: req_8e32ffa4521e86cce694d1091b6a02d4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Current user info
+          sortKey: 3001
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account"
+        name: Request account deletion
+        meta:
+          id: req_469e8c9aa43009c545c4794e74dfc5aa
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Request account deletion
+          sortKey: 3002
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/delete-confirm"
+        name: Confirm account deletion
+        meta:
+          id: req_a28daab6e65f0eb3920608dccaea215a
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Confirm account deletion
+          sortKey: 3003
+        method: DELETE
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "token": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/login"
+        name: Login
+        meta:
+          id: req_a6a8647ee4dcc7c8cba1c2933385bed4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Login
+          sortKey: 3004
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "root@root.it",
+              "password": "rootroot"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/signup"
+        name: Signup
+        meta:
+          id: req_c80e80e54038665739d9b29375765e39
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Signup
+          sortKey: 3005
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "username": "ginopinoshow",
+              "email": "gino@pino.it",
+              "password": "password"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/reset"
+        name: requestPasswordReset
+        meta:
+          id: req_b99332bfc6e1c51b040c4923aefffdda
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
+          sortKey: 3006
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "gino@pino.it"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/reset-confirm"
+        name: confirmPasswordReset
+        meta:
+          id: req_9a03458356648a3ff0b153167171012e
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
+          sortKey: 3007
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "token": "string",
+              "password": "password",
+              "passwordConfirm": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/refresh"
+        name: Refresh access token
+        meta:
+          id: req_16873a1938e9ea2ddd5da8c1d72eda68
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Refresh access token
+          sortKey: 3008
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/logout-all"
+        name: Logout from all devices
+        meta:
+          id: req_58bed8986803301b3b77c330d0e73de0
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Logout from all devices
+          sortKey: 3009
+        method: POST
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/tokens/expired"
+        name: Remove expired tokens
+        meta:
+          id: req_4ddaa0b1d521ee890f7b02543ecabd4d
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Remove expired tokens
+          sortKey: 3010
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/login"
+        name: "Probe: log in as the non-admin"
+        meta:
+          id: req_a6a8647ee4dcc7c8cba1c2933385bed4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: "Every generated login is the admin's, because a non-admin token makes half the collection answer 403. This is the other identity: log in with it to see those 403s deliberately, and to check that role scoping hides what it should."
+          sortKey: 3011
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "gino@pino.it",
+              "password": "password"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account"
+        name: "Probe: 401 with a bogus token"
+        meta:
+          id: req_8e32ffa4521e86cce694d1091b6a02d4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: The contract declares the 401 response but no request that causes one. This sends a token that was never issued, which is the cheapest way to see the real error envelope — and to confirm the API answers 401 rather than 500 when the signature does not verify.
+          sortKey: 3012
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+          - name: Authorization
+            value: Bearer not.a.real.token
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/signup"
+        name: "Probe: 409 on a signup that already exists"
+        meta:
+          id: req_c80e80e54038665739d9b29375765e39
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Registers the seeded admin's email a second time. The contract declares 409 for this operation; nothing in it can express the state that produces one.
+          sortKey: 3013
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "username": "root",
+              "email": "root@root.it",
+              "password": "rootroot"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/login"
+        name: "Probe: rate limit (send repeatedly)"
+        meta:
+          id: req_a6a8647ee4dcc7c8cba1c2933385bed4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: A wrong password on purpose. Send it in a burst — the auth rate limiter answers 429, a status the contract never declares because it belongs to middleware rather than to any operation.
+          sortKey: 3014
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "root@root.it",
+              "password": "wrong-on-purpose"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

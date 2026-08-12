@@ -1,0 +1,64 @@
+{
+    "account": {
+        "login": {
+            "invalid-data": "I dati inseriti non sono validi.",
+            "wrong-data": "Email o password non validi.",
+            "success": "Accesso effettuato."
+        },
+        "signup": {
+            "email-already-used": "L'email è già stata utilizzata.",
+            "password-dont-match": "La password di conferma deve essere uguale alla password.",
+            "registration-successful": "Registrazione completata, conferma via email per accedere."
+        },
+        "reset": {
+            "email-not-found": "Nessun utente associato all'email inserita è stato trovato.",
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "email-sent": "È stata inviata un'email con un link, clicca per reimpostare la password.",
+            "success": "Password modificata, accedi con la nuova password."
+        },
+        "delete": {
+            "email-sent": "È stata inviata un'email di conferma. Clicca sul link per confermare l'eliminazione dell'account.",
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "success": "Account eliminato definitivamente."
+        },
+        "email": {
+            "registration-confirm": {
+                "subject": "Benvenuto — il tuo account è pronto",
+                "meta-title": "Registrazione completata",
+                "title": "Benvenuto a bordo {{name}}!",
+                "body": "La registrazione è andata a buon fine."
+            },
+            "reset-request": {
+                "subject": "Reimpostazione della password",
+                "meta-title": "Reimpostazione della password richiesta",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Abbiamo ricevuto una richiesta di reimpostazione della password.",
+                "cta": "Clicca su questo link per impostare una nuova password.",
+                "link-label": "Reimposta la password",
+                "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
+            },
+            "reset-confirm": {
+                "subject": "La tua password è stata cambiata",
+                "meta-title": "Password reimpostata",
+                "greeting": "Ciao, {{name}}!",
+                "body": "La tua password è stata reimpostata."
+            },
+            "delete-request": {
+                "subject": "Conferma l'eliminazione dell'account",
+                "meta-title": "Eliminazione dell'account richiesta",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Abbiamo ricevuto una richiesta di eliminazione definitiva del tuo account.",
+                "cta": "Clicca su questo link per confermare l'eliminazione dell'account.",
+                "link-label": "Conferma l'eliminazione",
+                "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
+            },
+            "delete-confirm": {
+                "subject": "Il tuo account è stato eliminato",
+                "meta-title": "Account eliminato",
+                "greeting": "Ciao, {{name}}!",
+                "body": "Il tuo account è stato eliminato definitivamente.",
+                "farewell": "Ci dispiace vederti andare via. Se si è trattato di un errore, contatta l'assistenza."
+            }
+        }
+    }
+}
