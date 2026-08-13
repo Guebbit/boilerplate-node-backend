@@ -19,7 +19,9 @@
             "subject": "Order confirmed",
             "meta-title": "Order confirmed",
             "greeting": "Hello, {{name}}!",
-            "body": "Your order has been confirmed."
+            "body": "Your order has been confirmed.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Total: {{total}}"
         },
         "insufficient-stock": "One or more products on this order exceed the available stock."
     }

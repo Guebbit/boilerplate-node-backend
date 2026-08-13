@@ -5,7 +5,8 @@
 
 import { Types } from 'mongoose';
 import type { CastError } from 'mongoose';
-import { t } from '@infrastructure/i18n';
+import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
     generateSuccess,
     generateReject,
@@ -13,7 +14,7 @@ import {
     type IResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { orderRepository, type IOrderDocument } from '@modules/orders';
+import { orderRepository, orderConfirmEmail, type IOrderDocument } from '@modules/orders';
 import { userRepository } from '@modules/users';
 import { productRepository } from '@modules/products';
 import { addressForCheckout, type IAddressItem } from '@modules/account';
@@ -183,8 +184,26 @@ export const orderConfirm = (
                                 cartRepository
                                     .clearLinesIfUnchanged(userId, version)
                                     .then((clearedCart) => {
-                                        if (clearedCart)
+                                        if (clearedCart) {
+                                            /*
+                                             * The confirmation, from the service unlike every
+                                             * other email: only this point knows the order stood,
+                                             * and only here is the recipient's record in scope —
+                                             * the email goes out in the customer's own language,
+                                             * not the request's.
+                                             */
+                                            const mail = orderConfirmEmail(
+                                                user.locale ?? getDefaultLocale(),
+                                                user.username,
+                                                order
+                                            );
+                                            void enqueueEmail(
+                                                { to: user.email, subject: mail.subject },
+                                                mail.template,
+                                                mail.data
+                                            );
                                             return generateSuccess<IOrderDocument>(order);
+                                        }
 
                                         // Lost the race: retract the order this request wrote
                                         // and put its units back, so the cart's contents end up

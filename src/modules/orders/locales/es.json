@@ -19,7 +19,9 @@
             "subject": "Pedido confirmado",
             "meta-title": "Pedido confirmado",
             "greeting": "¡Hola, {{name}}!",
-            "body": "Tu pedido se ha confirmado."
+            "body": "Tu pedido se ha confirmado.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Total: {{total}}"
         },
         "insufficient-stock": "Uno o más productos de este pedido superan el stock disponible."
     }

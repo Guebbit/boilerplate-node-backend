@@ -50,6 +50,8 @@ const transportOptions = async (
         pageMetaLinks: [],
         greeting: '',
         body: '',
+        lines: [],
+        total: '',
         footer: ''
     }).catch(() => {});
 

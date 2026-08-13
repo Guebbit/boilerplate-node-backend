@@ -9,6 +9,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Checkout emails the customer what they bought.** `POST /cart/checkout` now dispatches the
+  order-confirmation email that until now only the admin `POST /orders` path sent — and the email
+  finally says something: `orderConfirmEmail` takes the order's lines and resolves one translated
+  string per bought product plus a total (through `sumLineItems`, so the email quotes the number
+  the order stands for — never a second sum). The dispatch lives in the checkout service rather
+  than the controller, unlike every other email, because only the point past the conditional cart
+  clear knows the order stood, and only there is the customer's record in scope: the email goes
+  out in the recipient's language (`user.locale`), not the request's. A refused checkout sends
+  nothing — "stock moved if and only if the order stands" now extends to the inbox.
+
 - **`docs/theory/module-lifecycle.md` — adding and removing a domain as a procedure, not a
   measurement.** `modules.md` said what a domain costs and proved it; it never said what to type.
   The new page is the ordered procedure in both directions: the four registries and which three of

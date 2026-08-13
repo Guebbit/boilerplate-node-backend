@@ -10,9 +10,31 @@
 
 import type { IEmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import { sumLineItems } from './domain';
 
-/** Order confirmation, sent to the customer. */
-export const orderConfirmEmail = (locale: string, name: string): IEmailContent => {
+/**
+ * The minimum either document needs from an order: a title and a price per line.
+ *
+ * Structural rather than `IOrderDocument`: what the documents print is the lines, and asking for
+ * less than the whole document keeps both builders callable from a test with a two-line fixture.
+ */
+export interface IOrderLines {
+    items: { quantity: number; product: { title: string; price: number } }[];
+}
+
+/**
+ * Order confirmation, sent to the customer.
+ *
+ * The bought lines are resolved here, one translated string each, for the same reason the invoice
+ * does it — per-line copy interpolates per-line values, so it cannot be a single string decided up
+ * front. The total is `sumLineItems`' arithmetic, not a fresh sum: the email quotes the number the
+ * order stands for.
+ */
+export const orderConfirmEmail = (
+    locale: string,
+    name: string,
+    order: IOrderLines
+): IEmailContent => {
     const t = translator(locale);
     return {
         template: 'orders.order-confirm.ejs',
@@ -23,21 +45,22 @@ export const orderConfirmEmail = (locale: string, name: string): IEmailContent =
             pageMetaLinks: [],
             greeting: t('orders.email-confirm.greeting', { name }),
             body: t('orders.email-confirm.body'),
+            lines: order.items.map((item) =>
+                t('orders.email-confirm.line', {
+                    title: item.product.title,
+                    quantity: item.quantity,
+                    price: item.product.price
+                })
+            ),
+            total: t('orders.email-confirm.total', { total: sumLineItems(order.items).price }),
             footer: t('email.footer')
         }
     };
 };
 
-/**
- * The minimum an invoice needs from an order.
- *
- * Structural rather than `IOrderDocument`: what the document prints is a title and a price per
- * line, and asking for less than the whole document keeps this callable from a test with a
- * two-line fixture.
- */
-export interface IInvoiceOrder {
+/** What the invoice needs beyond the lines: the order's id, for the document title. */
+export interface IInvoiceOrder extends IOrderLines {
     _id?: unknown;
-    items: { quantity: number; product: { title: string; price: number } }[];
 }
 
 /**

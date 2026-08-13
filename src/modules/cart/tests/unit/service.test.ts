@@ -24,6 +24,15 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+
+// The queue, not the copy: what checkout owes the customer is that a confirmation was DISPATCHED
+// exactly when the order stood. The copy itself is pinned by the mailer template suite.
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    enqueueEmail: jest.fn()
+}));
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import {
@@ -540,6 +549,35 @@ describe('orderConfirm', () => {
 
         expect(asReject(result).status).toBe(404);
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it('sends the customer a confirmation email listing the bought lines', async () => {
+        mockEnqueueEmail.mockClear();
+        const user = await createUser();
+        const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
+        await cartItemSetById(user.id, String(keyboard._id), 2);
+
+        const result = await orderConfirm(user.id);
+
+        expect(result.success).toBe(true);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(user.email);
+        expect(template).toBe('orders.order-confirm.ejs');
+        // The lines are the order's own snapshot, priced — not the cart's ids.
+        expect(data?.lines).toEqual(['Keyboard — 2 × 25']);
+        expect(data?.total).toBe('Total: 50');
+    });
+
+    it('sends no email when the checkout is refused', async () => {
+        // "Stock moved if and only if the order stands" extends to the inbox: a refused
+        // checkout must not congratulate anyone.
+        mockEnqueueEmail.mockClear();
+        const user = await createUser();
+
+        await orderConfirm(user.id);
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 
     it('names a vanished product CART_PRODUCT_UNAVAILABLE', async () => {

@@ -73,8 +73,18 @@ export const writeOrders = (
 
                 // The request's own language: an admin-created order has no recipient record to take
                 // one from. Admin-created orders only have an email, so it stands in for the name.
-                const mail = orderConfirmEmail(request.locale ?? getDefaultLocale(), email);
-                void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
+                if (result.data) {
+                    const mail = orderConfirmEmail(
+                        request.locale ?? getDefaultLocale(),
+                        email,
+                        result.data
+                    );
+                    void enqueueEmail(
+                        { to: email, subject: mail.subject },
+                        mail.template,
+                        mail.data
+                    );
+                }
 
                 orderCreatedTotal.inc();
                 const orderId = result.data?._id?.toString() ?? '';

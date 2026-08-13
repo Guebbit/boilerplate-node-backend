@@ -73,7 +73,12 @@ const contentFor = (locale: string): Record<string, IEmailContent> => ({
     'account.reset-confirm.ejs': resetConfirmEmail(locale, 'Ada'),
     'account.delete-request.ejs': deleteRequestEmail(locale, 'Ada', 'a-token'),
     'account.delete-confirm.ejs': deleteConfirmEmail(locale, 'Ada'),
-    'orders.order-confirm.ejs': orderConfirmEmail(locale, 'Ada'),
+    'orders.order-confirm.ejs': orderConfirmEmail(locale, 'Ada', {
+        items: [
+            { quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } },
+            { quantity: 1, product: { title: 'A whole ham', price: 42 } }
+        ]
+    }),
     'feedback.contact.ejs': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',

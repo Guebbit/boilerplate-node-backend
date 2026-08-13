@@ -18,6 +18,9 @@
 
 export { orderService } from './service';
 export { orderRepository } from './repository';
+// `cart` sends the customer's confirmation itself: only the checkout knows the order stood, and
+// only the service has the recipient's record in scope for the language it goes out in.
+export { orderConfirmEmail } from './emails';
 export { orderModel } from './model';
 export type { IOrderDocument, IOrderDocumentItem } from './model';
 export { sumLineItems } from './domain';
