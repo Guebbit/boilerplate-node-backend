@@ -15,9 +15,54 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { orderRepository, type IOrderDocument } from '@modules/orders';
 import { userRepository } from '@modules/users';
+import { productRepository } from '@modules/products';
+import { addressForCheckout, type IAddressItem } from '@modules/account';
 import { cartRepository } from '../repository';
 import { evaluateCheckout } from '../domain';
-import { isJoined, readCartLines } from './view';
+import { isJoined, readCartLines, type TJoinedCartLine } from './view';
+
+/**
+ * Decrement every line's stock, or none of it.
+ *
+ * Sequential and conditional per line: mongod holds each product while checking
+ * `stock >= quantity`, so two checkouts racing the last unit resolve there. A line that fails
+ * puts back everything taken so far — no transaction, same reasoning as the checkout's own
+ * conditional cart clear: the write shape carries the guarantee.
+ *
+ * @returns whether every line was taken
+ */
+const takeStock = async (lines: readonly TJoinedCartLine[]): Promise<boolean> => {
+    const taken: TJoinedCartLine[] = [];
+
+    for (const line of lines) {
+        const ok = await productRepository.decrementStock(String(line.productId), line.quantity);
+        if (!ok) {
+            await restoreStock(taken);
+            return false;
+        }
+        taken.push(line);
+    }
+    return true;
+};
+
+/**
+ * The snapshot an order embeds, from a book entry: the shipment's fields, none of the book's.
+ * Spelled field by field so the entry's `_id`/`default` cannot ride along into the order.
+ */
+const toShippingAddress = (address: IAddressItem) => ({
+    fullName: address.fullName,
+    street: address.street,
+    city: address.city,
+    zip: address.zip,
+    country: address.country,
+    ...(address.phone === undefined ? {} : { phone: address.phone })
+});
+
+/** Put every line's units back — the failure paths' half of `takeStock`'s invariant. */
+const restoreStock = async (lines: readonly TJoinedCartLine[]): Promise<void> => {
+    for (const line of lines)
+        await productRepository.incrementStock(String(line.productId), line.quantity);
+};
 
 /**
  * Create order from current user cart and empty the cart.
@@ -47,12 +92,27 @@ import { isJoined, readCartLines } from './view';
  * conditional write rather than a transaction.
  */
 export const orderConfirm = (
-    userId: string
+    userId: string,
+    addressId?: string
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
     userRepository
         .findById(userId)
-        .then<IResponseSuccess<IOrderDocument> | IResponseReject>((user) => {
+        .then<IResponseSuccess<IOrderDocument> | IResponseReject>(async (user) => {
             if (!user) return generateReject(404, []);
+
+            /*
+             * Which address ships. Resolved BEFORE any stock moves: a named entry that is not
+             * the caller's refuses the checkout while nothing has been written yet. `undefined`
+             * — no entry named, none default — is fine; an address is not required to buy.
+             */
+            const address = await addressForCheckout(userId, addressId);
+            if (address === null)
+                return generateReject(404, [
+                    {
+                        code: 'CART_ADDRESS_NOT_FOUND',
+                        message: t('cart.address-not-found')
+                    }
+                ]);
 
             return cartRepository.findByUserId(userId).then((cart) => {
                 // The version the lines below are read at, and the condition the cart is emptied
@@ -69,44 +129,80 @@ export const orderConfirm = (
                      * while `message` is translated for the user.
                      */
                     const verdict = evaluateCheckout(lines);
-                    if (!verdict.ok)
-                        return verdict.reason === 'empty'
-                            ? generateReject(409, [
-                                  { code: 'CART_EMPTY', message: t('cart.empty') }
-                              ])
-                            : generateReject(404, [
-                                  {
-                                      code: 'CART_PRODUCT_UNAVAILABLE',
-                                      message: t('cart.product-unavailable')
-                                  }
-                              ]);
+                    if (!verdict.ok) {
+                        if (verdict.reason === 'empty')
+                            return generateReject(409, [
+                                { code: 'CART_EMPTY', message: t('cart.empty') }
+                            ]);
+                        if (verdict.reason === 'insufficient-stock')
+                            return generateReject(409, [
+                                {
+                                    code: 'CART_INSUFFICIENT_STOCK',
+                                    message: t('cart.insufficient-stock')
+                                }
+                            ]);
+                        return generateReject(404, [
+                            {
+                                code: 'CART_PRODUCT_UNAVAILABLE',
+                                message: t('cart.product-unavailable')
+                            }
+                        ]);
+                    }
 
                     const joined = lines.filter((line) => isJoined(line));
 
-                    return orderRepository
-                        .create({
-                            userId: new Types.ObjectId(user.id),
-                            email: user.email,
-                            items: joined.map(({ product, quantity }) => ({ product, quantity }))
-                        } as Partial<IOrderDocument>)
-                        .then((order) =>
-                            cartRepository
-                                .clearLinesIfUnchanged(userId, version)
-                                .then((clearedCart) => {
-                                    if (clearedCart) return generateSuccess<IOrderDocument>(order);
+                    /*
+                     * Take the stock BEFORE writing the order, under the same discipline as the
+                     * cart-clearing guard: the conditional decrement is what holds when two
+                     * checkouts race the last unit (the verdict above was only the pre-flight).
+                     * On a failed line the units already taken go back, so a refused checkout
+                     * leaves the shelf exactly as it found it. Every later failure path below
+                     * restores too — the invariant is "stock moved if and only if the order
+                     * stands".
+                     */
+                    return takeStock(joined).then((stocked) => {
+                        if (!stocked)
+                            return generateReject(409, [
+                                {
+                                    code: 'CART_INSUFFICIENT_STOCK',
+                                    message: t('cart.insufficient-stock')
+                                }
+                            ]);
 
-                                    // Lost the race: retract the order this request wrote, so the
-                                    // cart's contents end up on exactly one of them.
-                                    return orderRepository.deleteOne(order).then(() =>
-                                        generateReject(409, [
-                                            {
-                                                code: 'CART_CHANGED',
-                                                message: t('cart.changed')
-                                            }
-                                        ])
-                                    );
-                                })
-                        );
+                        return orderRepository
+                            .create({
+                                userId: new Types.ObjectId(user.id),
+                                email: user.email,
+                                items: joined.map(({ product, quantity }) => ({
+                                    product,
+                                    quantity
+                                })),
+                                ...(address ? { shippingAddress: toShippingAddress(address) } : {})
+                            } as Partial<IOrderDocument>)
+                            .then((order) =>
+                                cartRepository
+                                    .clearLinesIfUnchanged(userId, version)
+                                    .then((clearedCart) => {
+                                        if (clearedCart)
+                                            return generateSuccess<IOrderDocument>(order);
+
+                                        // Lost the race: retract the order this request wrote
+                                        // and put its units back, so the cart's contents end up
+                                        // on exactly one of them and the shelf agrees.
+                                        return orderRepository
+                                            .deleteOne(order)
+                                            .then(() => restoreStock(joined))
+                                            .then(() =>
+                                                generateReject(409, [
+                                                    {
+                                                        code: 'CART_CHANGED',
+                                                        message: t('cart.changed')
+                                                    }
+                                                ])
+                                            );
+                                    })
+                            );
+                    });
                 });
             });
         })

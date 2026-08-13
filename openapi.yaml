@@ -31,6 +31,7 @@ tags:
     - name: Users
     - name: Products
     - name: Cart
+    - name: Wishlist
     - name: Orders
     - name: Feedback
     - name: System
@@ -356,6 +357,13 @@ components:
                 # not a value — see the note on `CreateProductRequest.active`.
                 active:
                     type: boolean
+                # Whether the address has been confirmed through the verify-request /
+                # verify-confirm flow. Self-signup starts `false` and confirms by email;
+                # admin-created accounts start `true` because an operator vouches for the
+                # address. Informational only — no endpoint refuses an unverified account —
+                # so clients render it as a banner, not a wall.
+                verified:
+                    type: boolean
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
                 locale:
@@ -386,6 +394,13 @@ components:
                 price:
                     type: number
                     format: double
+                    minimum: 0
+                # Units the shop can still sell. Checkout and the admin order create decrement
+                # it (atomically, so two buyers cannot share the last unit); a customer cancel
+                # restores it. `0` renders as out of stock — the catalogue still lists the
+                # product, checkout is what refuses it (`CART_INSUFFICIENT_STOCK`).
+                stock:
+                    type: integer
                     minimum: 0
                 description:
                     type: string
@@ -421,6 +436,27 @@ components:
                 quantity:
                     type: integer
                     minimum: 1
+
+        # The address an order ships to — a SNAPSHOT, exactly like the product snapshots the
+        # items embed: an order must keep where it was going, not what the address book says
+        # today. No `id`, no `default` — those are facts about the book entry, not the shipment.
+        OrderAddress:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                fullName:
+                    type: string
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    type: string
+                phone:
+                    type: string
 
         OrderItem:
             type: object
@@ -469,6 +505,10 @@ components:
                 notes:
                     type: string
                     description: Optional order notes
+                # Absent on orders placed before the address book existed, and on checkouts by
+                # users who keep no addresses — an address is not (yet) required to buy.
+                shippingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
                 status:
                     type: string
                     enum: [pending, paid, processing, shipped, delivered, cancelled]
@@ -892,6 +932,211 @@ components:
                     type: string
                     description: One-time account deletion token (NOT a JWT).
 
+        # Self-service profile update. Deliberately narrower than `UpdateUserRequest`: no
+        # `admin`, no `active`, no `password` — role and account state are the admin
+        # endpoints' to change, and the password has its own flow (`POST /account/password`)
+        # because it must prove knowledge of the current one.
+        UpdateAccountRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+
+        UpdateAccountRequestMultipart:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        ChangePasswordRequest:
+            type: object
+            additionalProperties: false
+            required: [currentPassword, password, passwordConfirm]
+            properties:
+                currentPassword:
+                    $ref: '#/components/schemas/Password'
+                password:
+                    $ref: '#/components/schemas/Password'
+                passwordConfirm:
+                    $ref: '#/components/schemas/Password'
+
+        VerifyEmailConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: One-time email verification token (NOT a JWT).
+
+        # One live refresh token, presented as a session. The token VALUE is never exposed —
+        # a live refresh token is as good as a password — so the subdocument id is the handle
+        # revocation takes.
+        Session:
+            type: object
+            additionalProperties: false
+            required: [id, current]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                expiration:
+                    type: string
+                    format: date-time
+                    description: Absent on a token issued without an expiry tier.
+                current:
+                    type: boolean
+                    description: >-
+                        Whether this session is the one making the request, matched through the
+                        refresh cookie. Always `false` for a caller authenticating by bearer
+                        token alone — an access token does not identify a session.
+
+        SessionsResponse:
+            type: object
+            additionalProperties: false
+            required: [sessions]
+            properties:
+                sessions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Session'
+
+        SessionsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/SessionsResponse'
+
+        # A saved address — `OrderAddress` (the shared snapshot an order embeds) plus the two
+        # facts that belong to the BOOK entry rather than to any shipment: its handle and
+        # whether it is the default. Exactly one entry is default whenever the book is
+        # non-empty; the API maintains that, not the client.
+        Address:
+            type: object
+            additionalProperties: false
+            required: [id, fullName, street, city, zip, country, default]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                label:
+                    type: string
+                    description: The caller's own name for the entry — "home", "office".
+                fullName:
+                    type: string
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    type: string
+                phone:
+                    type: string
+                default:
+                    type: boolean
+
+        AddressInput:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                label:
+                    type: string
+                fullName:
+                    type: string
+                    minLength: 1
+                street:
+                    type: string
+                    minLength: 1
+                city:
+                    type: string
+                    minLength: 1
+                zip:
+                    type: string
+                    minLength: 1
+                country:
+                    type: string
+                    minLength: 1
+                phone:
+                    type: string
+                # On create: `true` claims the default slot, absent means "first entry becomes
+                # default, later ones do not". On update: `true` claims the slot, `false` and
+                # absent both leave the assignment alone — demoting the default without naming
+                # a successor would leave the book with none.
+                default:
+                    type: boolean
+
+        UpdateAddressRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                label:
+                    type: string
+                fullName:
+                    type: string
+                    minLength: 1
+                street:
+                    type: string
+                    minLength: 1
+                city:
+                    type: string
+                    minLength: 1
+                zip:
+                    type: string
+                    minLength: 1
+                country:
+                    type: string
+                    minLength: 1
+                phone:
+                    type: string
+                default:
+                    type: boolean
+
+        AddressesResponse:
+            type: object
+            additionalProperties: false
+            required: [addresses]
+            properties:
+                addresses:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Address'
+
+        AddressesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/AddressesResponse'
+
         # ---------- users — the schemas only this module's paths reference. ----------
         UsersResponseEnvelope:
             type: object
@@ -1211,6 +1456,45 @@ components:
                 data:
                     $ref: '#/components/schemas/ProductsResponse'
 
+        # One value of `categories`/`tags`, with how many PUBLIC products carry it. Counts
+        # follow `publicScope` — a category held only by hidden products does not exist to the
+        # storefront, and a filter chip that finds nothing is worse than no chip.
+        FacetCount:
+            type: object
+            additionalProperties: false
+            required: [name, count]
+            properties:
+                name:
+                    type: string
+                count:
+                    type: integer
+                    minimum: 1
+
+        CatalogueFacetsResponse:
+            type: object
+            additionalProperties: false
+            required: [categories, tags]
+            properties:
+                categories:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FacetCount'
+                tags:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FacetCount'
+
+        CatalogueFacetsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CatalogueFacetsResponse'
+
         SearchProductsRequest:
             type: object
             additionalProperties: false
@@ -1247,6 +1531,14 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                # The demo default. Declared for the same reason `active`'s is (see below): an
+                # undeclared default is one the paired frontend's mock has to guess at. `100`
+                # rather than `0` because a boilerplate demo's new product exists to be bought;
+                # a real shop lowers it to 0 and stocks deliberately.
+                stock:
+                    type: integer
+                    minimum: 0
+                    default: 100
                 description:
                     type: string
                 # ---------- On `active`, and why it is declared here but not on the updates ----------
@@ -1291,6 +1583,14 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                # The demo default. Declared for the same reason `active`'s is (see below): an
+                # undeclared default is one the paired frontend's mock has to guess at. `100`
+                # rather than `0` because a boilerplate demo's new product exists to be bought;
+                # a real shop lowers it to 0 and stocks deliberately.
+                stock:
+                    type: integer
+                    minimum: 0
+                    default: 100
                 description:
                     type: string
                 # Same default, same reasoning as `CreateProductRequest.active` above.
@@ -1326,6 +1626,10 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                # No default on an update: an omitted `stock` means "leave it as it is".
+                stock:
+                    type: integer
+                    minimum: 0
                 active:
                     type: boolean
                 imageUrl:
@@ -1353,6 +1657,10 @@ components:
                 price:
                     type: number
                     format: double
+                    minimum: 0
+                # No default on an update: an omitted `stock` means "leave it as it is".
+                stock:
+                    type: integer
                     minimum: 0
                 active:
                     type: boolean
@@ -1383,6 +1691,10 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                # No default on an update: an omitted `stock` means "leave it as it is".
+                stock:
+                    type: integer
+                    minimum: 0
                 active:
                     type: boolean
                 imageUrl:
@@ -1408,6 +1720,10 @@ components:
                 price:
                     type: number
                     format: double
+                    minimum: 0
+                # No default on an update: an omitted `stock` means "leave it as it is".
+                stock:
+                    type: integer
                     minimum: 0
                 active:
                     type: boolean
@@ -1520,6 +1836,12 @@ components:
                 notes:
                     type: string
                     description: Optional order notes
+                addressId:
+                    allOf: [{ $ref: '#/components/schemas/Id' }]
+                    description: >-
+                        Which of the caller's saved addresses to ship to. Omitted, the default
+                        address is used when one exists; an id that matches none of the caller's
+                        addresses refuses the checkout with 404 rather than shipping nowhere.
 
         CartSummaryResponse:
             type: object
@@ -1567,6 +1889,46 @@ components:
 
         # ---------- Observability ----------
 
+        # ---------- wishlist — the schemas only this module's paths reference. ----------
+        # A line is a product reference and nothing else — no quantity, deliberately: a wishlist
+        # answers "do I want this", not "how many". The moment an amount matters the line belongs
+        # in the cart, which is what the move-to-cart operation is for.
+        WishlistItem:
+            type: object
+            additionalProperties: false
+            required: [productId]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+
+        WishlistResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/WishlistItem'
+
+        WishlistResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/WishlistResponse'
+
+        AddWishlistItemRequest:
+            type: object
+            additionalProperties: false
+            required: [productId]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
         # ---------- orders — the schemas only this module's paths reference. ----------
         OrderEnvelope:
             type: object
@@ -1918,6 +2280,34 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/UserEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
+        put:
+            tags: [Account]
+            summary: Update own profile
+            description: Updates the authenticated user's own profile — email, username, locale, image. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email resets `verified` and sends a fresh verification email to the new address.
+            operationId: updateAccount
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAccountRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAccountRequestMultipart'
+            responses:
+                '200':
+                    description: Updated profile
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Changing the email to an address another account already holds.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
         delete:
             tags: [Account]
             summary: Request account deletion
@@ -1928,6 +2318,215 @@ paths:
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/password:
+        post:
+            tags: [Auth]
+            summary: Change password
+            description: Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Other sessions stay live — revoke them with `POST /account/logout-all` or per session via `DELETE /account/sessions/{sessionId}`.
+            operationId: changePassword
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ChangePasswordRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # A wrong current password is a 422 with a translated message, NOT a 401: a 401
+                # here would read as "your token expired" to every client interceptor and log
+                # the user out of a session that is perfectly valid.
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/logout:
+        post:
+            tags: [Auth]
+            summary: Logout this session
+            description: Logs out the CURRENT session only — revokes the refresh token carried by the `jwt` cookie and clears the authentication cookies. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
+            operationId: logout
+            security: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/sessions:
+        get:
+            tags: [Account]
+            summary: List active sessions
+            description: Lists the authenticated user's live refresh tokens as sessions — issue-agnostic handles with an expiry and a `current` marker, never the token values themselves. The one carried by the caller's own refresh cookie is flagged `current`.
+            operationId: getSessions
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Active sessions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionsEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/sessions/{sessionId}:
+        delete:
+            tags: [Account]
+            summary: Revoke one session
+            description: Revokes a single refresh token by its session id — "log out that device". Revoking the current session is allowed and equivalent to `POST /account/logout`, except that the cookies of OTHER clients cannot be cleared from here; their next refresh simply fails.
+            operationId: revokeSession
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sessionId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: Session identifier from `GET /account/sessions`
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed session id that matches none of the caller's live sessions.
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/addresses:
+        get:
+            tags: [Account]
+            summary: List saved addresses
+            description: The authenticated user's address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named.
+            operationId: getAddresses
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Account]
+            summary: Add an address
+            description: Adds an entry to the authenticated user's address book. The first entry becomes the default automatically; a later entry claims the default slot only by sending `default true`, which demotes the previous holder.
+            operationId: addAddress
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AddressInput'
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/addresses/{addressId}:
+        put:
+            tags: [Account]
+            summary: Update an address
+            description: Updates one entry of the caller's own book. `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+            operationId: updateAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAddressRequest'
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed id that names none of the CALLER's addresses — someone else's
+                # entry answers the same 404 as an invented one.
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Account]
+            summary: Remove an address
+            description: Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default.
+            operationId: removeAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/verify-request:
+        post:
+            tags: [Auth]
+            summary: Request email verification
+            description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived.
+            operationId: requestEmailVerification
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # The account is already verified — there is nothing to send.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/verify-confirm:
+        post:
+            tags: [Auth]
+            summary: Confirm email verification
+            description: Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/verify-request` and, if valid, marks the account's email address as verified.
+            operationId: confirmEmailVerification
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyEmailConfirmRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     /account/delete-confirm:
@@ -2537,6 +3136,22 @@ paths:
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
+    /products/categories:
+        get:
+            tags: [Products]
+            summary: Catalogue facets
+            description: Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so a chip can never lead to an empty page.
+            operationId: getCatalogueFacets
+            security: []
+            responses:
+                '200':
+                    description: Categories and tags with counts
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CatalogueFacetsEnvelope'
+                '500': { $ref: '#/components/responses/InternalError' }
+
     /products/{id}:
         # Same as /products/id={id}
         get:
@@ -2806,12 +3421,134 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/CheckoutResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                # An `addressId` that names none of the caller's saved addresses — the checkout
+                # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
+                '404': { $ref: '#/components/responses/NotFound' }
                 # Checking out an empty cart. The implementation has always answered 409;
                 # the spec simply never declared it.
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
+    /cart/reorder/{orderId}:
+        post:
+            tags: [Cart]
+            summary: Reorder (refill cart from a past order)
+            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the returned cart view is the record of what actually landed. Admins are scoped to their own orders too — the cart being filled is the caller's.
+            operationId: reorder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed order id that matches none of the caller's own orders.
+                '404': { $ref: '#/components/responses/NotFound' }
+                # Every product on the order has left the public catalogue — nothing to add.
+                # `errors[].code` is `REORDER_UNAVAILABLE`.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /wishlist:
+        get:
+            tags: [Wishlist]
+            summary: Get wishlist
+            description: Returns the authenticated user's saved products — ids only, like the cart's lines; clients render them from their own product store. Absence and emptiness are the same state, so this never answers 404.
+            operationId: getWishlist
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Saved products
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Wishlist]
+            summary: Save a product
+            description: Adds a product to the authenticated user's wishlist. Idempotent — saving what is already saved answers the same 200, because a double-clicked heart icon is not an error. The product must be publicly visible; a hidden or soft-deleted product answers 404 exactly as it would from the catalogue.
+            operationId: addWishlistItem
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AddWishlistItemRequest'
+            responses:
+                '200':
+                    description: The updated wishlist
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed product id that matches no publicly visible product.
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /wishlist/{productId}:
+        delete:
+            tags: [Wishlist]
+            summary: Remove a saved product
+            description: Removes the line for the product identified by `{productId}` from the authenticated user's wishlist. A line the caller does not hold is a 404 — the client's view is stale and it needs to know.
+            operationId: removeWishlistItem
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: The updated wishlist
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /wishlist/{productId}/move-to-cart:
+        post:
+            tags: [Wishlist]
+            summary: Move a saved product into the cart
+            description: The wishlist's exit — the saved line becomes one cart line (quantity 1, incremented if the cart already holds the product) and leaves the wishlist. The cart is written before the wishlist line is removed, so a failure part-way leaves the product SAVED rather than lost. Returns the updated wishlist; read the cart for its own new state.
+            operationId: moveWishlistItemToCart
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: The updated wishlist
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Not on the wishlist, or no longer purchasable — the cart's own validation
+                # answers for the product the same way `POST /cart` would.
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
     /orders:
         get:
             tags: [Orders]
@@ -3036,6 +3773,31 @@ paths:
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '403': { $ref: '#/components/responses/Forbidden' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /orders/{id}/cancel:
+        post:
+            tags: [Orders]
+            summary: Cancel order
+            description: Cancels the order identified by `{id}` — the one order write a customer can make. Only a `pending` order can be cancelled this way; `paid`, `processing` and later statuses each need their own flow (refund, return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
+            operationId: cancelOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The cancelled order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                # The order exists and is visible to the caller, but its status is past pending.
+                # `errors[].code` is `ORDER_NOT_CANCELLABLE`.
+                '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 

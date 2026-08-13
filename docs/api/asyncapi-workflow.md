@@ -19,8 +19,8 @@ section owns its channels, its messages and its payload schemas:
 
 ```
 src/modules/observability/asyncapi/{channels,messages,schemas}.yaml   the SSE stream
-contracts/shared/asyncapi.workers.{channels,messages,schemas}.yaml    the RabbitMQ queues
-contracts/shared/asyncapi.{header,channels.header,components.header,schemas.header}.yaml
+shared/contracts/asyncapi.workers.{channels,messages,schemas}.yaml    the RabbitMQ queues
+shared/contracts/asyncapi.{header,channels.header,components.header,schemas.header}.yaml
 ```
 
 The worker queues are shared rather than owned by a module because the email and PDF workers are
@@ -55,7 +55,7 @@ import { WORKER_CHANNELS, OBSERVABILITY_CHANNELS } from '@types';
 Regenerate types after editing `asyncapi.yaml`:
 
 ```bash
-npm run genasyncapi
+npm run gen:asyncapi
 ```
 
 The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
@@ -63,7 +63,7 @@ The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml
 ### Shared with the frontend
 
 This script is **byte-identical** to `scripts/gen-asyncapi-types.ts` in `boilerplate-vue-frontend`.
-Only the output path differs, and it comes from `--out` in each repo's `genasyncapi` script:
+Only the output path differs, and it comes from `--out` in each repo's `gen:asyncapi` script:
 
 | Repo | Command |
 | --- | --- |
@@ -87,7 +87,7 @@ backend and tree-shaken in the frontend bundle.
 
 ```bash
 npm run lint:asyncapi   # validate asyncapi.yaml
-npm run genasyncapi     # regenerate src/types/asyncapi.ts
+npm run gen:asyncapi     # regenerate src/types/asyncapi.ts
 npm run docs:asyncapi   # open AsyncAPI Studio in browser
 ```
 
@@ -129,4 +129,4 @@ There are no handwritten duplicate string constants — `asyncapi.yaml` is the s
 
 ## CI enforcement
 
-CI runs `lint:asyncapi` and `genasyncapi`, then verifies `src/types/asyncapi.ts` has no uncommitted changes. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails.
+CI runs `lint:asyncapi` and `gen:asyncapi`, then verifies `src/types/asyncapi.ts` has no uncommitted changes. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails.

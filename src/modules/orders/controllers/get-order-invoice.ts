@@ -30,7 +30,7 @@ export const getOrderInvoice = (request: Request, response: Response) =>
              */
             return ejs
                 .renderFile(
-                    path.resolve('views', 'templates-files', 'invoice-order-file.ejs'),
+                    path.resolve('shared', 'views', 'templates-files', 'orders.invoice.ejs'),
                     // Same convention as the email templates: the copy is resolved here, in the
                     // request's language, and the template only interpolates. That is what lets
                     // the identical render run from `workers/pdf.worker.ts`, where there is no

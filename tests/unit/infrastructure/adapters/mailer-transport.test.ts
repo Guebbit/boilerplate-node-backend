@@ -44,7 +44,7 @@ const transportOptions = async (
     }
 
     // Any send builds the transport; the envelope itself is irrelevant here.
-    await nodemailer({ to: 'ada@example.com' }, 'email-order-confirm.ejs', {
+    await nodemailer({ to: 'ada@example.com' }, 'orders.order-confirm.ejs', {
         locale: 'en',
         pageMetaTitle: '',
         pageMetaLinks: [],

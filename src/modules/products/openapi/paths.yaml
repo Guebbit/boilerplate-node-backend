@@ -121,6 +121,22 @@
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
+    /products/categories:
+        get:
+            tags: [Products]
+            summary: Catalogue facets
+            description: Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so a chip can never lead to an empty page.
+            operationId: getCatalogueFacets
+            security: []
+            responses:
+                '200':
+                    description: Categories and tags with counts
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CatalogueFacetsEnvelope'
+                '500': { $ref: '#/components/responses/InternalError' }
+
     /products/{id}:
         # Same as /products/id={id}
         get:

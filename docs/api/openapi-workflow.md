@@ -7,10 +7,12 @@ For this boilerplate, the safest order is:
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart LR
-    Idea[Need a new endpoint or payload] --> Spec[Edit openapi.yaml]
+    Idea[Need a new endpoint or payload] --> Frag["Edit src/modules/&lt;name&gt;/openapi/*.yaml"]
+    Frag --> Bundle[npm run contracts:bundle]
+    Bundle --> Spec[openapi.yaml]
     Spec --> Lint[npm run lint:openapi]
     Spec --> Mock[npm run test:prism or Bruno/Mockoon]
-    Spec --> Generate[npm run genapi]
+    Spec --> Generate[npm run gen:api]
     Generate --> Implement[Align routes, services, and responses]
     Implement --> Test[npm run test]
 
@@ -19,13 +21,18 @@ flowchart LR
     classDef tooling fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef app fill:#ede9fe,stroke:#7c3aed,color:#111827;
     class Idea change;
-    class Spec contract;
-    class Lint,Mock,Generate tooling;
+    class Frag,Spec contract;
+    class Bundle,Lint,Mock,Generate tooling;
     class Implement,Test app;
 ```
 
 If the contract changes, start with the contract.
 That keeps backend, generated types, and consumers in sync.
+
+**Edit the fragment, never `openapi.yaml` itself.** The root file is assembled from per-module
+fragments by `npm run contracts:bundle`, which overwrites whatever you hand-edited — and a test
+fails first if you forget to re-bundle. [Regenerating After a
+Change](./regenerating.md) is the short version of what to run when.
 
 ## Who owns this file
 
@@ -44,21 +51,25 @@ How the file is meant to be split per module and how it travels between the two 
 | --- | --- |
 | [`openapi.yaml`](https://spec.openapis.org/oas/latest.html) | single contract file (OpenAPI 3.x specification) |
 | [Spectral](https://stoplight.io/open-source/spectral) | lint the spec against `spectral.yaml` rules |
-| [orval](https://orval.dev) | generate `api/` types and fetch clients from the spec |
+| [orval](https://orval.dev) | generate `api/` types and Zod validators from the spec |
 | [Prism](https://stoplight.io/open-source/prism) | mock the API from the spec |
 | [Bruno](https://www.usebruno.com/) / [Mockoon](https://mockoon.com/) / [Insomnia](https://insomnia.rest/) | explore or fake the API during development |
 
 ## Generated output (`api/`)
 
-Running `npm run genapi` regenerates the entire `api/` directory. **Never edit files inside `api/` manually** — changes will be overwritten.
+Running `npm run gen:api` deletes and regenerates the entire `api/` directory (`rm -rf ./api && orval`).
+**Never edit files inside `api/` manually** — changes will be overwritten.
 
 ```
 api/
-├── index.ts          ← fetch client functions (one per operation)
+├── schemas.zod.ts    ← one Zod schema per operation's request and response
 └── models/
     ├── index.ts      ← barrel re-export of all types and enum consts
     └── *.ts          ← one file per schema or enum
 ```
+
+There is no generated HTTP client: nothing in this repo calls its own API, so `orval.config.ts`
+generates the `zod` client only. Its comments list the other flavors and why each is not used here.
 
 **Importing generated types** — always go through the `@types` alias, which re-exports everything from `@api/models`:
 
@@ -79,20 +90,23 @@ The enum naming convention is: schema name + property name, PascalCase. For exam
 ## Commands used in this repo
 
 ```bash
+npm run contracts:bundle  # rebuild openapi.yaml (and the other six bundles) from the fragments
+npm run gen:api            # regenerate api/ from openapi.yaml via orval
 npm run lint:openapi      # lint openapi.yaml with Spectral
-npm run genapi            # regenerate api/ from openapi.yaml via orval
 npm run test:prism        # smoke-test Prism mock server against the spec
 ```
+
+The full "I changed X, run Y" table is [Regenerating After a Change](./regenerating.md).
 
 ## Orval configuration
 
 `orval.config.ts` at the project root controls code generation:
 
-- `input.target` — source spec (`./openapi.yaml`)
-- `output.target` — generated fetch client (`./api/index.ts`)
+- `input` — source spec (`./openapi.yaml`)
+- `output.target` — generated Zod schemas (`./api/schemas.zod.ts`)
 - `output.schemas` — generated types (`./api/models/`)
-- `output.client` — generator mode (`fetch`)
-- `output.mode` — `single` (one client file, all operations)
+- `output.client` — generator flavor (`zod`)
+- `output.mode` — `single` (one output file, all operations)
 
 Changing the mode to `tags-split` generates one file per OpenAPI tag instead.
 
@@ -101,6 +115,7 @@ separate idea — see [Contract Ownership & Fragmentation](./contract-fragmentat
 
 ## How this connects to the rest of the docs
 
+- [Regenerating After a Change](./regenerating.md) is the command cheat sheet: which fragment triggers which rebuild, and what each failure message means.
 - [Contract Ownership & Fragmentation](./contract-fragmentation.md) explains who owns the spec, how it is meant to be split per module, and how the frontend receives it.
 - [Theory / Layers](../theory/layers.md) explains where implementation code lands after the spec changes.
 - [Tools](../tools/) explains the non-OpenAPI dependencies around the API runtime.

@@ -108,11 +108,11 @@ This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imp
 
 ## Commands
 
-| Command                      | Effect                                 |
-| ---------------------------- | -------------------------------------- |
-| `npm run test:unit`          | Full unit suite                        |
-| `npm run test:unit:coverage` | Same, with coverage                    |
-| `npm run test:unit:target`   | One hardcoded file, for fast iteration |
+| Command                      | Effect                       |
+| ---------------------------- | ---------------------------- |
+| `npm run test:unit`          | Full unit suite              |
+| `npm run test:unit:coverage` | Same, with coverage          |
+| `npx jest <path>`            | One file, for fast iteration |
 
 ## Related pages
 

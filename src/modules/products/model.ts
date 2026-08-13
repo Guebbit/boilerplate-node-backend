@@ -69,6 +69,20 @@ export const productSchema = new Schema<IProductDocument, IProductModel, IProduc
             type: Number,
             required: true
         },
+        /*
+         * Units the shop can still sell. Written ONLY through the repository's conditional
+         * `adjustStock` helpers outside the admin product form — checkout decrements, a customer
+         * cancel restores — so no read-modify-write ever races two buyers over the last unit.
+         * `default: 100`, declared in `openapi.yaml` on both create bodies: a demo's new product
+         * exists to be bought, and an undeclared default is one the paired frontend's mock has
+         * to guess at. Existing rows are backfilled by
+         * `db/migrations/20260813091000-product-stock-column.js`.
+         */
+        stock: {
+            type: Number,
+            default: 100,
+            min: 0
+        },
         description: {
             type: String,
             default: ''

@@ -30,11 +30,8 @@ import {
     cartGet,
     cartGetWithSummary,
     cartItemSetById,
-    cartItemSet,
     cartItemAddById,
-    cartItemAdd,
     cartItemRemoveById,
-    cartItemRemove,
     cartRemove,
     orderConfirm,
     productRemoveFromCartsById
@@ -47,6 +44,7 @@ import cartModule from '@modules/cart/module';
 import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
+import accountModule from '@modules/account/module';
 import { orderRepository } from '@modules/orders';
 import type { IResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
@@ -374,28 +372,6 @@ describe('cartItemAddById', () => {
     });
 });
 
-describe('cartItemSet / cartItemAdd (document overloads)', () => {
-    it('cartItemSet behaves as cartItemSetById for the same product', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        await cartItemSet(user.id, product, 4);
-
-        await cartItemSet(user.id, product, 2);
-
-        expect(await storedQuantity(user.id, String(product._id))).toBe(2);
-    });
-
-    it('cartItemAdd behaves as cartItemAddById for the same product', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        await cartItemAdd(user.id, product, 4);
-
-        await cartItemAdd(user.id, product, 2);
-
-        expect(await storedQuantity(user.id, String(product._id))).toBe(6);
-    });
-});
-
 describe('cartItemRemoveById', () => {
     it('removes the targeted line and answers with what is left', async () => {
         const user = await createUser();
@@ -447,12 +423,12 @@ describe('cartItemRemoveById', () => {
         expect(asReject(result).status).toBe(404);
     });
 
-    it('cartItemRemove behaves as cartItemRemoveById for the same product', async () => {
+    it('leaves an empty cart behind when the last line goes', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await cartItemRemove(user.id, product);
+        const result = await cartItemRemoveById(user.id, String(product._id));
 
         expect(result.success).toBe(true);
         await expect(cartGet(user.id)).resolves.toEqual([]);
@@ -632,7 +608,7 @@ describe('productRemoveFromCartsById', () => {
  */
 describe('cartDeleteByUserId', () => {
     beforeEach(() => {
-        registerModules([productsModule, usersModule, ordersModule, cartModule]);
+        registerModules([accountModule, productsModule, usersModule, ordersModule, cartModule]);
     });
 
     afterEach(() => {

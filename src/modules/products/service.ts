@@ -105,6 +105,9 @@ export const update = (
     // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
     if (data.price !== undefined) product.price = data.price;
+    // The admin form is the one legitimate ABSOLUTE stock write — restocking sets a count.
+    // Relative changes (sales, cancellations) go through the repository's adjust helpers.
+    if (data.stock !== undefined) product.stock = data.stock;
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);

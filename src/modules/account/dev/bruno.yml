@@ -47,6 +47,7 @@
                       "username": "ginopinoshow",
                       "admin": false,
                       "active": true,
+                      "verified": true,
                       "imageUrl": "/images/seed/96346b77daf138a279677cb75c400ee9.jpg",
                       "locale": "it",
                       "createdAt": "2026-01-01T00:00:00.000Z",
@@ -81,9 +82,217 @@
                     ]
                   }
       - info:
-          name: Request account deletion
+          name: Update own profile
           type: http
           seq: 2
+          tags:
+            - Account
+        http:
+          method: PUT
+          url: "{{baseUrl}}/account"
+          body:
+            type: json
+            data: |-
+              {
+                "email": "gino@pino.it",
+                "username": "ginopinoshow",
+                "locale": "it",
+                "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+              }
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Updated profile
+            request:
+              url: "{{baseUrl}}/account"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "email": "gino@pino.it",
+                    "username": "ginopinoshow",
+                    "locale": "it",
+                    "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+                  }
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Updated profile",
+                    "data": {
+                      "id": "65de646a44f861fd83c13f13",
+                      "email": "gino@pino.it",
+                      "username": "ginopinoshow",
+                      "admin": false,
+                      "active": true,
+                      "verified": true,
+                      "imageUrl": "/images/seed/96346b77daf138a279677cb75c400ee9.jpg",
+                      "locale": "it",
+                      "createdAt": "2026-01-01T00:00:00.000Z",
+                      "updatedAt": "2026-01-01T00:00:00.000Z",
+                      "deletedAt": "2026-01-01T00:00:00.000Z"
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "email": "gino@pino.it",
+                    "username": "ginopinoshow",
+                    "locale": "it",
+                    "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+                  }
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 409 Response
+            description: The request conflicts with the current state of the resource
+            request:
+              url: "{{baseUrl}}/account"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "email": "gino@pino.it",
+                    "username": "ginopinoshow",
+                    "locale": "it",
+                    "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+                  }
+            response:
+              status: 409
+              statusText: Conflict
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 409,
+                    "message": "The request conflicts with the current state of the resource",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/account"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "email": "gino@pino.it",
+                    "username": "ginopinoshow",
+                    "locale": "it",
+                    "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "email": "gino@pino.it",
+                    "username": "ginopinoshow",
+                    "locale": "it",
+                    "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Request account deletion
+          type: http
+          seq: 3
           tags:
             - Account
         http:
@@ -170,9 +379,1377 @@
                     ]
                   }
       - info:
+          name: Change password
+          type: http
+          seq: 4
+          tags:
+            - Auth
+        http:
+          method: POST
+          url: "{{baseUrl}}/account/password"
+          body:
+            type: json
+            data: |-
+              {
+                "currentPassword": "string",
+                "password": "password",
+                "passwordConfirm": "string"
+              }
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Success
+            request:
+              url: "{{baseUrl}}/account/password"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "currentPassword": "string",
+                    "password": "password",
+                    "passwordConfirm": "string"
+                  }
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Success"
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/password"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "currentPassword": "string",
+                    "password": "password",
+                    "passwordConfirm": "string"
+                  }
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/account/password"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "currentPassword": "string",
+                    "password": "password",
+                    "passwordConfirm": "string"
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/password"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "currentPassword": "string",
+                    "password": "password",
+                    "passwordConfirm": "string"
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Logout this session
+          type: http
+          seq: 5
+          tags:
+            - Auth
+        http:
+          method: POST
+          url: "{{baseUrl}}/account/logout"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Success
+            request:
+              url: "{{baseUrl}}/account/logout"
+              method: POST
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Success"
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/logout"
+              method: POST
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: List active sessions
+          type: http
+          seq: 6
+          tags:
+            - Account
+        http:
+          method: GET
+          url: "{{baseUrl}}/account/sessions"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Active sessions
+            request:
+              url: "{{baseUrl}}/account/sessions"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Active sessions",
+                    "data": {
+                      "sessions": [
+                        {
+                          "id": "65dc8a99604c307b702b5ccc",
+                          "expiration": "2026-01-01T00:00:00.000Z",
+                          "current": true
+                        }
+                      ]
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/sessions"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/sessions"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Revoke one session
+          type: http
+          seq: 7
+          tags:
+            - Account
+        http:
+          method: DELETE
+          url: "{{baseUrl}}/account/sessions/example"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Success
+            request:
+              url: "{{baseUrl}}/account/sessions/example"
+              method: DELETE
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Success"
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/sessions/example"
+              method: DELETE
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/account/sessions/example"
+              method: DELETE
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/account/sessions/example"
+              method: DELETE
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/sessions/example"
+              method: DELETE
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: List saved addresses
+          type: http
+          seq: 8
+          tags:
+            - Account
+        http:
+          method: GET
+          url: "{{baseUrl}}/account/addresses"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The address book
+            request:
+              url: "{{baseUrl}}/account/addresses"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The address book",
+                    "data": {
+                      "addresses": [
+                        {
+                          "id": "65dc8a99604c307b702b5ccc",
+                          "label": "string",
+                          "fullName": "string",
+                          "street": "string",
+                          "city": "string",
+                          "zip": "string",
+                          "country": "string",
+                          "phone": "string",
+                          "default": true
+                        }
+                      ]
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/addresses"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/addresses"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Add an address
+          type: http
+          seq: 9
+          tags:
+            - Account
+        http:
+          method: POST
+          url: "{{baseUrl}}/account/addresses"
+          body:
+            type: json
+            data: |-
+              {
+                "label": "string",
+                "fullName": "string",
+                "street": "string",
+                "city": "string",
+                "zip": "string",
+                "country": "string",
+                "phone": "string",
+                "default": true
+              }
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The updated address book
+            request:
+              url: "{{baseUrl}}/account/addresses"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The updated address book",
+                    "data": {
+                      "addresses": [
+                        {
+                          "id": "65dc8a99604c307b702b5ccc",
+                          "label": "string",
+                          "fullName": "string",
+                          "street": "string",
+                          "city": "string",
+                          "zip": "string",
+                          "country": "string",
+                          "phone": "string",
+                          "default": true
+                        }
+                      ]
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/addresses"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/account/addresses"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/addresses"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Update an address
+          type: http
+          seq: 10
+          tags:
+            - Account
+        http:
+          method: PUT
+          url: "{{baseUrl}}/account/addresses/example"
+          body:
+            type: json
+            data: |-
+              {
+                "label": "string",
+                "fullName": "string",
+                "street": "string",
+                "city": "string",
+                "zip": "string",
+                "country": "string",
+                "phone": "string",
+                "default": true
+              }
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The updated address book
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The updated address book",
+                    "data": {
+                      "addresses": [
+                        {
+                          "id": "65dc8a99604c307b702b5ccc",
+                          "label": "string",
+                          "fullName": "string",
+                          "street": "string",
+                          "city": "string",
+                          "zip": "string",
+                          "country": "string",
+                          "phone": "string",
+                          "default": true
+                        }
+                      ]
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: PUT
+              body:
+                type: json
+                data: |-
+                  {
+                    "label": "string",
+                    "fullName": "string",
+                    "street": "string",
+                    "city": "string",
+                    "zip": "string",
+                    "country": "string",
+                    "phone": "string",
+                    "default": true
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Remove an address
+          type: http
+          seq: 11
+          tags:
+            - Account
+        http:
+          method: DELETE
+          url: "{{baseUrl}}/account/addresses/example"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The updated address book
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: DELETE
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The updated address book",
+                    "data": {
+                      "addresses": [
+                        {
+                          "id": "65dc8a99604c307b702b5ccc",
+                          "label": "string",
+                          "fullName": "string",
+                          "street": "string",
+                          "city": "string",
+                          "zip": "string",
+                          "country": "string",
+                          "phone": "string",
+                          "default": true
+                        }
+                      ]
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: DELETE
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: DELETE
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: DELETE
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/addresses/example"
+              method: DELETE
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Request email verification
+          type: http
+          seq: 12
+          tags:
+            - Auth
+        http:
+          method: POST
+          url: "{{baseUrl}}/account/verify-request"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Success
+            request:
+              url: "{{baseUrl}}/account/verify-request"
+              method: POST
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Success"
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/account/verify-request"
+              method: POST
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 409 Response
+            description: The request conflicts with the current state of the resource
+            request:
+              url: "{{baseUrl}}/account/verify-request"
+              method: POST
+            response:
+              status: 409
+              statusText: Conflict
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 409,
+                    "message": "The request conflicts with the current state of the resource",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/verify-request"
+              method: POST
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Confirm email verification
+          type: http
+          seq: 13
+          tags:
+            - Auth
+        http:
+          method: POST
+          url: "{{baseUrl}}/account/verify-confirm"
+          body:
+            type: json
+            data: |-
+              {
+                "token": "string"
+              }
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Success
+            request:
+              url: "{{baseUrl}}/account/verify-confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "token": "string"
+                  }
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Success"
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/account/verify-confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "token": "string"
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/account/verify-confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "token": "string"
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
           name: Confirm account deletion
           type: http
-          seq: 3
+          seq: 14
           tags:
             - Account
         http:
@@ -282,7 +1859,7 @@
       - info:
           name: Login
           type: http
-          seq: 4
+          seq: 15
           tags:
             - Auth
         http:
@@ -434,7 +2011,7 @@
       - info:
           name: Signup
           type: http
-          seq: 5
+          seq: 16
           tags:
             - Auth
         http:
@@ -486,6 +2063,7 @@
                       "username": "ginopinoshow",
                       "admin": false,
                       "active": true,
+                      "verified": true,
                       "imageUrl": "/images/seed/96346b77daf138a279677cb75c400ee9.jpg",
                       "locale": "it",
                       "createdAt": "2026-01-01T00:00:00.000Z",
@@ -598,7 +2176,7 @@
       - info:
           name: requestPasswordReset
           type: http
-          seq: 6
+          seq: 17
           tags:
             - Auth
         http:
@@ -708,7 +2286,7 @@
       - info:
           name: confirmPasswordReset
           type: http
-          seq: 7
+          seq: 18
           tags:
             - Auth
         http:
@@ -826,7 +2404,7 @@
       - info:
           name: Refresh access token
           type: http
-          seq: 8
+          seq: 19
           tags:
             - Auth
         http:
@@ -917,7 +2495,7 @@
       - info:
           name: Logout from all devices
           type: http
-          seq: 9
+          seq: 20
           tags:
             - Auth
         http:
@@ -1006,7 +2584,7 @@
       - info:
           name: Remove expired tokens
           type: http
-          seq: 10
+          seq: 21
           tags:
             - Auth
         http:
@@ -1121,7 +2699,7 @@
       - info:
           name: "Probe: log in as the non-admin"
           type: http
-          seq: 11
+          seq: 22
           tags:
             - Probe
         http:
@@ -1142,7 +2720,7 @@
       - info:
           name: "Probe: 401 with a bogus token"
           type: http
-          seq: 12
+          seq: 23
           tags:
             - Probe
         http:
@@ -1159,7 +2737,7 @@
       - info:
           name: "Probe: 409 on a signup that already exists"
           type: http
-          seq: 13
+          seq: 24
           tags:
             - Probe
         http:
@@ -1181,7 +2759,7 @@
       - info:
           name: "Probe: rate limit (send repeatedly)"
           type: http
-          seq: 14
+          seq: 25
           tags:
             - Probe
         http:

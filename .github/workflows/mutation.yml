@@ -65,7 +65,12 @@ jobs:
               # property of the MACHINE, not of the project. The committed config is tuned for a
               # developer workstation; a standard GitHub-hosted runner is 4 vCPU / 16 GB, where
               # that number would thrash or run out of memory.
-              run: npm run test:mutation -- --concurrency 3
+              # `--force` discards the committed `reports/stryker-incremental.json` and re-tests every
+              # mutant. That is the nightly's entire job: the incremental file is a cache, and a
+              # refactor that moves code between files or a badly resolved merge can leave it
+              # describing a codebase that no longer exists. Fast incremental runs are for humans
+              # on demand; this one is the measurement everything else is allowed to trust.
+              run: npm run test:mutation -- --concurrency 3 --force
 
             - name: Check the per-file baseline
               # The real gate. Stryker's thresholds are global — a strong file carries a weak one

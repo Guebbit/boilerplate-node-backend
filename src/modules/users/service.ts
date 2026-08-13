@@ -65,13 +65,15 @@ export const getById = (id?: string) => {
 /**
  * Create a new user document, with no email confirmation step.
  *
- * The self-service path is `authService.signup`, which confirms an address before the account
- * works. This one exists for the admin write endpoints, where an operator vouches for the address.
+ * The self-service path is `authService.signup`, which sends a verification email and leaves
+ * `verified` at the schema's `false`. This one exists for the admin write endpoints, where an
+ * operator vouches for the address — which is why `verified` defaults to `true` here, spread
+ * first so a caller that explicitly passes one still wins.
  */
 export const create = (
     data: Pick<IUser, 'email' | 'username' | 'password'> &
-        Partial<Pick<IUser, 'admin' | 'imageUrl' | 'locale'>>
-): Promise<IUserDocument> => userRepository.create(data);
+        Partial<Pick<IUser, 'admin' | 'imageUrl' | 'locale' | 'verified'>>
+): Promise<IUserDocument> => userRepository.create({ verified: true, ...data });
 
 /**
  * Update an existing user document.
@@ -190,6 +192,15 @@ export const findByAccountDeleteToken = (
 ): Promise<IUserDocument | undefined | null> => findByToken(token, 'delete');
 
 /**
+ * Find a user that holds an email-verification token.
+ * Returns the document if found, or undefined/null if no match.
+ *
+ * @param token
+ */
+export const findByEmailVerifyToken = (token: string): Promise<IUserDocument | undefined | null> =>
+    findByToken(token, 'verify');
+
+/**
  * Remove the given token from the user document and persist it.
  * Used to consume a one-time password-reset token after the reset completes.
  *
@@ -244,5 +255,6 @@ export const userService = {
     findByEmail,
     findByPasswordResetToken,
     findByAccountDeleteToken,
+    findByEmailVerifyToken,
     consumeToken
 };

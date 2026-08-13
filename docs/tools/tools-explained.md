@@ -133,9 +133,9 @@ Each section links to the dedicated page for configuration details and code poin
 
 **What it is.** Nodemailer is the standard SMTP client for Node.js. EJS (Embedded JavaScript) is a template engine that renders HTML strings from data.
 
-**Problem it solves.** Sending a formatted HTML email requires connecting to an SMTP relay, rendering a template, handling attachments, and dealing with SMTP errors. Nodemailer abstracts the transport; EJS handles the HTML so email markup stays in `views/` files, not in code strings.
+**Problem it solves.** Sending a formatted HTML email requires connecting to an SMTP relay, rendering a template, handling attachments, and dealing with SMTP errors. Nodemailer abstracts the transport; EJS handles the HTML so email markup stays in `shared/views/` files, not in code strings.
 
-**In this repo.** Used for password-reset emails, order confirmations, and contact-form notifications. Templates live in `views/*.ejs`. Calls go through `enqueueEmail()` which either publishes to RabbitMQ (if configured) or calls Nodemailer directly.
+**In this repo.** Used for password-reset emails, order confirmations, and contact-form notifications. Templates live in `shared/views/**/*.ejs`. Calls go through `enqueueEmail()` which either publishes to RabbitMQ (if configured) or calls Nodemailer directly.
 
 → [Email & PDF Rendering](./email-and-rendering.md)
 
@@ -319,7 +319,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** Maintaining a typed API client by hand alongside the spec means they inevitably drift. Every time a route changes, the client must be manually updated — which is error-prone and slow. Code generation makes the client an output of the spec, not a separate thing to maintain.
 
-**In this repo.** `npm run genapi` regenerates `api/` from `openapi.yaml`. The generated client is committed so the paired frontend boilerplate can import it directly.
+**In this repo.** `npm run gen:api` regenerates `api/` from `openapi.yaml`. The generated client is committed so the paired frontend boilerplate can import it directly.
 
 → [OpenAPI Workflow](../api/openapi-workflow.md)
 

@@ -5,6 +5,10 @@
         "soft-deleted": "Order was soft deleted (hidden from the customer).",
         "creation-success": "Order created with success.",
         "creation-failure": "Order creation failed.",
+        "cancel": {
+            "success": "Order cancelled.",
+            "not-cancellable": "This order can no longer be cancelled."
+        },
         "invoice-missing": "No invoice file was found",
         "invoice": {
             "meta-title": "Invoice — order {{order}}",
@@ -16,6 +20,7 @@
             "meta-title": "Order confirmed",
             "greeting": "Hello, {{name}}!",
             "body": "Your order has been confirmed."
-        }
+        },
+        "insufficient-stock": "One or more products on this order exceed the available stock."
     }
 }

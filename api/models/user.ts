@@ -29,6 +29,7 @@ export interface User {
   username: string;
   admin?: boolean;
   active?: boolean;
+  verified?: boolean;
   imageUrl?: ImageUrl;
   locale?: Locale;
   createdAt?: string;

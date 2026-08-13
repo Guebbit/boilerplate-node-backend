@@ -14,10 +14,10 @@ const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
  * in the chain. The duplication is deliberate and pinned — `tests/unit/db/host-scripts.test.ts`
  * runs both implementations over the same env matrix and fails if they ever disagree.
  *
- * Reading the host/port/name fragments and not only `NODE_DB_URI` is what makes the `:host`
- * scripts safe: a full URI hardcodes the database name, so they would silently target
+ * Reading the host/port/name fragments and not only `NODE_DB_URI` is what makes `npm run host`
+ * safe: a full URI hardcodes the database name, so it would silently target
  * `boilerplate-node-backend` whatever `NODE_MONGODB_NAME` said. Honouring the fragments lets
- * those scripts blank the URI and override the host alone.
+ * it blank the URI and override the host alone.
  */
 const getDatabaseUri = () => {
     if (process.env.NODE_DB_URI) return process.env.NODE_DB_URI;

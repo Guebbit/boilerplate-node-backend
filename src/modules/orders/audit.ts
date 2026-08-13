@@ -10,7 +10,13 @@
 export const ordersAuditActions = {
     ADMIN_ORDER_CREATED: 'admin.order.created',
     ADMIN_ORDER_UPDATED: 'admin.order.updated',
-    ADMIN_ORDER_DELETED: 'admin.order.deleted'
+    ADMIN_ORDER_DELETED: 'admin.order.deleted',
+    /*
+     * `user.` like `user.cart.item_removed`: the one order write a customer performs. Audited
+     * because a cancelled order is a support question with a money answer — who cancelled it,
+     * the customer or the shop, decides who owes whom an apology.
+     */
+    USER_ORDER_CANCELLED: 'user.order.cancelled'
 } as const;
 
 declare module '@infrastructure/observability/audit' {

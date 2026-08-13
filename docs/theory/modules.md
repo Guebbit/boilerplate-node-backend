@@ -3,6 +3,9 @@
 A domain lives in exactly one folder. Adding one is a folder plus a line; removing one is `rm -rf`
 plus deleting that line. Everything on this page exists to make those two sentences true.
 
+> New to the words **domain** and **barrel**? They are defined with a picture each in
+> [The words these pages use](./index.md#the-words-these-pages-use).
+
 ## The four tiers
 
 ```mermaid
@@ -374,63 +377,22 @@ Two orderings are load-bearing: locale directories must be registered **before**
 which reads the merged dictionaries; and `registerModules` must run **before** the first route
 exists, so every subscription is attached before anything can emit.
 
-## Adding a domain
+## Adding and removing a domain
 
-Two steps. Everything else is the domain's own business.
+Adding one is a folder plus a line; removing one is `rm -rf` plus deleting that line. The full
+procedure — the conditional registries, the bundling, the two-repo step — is
+[Adding & removing a module](./module-lifecycle.md). What belongs on this page is why it works and
+what it measured.
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
-flowchart LR
-    A["1 · mkdir src/modules/events/<br/>write module.ts"] --> B["2 · add one line to<br/>src/modules.ts"]
-    B --> C["✅ mounted · seeded · translated<br/>· audited · measured"]
-    classDef s fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class A,B,C s;
-```
+**It works because nothing central enumerates domains.** Route mounting, the seeder, the i18n boot,
+the audit vocabulary and the metrics registry all walk the registry rather than naming its entries,
+so none of them is on either checklist. `src/modules.ts` is the one file that names a domain, and
+the three `*_SECTION_ORDER` lists are the one exception — the price of a contract assembled from
+per-module fragments and shared with the paired frontend.
 
-1. **The folder.** At minimum a `module.ts`. Add `routes.ts` + `controllers/` if it serves HTTP,
-   `model.ts`/`repository.ts`/`service.ts` if it owns a collection, and `index.ts` only when another
-   module needs something from it.
-
-    ```ts
-    // src/modules/events/module.ts
-    import type { IAppModule } from '@kernel/registry';
-    import { router } from './routes';
-
-    export default {
-        name: 'events',
-        basePath: '/events',
-        routes: router,
-        locales: path.join(__dirname, 'locales')
-    } satisfies IAppModule;
-    ```
-
-2. **The line.**
-
-    ```ts
-    // src/modules.ts
-    import events from './modules/events/module';
-
-    export const enabledModules: IAppModule[] = [account, auditLogs, cart, events /* … */];
-    ```
-
-You do not touch route mounting, the seeder, the i18n boot, the audit vocabulary, the metrics
-registry, or the lint config. If your new domain needs a _sibling_, declare it in `dependsOn` and
-the registry will fail at boot — by name — if that sibling is not enabled.
-
-## Removing a domain
-
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
-flowchart LR
-    A["1 · rm -rf src/modules/cart/"] --> B["2 · delete its line<br/>from src/modules.ts"]
-    B --> C["3 · npm run complete:check"]
-    C --> D["whatever fails is<br/><b>real coupling</b>"]
-    classDef s fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class A,B,C,D s;
-```
-
-This is not a thought experiment — it is run as an acceptance test. Deleting `products`, `cart` and
-`orders` together, plus their registry lines:
+**And it is measured, in both directions.** `wishlist` was added under it: one folder, one registry
+line, three section-order entries, and **zero** edits to any existing file. Deleting `products`,
+`cart` and `orders` together gives:
 
 | Tier                  | Files that break              |
 | --------------------- | ----------------------------- |
@@ -440,17 +402,20 @@ This is not a thought experiment — it is run as an acceptance test. Deleting `
 | co-located specs      | 1 (`observability`'s metrics) |
 | `scripts/**`          | 1                             |
 
-Two of those sixteen are correct; the rest are residue, mostly sweep canaries pinned to the current
-module count. The measured run, with a ranked fix list, is
-`DELETABILITY_TEST.md` (repo root); the summary is
+The zeroes are the verdict: **the application tier genuinely does not know which domains exist.**
+The rest is residue in test and script code — two of those sixteen are correct and must not be
+"fixed", and the largest remaining group is sweep canaries pinned to the current module count. See
 [Known gaps §7](./known-gaps.md#7-what-still-breaks-when-domains-are-deleted).
-
-A domain's contract goes with it: delete its entry from `SECTION_ORDER` (and from
-`ANALYTICS_SECTION_ORDER` / `SEED_SECTION_ORDER` if it has one), re-bundle, and copy the shared
-files to the paired frontend. A missing fragment is a hard error naming the file, not a silent skip.
 
 If a module you delete was named in another module's `dependsOn`, the registry stops the boot with
 the offending pair named rather than 500-ing on the first request that crosses the gap.
+
+::: tip Run a deletability test after any significant change
+Delete two or three domains on a throwaway copy and see what breaks. Nothing in the suite checks
+this, and every finding it has ever produced was invisible to `tsc`, to lint and to a fully green
+run. The procedure is
+[Re-running the deletability check](./module-lifecycle.md#re-running-the-deletability-check).
+:::
 
 ## What is guarded, and by what
 
@@ -475,6 +440,7 @@ fire is a comment.
 
 ## Related pages
 
+- [Adding & removing a module](./module-lifecycle.md) — the procedure, with the commands
 - [Layers](./layers.md) — the layer stack inside one module
 - [Architecture](./architecture.md) — the runtime shape of the service
 - [Request Flow](./request-flow.md) — what happens to one request

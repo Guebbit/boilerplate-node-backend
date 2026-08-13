@@ -65,13 +65,24 @@ describe('every contract bundle', () => {
     );
 
     it('produces exactly the shared files that are domain-shaped', () => {
-        // The bundles are a subset of the cross-repo guard: everything assembled here is also
-        // compared against the frontend's copy. A bundle missing from that list would be rebuilt
-        // on one side and never checked against the other.
+        /*
+         * The AUTHORED bundles are a subset of the cross-repo guard: everything assembled from
+         * hand-written fragments is also compared against the frontend's copy, because a fork in
+         * one of those is a fork in what the two sides believe they share.
+         *
+         * The three client collections are exempt, and the exemption is the invariant: their
+         * fragments are GENERATED from `openapi.yaml` (which is guarded) and the committed
+         * bundles are pinned to a fresh generation by the byte-for-byte case above, so a
+         * frontend copy could never disagree without `openapi.yaml` disagreeing first — which is
+         * why the frontend holds none. A new authored bundle must land in `SHARED_FILES`; a new
+         * generated one must land here instead.
+         */
+        const generatedFromTheContract = new Set(['bruno', 'insomnia', 'mockoon']);
         const guarded = new Set(SHARED_FILES.map(({ backend }) => backend));
 
         for (const bundle of CONTRACT_BUNDLES)
-            expect(guarded).toContain(path.relative(REPO_ROOT, bundle.output));
+            if (!generatedFromTheContract.has(bundle.name))
+                expect(guarded).toContain(path.relative(REPO_ROOT, bundle.output));
     });
 });
 
@@ -119,7 +130,7 @@ describe('the OpenAPI bundle', () => {
 describe('the AsyncAPI bundle', () => {
     it('parses, and declares a message for every channel operation', () => {
         // The generated realtime types are themselves a guarded shared file, so a bundle that
-        // parses but has lost a channel forks `src/types/asyncapi.ts` one `genasyncapi` later.
+        // parses but has lost a channel forks `src/types/asyncapi.ts` one `gen:asyncapi` later.
         const document = parseYaml(readCommittedBundle(bundleByName('asyncapi'))) as {
             channels: Record<string, Record<string, { message?: { $ref?: string } }>>;
             components: { messages: Record<string, unknown>; schemas: Record<string, unknown> };

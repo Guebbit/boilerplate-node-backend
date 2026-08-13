@@ -60,12 +60,12 @@ flowchart LR
 
 ## What is implemented
 
-| Area                | Current implementation                                                                                                                |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| App image           | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                            |
-| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                          |
-| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands |
-| Podman support      | `podman:restart`, `podman:rebuild`, and `podman:kill` scripts wrap the same compose-oriented workflow                                 |
+| Area                | Current implementation                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| App image           | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                                 |
+| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                               |
+| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands      |
+| Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` drive either engine through `scripts/compose.ts`; pick one with `CONTAINER_ENGINE` |
 
 ## Container reference
 
@@ -116,13 +116,30 @@ uses the `k8s-file` log driver (CRI format) and stores them under a different ho
 has to be pointed at the right one, or it tails nothing.
 
 The base `docker-compose.yml` therefore mounts **neither**. Each runtime adds its own path through
-a small override file — `docker-compose.docker.yml` or `docker-compose.podman.yml` — and the npm
-scripts pass the correct one with `-f`:
+a small override file — `docker-compose.docker.yml` or `docker-compose.podman.yml` — and
+`scripts/compose.ts` passes the correct one with `-f`:
 
 ```bash
-npm run podman:restart   # -f docker-compose.yml -f docker-compose.podman.yml
-npm run docker:restart   # -f docker-compose.yml -f docker-compose.docker.yml
+npm run compose:restart                          # engine auto-detected
+CONTAINER_ENGINE=podman npm run compose:restart  # -f docker-compose.yml -f docker-compose.podman.yml
+CONTAINER_ENGINE=docker npm run compose:restart  # -f docker-compose.yml -f docker-compose.docker.yml
 ```
+
+### Choosing the engine
+
+`scripts/compose.ts` resolves it in this order, and prints the result on every run:
+
+1. `CONTAINER_ENGINE` in the environment,
+2. `CONTAINER_ENGINE` in `.env`,
+3. whichever of the two is actually installed,
+4. `docker`.
+
+**Set it in `.env` if you have both installed and want podman** — step 3 cannot tell a preference
+from a coincidence, so it prefers docker when both answer `--version`.
+
+This replaced eight npm scripts (`podman:{restart,rebuild,kill,compose}` and the docker four) that
+differed only in the engine name and the override file. The engine was never the interesting part;
+the `-f` list was, and it now exists in exactly one place, where choosing an engine cannot lose it.
 
 On Podman, one line in `.env` (see `.env-example`) supplies the log path the override needs:
 

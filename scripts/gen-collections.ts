@@ -2,7 +2,7 @@
 /**
  * Regenerate the API client collections' fragments — `npm run contracts:collections`.
  *
- * The three collections in `.dev/` are derived from `openapi.yaml`, so this writes their per-module
+ * The three `contract.<tool>.*` collections are derived from `openapi.yaml`, so this writes their per-module
  * fragments and `npm run contracts:bundle` assembles them. `contracts:bundle` runs this first, so
  * the usual answer to "the collections are out of date" is to re-bundle and copy the result to the
  * paired frontend, exactly as for the contract itself.

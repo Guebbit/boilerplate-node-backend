@@ -6,14 +6,12 @@
  * response envelope — see the note above the mutations.
  */
 
-import { Types } from 'mongoose';
 import {
     generateSuccess,
     generateReject,
     type IResponseSuccess,
     type IResponseReject
 } from '@infrastructure/http/response';
-import type { IProductDocument } from '@modules/products';
 import { cartRepository } from '../repository';
 import { readCartLines, toCartView, type ICartLine, type ICartView } from './view';
 
@@ -60,30 +58,10 @@ export const cartItemSetById = (userId: string, id: string, quantity = 1): Promi
     upsertCartItem(userId, id, quantity, 'set');
 
 /**
- * Set quantity of target product in cart (by product document).
- */
-export const cartItemSet = (
-    userId: string,
-    product: IProductDocument,
-    quantity = 1
-): Promise<ICartView> =>
-    cartItemSetById(userId, (product._id as Types.ObjectId).toString(), quantity);
-
-/**
  * Add quantity of target product to existing quantity in cart (by ID).
  */
 export const cartItemAddById = (userId: string, id: string, quantity = 1): Promise<ICartView> =>
     upsertCartItem(userId, id, quantity, 'add');
-
-/**
- * Add quantity of target product to cart (by product document).
- */
-export const cartItemAdd = (
-    userId: string,
-    product: IProductDocument,
-    quantity = 1
-): Promise<ICartView> =>
-    cartItemAddById(userId, (product._id as Types.ObjectId).toString(), quantity);
 
 /**
  * Remove target product from cart (by ID).
@@ -100,15 +78,6 @@ export const cartItemRemoveById = (
         if (!cart) return generateReject(404, []);
         return toCartView(cart).then((view) => generateSuccess(view, 200));
     });
-
-/**
- * Remove target product from cart (by product document).
- */
-export const cartItemRemove = (
-    userId: string,
-    product: IProductDocument
-): Promise<IResponseSuccess<ICartView> | IResponseReject> =>
-    cartItemRemoveById(userId, (product._id as Types.ObjectId).toString());
 
 /**
  * Remove all products from cart.

@@ -25,7 +25,13 @@ import path from 'node:path';
 import { REPO_ROOT, type IContractBundle, type TSegment } from './fragments';
 
 /** The order the groups appear in — auth first, then the path a user walks through the shop. */
-export const ANALYTICS_SECTION_ORDER = ['account', 'products', 'cart', 'orders'] as const;
+export const ANALYTICS_SECTION_ORDER = [
+    'account',
+    'products',
+    'cart',
+    'wishlist',
+    'orders'
+] as const;
 
 export type TAnalyticsSectionName = (typeof ANALYTICS_SECTION_ORDER)[number];
 
@@ -39,16 +45,16 @@ export const analyticsFragment = (section: TAnalyticsSectionName): string =>
 /** The prose, and the opening of the object literal. */
 const HEADER_FRAGMENT = path.join(
     REPO_ROOT,
-    'contracts',
     'shared',
+    'contracts',
     'analytics-events.header.fragment.ts'
 );
 
 /** The closing of the object literal, and the union type over its values. */
 const FOOTER_FRAGMENT = path.join(
     REPO_ROOT,
-    'contracts',
     'shared',
+    'contracts',
     'analytics-events.footer.fragment.ts'
 );
 

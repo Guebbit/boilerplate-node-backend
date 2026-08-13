@@ -41,3 +41,10 @@ export {
     createLoggedCookie,
     destroyLoggedCookie
 } from './cookies';
+
+/*
+ * The address book's one cross-module surface: checkout resolves the address an order ships to.
+ * The CRUD stays internal — it is served by this module's own routes.
+ */
+export { addressForCheckout } from './addresses-service';
+export type { IAddressItem } from './addresses-model';

@@ -15,9 +15,12 @@ TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first t
 - Link external services using `.env` variables (for example SMTP/email responders on another server):
     - `NODE_SMTP_HOST`, `NODE_SMTP_PORT`, `NODE_SMTP_USER`, `NODE_SMTP_PASS`, `NODE_SMTP_SENDER`
 - Optional: use Docker/Podman to run the app and its dependencies.
-- Load is generated from outside the process with `npm run load:test` (autocannon) — see [Load testing](docs/tools/load-testing.md).
+- Load is generated from outside the process with `npm run test:load` (autocannon) — see [Load testing](docs/tools/load-testing.md).
 
 ## Quickstart
+
+> The same thing with the URLs to check, the seeded collections, and where to go next:
+> [docs/getting-started.md](docs/getting-started.md).
 
 This stack is **container-first**. The shipped `.env` uses compose service hostnames
 (`NODE_DB_URI=mongodb://database:27017/…`, `NODE_REDIS_URL=redis://redis:6379`) because the
@@ -35,9 +38,10 @@ secondary path and has its own scripts (see [Running on the host](#running-on-th
     - The database and Redis URLs already point at the compose services — leave them alone
       unless you are pointing at something external (Atlas, a managed Redis, …).
 4. On Podman, set `PODMAN_CONTAINERS_PATH` in `.env` (see `.env-example` → _Promtail Log
-   Collection_). Nothing to set on Docker.
-5. Bring the stack up with the script for your runtime:
-    - `npm run podman:restart` (or `npm run docker:restart`)
+   Collection_), and `CONTAINER_ENGINE=podman` if you also have Docker installed. Nothing to set
+   on Docker.
+5. Bring the stack up:
+    - `npm run compose:restart`
 
 Use the scripts rather than a bare `compose up`: each one passes its runtime's Promtail override
 with `-f`, which is what gives Promtail a host log path to tail. A bare `podman compose up` runs
@@ -53,34 +57,38 @@ later boots are a no-op — see [Database migrations & seeding](#database-migrat
 ### Running on the host
 
 `npm run dev` on its own will **not** work against the shipped `.env`: the hostname `database`
-only resolves inside the compose network. Use the `:host` script variants, which redirect the
-**hostname** to `localhost` and change nothing else (the compose files publish Mongo and Redis on
-the `NODE_MONGODB_PORT` / `NODE_REDIS_PORT` from your `.env`, so start the stack — or at least
-those two services — first):
+only resolves inside the compose network. Prefix the script with `npm run host --`, which
+redirects the **hostname** to `localhost` and changes nothing else (the compose files publish
+Mongo and Redis on the `NODE_MONGODB_PORT` / `NODE_REDIS_PORT` from your `.env`, so start the
+stack — or at least those two services — first):
 
-| Container-first (default)   | Host equivalent                  |
-| --------------------------- | -------------------------------- |
-| `npm run dev:docker`        | `npm run dev:host`               |
-| `npm run db:migrate:up`     | `npm run db:migrate:up:host`     |
-| `npm run db:migrate:down`   | `npm run db:migrate:down:host`   |
-| `npm run db:migrate:status` | `npm run db:migrate:status:host` |
-| `npm run db:seed`           | `npm run db:seed:host`           |
-| `npm run db:seed:reset`     | `npm run db:seed:reset:host`     |
-| `npm run db:cache:clear`    | `npm run db:cache:clear:host`    |
-| `npm run db:bootstrap`      | `npm run db:bootstrap:host`      |
+| Container-first (default)   | Host equivalent                     |
+| --------------------------- | ----------------------------------- |
+| `npm run dev:docker`        | `npm run host -- dev`               |
+| `npm run db:migrate:up`     | `npm run host -- db:migrate:up`     |
+| `npm run db:migrate:down`   | `npm run host -- db:migrate:down`   |
+| `npm run db:migrate:status` | `npm run host -- db:migrate:status` |
+| `npm run db:seed`           | `npm run host -- db:seed`           |
+| `npm run db:seed:reset`     | `npm run host -- db:seed:reset`     |
+| `npm run db:cache:clear`    | `npm run host -- db:cache:clear`    |
+| `npm run db:bootstrap`      | `npm run host -- db:bootstrap`      |
 
-Mechanically, each one **blanks** `NODE_DB_URI` / `NODE_REDIS_URL` and sets
-`NODE_MONGODB_HOST=localhost` / `NODE_REDIS_HOST=localhost` via `cross-env`. An empty URI makes
-both resolvers fall through to their host/port/name fragments, so everything except the hostname
-— the database **name** above all — still comes from your `.env`. There is no second env file to
-keep in sync, and nothing is duplicated.
+Mechanically, `host` **blanks** `NODE_DB_URI` / `NODE_REDIS_URL`, sets
+`NODE_MONGODB_HOST=localhost` / `NODE_REDIS_HOST=localhost` via `cross-env`, and ends in
+`npm run` so npm appends whatever follows `--`. An empty URI makes both resolvers fall through to
+their host/port/name fragments, so everything except the hostname — the database **name** above
+all — still comes from your `.env`. There is no second env file to keep in sync, and nothing is
+duplicated.
 
 That indirection is the point. These scripts used to spell out
 `mongodb://localhost:27017/boilerplate-node-backend` in full, six times. Renaming the database in
-`.env` then left every `:host` script pointing at the old one, silently: `db:seed:host` would
-create and populate `boilerplate-node-backend` while your actual data sat untouched somewhere
-else, and nothing in the output said which database it had touched.
-`tests/unit/db/host-scripts.test.ts` fails if a literal URI or database name comes back.
+`.env` then left every `:host` script pointing at the old one, silently: seeding would create and
+populate `boilerplate-node-backend` while your actual data sat untouched somewhere else, and
+nothing in the output said which database it had touched. Then the URI came out and seven `:host`
+twins carried the same `cross-env` prefix instead — where `db:cache:clear:host` had already
+drifted, blanking Redis but not Mongo. One wrapper cannot drift from itself.
+`tests/unit/db/host-scripts.test.ts` fails if a literal URI, a database name, or a second
+hostname-redirecting script comes back.
 
 If you genuinely want the host to be your primary environment, edit `.env` to use `localhost`
 and let compose override the two hostnames in its `environment:` block instead.
@@ -437,23 +445,21 @@ curl -N http://localhost:3000/observability/events
 
 ## Scripts
 
-- `npm run dev` - run API in watch mode
-- `npm run dev:docker` - docker/podman single-worker hot-reload mode
-- `npm run dev:docker:cluster` - docker/podman clustered dev mode
-- `npm run ts-check` - TypeScript type-check
-- `npm run lint` - lint checks
-- `npm run lint:asyncapi` - validate AsyncAPI contract
-- `npm run genasyncapi` - generate TypeScript types from asyncapi.yaml into `src/types/`
-- `npm run prettier:check` - prettier non-mutating formatting check
-- `npm run test` - unit + integration tests
-- `npm run test:unit` - unit tests
-- `npm run test:integration` - HTTP integration tests
-- `npm run build` - type-check + lint
-- `npm run db:migrate` - apply pending migrations
-- `npm run db:migrate:down` - rollback last migration
-- `npm run db:migrate:status` - list migration status
-- `npm run complete` - build + test + auto-fix lint/prettier
-- `npm run complete:check` - build + test + non-mutating lint/prettier checks
+There are ~50 of them. [docs/tools/package-scripts.md](docs/tools/package-scripts.md) is the full
+map, grouped by job. The ones worth memorising:
+
+| Script                     | Job                                                              |
+| -------------------------- | ---------------------------------------------------------------- |
+| `npm run compose:restart`  | bring the whole stack up — the normal way to start               |
+| `npm run host -- <script>` | run any script on the host against the containerised Mongo/Redis |
+| `npm run contracts:bundle` | rebuild the committed contracts from their per-module fragments  |
+| `npm run gen:api`          | regenerate `api/` (types + Zod) from `openapi.yaml`              |
+| `npm run gen:asyncapi`     | regenerate `src/types/asyncapi.ts` from `asyncapi.yaml`          |
+| `npm run test`             | unit + cross-cutting + integration + contract                    |
+| `npm run complete:check`   | build + test + lint + format check — what pre-commit runs, ~60s  |
+| `npm run complete`         | the same, but fixing lint and formatting instead of reporting    |
+| `npm run db:migrate:up`    | apply pending migrations (`:down` and `:status` alongside)       |
+| `npm run db:seed:reset`    | drop and reseed the demo dataset                                 |
 
 Migrations use [migrate-mongo](https://github.com/seppevs/migrate-mongo) with CommonJS `.js` files in `db/migrations/`.
 
@@ -478,20 +484,30 @@ npm ci
 
 ## OpenAPI workflow
 
-- Source of truth: `openapi.yaml`
-- Lint OpenAPI spec:
-    - `npm run lint:openapi`
-- Generate typed API client:
-    - `npm run genapi`
+`openapi.yaml` is the contract, but it is **assembled**, not hand-edited: each module owns its slice
+in `src/modules/<name>/openapi/{paths,schemas}.yaml`, and seven documents in total are bundled from
+fragments the same way.
 
-Use the generated `api/` output as derived artifacts from `openapi.yaml`.
+```bash
+# edit src/modules/<name>/openapi/paths.yaml — never openapi.yaml itself
+npm run contracts:bundle    # fragments -> openapi.yaml (+ the other six bundles)
+npm run gen:api              # openapi.yaml -> api/models + api/schemas.zod.ts
+npm run lint:openapi        # spectral, against spectral.yaml
+```
+
+A fragment edited without re-bundling fails the test suite rather than drifting silently.
+
+- **What to rerun after which edit**: [docs/api/regenerating.md](docs/api/regenerating.md)
+- **Who owns which fragment, and why the bundler never parses YAML**: [docs/api/contract-fragmentation.md](docs/api/contract-fragmentation.md)
+
+Everything in `api/` is a derived artifact — committed, but never hand-edited.
 
 ## AsyncAPI workflow
 
 - Source of truth for async/realtime contracts: `asyncapi.yaml`
 - Generated TypeScript types live in `src/types/asyncapi.ts` and are re-exported from `src/types/`
 - Regenerate types after editing `asyncapi.yaml`:
-    - `npm run genasyncapi`
+    - `npm run gen:asyncapi`
 - This contract documents:
     - SSE observability channels (`observability.*`)
     - RabbitMQ worker job queues (`worker.*`)
@@ -500,7 +516,7 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
 ## Frontend/backend tandem sync discipline
 
 - Treat `openapi.yaml` as the canonical contract for both paired boilerplates.
-- After any contract edit, regenerate derived artifacts (`npm run genapi`) and commit the generated `api/` changes.
+- After any contract edit, regenerate derived artifacts (`npm run gen:api`) and commit the generated `api/` changes.
 - Keep paired branches aligned (backend `api-mongodb-mongoose` with the intended frontend branch) before merging contract changes.
 - Local pairing reminder:
     - Backend default URL: `http://localhost:3000`
@@ -509,37 +525,29 @@ Use the generated `api/` output as derived artifacts from `openapi.yaml`.
 
 ## Mock/testing helpers
 
-The `.dev/` folder contains Bruno/Mockoon/Insomnia assets for local API exploration and API mocking.
+Three ready-made collections sit at the repo root, next to the contract they are rendered from —
+**do not import `openapi.yaml` yourself.** They are
+generated from the contract by `npm run contracts:collections`, they carry one request per operation
+plus the hand-authored negative probes, and their values come from `db/seeds/seed-identities.ts`, so
+`POST /account/login` already sends credentials that work and `GET /products/{id}` asks for a product
+the seeded database actually holds.
 
-### Bruno (mock frontend consuming your API)
+| File                     | Tool                          | Use it to                                              |
+| ------------------------ | ----------------------------- | ------------------------------------------------------ |
+| `contract.bruno.yml`     | [Bruno](https://usebruno.com) | act as a frontend client against the real API          |
+| `contract.insomnia.json` | Insomnia                      | the same, in Insomnia                                  |
+| `contract.mockoon.json`  | Mockoon                       | serve a fake API from the contract's declared examples |
 
-Use `openapi.yaml` with Bruno to quickly create and test requests as if you were a frontend client.
+1. Load the file for your tool (Bruno: `+` → _Import collection_; Mockoon: open it as an existing
+   environment rather than importing OpenAPI).
+2. Point `baseUrl` at `http://localhost:3000` for the real API, or at your Mockoon port for the mock.
+3. Send requests.
 
-1. Open Bruno.
-2. In the left sidebar, click `+` -> `Import collection`.
-3. Import from `openapi.yaml`.
-4. Create/select a Bruno environment (for example `local`).
-5. Set environment variable `baseUrl` to:
-    - `http://localhost:3001` (Mockoon default)
-6. In the top-right environment selector, switch from `No environment` to your `local` environment.
-7. Send requests to verify payload shapes, status codes, and auth flow.
-
-Tip: keep one environment pointing to the real backend (`http://localhost:3000`) and one to Mockoon (`http://localhost:3001`) so you can switch quickly.
-
-### Mockoon (mock API returning fake data)
-
-Use `openapi.yaml` with Mockoon to generate a fake backend that returns mock responses.
-
-1. Open Mockoon desktop app.
-2. In the top menu, select:
-    - `Import/Export` -> `Import OpenAPI/Swagger` (Swagger v2/OpenAPI import)
-3. Select `openapi.yaml`.
-4. Review generated routes and sample responses.
-5. Set Mockoon port to `3001` (or adjust Bruno `baseUrl` accordingly).
-6. Start the mock server.
-7. Call endpoints from Bruno/Postman/frontend to test client integration without using the real database.
-
-Tip: enrich generated routes with realistic status codes (`200`, `400`, `401`, `404`, `500`) to test client error handling.
+Because they are generated, **never edit them by hand** — a fix belongs in the contract fragment, or
+in that module's `dev/probes.yml` for requests a spec cannot describe (401s, 409s, rate limits). A
+test asserts all three carry one request per declared operation, which is exactly the check that was
+missing while the hand-written versions rotted — see
+[docs/api/contract-fragmentation.md](docs/api/contract-fragmentation.md).
 
 ## How to expose services to local Wi-Fi (Podman)
 

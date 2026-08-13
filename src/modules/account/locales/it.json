@@ -21,12 +21,41 @@
             "token-not-found": "Token non valido o scaduto, riprova.",
             "success": "Account eliminato definitivamente."
         },
+        "update": {
+            "success": "Profilo aggiornato."
+        },
+        "password-change": {
+            "wrong-current": "La password attuale non è corretta.",
+            "success": "Password modificata."
+        },
+        "logout": {
+            "success": "Disconnessione effettuata."
+        },
+        "sessions": {
+            "revoked": "Sessione revocata.",
+            "not-found": "Sessione non trovata."
+        },
+        "verify": {
+            "email-sent": "È stata inviata un'email di verifica, clicca sul link per confermare il tuo indirizzo.",
+            "already-verified": "Questo account è già verificato.",
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "success": "Indirizzo email verificato."
+        },
         "email": {
             "registration-confirm": {
                 "subject": "Benvenuto — il tuo account è pronto",
                 "meta-title": "Registrazione completata",
                 "title": "Benvenuto a bordo {{name}}!",
                 "body": "La registrazione è andata a buon fine."
+            },
+            "verify-request": {
+                "subject": "Conferma il tuo indirizzo email",
+                "meta-title": "Verifica email",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Conferma che questo indirizzo email è tuo.",
+                "cta": "Clicca su questo link per verificare il tuo indirizzo email.",
+                "link-label": "Verifica la mia email",
+                "ignore": "Se non hai creato questo account, puoi ignorare questa email."
             },
             "reset-request": {
                 "subject": "Reimpostazione della password",
@@ -59,6 +88,12 @@
                 "body": "Il tuo account è stato eliminato definitivamente.",
                 "farewell": "Ci dispiace vederti andare via. Se si è trattato di un errore, contatta l'assistenza."
             }
+        },
+        "addresses": {
+            "added": "Indirizzo salvato.",
+            "updated": "Indirizzo aggiornato.",
+            "removed": "Indirizzo rimosso.",
+            "not-found": "L'indirizzo richiesto non è stato trovato"
         }
     }
 }

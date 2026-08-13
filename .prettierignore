@@ -1,6 +1,8 @@
 api
 .prism
-.dev
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
 src/types/asyncapi.ts
 
 # Contract fragments are verbatim SLICES of a committed document, not standalone files: each one
@@ -11,7 +13,7 @@ src/types/asyncapi.ts
 #
 # The BUNDLES are formatted as normal, which is what keeps the fragments honest: a slice that
 # prettier would have changed shows up as a diff in the document it lands in.
-contracts/shared/*
+shared/contracts/*
 src/modules/*/openapi/*.yaml
 src/modules/*/asyncapi/*.yaml
 src/modules/*/dev/*

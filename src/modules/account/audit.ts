@@ -15,13 +15,20 @@ export const accountAuditActions = {
     AUTH_LOGIN_FAILED: 'auth.login.failed',
     AUTH_SIGNUP_SUCCEEDED: 'auth.signup.succeeded',
     AUTH_SIGNUP_FAILED: 'auth.signup.failed',
+    AUTH_ACCOUNT_UPDATED: 'auth.account.updated',
     AUTH_PASSWORD_RESET_REQUESTED: 'auth.password_reset.requested',
     AUTH_PASSWORD_RESET_COMPLETED: 'auth.password_reset.completed',
+    AUTH_PASSWORD_CHANGE_COMPLETED: 'auth.password_change.completed',
+    AUTH_PASSWORD_CHANGE_FAILED: 'auth.password_change.failed',
     AUTH_ACCOUNT_DELETE_REQUESTED: 'auth.account_delete.requested',
     AUTH_ACCOUNT_DELETE_COMPLETED: 'auth.account_delete.completed',
+    AUTH_EMAIL_VERIFY_REQUESTED: 'auth.email_verify.requested',
+    AUTH_EMAIL_VERIFY_COMPLETED: 'auth.email_verify.completed',
     AUTH_REFRESH_SUCCEEDED: 'auth.refresh.succeeded',
     AUTH_REFRESH_FAILED: 'auth.refresh.failed',
+    AUTH_LOGOUT_SUCCEEDED: 'auth.logout.succeeded',
     AUTH_LOGOUT_ALL_SUCCEEDED: 'auth.logout_all.succeeded',
+    AUTH_SESSION_REVOKED: 'auth.session.revoked',
     AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup'
 } as const;
 

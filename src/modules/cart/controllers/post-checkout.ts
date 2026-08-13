@@ -20,8 +20,10 @@ export const postCheckout = (request: Request, response: Response) => {
         return;
     }
     const userId = request.authContext.id;
+    // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
+    const { addressId } = (request.body ?? {}) as { addressId?: string };
     return cartService
-        .orderConfirm(userId)
+        .orderConfirm(userId, addressId)
         .then((result) => {
             if (!result.success) {
                 cartCheckoutTotal.inc({ status: 'failure' });

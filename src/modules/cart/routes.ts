@@ -7,6 +7,7 @@ import { putCartItem } from './controllers/put-cart-item';
 import { deleteCart } from './controllers/delete-cart';
 import { deleteCartItem } from './controllers/delete-cart-item';
 import { postCheckout } from './controllers/post-checkout';
+import { postReorder } from './controllers/post-reorder';
 import { invalidateCache } from '@infrastructure/http/middlewares/cache';
 
 /** Express router for cart operations (add, update, remove items; checkout). */
@@ -19,7 +20,10 @@ router.use(getAuth, isAuth);
 router.get('/summary', getCartSummary);
 
 // POST /cart/checkout
-router.post('/checkout', invalidateCache(['orders']), postCheckout);
+router.post('/checkout', invalidateCache(['orders', 'products']), postCheckout);
+
+// POST /cart/reorder/:orderId — copy one of the caller's own orders back into the cart
+router.post('/reorder/:orderId', postReorder);
 
 // GET /cart
 router.get('/', getCart);

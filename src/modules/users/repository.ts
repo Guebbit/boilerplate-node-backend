@@ -1,4 +1,4 @@
-import { userModel, applyUserTransform } from './model';
+import { userModel, applyUserTransform, ETokenType } from './model';
 import type { IUserDocument } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
@@ -32,6 +32,8 @@ export const userRepository: IBaseRepository<IUserDocument> & {
     findByIdWithCredentials: (id: string) => Promise<IUserDocument | null>;
     findOneWithCredentials: (where: QueryFilter<IUserDocument>) => Promise<IUserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
+    tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
+    sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
 } = {
     ...createBaseRepository<IUserDocument>(userModel, {
         transform: applyUserTransform,
@@ -87,6 +89,51 @@ export const userRepository: IBaseRepository<IUserDocument> & {
                 {
                     timestamps: false
                 }
+            )
+            .exec(),
+
+    /**
+     * Spend one token by VALUE ALONE, atomically — the single-session logout.
+     *
+     * No user id in the filter, because the caller does not have one: `POST /account/logout`
+     * works from the refresh cookie with no bearer token, and the cookie's value is itself the
+     * proof of ownership — whoever presents it IS that session. The filter finds the document
+     * holding the value; the `$pull` removes exactly that entry.
+     *
+     * Idempotent like `tokenRemove`: a value no document holds matches nothing and reports
+     * `modifiedCount: 0`, which the logout deliberately does not distinguish — the caller's goal
+     * is "not logged in here", and that is true either way.
+     *
+     * `timestamps: false` — ending a session is not a change to the account.
+     */
+    tokenRemoveByValue: (token: string) =>
+        userModel
+            .updateOne(
+                { 'tokens.token': token },
+                { $pull: { tokens: { token } } },
+                { timestamps: false }
+            )
+            .exec(),
+
+    /**
+     * Revoke one refresh token by its SUBDOCUMENT id — "log out that device".
+     *
+     * The id filter carries the owner as well as the session: a caller can only revoke entries
+     * on their own document, so a guessed or leaked session id from someone else's listing
+     * matches nothing and reports `modifiedCount: 0`, which the controller answers as 404.
+     *
+     * `type` is pinned to `refresh` so the handle from `GET /account/sessions` cannot be turned
+     * against the other token kinds — a pending reset or delete confirmation is not a session,
+     * and this endpoint must not be able to cancel one.
+     *
+     * `timestamps: false` — ending a session is not a change to the account.
+     */
+    sessionRemove: (id: string, sessionId: string) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id) },
+                { $pull: { tokens: { _id: toObjectId(sessionId), type: ETokenType.REFRESH } } },
+                { timestamps: false }
             )
             .exec()
 };

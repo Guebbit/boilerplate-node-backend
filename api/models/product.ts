@@ -26,6 +26,8 @@ export interface Product {
   title: string;
   /** @minimum 0 */
   price: number;
+  /** @minimum 0 */
+  stock?: number;
   description?: string;
   active?: boolean;
   imageUrl?: ImageUrl;

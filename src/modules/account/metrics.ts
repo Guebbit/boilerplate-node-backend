@@ -72,6 +72,33 @@ export const authRefreshTotal = new Counter({
 });
 
 /**
+ * Authenticated password changes (the current-password flow, not the email reset).
+ * Kept separate from `auth_password_reset_total` for the same reason that one excludes the
+ * confirmation step: two flows in one counter cannot be read as a funnel. The failure series
+ * doubles as a security signal — repeated wrong current passwords against a live session
+ * suggests a hijacked device probing for the credential it does not have.
+ */
+export const authPasswordChangeTotal = new Counter({
+    name: 'auth_password_change_total',
+    help: 'Total authenticated password-change attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
+ * Email-verification confirmations (the token-spending step, not the send).
+ * The send is not counted: it rides the email queue, whose own metrics say whether mail moves.
+ * What no other signal answers is how many verification links actually get clicked — the
+ * success/failure split here is the closest thing this stack has to a deliverability check.
+ */
+export const authEmailVerifyTotal = new Counter({
+    name: 'auth_email_verify_total',
+    help: 'Total email-verification confirmation attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
  * Expired-token cleanup runs (admin endpoint).
  * Note: no `labelNames` — a maintenance job either ran or did not, so there is no outcome
  * dimension worth slicing by. Useful mainly to confirm the job is still running at all.

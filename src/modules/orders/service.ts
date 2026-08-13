@@ -9,7 +9,7 @@ import {
 } from '@infrastructure/http/response';
 import { productRepository } from '@modules/products';
 import { orderRepository } from './repository';
-import { checkOrderLines, nextDeletionState, readScope } from './domain';
+import { checkOrderLines } from './domain';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/base-repository';
@@ -76,7 +76,7 @@ export const create = (
         (items ?? []).map((item) =>
             productRepository.findByIdRaw(item.productId).then((product) => ({ item, product }))
         )
-    ).then((resolvedItems) => {
+    ).then(async (resolvedItems) => {
         const verdict = checkOrderLines(
             resolvedItems.map(({ item, product }) => ({ quantity: item.quantity, product }))
         );
@@ -84,6 +84,28 @@ export const create = (
             return verdict.reason === 'no-lines'
                 ? generateReject(422, [t('generic.error-missing-data')])
                 : generateReject(404, [t('products.not-found')]);
+
+        /*
+         * Take the stock before writing the order, conditionally per line, exactly as checkout
+         * does — the admin path sells the same shelf the storefront does, and skipping the
+         * decrement here is how a manual order oversells what checkout was carefully guarding.
+         * A failed line puts back what was taken and refuses the whole order.
+         */
+        const taken: { productId: string; quantity: number }[] = [];
+        for (const { item } of resolvedItems) {
+            const ok = await productRepository.decrementStock(item.productId, item.quantity);
+            if (!ok) {
+                for (const line of taken)
+                    await productRepository.incrementStock(line.productId, line.quantity);
+                return generateReject(409, [
+                    {
+                        code: 'ORDER_INSUFFICIENT_STOCK',
+                        message: t('orders.insufficient-stock')
+                    }
+                ]);
+            }
+            taken.push({ productId: item.productId, quantity: item.quantity });
+        }
 
         const orderItems: IOrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
             // lean() returns a plain object compatible with IProductDocument at runtime
@@ -189,8 +211,9 @@ export const remove = (
             .deleteOne(order)
             .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')));
 
-    // Toggle delete/restore — the rule is in `domain/rules.ts`.
-    order.deletedAt = nextDeletionState(order.deletedAt, new Date());
+    // Toggle: delete stamps, delete again restores. An order is a financial record, so the row
+    // survives either way — only the stamp moves.
+    order.deletedAt = order.deletedAt ? undefined : new Date();
 
     // SOFT delete (or restore)
     return orderRepository
@@ -222,10 +245,9 @@ export const removeById = (
  * `undefined` for admins, meaning "no restriction", so callers must spread it
  * (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a filter.
  *
- * Takes the auth context rather than the express `Request`: this is a domain rule about a
- * caller, not about a request, and the narrower argument is what lets it live below the HTTP
- * layer: a database filter has no business in `src/infrastructure/**`, which the `no-restricted-imports`
- * rule enforces.
+ * Takes the auth context rather than the express `Request`: this is a rule about a caller, not
+ * about a request, and the narrower argument is what keeps the decision next to the query it
+ * produces.
  *
  * The `?? ''` is deliberate: an empty string is not a valid ObjectId, so `ownerScope` throws.
  * That is the safe direction — a request with no auth context errors out instead of quietly
@@ -233,11 +255,68 @@ export const removeById = (
  */
 export const callerScope = (
     authContext?: { id?: string; admin?: boolean } | undefined
-): Record<string, unknown> | undefined => {
-    // `readScope` decides; the repository translates the decision into a query.
-    const scope = readScope(authContext);
-    return scope.kind === 'all' ? undefined : orderRepository.visibleScope(scope.userId);
-};
+): Record<string, unknown> | undefined =>
+    authContext?.admin ? undefined : orderRepository.visibleScope(authContext?.id ?? '');
+
+/**
+ * The statuses a CUSTOMER's cancel may move from — `pending` only, deliberately.
+ *
+ * `paid` money has to travel back, `processing` has left the queue, `shipped` is a return
+ * rather than a cancellation: each of those is a flow with its own rules, and an admin can
+ * always force a status through the admin write. The customer's cancel is the narrow one —
+ * nothing has happened yet, so nothing has to be undone.
+ */
+const CANCELLABLE_ORDER_STATUSES: readonly string[] = ['pending'];
+
+/**
+ * Cancel an order — the one write a customer may make to one.
+ *
+ * A conditional status move, not a read-check-write: the repository's filter carries the
+ * caller's scope AND the `pending` requirement, so a cancel racing the admin's "shipped" (or a
+ * double-clicked cancel) resolves at the storage layer — exactly one write matches. The
+ * follow-up read on the `null` branch exists only to tell 404 from 409 in the answer; by then
+ * the decision is already made.
+ *
+ * @param id - the order to cancel
+ * @param authContext - whose view of the collection the write happens in ({@link callerScope})
+ */
+export const cancelById = (
+    id: string,
+    authContext?: { id?: string; admin?: boolean }
+): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
+    orderRepository
+        .updateStatusIfIn(
+            id,
+            CANCELLABLE_ORDER_STATUSES,
+            'cancelled' satisfies OrderStatus,
+            callerScope(authContext)
+        )
+        .then(async (order) => {
+            if (order) {
+                /*
+                 * The shelf gets its units back. After the status write, deliberately: the
+                 * conditional move is what guarantees this runs at most once per order — a
+                 * second cancel loses the `$in: ['pending']` match and never reaches here.
+                 */
+                for (const item of order.items)
+                    await productRepository.incrementStock(String(item.product._id), item.quantity);
+
+                return generateSuccess(order, 200, t('orders.cancel.success'));
+            }
+
+            // Which refusal was it? This read only informs the message — the write above
+            // already decided nothing changes.
+            return getById(id, callerScope(authContext)).then((existing) =>
+                existing
+                    ? generateReject(409, [
+                          {
+                              code: 'ORDER_NOT_CANCELLABLE',
+                              message: t('orders.cancel.not-cancellable')
+                          }
+                      ])
+                    : generateReject(404, [t('orders.not-found')])
+            );
+        });
 
 export const orderService = {
     search,
@@ -247,5 +326,6 @@ export const orderService = {
     update,
     updateById,
     remove,
-    removeById
+    removeById,
+    cancelById
 };

@@ -3,13 +3,21 @@ import { authRateLimiter } from '@infrastructure/http/middlewares/security';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/adapters/storage';
 import { getAccount } from './controllers/get-account';
+import { putAccount } from './controllers/put-account';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
 import { postResetConfirm } from './controllers/post-reset-confirm';
+import { postPasswordChange } from './controllers/post-password-change';
 import { getRefreshToken } from './controllers/get-refresh-token';
+import { postLogout } from './controllers/post-logout';
 import { postLogoutEverywhere } from './controllers/post-logout-everywhere';
+import { getSessions } from './controllers/get-sessions';
+import { deleteSession } from './controllers/delete-session';
+import { postVerifyRequest } from './controllers/post-verify-request';
+import { postVerifyConfirm } from './controllers/post-verify-confirm';
 import { deleteExpiredTokens } from './controllers/delete-expired-tokens';
+import { getAddresses, postAddress, putAddress, deleteAddress } from './controllers/addresses';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { invalidateCache, noStore, setCache } from '@infrastructure/http/middlewares/cache';
@@ -26,6 +34,15 @@ router.use(noStore);
 
 // GET /account — current user profile (requires auth)
 router.get('/', setCache(3600, { tags: ['account'], keyParameters: [] }), isAuth, getAccount);
+
+// PUT /account — update own profile (requires auth). The upload mirrors signup's.
+router.put(
+    '/',
+    isAuth,
+    invalidateCache(['users', 'account']),
+    upload.single('imageUpload'),
+    putAccount
+);
 
 // DELETE /account — request account deletion (requires auth)
 router.delete('/', isAuth, deleteAccountRequest);
@@ -56,11 +73,46 @@ router.post(
     postResetConfirm
 );
 
+// POST /account/password — change password by proving the current one (requires auth)
+router.post('/password', authRateLimiter, isAuth, postPasswordChange);
+
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
 
+// POST /account/logout — revoke THIS session's refresh token (cookie is the credential)
+router.post('/logout', postLogout);
+
 // POST /account/logout-all — revoke all refresh tokens (requires auth)
 router.post('/logout-all', isAuth, invalidateCache(['account']), postLogoutEverywhere);
+
+// GET /account/sessions — list live refresh tokens as sessions (requires auth)
+router.get('/sessions', isAuth, getSessions);
+
+// DELETE /account/sessions/:sessionId — revoke one session (requires auth)
+router.delete('/sessions/:sessionId', isAuth, deleteSession);
+
+// GET /account/addresses — the caller's address book (requires auth)
+router.get('/addresses', isAuth, getAddresses);
+
+// POST /account/addresses — add an entry (requires auth)
+router.post('/addresses', isAuth, postAddress);
+
+// PUT /account/addresses/:addressId — update an entry (requires auth)
+router.put('/addresses/:addressId', isAuth, putAddress);
+
+// DELETE /account/addresses/:addressId — remove an entry (requires auth)
+router.delete('/addresses/:addressId', isAuth, deleteAddress);
+
+// POST /account/verify-request — re-send the verification email (requires auth)
+router.post('/verify-request', authRateLimiter, isAuth, postVerifyRequest);
+
+// POST /account/verify-confirm — spend the emailed token; public, the token is the credential
+router.post(
+    '/verify-confirm',
+    authRateLimiter,
+    invalidateCache(['users', 'account']),
+    postVerifyConfirm
+);
 
 // DELETE /account/tokens/expired — remove expired tokens from the DB (admin only)
 router.delete(

@@ -22,7 +22,8 @@ import { cartAuditActions } from '../../audit';
 describe('the cart audit vocabulary', () => {
     it('spells every action exactly as the log tooling expects', () => {
         expect(cartAuditActions).toEqual({
-            USER_CART_ITEM_REMOVED: 'user.cart.item_removed'
+            USER_CART_ITEM_REMOVED: 'user.cart.item_removed',
+            USER_CART_REORDERED: 'user.cart.reordered'
         });
     });
 

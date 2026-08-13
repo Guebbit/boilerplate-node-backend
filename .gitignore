@@ -24,4 +24,11 @@ coverage
 
 # per-run in-memory Mongo data directories (see tests/support/global-setup.ts)
 .tmp
-reports/
+
+# Mutation reports are generated, EXCEPT the incremental cache, which is committed on purpose:
+# Stryker reuses it to re-test only what changed, and CI can only read it if it is in the repo.
+# `reports/*` and not `reports/`: git does not descend into an excluded DIRECTORY, so the negation
+# below is silently dead if this loses its `*` — the file stops being committed and runs quietly
+# go back to full length with nothing reporting an error.
+reports/*
+!reports/stryker-incremental.json

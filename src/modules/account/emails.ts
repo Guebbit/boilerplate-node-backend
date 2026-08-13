@@ -34,7 +34,7 @@ const accountLink = (route: string, token: string): string =>
 export const registrationConfirmEmail = (locale: string, name: string): IEmailContent => {
     const t = translator(locale);
     return {
-        template: 'email-registration-confirm.ejs',
+        template: 'account.registration-confirm.ejs',
         subject: t('account.email.registration-confirm.subject'),
         data: {
             locale,
@@ -47,11 +47,31 @@ export const registrationConfirmEmail = (locale: string, name: string): IEmailCo
     };
 };
 
+/** Email verification: the email carrying the one-time confirmation link. */
+export const verifyRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.verify-request.ejs',
+        subject: t('account.email.verify-request.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.verify-request.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.verify-request.greeting', { name }),
+            intro: t('account.email.verify-request.intro'),
+            linkLabel: t('account.email.verify-request.link-label'),
+            linkUrl: accountLink('verify', token),
+            ignore: t('account.email.verify-request.ignore'),
+            footer: t('email.footer')
+        }
+    };
+};
+
 /** Password reset: the email carrying the one-time link. */
 export const resetRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
     const t = translator(locale);
     return {
-        template: 'email-reset-request.ejs',
+        template: 'account.reset-request.ejs',
         subject: t('account.email.reset-request.subject'),
         data: {
             locale,
@@ -71,7 +91,7 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
 export const resetConfirmEmail = (locale: string, name: string): IEmailContent => {
     const t = translator(locale);
     return {
-        template: 'email-reset-confirm.ejs',
+        template: 'account.reset-confirm.ejs',
         subject: t('account.email.reset-confirm.subject'),
         data: {
             locale,
@@ -88,7 +108,7 @@ export const resetConfirmEmail = (locale: string, name: string): IEmailContent =
 export const deleteRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
     const t = translator(locale);
     return {
-        template: 'email-delete-request.ejs',
+        template: 'account.delete-request.ejs',
         subject: t('account.email.delete-request.subject'),
         data: {
             locale,
@@ -108,7 +128,7 @@ export const deleteRequestEmail = (locale: string, name: string, token: string):
 export const deleteConfirmEmail = (locale: string, name: string): IEmailContent => {
     const t = translator(locale);
     return {
-        template: 'email-delete-confirm.ejs',
+        template: 'account.delete-confirm.ejs',
         subject: t('account.email.delete-confirm.subject'),
         data: {
             locale,

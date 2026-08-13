@@ -31,6 +31,41 @@
             store: true
           rebuildPath: true
       - url: "{{ _.baseURL }}/account"
+        name: Update own profile
+        meta:
+          id: req_6244e694788d673ad57f4873e80e666e
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Update own profile
+          sortKey: 3002
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "email": "gino@pino.it",
+              "username": "ginopinoshow",
+              "locale": "it",
+              "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account"
         name: Request account deletion
         meta:
           id: req_469e8c9aa43009c545c4794e74dfc5aa
@@ -38,7 +73,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Request account deletion
-          sortKey: 3002
+          sortKey: 3003
         method: DELETE
         headers:
           - name: Accept
@@ -46,6 +81,296 @@
         authentication:
           type: bearer
           token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/password"
+        name: Change password
+        meta:
+          id: req_4b86f683c85c6bf58dfb739f56edf34c
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Change password
+          sortKey: 3004
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "currentPassword": "string",
+              "password": "password",
+              "passwordConfirm": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/logout"
+        name: Logout this session
+        meta:
+          id: req_a75b714a1f1cda945a2b6c9c3cc4a894
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Logout this session
+          sortKey: 3005
+        method: POST
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/sessions"
+        name: List active sessions
+        meta:
+          id: req_3e10b32d31feb4498e167e638b23e3c4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: List active sessions
+          sortKey: 3006
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/sessions/example"
+        name: Revoke one session
+        meta:
+          id: req_4a0f96641f682ca23b3531c9b73a0521
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Revoke one session
+          sortKey: 3007
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/addresses"
+        name: List saved addresses
+        meta:
+          id: req_c8524e5fa01e3d2f470d87b9f158e170
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: List saved addresses
+          sortKey: 3008
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/addresses"
+        name: Add an address
+        meta:
+          id: req_e0abd2ff9ac323c4dbe0cfed199cdce5
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Add an address
+          sortKey: 3009
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "label": "string",
+              "fullName": "string",
+              "street": "string",
+              "city": "string",
+              "zip": "string",
+              "country": "string",
+              "phone": "string",
+              "default": true
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/addresses/example"
+        name: Update an address
+        meta:
+          id: req_9d201a23efc87b329f23ff12d3f87ba4
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Update an address
+          sortKey: 3010
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "label": "string",
+              "fullName": "string",
+              "street": "string",
+              "city": "string",
+              "zip": "string",
+              "country": "string",
+              "phone": "string",
+              "default": true
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/addresses/example"
+        name: Remove an address
+        meta:
+          id: req_a103011727a0fc1f2e8e402e7034bb19
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Remove an address
+          sortKey: 3011
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/verify-request"
+        name: Request email verification
+        meta:
+          id: req_7c5bc806cd8465646019c80462993af6
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Request email verification
+          sortKey: 3012
+        method: POST
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/account/verify-confirm"
+        name: Confirm email verification
+        meta:
+          id: req_9ec8349493d7fd42cce17103974e634e
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Confirm email verification
+          sortKey: 3013
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "token": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
         settings:
           renderRequestBody: true
           encodeUrl: true
@@ -62,7 +387,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Confirm account deletion
-          sortKey: 3003
+          sortKey: 3014
         method: DELETE
         body:
           mimeType: application/json
@@ -95,7 +420,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Login
-          sortKey: 3004
+          sortKey: 3015
         method: POST
         body:
           mimeType: application/json
@@ -129,7 +454,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Signup
-          sortKey: 3005
+          sortKey: 3016
         method: POST
         body:
           mimeType: application/json
@@ -164,7 +489,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
-          sortKey: 3006
+          sortKey: 3017
         method: POST
         body:
           mimeType: application/json
@@ -197,7 +522,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
-          sortKey: 3007
+          sortKey: 3018
         method: POST
         body:
           mimeType: application/json
@@ -232,7 +557,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Refresh access token
-          sortKey: 3008
+          sortKey: 3019
         method: GET
         headers:
           - name: Accept
@@ -257,7 +582,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Logout from all devices
-          sortKey: 3009
+          sortKey: 3020
         method: POST
         headers:
           - name: Accept
@@ -281,7 +606,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Remove expired tokens
-          sortKey: 3010
+          sortKey: 3021
         method: DELETE
         headers:
           - name: Accept
@@ -305,7 +630,7 @@
           modified: 1767225600000
           isPrivate: false
           description: "Every generated login is the admin's, because a non-admin token makes half the collection answer 403. This is the other identity: log in with it to see those 403s deliberately, and to check that role scoping hides what it should."
-          sortKey: 3011
+          sortKey: 3022
         method: POST
         body:
           mimeType: application/json
@@ -339,7 +664,7 @@
           modified: 1767225600000
           isPrivate: false
           description: The contract declares the 401 response but no request that causes one. This sends a token that was never issued, which is the cheapest way to see the real error envelope — and to confirm the API answers 401 rather than 500 when the signature does not verify.
-          sortKey: 3012
+          sortKey: 3023
         method: GET
         headers:
           - name: Accept
@@ -366,7 +691,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Registers the seeded admin's email a second time. The contract declares 409 for this operation; nothing in it can express the state that produces one.
-          sortKey: 3013
+          sortKey: 3024
         method: POST
         body:
           mimeType: application/json
@@ -401,7 +726,7 @@
           modified: 1767225600000
           isPrivate: false
           description: A wrong password on purpose. Send it in a burst — the auth rate limiter answers 429, a status the contract never declares because it belongs to middleware rather than to any operation.
-          sortKey: 3014
+          sortKey: 3025
         method: POST
         body:
           mimeType: application/json

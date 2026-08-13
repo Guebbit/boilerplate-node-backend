@@ -91,8 +91,98 @@ and copy are delivery concerns; the same verdict serves a queue consumer or a CL
 
 ### Why bother
 
-`domain/totals.ts` is property-tested over 300 generated baskets in milliseconds. That is only
-possible because it cannot reach anything.
+`tests/unit/totals.property.test.ts` runs **13 properties × 300 generated baskets, seeded, with no
+`setupTestDb`, no `beforeAll` and no mocks** — there is nothing to set up, because the file under
+test cannot reach anything. It proves things like _"a total is never `NaN`, for every possible
+input"_, which is a claim about all inputs that no table of examples can make. A `NaN` total
+reaches a customer as a blank price, so this is worth proving rather than spot-checking.
+
+**Lint is how the boundary is enforced, not why it exists.** The block in `eslint.config.ts` points
+at `src/modules/*/domain/**` because ESLint matches on paths — a folder is simply the only thing a
+linter can aim at. If the folder existed _only_ to satisfy the linter, it would be ceremony. It
+exists so that money arithmetic can be proven; the linter is what stops that from decaying the
+first day someone needs "just one query" inside a rule, at which point the fast proof quietly
+becomes a slow integration test nobody runs.
+
+### Is this standard?
+
+Yes. A framework-free innermost layer is one of the most agreed-on ideas in software architecture —
+four traditions describe the same ring under four names:
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 35}}}%%
+flowchart TD
+    O["<b>outside</b><br/>HTTP · database · queues · email"]
+    A["<b>application</b><br/>service.ts · controllers/ · repository.ts"]
+    D["<b>the rules</b><br/>domain/"]
+
+    O -->|"may import"| A
+    A -->|"may import"| D
+    D -.->|"❌ never"| A
+    D -.->|"❌ never"| O
+
+    classDef out fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class O out;
+    class A app;
+    class D pure;
+```
+
+| Tradition                        | Year | Author            | What it calls the innermost ring |
+| -------------------------------- | ---- | ----------------- | -------------------------------- |
+| **DDD**, layered architecture    | 2003 | Eric Evans        | the **domain layer**             |
+| **Hexagonal** (Ports & Adapters) | 2005 | Alistair Cockburn | the inside, behind ports         |
+| **Onion Architecture**           | 2008 | Jeffrey Palermo   | Domain Model + Domain Services   |
+| **Clean Architecture**           | 2012 | Robert C. Martin  | Entities, then Use Cases         |
+
+All four state the same rule this page opened with: the rules do not import the delivery mechanism
+or the database, and the dependency arrow points inward only. `domain/` is the DDD spelling, which
+is why the folder carries that name.
+
+**Will a reader recognise it?** Depends on the reader, and it is worth being honest about that:
+
+| Arriving from                      | Reaction                                               |
+| ---------------------------------- | ------------------------------------------------------ |
+| Java/Spring, .NET, Go, or any DDD  | instant — `orders/domain/` is the expected layout      |
+| Nx / modular monorepos             | familiar — the "domain library" split is the same idea |
+| typical Express or Vue application | often not — this is the page that has to explain it    |
+
+The third row is why this page exists. The idea is standard; its presence in a Node boilerplate is
+not, so it gets documented rather than assumed.
+
+**When you would not have one at all:** a module whose rules are all "store this, return it" has no
+domain layer, and inventing one produces empty folders. Most modules here have none — see
+[the floor](#the-floor-testable-without-a-database-is-necessary-not-sufficient) for the test a rule
+must pass before it earns a place.
+
+### The floor: "testable without a database" is necessary, not sufficient
+
+The question above decides _where_ a rule goes. It does not decide _whether_ there is a rule. A
+one-line expression passes "testable without a database" trivially, so the test alone would pull
+every ternary in the codebase into `domain/`.
+
+> **A rule earns `domain/` when it has more than one caller, _or_ a non-obvious failure mode a
+> reader would otherwise reintroduce. A one-line expression with one caller and no trap is
+> inlined, and its comment goes with it.**
+
+The comment is the part worth keeping. `order.deletedAt = order.deletedAt ? undefined : new Date()`
+with _"delete stamps, delete again restores — an order is a financial record"_ above it says
+everything a `nextDeletionState(deletedAt, now)` said, minus an import, a barrel line and a hop.
+
+Both halves are live:
+
+| Kept              | Why it clears the floor                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| `sumLineItems`    | Two modules — `cart` totals itself through it, so a summary cannot disagree with the order it previews |
+| `steppedQuantity` | One caller, but a real trap: the clamp catches a double click outrunning `:disabled`                   |
+| `checkOrderLines` | Ordered reasons that map to distinct status codes and analytics labels                                 |
+
+| Removed             | Why it did not                                                                |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `nextDeletionState` | `deletedAt ? undefined : now`, one caller — the call site was shorter inlined |
+| `readScope`         | A tagged union its only caller destructured two lines later                   |
+| `canDecrement`      | `q > MIN_LINE_QUANTITY`, one template binding                                 |
 
 ### The folder is optional
 

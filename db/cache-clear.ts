@@ -11,7 +11,7 @@
  *
  * Usage:
  *   npm run db:cache:clear         # against the compose Redis hostname
- *   npm run db:cache:clear:host    # against localhost
+ *   npm run host -- db:cache:clear  # against localhost
  */
 import 'dotenv/config';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';

@@ -1,7 +1,8 @@
 # Compose override for Podman.
 # Swaps promtail to use the Podman CRI-format config and mounts the correct host log path.
 #
-# Applied by the `npm run podman:*` scripts, which pass it with `-f`. Do NOT switch this to
+# Applied by the `npm run compose:*` scripts when CONTAINER_ENGINE resolves to podman, which pass
+# it with `-f`. Do NOT switch this to
 # COMPOSE_FILE in .env: podman-compose ignores that variable there (verified 2026-08-05 against
 # podman-compose 1.6.0), so the override would silently not apply and Promtail would tail nothing.
 # Needs PODMAN_CONTAINERS_PATH in .env — see .env-example.

@@ -11,6 +11,7 @@ import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import productsModule from '@modules/products/module';
 import cartModule from '@modules/cart/module';
+import accountModule from '@modules/account/module';
 import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
 
@@ -433,7 +434,7 @@ describe('productService.removeById', () => {
      * it would assert the cleanup never happens and pass for the wrong reason.
      */
     it('hard-deletes the product and removes it from all carts', async () => {
-        registerModules([productsModule, usersModule, ordersModule, cartModule]);
+        registerModules([accountModule, productsModule, usersModule, ordersModule, cartModule]);
 
         const product = await createProduct({ active: true });
         const pid = (product._id as Types.ObjectId).toString();

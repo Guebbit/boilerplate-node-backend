@@ -5,6 +5,10 @@
         "soft-deleted": "L'ordine è stato eliminato logicamente (nascosto al cliente).",
         "creation-success": "Ordine creato con successo.",
         "creation-failure": "Creazione dell'ordine fallita.",
+        "cancel": {
+            "success": "Ordine annullato.",
+            "not-cancellable": "Questo ordine non può più essere annullato."
+        },
         "invoice-missing": "Nessun file fattura è stato trovato",
         "invoice": {
             "meta-title": "Fattura — ordine {{order}}",
@@ -16,6 +20,7 @@
             "meta-title": "Ordine confermato",
             "greeting": "Ciao, {{name}}!",
             "body": "Il tuo ordine è stato confermato."
-        }
+        },
+        "insufficient-stock": "Uno o più prodotti di questo ordine superano la disponibilità."
     }
 }

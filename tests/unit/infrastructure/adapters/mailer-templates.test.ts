@@ -13,6 +13,7 @@ import { EMAIL_TEMPLATES_DIR } from '@infrastructure/adapters/mailer';
 import { listSupportedLocales } from '@infrastructure/i18n';
 import {
     registrationConfirmEmail,
+    verifyRequestEmail,
     resetRequestEmail,
     resetConfirmEmail,
     deleteRequestEmail,
@@ -32,11 +33,11 @@ describe('email templates', () => {
     });
 
     it.each([
-        'email-registration-confirm.ejs',
-        'email-order-confirm.ejs',
-        'email-delete-confirm.ejs',
-        'email-delete-request.ejs',
-        'email-feedback-contact.ejs'
+        'account.registration-confirm.ejs',
+        'orders.order-confirm.ejs',
+        'account.delete-confirm.ejs',
+        'account.delete-request.ejs',
+        'feedback.contact.ejs'
     ])('resolves %s to a real file', (template) => {
         expect(existsSync(path.resolve(EMAIL_TEMPLATES_DIR, template))).toBe(true);
     });
@@ -66,13 +67,14 @@ describe('email templates', () => {
  * nothing but their output, which is exactly the production sequence.
  */
 const contentFor = (locale: string): Record<string, IEmailContent> => ({
-    'email-registration-confirm.ejs': registrationConfirmEmail(locale, 'Ada'),
-    'email-reset-request.ejs': resetRequestEmail(locale, 'Ada', 'a-token'),
-    'email-reset-confirm.ejs': resetConfirmEmail(locale, 'Ada'),
-    'email-delete-request.ejs': deleteRequestEmail(locale, 'Ada', 'a-token'),
-    'email-delete-confirm.ejs': deleteConfirmEmail(locale, 'Ada'),
-    'email-order-confirm.ejs': orderConfirmEmail(locale, 'Ada'),
-    'email-feedback-contact.ejs': contactRequestEmail(locale, {
+    'account.registration-confirm.ejs': registrationConfirmEmail(locale, 'Ada'),
+    'account.verify-request.ejs': verifyRequestEmail(locale, 'Ada', 'a-token'),
+    'account.reset-request.ejs': resetRequestEmail(locale, 'Ada', 'a-token'),
+    'account.reset-confirm.ejs': resetConfirmEmail(locale, 'Ada'),
+    'account.delete-request.ejs': deleteRequestEmail(locale, 'Ada', 'a-token'),
+    'account.delete-confirm.ejs': deleteConfirmEmail(locale, 'Ada'),
+    'orders.order-confirm.ejs': orderConfirmEmail(locale, 'Ada'),
+    'feedback.contact.ejs': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',
         subject: 'A subject',
@@ -113,7 +115,7 @@ describe('email templates render in every supported locale', () => {
      */
     it.each(listSupportedLocales())('renders the invoice document in %s', async (locale) => {
         const html = await ejs.renderFile(
-            path.resolve('views', 'templates-files', 'invoice-order-file.ejs'),
+            path.resolve('shared', 'views', 'templates-files', 'orders.invoice.ejs'),
             invoiceDocument(locale, {
                 _id: 'an-order-id',
                 items: [{ product: { title: 'A product', price: 10 }, quantity: 2 }]
@@ -126,8 +128,8 @@ describe('email templates render in every supported locale', () => {
 
     it('produces different copy per locale, so the dictionaries are actually consulted', async () => {
         const [english, italian] = await Promise.all([
-            render('email-registration-confirm.ejs', 'en'),
-            render('email-registration-confirm.ejs', 'it')
+            render('account.registration-confirm.ejs', 'en'),
+            render('account.registration-confirm.ejs', 'it')
         ]);
 
         expect(english).not.toBe(italian);

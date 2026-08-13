@@ -24,17 +24,28 @@ Endpoints for health checks, metrics, and audit logs. The two public routes feed
 
 ## Account & Auth
 
-JWT-based authentication. Login returns an `accessToken` (short-lived) and a `refreshToken` (long-lived, stored in a cookie). The refresh endpoints issue a new access token without re-authenticating. Password reset is a two-step flow: request sends an email with a signed link, confirm validates it and updates the password.
+JWT-based authentication. Login returns an `accessToken` (short-lived) and a `refreshToken` (long-lived, stored in a cookie). The refresh endpoints issue a new access token without re-authenticating. Password reset is a two-step flow: request sends an email with a signed link, confirm validates it and updates the password. Email verification follows the same two-step shape — signup sends the first link automatically, and `verified` on the `User` is informational only (no endpoint refuses an unverified account).
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | POST | `/account/login` | none | Authenticate and get JWT |
-| POST | `/account/signup` | none | Register a new user |
+| POST | `/account/signup` | none | Register a new user (sends verification email) |
 | GET | `/account` | user | Get current user profile |
+| PUT | `/account` | user | Update own profile (email change restarts verification) |
+| POST | `/account/password` | user | Change password by proving the current one |
 | GET | `/account/refresh` | none | Refresh access token (uses HttpOnly cookie) |
 | POST | `/account/reset` | none | Request password reset email |
 | POST | `/account/reset-confirm` | none | Confirm password reset |
+| POST | `/account/logout` | none | Revoke THIS session's refresh token (cookie is the credential) |
 | POST | `/account/logout-all` | user | Revoke all refresh tokens |
+| GET | `/account/sessions` | user | List live refresh tokens as sessions |
+| DELETE | `/account/sessions/:id` | user | Revoke one session ("log out that device") |
+| GET | `/account/addresses` | user | List saved addresses (one is always default) |
+| POST | `/account/addresses` | user | Add an address (first becomes default) |
+| PUT | `/account/addresses/:id` | user | Update an address; `default: true` claims the slot |
+| DELETE | `/account/addresses/:id` | user | Remove an address (default promotes a survivor) |
+| POST | `/account/verify-request` | user | Re-send the email-verification link |
+| POST | `/account/verify-confirm` | none | Spend the emailed token, mark the address verified |
 | DELETE | `/account` | user | Delete own account |
 
 ## Products
@@ -44,6 +55,7 @@ Standard CRUD for the product catalogue. Read endpoints are public and Redis-cac
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/products` | none | List products (cached) |
+| GET | `/products/categories` | none | Categories and tags with counts (filter chips, cached) |
 | POST | `/products/search` | none | Search with filters |
 | GET | `/products/:id` | none | Single product detail |
 | POST | `/products` | admin | Create product |
@@ -65,6 +77,18 @@ Per-user, server-side cart. Items are scoped to the authenticated user. `POST /c
 | DELETE | `/cart/:productId` | user | Remove item from cart |
 | DELETE | `/cart` | user | Clear entire cart |
 | POST | `/cart/checkout` | user | Checkout → create order |
+| POST | `/cart/reorder/:orderId` | user | Refill cart from one of your own orders |
+
+## Wishlist
+
+Per-user saved products — ids only, joined client-side like the cart's lines. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/wishlist` | user | Get saved products |
+| POST | `/wishlist` | user | Save a product (idempotent) |
+| DELETE | `/wishlist/:productId` | user | Remove a saved product |
+| POST | `/wishlist/:productId/move-to-cart` | user | Move a saved product into the cart |
 
 ## Orders
 
@@ -76,6 +100,7 @@ Orders are normally created via checkout but can also be created manually by an 
 | POST | `/orders/search` | user | Search own orders |
 | GET | `/orders/:id` | user | Single order detail |
 | GET | `/orders/:id/invoice` | user | Download order invoice PDF |
+| POST | `/orders/:id/cancel` | user | Cancel own pending order (admin: anyone's) |
 | POST | `/orders` | admin | Create order manually |
 | PUT | `/orders` | admin | Bulk update orders |
 | PUT | `/orders/:id` | admin | Update single order |

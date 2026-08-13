@@ -45,11 +45,11 @@ export const writeProducts = (
     // `price` is declared for the same reason `active` is: the image-carrying variants of these
     // routes send a multipart body, which has no types, so both arrive as strings and
     // `zodProductSchema` rejects them.
-    const { id, active, price, categories, tags } = readInput(request, {
+    const { id, active, price, stock, categories, tags } = readInput(request, {
         surface: 'write',
         ids: ['id'],
         booleans: ['active'],
-        numbers: ['price'],
+        numbers: ['price', 'stock'],
         stringArrays: ['categories', 'tags']
     });
 
@@ -71,6 +71,7 @@ export const writeProducts = (
         imageUrl,
         active,
         price,
+        stock,
         categories,
         tags
     });
@@ -88,9 +89,9 @@ export const writeProducts = (
 
     // Past the guard above, these have been checked against zodProductSchema — the assertion
     // records what the validator just established rather than assuming it.
-    const validated = { imageUrl, active, price, categories, tags } as Pick<
+    const validated = { imageUrl, active, price, stock, categories, tags } as Pick<
         Product,
-        'imageUrl' | 'active' | 'price' | 'categories' | 'tags'
+        'imageUrl' | 'active' | 'price' | 'stock' | 'categories' | 'tags'
     >;
 
     /**

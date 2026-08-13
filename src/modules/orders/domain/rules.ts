@@ -26,24 +26,3 @@ export const checkOrderLines = (lines: readonly IOrderLineCandidate[]): TOrderLi
         return { ok: false, reason: 'product-missing' };
     return { ok: true };
 };
-
-/**
- * Soft delete toggles: delete stamps, delete again restores. An order is a financial record.
- * @param deletedAt - the order's current deletion timestamp, if any
- * @param now - the instant to record when deleting
- * @returns the next value for `deletedAt`
- */
-export const nextDeletionState = (deletedAt: Date | undefined, now: Date): Date | undefined =>
-    deletedAt ? undefined : now;
-
-/**
- * Which orders a caller may read.
- * No caller yields an empty id, which the repository rejects — fails closed, never widens.
- * @param caller - the authenticated caller, if any
- * @returns `all` for admins, otherwise `own` scoped to the caller
- */
-export const readScope = (caller?: {
-    id?: string;
-    admin?: boolean;
-}): { kind: 'all' } | { kind: 'own'; userId: string } =>
-    caller?.admin ? { kind: 'all' } : { kind: 'own', userId: caller?.id ?? '' };

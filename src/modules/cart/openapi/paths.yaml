@@ -150,8 +150,42 @@
                             schema:
                                 $ref: '#/components/schemas/CheckoutResponseEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                # An `addressId` that names none of the caller's saved addresses — the checkout
+                # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
+                '404': { $ref: '#/components/responses/NotFound' }
                 # Checking out an empty cart. The implementation has always answered 409;
                 # the spec simply never declared it.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /cart/reorder/{orderId}:
+        post:
+            tags: [Cart]
+            summary: Reorder (refill cart from a past order)
+            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the returned cart view is the record of what actually landed. Admins are scoped to their own orders too — the cart being filled is the caller's.
+            operationId: reorder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed order id that matches none of the caller's own orders.
+                '404': { $ref: '#/components/responses/NotFound' }
+                # Every product on the order has left the public catalogue — nothing to add.
+                # `errors[].code` is `REORDER_UNAVAILABLE`.
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }

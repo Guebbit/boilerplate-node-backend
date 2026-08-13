@@ -115,6 +115,25 @@ export const orderSchema = new Schema<IOrderDocument>(
             type: String
         },
         /*
+         * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
+         * `items`: an order keeps where it was going, not what the address book says today.
+         * Absent on orders that predate the book and on checkouts by users who keep none;
+         * `_id: false` because the shared `OrderAddress` schema is `additionalProperties: false`.
+         */
+        shippingAddress: {
+            type: new Schema(
+                {
+                    fullName: { type: String, required: true },
+                    street: { type: String, required: true },
+                    city: { type: String, required: true },
+                    zip: { type: String, required: true },
+                    country: { type: String, required: true },
+                    phone: { type: String }
+                },
+                { _id: false }
+            )
+        },
+        /*
          * Set when an order is soft-deleted. Orders carry no `active` flag, so unlike a product
          * this is the only fact that hides one: `visibleScope` requires its absence, and an admin
          * passes no scope at all, which is how a soft-deleted order stays readable to them.

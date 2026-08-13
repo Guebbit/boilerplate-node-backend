@@ -5,6 +5,13 @@
         "empty": "Tu carrito está vacío.",
         "product-removed": "Producto eliminado del carrito.",
         "product-unavailable": "Uno o más productos de tu carrito ya no están disponibles.",
-        "product-added": "Producto añadido al carrito."
+        "product-added": "Producto añadido al carrito.",
+        "reorder": {
+            "success": "Pedido añadido al carrito.",
+            "unavailable": "Ninguno de los productos de este pedido sigue disponible.",
+            "order-not-found": "El pedido solicitado no se encontró"
+        },
+        "insufficient-stock": "Uno o más productos de tu carrito superan el stock disponible.",
+        "address-not-found": "La dirección de envío seleccionada no se encontró."
     }
 }

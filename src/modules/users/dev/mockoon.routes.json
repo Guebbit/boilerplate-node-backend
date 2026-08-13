@@ -7,7 +7,7 @@
         "responses": [
           {
             "uuid": "c5e8d49c-9273-4d84-89d3-6336cfd6eb82",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Users list page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de646a44f861fd83c13f13\",\n        \"email\": \"gino@pino.it\",\n        \"username\": \"ginopinoshow\",\n        \"admin\": false,\n        \"active\": true,\n        \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n        \"locale\": \"it\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Users list page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de646a44f861fd83c13f13\",\n        \"email\": \"gino@pino.it\",\n        \"username\": \"ginopinoshow\",\n        \"admin\": false,\n        \"active\": true,\n        \"verified\": true,\n        \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n        \"locale\": \"it\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Users list page",
@@ -139,7 +139,7 @@
         "responses": [
           {
             "uuid": "88e8d00a-b69b-42c9-8d79-a49e6a33e17f",
-            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created user\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created user\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"verified\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 201,
             "label": "Created user",
@@ -271,7 +271,7 @@
         "responses": [
           {
             "uuid": "ef543e37-1449-4bdb-842f-3fd2ceb7ed95",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated user\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated user\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"verified\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated user",
@@ -559,7 +559,7 @@
         "responses": [
           {
             "uuid": "bc246186-e04f-4175-85f3-576f66abda7a",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"User\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"User\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"verified\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "User",
@@ -691,7 +691,7 @@
         "responses": [
           {
             "uuid": "8d239035-6656-477c-8db1-e20915db84b2",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated user\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated user\",\n  \"data\": {\n    \"id\": \"65de646a44f861fd83c13f13\",\n    \"email\": \"gino@pino.it\",\n    \"username\": \"ginopinoshow\",\n    \"admin\": false,\n    \"active\": true,\n    \"verified\": true,\n    \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n    \"locale\": \"it\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated user",
@@ -1159,7 +1159,7 @@
         "responses": [
           {
             "uuid": "77364ba4-cce6-4682-8455-f2dbd218b8e7",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Users search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de646a44f861fd83c13f13\",\n        \"email\": \"gino@pino.it\",\n        \"username\": \"ginopinoshow\",\n        \"admin\": false,\n        \"active\": true,\n        \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n        \"locale\": \"it\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Users search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de646a44f861fd83c13f13\",\n        \"email\": \"gino@pino.it\",\n        \"username\": \"ginopinoshow\",\n        \"admin\": false,\n        \"active\": true,\n        \"verified\": true,\n        \"imageUrl\": \"/images/seed/96346b77daf138a279677cb75c400ee9.jpg\",\n        \"locale\": \"it\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Users search results",

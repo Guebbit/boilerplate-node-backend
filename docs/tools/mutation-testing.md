@@ -20,7 +20,7 @@ Read this first. The rest of the page uses these words precisely, and several of
 | **Concurrency**        | How many mutants Stryker tests **in parallel**. Each one is a separate OS process running a full test runner _and its own in-memory mongod_, so the limit is memory, not CPU cores.                                                                                                      |
 | **`coverageAnalysis`** | Set to `perTest`: Stryker first records which tests touch which code, then runs **only the covering tests** for each mutant instead of the whole suite. This is the main reason a run is minutes and not days — except for static mutants, below.                                        |
 | **Static mutant**      | A mutant in code that runs when the file is **imported**, not when a test calls it — a `new Schema({...})`, a repository built at module scope, a config object. See [Why a run is slow](#why-a-run-is-slow-static-mutants); it is the single biggest cost in this repo.                 |
-| **Incremental**        | Stryker remembers per-mutant results in a committed file, so the next run only re-mutates what changed. See [Incremental mode](#incremental-mode--what-it-is). Not enabled here yet.                                                                                                     |
+| **Incremental**        | Stryker remembers per-mutant results in a committed file, so the next run only re-mutates what changed. **Enabled**, with the nightly passing `--force` to rebuild from scratch. See [Incremental mode](#incremental-mode--what-it-is).                                                  |
 
 ## What a mutant actually is
 
@@ -214,7 +214,7 @@ The honest position: it is standard and supported, it is probably the right call
 
 ## Incremental mode — what it is
 
-Not enabled here yet, but it is the change that would make mutation testing usable on a pull request, so it is worth understanding.
+**Enabled.** This is what makes mutation testing usable on a pull request rather than only in a nightly.
 
 **The problem.** Every run starts from scratch. Change one line in one service, and Stryker still re-mutates every mutant across the whole codebase — including all the ones in files you did not touch, whose results will be identical to last time.
 

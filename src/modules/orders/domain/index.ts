@@ -7,8 +7,10 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-export { sumLineItems, toCents } from './totals';
+// `toCents` is deliberately absent: `sumLineItems` is its only caller, and `totals.ts` is where
+// its property test reaches it. A barrel line would make it look like a rule others may use.
+export { sumLineItems } from './totals';
 export type { ILineItem, ILineItemTotals } from './totals';
 
-export { checkOrderLines, nextDeletionState, readScope } from './rules';
+export { checkOrderLines } from './rules';
 export type { IOrderLineCandidate, TOrderLinesVerdict } from './rules';

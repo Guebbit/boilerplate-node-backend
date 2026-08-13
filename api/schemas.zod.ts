@@ -289,8 +289,48 @@ export const GetAccountResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(getAccountResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
+})
+})
+
+
+/**
+ * Updates the authenticated user's own profile — email, username, locale, image. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email resets `verified` and sends a fresh verification email to the new address.
+ * @summary Update own profile
+ */
+export const updateAccountBodyUsernameMin = 3;
+
+export const updateAccountBodyLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const UpdateAccountBody = zod.object({
+  "email": zod.email().optional(),
+  "username": zod.string().min(updateAccountBodyUsernameMin).optional(),
+  "locale": zod.string().regex(updateAccountBodyLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.')
+})
+
+export const updateAccountResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
+
+
+export const UpdateAccountResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "email": zod.email(),
+  "username": zod.string(),
+  "admin": zod.boolean().optional(),
+  "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(updateAccountResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -303,6 +343,241 @@ export const GetAccountResponse = zod.object({
  * @summary Request account deletion
  */
 export const RequestAccountDeleteResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Other sessions stay live — revoke them with `POST /account/logout-all` or per session via `DELETE /account/sessions/{sessionId}`.
+ * @summary Change password
+ */
+export const changePasswordBodyCurrentPasswordMin = 8;
+
+export const changePasswordBodyPasswordMin = 8;
+
+export const changePasswordBodyPasswordConfirmMin = 8;
+
+
+
+export const ChangePasswordBody = zod.object({
+  "currentPassword": zod.string().min(changePasswordBodyCurrentPasswordMin),
+  "password": zod.string().min(changePasswordBodyPasswordMin),
+  "passwordConfirm": zod.string().min(changePasswordBodyPasswordConfirmMin)
+})
+
+export const ChangePasswordResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Logs out the CURRENT session only — revokes the refresh token carried by the `jwt` cookie and clears the authentication cookies. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
+ * @summary Logout this session
+ */
+export const LogoutResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Lists the authenticated user's live refresh tokens as sessions — issue-agnostic handles with an expiry and a `current` marker, never the token values themselves. The one carried by the caller's own refresh cookie is flagged `current`.
+ * @summary List active sessions
+ */
+export const GetSessionsResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "sessions": zod.array(zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "expiration": zod.iso.datetime({"offset":true}).optional().describe('Absent on a token issued without an expiry tier.'),
+  "current": zod.boolean().describe('Whether this session is the one making the request, matched through the refresh cookie. Always `false` for a caller authenticating by bearer token alone — an access token does not identify a session.')
+}))
+})
+})
+
+
+/**
+ * Revokes a single refresh token by its session id — "log out that device". Revoking the current session is allowed and equivalent to `POST /account/logout`, except that the cookies of OTHER clients cannot be cleared from here; their next refresh simply fails.
+ * @summary Revoke one session
+ */
+export const RevokeSessionParams = zod.object({
+  "sessionId": zod.string().describe('Session identifier from `GET \/account\/sessions`')
+})
+
+export const RevokeSessionResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * The authenticated user's address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named.
+ * @summary List saved addresses
+ */
+export const GetAddressesResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "addresses": zod.array(zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "label": zod.string().optional().describe('The caller\'s own name for the entry — \"home\", \"office\".'),
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional(),
+  "default": zod.boolean()
+}))
+})
+})
+
+
+/**
+ * Adds an entry to the authenticated user's address book. The first entry becomes the default automatically; a later entry claims the default slot only by sending `default true`, which demotes the previous holder.
+ * @summary Add an address
+ */
+
+
+
+
+
+
+
+export const AddAddressBody = zod.object({
+  "label": zod.string().optional(),
+  "fullName": zod.string().min(1),
+  "street": zod.string().min(1),
+  "city": zod.string().min(1),
+  "zip": zod.string().min(1),
+  "country": zod.string().min(1),
+  "phone": zod.string().optional(),
+  "default": zod.boolean().optional()
+})
+
+export const AddAddressResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "addresses": zod.array(zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "label": zod.string().optional().describe('The caller\'s own name for the entry — \"home\", \"office\".'),
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional(),
+  "default": zod.boolean()
+}))
+})
+})
+
+
+/**
+ * Updates one entry of the caller's own book. `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+ * @summary Update an address
+ */
+export const UpdateAddressParams = zod.object({
+  "addressId": zod.string().describe('Address identifier from `GET \/account\/addresses`')
+})
+
+
+
+
+
+
+
+
+export const UpdateAddressBody = zod.object({
+  "label": zod.string().optional(),
+  "fullName": zod.string().min(1).optional(),
+  "street": zod.string().min(1).optional(),
+  "city": zod.string().min(1).optional(),
+  "zip": zod.string().min(1).optional(),
+  "country": zod.string().min(1).optional(),
+  "phone": zod.string().optional(),
+  "default": zod.boolean().optional()
+})
+
+export const UpdateAddressResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "addresses": zod.array(zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "label": zod.string().optional().describe('The caller\'s own name for the entry — \"home\", \"office\".'),
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional(),
+  "default": zod.boolean()
+}))
+})
+})
+
+
+/**
+ * Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default.
+ * @summary Remove an address
+ */
+export const RemoveAddressParams = zod.object({
+  "addressId": zod.string().describe('Address identifier from `GET \/account\/addresses`')
+})
+
+export const RemoveAddressResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "addresses": zod.array(zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "label": zod.string().optional().describe('The caller\'s own name for the entry — \"home\", \"office\".'),
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional(),
+  "default": zod.boolean()
+}))
+})
+})
+
+
+/**
+ * Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived.
+ * @summary Request email verification
+ */
+export const RequestEmailVerificationResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string()
+})
+
+
+/**
+ * Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/verify-request` and, if valid, marks the account's email address as verified.
+ * @summary Confirm email verification
+ */
+export const ConfirmEmailVerificationBody = zod.object({
+  "token": zod.string().describe('One-time email verification token (NOT a JWT).')
+})
+
+export const ConfirmEmailVerificationResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string()
@@ -382,6 +657,7 @@ export const SignupResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(signupResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -510,6 +786,7 @@ export const ListUsersResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(listUsersResponseDataItemsItemLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -559,6 +836,7 @@ export const CreateUserResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(createUserResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -601,6 +879,7 @@ export const UpdateUserResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(updateUserResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -649,6 +928,7 @@ export const GetUserByIdResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(getUserByIdResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -692,6 +972,7 @@ export const UpdateUserByIdResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(updateUserByIdResponseDataLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -786,6 +1067,7 @@ export const SearchUsersResponse = zod.object({
   "username": zod.string(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
+  "verified": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "locale": zod.string().regex(searchUsersResponseDataItemsItemLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
@@ -967,6 +1249,8 @@ export const ListProductsQueryParams = zod.object({
 
 export const listProductsResponseDataItemsItemPriceMin = 0;
 
+export const listProductsResponseDataItemsItemStockMin = 0;
+
 export const listProductsResponseDataMetaPageDefault = 1;
 
 export const listProductsResponseDataMetaPageSizeDefault = 10;
@@ -987,6 +1271,7 @@ export const ListProductsResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(listProductsResponseDataItemsItemPriceMin),
+  "stock": zod.number().min(listProductsResponseDataItemsItemStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1012,11 +1297,15 @@ export const ListProductsResponse = zod.object({
  */
 export const createProductBodyPriceMin = 0;
 
+export const createProductBodyStockDefault = 100;
+export const createProductBodyStockMin = 0;
+
 export const createProductBodyActiveDefault = true;
 
 export const CreateProductBody = zod.object({
   "title": zod.string(),
   "price": zod.number().min(createProductBodyPriceMin),
+  "stock": zod.number().min(createProductBodyStockMin).default(createProductBodyStockDefault),
   "description": zod.string().optional(),
   "active": zod.boolean().default(createProductBodyActiveDefault),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1025,6 +1314,8 @@ export const CreateProductBody = zod.object({
 })
 
 export const createProductResponseDataPriceMin = 0;
+
+export const createProductResponseDataStockMin = 0;
 
 
 
@@ -1036,6 +1327,7 @@ export const CreateProductResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(createProductResponseDataPriceMin),
+  "stock": zod.number().min(createProductResponseDataStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1054,6 +1346,8 @@ export const CreateProductResponse = zod.object({
  */
 export const updateProductBodyPriceMin = 0;
 
+export const updateProductBodyStockMin = 0;
+
 
 
 export const UpdateProductBody = zod.object({
@@ -1061,6 +1355,7 @@ export const UpdateProductBody = zod.object({
   "title": zod.string(),
   "description": zod.string().optional(),
   "price": zod.number().min(updateProductBodyPriceMin),
+  "stock": zod.number().min(updateProductBodyStockMin).optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
@@ -1068,6 +1363,8 @@ export const UpdateProductBody = zod.object({
 })
 
 export const updateProductResponseDataPriceMin = 0;
+
+export const updateProductResponseDataStockMin = 0;
 
 
 
@@ -1079,6 +1376,7 @@ export const UpdateProductResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateProductResponseDataPriceMin),
+  "stock": zod.number().min(updateProductResponseDataStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1110,6 +1408,31 @@ export const DeleteProductResponse = zod.object({
 
 
 /**
+ * Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so a chip can never lead to an empty page.
+ * @summary Catalogue facets
+ */
+
+
+
+
+export const GetCatalogueFacetsResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "categories": zod.array(zod.object({
+  "name": zod.string(),
+  "count": zod.number().min(1)
+})),
+  "tags": zod.array(zod.object({
+  "name": zod.string(),
+  "count": zod.number().min(1)
+}))
+})
+})
+
+
+/**
  * Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`.
  * @summary Product details
  */
@@ -1118,6 +1441,8 @@ export const GetProductByIdParams = zod.object({
 })
 
 export const getProductByIdResponseDataPriceMin = 0;
+
+export const getProductByIdResponseDataStockMin = 0;
 
 
 
@@ -1129,6 +1454,7 @@ export const GetProductByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(getProductByIdResponseDataPriceMin),
+  "stock": zod.number().min(getProductByIdResponseDataStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1151,12 +1477,15 @@ export const UpdateProductByIdParams = zod.object({
 
 export const updateProductByIdBodyPriceMin = 0;
 
+export const updateProductByIdBodyStockMin = 0;
+
 
 
 export const UpdateProductByIdBody = zod.object({
   "title": zod.string(),
   "description": zod.string().optional(),
   "price": zod.number().min(updateProductByIdBodyPriceMin),
+  "stock": zod.number().min(updateProductByIdBodyStockMin).optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
@@ -1164,6 +1493,8 @@ export const UpdateProductByIdBody = zod.object({
 })
 
 export const updateProductByIdResponseDataPriceMin = 0;
+
+export const updateProductByIdResponseDataStockMin = 0;
 
 
 
@@ -1175,6 +1506,7 @@ export const UpdateProductByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateProductByIdResponseDataPriceMin),
+  "stock": zod.number().min(updateProductByIdResponseDataStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1256,6 +1588,8 @@ export const SearchProductsBody = zod.object({
 
 export const searchProductsResponseDataItemsItemPriceMin = 0;
 
+export const searchProductsResponseDataItemsItemStockMin = 0;
+
 export const searchProductsResponseDataMetaPageDefault = 1;
 
 export const searchProductsResponseDataMetaPageSizeDefault = 10;
@@ -1276,6 +1610,7 @@ export const SearchProductsResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(searchProductsResponseDataItemsItemPriceMin),
+  "stock": zod.number().min(searchProductsResponseDataItemsItemStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1514,10 +1849,13 @@ export const GetCartSummaryResponse = zod.object({
  */
 export const CheckoutBody = zod.object({
   "email": zod.email().optional(),
-  "notes": zod.string().optional().describe('Optional order notes')
+  "notes": zod.string().optional().describe('Optional order notes'),
+  "addressId": zod.string().describe('Resource identifier').optional().describe('Which of the caller\'s saved addresses to ship to. Omitted, the default address is used when one exists; an id that matches none of the caller\'s addresses refuses the checkout with 404 rather than shipping nowhere.')
 })
 
 export const checkoutResponseDataOrderItemsItemProductPriceMin = 0;
+
+export const checkoutResponseDataOrderItemsItemProductStockMin = 0;
 
 
 export const checkoutResponseDataOrderTotalItemsMin = 0;
@@ -1542,6 +1880,7 @@ export const CheckoutResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(checkoutResponseDataOrderItemsItemProductPriceMin),
+  "stock": zod.number().min(checkoutResponseDataOrderItemsItemProductStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1557,12 +1896,132 @@ export const CheckoutResponse = zod.object({
   "totalQuantity": zod.number().min(checkoutResponseDataOrderTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
   "totalPrice": zod.number().min(checkoutResponseDataOrderTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
 }),
   "message": zod.string().optional()
+})
+})
+
+
+/**
+ * Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the returned cart view is the record of what actually landed. Admins are scoped to their own orders too — the cart being filled is the caller's.
+ * @summary Reorder (refill cart from a past order)
+ */
+export const ReorderParams = zod.object({
+  "orderId": zod.string().describe('One of the caller\'s own orders')
+})
+
+
+export const reorderResponseDataSummaryItemsCountMin = 0;
+
+export const reorderResponseDataSummaryTotalQuantityMin = 0;
+
+export const reorderResponseDataSummaryTotalMin = 0;
+
+
+
+export const ReorderResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string().describe('Resource identifier'),
+  "quantity": zod.number().min(1)
+})),
+  "summary": zod.object({
+  "itemsCount": zod.number().min(reorderResponseDataSummaryItemsCountMin).describe('Number of distinct cart lines\/items'),
+  "totalQuantity": zod.number().min(reorderResponseDataSummaryTotalQuantityMin).describe('Sum of quantities across all items'),
+  "total": zod.number().min(reorderResponseDataSummaryTotalMin).describe('Sum of item prices \* quantity (before tax\/shipping\/discounts)'),
+  "currency": zod.string().optional().describe('ISO-4217 currency code (e.g. USD)')
+})
+})
+})
+
+
+/**
+ * Returns the authenticated user's saved products — ids only, like the cart's lines; clients render them from their own product store. Absence and emptiness are the same state, so this never answers 404.
+ * @summary Get wishlist
+ */
+export const GetWishlistResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string().describe('Resource identifier')
+}))
+})
+})
+
+
+/**
+ * Adds a product to the authenticated user's wishlist. Idempotent — saving what is already saved answers the same 200, because a double-clicked heart icon is not an error. The product must be publicly visible; a hidden or soft-deleted product answers 404 exactly as it would from the catalogue.
+ * @summary Save a product
+ */
+export const AddWishlistItemBody = zod.object({
+  "productId": zod.string().describe('Resource identifier')
+})
+
+export const AddWishlistItemResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string().describe('Resource identifier')
+}))
+})
+})
+
+
+/**
+ * Removes the line for the product identified by `{productId}` from the authenticated user's wishlist. A line the caller does not hold is a 404 — the client's view is stale and it needs to know.
+ * @summary Remove a saved product
+ */
+export const RemoveWishlistItemParams = zod.object({
+  "productId": zod.string().describe('Product identifier')
+})
+
+export const RemoveWishlistItemResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string().describe('Resource identifier')
+}))
+})
+})
+
+
+/**
+ * The wishlist's exit — the saved line becomes one cart line (quantity 1, incremented if the cart already holds the product) and leaves the wishlist. The cart is written before the wishlist line is removed, so a failure part-way leaves the product SAVED rather than lost. Returns the updated wishlist; read the cart for its own new state.
+ * @summary Move a saved product into the cart
+ */
+export const MoveWishlistItemToCartParams = zod.object({
+  "productId": zod.string().describe('Product identifier')
+})
+
+export const MoveWishlistItemToCartResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string().describe('Resource identifier')
+}))
 })
 })
 
@@ -1589,6 +2048,8 @@ export const ListOrdersQueryParams = zod.object({
 })
 
 export const listOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;
+
+export const listOrdersResponseDataItemsItemItemsItemProductStockMin = 0;
 
 
 export const listOrdersResponseDataItemsItemTotalItemsMin = 0;
@@ -1622,6 +2083,7 @@ export const ListOrdersResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductPriceMin),
+  "stock": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1637,6 +2099,14 @@ export const ListOrdersResponse = zod.object({
   "totalQuantity": zod.number().min(listOrdersResponseDataItemsItemTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
   "totalPrice": zod.number().min(listOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1671,6 +2141,8 @@ export const CreateOrderBody = zod.object({
 
 export const createOrderResponseDataItemsItemProductPriceMin = 0;
 
+export const createOrderResponseDataItemsItemProductStockMin = 0;
+
 
 export const createOrderResponseDataTotalItemsMin = 0;
 
@@ -1693,6 +2165,7 @@ export const CreateOrderResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(createOrderResponseDataItemsItemProductPriceMin),
+  "stock": zod.number().min(createOrderResponseDataItemsItemProductStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1708,6 +2181,14 @@ export const CreateOrderResponse = zod.object({
   "totalQuantity": zod.number().min(createOrderResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
   "totalPrice": zod.number().min(createOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1737,6 +2218,8 @@ export const UpdateOrderBody = zod.object({
 
 export const updateOrderResponseDataItemsItemProductPriceMin = 0;
 
+export const updateOrderResponseDataItemsItemProductStockMin = 0;
+
 
 export const updateOrderResponseDataTotalItemsMin = 0;
 
@@ -1759,6 +2242,7 @@ export const UpdateOrderResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateOrderResponseDataItemsItemProductPriceMin),
+  "stock": zod.number().min(updateOrderResponseDataItemsItemProductStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1774,6 +2258,14 @@ export const UpdateOrderResponse = zod.object({
   "totalQuantity": zod.number().min(updateOrderResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
   "totalPrice": zod.number().min(updateOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1823,6 +2315,8 @@ export const SearchOrdersBody = zod.object({
 
 export const searchOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;
 
+export const searchOrdersResponseDataItemsItemItemsItemProductStockMin = 0;
+
 
 export const searchOrdersResponseDataItemsItemTotalItemsMin = 0;
 
@@ -1855,6 +2349,7 @@ export const SearchOrdersResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductPriceMin),
+  "stock": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1870,6 +2365,14 @@ export const SearchOrdersResponse = zod.object({
   "totalQuantity": zod.number().min(searchOrdersResponseDataItemsItemTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
   "totalPrice": zod.number().min(searchOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1895,6 +2398,8 @@ export const GetOrderByIdParams = zod.object({
 
 export const getOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
+export const getOrderByIdResponseDataItemsItemProductStockMin = 0;
+
 
 export const getOrderByIdResponseDataTotalItemsMin = 0;
 
@@ -1917,6 +2422,7 @@ export const GetOrderByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(getOrderByIdResponseDataItemsItemProductPriceMin),
+  "stock": zod.number().min(getOrderByIdResponseDataItemsItemProductStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1932,6 +2438,14 @@ export const GetOrderByIdResponse = zod.object({
   "totalQuantity": zod.number().min(getOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
   "totalPrice": zod.number().min(getOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
@@ -1964,6 +2478,8 @@ export const UpdateOrderByIdBody = zod.object({
 
 export const updateOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
+export const updateOrderByIdResponseDataItemsItemProductStockMin = 0;
+
 
 export const updateOrderByIdResponseDataTotalItemsMin = 0;
 
@@ -1986,6 +2502,7 @@ export const UpdateOrderByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateOrderByIdResponseDataItemsItemProductPriceMin),
+  "stock": zod.number().min(updateOrderByIdResponseDataItemsItemProductStockMin).optional(),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2001,6 +2518,14 @@ export const UpdateOrderByIdResponse = zod.object({
   "totalQuantity": zod.number().min(updateOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
   "totalPrice": zod.number().min(updateOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
   "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
@@ -2046,6 +2571,72 @@ export const HardDeleteOrderByIdResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string()
+})
+
+
+/**
+ * Cancels the order identified by `{id}` — the one order write a customer can make. Only a `pending` order can be cancelled this way; `paid`, `processing` and later statuses each need their own flow (refund, return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
+ * @summary Cancel order
+ */
+export const CancelOrderByIdParams = zod.object({
+  "id": zod.string().describe('Resource identifier')
+})
+
+export const cancelOrderByIdResponseDataItemsItemProductPriceMin = 0;
+
+export const cancelOrderByIdResponseDataItemsItemProductStockMin = 0;
+
+
+export const cancelOrderByIdResponseDataTotalItemsMin = 0;
+
+export const cancelOrderByIdResponseDataTotalQuantityMin = 0;
+
+export const cancelOrderByIdResponseDataTotalPriceMin = 0;
+
+
+
+export const CancelOrderByIdResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "userId": zod.string().describe('Resource identifier'),
+  "email": zod.email(),
+  "items": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "title": zod.string(),
+  "price": zod.number().min(cancelOrderByIdResponseDataItemsItemProductPriceMin),
+  "stock": zod.number().min(cancelOrderByIdResponseDataItemsItemProductStockMin).optional(),
+  "description": zod.string().optional(),
+  "active": zod.boolean().optional(),
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "categories": zod.array(zod.string()).optional(),
+  "tags": zod.array(zod.string()).optional(),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
+}),
+  "quantity": zod.number().min(1)
+})),
+  "totalItems": zod.number().min(cancelOrderByIdResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
+  "totalQuantity": zod.number().min(cancelOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
+  "totalPrice": zod.number().min(cancelOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingAddress": zod.object({
+  "fullName": zod.string(),
+  "street": zod.string(),
+  "city": zod.string(),
+  "zip": zod.string(),
+  "country": zod.string(),
+  "phone": zod.string().optional()
+}).optional(),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional(),
+  "deletedAt": zod.iso.datetime({"offset":true}).optional()
+})
 })
 
 

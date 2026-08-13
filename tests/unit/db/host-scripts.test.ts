@@ -1,24 +1,27 @@
 /**
- * The `:host` npm scripts, and the two URI resolvers they depend on.
+ * The `host` npm script, and the two URI resolvers it depends on.
  *
- * `:host` exists so a developer can run the app against the containerised database WITHOUT being
- * in a container. That means overriding one thing — the hostname — and nothing else. A script that
- * spells out a whole `mongodb://localhost:27017/boilerplate-node-backend` hardcodes the database
- * NAME and ignores `NODE_MONGODB_NAME`, so renaming the database in `.env` has `db:seed:host`
- * cheerfully seed a different one, silently, with no output naming which.
+ * `npm run host -- <script>` exists so a developer can run anything against the containerised
+ * database WITHOUT being in a container. That means overriding one thing — the hostname — and
+ * nothing else. A script that spells out a whole `mongodb://localhost:27017/boilerplate-node-backend`
+ * hardcodes the database NAME and ignores `NODE_MONGODB_NAME`, so renaming the database in `.env`
+ * has `npm run host -- db:seed` cheerfully seed a different one, silently, with no output naming
+ * which.
  *
- * So the scripts blank `NODE_DB_URI` / `NODE_REDIS_URL` and set only `*_HOST=localhost`, letting
+ * So the wrapper blanks `NODE_DB_URI` / `NODE_REDIS_URL` and sets only `*_HOST=localhost`, letting
  * both resolvers fall through to their host/port/name fragments — which come from `.env`, the
- * single source of truth. Three things have to stay true for that to keep working, and each is
+ * single source of truth. Four things have to stay true for that to keep working, and each is
  * asserted below:
  *
- *   1. The scripts do not reintroduce a literal URI.
- *   2. An EMPTY URI falls through to the fragments (a `!== undefined` check would not).
- *   3. `migrate-mongo-config.js` resolves the same URI as the application, despite having to
+ *   1. The wrapper does not reintroduce a literal URI.
+ *   2. It stays the ONLY script that redirects a hostname — the per-script `:host` twins it
+ *      replaced were seven copies of one env prefix, and seven chances to copy it wrong.
+ *   3. An EMPTY URI falls through to the fragments (a `!== undefined` check would not).
+ *   4. `migrate-mongo-config.js` resolves the same URI as the application, despite having to
  *      reimplement the logic — it is CommonJS loaded by migrate-mongo's own resolver, and it
  *      cannot import a TypeScript module.
  *
- * (2) is the load-bearing one and the easiest to break by "tidying" a truthiness check.
+ * (3) is the load-bearing one and the easiest to break by "tidying" a truthiness check.
  */
 
 import { readFileSync } from 'node:fs';
@@ -38,7 +41,7 @@ const packageScripts: Record<string, string> = JSON.parse(
     readFileSync(path.join(ROOT, 'package.json'), 'utf8')
 ).scripts;
 
-const hostScripts = Object.entries(packageScripts).filter(([name]) => name.endsWith(':host'));
+const hostScript = packageScripts.host;
 
 /**
  * Re-evaluate the migrate-mongo config against the CURRENT env — it resolves the URI at load, so
@@ -58,12 +61,6 @@ const migrateMongoUri = (): string => {
     return url;
 };
 
-/** Scripts that open a Mongo connection, and therefore need the host override to be correct. */
-const touchesMongo = (command: string) =>
-    command.includes('migrate-mongo') ||
-    command.includes('db/seeds') ||
-    command.includes('src/cluster.ts');
-
 const MONGO_VARS = [
     'NODE_DB_URI',
     'NODE_MONGODB_HOST',
@@ -71,53 +68,50 @@ const MONGO_VARS = [
     'NODE_MONGODB_NAME'
 ] as const;
 
-describe('the :host scripts', () => {
-    it('finds them, so the assertions below are not vacuous', () => {
-        expect(hostScripts.length).toBeGreaterThan(0);
+describe('the host script', () => {
+    it('exists, so the assertions below are not vacuous', () => {
+        expect(hostScript).toBeDefined();
     });
 
-    it.each(hostScripts)('%s — spells out no connection URI', (_name, command) => {
+    it('spells out no connection URI', () => {
         // The original bug in its most direct form. A literal URI carries a database name with
         // it, and that name then contradicts `.env` the moment anyone changes one of them.
-        expect(command).not.toMatch(/mongodb(\+srv)?:\/\/\S/);
-        expect(command).not.toMatch(/redis:\/\/\S/);
+        expect(hostScript).not.toMatch(/mongodb(\+srv)?:\/\/\S/);
+        expect(hostScript).not.toMatch(/redis:\/\/\S/);
     });
 
-    it.each(hostScripts)('%s — never names a database', (_name, command) => {
+    it('never names a database', () => {
         // Belt and braces: catches a name arriving through some route other than a full URI,
         // e.g. someone "helpfully" adding NODE_MONGODB_NAME=… back into the script.
-        expect(command).not.toContain('NODE_MONGODB_NAME');
-        expect(command).not.toContain('boilerplate-node-backend');
+        expect(hostScript).not.toContain('NODE_MONGODB_NAME');
+        expect(hostScript).not.toContain('boilerplate-node-backend');
     });
 
-    it.each(hostScripts.filter(([, command]) => command.includes('NODE_DB_URI')))(
-        '%s — blanks the URI and redirects only the host',
-        (_name, command) => {
-            // The mechanism itself. `NODE_DB_URI=` (empty) is what makes the resolver fall
-            // through to the fragments; without the paired host override it would fall through
-            // to `.env`'s container hostname, which does not resolve from the host.
-            expect(command).toContain('NODE_DB_URI= ');
-            expect(command).toContain('NODE_MONGODB_HOST=localhost');
-        }
-    );
+    it('blanks both URIs and redirects only the hostnames', () => {
+        // The mechanism itself. `NODE_DB_URI=` (empty) is what makes the resolver fall through to
+        // the fragments; without the paired host override it would fall through to `.env`'s
+        // container hostname, which does not resolve from the host.
+        expect(hostScript).toContain('NODE_DB_URI= ');
+        expect(hostScript).toContain('NODE_MONGODB_HOST=localhost');
+        expect(hostScript).toContain('NODE_REDIS_URL= ');
+        expect(hostScript).toContain('NODE_REDIS_HOST=localhost');
+    });
 
-    it.each(hostScripts.filter(([, command]) => command.includes('NODE_REDIS_URL')))(
-        '%s — blanks the Redis URL and redirects only the host',
-        (_name, command) => {
-            expect(command).toContain('NODE_REDIS_URL= ');
-            expect(command).toContain('NODE_REDIS_HOST=localhost');
-        }
-    );
+    it('delegates rather than naming a command of its own', () => {
+        // `npm run host -- db:seed` works because the wrapper ENDS in `npm run`: npm appends the
+        // arguments after `--`. Anything after that would silently swallow the script name.
+        expect(hostScript.trimEnd()).toMatch(/\bnpm run$/);
+    });
 
-    it('covers every script that reaches a datastore', () => {
-        // A new `:host` script that talks to Mongo but forgets the override would connect to
-        // `.env`'s container hostname and fail — or worse, reach something else listening there.
-        for (const [name, command] of hostScripts)
-            if (touchesMongo(command) && !command.startsWith('npm run'))
-                expect([name, command.includes('NODE_MONGODB_HOST=localhost')]).toEqual([
-                    name,
-                    true
-                ]);
+    it('is the only script that redirects a hostname', () => {
+        // The seven `:host` twins this replaced were one env prefix copied seven times, and
+        // `db:cache:clear:host` had already drifted — it blanked Redis but not Mongo. One wrapper
+        // cannot drift from itself, so the invariant worth guarding is that it stays one.
+        const redirectors = Object.entries(packageScripts)
+            .filter(([, command]) => command.includes('_HOST=localhost'))
+            .map(([name]) => name);
+
+        expect(redirectors).toEqual(['host']);
     });
 });
 
@@ -177,8 +171,8 @@ describe('database URI resolution', () => {
 /**
  * `migrate-mongo-config.js` duplicates `getDatabaseUri()` because it cannot import it. The
  * duplication is allowed to exist ONLY because this block proves the two agree — without it,
- * `db:migrate:*:host` drifting away from `db:seed:host` is exactly the silent wrong-database
- * failure the change was meant to end, just relocated.
+ * `npm run host -- db:migrate:up` drifting away from `npm run host -- db:seed` is exactly the
+ * silent wrong-database failure the change was meant to end, just relocated.
  */
 describe('migrate-mongo agrees with the application', () => {
     const saved = new Map<string, string | undefined>();

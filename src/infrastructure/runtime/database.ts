@@ -36,8 +36,8 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * URI first, so a deployment can override a baked-in default with one variable.
  *
  * Note the truthiness check rather than a `!== undefined` one: an EMPTY `NODE_DB_URI` falls
- * through to the fragments deliberately, and that is load-bearing. It is how the `:host` npm
- * scripts reach a containerised database from the host — they blank the URI and override only
+ * through to the fragments deliberately, and that is load-bearing. It is how the `npm run host`
+ * wrapper reaches a containerised database from the host — it blanks the URI and overrides only
  * `NODE_MONGODB_HOST`, so the database NAME keeps coming from `.env` instead of being spelled
  * out a second time in `package.json`, where it can drift and seed the wrong database.
  *

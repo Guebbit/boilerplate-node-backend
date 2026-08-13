@@ -8,7 +8,10 @@
  */
 
 export const cartAuditActions = {
-    USER_CART_ITEM_REMOVED: 'user.cart.item_removed'
+    USER_CART_ITEM_REMOVED: 'user.cart.item_removed',
+    /* A whole order's lines re-entering the cart at once — the support question this answers is
+     * "why is my cart suddenly full", and the metadata names the order that did it. */
+    USER_CART_REORDERED: 'user.cart.reordered'
 } as const;
 
 declare module '@infrastructure/observability/audit' {

@@ -34,6 +34,8 @@ flowchart LR
 | Need | Go to |
 | --- | --- |
 | Change the contract and related tooling | [OpenAPI Workflow](./openapi-workflow.md) |
+| Know what to rerun after editing a fragment | [Regenerating After a Change](./regenerating.md) |
+| Know who owns which fragment | [Contract Ownership & Fragmentation](./contract-fragmentation.md) |
 | Change SSE/event/queue contracts | [AsyncAPI Workflow](./asyncapi-workflow.md) |
 | Understand route style and response patterns | [REST patterns used here](#rest-patterns-used-here) |
 | Understand the app layers behind the API | [Theory / Layers](../theory/layers.md) |

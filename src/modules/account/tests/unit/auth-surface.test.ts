@@ -47,6 +47,13 @@ const POLICY_EXPORTS = [
     'getAccessTokenTTL'
 ] as const;
 
+/**
+ * Re-exported from `./addresses-service` — the address book's ONE cross-module surface: the
+ * cart's checkout resolves which address an order ships to. The CRUD stays internal, served by
+ * this module's own routes.
+ */
+const ADDRESS_EXPORTS = ['addressForCheckout'] as const;
+
 describe('the account barrel', () => {
     it.each(JWT_EXPORTS)('re-exports %s from ./jwt unchanged', (name) => {
         // Identity, not existence: a re-export resolving to a different object means the barrel
@@ -63,7 +70,7 @@ describe('the account barrel', () => {
         // shape will not move. This case makes that deliberate rather than incidental: a new
         // export fails here until it is written down above.
         expect(Object.keys(account).toSorted()).toEqual(
-            [...JWT_EXPORTS, ...COOKIE_EXPORTS, ...POLICY_EXPORTS].toSorted()
+            [...JWT_EXPORTS, ...COOKIE_EXPORTS, ...POLICY_EXPORTS, ...ADDRESS_EXPORTS].toSorted()
         );
     });
 });
@@ -100,9 +107,13 @@ describe('nothing outside the module reaches past the barrel', () => {
     });
 
     it('no file outside src/modules/account imports its internals', () => {
+        // The manifest is exempt, matching the cross-cutting boundary sweep: a sibling's test
+        // that boots the registry legitimately names `@modules/account/module`.
         const offenders = listSourceFiles(SOURCE_ROOT)
             .filter((file) => !file.startsWith(ACCOUNT_ROOT))
-            .filter((file) => /from\s+'@modules\/account\/[^']+'/.test(readFileSync(file, 'utf8')))
+            .filter((file) =>
+                /from\s+'@modules\/account\/(?!module')[^']+'/.test(readFileSync(file, 'utf8'))
+            )
             .map((file) => path.relative(SOURCE_ROOT, file));
 
         expect(offenders).toEqual([]);

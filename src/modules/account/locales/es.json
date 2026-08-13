@@ -21,12 +21,41 @@
             "token-not-found": "Token no válido o caducado, inténtalo de nuevo.",
             "success": "Cuenta eliminada definitivamente."
         },
+        "update": {
+            "success": "Perfil actualizado."
+        },
+        "password-change": {
+            "wrong-current": "La contraseña actual no es correcta.",
+            "success": "Contraseña cambiada."
+        },
+        "logout": {
+            "success": "Sesión cerrada."
+        },
+        "sessions": {
+            "revoked": "Sesión revocada.",
+            "not-found": "Sesión no encontrada."
+        },
+        "verify": {
+            "email-sent": "Se ha enviado un correo de verificación, haz clic en el enlace para confirmar tu dirección.",
+            "already-verified": "Esta cuenta ya está verificada.",
+            "token-not-found": "Token no válido o caducado, inténtalo de nuevo.",
+            "success": "Dirección de correo verificada."
+        },
         "email": {
             "registration-confirm": {
                 "subject": "Bienvenido — tu cuenta está lista",
                 "meta-title": "Registro completado",
                 "title": "¡Bienvenido a bordo {{name}}!",
                 "body": "Tu registro se ha completado correctamente."
+            },
+            "verify-request": {
+                "subject": "Confirma tu dirección de correo",
+                "meta-title": "Verificación de correo",
+                "greeting": "¡Hola, {{name}}!",
+                "intro": "Confirma que esta dirección de correo es tuya.",
+                "cta": "Haz clic en este enlace para verificar tu dirección de correo.",
+                "link-label": "Verificar mi correo",
+                "ignore": "Si no has creado esta cuenta, puedes ignorar este correo."
             },
             "reset-request": {
                 "subject": "Restablecer la contraseña",
@@ -59,6 +88,12 @@
                 "body": "Tu cuenta se ha eliminado definitivamente.",
                 "farewell": "Sentimos verte marchar. Si ha sido un error, ponte en contacto con el soporte."
             }
+        },
+        "addresses": {
+            "added": "Dirección guardada.",
+            "updated": "Dirección actualizada.",
+            "removed": "Dirección eliminada.",
+            "not-found": "La dirección solicitada no se encontró"
         }
     }
 }

@@ -5,6 +5,13 @@
         "empty": "Your cart is empty.",
         "product-removed": "Product removed from cart.",
         "product-unavailable": "One or more products in your cart are no longer available.",
-        "product-added": "Product successfully added to cart."
+        "product-added": "Product successfully added to cart.",
+        "reorder": {
+            "success": "Order added to cart.",
+            "unavailable": "None of the products on this order are still available.",
+            "order-not-found": "The requested order was not found"
+        },
+        "insufficient-stock": "One or more products in your cart exceed the available stock.",
+        "address-not-found": "The selected shipping address was not found."
     }
 }

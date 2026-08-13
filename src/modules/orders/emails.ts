@@ -15,7 +15,7 @@ import { translator } from '@infrastructure/i18n';
 export const orderConfirmEmail = (locale: string, name: string): IEmailContent => {
     const t = translator(locale);
     return {
-        template: 'email-order-confirm.ejs',
+        template: 'orders.order-confirm.ejs',
         subject: t('orders.email-confirm.subject'),
         data: {
             locale,

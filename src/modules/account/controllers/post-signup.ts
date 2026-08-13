@@ -14,6 +14,7 @@ import {
     analyticsEvents,
     buildAnalyticsBase
 } from '@infrastructure/observability/analytics';
+import { sendVerificationEmail } from '../verification';
 
 /**
  * POST /account/signup
@@ -74,6 +75,12 @@ export const postSignup = (
                 distinctId: newUserId,
                 event: analyticsEvents.USER_SIGNED_UP
             });
+            /*
+             * Start email verification — the account works either way (`verified` is
+             * informational), so this is fire-and-forget like every other account email and the
+             * 201 does not wait on the queue.
+             */
+            if (result.data) void sendVerificationEmail(result.data, request.locale);
             // create() returns the in-memory document; the schema's toJSON transform
             // strips the hashed password before it ever reaches res.json
             successResponse(response, result.data, 201);

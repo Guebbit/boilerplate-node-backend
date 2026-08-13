@@ -37,7 +37,7 @@ services:
             # frontend suite from a single address and exceeds both budgets, at which point the API
             # answers 429 and the failures read as "login is broken" rather than "out of allowance".
             # Declared here so a run can raise them from the shell — `NODE_RATE_LIMIT_MAX=1000
-            # NODE_AUTH_RATE_LIMIT_MAX=1000 npm run podman:restart` — instead of editing `.env`.
+            # NODE_AUTH_RATE_LIMIT_MAX=1000 npm run compose:restart` — instead of editing `.env`.
             # The defaults match `.env`, so an ordinary `up` is unchanged. Two buckets, deliberately
             # decoupled: the auth one is what makes password guessing expensive, so widening the
             # global one must never widen it. Never raise either in a deployed environment.

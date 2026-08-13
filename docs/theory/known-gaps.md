@@ -131,8 +131,8 @@ belongs in the owning module, or the two modules were one module.
 
 `rm -rf src/modules/{products,cart,orders}` plus the registry lines leaves `src/` and `db/`
 compiling — zero files — and breaks **sixteen**, all under `tests/` and `scripts/`. Measured
-2026-08-12; the full run, the classification and a ranked fix list are in
-`DELETABILITY_TEST.md` (repo root).
+2026-08-12. How to re-run it, and how to classify what breaks, is
+[Re-running the deletability check](./module-lifecycle.md#re-running-the-deletability-check).
 
 Two of the sixteen are correct and must not be "fixed":
 

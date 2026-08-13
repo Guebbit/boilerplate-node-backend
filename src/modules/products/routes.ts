@@ -5,6 +5,7 @@ import { getProducts, searchProductsKeyParameters } from './controllers/get-prod
 import { writeProducts } from './controllers/write-products';
 import { deleteProducts } from './controllers/delete-products';
 import { getProductItem } from './controllers/get-product-item';
+import { getCatalogueFacets } from './controllers/get-catalogue-facets';
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
@@ -46,6 +47,14 @@ router.put(
 
 // DELETE /products — admin only, id in body
 router.delete('/', isAuth, isAdmin, invalidateCache(['products']), deleteProducts);
+
+// GET /products/categories — the filter chips; a static segment, so declared before /:id
+// for the same readability rule the create route follows
+router.get(
+    '/categories',
+    setCache(3600, { tags: ['products'], keyParameters: [] }),
+    getCatalogueFacets
+);
 
 // GET /products/:id — public
 router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), getProductItem);

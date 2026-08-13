@@ -27,7 +27,7 @@ Podman log files → Promtail (CRI pipeline) → Loki → Grafana
 - Promtail reads `$HOME/.local/share/containers/storage/overlay-containers/*/userdata/*.log` on the host.
 - Podman's default `k8s-file` driver uses CRI format, so a separate pipeline stage is used.
 - The `docker-compose.podman.yml` override wires the correct path and config automatically.
-- Run `npm run podman:rebuild` (or `podman:restart`) to use the Podman-ready stack.
+- Run `npm run compose:rebuild` (or `compose:restart`) to use the Podman-ready stack.
 
 ## Querying logs in Grafana
 

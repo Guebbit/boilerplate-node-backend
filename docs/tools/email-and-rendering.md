@@ -14,7 +14,7 @@ Both are optional: they only activate when the relevant env vars / browser binar
 | SMTP transport | `src/infrastructure/adapters/mailer.ts`                                  |
 | Email triggers | `src/modules/account/controllers/post-reset-request.ts` (password reset) |
 | Email copy     | `src/modules/<name>/emails.ts`                                           |
-| HTML templates | `views/*.ejs`                                                            |
+| HTML templates | `shared/views/**/*.ejs`                                                  |
 | PDF rendering  | `src/modules/orders/controllers/get-order-invoice.ts`                    |
 
 ## Email pipeline

@@ -24,7 +24,8 @@ describe('the orders audit vocabulary', () => {
         expect(ordersAuditActions).toEqual({
             ADMIN_ORDER_CREATED: 'admin.order.created',
             ADMIN_ORDER_UPDATED: 'admin.order.updated',
-            ADMIN_ORDER_DELETED: 'admin.order.deleted'
+            ADMIN_ORDER_DELETED: 'admin.order.deleted',
+            USER_ORDER_CANCELLED: 'user.order.cancelled'
         });
     });
 

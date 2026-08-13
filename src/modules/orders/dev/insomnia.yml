@@ -3,7 +3,7 @@
       id: fld_9658403816409e66eba2175f8eff8b53
       created: 1767225600000
       modified: 1767225600000
-      sortKey: 8000
+      sortKey: 9000
       description: ""
     children:
       - url: "{{ _.baseURL }}/orders"
@@ -14,7 +14,7 @@
           modified: 1767225600000
           isPrivate: false
           description: List orders (paginated)
-          sortKey: 8001
+          sortKey: 9001
         method: GET
         headers:
           - name: Accept
@@ -38,7 +38,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Create order
-          sortKey: 8002
+          sortKey: 9002
         method: POST
         body:
           mimeType: application/json
@@ -77,7 +77,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Update order
-          sortKey: 8003
+          sortKey: 9003
         method: PUT
         body:
           mimeType: application/json
@@ -118,7 +118,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Delete order
-          sortKey: 8004
+          sortKey: 9004
         method: DELETE
         body:
           mimeType: application/json
@@ -151,7 +151,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Search orders (DTO-friendly)
-          sortKey: 8005
+          sortKey: 9005
         method: POST
         body:
           mimeType: application/json
@@ -188,7 +188,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Order details
-          sortKey: 8006
+          sortKey: 9006
         method: GET
         headers:
           - name: Accept
@@ -212,7 +212,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Edit order
-          sortKey: 8007
+          sortKey: 9007
         method: PUT
         body:
           mimeType: application/json
@@ -252,7 +252,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Delete order
-          sortKey: 8008
+          sortKey: 9008
         method: DELETE
         body:
           mimeType: application/json
@@ -284,8 +284,32 @@
           modified: 1767225600000
           isPrivate: false
           description: Permanently delete order
-          sortKey: 8009
+          sortKey: 9009
         method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/orders/65de73a69ca05739be2b5e85/cancel"
+        name: Cancel order
+        meta:
+          id: req_a44014c8838cb29ca4f35204b69997f5
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Cancel order
+          sortKey: 9010
+        method: POST
         headers:
           - name: Accept
             value: application/json
@@ -308,7 +332,7 @@
           modified: 1767225600000
           isPrivate: false
           description: Download order invoice (PDF)
-          sortKey: 8010
+          sortKey: 9011
         method: GET
         headers:
           - name: Accept
@@ -332,7 +356,7 @@
           modified: 1767225600000
           isPrivate: false
           description: "The dataset puts its one soft-deleted order on the NON-admin user for exactly this case, and the case is subtle: ownership-only scoping would allow it, and correct scoping refuses. Log in as the non-admin first (see the account probes), then send this — it must not return the order. An admin token on the same URL must."
-          sortKey: 8011
+          sortKey: 9012
         method: GET
         headers:
           - name: Accept
@@ -356,7 +380,7 @@
           modified: 1767225600000
           isPrivate: false
           description: The seeded admin's order, requested with whatever token the collection holds. As the non-admin this is the cross-tenant read the API must refuse; as the admin it is a legitimate one. Same URL, two answers — which is the whole of role scoping in one request.
-          sortKey: 8012
+          sortKey: 9013
         method: GET
         headers:
           - name: Accept

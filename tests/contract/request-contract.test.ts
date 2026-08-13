@@ -66,7 +66,13 @@ const withRealOrderReferences = async (
     payload: Record<string, unknown>,
     skipField?: string
 ): Promise<Record<string, unknown>> => {
-    const [product, { user }] = await Promise.all([createProduct(), authenticateAs('user')]);
+    // A shelf no generated quantity can exhaust, for the same reason the ids are patched in:
+    // `quantity ≤ stock` is a business rule the schema cannot express, and this file only asks
+    // whether the API honours its own CONTRACT — the stock refusal has its own scenario tests.
+    const [product, { user }] = await Promise.all([
+        createProduct({ stock: 1_000_000_000 }),
+        authenticateAs('user')
+    ]);
     const result: Record<string, unknown> = { ...payload };
     if (skipField !== 'userId') result.userId = String(user._id);
     if (Array.isArray(payload.items))

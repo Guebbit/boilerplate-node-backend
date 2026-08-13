@@ -1,0 +1,112 @@
+  - name: Wishlist
+    meta:
+      id: fld_10b436b3673e262375953d799a410086
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 8000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/wishlist"
+        name: Get wishlist
+        meta:
+          id: req_2b9890357252ec11fdc6080878056fc5
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Get wishlist
+          sortKey: 8001
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/wishlist"
+        name: Save a product
+        meta:
+          id: req_3a28f04483d313f979dcf30206963edf
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Save a product
+          sortKey: 8002
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "productId": "65dc8a99604c307b702b5ccc"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/wishlist/65dc8a99604c307b702b5ccc"
+        name: Remove a saved product
+        meta:
+          id: req_447e96c65ab58e46cc6f5dc57fafe841
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Remove a saved product
+          sortKey: 8003
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/wishlist/65dc8a99604c307b702b5ccc/move-to-cart"
+        name: Move a saved product into the cart
+        meta:
+          id: req_ccef14db31e78e58ce3dada730271bdf
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Move a saved product into the cart
+          sortKey: 8004
+        method: POST
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

@@ -4,7 +4,7 @@
  *
  * SHARED SCRIPT — this file is byte-identical in `boilerplate-node-api-mongodb-mongoose` and
  * `boilerplate-vue-frontend`. Only the output path differs, and that
- * comes from `--out` in each repo's `genasyncapi` script, so the two copies can be compared
+ * comes from `--out` in each repo's `gen:asyncapi` script, so the two copies can be compared
  * with a plain `diff`. Change it in one repo and copy it to the other, or the outputs drift.
  *
  * It emits a SUPERSET of what either repo needs, so neither has to rename anything:
@@ -343,7 +343,7 @@ const buildOutput = (modelBlocks: string[]): string => {
         '/* eslint-disable @typescript-eslint/naming-convention */',
         '/*',
         ' * GENERATED — do not edit manually.',
-        ' * Source: asyncapi.yaml  |  Regenerate: npm run genasyncapi',
+        ' * Source: asyncapi.yaml  |  Regenerate: npm run gen:asyncapi',
         ' */',
         '',
         ...modelBlocks,

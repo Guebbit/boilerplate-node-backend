@@ -4,12 +4,7 @@
  * No mocks, no database, no fake timers — the rules take arguments and return verdicts.
  */
 
-import {
-    checkOrderLines,
-    nextDeletionState,
-    readScope,
-    type IOrderLineCandidate
-} from '../../domain/rules';
+import { checkOrderLines, type IOrderLineCandidate } from '../../domain/rules';
 
 /** A line whose product resolved. */
 const line = (quantity = 1): IOrderLineCandidate => ({ quantity, product: { price: 10 } });
@@ -40,38 +35,7 @@ describe('checkOrderLines', () => {
     });
 });
 
-describe('nextDeletionState', () => {
-    const now = new Date('2026-08-12T10:00:00.000Z');
-
-    it('stamps the given instant when the order is live', () => {
-        expect(nextDeletionState(undefined, now)).toBe(now);
-    });
-
-    it('clears the stamp when the order is already soft-deleted — delete toggles', () => {
-        expect(nextDeletionState(new Date('2020-01-01'), now)).toBeUndefined();
-    });
-
-    it('is a pure toggle: applying it twice returns to live', () => {
-        const deleted = nextDeletionState(undefined, now);
-        expect(nextDeletionState(deleted, now)).toBeUndefined();
-    });
-});
-
-describe('readScope', () => {
-    it('gives an admin an unrestricted scope', () => {
-        expect(readScope({ id: 'abc', admin: true })).toEqual({ kind: 'all' });
-    });
-
-    it('restricts a normal caller to their own orders', () => {
-        expect(readScope({ id: 'abc' })).toEqual({ kind: 'own', userId: 'abc' });
-    });
-
-    // Fails closed: the empty id is an invalid ObjectId, so the repository throws.
-    it.each([
-        ['no caller', undefined],
-        ['an empty context', {}],
-        ['admin explicitly false', { admin: false }]
-    ])('restricts %s to an unusable own-scope rather than widening', (_label, caller) => {
-        expect(readScope(caller)).toEqual({ kind: 'own', userId: '' });
-    });
-});
+// The soft-delete toggle and the read scope used to live here as `nextDeletionState` and
+// `readScope`. Both were one-line expressions with one caller each, so they moved back into
+// `service.ts`; `service-crud.test.ts` covers the toggle and `service-scope.test.ts` the scope,
+// including the fail-closed cases.

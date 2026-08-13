@@ -14,6 +14,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factory';
 import { createOrder } from '@modules/orders/tests/factory';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { orderRepository } from '@modules/orders';
 import type { IOrderDocumentItem } from '@modules/orders';
 
 setupTestDb();
@@ -84,6 +86,89 @@ describe('GET /orders/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /orders/{id}/cancel', () => {
+    it('lets the owner cancel a pending order, one case per role — user', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('cancelled');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it("lets an admin cancel someone else's pending order", async () => {
+        const { user: owner } = await authenticateAs('user');
+        const order = await seedOrderFor(owner);
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('cancelled');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it("answers 404 for another user's order — same as an invented id, no existence leak", async () => {
+        const { user: owner } = await authenticateAs('user');
+        const order = await seedOrderFor(owner);
+
+        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
+        const login = await api()
+            .post('/account/login')
+            .send({ email: stranger.email, password: PLAIN_PASSWORD });
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', `Bearer ${login.body.data.token as string}`);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an order past pending', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const order = await seedOrderFor(user);
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_CANCELLABLE');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('a second cancel is a 409, not a double write', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const order = await seedOrderFor(user);
+
+        const first = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+        const second = await api()
+            .post(`/orders/${String(order._id)}/cancel`)
+            .set('Authorization', bearer);
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(409);
+        expect(second).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract when unauthenticated', async () => {
+        const response = await api().post('/orders/65dc8a99604c307b702b5ccc/cancel');
+
+        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 });

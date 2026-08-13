@@ -1,10 +1,11 @@
 /**
- * The three API client collections in `.dev/` — Bruno, Insomnia and Mockoon.
+ * The three API client collections at the repo root — contract.bruno.yml, contract.insomnia.json, contract.mockoon.json.
  *
  * They restate the REST contract one request at a time, with auth, bodies and example responses.
  * Being developer tooling, nothing reads them closely enough to notice a gap, so a missing endpoint
- * is invisible until someone opens the collection and finds it useless — which is why all three are
- * in `scripts/specIdentity.ts` and why they are now DERIVED rather than written by hand.
+ * is invisible until someone opens the collection and finds it useless — which is why they are
+ * DERIVED rather than written by hand, and pinned to a fresh generation by
+ * `tests/cross-cutting/contract-bundles.test.ts`.
  *
  * TWO STEPS, BOTH COMMITTED. `scripts/contracts/generateCollections.ts` writes one fragment per
  * module per tool from `openapi.yaml` and `seed-identities.ts`; this file says how those fragments
@@ -15,7 +16,7 @@
  * SECTIONS ARE THE CONTRACT'S. A collection groups requests exactly as the contract files paths,
  * `SECTION_ORDER` and all, because ownership is recorded once — in the OpenAPI fragments — and
  * restating it here is how the three would drift apart again. `system` (the health probe, which
- * belongs to no module) lives in `contracts/shared/`, as it does for the contract itself.
+ * belongs to no module) lives in `shared/contracts/`, as it does for the contract itself.
  *
  * THREE FORMATS, ONE MECHANISM. Bruno and Insomnia are YAML lists, where items need no separator
  * and a fragment is pasted verbatim. Mockoon is JSON, where entries need a comma between them and
@@ -59,8 +60,8 @@ export const collectionFragment = (
     return section === 'system'
         ? path.join(
               REPO_ROOT,
-              'contracts',
               'shared',
+              'contracts',
               `${tool}.system${qualifier}.${extensionFor(tool)}`
           )
         : path.join(
@@ -75,16 +76,24 @@ export const collectionFragment = (
 
 /** A collection's shared scaffolding: its name, environments, server settings, cookie jar. */
 const sharedPart = (tool: TCollectionTool, part: string): string =>
-    path.join(REPO_ROOT, 'contracts', 'shared', `${tool}.${part}.${extensionFor(tool)}`);
+    path.join(REPO_ROOT, 'shared', 'contracts', `${tool}.${part}.${extensionFor(tool)}`);
 
 /** Every section's slice of one tool, in the contract's own order. */
 const sectionsOf = (tool: TCollectionTool, kind: 'routes' | 'tree' = 'routes'): string[] =>
     SECTION_ORDER.map((section) => collectionFragment(tool, section, kind));
 
+/*
+ * At the repo root as `contract.<tool>.<ext>`, next to `openapi.yaml` — deliberately not in a
+ * dotfolder. They are the contract rendered for each tool, they sit beside the document they are
+ * derived from, and a dotfolder is where things go to be forgotten: `.dev/` was exactly where
+ * the hand-written versions rotted unnoticed for months.
+ */
+
 export const brunoBundle: IContractBundle = {
     name: 'bruno',
-    label: '.dev/Ecommerce Demo API - Bruno.yml',
-    output: path.join(REPO_ROOT, '.dev', 'Ecommerce Demo API - Bruno.yml'),
+    generated: true,
+    label: 'contract.bruno.yml',
+    output: path.join(REPO_ROOT, 'contract.bruno.yml'),
     segments: (): TSegment[] => [
         sharedPart('bruno', 'header'),
         ...sectionsOf('bruno'),
@@ -94,10 +103,11 @@ export const brunoBundle: IContractBundle = {
 
 export const insomniaBundle: IContractBundle = {
     name: 'insomnia',
-    label: '.dev/Ecommerce Demo API - Insomnia.json',
-    // Named `.json` by the tool that exports it, and YAML inside. Kept as-is: the name is what
-    // Insomnia's importer and the frontend's copy of the file both expect.
-    output: path.join(REPO_ROOT, '.dev', 'Ecommerce Demo API - Insomnia.json'),
+    generated: true,
+    label: 'contract.insomnia.json',
+    // Named `.json` after the tool's own export convention, and YAML inside — Insomnia's
+    // importer accepts either and keys on the content, not the extension.
+    output: path.join(REPO_ROOT, 'contract.insomnia.json'),
     segments: (): TSegment[] => [
         sharedPart('insomnia', 'header'),
         ...sectionsOf('insomnia'),
@@ -107,8 +117,9 @@ export const insomniaBundle: IContractBundle = {
 
 export const mockoonBundle: IContractBundle = {
     name: 'mockoon',
-    label: '.dev/Ecommerce Demo API - Mockoon.json',
-    output: path.join(REPO_ROOT, '.dev', 'Ecommerce Demo API - Mockoon.json'),
+    generated: true,
+    label: 'contract.mockoon.json',
+    output: path.join(REPO_ROOT, 'contract.mockoon.json'),
     segments: (): TSegment[] => [
         sharedPart('mockoon', 'header'),
         { parts: sectionsOf('mockoon'), separator: ENTRY_SEPARATOR },

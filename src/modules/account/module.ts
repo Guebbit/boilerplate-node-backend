@@ -1,8 +1,10 @@
 import path from 'node:path';
 import type { IAppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
-import { userRepository } from '@modules/users';
+import { onDomainEvent } from '@kernel/events';
+import { userRepository, USER_DELETED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken } from './jwt';
+import { addressesDeleteByUserId } from './addresses-service';
 import { router } from './routes';
 
 /**
@@ -51,5 +53,13 @@ export default {
     basePath: '/account',
     routes: router,
     dependsOn: ['users'],
+    /*
+     * The one collection this module owns is the address book — the account lifecycle's own
+     * data, unlike the User record it administers through `users`. A destroyed account takes
+     * its book with it, by the same event the cart and wishlist listen for.
+     */
+    subscribe: () => {
+        onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
+    },
     locales: path.join(__dirname, 'locales')
 } satisfies IAppModule;

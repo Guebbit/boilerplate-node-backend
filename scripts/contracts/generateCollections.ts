@@ -325,7 +325,7 @@ interface IProbe {
 /** Where a module declares its probes. Absence is the normal case. */
 const probesFile = (section: TSectionName): string =>
     section === 'system'
-        ? path.join(REPO_ROOT, 'contracts', 'shared', 'probes.yml')
+        ? path.join(REPO_ROOT, 'shared', 'contracts', 'probes.yml')
         : path.join(REPO_ROOT, 'src', 'modules', section, 'dev', 'probes.yml');
 
 /**
@@ -991,8 +991,8 @@ const mockoonFooter = (): string =>
 export const collectionSharedFragment = (tool: TCollectionTool, part: string): string =>
     path.join(
         REPO_ROOT,
-        'contracts',
         'shared',
+        'contracts',
         `${tool}.${part}.${tool === 'mockoon' ? 'json' : 'yml'}`
     );
 

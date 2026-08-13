@@ -20,6 +20,7 @@
  */
 import type { Email } from './email';
 import type { Id } from './id';
+import type { OrderAddress } from './orderAddress';
 import type { OrderItem } from './orderItem';
 import type { OrderStatus } from './orderStatus';
 
@@ -45,6 +46,7 @@ export interface Order {
   totalPrice: number;
   /** Optional order notes */
   notes?: string;
+  shippingAddress?: OrderAddress;
   status: OrderStatus;
   createdAt?: string;
   updatedAt?: string;

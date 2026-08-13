@@ -20,5 +20,5 @@ export { orderService } from './service';
 export { orderRepository } from './repository';
 export { orderModel } from './model';
 export type { IOrderDocument, IOrderDocumentItem } from './model';
-export { sumLineItems, toCents } from './domain';
+export { sumLineItems } from './domain';
 export type { ILineItem, ILineItemTotals } from './domain';

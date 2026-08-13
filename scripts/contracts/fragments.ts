@@ -60,6 +60,12 @@ export interface IContractBundle {
      * from its section list instead of restating every path.
      */
     segments: () => readonly TSegment[];
+    /**
+     * True when this bundle's own fragments are generated rather than authored — today the three
+     * client collections, which are derived from `openapi.yaml`. It is what orders a full run:
+     * every authored bundle is assembled first, so the generator has a current contract to read.
+     */
+    generated?: boolean;
 }
 
 /**
@@ -101,9 +107,16 @@ export const assembleBundle = (bundle: IContractBundle): string =>
         .map((segment) => renderSegment(bundle, segment))
         .join('');
 
-/** The bundle as committed on disk. */
+/**
+ * The bundle as committed on disk.
+ *
+ * An absent file reads as the empty string rather than throwing: a bundle whose output does not
+ * exist yet — a renamed output, a fresh checkout mid-migration — is the definition of stale, and
+ * "stale, write it" is the answer the caller is asking this function to help give. Crashing here
+ * turns the one command that would fix the state into the command that cannot run.
+ */
 export const readCommittedBundle = (bundle: IContractBundle): string =>
-    readFileSync(bundle.output, 'utf8');
+    existsSync(bundle.output) ? readFileSync(bundle.output, 'utf8') : '';
 
 /** Every fragment a bundle is built from, flattened — what a staleness check watches. */
 export const bundleFragments = (bundle: IContractBundle): string[] =>

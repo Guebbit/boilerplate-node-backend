@@ -7,6 +7,186 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/theory/module-lifecycle.md` — adding and removing a domain as a procedure, not a
+  measurement.** `modules.md` said what a domain costs and proved it; it never said what to type.
+  The new page is the ordered procedure in both directions: the four registries and which three of
+  them are conditional, the manifest, the fragment-plus-section-order step, the bundle, and the
+  two-repo copy that ends both halves. It also states the rule for reading a deletion run — a break
+  in `src/**` or `db/**` is the only real failure, everything under `tests/**` and `scripts/**` is a
+  report, and two specific breaks are supposed to happen. It stays a written procedure rather than
+  becoming a test on purpose, and the page says why: the four failure classes worth catching — a
+  canary pinned to the module count, a mechanism spec using a domain as sample data, a domain-named
+  export from a generated file, and a route addressed by name — are each invisible to a sweep. A
+  whole-word scan for domain names was tried and rejected on the way: `observability` and `locales`
+  are module names AND infrastructure folder names, and `db/migrations` names collections forever by
+  design. `modules.md` keeps the reasoning and the scorecard, points here, and carries the standing
+  reminder to run the exercise after any significant change.
+
+- **The account is self-service now: `PUT /account`, `POST /account/password`, and the fix they
+  carry.** The profile page saved through `PUT /users/{id}`, which sits behind `isAdmin` — so a
+  normal user editing their own profile got a 403 from their own account. `PUT /account` is the
+  self-service update (email, username, locale, image; never `admin`, `active` or `password` —
+  role and account state stay with the admin endpoints), and `POST /account/password` changes the
+  password by proving the current one. A wrong current password is a **422 with translated copy,
+  not a 401**: a 401 from an authenticated endpoint reads as "session expired" to every client
+  interceptor and would log the user out of a session that is perfectly valid. A duplicate email
+  takes the same E11000 → 409 path signup takes, so the two flows cannot disagree about what
+  "taken" looks like.
+
+- **Sessions are visible and individually revocable: `GET /account/sessions`,
+  `DELETE /account/sessions/{sessionId}`, `POST /account/logout`.** The refresh tokens were
+  already one row per session (`jwtid` gave each its own identity); these endpoints finally read
+  them. The listing exposes the subdocument id, the expiry and a `current` flag matched through
+  the refresh cookie — **never the token value**, which is as good as a password. Revocation
+  `$pull`s by that id, pinned to the caller's own document (someone else's session id answers the
+  same 404 as an invented one) and to `type: refresh` (a pending reset/delete/verify token is not
+  a session and the handle must not reach it). `POST /account/logout` is the single-session
+  logout that was missing — `logout-all` was the only exit, so signing out on a shared machine
+  killed the phone's session too. It works from the cookie alone, no bearer token, exactly like
+  `GET /account/refresh` and for the same reason.
+
+- **Email verification: `verified` on the `User`, `POST /account/verify-request` and
+  `/account/verify-confirm`.** Signup issues a 24h one-time token and emails it (the copy already
+  promised this: "confirm via email to login" has been in `signup.registration-successful` since
+  before the flow existed); confirm spends the token atomically — same consume-decides-the-race
+  shape as `reset-confirm` — and flips `verified`. Changing the email through `PUT /account`
+  UNVERIFIES the account first, or one confirmed mailbox could launder any number of addresses.
+  `verified` is **informational only**: no endpoint refuses an unverified account, clients render
+  a banner rather than a wall. Admin-created users start `true` (an operator vouches for the
+  address they typed), self-signups start `false`, and existing rows are grandfathered to `true`
+  by `db/migrations/20260813090000-user-verified-column.js` — they predate the flow, and nagging
+  the longest-standing accounts first is the wrong reading of a new column.
+
+- **The filter chips have an endpoint: `GET /products/categories`.** Categories and tags with
+  counts, in one `$facet` aggregation so both lists describe the same instant of the collection.
+  Counts follow `publicScope` — a category held only by hidden or soft-deleted products does not
+  exist to the storefront, because a chip that finds nothing is worse than no chip — and the
+  response is cached under the products tag, so every write that changes the catalogue refreshes
+  the chips with it. The seed products now carry categories and tags (they never had any), which
+  is also what makes the search's existing `category`/`tag` filters demonstrable at last.
+
+- **An address book, and orders that remember where they were going:
+  `GET/POST /account/addresses`, `PUT/DELETE /account/addresses/{addressId}`,
+  `Order.shippingAddress`.** One collection keyed by `userId` (the cart's pattern, for the cart's
+  reasons), owned by `account` — the first collection that module owns, and its manifest now says
+  so. One invariant carries the CRUD: a non-empty book has EXACTLY ONE default, whichever write
+  got it there — the first entry claims it, `default: true` steals it, removing the holder
+  promotes the oldest survivor, and `default: false` is deliberately not a demotion (a book with
+  no default would make checkout's "ship to the default" a coin flip). Checkout accepts an
+  optional `addressId`, resolves it BEFORE any stock moves — a stale id refuses the whole
+  checkout with `CART_ADDRESS_NOT_FOUND` rather than shipping nowhere — and embeds a SNAPSHOT
+  (`OrderAddress`: the shipment's fields, none of the book's), exactly as the items embed product
+  snapshots. No address is required to buy: an empty book simply produces an order without one.
+  The barrel exports exactly one thing for it (`addressForCheckout`); the CRUD stays behind the
+  module's own routes, and a destroyed account takes its book with it via `user.deleted`.
+
+- **Products have stock, and checkout finally has a realistic way to fail.** `Product.stock`
+  (integer, `minimum: 0`, demo default `100` — declared on the create bodies for the same reason
+  `active`'s is) is decremented by checkout and by the admin order create, and restored by a
+  customer cancel. The decrement is CONDITIONAL — `stock: { $gte: quantity }` rides in the
+  update's filter — so two checkouts racing the last unit resolve at the storage layer instead of
+  overselling; a multi-line checkout that fails one line puts back what earlier lines took, and
+  the checkout that loses the cart-changed race restores its units alongside retracting its
+  order. The invariant, tested from both directions: **stock moves if and only if the order
+  stands.** Pre-flight, `evaluateCheckout` gains an `insufficient-stock` verdict
+  (`CART_INSUFFICIENT_STOCK` on the wire, `ORDER_INSUFFICIENT_STOCK` from the admin path); the
+  routes that move stock invalidate the products cache so the storefront's counts follow. A sale
+  is written with `timestamps: false` — `updatedAt` keeps meaning "the catalogue entry changed".
+  Existing rows are backfilled to `100` by `db/migrations/20260813091000-product-stock-column.js`;
+  one seed product now sits at `stock: 0` so the out-of-stock badge and the checkout refusal have
+  something to demonstrate. Deliberately NOT coupled: the admin status/items edit and the hard
+  delete move no stock — an admin correcting a record is not a sale.
+
+- **A tenth module: `wishlist`.** One document per user like the cart, but a line is
+  `{ productId }` alone — a wishlist answers "do I want this", not "how many", so `$addToSet` is
+  the entire idempotence story and the cart's retried two-step upsert has no race to close here.
+  `GET /wishlist`, `POST /wishlist` (public-catalogue products only, double-click-safe),
+  `DELETE /wishlist/{productId}`, and the exit: `POST /wishlist/{productId}/move-to-cart`, which
+  writes the cart line BEFORE dropping the saved one so a failure part-way leaves the product
+  saved rather than lost. Subscribes to `product.deleted` and `user.deleted` exactly as the cart
+  does; seeds its own fixtures through a new `seed-identities` fragment; three analytics events
+  tie the save funnel to the purchase funnel (`wishlist_item_added`, `wishlist_item_removed`,
+  `wishlist_moved_to_cart`). Also the first module added since the registry existed — the whole
+  footprint is one folder plus one line in `src/modules.ts` and three section-order entries in
+  `scripts/contracts/`, which is the deletability claim exercised in the other direction.
+
+- **Customers act on their own orders: `POST /orders/{id}/cancel` and
+  `POST /cart/reorder/{orderId}`.** Every order write used to be `isAdmin`, so the storefront half
+  of the app could create orders and then only watch them. Cancel is the narrow write — `pending`
+  only, because `paid` money travels back and `shipped` is a return, each a flow of its own that
+  an admin drives through the status write — and the gate rides IN the update's filter with the
+  caller's scope, so a cancel racing the admin's "shipped" (or its own double-click) resolves at
+  the storage layer with exactly one winner; the follow-up read only chooses between 404 and the
+  `ORDER_NOT_CANCELLABLE` 409. Reorder is filed under **cart**, not orders, because of what it
+  writes: the order is only read, and `cart → orders` is the arrow the manifests already declare.
+  It re-resolves the order's product snapshots against today's catalogue through `publicScope` —
+  vanished, deactivated and hidden products are skipped, the returned cart view is the record of
+  what landed, and an order with nothing left answers `REORDER_UNAVAILABLE` rather than a hollow 200. Both audited (`user.order.cancelled`, `user.cart.reordered`) and in the analytics funnel
+  (`order_cancelled`, `cart_reordered`).
+
+### Changed
+
+- **The npm scripts were consolidated.** `genapi`/`genasyncapi` are `gen:api`/`gen:asyncapi`; the
+  `podman:*`/`docker:*` families collapsed into one `compose` runner (`scripts/compose.ts` picks
+  the engine); the `:host` variants collapsed into one `host` prefix runner (`npm run host
+db:seed`); `load:test*` became `test:load*`, keeping everything test-shaped under the `test:`
+  prefix; `test:prism` is a real script (`scripts/prism-smoke.ts`) instead of a shell one-liner;
+  and `build` is `ts-check && lint` with the `build-only` indirection gone.
+
+- **`views/` and `contracts/shared/` became `shared/views/` and `shared/contracts/`, and the email
+  templates carry the module that owns them in the filename.** The repo root held two folders that
+  meant the same thing — assets no module owns — under two names, and one of them said it twice
+  (`contracts/shared`). One `shared/` now holds both, which leaves the ownership axis reading the
+  same way everywhere: a module owns its slice, `shared/` holds what no module can. The templates
+  went from `email-order-confirm.ejs` to `orders.order-confirm.ejs`: the old prefix repeated the
+  directory, the new one names the owner, so a template orphaned by a deleted module is visible on
+  sight rather than only at the point `mailer-templates.test.ts` compares the copy map against the
+  directory listing. They stay in ONE flat directory rather than moving into their modules on
+  purpose — `templateName` crosses RabbitMQ to a consumer that may be another process, and a bare
+  name resolved against that consumer's own `EMAIL_TEMPLATES_DIR` stays portable where a path into
+  `src/modules` would bind the payload to one checkout's layout. So the AsyncAPI contract is
+  untouched, the queue needs no drain, and no `include` in any template changed.
+
+- **`tests/unit/i18n/user-locale.test.ts` → `src/modules/account/tests/unit/persisted-locale.test.ts`.**
+  It reached `@modules/account/service` and `@modules/users/service` — a module's internals, which
+  production code may not import either. Signup is what captures the persisted locale and signup
+  lives behind `account`'s routes, so the spec belongs to `account`; its edits now go through the
+  `users` barrel, which is the same surface `account` uses in production. Filed here rather than
+  under Fixed because nothing was broken — the spec passed where it stood, it just made `users` and
+  `account` harder to delete, which is the residue a deletability run exists to surface.
+
+- **The three client collections left `.dev/` for the repo root — `contract.bruno.yml`,
+  `contract.insomnia.json`, `contract.mockoon.json` — and are no longer shared files: the frontend
+  holds no copy and the identity gate is 8 files, not 11.** The root because they are the contract
+  rendered for each tool and belong beside the document they are derived from; a dotfolder is
+  where things go to be forgotten, and `.dev/` is exactly where the hand-written versions rotted
+  unnoticed. Their identity entries defended against
+  hand-maintained restatements forking, and they are not hand-maintained any more: the backend
+  generates them from `openapi.yaml` and pins them to a fresh generation in
+  `contract-bundles.test.ts`, while `openapi.yaml` itself stays identity-checked — identical spec
+  plus deterministic generator means a frontend copy could never disagree without the spec
+  disagreeing first. Nothing in the frontend ever read them (its mocking is MSW, its API layer is
+  orval), so each copy was pure carrying cost: one more file to sync on every contract change.
+  Here they are NOT deprecated — they are the published output the fragment pipeline exists to
+  produce, committed like `openapi.yaml` itself. `readCommittedBundle` now reads an absent output
+  as stale-and-rewrite instead of crashing, which is what a renamed bundle output turns out to
+  need.
+
+### Fixed
+
+- **`contracts:bundle` ran its two steps in the wrong order** — collections generated from
+  `openapi.yaml` BEFORE the bundle rebuilt it, so any contract change failed the run (or worse,
+  regenerated collections one edit behind). This was fix #6 on `DELETABILITY_TEST.md`'s ranked
+  list. The fix ended up in the bundler rather than in the npm script: a bundle declares
+  `generated: true` when its own fragments derive from another bundle's output, and a full run
+  assembles every authored bundle first, regenerates the collection fragments from the fresh
+  `openapi.yaml`, then assembles the generated three. `readCommittedBundle` also reads an absent
+  output as stale-and-rewrite instead of crashing — a renamed output is the definition of stale,
+  and crashing there turns the one command that would fix the state into the one that cannot
+  run.
+
 ## [2.0.0] - 2026-08-13
 
 The modular release, and the first one cut. Everything below is a single arc told in waves —
@@ -28,14 +208,14 @@ what was true when that wave closed; later waves above it document the fixes.
 
     The shape is **return a verdict, not a rejection**: `checkOrderLines()` answers `no-lines` or
     `product-missing` and knows nothing of 422, 404 or i18n, while `service.ts` maps the verdict to an
-    envelope. Same for `evaluateCheckout()` in cart, `nextDeletionState()` (the soft-delete toggle,
-    taking the clock as an argument), and `readScope()` (returns `all`/`own`; the repository turns it
-    into a Mongo filter). The behaviour of every one of these is unchanged — they were extracted from
-    where they already ran.
+    envelope. Same for `evaluateCheckout()` in cart. The behaviour of both is unchanged — they were
+    extracted from where they already ran.
 
-    The folder is **optional**, and most modules do not have one. See `docs/theory/domain-layer.md`
-    for what earns a place there, and `DDD_EXPLORATION.md` for what it would take to go to full
-    tactical DDD, costed — neither of which is implemented.
+    The folder is **optional**, and most modules do not have one. It also has a **floor**: a rule
+    earns a place only if it has more than one caller or a non-obvious failure mode. A one-line
+    expression with a single caller stays inlined, with its comment. See
+    `docs/theory/domain-layer.md` for both halves of that test, and `DDD_EXPLORATION.md` for what it
+    would take to go to full tactical DDD, costed — neither of which is implemented.
 
 - **The two substrate tiers were renamed: `src/core` → `src/infrastructure`, `src/platform` →
   `src/kernel`.** Aliases follow: `@core/*` → `@infrastructure/*`, `@platform/*` → `@kernel/*`. Nothing about

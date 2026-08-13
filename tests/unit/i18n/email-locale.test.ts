@@ -156,7 +156,7 @@ describe('the email worker renders the copy it was given', () => {
         const { handleEmailJob } = await import('@infrastructure/adapters/email.worker');
 
         await expect(
-            handleEmailJob({ templateName: 'email-registration-confirm.ejs' })
+            handleEmailJob({ templateName: 'account.registration-confirm.ejs' })
         ).resolves.toBe(false);
 
         expect(sendMailMock).not.toHaveBeenCalled();

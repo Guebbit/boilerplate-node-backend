@@ -3,6 +3,15 @@ export interface ISeedProduct {
     title: string;
     description: string;
     price: number;
+    /* Units on the shelf. One record keeps `0` on purpose: the storefront needs an out-of-stock
+     * badge to render and checkout needs a refusal to demonstrate, and a dataset where nothing
+     * is ever scarce can exercise neither. */
+    stock: number;
+    /* Filter facets. Free-text by design — the catalogue has no category table — and non-empty
+     * on every PUBLIC record, so `GET /products/categories` and the storefront's chips have
+     * something to show out of the box. */
+    categories: string[];
+    tags: string[];
     active: boolean;
     imageUrl: string;
     /* ISO 8601, or absent. Present on exactly one product: the role-scoping branches in
@@ -17,6 +26,9 @@ export const seedProducts: ISeedProduct[] = [
         title: 'Sallyno Panino',
         description: 'Piccolo Sallyno panino. Da mangiare di coccole',
         price: 100,
+        stock: 25,
+        categories: ['food'],
+        tags: ['sallyno', 'cute'],
         active: true,
         imageUrl: '/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg'
     },
@@ -25,6 +37,9 @@ export const seedProducts: ISeedProduct[] = [
         title: 'Sallyno Carino',
         description: 'Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.',
         price: 50,
+        stock: 10,
+        categories: ['pets'],
+        tags: ['sallyno', 'illegal'],
         active: true,
         imageUrl: '/images/seed/96346b77daf138a279677cb75c400ee9.jpg',
         deletedAt: '2024-02-26T23:34:44.832Z'
@@ -34,6 +49,9 @@ export const seedProducts: ISeedProduct[] = [
         title: 'Miciona inutile',
         description: 'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire',
         price: 1,
+        stock: 0,
+        categories: ['pets'],
+        tags: ['micini', 'useless'],
         active: true,
         imageUrl: '/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg'
     },
@@ -42,6 +60,9 @@ export const seedProducts: ISeedProduct[] = [
         title: 'Micino pufettino',
         description: 'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.',
         price: 77,
+        stock: 40,
+        categories: ['pets'],
+        tags: ['micini', 'cute', 'illegal'],
         active: true,
         imageUrl: '/images/seed/f12ba2e44fe347010397f1dcba399808.jpg'
     },
@@ -50,6 +71,9 @@ export const seedProducts: ISeedProduct[] = [
         title: 'Bundle micini',
         description: 'Produttori di rumori molesti a tutte le ore. Inactive product.',
         price: 40,
+        stock: 15,
+        categories: ['pets', 'bundles'],
+        tags: ['micini', 'noisy'],
         active: false,
         imageUrl: '/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg'
     }

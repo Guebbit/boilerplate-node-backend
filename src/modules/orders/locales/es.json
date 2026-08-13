@@ -5,6 +5,10 @@
         "soft-deleted": "El pedido se ha eliminado lógicamente (oculto para el cliente).",
         "creation-success": "Pedido creado correctamente.",
         "creation-failure": "No se ha podido crear el pedido.",
+        "cancel": {
+            "success": "Pedido cancelado.",
+            "not-cancellable": "Este pedido ya no se puede cancelar."
+        },
         "invoice-missing": "No se ha encontrado ningún archivo de factura",
         "invoice": {
             "meta-title": "Factura — pedido {{order}}",
@@ -16,6 +20,7 @@
             "meta-title": "Pedido confirmado",
             "greeting": "¡Hola, {{name}}!",
             "body": "Tu pedido se ha confirmado."
-        }
+        },
+        "insufficient-stock": "Uno o más productos de este pedido superan el stock disponible."
     }
 }

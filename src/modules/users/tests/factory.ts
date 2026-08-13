@@ -45,7 +45,7 @@ export const PLAIN_PASSWORD = 'Password1!';
  * is constructible.
  */
 type CreateUserInput = Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'tokens'> &
-    Partial<Pick<IUser, 'imageUrl' | 'deletedAt' | 'active'>>;
+    Partial<Pick<IUser, 'imageUrl' | 'deletedAt' | 'active' | 'verified'>>;
 
 /**
  * Build a valid user payload.

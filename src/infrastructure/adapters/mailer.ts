@@ -38,17 +38,23 @@ import { isQueueEnabled, publishToQueue, EMAIL_QUEUE } from '@infrastructure/ada
 /**
  * Absolute path to the EJS email templates.
  *
- * Defaults to `views/templates-emails` under the process working directory, which is the project
- * root for every entry point (npm scripts, the compose command, tsx). There is no compile step —
- * `build` runs `ts-check` and lint, so the app always executes from source and `views/` never
- * moves. `NODE_EMAIL_TEMPLATES_DIR` overrides the whole path when it does.
+ * Defaults to `shared/views/templates-emails` under the process working directory, which is the
+ * project root for every entry point (npm scripts, the compose command, tsx). There is no compile
+ * step — `build` runs `ts-check` and lint, so the app always executes from source and
+ * `shared/views/` never moves. `NODE_EMAIL_TEMPLATES_DIR` overrides the whole path when it does.
+ *
+ * `shared/` rather than a module, even though every template but the layouts belongs to one. The
+ * name a caller passes travels through RabbitMQ to a consumer that may be another process: a bare
+ * filename resolved against the consumer's own directory stays portable, where a path into
+ * `src/modules` would bind the payload to one checkout's layout. The owner lives in the filename
+ * prefix instead — see {@link IEmailContent.template}.
  *
  * `tests/unit/infrastructure/adapters/mailer-templates.test.ts` asserts every template resolves under this
  * directory, so the path cannot silently rot.
  */
 export const EMAIL_TEMPLATES_DIR = process.env.NODE_EMAIL_TEMPLATES_DIR
     ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
-    : path.resolve(process.cwd(), 'views/templates-emails');
+    : path.resolve(process.cwd(), 'shared/views/templates-emails');
 
 /** The memoised SMTP transport. See {@link getTransporter}. */
 let transport: Transporter | undefined;
@@ -130,7 +136,7 @@ const getTransporter = (): Transporter => {
  *
  * @param request - nodemailer envelope (to, subject, attachments, ...). `from` and `html`
  *                  are filled in here, but anything passed in overrides them.
- * @param templateName - file name inside `src/views/templates-emails`
+ * @param templateName - file name inside {@link EMAIL_TEMPLATES_DIR}
  * @param data - variables interpolated into the EJS template
  */
 export const nodemailer = (
@@ -218,7 +224,12 @@ export interface IEmailJob extends Omit<IEmailJobPayload, 'request'> {
  * controllers happened to send that email.
  */
 export interface IEmailContent {
-    /** Template file name inside {@link EMAIL_TEMPLATES_DIR}. */
+    /**
+     * Template file name inside {@link EMAIL_TEMPLATES_DIR}, prefixed with the module that owns
+     * it — `orders.order-confirm.ejs`. The templates sit in one flat directory so this stays a
+     * bare name the queue can carry, and the prefix is what makes an orphan visible after its
+     * module is deleted.
+     */
     template: string;
     /** Subject line, already translated. */
     subject: string;

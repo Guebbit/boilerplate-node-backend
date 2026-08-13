@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 /*
  * GENERATED — do not edit manually.
- * Source: asyncapi.yaml  |  Regenerate: npm run genasyncapi
+ * Source: asyncapi.yaml  |  Regenerate: npm run gen:asyncapi
  */
 
 export interface IObservabilityMetricsPayload {

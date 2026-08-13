@@ -116,7 +116,10 @@ describe('user credential exposure', () => {
                 // it in the profile and writes it back, and it is in the `User` contract.
                 'locale',
                 'updatedAt',
-                'username'
+                'username',
+                // Whether the address is confirmed — in the `User` contract, and the client's
+                // cue for the "verify your email" banner.
+                'verified'
             ]);
         });
 

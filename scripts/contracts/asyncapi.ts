@@ -9,10 +9,10 @@
  * `/observability/events` is the one that decides what it pushes down them. The `worker.*` queues
  * belong to no module: the email and PDF workers are substrate (`src/app/workers.ts` over
  * `src/infrastructure/adapters/queue.ts`), enqueued by whichever domain happens to need a mail sent, so they
- * are filed under `workers` in `contracts/shared/` for the same reason `GET /` is filed under
+ * are filed under `workers` in `shared/contracts/` for the same reason `GET /` is filed under
  * `system` in the REST contract.
  *
- * The output feeds `npm run genasyncapi`, whose generated types are themselves a guarded shared
+ * The output feeds `npm run gen:asyncapi`, whose generated types are themselves a guarded shared
  * file — so a fragment edited without re-bundling forks the types too, one step later.
  */
 
@@ -33,12 +33,12 @@ export const asyncSectionFragment = (
     kind: TAsyncFragmentKind
 ): string =>
     section === 'workers'
-        ? path.join(REPO_ROOT, 'contracts', 'shared', `asyncapi.workers.${kind}.yaml`)
+        ? path.join(REPO_ROOT, 'shared', 'contracts', `asyncapi.workers.${kind}.yaml`)
         : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi', `${kind}.yaml`);
 
 /** A shared fragment of the document's scaffolding, by the key it opens. */
 const sharedFragment = (name: string): string =>
-    path.join(REPO_ROOT, 'contracts', 'shared', `asyncapi.${name}.yaml`);
+    path.join(REPO_ROOT, 'shared', 'contracts', `asyncapi.${name}.yaml`);
 
 /** Preamble: version, id, info, content type, tags, servers. */
 export const ASYNC_HEADER_FRAGMENT = sharedFragment('header');

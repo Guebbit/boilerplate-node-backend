@@ -19,6 +19,7 @@ import observability from './modules/observability/module';
 import orders from './modules/orders/module';
 import products from './modules/products/module';
 import users from './modules/users/module';
+import wishlist from './modules/wishlist/module';
 
 export const enabledModules: IAppModule[] = [
     account,
@@ -29,5 +30,6 @@ export const enabledModules: IAppModule[] = [
     observability,
     orders,
     products,
-    users
+    users,
+    wishlist
 ];

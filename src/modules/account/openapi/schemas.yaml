@@ -128,3 +128,208 @@
                     type: string
                     description: One-time account deletion token (NOT a JWT).
 
+        # Self-service profile update. Deliberately narrower than `UpdateUserRequest`: no
+        # `admin`, no `active`, no `password` — role and account state are the admin
+        # endpoints' to change, and the password has its own flow (`POST /account/password`)
+        # because it must prove knowledge of the current one.
+        UpdateAccountRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+
+        UpdateAccountRequestMultipart:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        ChangePasswordRequest:
+            type: object
+            additionalProperties: false
+            required: [currentPassword, password, passwordConfirm]
+            properties:
+                currentPassword:
+                    $ref: '#/components/schemas/Password'
+                password:
+                    $ref: '#/components/schemas/Password'
+                passwordConfirm:
+                    $ref: '#/components/schemas/Password'
+
+        VerifyEmailConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: One-time email verification token (NOT a JWT).
+
+        # One live refresh token, presented as a session. The token VALUE is never exposed —
+        # a live refresh token is as good as a password — so the subdocument id is the handle
+        # revocation takes.
+        Session:
+            type: object
+            additionalProperties: false
+            required: [id, current]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                expiration:
+                    type: string
+                    format: date-time
+                    description: Absent on a token issued without an expiry tier.
+                current:
+                    type: boolean
+                    description: >-
+                        Whether this session is the one making the request, matched through the
+                        refresh cookie. Always `false` for a caller authenticating by bearer
+                        token alone — an access token does not identify a session.
+
+        SessionsResponse:
+            type: object
+            additionalProperties: false
+            required: [sessions]
+            properties:
+                sessions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Session'
+
+        SessionsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/SessionsResponse'
+
+        # A saved address — `OrderAddress` (the shared snapshot an order embeds) plus the two
+        # facts that belong to the BOOK entry rather than to any shipment: its handle and
+        # whether it is the default. Exactly one entry is default whenever the book is
+        # non-empty; the API maintains that, not the client.
+        Address:
+            type: object
+            additionalProperties: false
+            required: [id, fullName, street, city, zip, country, default]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                label:
+                    type: string
+                    description: The caller's own name for the entry — "home", "office".
+                fullName:
+                    type: string
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    type: string
+                phone:
+                    type: string
+                default:
+                    type: boolean
+
+        AddressInput:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                label:
+                    type: string
+                fullName:
+                    type: string
+                    minLength: 1
+                street:
+                    type: string
+                    minLength: 1
+                city:
+                    type: string
+                    minLength: 1
+                zip:
+                    type: string
+                    minLength: 1
+                country:
+                    type: string
+                    minLength: 1
+                phone:
+                    type: string
+                # On create: `true` claims the default slot, absent means "first entry becomes
+                # default, later ones do not". On update: `true` claims the slot, `false` and
+                # absent both leave the assignment alone — demoting the default without naming
+                # a successor would leave the book with none.
+                default:
+                    type: boolean
+
+        UpdateAddressRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                label:
+                    type: string
+                fullName:
+                    type: string
+                    minLength: 1
+                street:
+                    type: string
+                    minLength: 1
+                city:
+                    type: string
+                    minLength: 1
+                zip:
+                    type: string
+                    minLength: 1
+                country:
+                    type: string
+                    minLength: 1
+                phone:
+                    type: string
+                default:
+                    type: boolean
+
+        AddressesResponse:
+            type: object
+            additionalProperties: false
+            required: [addresses]
+            properties:
+                addresses:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Address'
+
+        AddressesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/AddressesResponse'
+

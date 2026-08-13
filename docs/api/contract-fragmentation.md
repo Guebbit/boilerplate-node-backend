@@ -6,14 +6,16 @@ repositories and is easy to get wrong from either side.
 
 ## The one-line version
 
-> This repository **owns** the seven shared, domain-shaped documents. The frontend **holds
-> byte-identical copies** and never edits them.
+> This repository **owns** the shared, domain-shaped documents. The frontend **holds
+> byte-identical copies** of the four it consumes and never edits them.
 
-## The seven
+## The seven bundles
 
-`openapi.yaml` is not a special case. Seven files exist twice — once here, once in
-`boilerplate-vue-frontend` — and list every domain the app has. All seven are assembled here from
-per-module fragments and copied there whole:
+`openapi.yaml` is not a special case. Seven documents are assembled here from per-module
+fragments; the first four also exist in `boilerplate-vue-frontend` as byte-identical copies,
+because the frontend's toolchain reads them. The three client collections stay in this repo
+only — they are derived from `openapi.yaml`, so a frontend copy could never disagree without
+the spec disagreeing first, and nothing there reads them:
 
 | Bundle            | Committed at                                | Fragments live in                                              |
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
@@ -21,11 +23,11 @@ per-module fragments and copied there whole:
 | `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi/{channels,messages,schemas}.yaml`  |
 | `analytics-events`| `src/infrastructure/observability/analytics-events.ts`| `src/modules/<name>/analytics.fragment.ts`                      |
 | `seed-identities` | `db/seeds/seed-identities.ts`               | `src/modules/<name>/seed-identities.fragment.ts`                |
-| `bruno`           | `.dev/… - Bruno.yml`                        | `src/modules/<name>/dev/bruno.yml` — **generated**              |
-| `insomnia`        | `.dev/… - Insomnia.json`                    | `src/modules/<name>/dev/insomnia.yml` — **generated**           |
-| `mockoon`         | `.dev/… - Mockoon.json`                     | `src/modules/<name>/dev/mockoon.{routes,tree}.json` — **generated** |
+| `bruno`           | `contract.bruno.yml`                        | `src/modules/<name>/dev/bruno.yml` — **generated**              |
+| `insomnia`        | `contract.insomnia.json`                    | `src/modules/<name>/dev/insomnia.yml` — **generated**           |
+| `mockoon`         | `contract.mockoon.json`                     | `src/modules/<name>/dev/mockoon.{routes,tree}.json` — **generated** |
 
-Whatever more than one domain reads stays in `contracts/shared/`, and each bundle's section order,
+Whatever more than one domain reads stays in `shared/contracts/`, and each bundle's section order,
 layout and shared parts are declared in one file under `scripts/contracts/`.
 
 The first four are authored fragment by fragment. The three client collections are one step longer:
@@ -33,7 +35,7 @@ their fragments are themselves generated from `openapi.yaml`, because a hand-wri
 the contract is a copy, and copies rot — see [The three client collections](#the-three-client-collections).
 
 ```bash
-npm run contracts:bundle              # regenerate the collections, then rebuild all seven
+npm run contracts:bundle              # bundle the specs, regenerate the collections, rebuild all seven
 npm run contracts:collections         # only the generated collection fragments
 npm run check:contracts-bundle        # fail if a bundle is stale or a collection is out of date
 ```
@@ -44,7 +46,7 @@ every run, so a fragment edited without re-bundling fails the build rather than 
 The three shared files that are **not** bundled are the three that name no domain: `spectral.yaml`
 is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are tooling.
 `src/types/asyncapi.ts` is absent for the opposite reason — it is generated from a bundle by
-`npm run genasyncapi`, so it follows one rather than being one.
+`npm run gen:asyncapi`, so it follows one rather than being one.
 
 ## The flow
 
@@ -52,7 +54,7 @@ is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are 
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TD
     subgraph BE["boilerplate-node-api-mongodb-mongoose  (owns the contract)"]
-        H["contracts/shared/header.yaml<br/><i>preamble · tags · components</i>"] --> B[bundle]
+        H["shared/contracts/header.yaml<br/><i>preamble · tags · components</i>"] --> B[bundle]
         F1["modules/products/openapi/paths.yaml"] --> B
         F2["modules/orders/openapi/paths.yaml"] --> B
         F3["modules/…/openapi/paths.yaml"] --> B
@@ -105,15 +107,16 @@ result, copy that.
 ## Which fragment owns which operation
 
 The rule is the one the module registry already uses: **a module owns the paths under its
-`basePath`.** As of today the contract's 56 operations map onto the enabled modules like this:
+`basePath`.** As of today the contract's 74 operations map onto the enabled modules like this:
 
 | Module          | `basePath`       | OpenAPI tag(s)        | Ops |
 | --------------- | ---------------- | --------------------- | --- |
-| `orders`        | `/orders`        | `Orders`              | 11  |
-| `account`       | `/account`       | `Auth` + `Account`    | 10  |
+| `account`       | `/account`       | `Auth` + `Account`    | 21  |
+| `orders`        | `/orders`        | `Orders`              | 12  |
 | `users`         | `/users`         | `Users`               | 9   |
-| `products`      | `/products`      | `Products`            | 9   |
-| `cart`          | `/cart`          | `Cart`                | 6   |
+| `products`      | `/products`      | `Products`            | 10  |
+| `cart`          | `/cart`          | `Cart`                | 7   |
+| `wishlist`      | `/wishlist`      | `Wishlist`            | 4   |
 | `observability` | `/observability` | `Observability`       | 5   |
 | `feedback`      | `/feedback`      | `Feedback`            | 3   |
 | `locales`       | `/locales`       | `System` (2 of 3)     | 2   |
@@ -186,19 +189,24 @@ contract:
 that owns it.
 
 ```
-contracts/shared/header.yaml          preamble · tags · securitySchemes · parameters · responses
-contracts/shared/schemas.yaml         the 20 types more than one module references
-contracts/shared/system.schemas.yaml  HealthPing — the shell answering for itself
-contracts/shared/paths.header.yaml    the `paths:` key
-contracts/shared/system.paths.yaml    GET /
+shared/contracts/header.yaml          preamble · tags · securitySchemes · parameters · responses
+shared/contracts/schemas.yaml         the 20 types more than one module references
+shared/contracts/system.schemas.yaml  HealthPing — the shell answering for itself
+shared/contracts/paths.header.yaml    the `paths:` key
+shared/contracts/system.paths.yaml    GET /
 src/modules/<name>/openapi/schemas.yaml
 src/modules/<name>/openapi/paths.yaml
 ```
 
 ```bash
-npm run contracts:bundle -- openapi   # rebuild openapi.yaml from the fragments
+npm run contracts:bundle              # rebuild every bundle from the fragments
 npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
+
+To rebuild one document while iterating, call the script directly —
+`npx tsx scripts/bundle-contracts.ts openapi`. Passing the name through
+`npm run contracts:bundle --` does not narrow the run; see [Regenerating After a
+Change](./regenerating.md#regenerate-one-bundle-only).
 
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
@@ -224,7 +232,7 @@ to be last, which is what keeps deleting a module a one-line change.
 ### Which schemas stayed shared, and why
 
 73 of the 93 schemas reference nothing outside one module's paths, computed as a transitive closure
-over `$ref` rather than guessed from names. The other 20 stayed in `contracts/shared/schemas.yaml`:
+over `$ref` rather than guessed from names. The other 20 stayed in `shared/contracts/schemas.yaml`:
 
 | Kind | Examples | Why shared |
 | ---- | -------- | ---------- |
@@ -253,7 +261,7 @@ point of doing this textually.
 What is already true and does not change:
 
 - the module registry, the `basePath` per module, and the one-line enable/disable in `src/modules.ts`
-- `npm run lint:openapi`, `npm run genapi`, and the `specIdentity` check
+- `npm run lint:openapi`, `npm run gen:api`, and the `specIdentity` check
 - the frontend holding a byte-identical copy
 
 ## The other six, and what each one taught
@@ -265,7 +273,7 @@ A domain appears three times in this document (`channels:`, `components.messages
 fragments of their own. `observability` owns the SSE channels because the module serving
 `/observability/events` decides what it pushes down them. The `worker.*` queues belong to no module
 — the email and PDF workers are substrate, enqueued by whichever domain needs a mail sent — so they
-sit under `workers` in `contracts/shared/`, exactly as `GET /` sits under `system`.
+sit under `workers` in `shared/contracts/`, exactly as `GET /` sits under `system`.
 
 ### `analytics-events.ts` — a name lives with the code that emits it
 

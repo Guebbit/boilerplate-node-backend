@@ -16,6 +16,9 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factory';
+import { createOrder } from '@modules/orders/tests/factory';
+import { createUser } from '@modules/users/tests/factory';
+import type { IOrderDocumentItem } from '@modules/orders';
 
 setupTestDb();
 
@@ -245,8 +248,138 @@ describe('POST /cart/checkout', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('matches the error contract when a line exceeds the shelf', async () => {
+        const { bearer } = await authenticateAs('user');
+        const scarce = await createProduct({ stock: 1 });
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(scarce._id), quantity: 2 });
+
+        const response = await api().post('/cart/checkout').set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('CART_INSUFFICIENT_STOCK');
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('matches the error contract when unauthenticated', async () => {
         const response = await api().post('/cart/checkout');
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /cart/reorder/{orderId}', () => {
+    it("refills the cart from the caller's own order, quantities included", async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const keyboard = await createProduct({ title: 'Keyboard' });
+        const mouse = await createProduct({ title: 'Mouse' });
+        const order = await createOrder(user, [
+            { product: keyboard, quantity: 2 } as unknown as IOrderDocumentItem,
+            { product: mouse, quantity: 1 } as unknown as IOrderDocumentItem
+        ]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        // Ids, not counts: the cart must hold exactly the order's products.
+        const items: { productId: string; quantity: number }[] = response.body.data.items;
+        expect(items.map(({ productId }) => productId).toSorted()).toEqual(
+            [String(keyboard._id), String(mouse._id)].toSorted()
+        );
+        expect(response.body.data.summary.totalQuantity).toBe(3);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('adds on top of what the cart already holds', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const seeded = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 2 });
+        expect(seeded.status).toBe(200);
+
+        // The same product arrives again via a reorder of an old order holding 3 of it.
+        const order = await createOrder(user, [
+            { product, quantity: 3 } as unknown as IOrderDocumentItem
+        ]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.summary.totalQuantity).toBe(5);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('skips products that have left the public catalogue and lands the rest', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const alive = await createProduct({ title: 'Alive' });
+        const retired = await createProduct({ title: 'Retired', active: false });
+        const order = await createOrder(user, [
+            { product: alive, quantity: 1 } as unknown as IOrderDocumentItem,
+            { product: retired, quantity: 4 } as unknown as IOrderDocumentItem
+        ]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        const items: { productId: string }[] = response.body.data.items;
+        expect(items.map(({ productId }) => productId)).toEqual([String(alive._id)]);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 409 when nothing on the order is still available', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const retired = await createProduct({ title: 'Retired', active: false });
+        const order = await createOrder(user, [
+            { product: retired, quantity: 1 } as unknown as IOrderDocumentItem
+        ]);
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('REORDER_UNAVAILABLE');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it("answers 404 for another user's order — no existence leak", async () => {
+        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const product = await createProduct();
+        const order = await createOrder(owner, [
+            { product, quantity: 1 } as unknown as IOrderDocumentItem
+        ]);
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .post(`/cart/reorder/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a malformed order id', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().post('/cart/reorder/not-an-id').set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract when unauthenticated', async () => {
+        const response = await api().post(`/cart/reorder/${MISSING_ID}`);
 
         expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();

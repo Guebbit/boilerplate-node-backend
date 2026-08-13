@@ -19,9 +19,12 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
+import type { Id } from './id';
 
 export interface CheckoutRequest {
   email?: Email;
   /** Optional order notes */
   notes?: string;
+  /** Which of the caller's saved addresses to ship to. Omitted, the default address is used when one exists; an id that matches none of the caller's addresses refuses the checkout with 404 rather than shipping nowhere. */
+  addressId?: Id;
 }

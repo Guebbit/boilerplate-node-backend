@@ -5,6 +5,7 @@ import { writeOrders } from './controllers/write-orders';
 import { deleteOrders } from './controllers/delete-orders';
 import { getOrderItem } from './controllers/get-order-item';
 import { getOrderInvoice } from './controllers/get-order-invoice';
+import { postCancelOrder } from './controllers/post-cancel-order';
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
@@ -25,13 +26,17 @@ router.get(
 );
 
 // POST /orders — admin creates order directly
-router.post('/', isAdmin, invalidateCache(['orders']), writeOrders);
+router.post('/', isAdmin, invalidateCache(['orders', 'products']), writeOrders);
 
 // PUT /orders — admin, id in body (update)
 router.put('/', isAdmin, invalidateCache(['orders']), writeOrders);
 
 // DELETE /orders — admin, id in body
 router.delete('/', isAdmin, invalidateCache(['orders']), deleteOrders);
+
+// POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
+// the service's conditional write carries the caller's scope)
+router.post('/:id/cancel', invalidateCache(['orders', 'products']), postCancelOrder);
 
 // GET /orders/:id/invoice — must come before /:id
 router.get(

@@ -6,6 +6,9 @@ hero:
     tagline: Single-package REST API boilerplate in the Node backend family.
     actions:
         - theme: brand
+          text: Get Started
+          link: /getting-started
+        - theme: alt
           text: Read Theory
           link: /theory/
         - theme: alt
@@ -118,6 +121,8 @@ flowchart LR
 
 ## Good starting points
 
+- Never run this repo before? Start at [Getting Started](./getting-started.md) — four commands to a browsable API.
+- Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./api/regenerating.md).
 - Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
 - Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.
 - Want the `package.json` map? Read [Package Dependencies](./tools/package-dependencies.md) and [Package Scripts](./tools/package-scripts.md).

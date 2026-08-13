@@ -44,6 +44,7 @@
                           "id": "65dc8a99604c307b702b5ccc",
                           "title": "Sallyno Panino",
                           "price": 100,
+                          "stock": 0,
                           "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                           "active": true,
                           "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -133,6 +134,7 @@
               {
                 "title": "Sallyno Panino",
                 "price": 100,
+                "stock": 100,
                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 "active": true,
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -163,6 +165,7 @@
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
+                    "stock": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -190,6 +193,7 @@
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
+                      "stock": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -215,6 +219,7 @@
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
+                    "stock": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -257,6 +262,7 @@
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
+                    "stock": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -299,6 +305,7 @@
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
+                    "stock": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -341,6 +348,7 @@
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
+                    "stock": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -389,6 +397,7 @@
                 "title": "Sallyno Panino",
                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 "price": 100,
+                "stock": 0,
                 "active": true,
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                 "categories": [
@@ -420,6 +429,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -446,6 +456,7 @@
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
+                      "stock": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -473,6 +484,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -516,6 +528,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -559,6 +572,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -602,6 +616,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -645,6 +660,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -892,9 +908,83 @@
                     ]
                   }
       - info:
-          name: Product details
+          name: Catalogue facets
           type: http
           seq: 5
+          tags:
+            - Products
+        http:
+          method: GET
+          url: "{{baseUrl}}/products/categories"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: Categories and tags with counts
+            request:
+              url: "{{baseUrl}}/products/categories"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "Categories and tags with counts",
+                    "data": {
+                      "categories": [
+                        {
+                          "name": "string",
+                          "count": 1
+                        }
+                      ],
+                      "tags": [
+                        {
+                          "name": "string",
+                          "count": 1
+                        }
+                      ]
+                    }
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/products/categories"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Product details
+          type: http
+          seq: 6
           tags:
             - Products
         http:
@@ -928,6 +1018,7 @@
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
+                      "stock": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -997,7 +1088,7 @@
       - info:
           name: Edit product
           type: http
-          seq: 6
+          seq: 7
           tags:
             - Products
         http:
@@ -1010,6 +1101,7 @@
                 "title": "Sallyno Panino",
                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 "price": 100,
+                "stock": 0,
                 "active": true,
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                 "categories": [
@@ -1040,6 +1132,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -1066,6 +1159,7 @@
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
+                      "stock": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -1092,6 +1186,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -1134,6 +1229,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -1176,6 +1272,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -1218,6 +1315,7 @@
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
+                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -1251,7 +1349,7 @@
       - info:
           name: Delete product
           type: http
-          seq: 7
+          seq: 8
           tags:
             - Products
         http:
@@ -1428,7 +1526,7 @@
       - info:
           name: Permanently delete product
           type: http
-          seq: 8
+          seq: 9
           tags:
             - Products
         http:
@@ -1569,7 +1667,7 @@
       - info:
           name: Search products (DTO-friendly)
           type: http
-          seq: 9
+          seq: 10
           tags:
             - Products
         http:
@@ -1631,6 +1729,7 @@
                           "id": "65dc8a99604c307b702b5ccc",
                           "title": "Sallyno Panino",
                           "price": 100,
+                          "stock": 0,
                           "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                           "active": true,
                           "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -1734,7 +1833,7 @@
       - info:
           name: "Probe: 422 on a body that violates the schema"
           type: http
-          seq: 10
+          seq: 11
           tags:
             - Probe
         http:
@@ -1759,7 +1858,7 @@
       - info:
           name: "Probe: the same product in Italian"
           type: http
-          seq: 11
+          seq: 12
           tags:
             - Probe
         http:
@@ -1776,7 +1875,7 @@
       - info:
           name: "Probe: the optional filters, all at once"
           type: http
-          seq: 12
+          seq: 13
           tags:
             - Probe
         http:
@@ -1790,7 +1889,7 @@
       - info:
           name: "Probe: the soft-deleted product, anonymously"
           type: http
-          seq: 13
+          seq: 14
           tags:
             - Probe
         http:
@@ -1804,7 +1903,7 @@
       - info:
           name: "Probe: the inactive product, anonymously"
           type: http
-          seq: 14
+          seq: 15
           tags:
             - Probe
         http:

@@ -66,8 +66,8 @@ export const siblingRole = (role: TRepoRole): TRepoRole =>
  * by requirement — either repo may legitimately change its own icon or formatting width, and a
  * gate that fails on that trains people to ignore it.
  *
- * SEVEN OF THESE ARE AUTHORED IN THE BACKEND and copied here — the two specs, the seed identities,
- * the analytics names and the three client collections. Every one of them lists every domain, so
+ * FOUR OF THESE ARE AUTHORED IN THE BACKEND and copied here — the two specs, the seed identities
+ * and the analytics names. Every one of them lists every domain, so
  * every one is assembled there from per-module fragments (`npm run contracts:bundle`). For those,
  * "decide which side is right" has one answer: the backend's, because the frontend's copy is an
  * output. Editing the copy is the failure this list is worst at describing and best at catching —
@@ -96,22 +96,15 @@ export const SHARED_FILES: readonly ISharedFile[] = [
     { backend: 'db/seeds/seed-identities.ts', frontend: 'tests/support/mocks/seed-identities.ts' },
 
     /*
-     * The API client collections. They describe the same endpoints the spec does, by hand, so
-     * they fork the moment an endpoint is added on one side only — and being developer tooling,
-     * nothing else ever reads them closely enough to notice.
+     * The three API client collections (`contract.<tool>.*` at the backend's root) are deliberately NOT here.
+     * They earned a place in this list when they were written by hand — a hand-maintained
+     * restatement of the contract forks the moment an endpoint lands on one side only. They are
+     * generated from `openapi.yaml` now, pinned to a fresh generation by the backend's
+     * contract-bundles test, and `openapi.yaml` itself is compared above: identical spec plus
+     * deterministic generator means a frontend copy could never disagree without the spec
+     * disagreeing first. So the frontend holds no copy at all, and the collections live only
+     * where they are produced.
      */
-    {
-        backend: '.dev/Ecommerce Demo API - Bruno.yml',
-        frontend: '.dev/Ecommerce Demo API - Bruno.yml'
-    },
-    {
-        backend: '.dev/Ecommerce Demo API - Insomnia.json',
-        frontend: '.dev/Ecommerce Demo API - Insomnia.json'
-    },
-    {
-        backend: '.dev/Ecommerce Demo API - Mockoon.json',
-        frontend: '.dev/Ecommerce Demo API - Mockoon.json'
-    },
 
     /*
      * The analytics event names both sides emit. The backend sends them to PostHog and this app
@@ -246,10 +239,10 @@ export const formatSharedFileProblems = (
     return (
         `Shared contract mismatch against ${siblingRoot}:\n${lines.join('\n')}\n\n` +
         `  Both repos must carry byte-identical copies of ${SHARED_FILES.length} files.\n` +
-        `  Seven of them are AUTHORED IN THE BACKEND, assembled from per-module fragments:\n` +
+        `  Four of them are AUTHORED IN THE BACKEND, assembled from per-module fragments:\n` +
         `    cd <backend> && npm run contracts:bundle   # then copy each result to the frontend\n` +
         `  The rest are hand-maintained on both sides: decide which copy is right and copy it\n` +
         `  over the other. Either way, regenerate in BOTH repos afterwards:\n` +
-        `    npm run genapi && npm run genasyncapi`
+        `    npm run gen:api && npm run gen:asyncapi`
     );
 };

@@ -22,6 +22,10 @@ export const userFixtures = seedUsers.map((user) => ({
     password: user.password,
     imageUrl: user.imageUrl,
     admin: user.admin,
+    /* Not part of the cross-repo identity: whether a demo account has confirmed its email is
+     * this backend's own column, so it is decided here, not in `@seed-identities`. `true`
+     * because a seed user exists to be logged into, not to demonstrate the nag banner. */
+    verified: true,
     tokens: []
 }));
 

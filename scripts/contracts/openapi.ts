@@ -4,12 +4,12 @@
  * The rule the module registry already uses applies here too: a module owns the paths under its
  * `basePath`, and the schemas only its paths reference. Everything two or more modules reference —
  * the error envelope, the pagination parameters, the scalars, the entities a cart line embeds —
- * stays in `contracts/shared/schemas.yaml`. Duplicating one of those into two module fragments
+ * stays in `shared/contracts/schemas.yaml`. Duplicating one of those into two module fragments
  * would put two definitions in the bundle that drift apart silently, which is the failure mode this
  * split has to avoid.
  *
  * `GET /` — the health probe — belongs to no module: it is the application shell answering for
- * itself, so it is filed under the `system` section in `contracts/shared/`.
+ * itself, so it is filed under the `system` section in `shared/contracts/`.
  *
  * THE ORDER IS SHARED, THE LAYOUT IS NOT. The paired frontend holds the bundled document and does
  * not fragment it, but if it ever did, its modules are not these: a path this repo files under
@@ -34,6 +34,7 @@ export const SECTION_ORDER = [
     'feedback',
     'products',
     'cart',
+    'wishlist',
     'orders'
 ] as const;
 
@@ -42,11 +43,11 @@ export type TSectionName = (typeof SECTION_ORDER)[number];
 /** Where a section's fragment of `kind` lives in THIS repo. */
 export const sectionFragment = (section: TSectionName, kind: 'paths' | 'schemas'): string =>
     section === 'system'
-        ? path.join(REPO_ROOT, 'contracts', 'shared', `system.${kind}.yaml`)
+        ? path.join(REPO_ROOT, 'shared', 'contracts', `system.${kind}.yaml`)
         : path.join(REPO_ROOT, 'src', 'modules', section, 'openapi', `${kind}.yaml`);
 
 /** Preamble, tags, security schemes, parameters, responses — down to the `schemas:` key. */
-export const HEADER_FRAGMENT = path.join(REPO_ROOT, 'contracts', 'shared', 'header.yaml');
+export const HEADER_FRAGMENT = path.join(REPO_ROOT, 'shared', 'contracts', 'header.yaml');
 
 /**
  * The scalars, envelopes and entities that MORE THAN ONE module references.
@@ -54,10 +55,10 @@ export const HEADER_FRAGMENT = path.join(REPO_ROOT, 'contracts', 'shared', 'head
  * `Product` is here because cart lines and order items both embed it; `Order` because a checkout
  * returns one; `User` because `account` authenticates the record `users` administers.
  */
-export const SHARED_SCHEMAS_FRAGMENT = path.join(REPO_ROOT, 'contracts', 'shared', 'schemas.yaml');
+export const SHARED_SCHEMAS_FRAGMENT = path.join(REPO_ROOT, 'shared', 'contracts', 'schemas.yaml');
 
 /** The lone `paths:` key, between the components and the path fragments. */
-export const PATHS_KEY_FRAGMENT = path.join(REPO_ROOT, 'contracts', 'shared', 'paths.header.yaml');
+export const PATHS_KEY_FRAGMENT = path.join(REPO_ROOT, 'shared', 'contracts', 'paths.header.yaml');
 
 export const openapiBundle: IContractBundle = {
     name: 'openapi',

@@ -134,7 +134,7 @@ Two config files ship with the repo — one per container runtime:
 | [`/.docker/observability/promtail.config.yaml`](../../.docker/observability/promtail.config.yaml)               | Docker (`json-file` driver)          | Docker JSON envelope |
 | [`/.docker/observability/promtail.podman.config.yaml`](../../.docker/observability/promtail.podman.config.yaml) | Podman (`k8s-file` driver, rootless) | CRI format           |
 
-The `docker-compose.podman.yml` override selects `promtail.podman.config.yaml` and mounts the correct host log path automatically when running `npm run podman:*` scripts.
+The `docker-compose.podman.yml` override selects `promtail.podman.config.yaml` and mounts the correct host log path automatically when `CONTAINER_ENGINE` resolves to podman — see [Docker & Podman](./docker-and-podman.md).
 
 | Config section                     | What it does                          | Why local value                                     | Common tweak                     | Dev vs prod                                      |
 | ---------------------------------- | ------------------------------------- | --------------------------------------------------- | -------------------------------- | ------------------------------------------------ |

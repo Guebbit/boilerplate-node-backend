@@ -15,6 +15,34 @@
                             schema:
                                 $ref: '#/components/schemas/UserEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
+        put:
+            tags: [Account]
+            summary: Update own profile
+            description: Updates the authenticated user's own profile — email, username, locale, image. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email resets `verified` and sends a fresh verification email to the new address.
+            operationId: updateAccount
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAccountRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAccountRequestMultipart'
+            responses:
+                '200':
+                    description: Updated profile
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Changing the email to an address another account already holds.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
         delete:
             tags: [Account]
             summary: Request account deletion
@@ -25,6 +53,215 @@
             responses:
                 '200': { $ref: '#/components/responses/Success' }
                 '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/password:
+        post:
+            tags: [Auth]
+            summary: Change password
+            description: Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Other sessions stay live — revoke them with `POST /account/logout-all` or per session via `DELETE /account/sessions/{sessionId}`.
+            operationId: changePassword
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ChangePasswordRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # A wrong current password is a 422 with a translated message, NOT a 401: a 401
+                # here would read as "your token expired" to every client interceptor and log
+                # the user out of a session that is perfectly valid.
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/logout:
+        post:
+            tags: [Auth]
+            summary: Logout this session
+            description: Logs out the CURRENT session only — revokes the refresh token carried by the `jwt` cookie and clears the authentication cookies. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
+            operationId: logout
+            security: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/sessions:
+        get:
+            tags: [Account]
+            summary: List active sessions
+            description: Lists the authenticated user's live refresh tokens as sessions — issue-agnostic handles with an expiry and a `current` marker, never the token values themselves. The one carried by the caller's own refresh cookie is flagged `current`.
+            operationId: getSessions
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Active sessions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionsEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/sessions/{sessionId}:
+        delete:
+            tags: [Account]
+            summary: Revoke one session
+            description: Revokes a single refresh token by its session id — "log out that device". Revoking the current session is allowed and equivalent to `POST /account/logout`, except that the cookies of OTHER clients cannot be cleared from here; their next refresh simply fails.
+            operationId: revokeSession
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sessionId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: Session identifier from `GET /account/sessions`
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed session id that matches none of the caller's live sessions.
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/addresses:
+        get:
+            tags: [Account]
+            summary: List saved addresses
+            description: The authenticated user's address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named.
+            operationId: getAddresses
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        post:
+            tags: [Account]
+            summary: Add an address
+            description: Adds an entry to the authenticated user's address book. The first entry becomes the default automatically; a later entry claims the default slot only by sending `default true`, which demotes the previous holder.
+            operationId: addAddress
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AddressInput'
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/addresses/{addressId}:
+        put:
+            tags: [Account]
+            summary: Update an address
+            description: Updates one entry of the caller's own book. `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+            operationId: updateAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAddressRequest'
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # Well-formed id that names none of the CALLER's addresses — someone else's
+                # entry answers the same 404 as an invented one.
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+        delete:
+            tags: [Account]
+            summary: Remove an address
+            description: Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default.
+            operationId: removeAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/verify-request:
+        post:
+            tags: [Auth]
+            summary: Request email verification
+            description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived.
+            operationId: requestEmailVerification
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                # The account is already verified — there is nothing to send.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /account/verify-confirm:
+        post:
+            tags: [Auth]
+            summary: Confirm email verification
+            description: Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/verify-request` and, if valid, marks the account's email address as verified.
+            operationId: confirmEmailVerification
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyEmailConfirmRequest'
+            responses:
+                '200': { $ref: '#/components/responses/Success' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
 
     /account/delete-confirm:

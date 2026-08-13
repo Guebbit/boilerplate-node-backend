@@ -631,7 +631,7 @@
         "responses": [
           {
             "uuid": "ce7bfe44-8bee-4bf6-8052-288dfc34fbb4",
-            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Order created\",\n  \"data\": {\n    \"order\": {\n      \"id\": \"65de73a69ca05739be2b5e85\",\n      \"userId\": \"65dd2bdb923652b7800fe180\",\n      \"email\": \"oldpsw@root.it\",\n      \"items\": [\n        {\n          \"product\": {\n            \"id\": \"65dc8a99604c307b702b5ccc\",\n            \"title\": \"Sallyno Panino\",\n            \"price\": 100,\n            \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n            \"active\": true,\n            \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n            \"categories\": [\n              \"string\"\n            ],\n            \"tags\": [\n              \"string\"\n            ],\n            \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n            \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n            \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n          },\n          \"quantity\": 1\n        }\n      ],\n      \"totalItems\": 2,\n      \"totalQuantity\": 5,\n      \"totalPrice\": 149.97,\n      \"notes\": \"string\",\n      \"status\": \"pending\",\n      \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n      \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n    },\n    \"message\": \"string\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Order created\",\n  \"data\": {\n    \"order\": {\n      \"id\": \"65de73a69ca05739be2b5e85\",\n      \"userId\": \"65dd2bdb923652b7800fe180\",\n      \"email\": \"oldpsw@root.it\",\n      \"items\": [\n        {\n          \"product\": {\n            \"id\": \"65dc8a99604c307b702b5ccc\",\n            \"title\": \"Sallyno Panino\",\n            \"price\": 100,\n            \"stock\": 0,\n            \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n            \"active\": true,\n            \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n            \"categories\": [\n              \"string\"\n            ],\n            \"tags\": [\n              \"string\"\n            ],\n            \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n            \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n            \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n          },\n          \"quantity\": 1\n        }\n      ],\n      \"totalItems\": 2,\n      \"totalQuantity\": 5,\n      \"totalPrice\": 149.97,\n      \"notes\": \"string\",\n      \"shippingAddress\": {\n        \"fullName\": \"string\",\n        \"street\": \"string\",\n        \"city\": \"string\",\n        \"zip\": \"string\",\n        \"country\": \"string\",\n        \"phone\": \"string\"\n      },\n      \"status\": \"pending\",\n      \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n      \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n    },\n    \"message\": \"string\"\n  }\n}",
             "latency": 0,
             "statusCode": 201,
             "label": "Order created",
@@ -659,6 +659,30 @@
             "latency": 0,
             "statusCode": 401,
             "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "d7ccd4f5-12db-4d1b-83f3-aef2e30550d7",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
             "headers": [
               {
                 "key": "Content-Type",
@@ -727,6 +751,162 @@
           },
           {
             "uuid": "867053f8-8cda-4784-872c-0c70b2e0145b",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "7c70b16b-4871-44ae-805e-2feb42680c33",
+        "type": "http",
+        "documentation": "Reorder (refill cart from a past order)",
+        "method": "post",
+        "endpoint": "cart/reorder/:orderId",
+        "responses": [
+          {
+            "uuid": "01c3440a-cef2-494a-80fd-7a23c19d7c1d",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The updated cart\",\n  \"data\": {\n    \"items\": [\n      {\n        \"productId\": \"65dc8a99604c307b702b5ccc\",\n        \"quantity\": 2\n      }\n    ],\n    \"summary\": {\n      \"itemsCount\": 0,\n      \"totalQuantity\": 0,\n      \"total\": 0,\n      \"currency\": \"string\"\n    }\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The updated cart",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "04383ee0-93c5-4a52-890d-3ba636d5e1b8",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "680659ba-2af6-4cc9-83e8-4a3264774173",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "b4b215ea-53b5-4401-86aa-a473598555ee",
+            "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 409,
+            "label": "The request conflicts with the current state of the resource",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "b3ca8cf5-fc7a-4a6e-8853-c94f52f4460b",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "24e83056-3585-4505-83cf-c5f152c0ff5a",
             "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
             "latency": 0,
             "statusCode": 500,

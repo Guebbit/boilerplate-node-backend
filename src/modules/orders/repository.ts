@@ -125,6 +125,34 @@ const visibleScope = (userId: string): Record<string, unknown> => ({
 });
 
 /**
+ * Move an order between statuses, but only from one of the expected ones — atomically.
+ *
+ * The condition rides IN THE FILTER, not in a preceding read, for the same reason the cart's
+ * checkout guard does: two requests racing an order (a customer cancelling while the admin marks
+ * it shipped) must not both read `pending` and both write. mongod evaluates the filter while
+ * holding the document, so exactly one of them matches; the loser gets `null` and the caller
+ * decides whether that means "gone" or "no longer cancellable" with a follow-up read that only
+ * informs the error message.
+ *
+ * The scope composes like everywhere else: the caller's `visibleScope` rides in the same filter,
+ * so a non-admin cannot move an order they cannot see — there is no window between an ownership
+ * check and the write because there is no separate ownership check.
+ */
+const updateStatusIfIn = (
+    id: string,
+    from: readonly string[],
+    to: string,
+    scope?: Record<string, unknown>
+): Promise<IOrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), ...scope, status: { $in: [...from] } },
+            { $set: { status: to } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
  * `search` is narrower than the base signature (no caller-supplied sort — the pipeline fixes it),
  * so it is omitted from the base contract rather than intersected with it.
  *
@@ -143,11 +171,18 @@ export const orderRepository: Omit<IBaseRepository<IOrderDocument>, 'search'> & 
     ) => Promise<IOrderDocument | undefined>;
     ownerScope: (userId: string) => Record<string, unknown>;
     visibleScope: (userId: string) => Record<string, unknown>;
+    updateStatusIfIn: (
+        id: string,
+        from: readonly string[],
+        to: string,
+        scope?: Record<string, unknown>
+    ) => Promise<IOrderDocument | null>;
 } = {
     ...base,
     aggregate,
     search,
     findByIdScoped,
     ownerScope,
-    visibleScope
+    visibleScope,
+    updateStatusIfIn
 };

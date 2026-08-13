@@ -1,5 +1,5 @@
 import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import type { Document, Model, Types } from 'mongoose';
 import bcrypt from 'bcrypt';
 import { logger } from '@infrastructure/adapters/logger';
 import { type User } from '@types';
@@ -19,6 +19,15 @@ export enum ETokenType {
  * Token is like an ID, but not really an ID
  */
 export interface IToken {
+    /**
+     * The subdocument id Mongoose gives every entry in the array.
+     *
+     * Optional because a NEW entry has none until it is written — `tokenAdd` builds the object
+     * and lets mongod assign it. It is also the only part of a refresh token that may leave the
+     * server: `GET /account/sessions` presents tokens as sessions, and this id is the handle
+     * revocation takes, precisely because the token VALUE is as good as a password.
+     */
+    _id?: Types.ObjectId;
     token: string;
     type: string;
     expiration?: Date;
@@ -138,6 +147,21 @@ export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
         active: {
             type: Boolean,
             default: true
+        },
+        /*
+         * Whether the address has been confirmed through the verify flow. Defaults to `false`
+         * because the default path is self-signup, where nobody has vouched for the address yet
+         * — signup sends the verification email, `POST /account/verify-confirm` flips this.
+         * `userService.create` (the admin path) overrides it to `true`: an operator typing an
+         * address in is the vouching. Informational only — no guard reads it — so an unverified
+         * account works and the client decides what to nag about. Existing rows are backfilled
+         * to `true` by `db/migrations/20260813090000-user-verified-column.js`: they predate the
+         * flow, and retroactively distrusting every account that never had a chance to verify
+         * would nag exactly the wrong people.
+         */
+        verified: {
+            type: Boolean,
+            default: false
         },
         // sub documents always have _id
         // `select: false` for the same reason as `password` — live refresh tokens are as good as

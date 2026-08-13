@@ -188,3 +188,25 @@ describe('DELETE /products/{id}/hard', () => {
         expect(await stored(String(product._id))).toBeNull();
     });
 });
+
+describe('GET /products/categories', () => {
+    it('matches the contract, and only counts the public catalogue', async () => {
+        await createProduct({ categories: ['pets'], tags: ['cute'] });
+        await createProduct({ categories: ['secret'], tags: [], active: false });
+
+        const response = await api().get('/products/categories');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.categories).toEqual([{ name: 'pets', count: 1 }]);
+        expect(response.body.data.tags).toEqual([{ name: 'cute', count: 1 }]);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the contract for an empty catalogue', async () => {
+        const response = await api().get('/products/categories');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.categories).toEqual([]);
+        expect(response).toSatisfyApiSpec();
+    });
+});

@@ -8,7 +8,7 @@
  * The three files in `specIdentity.ts` that are NOT here are the ones with nothing to fragment:
  * `spectral.yaml` is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are
  * tooling, and none of them names a domain. `src/types/asyncapi.ts` is absent for the opposite
- * reason — it is generated from `asyncapi.yaml` by `npm run genasyncapi`, so it follows a bundle
+ * reason — it is generated from `asyncapi.yaml` by `npm run gen:asyncapi`, so it follows a bundle
  * rather than being one.
  *
  * Adding a bundle is one entry here plus its spec file: the CLI, the staleness check and the

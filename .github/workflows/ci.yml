@@ -184,10 +184,10 @@ jobs:
 
             - name: Check generated AsyncAPI types are fresh
               run: |
-                  npm run genasyncapi
+                  npm run gen:asyncapi
                   npx prettier --write src/types/asyncapi.ts
                   if ! git diff --exit-code -- src/types/asyncapi.ts; then
-                      echo "Generated src/types/asyncapi.ts is stale. Run 'npm run genasyncapi && npm run prettier:fix' and commit the changes."
+                      echo "Generated src/types/asyncapi.ts is stale. Run 'npm run gen:asyncapi && npm run prettier:fix' and commit the changes."
                       exit 1
                   fi
 
@@ -213,9 +213,9 @@ jobs:
 
             - name: Check generated API client is fresh
               run: |
-                  npm run genapi
+                  npm run gen:api
                   if ! git diff --exit-code -- api/; then
-                      echo "Generated api/ is stale. Run 'npm run genapi' and commit the changes."
+                      echo "Generated api/ is stale. Run 'npm run gen:api' and commit the changes."
                       exit 1
                   fi
 
@@ -318,6 +318,11 @@ jobs:
 
     build:
         # Proves the project still builds from a clean checkout.
+        #
+        # `build` is `ts-check && lint`, so this overlaps the two jobs above on purpose: they report
+        # which half failed, this one proves the composite gate a developer actually runs still
+        # passes. It used to call `build-only`, an alias for `npm run lint` inherited from a
+        # frontend template, which made the overlap total rather than partial.
         runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
@@ -337,7 +342,7 @@ jobs:
               run: npm ci
 
             - name: Build
-              run: npm run build-only
+              run: npm run build
 
     test-unit:
         # The fast suite: pure functions, services and repositories against in-memory Mongo.

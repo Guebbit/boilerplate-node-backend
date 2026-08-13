@@ -11,6 +11,7 @@ export default withMermaid(
             },
             nav: [
                 { text: 'Home', link: '/' },
+                { text: 'Start', link: '/getting-started' },
                 { text: 'Theory', link: '/theory/' },
                 { text: 'Tools', link: '/tools/' },
                 { text: 'API', link: '/api/' }
@@ -23,6 +24,10 @@ export default withMermaid(
                             { text: 'Overview', link: '/theory/' },
                             { text: 'Architecture', link: '/theory/architecture' },
                             { text: 'Modules', link: '/theory/modules' },
+                            {
+                                text: 'Adding & Removing a Module',
+                                link: '/theory/module-lifecycle'
+                            },
                             { text: 'Layers', link: '/theory/layers' },
                             { text: 'Domain Layer', link: '/theory/domain-layer' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
@@ -123,6 +128,10 @@ export default withMermaid(
                             { text: 'Endpoints', link: '/api/endpoints' },
                             { text: 'Observability Endpoints', link: '/api/observability' },
                             { text: 'OpenAPI Workflow', link: '/api/openapi-workflow' },
+                            {
+                                text: 'Regenerating After a Change',
+                                link: '/api/regenerating'
+                            },
                             {
                                 text: 'Contract Ownership & Fragmentation',
                                 link: '/api/contract-fragmentation'

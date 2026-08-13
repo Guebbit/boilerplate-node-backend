@@ -27,7 +27,7 @@ import path from 'node:path';
 import { REPO_ROOT, type IContractBundle, type TSegment } from './fragments';
 
 /** The domains that contribute records, in declaration order. */
-export const SEED_SECTION_ORDER = ['users', 'products', 'orders'] as const;
+export const SEED_SECTION_ORDER = ['users', 'products', 'orders', 'wishlist'] as const;
 
 export type TSeedSectionName = (typeof SEED_SECTION_ORDER)[number];
 
@@ -41,8 +41,8 @@ export const seedFragment = (section: TSeedSectionName): string =>
 /** The prose, the credentials, and the one interface two domains share. */
 const HEADER_FRAGMENT = path.join(
     REPO_ROOT,
-    'contracts',
     'shared',
+    'contracts',
     'seed-identities.header.fragment.ts'
 );
 

@@ -21,12 +21,41 @@
             "token-not-found": "Invalid or expired token, please try again.",
             "success": "Account permanently deleted."
         },
+        "update": {
+            "success": "Profile updated."
+        },
+        "password-change": {
+            "wrong-current": "The current password is incorrect.",
+            "success": "Password changed."
+        },
+        "logout": {
+            "success": "Logged out."
+        },
+        "sessions": {
+            "revoked": "Session revoked.",
+            "not-found": "Session not found."
+        },
+        "verify": {
+            "email-sent": "A verification email has been sent, click the link to confirm your address.",
+            "already-verified": "This account is already verified.",
+            "token-not-found": "Invalid or expired token, please try again.",
+            "success": "Email address verified."
+        },
         "email": {
             "registration-confirm": {
                 "subject": "Welcome — your account is ready",
                 "meta-title": "Registration successful",
                 "title": "Welcome aboard {{name}}!",
                 "body": "Your registration was successful."
+            },
+            "verify-request": {
+                "subject": "Confirm your email address",
+                "meta-title": "Email verification",
+                "greeting": "Hello, {{name}}!",
+                "intro": "Please confirm that this email address is yours.",
+                "cta": "Click this link to verify your email address.",
+                "link-label": "Verify my email",
+                "ignore": "If you did not create this account, you can safely ignore this email."
             },
             "reset-request": {
                 "subject": "Password reset",
@@ -59,6 +88,12 @@
                 "body": "Your account has been permanently deleted.",
                 "farewell": "We're sorry to see you go. If this was a mistake, please contact support."
             }
+        },
+        "addresses": {
+            "added": "Address saved.",
+            "updated": "Address updated.",
+            "removed": "Address removed.",
+            "not-found": "The requested address was not found"
         }
     }
 }
