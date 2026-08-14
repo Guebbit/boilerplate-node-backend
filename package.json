@@ -2,7 +2,10 @@
     "name": "boilerplate-node-api-mongodb-mongoose",
     "version": "2.1.0",
     "main": "src/cluster.ts",
-    "license": "AGPLv3.0",
+    "license": "AGPL-3.0-only",
+    "engines": {
+        "node": ">=22"
+    },
     "scripts": {
         "dev": "tsx watch src/cluster.ts",
         "dev:host": "cross-env NODE_DB_URI= NODE_MONGODB_HOST=localhost NODE_REDIS_URL= NODE_REDIS_HOST=localhost tsx watch src/cluster.ts",
