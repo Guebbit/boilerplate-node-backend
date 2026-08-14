@@ -283,7 +283,7 @@
         "responses": [
           {
             "uuid": "92fb9299-14b8-431c-828e-c2c73f42004c",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Metrics overview\",\n  \"data\": {\n    \"http\": {\n      \"totalRequests\": 0,\n      \"totalErrors\": 0,\n      \"errorRate\": 0,\n      \"inFlight\": 0,\n      \"latencyMs\": {\n        \"p50\": 1,\n        \"p95\": 1\n      }\n    },\n    \"auth\": {\n      \"loginSuccess\": 0,\n      \"loginFailure\": 0,\n      \"signupSuccess\": 0\n    },\n    \"business\": {\n      \"checkoutSuccess\": 0,\n      \"ordersCreated\": 0\n    },\n    \"database\": {\n      \"queriesTotal\": 0,\n      \"errorsTotal\": 0\n    },\n    \"process\": {\n      \"uptimeSeconds\": 0,\n      \"heapUsedMb\": 0\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Metrics overview\",\n  \"data\": {\n    \"http\": {\n      \"totalRequests\": 0,\n      \"totalErrors\": 0,\n      \"errorRate\": 0,\n      \"inFlight\": 0,\n      \"latencyMs\": {\n        \"p50\": 1,\n        \"p95\": 1\n      }\n    },\n    \"auth\": {\n      \"loginSuccess\": 0,\n      \"loginFailure\": 0,\n      \"signupSuccess\": 0\n    },\n    \"business\": {\n      \"checkoutSuccess\": 0,\n      \"ordersCreated\": 0,\n      \"lowStockProducts\": 0\n    },\n    \"database\": {\n      \"queriesTotal\": 0,\n      \"errorsTotal\": 0\n    },\n    \"process\": {\n      \"uptimeSeconds\": 0,\n      \"heapUsedMb\": 0\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Metrics overview",

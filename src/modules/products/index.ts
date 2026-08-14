@@ -21,4 +21,4 @@ export type { IProductDocument } from './model';
 export { productSchema, applyProductTransform } from './model';
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
-export { PRODUCT_DELETED } from './events';
+export { PRODUCT_DELETED, STOCK_MOVED } from './events';

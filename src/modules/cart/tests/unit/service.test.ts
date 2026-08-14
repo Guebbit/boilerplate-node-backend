@@ -54,7 +54,9 @@ import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
 import accountModule from '@modules/account/module';
+import deliveryModule from '@modules/delivery/module';
 import { orderRepository } from '@modules/orders';
+import { productRepository } from '@modules/products';
 import type { IResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 
@@ -551,6 +553,58 @@ describe('orderConfirm', () => {
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
     });
 
+    it('freezes the chosen shipping method and its cost onto the order', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 25 });
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        const result = await orderConfirm(user.id, undefined, 'express');
+
+        expect(result.success).toBe(true);
+        const order = await orderRepository.findOne({ userId: user._id });
+        expect(order!.shippingMethod).toBe('express');
+        expect(order!.shippingCost).toBe(15);
+    });
+
+    it('prices the free-above rule against the lines being bought', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 60 });
+        await cartItemSetById(user.id, String(product._id), 2); // 120 ≥ standard's 100
+
+        const result = await orderConfirm(user.id, undefined, 'standard');
+
+        expect(result.success).toBe(true);
+        const order = await orderRepository.findOne({ userId: user._id });
+        expect(order!.shippingCost).toBe(0);
+    });
+
+    it('refuses an unknown shipping method before anything is written', async () => {
+        const user = await createUser();
+        const product = await createProduct({ stock: 5 });
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        const result = await orderConfirm(user.id, undefined, 'teleport');
+
+        expect(asReject(result).status).toBe(404);
+        expect(asReject(result).errors[0]!.code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
+        // Nothing moved: no order, full shelf, full cart.
+        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+        const stored = await productRepository.findByIdRaw(String(product._id));
+        expect(stored!.stock).toBe(5);
+    });
+
+    it('an omitted method leaves the order without shipping — buying does not require it', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        await orderConfirm(user.id);
+
+        const order = await orderRepository.findOne({ userId: user._id });
+        expect(order!.shippingMethod).toBeUndefined();
+        expect(order!.shippingCost).toBeUndefined();
+    });
+
     it('sends the customer a confirmation email listing the bought lines', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
@@ -646,7 +700,14 @@ describe('productRemoveFromCartsById', () => {
  */
 describe('cartDeleteByUserId', () => {
     beforeEach(() => {
-        registerModules([accountModule, productsModule, usersModule, ordersModule, cartModule]);
+        registerModules([
+            accountModule,
+            deliveryModule,
+            productsModule,
+            usersModule,
+            ordersModule,
+            cartModule
+        ]);
     });
 
     afterEach(() => {

@@ -363,7 +363,8 @@
                       },
                       "business": {
                         "checkoutSuccess": 0,
-                        "ordersCreated": 0
+                        "ordersCreated": 0,
+                        "lowStockProducts": 0
                       },
                       "database": {
                         "queriesTotal": 0,

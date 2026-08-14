@@ -1,0 +1,85 @@
+        # ── Inventory module ────────────────────────────────────────────────────
+        # Owned by src/modules/inventory. The ledger explains stock changes; the product's own
+        # `stock` field stays authoritative.
+
+        StockMovement:
+            type: object
+            additionalProperties: false
+            required: [id, productId, delta, reason]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                productId:
+                    $ref: '#/components/schemas/Id'
+                delta:
+                    type: number
+                    description: Signed — a sale is negative, a return or restock positive.
+                reason:
+                    type: string
+                    enum: [order, order-cancelled, adjustment, restock]
+                    description: Why the units moved.
+                reference:
+                    type: string
+                    description: What caused it, when something did — the order id, typically.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        StockMovementsResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/StockMovement'
+
+        StockMovementsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/StockMovementsResponse'
+
+        RestockRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                    description: How many units arrived. Corrections downward are the admin product form's absolute stock write.
+
+        RestockResponse:
+            type: object
+            additionalProperties: false
+            required: [productId, stock]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                stock:
+                    type: integer
+                    minimum: 0
+                    description: The shelf count after the units landed.
+
+        RestockResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/RestockResponse'

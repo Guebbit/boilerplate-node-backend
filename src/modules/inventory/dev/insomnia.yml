@@ -1,0 +1,65 @@
+  - name: Inventory
+    meta:
+      id: fld_ec99b813fa064f7f7cfa1d35bc7cc3d7
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 12000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/inventory/movements"
+        name: List stock movements
+        meta:
+          id: req_ae596e76e929a32c20e4697846dfd22a
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: List stock movements
+          sortKey: 12001
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/inventory/restock"
+        name: Restock a product
+        meta:
+          id: req_3ce9123618fe8629eeb7f56334ea1f86
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Restock a product
+          sortKey: 12002
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "productId": "65dc8a99604c307b702b5ccc",
+              "quantity": 2
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true

@@ -55,7 +55,13 @@ export const analyticsEvents = {
     // Orders
     ORDER_CREATED: 'order_created',
     ORDER_CANCELLED: 'order_cancelled',
-    ORDERS_VIEWED: 'orders_viewed'
+    ORDERS_VIEWED: 'orders_viewed',
+
+    // Payments
+    // The pair is the funnel's last gate: succeeded over (succeeded + declined) is the
+    // conversion number a payment provider change would move.
+    PAYMENT_SUCCEEDED: 'payment_succeeded',
+    PAYMENT_DECLINED: 'payment_declined'
 } as const;
 
 /** Any name declared above. */

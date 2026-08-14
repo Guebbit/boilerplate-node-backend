@@ -7,7 +7,9 @@ import {
     type IResponseReject,
     type IResponseSuccess
 } from '@infrastructure/http/response';
-import { productRepository } from '@modules/products';
+import { productRepository, STOCK_MOVED } from '@modules/products';
+import { emitDomainEvent } from '@kernel/events';
+import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 import { orderRepository } from './repository';
 import { checkOrderLines } from './domain';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
@@ -119,7 +121,17 @@ export const create = (
                 email,
                 items: orderItems
             } as Partial<IOrderDocument>)
-            .then((order) => generateSuccess(order, 201, t('orders.creation-success')));
+            .then(async (order) => {
+                // The shelf already moved; the ledger hears why, now that the order has an id.
+                for (const line of taken)
+                    await emitDomainEvent(STOCK_MOVED, {
+                        productId: line.productId,
+                        delta: -line.quantity,
+                        reason: 'order',
+                        reference: String(order._id)
+                    });
+                return generateSuccess(order, 201, t('orders.creation-success'));
+            });
     });
 };
 
@@ -139,6 +151,7 @@ export const update = (
         items?: CartItem[];
     }
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
+    const previousStatus = order.status;
     if (data.status !== undefined) order.status = data.status as OrderStatus;
     if (data.email !== undefined) order.email = data.email;
     if (data.userId !== undefined) order.userId = toObjectId(data.userId);
@@ -165,7 +178,17 @@ export const update = (
 
     return updateItemsPromise.then((earlyResult) => {
         if (earlyResult) return earlyResult;
-        return orderRepository.save(order).then((saved) => generateSuccess(saved));
+        return orderRepository.save(order).then(async (saved) => {
+            // Announced after the save: a status is only "changed" once it is on disk, and the
+            // listeners (the shipment, one day a notification) compensate for facts, not plans.
+            if (saved.status !== previousStatus)
+                await emitDomainEvent(ORDER_STATUS_CHANGED, {
+                    orderId: String(saved._id),
+                    from: previousStatus,
+                    to: saved.status
+                });
+            return generateSuccess(saved);
+        });
     });
 };
 
@@ -259,14 +282,15 @@ export const callerScope = (
     authContext?.admin ? undefined : orderRepository.visibleScope(authContext?.id ?? '');
 
 /**
- * The statuses a CUSTOMER's cancel may move from — `pending` only, deliberately.
+ * The statuses a CUSTOMER's cancel may move from.
  *
- * `paid` money has to travel back, `processing` has left the queue, `shipped` is a return
- * rather than a cancellation: each of those is a flow with its own rules, and an admin can
- * always force a status through the admin write. The customer's cancel is the narrow one —
- * nothing has happened yet, so nothing has to be undone.
+ * `pending` costs nothing to undo. `paid` is cancellable because the money's way back exists:
+ * the cancel emits {@link ORDER_CANCELLED} and the payments module answers it with a refund —
+ * this list may only include `paid` while that listener exists. `processing` has left the
+ * queue and `shipped` is a return rather than a cancellation: those stay flows of their own,
+ * reachable through the admin write.
  */
-const CANCELLABLE_ORDER_STATUSES: readonly string[] = ['pending'];
+const CANCELLABLE_ORDER_STATUSES: readonly string[] = ['pending', 'paid'];
 
 /**
  * Cancel an order — the one write a customer may make to one.
@@ -298,8 +322,18 @@ export const cancelById = (
                  * conditional move is what guarantees this runs at most once per order — a
                  * second cancel loses the `$in: ['pending']` match and never reaches here.
                  */
-                for (const item of order.items)
+                for (const item of order.items) {
                     await productRepository.incrementStock(String(item.product._id), item.quantity);
+                    await emitDomainEvent(STOCK_MOVED, {
+                        productId: String(item.product._id),
+                        delta: item.quantity,
+                        reason: 'order-cancelled',
+                        reference: String(order._id)
+                    });
+                }
+
+                // Whoever has to compensate — a refund, above all — hears it from here.
+                await emitDomainEvent(ORDER_CANCELLED, { orderId: String(order._id) });
 
                 return generateSuccess(order, 200, t('orders.cancel.success'));
             }

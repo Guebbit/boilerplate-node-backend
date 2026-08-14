@@ -30,7 +30,8 @@ export const ANALYTICS_SECTION_ORDER = [
     'products',
     'cart',
     'wishlist',
-    'orders'
+    'orders',
+    'payments'
 ] as const;
 
 export type TAnalyticsSectionName = (typeof ANALYTICS_SECTION_ORDER)[number];

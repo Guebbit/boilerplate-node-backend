@@ -334,11 +334,21 @@
                     type: number
                     format: double
                     minimum: 0
-                    description: Sum of `product.price × quantity` across every line item.
+                    description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
                     example: 149.97
                 notes:
                     type: string
                     description: Optional order notes
+                # Both absent on orders that predate delivery and on checkouts that chose no
+                # method — shipping is not required to buy, exactly like the address.
+                shippingMethod:
+                    type: string
+                    description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
+                shippingCost:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: What that method cost at checkout time — a later rate change cannot re-price history.
                 # Absent on orders placed before the address book existed, and on checkouts by
                 # users who keep no addresses — an address is not (yet) required to buy.
                 shippingAddress:

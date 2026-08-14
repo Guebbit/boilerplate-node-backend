@@ -1,0 +1,6 @@
+{
+    "inventory": {
+        "product-not-found": "Il prodotto da rifornire non è stato trovato",
+        "restock-success": "Scorte aggiornate — le nuove unità sono a scaffale."
+    }
+}

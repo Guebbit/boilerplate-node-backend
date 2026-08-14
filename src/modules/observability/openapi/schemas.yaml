@@ -128,6 +128,9 @@
                     properties:
                         checkoutSuccess: { type: integer, minimum: 0 }
                         ordersCreated: { type: integer, minimum: 0 }
+                        # Products at or under NODE_LOW_STOCK_THRESHOLD, recounted at read time.
+                        # Zero in builds without the inventory module.
+                        lowStockProducts: { type: integer, minimum: 0 }
                 database:
                     type: object
                     additionalProperties: false

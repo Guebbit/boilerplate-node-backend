@@ -2,6 +2,8 @@ import path from 'node:path';
 import type { IAppModule } from '@kernel/registry';
 import { router } from './routes';
 import { seedOrdersCollection } from './seeds';
+// Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
+import './events';
 
 /**
  * Placed orders: admin write and soft delete, plus each account reading back its own.

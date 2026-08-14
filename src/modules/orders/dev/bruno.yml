@@ -74,6 +74,8 @@
                           "totalQuantity": 5,
                           "totalPrice": 149.97,
                           "notes": "string",
+                          "shippingMethod": "string",
+                          "shippingCost": 0,
                           "shippingAddress": {
                             "fullName": "string",
                             "street": "string",
@@ -267,6 +269,8 @@
                       "totalQuantity": 5,
                       "totalPrice": 149.97,
                       "notes": "string",
+                      "shippingMethod": "string",
+                      "shippingCost": 0,
                       "shippingAddress": {
                         "fullName": "string",
                         "street": "string",
@@ -573,6 +577,8 @@
                       "totalQuantity": 5,
                       "totalPrice": 149.97,
                       "notes": "string",
+                      "shippingMethod": "string",
+                      "shippingCost": 0,
                       "shippingAddress": {
                         "fullName": "string",
                         "street": "string",
@@ -1099,6 +1105,8 @@
                           "totalQuantity": 5,
                           "totalPrice": 149.97,
                           "notes": "string",
+                          "shippingMethod": "string",
+                          "shippingCost": 0,
                           "shippingAddress": {
                             "fullName": "string",
                             "street": "string",
@@ -1336,6 +1344,8 @@
                       "totalQuantity": 5,
                       "totalPrice": 149.97,
                       "notes": "string",
+                      "shippingMethod": "string",
+                      "shippingCost": 0,
                       "shippingAddress": {
                         "fullName": "string",
                         "street": "string",
@@ -1549,6 +1559,8 @@
                       "totalQuantity": 5,
                       "totalPrice": 149.97,
                       "notes": "string",
+                      "shippingMethod": "string",
+                      "shippingCost": 0,
                       "shippingAddress": {
                         "fullName": "string",
                         "street": "string",
@@ -2206,6 +2218,8 @@
                       "totalQuantity": 5,
                       "totalPrice": 149.97,
                       "notes": "string",
+                      "shippingMethod": "string",
+                      "shippingCost": 0,
                       "shippingAddress": {
                         "fullName": "string",
                         "street": "string",

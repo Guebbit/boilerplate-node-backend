@@ -33,6 +33,9 @@ tags:
     - name: Cart
     - name: Wishlist
     - name: Orders
+    - name: Payments
+    - name: Delivery
+    - name: Inventory
     - name: Feedback
     - name: System
       description: Public system endpoints (ping, liveness).

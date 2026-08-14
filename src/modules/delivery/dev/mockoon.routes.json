@@ -1,0 +1,300 @@
+      {
+        "uuid": "00d49ea8-d547-42e4-8def-3ab49934830c",
+        "type": "http",
+        "documentation": "List shipping methods",
+        "method": "get",
+        "endpoint": "delivery/methods",
+        "responses": [
+          {
+            "uuid": "5dfa0347-ffbe-4d73-8dbc-a60219add999",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The methods\",\n  \"data\": {\n    \"methods\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"price\": 100,\n        \"freeAbove\": 0\n      }\n    ]\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The methods",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "3052c404-0c50-4b37-8f08-5b83b1bd3550",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "9e5b4d75-9698-4c17-8ec4-6bfb73198bc7",
+        "type": "http",
+        "documentation": "Get the shipment behind an order",
+        "method": "get",
+        "endpoint": "delivery/order/:orderId",
+        "responses": [
+          {
+            "uuid": "d99e6328-d82c-4e49-8bd4-b67679a0e34e",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The shipment\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"orderId\": \"65de73a69ca05739be2b5e85\",\n    \"trackingCode\": \"string\",\n    \"status\": \"shipped\",\n    \"deliveredAt\": \"2026-01-01T00:00:00.000Z\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The shipment",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "ab8903b7-903a-42b3-8b9f-f78d587a8db1",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "28d73a24-c4e2-4be8-83d9-d48ec56fccf6",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "ab4dcb11-2564-42dd-805d-5bc81cb5687e",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "6c56d928-aeab-4d9f-8972-9d29db695275",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "cadd6c9f-e2e7-4491-8b8c-53f7f8d13a80",
+        "type": "http",
+        "documentation": "Advance the fake courier",
+        "method": "post",
+        "endpoint": "delivery/advance",
+        "responses": [
+          {
+            "uuid": "68b7ca7b-6bd6-4b39-8a59-ba6e1b3731ae",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"How many parcels arrived\",\n  \"data\": {\n    \"advanced\": 0\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "How many parcels arrived",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "779c6b16-4d8f-4009-88d9-c2070a92f3e9",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "dfcfefd7-3b99-4c60-847f-fbd527aafd9d",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "6e78750e-90d2-40ee-819e-b4fc89ba0fb8",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      }

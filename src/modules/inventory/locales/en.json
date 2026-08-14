@@ -1,0 +1,6 @@
+{
+    "inventory": {
+        "product-not-found": "The product to restock was not found",
+        "restock-success": "Stock updated — the shelf has the new units."
+    }
+}

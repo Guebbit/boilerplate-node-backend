@@ -33,6 +33,9 @@ tags:
     - name: Cart
     - name: Wishlist
     - name: Orders
+    - name: Payments
+    - name: Delivery
+    - name: Inventory
     - name: Feedback
     - name: System
       description: Public system endpoints (ping, liveness).
@@ -500,11 +503,21 @@ components:
                     type: number
                     format: double
                     minimum: 0
-                    description: Sum of `product.price × quantity` across every line item.
+                    description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
                     example: 149.97
                 notes:
                     type: string
                     description: Optional order notes
+                # Both absent on orders that predate delivery and on checkouts that chose no
+                # method — shipping is not required to buy, exactly like the address.
+                shippingMethod:
+                    type: string
+                    description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
+                shippingCost:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: What that method cost at checkout time — a later rate change cannot re-price history.
                 # Absent on orders placed before the address book existed, and on checkouts by
                 # users who keep no addresses — an address is not (yet) required to buy.
                 shippingAddress:
@@ -748,6 +761,9 @@ components:
                     properties:
                         checkoutSuccess: { type: integer, minimum: 0 }
                         ordersCreated: { type: integer, minimum: 0 }
+                        # Products at or under NODE_LOW_STOCK_THRESHOLD, recounted at read time.
+                        # Zero in builds without the inventory module.
+                        lowStockProducts: { type: integer, minimum: 0 }
                 database:
                     type: object
                     additionalProperties: false
@@ -1842,6 +1858,14 @@ components:
                         Which of the caller's saved addresses to ship to. Omitted, the default
                         address is used when one exists; an id that matches none of the caller's
                         addresses refuses the checkout with 404 rather than shipping nowhere.
+                shippingMethodId:
+                    type: string
+                    description: >-
+                        Which shipping method (see `GET /delivery/methods`) the order travels by.
+                        Its cost is priced against the lines being bought (free-above thresholds
+                        included) and frozen onto the order. Omitted, the order carries no
+                        shipping; an id that matches no method refuses the checkout with 404,
+                        `errors[].code` `CART_SHIPPING_METHOD_NOT_FOUND`.
 
         CartSummaryResponse:
             type: object
@@ -2047,6 +2071,262 @@ components:
                 meta:
                     $ref: '#/components/schemas/PaginationMeta'
 
+        # ── Payments module ─────────────────────────────────────────────────────
+        # Owned by src/modules/payments. The Payment is the provider-facing record of an
+        # order's money; the order's own status stays the customer-facing lifecycle.
+
+        Payment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, userId, amount, currency, status, provider]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                orderId:
+                    $ref: '#/components/schemas/Id'
+                userId:
+                    $ref: '#/components/schemas/Id'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The order's total as the intent froze it.
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. EUR)
+                status:
+                    type: string
+                    enum: [requires_confirmation, succeeded, declined, refunded]
+                    description: The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.
+                provider:
+                    type: string
+                    description: Which provider implementation handled it (`fake` in the demo).
+                cardLast4:
+                    type: string
+                    description: The only card digits a payment system may remember.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        PaymentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Payment'
+
+        CreatePaymentIntentRequest:
+            type: object
+            additionalProperties: false
+            required: [orderId]
+            properties:
+                orderId:
+                    $ref: '#/components/schemas/Id'
+
+        ConfirmPaymentRequest:
+            type: object
+            additionalProperties: false
+            required: [cardNumber]
+            properties:
+                cardNumber:
+                    type: string
+                    minLength: 12
+                    maxLength: 23
+                    pattern: '^[\d ]+$'
+                    description: The card number, digits and optional spaces. The fake provider declines `4000000000000002` and accepts everything else; `4242424242424242` is the conventional success card.
+        # ── Delivery module ─────────────────────────────────────────────────────
+        # Owned by src/modules/delivery. The methods are the checkout's selector; the shipment
+        # is the courier's record of one order's parcel.
+
+        ShippingMethod:
+            type: object
+            additionalProperties: false
+            required: [id, price]
+            properties:
+                id:
+                    type: string
+                    description: Stable id, frozen onto orders at checkout (standard, express, pickup).
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Flat rate, in the shop's currency.
+                freeAbove:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Items total at which this method becomes free. Absent — it never does.
+
+        ShippingMethodsResponse:
+            type: object
+            additionalProperties: false
+            required: [methods]
+            properties:
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ShippingMethod'
+
+        ShippingMethodsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ShippingMethodsResponse'
+
+        Shipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, trackingCode, status]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                orderId:
+                    $ref: '#/components/schemas/Id'
+                trackingCode:
+                    type: string
+                    description: The courier's handle on the parcel.
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                    description: The tail of the order's lifecycle, as the courier sees it.
+                deliveredAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        ShipmentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Shipment'
+
+        CourierAdvanceResponse:
+            type: object
+            additionalProperties: false
+            required: [advanced]
+            properties:
+                advanced:
+                    type: integer
+                    minimum: 0
+                    description: How many parcels arrived on this tick.
+
+        CourierAdvanceResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CourierAdvanceResponse'
+        # ── Inventory module ────────────────────────────────────────────────────
+        # Owned by src/modules/inventory. The ledger explains stock changes; the product's own
+        # `stock` field stays authoritative.
+
+        StockMovement:
+            type: object
+            additionalProperties: false
+            required: [id, productId, delta, reason]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                productId:
+                    $ref: '#/components/schemas/Id'
+                delta:
+                    type: number
+                    description: Signed — a sale is negative, a return or restock positive.
+                reason:
+                    type: string
+                    enum: [order, order-cancelled, adjustment, restock]
+                    description: Why the units moved.
+                reference:
+                    type: string
+                    description: What caused it, when something did — the order id, typically.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        StockMovementsResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/StockMovement'
+
+        StockMovementsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/StockMovementsResponse'
+
+        RestockRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                    description: How many units arrived. Corrections downward are the admin product form's absolute stock write.
+
+        RestockResponse:
+            type: object
+            additionalProperties: false
+            required: [productId, stock]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                stock:
+                    type: integer
+                    minimum: 0
+                    description: The shelf count after the units landed.
+
+        RestockResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/RestockResponse'
 paths:
     # --------- System ---------
     /:
@@ -3780,7 +4060,7 @@ paths:
         post:
             tags: [Orders]
             summary: Cancel order
-            description: Cancels the order identified by `{id}` — the one order write a customer can make. Only a `pending` order can be cancelled this way; `paid`, `processing` and later statuses each need their own flow (refund, return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
+            description: Cancels the order identified by `{id}` — the one order write a customer can make. A `pending` or `paid` order can be cancelled this way; cancelling a paid one refunds its payment. `processing` and later statuses each need their own flow (return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
             operationId: cancelOrderById
             security:
                 - bearerAuth: []
@@ -3795,8 +4075,8 @@ paths:
                                 $ref: '#/components/schemas/OrderEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
-                # The order exists and is visible to the caller, but its status is past pending.
-                # `errors[].code` is `ORDER_NOT_CANCELLABLE`.
+                # The order exists and is visible to the caller, but its status is past the
+                # cancellable pair (pending, paid). `errors[].code` is `ORDER_NOT_CANCELLABLE`.
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }
@@ -3821,4 +4101,205 @@ paths:
                                 format: binary
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
+                '500': { $ref: '#/components/responses/InternalError' }
+    /payments/intent:
+        post:
+            tags: [Payments]
+            summary: Create a payment intent
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact); an order whose money already moved answers 409. The intent is the thing the card dialog confirms.
+            operationId: createPaymentIntent
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreatePaymentIntentRequest'
+            responses:
+                '201':
+                    description: The payment intent, ready to confirm
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                # Not `pending` any more, or already paid. `errors[].code` is
+                # `PAYMENT_ORDER_NOT_PAYABLE`.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /payments/order/{orderId}:
+        get:
+            tags: [Payments]
+            summary: Get the payment behind an order
+            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. Admins read anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
+            operationId: getPaymentByOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The payment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /payments/{id}/confirm:
+        post:
+            tags: [Payments]
+            summary: Confirm a payment
+            description: The card dialog's submit. The provider charges first (that is how PSPs work — the money moves before your database hears about it), then the order is moved `pending → paid` by a conditional write; if the order slipped away in between, the charge is refunded on the spot. A decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable — submit the same payment again with another card. The fake provider declines exactly one number, documented on `ConfirmPaymentRequest.cardNumber`.
+            operationId: confirmPayment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConfirmPaymentRequest'
+            responses:
+                '200':
+                    description: The payment, `succeeded`; the order is `paid`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                # Declined by the card issuer (`PAYMENT_DECLINED`), not awaiting confirmation
+                # (`PAYMENT_NOT_CONFIRMABLE`), or the order slipped away between charge and
+                # write (`PAYMENT_ORDER_NOT_PAYABLE` — the charge was refunded on the spot).
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+    /delivery/methods:
+        get:
+            tags: [Delivery]
+            summary: List shipping methods
+            description: The shipping methods this shop offers — flat rates and free-above thresholds. Public, because what shipping costs is pre-purchase information; the authoritative pricing still happens at checkout, against the lines actually bought, so a client showing these numbers cannot commit the shop to a stale rate.
+            operationId: listShippingMethods
+            security: []
+            responses:
+                '200':
+                    description: The methods
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShippingMethodsResponseEnvelope'
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /delivery/order/{orderId}:
+        get:
+            tags: [Delivery]
+            summary: Get the shipment behind an order
+            description: The parcel for one of the caller's orders — tracking code and whether it has arrived. Ownership is the order's, read through the same scope every order read uses. No parcel yet (the order has not reached `shipped`) is a 404 — absence is the answer.
+            operationId: getShipmentByOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The shipment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /delivery/advance:
+        post:
+            tags: [Delivery]
+            summary: Advance the fake courier
+            description: Every parcel currently `shipped` arrives — the order moves `shipped → delivered` through the same conditional write the rest of the status machine uses, then the shipment is stamped. Admin, and deliberately a button rather than a schedule — this repo has no cron, so an operator (or the demo) is the timer, exactly like the expired-token purge.
+            operationId: advanceCourier
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: How many parcels arrived
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CourierAdvanceResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '500': { $ref: '#/components/responses/InternalError' }
+    /inventory/movements:
+        get:
+            tags: [Inventory]
+            summary: List stock movements
+            description: The ledger, newest first — every signed change to a shelf count with the why attached (order, cancel, adjustment, restock). Optionally one product's story via `productId`. Admin — customers see stock as a number on the product page.
+            operationId: listStockMovements
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: productId
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: Narrow to one product's movements
+            responses:
+                '200':
+                    description: The latest movements
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StockMovementsResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /inventory/restock:
+        post:
+            tags: [Inventory]
+            summary: Restock a product
+            description: Puts units on a shelf through the same conditional increment every other movement uses, and writes the ledger row through the same announcement — so a restock and a sale tell the same kind of story. Answers the shelf count after the units landed.
+            operationId: restockProduct
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RestockRequest'
+            responses:
+                '200':
+                    description: The shelf after the delivery
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RestockResponseEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '403': { $ref: '#/components/responses/Forbidden' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }

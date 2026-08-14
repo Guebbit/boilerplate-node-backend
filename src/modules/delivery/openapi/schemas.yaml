@@ -1,0 +1,101 @@
+        # ── Delivery module ─────────────────────────────────────────────────────
+        # Owned by src/modules/delivery. The methods are the checkout's selector; the shipment
+        # is the courier's record of one order's parcel.
+
+        ShippingMethod:
+            type: object
+            additionalProperties: false
+            required: [id, price]
+            properties:
+                id:
+                    type: string
+                    description: Stable id, frozen onto orders at checkout (standard, express, pickup).
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Flat rate, in the shop's currency.
+                freeAbove:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Items total at which this method becomes free. Absent — it never does.
+
+        ShippingMethodsResponse:
+            type: object
+            additionalProperties: false
+            required: [methods]
+            properties:
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ShippingMethod'
+
+        ShippingMethodsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/ShippingMethodsResponse'
+
+        Shipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, trackingCode, status]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                orderId:
+                    $ref: '#/components/schemas/Id'
+                trackingCode:
+                    type: string
+                    description: The courier's handle on the parcel.
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                    description: The tail of the order's lifecycle, as the courier sees it.
+                deliveredAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        ShipmentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Shipment'
+
+        CourierAdvanceResponse:
+            type: object
+            additionalProperties: false
+            required: [advanced]
+            properties:
+                advanced:
+                    type: integer
+                    minimum: 0
+                    description: How many parcels arrived on this tick.
+
+        CourierAdvanceResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/CourierAdvanceResponse'

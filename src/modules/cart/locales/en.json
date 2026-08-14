@@ -12,6 +12,7 @@
             "order-not-found": "The requested order was not found"
         },
         "insufficient-stock": "One or more products in your cart exceed the available stock.",
-        "address-not-found": "The selected shipping address was not found."
+        "address-not-found": "The selected shipping address was not found.",
+        "shipping-method-not-found": "The chosen shipping method does not exist."
     }
 }

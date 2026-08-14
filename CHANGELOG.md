@@ -9,6 +9,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Payments, behind a provider port — module eleven.** `POST /payments/intent` freezes one of
+  your pending orders at the order's own total (`sumLineItems`, so intent and order can never
+  quote different numbers), `POST /payments/{id}/confirm` charges through whatever
+  `NODE_PAYMENT_PROVIDER` names — the boilerplate ships `fake`, which declines exactly
+  `4000000000000002` and accepts everything else, magic-test-card style — and a successful
+  charge moves the order `pending → paid` through the same conditional write the rest of the
+  status machine uses. The ordering is the PSP's reality: the money moves first, and a charge
+  whose order slipped away (cancelled, a racing tab) is refunded on the spot. Cancelling now
+  extends to `paid` orders BECAUSE the way back exists: the cancel emits the new
+  `ORDER_CANCELLED` domain event and payments answers with an at-most-once
+  `succeeded → refunded` move. A real PSP is one more file in `providers/` and one env var.
+
+- **Delivery: rates as rules, shipments as records, and a courier you press.** Shipping methods
+  live in `delivery/domain` as pure functions (flat rates, the classic free-above-100 rule,
+  pickup at zero) and the checkout prices the chosen `shippingMethodId` against the lines being
+  bought, freezing method and cost onto the order — `totalPrice` now includes it. An order
+  reaching `shipped` gets its parcel automatically (the new `ORDER_STATUS_CHANGED` event):
+  tracking code, shipment row, and the shipped email with the code in it. `POST
+/delivery/advance` is the fake courier — every parcel arrives, order first through the
+  conditional `shipped → delivered`, then the shipment — an admin button rather than a schedule
+  because this repo deliberately has no cron, exactly like the expired-token purge.
+
+- **An inventory ledger that hears every mover.** Whoever moves units — the checkout, a cancel,
+  the admin form's absolute stock write (announced as the relative movement it amounts to), the
+  new `POST /inventory/restock` — emits `STOCK_MOVED` with the why attached, and the inventory
+  module writes the append-only row. The product's `stock` stays authoritative: the ledger
+  explains, it never computes, so a build without the module keeps every count and loses only
+  the story. `GET /inventory/movements` reads it newest-first; a `products_low_stock_total`
+  gauge recounts the shelf at scrape time (`NODE_LOW_STOCK_THRESHOLD`) and surfaces on the
+  admin metrics overview as `business.lowStockProducts`.
+
 - **Checkout emails the customer what they bought.** `POST /cart/checkout` now dispatches the
   order-confirmation email that until now only the admin `POST /orders` path sent — and the email
   finally says something: `orderConfirmEmail` takes the order's lines and resolves one translated

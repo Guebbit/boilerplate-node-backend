@@ -175,6 +175,8 @@ export const getObservabilityMetricsOverviewResponseDataBusinessCheckoutSuccessM
 
 export const getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin = 0;
 
+export const getObservabilityMetricsOverviewResponseDataBusinessLowStockProductsMin = 0;
+
 export const getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin = 0;
 
 export const getObservabilityMetricsOverviewResponseDataDatabaseErrorsTotalMin = 0;
@@ -207,7 +209,8 @@ export const GetObservabilityMetricsOverviewResponse = zod.object({
 }),
   "business": zod.object({
   "checkoutSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessCheckoutSuccessMin).optional(),
-  "ordersCreated": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin).optional()
+  "ordersCreated": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin).optional(),
+  "lowStockProducts": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessLowStockProductsMin).optional()
 }),
   "database": zod.object({
   "queriesTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin).optional(),
@@ -1850,7 +1853,8 @@ export const GetCartSummaryResponse = zod.object({
 export const CheckoutBody = zod.object({
   "email": zod.email().optional(),
   "notes": zod.string().optional().describe('Optional order notes'),
-  "addressId": zod.string().describe('Resource identifier').optional().describe('Which of the caller\'s saved addresses to ship to. Omitted, the default address is used when one exists; an id that matches none of the caller\'s addresses refuses the checkout with 404 rather than shipping nowhere.')
+  "addressId": zod.string().describe('Resource identifier').optional().describe('Which of the caller\'s saved addresses to ship to. Omitted, the default address is used when one exists; an id that matches none of the caller\'s addresses refuses the checkout with 404 rather than shipping nowhere.'),
+  "shippingMethodId": zod.string().optional().describe('Which shipping method (see `GET \/delivery\/methods`) the order travels by. Its cost is priced against the lines being bought (free-above thresholds included) and frozen onto the order. Omitted, the order carries no shipping; an id that matches no method refuses the checkout with 404, `errors[].code` `CART_SHIPPING_METHOD_NOT_FOUND`.')
 })
 
 export const checkoutResponseDataOrderItemsItemProductPriceMin = 0;
@@ -1863,6 +1867,8 @@ export const checkoutResponseDataOrderTotalItemsMin = 0;
 export const checkoutResponseDataOrderTotalQuantityMin = 0;
 
 export const checkoutResponseDataOrderTotalPriceMin = 0;
+
+export const checkoutResponseDataOrderShippingCostMin = 0;
 
 
 
@@ -1894,8 +1900,10 @@ export const CheckoutResponse = zod.object({
 })),
   "totalItems": zod.number().min(checkoutResponseDataOrderTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(checkoutResponseDataOrderTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(checkoutResponseDataOrderTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(checkoutResponseDataOrderTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(checkoutResponseDataOrderShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2058,6 +2066,8 @@ export const listOrdersResponseDataItemsItemTotalQuantityMin = 0;
 
 export const listOrdersResponseDataItemsItemTotalPriceMin = 0;
 
+export const listOrdersResponseDataItemsItemShippingCostMin = 0;
+
 export const listOrdersResponseDataMetaPageDefault = 1;
 
 export const listOrdersResponseDataMetaPageSizeDefault = 10;
@@ -2097,8 +2107,10 @@ export const ListOrdersResponse = zod.object({
 })),
   "totalItems": zod.number().min(listOrdersResponseDataItemsItemTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(listOrdersResponseDataItemsItemTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(listOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(listOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(listOrdersResponseDataItemsItemShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2150,6 +2162,8 @@ export const createOrderResponseDataTotalQuantityMin = 0;
 
 export const createOrderResponseDataTotalPriceMin = 0;
 
+export const createOrderResponseDataShippingCostMin = 0;
+
 
 
 export const CreateOrderResponse = zod.object({
@@ -2179,8 +2193,10 @@ export const CreateOrderResponse = zod.object({
 })),
   "totalItems": zod.number().min(createOrderResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(createOrderResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(createOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(createOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(createOrderResponseDataShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2227,6 +2243,8 @@ export const updateOrderResponseDataTotalQuantityMin = 0;
 
 export const updateOrderResponseDataTotalPriceMin = 0;
 
+export const updateOrderResponseDataShippingCostMin = 0;
+
 
 
 export const UpdateOrderResponse = zod.object({
@@ -2256,8 +2274,10 @@ export const UpdateOrderResponse = zod.object({
 })),
   "totalItems": zod.number().min(updateOrderResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(updateOrderResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(updateOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(updateOrderResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(updateOrderResponseDataShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2324,6 +2344,8 @@ export const searchOrdersResponseDataItemsItemTotalQuantityMin = 0;
 
 export const searchOrdersResponseDataItemsItemTotalPriceMin = 0;
 
+export const searchOrdersResponseDataItemsItemShippingCostMin = 0;
+
 export const searchOrdersResponseDataMetaPageDefault = 1;
 
 export const searchOrdersResponseDataMetaPageSizeDefault = 10;
@@ -2363,8 +2385,10 @@ export const SearchOrdersResponse = zod.object({
 })),
   "totalItems": zod.number().min(searchOrdersResponseDataItemsItemTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(searchOrdersResponseDataItemsItemTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(searchOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(searchOrdersResponseDataItemsItemTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(searchOrdersResponseDataItemsItemShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2407,6 +2431,8 @@ export const getOrderByIdResponseDataTotalQuantityMin = 0;
 
 export const getOrderByIdResponseDataTotalPriceMin = 0;
 
+export const getOrderByIdResponseDataShippingCostMin = 0;
+
 
 
 export const GetOrderByIdResponse = zod.object({
@@ -2436,8 +2462,10 @@ export const GetOrderByIdResponse = zod.object({
 })),
   "totalItems": zod.number().min(getOrderByIdResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(getOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(getOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(getOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(getOrderByIdResponseDataShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2487,6 +2515,8 @@ export const updateOrderByIdResponseDataTotalQuantityMin = 0;
 
 export const updateOrderByIdResponseDataTotalPriceMin = 0;
 
+export const updateOrderByIdResponseDataShippingCostMin = 0;
+
 
 
 export const UpdateOrderByIdResponse = zod.object({
@@ -2516,8 +2546,10 @@ export const UpdateOrderByIdResponse = zod.object({
 })),
   "totalItems": zod.number().min(updateOrderByIdResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(updateOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(updateOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(updateOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(updateOrderByIdResponseDataShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2575,7 +2607,7 @@ export const HardDeleteOrderByIdResponse = zod.object({
 
 
 /**
- * Cancels the order identified by `{id}` — the one order write a customer can make. Only a `pending` order can be cancelled this way; `paid`, `processing` and later statuses each need their own flow (refund, return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
+ * Cancels the order identified by `{id}` — the one order write a customer can make. A `pending` or `paid` order can be cancelled this way; cancelling a paid one refunds its payment. `processing` and later statuses each need their own flow (return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
  * @summary Cancel order
  */
 export const CancelOrderByIdParams = zod.object({
@@ -2592,6 +2624,8 @@ export const cancelOrderByIdResponseDataTotalItemsMin = 0;
 export const cancelOrderByIdResponseDataTotalQuantityMin = 0;
 
 export const cancelOrderByIdResponseDataTotalPriceMin = 0;
+
+export const cancelOrderByIdResponseDataShippingCostMin = 0;
 
 
 
@@ -2622,8 +2656,10 @@ export const CancelOrderByIdResponse = zod.object({
 })),
   "totalItems": zod.number().min(cancelOrderByIdResponseDataTotalItemsMin).describe('Number of distinct line items in this order. Not to be confused with `PaginationMeta.totalItems`, which counts orders matching a search.'),
   "totalQuantity": zod.number().min(cancelOrderByIdResponseDataTotalQuantityMin).describe('Sum of `quantity` across every line item.'),
-  "totalPrice": zod.number().min(cancelOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item.'),
+  "totalPrice": zod.number().min(cancelOrderByIdResponseDataTotalPriceMin).describe('Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.'),
   "notes": zod.string().optional().describe('Optional order notes'),
+  "shippingMethod": zod.string().optional().describe('The shipping method\'s id as the checkout froze it (e.g. standard, express, pickup).'),
+  "shippingCost": zod.number().min(cancelOrderByIdResponseDataShippingCostMin).optional().describe('What that method cost at checkout time — a later rate change cannot re-price history.'),
   "shippingAddress": zod.object({
   "fullName": zod.string(),
   "street": zod.string(),
@@ -2649,3 +2685,226 @@ export const GetOrderInvoiceParams = zod.object({
 })
 
 export const GetOrderInvoiceResponse = zod.unknown()
+
+
+/**
+ * Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact); an order whose money already moved answers 409. The intent is the thing the card dialog confirms.
+ * @summary Create a payment intent
+ */
+export const CreatePaymentIntentBody = zod.object({
+  "orderId": zod.string().describe('Resource identifier')
+})
+
+export const createPaymentIntentResponseDataAmountMin = 0;
+
+
+
+export const CreatePaymentIntentResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "orderId": zod.string().describe('Resource identifier'),
+  "userId": zod.string().describe('Resource identifier'),
+  "amount": zod.number().min(createPaymentIntentResponseDataAmountMin).describe('The order\'s total as the intent froze it.'),
+  "currency": zod.string().describe('ISO-4217 currency code (e.g. EUR)'),
+  "status": zod.enum(['requires_confirmation', 'succeeded', 'declined', 'refunded']).describe('The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.'),
+  "provider": zod.string().describe('Which provider implementation handled it (`fake` in the demo).'),
+  "cardLast4": zod.string().optional().describe('The only card digits a payment system may remember.'),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+})
+})
+
+
+/**
+ * The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. Admins read anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
+ * @summary Get the payment behind an order
+ */
+export const GetPaymentByOrderParams = zod.object({
+  "orderId": zod.string().describe('One of the caller\'s own orders')
+})
+
+export const getPaymentByOrderResponseDataAmountMin = 0;
+
+
+
+export const GetPaymentByOrderResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "orderId": zod.string().describe('Resource identifier'),
+  "userId": zod.string().describe('Resource identifier'),
+  "amount": zod.number().min(getPaymentByOrderResponseDataAmountMin).describe('The order\'s total as the intent froze it.'),
+  "currency": zod.string().describe('ISO-4217 currency code (e.g. EUR)'),
+  "status": zod.enum(['requires_confirmation', 'succeeded', 'declined', 'refunded']).describe('The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.'),
+  "provider": zod.string().describe('Which provider implementation handled it (`fake` in the demo).'),
+  "cardLast4": zod.string().optional().describe('The only card digits a payment system may remember.'),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+})
+})
+
+
+/**
+ * The card dialog's submit. The provider charges first (that is how PSPs work — the money moves before your database hears about it), then the order is moved `pending → paid` by a conditional write; if the order slipped away in between, the charge is refunded on the spot. A decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable — submit the same payment again with another card. The fake provider declines exactly one number, documented on `ConfirmPaymentRequest.cardNumber`.
+ * @summary Confirm a payment
+ */
+export const ConfirmPaymentParams = zod.object({
+  "id": zod.string().describe('Resource identifier')
+})
+
+export const confirmPaymentBodyCardNumberMin = 12;
+export const confirmPaymentBodyCardNumberMax = 23;
+
+
+export const confirmPaymentBodyCardNumberRegExp = new RegExp('^[\\d ]+$');
+
+
+export const ConfirmPaymentBody = zod.object({
+  "cardNumber": zod.string().min(confirmPaymentBodyCardNumberMin).max(confirmPaymentBodyCardNumberMax).regex(confirmPaymentBodyCardNumberRegExp).describe('The card number, digits and optional spaces. The fake provider declines `4000000000000002` and accepts everything else; `4242424242424242` is the conventional success card.')
+})
+
+export const confirmPaymentResponseDataAmountMin = 0;
+
+
+
+export const ConfirmPaymentResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "orderId": zod.string().describe('Resource identifier'),
+  "userId": zod.string().describe('Resource identifier'),
+  "amount": zod.number().min(confirmPaymentResponseDataAmountMin).describe('The order\'s total as the intent froze it.'),
+  "currency": zod.string().describe('ISO-4217 currency code (e.g. EUR)'),
+  "status": zod.enum(['requires_confirmation', 'succeeded', 'declined', 'refunded']).describe('The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.'),
+  "provider": zod.string().describe('Which provider implementation handled it (`fake` in the demo).'),
+  "cardLast4": zod.string().optional().describe('The only card digits a payment system may remember.'),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+})
+})
+
+
+/**
+ * The shipping methods this shop offers — flat rates and free-above thresholds. Public, because what shipping costs is pre-purchase information; the authoritative pricing still happens at checkout, against the lines actually bought, so a client showing these numbers cannot commit the shop to a stale rate.
+ * @summary List shipping methods
+ */
+export const listShippingMethodsResponseDataMethodsItemPriceMin = 0;
+
+export const listShippingMethodsResponseDataMethodsItemFreeAboveMin = 0;
+
+
+
+export const ListShippingMethodsResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "methods": zod.array(zod.object({
+  "id": zod.string().describe('Stable id, frozen onto orders at checkout (standard, express, pickup).'),
+  "price": zod.number().min(listShippingMethodsResponseDataMethodsItemPriceMin).describe('Flat rate, in the shop\'s currency.'),
+  "freeAbove": zod.number().min(listShippingMethodsResponseDataMethodsItemFreeAboveMin).optional().describe('Items total at which this method becomes free. Absent — it never does.')
+}))
+})
+})
+
+
+/**
+ * The parcel for one of the caller's orders — tracking code and whether it has arrived. Ownership is the order's, read through the same scope every order read uses. No parcel yet (the order has not reached `shipped`) is a 404 — absence is the answer.
+ * @summary Get the shipment behind an order
+ */
+export const GetShipmentByOrderParams = zod.object({
+  "orderId": zod.string().describe('One of the caller\'s own orders')
+})
+
+export const GetShipmentByOrderResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "orderId": zod.string().describe('Resource identifier'),
+  "trackingCode": zod.string().describe('The courier\'s handle on the parcel.'),
+  "status": zod.enum(['shipped', 'delivered']).describe('The tail of the order\'s lifecycle, as the courier sees it.'),
+  "deliveredAt": zod.iso.datetime({"offset":true}).optional(),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+})
+})
+
+
+/**
+ * Every parcel currently `shipped` arrives — the order moves `shipped → delivered` through the same conditional write the rest of the status machine uses, then the shipment is stamped. Admin, and deliberately a button rather than a schedule — this repo has no cron, so an operator (or the demo) is the timer, exactly like the expired-token purge.
+ * @summary Advance the fake courier
+ */
+export const advanceCourierResponseDataAdvancedMin = 0;
+
+
+
+export const AdvanceCourierResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "advanced": zod.number().min(advanceCourierResponseDataAdvancedMin).describe('How many parcels arrived on this tick.')
+})
+})
+
+
+/**
+ * The ledger, newest first — every signed change to a shelf count with the why attached (order, cancel, adjustment, restock). Optionally one product's story via `productId`. Admin — customers see stock as a number on the product page.
+ * @summary List stock movements
+ */
+export const ListStockMovementsQueryParams = zod.object({
+  "productId": zod.string().optional().describe('Narrow to one product\'s movements')
+})
+
+export const ListStockMovementsResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "productId": zod.string().describe('Resource identifier'),
+  "delta": zod.number().describe('Signed — a sale is negative, a return or restock positive.'),
+  "reason": zod.enum(['order', 'order-cancelled', 'adjustment', 'restock']).describe('Why the units moved.'),
+  "reference": zod.string().optional().describe('What caused it, when something did — the order id, typically.'),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+}))
+})
+})
+
+
+/**
+ * Puts units on a shelf through the same conditional increment every other movement uses, and writes the ledger row through the same announcement — so a restock and a sale tell the same kind of story. Answers the shelf count after the units landed.
+ * @summary Restock a product
+ */
+
+
+
+export const RestockProductBody = zod.object({
+  "productId": zod.string().describe('Resource identifier'),
+  "quantity": zod.number().min(1).describe('How many units arrived. Corrections downward are the admin product form\'s absolute stock write.')
+})
+
+export const restockProductResponseDataStockMin = 0;
+
+
+
+export const RestockProductResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "productId": zod.string().describe('Resource identifier'),
+  "stock": zod.number().min(restockProductResponseDataStockMin).describe('The shelf count after the units landed.')
+})
+})

@@ -1,0 +1,10 @@
+{
+    "payments": {
+        "order-not-found": "L'ordine da pagare non è stato trovato",
+        "order-not-payable": "Questo ordine non può essere pagato nel suo stato attuale.",
+        "not-found": "Nessun pagamento trovato",
+        "not-confirmable": "Questo pagamento non è in attesa di conferma.",
+        "declined": "Il pagamento è stato rifiutato dall'emittente della carta.",
+        "confirm-success": "Pagamento ricevuto — l'ordine è pagato."
+    }
+}

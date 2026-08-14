@@ -14,10 +14,17 @@ import {
     type IResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { orderRepository, orderConfirmEmail, type IOrderDocument } from '@modules/orders';
+import {
+    orderRepository,
+    orderConfirmEmail,
+    sumLineItems,
+    type IOrderDocument
+} from '@modules/orders';
 import { userRepository } from '@modules/users';
-import { productRepository } from '@modules/products';
+import { productRepository, STOCK_MOVED } from '@modules/products';
+import { emitDomainEvent } from '@kernel/events';
 import { addressForCheckout, type IAddressItem } from '@modules/account';
+import { findShippingMethod, priceShipping } from '@modules/delivery';
 import { cartRepository } from '../repository';
 import { evaluateCheckout } from '../domain';
 import { isJoined, readCartLines, type TJoinedCartLine } from './view';
@@ -94,12 +101,30 @@ const restoreStock = async (lines: readonly TJoinedCartLine[]): Promise<void> =>
  */
 export const orderConfirm = (
     userId: string,
-    addressId?: string
+    addressId?: string,
+    shippingMethodId?: string
 ): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
     userRepository
         .findById(userId)
         .then<IResponseSuccess<IOrderDocument> | IResponseReject>(async (user) => {
             if (!user) return generateReject(404, []);
+
+            /*
+             * Which method ships. Resolved BEFORE any stock moves for the same reason the
+             * address is: a name that matches nothing refuses the checkout while nothing has
+             * been written yet. `undefined` — no method named — is fine; shipping is not (yet)
+             * required to buy, exactly like the address. The COST is priced later, once the
+             * joined lines say what the items total is.
+             */
+            const shippingMethod =
+                shippingMethodId === undefined ? undefined : findShippingMethod(shippingMethodId);
+            if (shippingMethodId !== undefined && !shippingMethod)
+                return generateReject(404, [
+                    {
+                        code: 'CART_SHIPPING_METHOD_NOT_FOUND',
+                        message: t('cart.shipping-method-not-found')
+                    }
+                ]);
 
             /*
              * Which address ships. Resolved BEFORE any stock moves: a named entry that is not
@@ -170,21 +195,46 @@ export const orderConfirm = (
                                 }
                             ]);
 
+                        const orderItems = joined.map(({ product, quantity }) => ({
+                            product,
+                            quantity
+                        }));
+
                         return orderRepository
                             .create({
                                 userId: new Types.ObjectId(user.id),
                                 email: user.email,
-                                items: joined.map(({ product, quantity }) => ({
-                                    product,
-                                    quantity
-                                })),
-                                ...(address ? { shippingAddress: toShippingAddress(address) } : {})
+                                items: orderItems,
+                                ...(address ? { shippingAddress: toShippingAddress(address) } : {}),
+                                // The cost frozen against THESE lines' total — the free-above
+                                // rule prices the basket being bought, not a later edit of it.
+                                ...(shippingMethod
+                                    ? {
+                                          shippingMethod: shippingMethod.id,
+                                          shippingCost: priceShipping(
+                                              shippingMethod,
+                                              sumLineItems(orderItems).price
+                                          )
+                                      }
+                                    : {})
                             } as Partial<IOrderDocument>)
                             .then((order) =>
                                 cartRepository
                                     .clearLinesIfUnchanged(userId, version)
-                                    .then((clearedCart) => {
+                                    .then(async (clearedCart) => {
                                         if (clearedCart) {
+                                            /*
+                                             * The ledger hears the sale only now: the failure
+                                             * paths below put every unit back, and a movement
+                                             * that was fully undone is not a fact worth a row.
+                                             */
+                                            for (const line of joined)
+                                                await emitDomainEvent(STOCK_MOVED, {
+                                                    productId: String(line.productId),
+                                                    delta: -line.quantity,
+                                                    reason: 'order',
+                                                    reference: String(order._id)
+                                                });
                                             /*
                                              * The confirmation, from the service unlike every
                                              * other email: only this point knows the order stood,

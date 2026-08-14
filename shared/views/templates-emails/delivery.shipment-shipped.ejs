@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="<%= locale %>">
+<%- include("../layouts/email-template-head.ejs"); %>
+<body>
+<main class="centered">
+    <h1><%= greeting %></h1>
+    <p><%= body %></p>
+    <p><%= tracking %></p>
+</main>
+<%- include("../layouts/default-footer.ejs"); %>
+</body>
+</html>

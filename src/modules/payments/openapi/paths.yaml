@@ -1,0 +1,87 @@
+    /payments/intent:
+        post:
+            tags: [Payments]
+            summary: Create a payment intent
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact); an order whose money already moved answers 409. The intent is the thing the card dialog confirms.
+            operationId: createPaymentIntent
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreatePaymentIntentRequest'
+            responses:
+                '201':
+                    description: The payment intent, ready to confirm
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                # Not `pending` any more, or already paid. `errors[].code` is
+                # `PAYMENT_ORDER_NOT_PAYABLE`.
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /payments/order/{orderId}:
+        get:
+            tags: [Payments]
+            summary: Get the payment behind an order
+            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. Admins read anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
+            operationId: getPaymentByOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The payment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }
+
+    /payments/{id}/confirm:
+        post:
+            tags: [Payments]
+            summary: Confirm a payment
+            description: The card dialog's submit. The provider charges first (that is how PSPs work — the money moves before your database hears about it), then the order is moved `pending → paid` by a conditional write; if the order slipped away in between, the charge is refunded on the spot. A decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable — submit the same payment again with another card. The fake provider declines exactly one number, documented on `ConfirmPaymentRequest.cardNumber`.
+            operationId: confirmPayment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConfirmPaymentRequest'
+            responses:
+                '200':
+                    description: The payment, `succeeded`; the order is `paid`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '#/components/responses/Unauthorized' }
+                '404': { $ref: '#/components/responses/NotFound' }
+                # Declined by the card issuer (`PAYMENT_DECLINED`), not awaiting confirmation
+                # (`PAYMENT_NOT_CONFIRMABLE`), or the order slipped away between charge and
+                # write (`PAYMENT_ORDER_NOT_PAYABLE` — the charge was refunded on the spot).
+                '409': { $ref: '#/components/responses/Conflict' }
+                '422': { $ref: '#/components/responses/ValidationError' }
+                '500': { $ref: '#/components/responses/InternalError' }

@@ -107,6 +107,35 @@ Orders are normally created via checkout but can also be created manually by an 
 | DELETE | `/orders` | admin | Bulk delete orders |
 | DELETE | `/orders/:id` | admin | Delete single order |
 
+## Payments
+
+An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, default `fake` — magic test cards, no outside calls). The intent freezes the order's total; the confirm charges and moves the order `pending → paid` atomically; cancelling a paid order refunds automatically (the `ORDER_CANCELLED` event). The fake provider declines exactly `4000000000000002` and accepts everything else.
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| POST | `/payments/intent` | user | Freeze one of your pending orders into a payment intent |
+| GET | `/payments/order/:orderId` | user | The payment behind an order (admin: anyone's) |
+| POST | `/payments/:id/confirm` | user | Confirm with a card; 409 `PAYMENT_DECLINED` is retryable |
+
+## Delivery
+
+Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. An order reaching `shipped` (admin status write) automatically gets a shipment, a tracking code and the shipped email; the fake courier is a button, not a schedule — this repo deliberately has no cron.
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/delivery/methods` | none | The shipping methods and their rates |
+| GET | `/delivery/order/:orderId` | user | The shipment behind an order (tracking, delivered?) |
+| POST | `/delivery/advance` | admin | The fake courier's tick: every shipped parcel arrives |
+
+## Inventory
+
+An append-only stock-movements ledger: every mover (checkout, cancel, the admin product form, the restock) announces through the `STOCK_MOVED` event and this module writes the row — the product's `stock` stays authoritative, the ledger explains. The low-stock gauge (`NODE_LOW_STOCK_THRESHOLD`) feeds the admin metrics overview.
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/inventory/movements` | admin | The ledger, newest first (`?productId=` narrows) |
+| POST | `/inventory/restock` | admin | Put units on a shelf, through the same announcement |
+
 ## Users (admin)
 
 Full user management, admin-only. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.

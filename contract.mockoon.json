@@ -473,7 +473,7 @@
         "responses": [
           {
             "uuid": "92fb9299-14b8-431c-828e-c2c73f42004c",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Metrics overview\",\n  \"data\": {\n    \"http\": {\n      \"totalRequests\": 0,\n      \"totalErrors\": 0,\n      \"errorRate\": 0,\n      \"inFlight\": 0,\n      \"latencyMs\": {\n        \"p50\": 1,\n        \"p95\": 1\n      }\n    },\n    \"auth\": {\n      \"loginSuccess\": 0,\n      \"loginFailure\": 0,\n      \"signupSuccess\": 0\n    },\n    \"business\": {\n      \"checkoutSuccess\": 0,\n      \"ordersCreated\": 0\n    },\n    \"database\": {\n      \"queriesTotal\": 0,\n      \"errorsTotal\": 0\n    },\n    \"process\": {\n      \"uptimeSeconds\": 0,\n      \"heapUsedMb\": 0\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Metrics overview\",\n  \"data\": {\n    \"http\": {\n      \"totalRequests\": 0,\n      \"totalErrors\": 0,\n      \"errorRate\": 0,\n      \"inFlight\": 0,\n      \"latencyMs\": {\n        \"p50\": 1,\n        \"p95\": 1\n      }\n    },\n    \"auth\": {\n      \"loginSuccess\": 0,\n      \"loginFailure\": 0,\n      \"signupSuccess\": 0\n    },\n    \"business\": {\n      \"checkoutSuccess\": 0,\n      \"ordersCreated\": 0,\n      \"lowStockProducts\": 0\n    },\n    \"database\": {\n      \"queriesTotal\": 0,\n      \"errorsTotal\": 0\n    },\n    \"process\": {\n      \"uptimeSeconds\": 0,\n      \"heapUsedMb\": 0\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Metrics overview",
@@ -6197,7 +6197,7 @@
         "responses": [
           {
             "uuid": "ce7bfe44-8bee-4bf6-8052-288dfc34fbb4",
-            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Order created\",\n  \"data\": {\n    \"order\": {\n      \"id\": \"65de73a69ca05739be2b5e85\",\n      \"userId\": \"65dd2bdb923652b7800fe180\",\n      \"email\": \"oldpsw@root.it\",\n      \"items\": [\n        {\n          \"product\": {\n            \"id\": \"65dc8a99604c307b702b5ccc\",\n            \"title\": \"Sallyno Panino\",\n            \"price\": 100,\n            \"stock\": 0,\n            \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n            \"active\": true,\n            \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n            \"categories\": [\n              \"string\"\n            ],\n            \"tags\": [\n              \"string\"\n            ],\n            \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n            \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n            \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n          },\n          \"quantity\": 1\n        }\n      ],\n      \"totalItems\": 2,\n      \"totalQuantity\": 5,\n      \"totalPrice\": 149.97,\n      \"notes\": \"string\",\n      \"shippingAddress\": {\n        \"fullName\": \"string\",\n        \"street\": \"string\",\n        \"city\": \"string\",\n        \"zip\": \"string\",\n        \"country\": \"string\",\n        \"phone\": \"string\"\n      },\n      \"status\": \"pending\",\n      \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n      \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n    },\n    \"message\": \"string\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Order created\",\n  \"data\": {\n    \"order\": {\n      \"id\": \"65de73a69ca05739be2b5e85\",\n      \"userId\": \"65dd2bdb923652b7800fe180\",\n      \"email\": \"oldpsw@root.it\",\n      \"items\": [\n        {\n          \"product\": {\n            \"id\": \"65dc8a99604c307b702b5ccc\",\n            \"title\": \"Sallyno Panino\",\n            \"price\": 100,\n            \"stock\": 0,\n            \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n            \"active\": true,\n            \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n            \"categories\": [\n              \"string\"\n            ],\n            \"tags\": [\n              \"string\"\n            ],\n            \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n            \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n            \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n          },\n          \"quantity\": 1\n        }\n      ],\n      \"totalItems\": 2,\n      \"totalQuantity\": 5,\n      \"totalPrice\": 149.97,\n      \"notes\": \"string\",\n      \"shippingMethod\": \"string\",\n      \"shippingCost\": 0,\n      \"shippingAddress\": {\n        \"fullName\": \"string\",\n        \"street\": \"string\",\n        \"city\": \"string\",\n        \"zip\": \"string\",\n        \"country\": \"string\",\n        \"phone\": \"string\"\n      },\n      \"status\": \"pending\",\n      \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n      \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n    },\n    \"message\": \"string\"\n  }\n}",
             "latency": 0,
             "statusCode": 201,
             "label": "Order created",
@@ -6989,7 +6989,7 @@
         "responses": [
           {
             "uuid": "1598f077-3d08-4822-8940-b086e8f14efc",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"stock\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"stock\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingMethod\": \"string\",\n        \"shippingCost\": 0,\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Orders page",
@@ -7097,7 +7097,7 @@
         "responses": [
           {
             "uuid": "1d05c7e0-ade5-4ce7-8070-2d1ddfe65525",
-            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 201,
             "label": "Created order",
@@ -7253,7 +7253,7 @@
         "responses": [
           {
             "uuid": "e0ae4413-e750-42f0-8717-6608119aa39e",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated order",
@@ -7565,7 +7565,7 @@
         "responses": [
           {
             "uuid": "4e6758f5-7896-4717-887a-e2eb05c1bbde",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"stock\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"stock\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingMethod\": \"string\",\n        \"shippingCost\": 0,\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Orders search results",
@@ -7697,7 +7697,7 @@
         "responses": [
           {
             "uuid": "8a822388-94c4-4e61-88e8-53576011e14c",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Order",
@@ -7829,7 +7829,7 @@
         "responses": [
           {
             "uuid": "39612fe3-f6cf-402a-8e16-dfc15e4c290f",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated order",
@@ -8297,7 +8297,7 @@
         "responses": [
           {
             "uuid": "cea471e8-9eeb-46f0-87d5-fd654c16a059",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The cancelled order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The cancelled order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "The cancelled order",
@@ -8525,6 +8525,1038 @@
           },
           {
             "uuid": "0d97c202-f61f-49e5-8b9f-5b513d2f9841",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "ebae1b58-7cfb-4af2-8f1e-6200403479d0",
+        "type": "http",
+        "documentation": "Create a payment intent",
+        "method": "post",
+        "endpoint": "payments/intent",
+        "responses": [
+          {
+            "uuid": "5b4fad63-c2d4-4a56-8949-d98d23ae53a9",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"The payment intent, ready to confirm\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"orderId\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65de646a44f861fd83c13f13\",\n    \"amount\": 0,\n    \"currency\": \"string\",\n    \"status\": \"requires_confirmation\",\n    \"provider\": \"string\",\n    \"cardLast4\": \"string\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "latency": 0,
+            "statusCode": 201,
+            "label": "The payment intent, ready to confirm",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "8d90ab60-f364-4676-846b-031bc57ca3de",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "bf38d143-ef98-45df-8234-6919ac243478",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "b6e0dd5a-ca31-479e-84f1-e1b12ea5bce0",
+            "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 409,
+            "label": "The request conflicts with the current state of the resource",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "cc1badff-727c-4487-88e1-cc388f0cd03a",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "c95e1f81-f125-40e6-8d9b-38f8e46c52c5",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "54e5c3a0-cf8e-45a0-88fc-a4c41864479e",
+        "type": "http",
+        "documentation": "Get the payment behind an order",
+        "method": "get",
+        "endpoint": "payments/order/:orderId",
+        "responses": [
+          {
+            "uuid": "14fbccb4-2592-4db9-8112-851c73f17eab",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The payment\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"orderId\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65de646a44f861fd83c13f13\",\n    \"amount\": 0,\n    \"currency\": \"string\",\n    \"status\": \"requires_confirmation\",\n    \"provider\": \"string\",\n    \"cardLast4\": \"string\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The payment",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "71431546-091c-4796-869b-b338ff7585de",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "7fc74fab-26eb-4b43-8c4f-7ed9ca8edb76",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "c6fab1a9-2128-4ade-8522-97043f50459a",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "ecbafbc7-de27-4ed9-83df-c1fc84be1512",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "cecfdfb8-c24a-41b6-8d97-d1308e866538",
+        "type": "http",
+        "documentation": "Confirm a payment",
+        "method": "post",
+        "endpoint": "payments/:id/confirm",
+        "responses": [
+          {
+            "uuid": "1f8d7b5e-5885-4e7c-8420-57cf2a5c1265",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The payment, `succeeded`; the order is `paid`\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"orderId\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65de646a44f861fd83c13f13\",\n    \"amount\": 0,\n    \"currency\": \"string\",\n    \"status\": \"requires_confirmation\",\n    \"provider\": \"string\",\n    \"cardLast4\": \"string\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The payment, `succeeded`; the order is `paid`",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "07f755d1-2d78-4950-8c57-2311415babde",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "dd7e4d95-fadb-414c-8cee-5c24b289d7a6",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "8ffb5a20-0f09-477d-8dc5-f9b52049a0b9",
+            "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 409,
+            "label": "The request conflicts with the current state of the resource",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "cef023d0-6836-4298-85e7-b205ffd7d24a",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "e5d8864b-574e-4a65-8468-db285cad577f",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "00d49ea8-d547-42e4-8def-3ab49934830c",
+        "type": "http",
+        "documentation": "List shipping methods",
+        "method": "get",
+        "endpoint": "delivery/methods",
+        "responses": [
+          {
+            "uuid": "5dfa0347-ffbe-4d73-8dbc-a60219add999",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The methods\",\n  \"data\": {\n    \"methods\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"price\": 100,\n        \"freeAbove\": 0\n      }\n    ]\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The methods",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "3052c404-0c50-4b37-8f08-5b83b1bd3550",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "9e5b4d75-9698-4c17-8ec4-6bfb73198bc7",
+        "type": "http",
+        "documentation": "Get the shipment behind an order",
+        "method": "get",
+        "endpoint": "delivery/order/:orderId",
+        "responses": [
+          {
+            "uuid": "d99e6328-d82c-4e49-8bd4-b67679a0e34e",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The shipment\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"orderId\": \"65de73a69ca05739be2b5e85\",\n    \"trackingCode\": \"string\",\n    \"status\": \"shipped\",\n    \"deliveredAt\": \"2026-01-01T00:00:00.000Z\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The shipment",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "ab8903b7-903a-42b3-8b9f-f78d587a8db1",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "28d73a24-c4e2-4be8-83d9-d48ec56fccf6",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "ab4dcb11-2564-42dd-805d-5bc81cb5687e",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "6c56d928-aeab-4d9f-8972-9d29db695275",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "cadd6c9f-e2e7-4491-8b8c-53f7f8d13a80",
+        "type": "http",
+        "documentation": "Advance the fake courier",
+        "method": "post",
+        "endpoint": "delivery/advance",
+        "responses": [
+          {
+            "uuid": "68b7ca7b-6bd6-4b39-8a59-ba6e1b3731ae",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"How many parcels arrived\",\n  \"data\": {\n    \"advanced\": 0\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "How many parcels arrived",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "779c6b16-4d8f-4009-88d9-c2070a92f3e9",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "dfcfefd7-3b99-4c60-847f-fbd527aafd9d",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "6e78750e-90d2-40ee-819e-b4fc89ba0fb8",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "ae596e76-e929-432c-80e4-697846dfd22a",
+        "type": "http",
+        "documentation": "List stock movements",
+        "method": "get",
+        "endpoint": "inventory/movements",
+        "responses": [
+          {
+            "uuid": "ff07aa0f-8546-4874-8152-cbf51f98d438",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The latest movements\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"productId\": \"65dc8a99604c307b702b5ccc\",\n        \"delta\": 1,\n        \"reason\": \"order\",\n        \"reference\": \"string\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ]\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The latest movements",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "b9ef42ec-fed7-4a59-8dc0-4afdecc9517b",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "e6acc5f4-f9e3-45d8-8730-19601c2ba6a6",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "767b0906-d4c3-4f96-8de2-ef9afe557479",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "989a03a7-a293-424f-8376-597a5075dca1",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "3ce91236-18fe-4629-8eb7-f56334ea1f86",
+        "type": "http",
+        "documentation": "Restock a product",
+        "method": "post",
+        "endpoint": "inventory/restock",
+        "responses": [
+          {
+            "uuid": "0d5b9cb8-1010-4b08-83be-0a70e7d096fa",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The shelf after the delivery\",\n  \"data\": {\n    \"productId\": \"65dc8a99604c307b702b5ccc\",\n    \"stock\": 0\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The shelf after the delivery",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "168c9795-8de7-4462-8a1f-c5462b856382",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "212ab9a2-224f-4da1-85a9-6cdbdd225766",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "811a0b10-ffa1-421c-8fbc-6f5944dc29cd",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "afb5df82-206e-4c6d-84cd-9ff4a5d34e60",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "07c67b69-d58f-40a6-81e9-c3367fa6e4a2",
             "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
             "latency": 0,
             "statusCode": 500,
@@ -8849,6 +9881,38 @@
       {
         "type": "route",
         "uuid": "4a871dc0-f14c-4b6d-86ae-6706c273dfc4"
+      },
+      {
+        "type": "route",
+        "uuid": "ebae1b58-7cfb-4af2-8f1e-6200403479d0"
+      },
+      {
+        "type": "route",
+        "uuid": "54e5c3a0-cf8e-45a0-88fc-a4c41864479e"
+      },
+      {
+        "type": "route",
+        "uuid": "cecfdfb8-c24a-41b6-8d97-d1308e866538"
+      },
+      {
+        "type": "route",
+        "uuid": "00d49ea8-d547-42e4-8def-3ab49934830c"
+      },
+      {
+        "type": "route",
+        "uuid": "9e5b4d75-9698-4c17-8ec4-6bfb73198bc7"
+      },
+      {
+        "type": "route",
+        "uuid": "cadd6c9f-e2e7-4491-8b8c-53f7f8d13a80"
+      },
+      {
+        "type": "route",
+        "uuid": "ae596e76-e929-432c-80e4-697846dfd22a"
+      },
+      {
+        "type": "route",
+        "uuid": "3ce91236-18fe-4629-8eb7-f56334ea1f86"
       }
   ],
   "proxyMode": false,

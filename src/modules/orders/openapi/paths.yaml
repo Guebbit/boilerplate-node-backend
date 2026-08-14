@@ -229,7 +229,7 @@
         post:
             tags: [Orders]
             summary: Cancel order
-            description: Cancels the order identified by `{id}` — the one order write a customer can make. Only a `pending` order can be cancelled this way; `paid`, `processing` and later statuses each need their own flow (refund, return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
+            description: Cancels the order identified by `{id}` — the one order write a customer can make. A `pending` or `paid` order can be cancelled this way; cancelling a paid one refunds its payment. `processing` and later statuses each need their own flow (return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
             operationId: cancelOrderById
             security:
                 - bearerAuth: []
@@ -244,8 +244,8 @@
                                 $ref: '#/components/schemas/OrderEnvelope'
                 '401': { $ref: '#/components/responses/Unauthorized' }
                 '404': { $ref: '#/components/responses/NotFound' }
-                # The order exists and is visible to the caller, but its status is past pending.
-                # `errors[].code` is `ORDER_NOT_CANCELLABLE`.
+                # The order exists and is visible to the caller, but its status is past the
+                # cancellable pair (pending, paid). `errors[].code` is `ORDER_NOT_CANCELLABLE`.
                 '409': { $ref: '#/components/responses/Conflict' }
                 '422': { $ref: '#/components/responses/ValidationError' }
                 '500': { $ref: '#/components/responses/InternalError' }

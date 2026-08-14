@@ -18,6 +18,7 @@
 
 export { orderService } from './service';
 export { orderRepository } from './repository';
+export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 // `cart` sends the customer's confirmation itself: only the checkout knows the order stood, and
 // only the service has the recipient's record in scope for the language it goes out in.
 export { orderConfirmEmail } from './emails';

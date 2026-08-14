@@ -1,0 +1,70 @@
+        # ── Payments module ─────────────────────────────────────────────────────
+        # Owned by src/modules/payments. The Payment is the provider-facing record of an
+        # order's money; the order's own status stays the customer-facing lifecycle.
+
+        Payment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, userId, amount, currency, status, provider]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                orderId:
+                    $ref: '#/components/schemas/Id'
+                userId:
+                    $ref: '#/components/schemas/Id'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The order's total as the intent froze it.
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. EUR)
+                status:
+                    type: string
+                    enum: [requires_confirmation, succeeded, declined, refunded]
+                    description: The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.
+                provider:
+                    type: string
+                    description: Which provider implementation handled it (`fake` in the demo).
+                cardLast4:
+                    type: string
+                    description: The only card digits a payment system may remember.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        PaymentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: *envelopeSuccess
+                status: *envelopeStatus
+                message: *envelopeMessage
+                data:
+                    $ref: '#/components/schemas/Payment'
+
+        CreatePaymentIntentRequest:
+            type: object
+            additionalProperties: false
+            required: [orderId]
+            properties:
+                orderId:
+                    $ref: '#/components/schemas/Id'
+
+        ConfirmPaymentRequest:
+            type: object
+            additionalProperties: false
+            required: [cardNumber]
+            properties:
+                cardNumber:
+                    type: string
+                    minLength: 12
+                    maxLength: 23
+                    pattern: '^[\d ]+$'
+                    description: The card number, digits and optional spaces. The fake provider declines `4000000000000002` and accepts everything else; `4242424242424242` is the conventional success card.

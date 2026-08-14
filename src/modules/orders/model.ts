@@ -115,6 +115,19 @@ export const orderSchema = new Schema<IOrderDocument>(
             type: String
         },
         /*
+         * The shipping choice, frozen at checkout like everything else on an order: the method's
+         * id and what it COST THEN — a later change to the delivery module's rates cannot
+         * re-price history. Absent on orders that predate delivery and on checkouts that chose
+         * no method (shipping is not required to buy, exactly like the address).
+         */
+        shippingMethod: {
+            type: String
+        },
+        shippingCost: {
+            type: Number,
+            min: 0
+        },
+        /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
          * `items`: an order keeps where it was going, not what the address book says today.
          * Absent on orders that predate the book and on checkouts by users who keep none;
@@ -196,7 +209,13 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
 
     serialized.totalItems = count;
     serialized.totalQuantity = quantity;
-    serialized.totalPrice = price;
+    // What the customer owes: the lines plus the shipping frozen at checkout. Same rounding as
+    // the lines themselves — both numbers came through `toCents` territory.
+    serialized.totalPrice =
+        Math.round(
+            (price + (typeof serialized.shippingCost === 'number' ? serialized.shippingCost : 0)) *
+                100
+        ) / 100;
 };
 
 /**

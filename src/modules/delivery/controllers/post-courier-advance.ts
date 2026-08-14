@@ -1,0 +1,29 @@
+import type { Request, Response } from 'express';
+import type { CastError } from 'mongoose';
+import { successResponse } from '@infrastructure/http/response';
+import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { deliveryAuditActions } from '../audit';
+import { runCourierAdvance } from '../service';
+
+/**
+ * POST /delivery/advance
+ * The fake courier's tick, behind an admin endpoint the way the token cleanup is: this repo
+ * deliberately has no scheduler, so an operator (or the demo's admin button) is the cron. Every
+ * parcel currently on a truck arrives.
+ */
+export const postCourierAdvance = (request: Request, response: Response) =>
+    runCourierAdvance()
+        .then((advanced) => {
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: deliveryAuditActions.ADMIN_COURIER_ADVANCED,
+                    outcome: 'success',
+                    metadata: { advanced }
+                })
+            );
+            successResponse(response, { advanced });
+        })
+        .catch((error: CastError | Error) => {
+            rejectDatabaseError(response, 'postCourierAdvance', error);
+        });

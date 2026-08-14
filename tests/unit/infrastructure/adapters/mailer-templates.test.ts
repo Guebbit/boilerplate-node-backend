@@ -21,6 +21,7 @@ import {
 } from '@modules/account/emails';
 import { contactRequestEmail } from '@modules/feedback/emails';
 import { orderConfirmEmail, invoiceDocument } from '@modules/orders/emails';
+import { shipmentShippedEmail } from '@modules/delivery/emails';
 
 describe('email templates', () => {
     it('resolves to a directory that exists', () => {
@@ -79,6 +80,7 @@ const contentFor = (locale: string): Record<string, IEmailContent> => ({
             { quantity: 1, product: { title: 'A whole ham', price: 42 } }
         ]
     }),
+    'delivery.shipment-shipped.ejs': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
     'feedback.contact.ejs': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',

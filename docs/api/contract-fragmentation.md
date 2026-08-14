@@ -107,7 +107,7 @@ result, copy that.
 ## Which fragment owns which operation
 
 The rule is the one the module registry already uses: **a module owns the paths under its
-`basePath`.** As of today the contract's 74 operations map onto the enabled modules like this:
+`basePath`.** As of today the contract's 82 operations map onto the enabled modules like this:
 
 | Module          | `basePath`       | OpenAPI tag(s)        | Ops |
 | --------------- | ---------------- | --------------------- | --- |
@@ -117,6 +117,9 @@ The rule is the one the module registry already uses: **a module owns the paths 
 | `products`      | `/products`      | `Products`            | 10  |
 | `cart`          | `/cart`          | `Cart`                | 7   |
 | `wishlist`      | `/wishlist`      | `Wishlist`            | 4   |
+| `payments`      | `/payments`      | `Payments`            | 3   |
+| `delivery`      | `/delivery`      | `Delivery`            | 3   |
+| `inventory`     | `/inventory`     | `Inventory`           | 2   |
 | `observability` | `/observability` | `Observability`       | 5   |
 | `feedback`      | `/feedback`      | `Feedback`            | 3   |
 | `locales`       | `/locales`       | `System` (2 of 3)     | 2   |

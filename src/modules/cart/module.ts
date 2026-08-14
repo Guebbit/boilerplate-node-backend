@@ -21,7 +21,7 @@ export default {
     name: 'cart',
     basePath: '/cart',
     routes: router,
-    dependsOn: ['account', 'orders', 'products', 'users'],
+    dependsOn: ['account', 'delivery', 'orders', 'products', 'users'],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) => productRemoveFromCartsById(productId));
         onDomainEvent(USER_DELETED, ({ userId }) => cartDeleteByUserId(userId));

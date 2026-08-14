@@ -1,0 +1,602 @@
+  - info:
+      name: Payments
+      type: folder
+      seq: 11
+    request:
+      auth: inherit
+    items:
+      - info:
+          name: Create a payment intent
+          type: http
+          seq: 1
+          tags:
+            - Payments
+        http:
+          method: POST
+          url: "{{baseUrl}}/payments/intent"
+          body:
+            type: json
+            data: |-
+              {
+                "orderId": "65de73a69ca05739be2b5e85"
+              }
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 201 Response
+            description: The payment intent, ready to confirm
+            request:
+              url: "{{baseUrl}}/payments/intent"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "orderId": "65de73a69ca05739be2b5e85"
+                  }
+            response:
+              status: 201
+              statusText: Created
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 201,
+                    "message": "The payment intent, ready to confirm",
+                    "data": {
+                      "id": "65dc8a99604c307b702b5ccc",
+                      "orderId": "65de73a69ca05739be2b5e85",
+                      "userId": "65de646a44f861fd83c13f13",
+                      "amount": 0,
+                      "currency": "string",
+                      "status": "requires_confirmation",
+                      "provider": "string",
+                      "cardLast4": "string",
+                      "createdAt": "2026-01-01T00:00:00.000Z",
+                      "updatedAt": "2026-01-01T00:00:00.000Z"
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/payments/intent"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "orderId": "65de73a69ca05739be2b5e85"
+                  }
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/payments/intent"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "orderId": "65de73a69ca05739be2b5e85"
+                  }
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 409 Response
+            description: The request conflicts with the current state of the resource
+            request:
+              url: "{{baseUrl}}/payments/intent"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "orderId": "65de73a69ca05739be2b5e85"
+                  }
+            response:
+              status: 409
+              statusText: Conflict
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 409,
+                    "message": "The request conflicts with the current state of the resource",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/payments/intent"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "orderId": "65de73a69ca05739be2b5e85"
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/payments/intent"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "orderId": "65de73a69ca05739be2b5e85"
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Get the payment behind an order
+          type: http
+          seq: 2
+          tags:
+            - Payments
+        http:
+          method: GET
+          url: "{{baseUrl}}/payments/order/65de73a69ca05739be2b5e85"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The payment
+            request:
+              url: "{{baseUrl}}/payments/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The payment",
+                    "data": {
+                      "id": "65dc8a99604c307b702b5ccc",
+                      "orderId": "65de73a69ca05739be2b5e85",
+                      "userId": "65de646a44f861fd83c13f13",
+                      "amount": 0,
+                      "currency": "string",
+                      "status": "requires_confirmation",
+                      "provider": "string",
+                      "cardLast4": "string",
+                      "createdAt": "2026-01-01T00:00:00.000Z",
+                      "updatedAt": "2026-01-01T00:00:00.000Z"
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/payments/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/payments/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/payments/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/payments/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Confirm a payment
+          type: http
+          seq: 3
+          tags:
+            - Payments
+        http:
+          method: POST
+          url: "{{baseUrl}}/payments/65dd2bdb923652b7800fe180/confirm"
+          body:
+            type: json
+            data: |-
+              {
+                "cardNumber": "string"
+              }
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The payment, `succeeded`; the order is `paid`
+            request:
+              url: "{{baseUrl}}/payments/65dd2bdb923652b7800fe180/confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "cardNumber": "string"
+                  }
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The payment, `succeeded`; the order is `paid`",
+                    "data": {
+                      "id": "65dc8a99604c307b702b5ccc",
+                      "orderId": "65de73a69ca05739be2b5e85",
+                      "userId": "65de646a44f861fd83c13f13",
+                      "amount": 0,
+                      "currency": "string",
+                      "status": "requires_confirmation",
+                      "provider": "string",
+                      "cardLast4": "string",
+                      "createdAt": "2026-01-01T00:00:00.000Z",
+                      "updatedAt": "2026-01-01T00:00:00.000Z"
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/payments/65dd2bdb923652b7800fe180/confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "cardNumber": "string"
+                  }
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/payments/65dd2bdb923652b7800fe180/confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "cardNumber": "string"
+                  }
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 409 Response
+            description: The request conflicts with the current state of the resource
+            request:
+              url: "{{baseUrl}}/payments/65dd2bdb923652b7800fe180/confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "cardNumber": "string"
+                  }
+            response:
+              status: 409
+              statusText: Conflict
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 409,
+                    "message": "The request conflicts with the current state of the resource",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/payments/65dd2bdb923652b7800fe180/confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "cardNumber": "string"
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/payments/65dd2bdb923652b7800fe180/confirm"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "cardNumber": "string"
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }

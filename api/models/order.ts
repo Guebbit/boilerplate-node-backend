@@ -40,12 +40,19 @@ export interface Order {
      */
   totalQuantity: number;
   /**
-     * Sum of `product.price × quantity` across every line item.
+     * Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
      * @minimum 0
      */
   totalPrice: number;
   /** Optional order notes */
   notes?: string;
+  /** The shipping method's id as the checkout froze it (e.g. standard, express, pickup). */
+  shippingMethod?: string;
+  /**
+     * What that method cost at checkout time — a later rate change cannot re-price history.
+     * @minimum 0
+     */
+  shippingCost?: number;
   shippingAddress?: OrderAddress;
   status: OrderStatus;
   createdAt?: string;

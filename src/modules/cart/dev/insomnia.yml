@@ -199,7 +199,8 @@
                 "3": "i",
                 "4": "n",
                 "5": "g"
-              }
+              },
+              "shippingMethodId": "string"
             }
         headers:
           - name: Content-Type

@@ -1,0 +1,344 @@
+  - info:
+      name: Delivery
+      type: folder
+      seq: 12
+    request:
+      auth: inherit
+    items:
+      - info:
+          name: List shipping methods
+          type: http
+          seq: 1
+          tags:
+            - Delivery
+        http:
+          method: GET
+          url: "{{baseUrl}}/delivery/methods"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The methods
+            request:
+              url: "{{baseUrl}}/delivery/methods"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The methods",
+                    "data": {
+                      "methods": [
+                        {
+                          "id": "65dc8a99604c307b702b5ccc",
+                          "price": 100,
+                          "freeAbove": 0
+                        }
+                      ]
+                    }
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/delivery/methods"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Get the shipment behind an order
+          type: http
+          seq: 2
+          tags:
+            - Delivery
+        http:
+          method: GET
+          url: "{{baseUrl}}/delivery/order/65de73a69ca05739be2b5e85"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The shipment
+            request:
+              url: "{{baseUrl}}/delivery/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The shipment",
+                    "data": {
+                      "id": "65dc8a99604c307b702b5ccc",
+                      "orderId": "65de73a69ca05739be2b5e85",
+                      "trackingCode": "string",
+                      "status": "shipped",
+                      "deliveredAt": "2026-01-01T00:00:00.000Z",
+                      "createdAt": "2026-01-01T00:00:00.000Z",
+                      "updatedAt": "2026-01-01T00:00:00.000Z"
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/delivery/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/delivery/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/delivery/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/delivery/order/65de73a69ca05739be2b5e85"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Advance the fake courier
+          type: http
+          seq: 3
+          tags:
+            - Delivery
+        http:
+          method: POST
+          url: "{{baseUrl}}/delivery/advance"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: How many parcels arrived
+            request:
+              url: "{{baseUrl}}/delivery/advance"
+              method: POST
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "How many parcels arrived",
+                    "data": {
+                      "advanced": 0
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/delivery/advance"
+              method: POST
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/delivery/advance"
+              method: POST
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/delivery/advance"
+              method: POST
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }

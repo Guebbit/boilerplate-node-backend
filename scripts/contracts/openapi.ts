@@ -35,7 +35,10 @@ export const SECTION_ORDER = [
     'products',
     'cart',
     'wishlist',
-    'orders'
+    'orders',
+    'payments',
+    'delivery',
+    'inventory'
 ] as const;
 
 export type TSectionName = (typeof SECTION_ORDER)[number];

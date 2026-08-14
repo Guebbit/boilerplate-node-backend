@@ -9,7 +9,7 @@ import {
 } from '@infrastructure/http/response';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { emitDomainEvent } from '@kernel/events';
-import { PRODUCT_DELETED } from './events';
+import { PRODUCT_DELETED, STOCK_MOVED } from './events';
 import { zodProductSchema } from './model';
 import type { IProductDocument } from './model';
 import { productRepository } from './repository';
@@ -107,6 +107,7 @@ export const update = (
     if (data.price !== undefined) product.price = data.price;
     // The admin form is the one legitimate ABSOLUTE stock write — restocking sets a count.
     // Relative changes (sales, cancellations) go through the repository's adjust helpers.
+    const stockBefore = product.stock;
     if (data.stock !== undefined) product.stock = data.stock;
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
@@ -119,13 +120,23 @@ export const update = (
     if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
     // Persist the updated document
-    return productRepository.save(product).then((updatedProduct) =>
+    return productRepository.save(product).then(async (updatedProduct) => {
+        // The absolute write, announced as the RELATIVE movement it amounts to — a ledger
+        // records what changed, and "the admin set 40 over 25" is a +15 with reason attached.
+        if (data.stock !== undefined && data.stock !== stockBefore)
+            await emitDomainEvent(STOCK_MOVED, {
+                productId: String(updatedProduct._id),
+                delta: data.stock - (stockBefore ?? 0),
+                reason: 'adjustment'
+            });
+
         // After saving the new image path, delete the old image file
-        (newImageUrl && oldImageUrl !== newImageUrl
-            ? imageStore.remove(oldImageUrl)
-            : Promise.resolve()
-        ).then(() => updatedProduct)
-    );
+        return (
+            newImageUrl && oldImageUrl !== newImageUrl
+                ? imageStore.remove(oldImageUrl)
+                : Promise.resolve()
+        ).then(() => updatedProduct);
+    });
 };
 
 /**

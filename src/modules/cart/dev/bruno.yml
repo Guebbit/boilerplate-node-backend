@@ -875,7 +875,8 @@
                   "3": "i",
                   "4": "n",
                   "5": "g"
-                }
+                },
+                "shippingMethodId": "string"
               }
           auth:
             type: bearer
@@ -904,7 +905,8 @@
                       "3": "i",
                       "4": "n",
                       "5": "g"
-                    }
+                    },
+                    "shippingMethodId": "string"
                   }
             response:
               status: 201
@@ -951,6 +953,8 @@
                         "totalQuantity": 5,
                         "totalPrice": 149.97,
                         "notes": "string",
+                        "shippingMethod": "string",
+                        "shippingCost": 0,
                         "shippingAddress": {
                           "fullName": "string",
                           "street": "string",
@@ -985,7 +989,8 @@
                       "3": "i",
                       "4": "n",
                       "5": "g"
-                    }
+                    },
+                    "shippingMethodId": "string"
                   }
             response:
               status: 401
@@ -1026,7 +1031,8 @@
                       "3": "i",
                       "4": "n",
                       "5": "g"
-                    }
+                    },
+                    "shippingMethodId": "string"
                   }
             response:
               status: 404
@@ -1067,7 +1073,8 @@
                       "3": "i",
                       "4": "n",
                       "5": "g"
-                    }
+                    },
+                    "shippingMethodId": "string"
                   }
             response:
               status: 409
@@ -1108,7 +1115,8 @@
                       "3": "i",
                       "4": "n",
                       "5": "g"
-                    }
+                    },
+                    "shippingMethodId": "string"
                   }
             response:
               status: 422
@@ -1149,7 +1157,8 @@
                       "3": "i",
                       "4": "n",
                       "5": "g"
-                    }
+                    },
+                    "shippingMethodId": "string"
                   }
             response:
               status: 500

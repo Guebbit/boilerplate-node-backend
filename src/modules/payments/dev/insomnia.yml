@@ -1,0 +1,96 @@
+  - name: Payments
+    meta:
+      id: fld_40c4770202821f32b6da336e22f1dfb6
+      created: 1767225600000
+      modified: 1767225600000
+      sortKey: 10000
+      description: ""
+    children:
+      - url: "{{ _.baseURL }}/payments/intent"
+        name: Create a payment intent
+        meta:
+          id: req_ebae1b587cfb9af27f1e6200403479d0
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Create a payment intent
+          sortKey: 10001
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "orderId": "65de73a69ca05739be2b5e85"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/payments/order/65de73a69ca05739be2b5e85"
+        name: Get the payment behind an order
+        meta:
+          id: req_54e5c3a0cf8e25a048fca4c41864479e
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Get the payment behind an order
+          sortKey: 10002
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/payments/65dd2bdb923652b7800fe180/confirm"
+        name: Confirm a payment
+        meta:
+          id: req_cecfdfb8c24a21b6ed97d1308e866538
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Confirm a payment
+          sortKey: 10003
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "cardNumber": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
