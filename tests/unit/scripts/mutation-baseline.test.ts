@@ -18,7 +18,7 @@ import {
     formatRegressions,
     nextBaseline,
     scoresFromReport,
-    type IMutationBaseline
+    type MutationBaseline
 } from '../../../scripts/mutationBaseline';
 
 /*
@@ -37,7 +37,7 @@ const report = (...files: [string, string[]][]) => ({
 /** Per-file scores from `[file, score]` pairs. */
 const scores = (...files: [string, number][]): Record<string, number> => Object.fromEntries(files);
 
-const baselineOf = (...files: [string, number][]): IMutationBaseline => ({
+const baselineOf = (...files: [string, number][]): MutationBaseline => ({
     generatedAt: '2026-08-09T00:00:00.000Z',
     files: Object.fromEntries(files)
 });

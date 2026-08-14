@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { registerModules, validateModules } from '@kernel/registry';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 
 /**
  * The registry is the file that decides what "this build" means, so its failures have to be loud
@@ -8,7 +8,7 @@ import type { IAppModule } from '@kernel/registry';
  * is strictly worse than one that refuses to boot with the offending path named.
  */
 
-const makeModule = (name: string, dependsOn: string[] = []): IAppModule => ({
+const makeModule = (name: string, dependsOn: string[] = []): AppModule => ({
     name,
     basePath: `/${name}`,
     routes: Router(),

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_CANCELLED } from '@modules/orders';
 import { router } from './routes';
@@ -23,4 +23,4 @@ export default {
         onDomainEvent(ORDER_CANCELLED, ({ orderId }) => refundForOrder(orderId));
     },
     locales: path.join(__dirname, 'locales')
-} satisfies IAppModule;
+} satisfies AppModule;

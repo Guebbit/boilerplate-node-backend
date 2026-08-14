@@ -8,7 +8,7 @@
  * dependency arrow points one way only.
  *
  * The payload map is open by design. A module declares its own events by augmenting
- * `IDomainEventMap` from inside its own folder, so adding a domain never edits a shared file —
+ * `DomainEventMap` from inside its own folder, so adding a domain never edits a shared file —
  * which is the whole point of the registry it belongs to.
  */
 
@@ -21,12 +21,12 @@ import { logger } from '@infrastructure/adapters/logger';
  * that emit them rather than in a list that every new domain has to edit.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface IDomainEventMap {}
+export interface DomainEventMap {}
 
-type DomainEventName = keyof IDomainEventMap & string;
+type DomainEventName = keyof DomainEventMap & string;
 
-type DomainEventHandler<K extends DomainEventName> = (
-    payload: IDomainEventMap[K]
+type DomainEventHandler<TEventName extends DomainEventName> = (
+    payload: DomainEventMap[TEventName]
 ) => Promise<unknown> | unknown;
 
 const handlers = new Map<string, ((payload: never) => Promise<unknown> | unknown)[]>();
@@ -40,9 +40,9 @@ const handlers = new Map<string, ((payload: never) => Promise<unknown> | unknown
  * @param name - the event name
  * @param handler - invoked with the payload; may be async
  */
-export const onDomainEvent = <K extends DomainEventName>(
-    name: K,
-    handler: DomainEventHandler<K>
+export const onDomainEvent = <TEventName extends DomainEventName>(
+    name: TEventName,
+    handler: DomainEventHandler<TEventName>
 ): void => {
     const existing = handlers.get(name) ?? [];
     existing.push(handler as (payload: never) => Promise<unknown> | unknown);
@@ -63,14 +63,14 @@ export const onDomainEvent = <K extends DomainEventName>(
  * @param name - the event name
  * @param payload - the event payload
  */
-export const emitDomainEvent = async <K extends DomainEventName>(
-    name: K,
-    payload: IDomainEventMap[K]
+export const emitDomainEvent = async <TEventName extends DomainEventName>(
+    name: TEventName,
+    payload: DomainEventMap[TEventName]
 ): Promise<void> => {
     // Caught per handler, so one subscriber's failure cannot stop the ones queued behind it.
     for (const handler of handlers.get(name) ?? [])
         try {
-            await (handler as DomainEventHandler<K>)(payload);
+            await (handler as DomainEventHandler<TEventName>)(payload);
         } catch (error) {
             logger.error(`Domain event handler failed for "${name}"`, error);
         }

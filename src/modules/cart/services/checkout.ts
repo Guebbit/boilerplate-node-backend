@@ -10,24 +10,24 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import {
     orderRepository,
     orderConfirmEmail,
     sumLineItems,
-    type IOrderDocument
+    type OrderDocument
 } from '@modules/orders';
 import { userRepository } from '@modules/users';
 import { productRepository, STOCK_MOVED } from '@modules/products';
 import { emitDomainEvent } from '@kernel/events';
-import { addressForCheckout, type IAddressItem } from '@modules/account';
+import { addressForCheckout, type AddressItem } from '@modules/account';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
 import { cartRepository } from '../repository';
 import { evaluateCheckout } from '../domain';
-import { isJoined, readCartLines, type TJoinedCartLine } from './view';
+import { isJoined, readCartLines, type JoinedCartLine } from './view';
 
 /**
  * Decrement every line's stock, or none of it.
@@ -39,8 +39,8 @@ import { isJoined, readCartLines, type TJoinedCartLine } from './view';
  *
  * @returns whether every line was taken
  */
-const takeStock = async (lines: readonly TJoinedCartLine[]): Promise<boolean> => {
-    const taken: TJoinedCartLine[] = [];
+const takeStock = async (lines: readonly JoinedCartLine[]): Promise<boolean> => {
+    const taken: JoinedCartLine[] = [];
 
     for (const line of lines) {
         const ok = await productRepository.decrementStock(String(line.productId), line.quantity);
@@ -57,7 +57,7 @@ const takeStock = async (lines: readonly TJoinedCartLine[]): Promise<boolean> =>
  * The snapshot an order embeds, from a book entry: the shipment's fields, none of the book's.
  * Spelled field by field so the entry's `_id`/`default` cannot ride along into the order.
  */
-const toShippingAddress = (address: IAddressItem) => ({
+const toShippingAddress = (address: AddressItem) => ({
     fullName: address.fullName,
     street: address.street,
     city: address.city,
@@ -67,7 +67,7 @@ const toShippingAddress = (address: IAddressItem) => ({
 });
 
 /** Put every line's units back — the failure paths' half of `takeStock`'s invariant. */
-const restoreStock = async (lines: readonly TJoinedCartLine[]): Promise<void> => {
+const restoreStock = async (lines: readonly JoinedCartLine[]): Promise<void> => {
     for (const line of lines)
         await productRepository.incrementStock(String(line.productId), line.quantity);
 };
@@ -103,10 +103,10 @@ export const orderConfirm = (
     userId: string,
     addressId?: string,
     shippingMethodId?: string
-): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     userRepository
         .findById(userId)
-        .then<IResponseSuccess<IOrderDocument> | IResponseReject>(async (user) => {
+        .then<ResponseSuccess<OrderDocument> | ResponseReject>(async (user) => {
             if (!user) return generateReject(404, []);
 
             /*
@@ -217,7 +217,7 @@ export const orderConfirm = (
                                           )
                                       }
                                     : {})
-                            } as Partial<IOrderDocument>)
+                            } as Partial<OrderDocument>)
                             .then((order) =>
                                 cartRepository
                                     .clearLinesIfUnchanged(userId, version)
@@ -252,7 +252,7 @@ export const orderConfirm = (
                                                 mail.template,
                                                 mail.data
                                             );
-                                            return generateSuccess<IOrderDocument>(order);
+                                            return generateSuccess<OrderDocument>(order);
                                         }
 
                                         // Lost the race: retract the order this request wrote

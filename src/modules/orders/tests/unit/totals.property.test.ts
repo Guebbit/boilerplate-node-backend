@@ -17,7 +17,7 @@
  *     comment. The property states the rule; the example remembers the bug.
  */
 import fc from 'fast-check';
-import { sumLineItems, toCents, type ILineItem } from '../../domain/totals';
+import { sumLineItems, toCents, type LineItem } from '../../domain/totals';
 
 /** One seed for the file, and one place to change it. */
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
@@ -50,7 +50,7 @@ const hostileLineItem = () =>
             )
         },
         { requiredKeys: [] }
-    ) as fc.Arbitrary<ILineItem>;
+    ) as fc.Arbitrary<LineItem>;
 
 describe('sumLineItems — totality', () => {
     it('never produces NaN, for any input at all', () => {

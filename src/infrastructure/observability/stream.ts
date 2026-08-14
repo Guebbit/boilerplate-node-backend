@@ -13,8 +13,8 @@ import {
     // Channel-name constants, shared with asyncapi.yaml so the event names a dashboard listens
     // for are contractual rather than ad hoc strings.
     OBSERVABILITY_CHANNELS,
-    type IObservabilityMetricsPayload,
-    type TObservabilityChannel
+    type ObservabilityMetricsPayload,
+    type ObservabilityChannel
 } from '@types';
 import { getHttpRequestCounters } from '@infrastructure/observability/metrics-http';
 
@@ -48,8 +48,8 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
  */
 const writeEvent = (
     response: Response,
-    event: TObservabilityChannel,
-    payload: IObservabilityMetricsPayload
+    event: ObservabilityChannel,
+    payload: ObservabilityMetricsPayload
 ) => {
     response.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
 };
@@ -65,7 +65,7 @@ export const getActiveSseClients = (): number => sseClients.size;
  * Builds a snapshot of current process/runtime metrics matching the asyncapi.yaml schema.
  * Merges Node.js memory stats with HTTP counters and realtime connection counts.
  */
-export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayload> => {
+export const buildObservabilityPayload = (): Promise<ObservabilityMetricsPayload> => {
     // Synchronous snapshot of V8/process memory, taken before the async counter read so all
     // numbers in one frame describe roughly the same instant.
     const memoryUsage = process.memoryUsage();
@@ -104,7 +104,7 @@ export const buildObservabilityPayload = (): Promise<IObservabilityMetricsPayloa
  * client has already dropped. Neither is worth tearing the stream down for, and an unhandled
  * rejection inside an interval callback would take the process with it.
  */
-const writeMetricsEvent = (response: Response, eventName: TObservabilityChannel) => {
+const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) => {
     // `void` marks the floating promise as deliberate — the interval must not wait on it.
     void buildObservabilityPayload()
         .then((payload) => {

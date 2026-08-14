@@ -18,7 +18,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
 import * as userService from '@modules/users/service';
-import { ETokenType } from '@modules/users';
+import { TokenType } from '@modules/users';
 
 setupTestDb();
 
@@ -34,7 +34,7 @@ const withTokens = () =>
     createUser({
         tokens: [
             {
-                type: ETokenType.REFRESH,
+                type: TokenType.REFRESH,
                 token: 'refresh-token-value',
                 expiration: new Date(Date.now() + 60_000)
             }

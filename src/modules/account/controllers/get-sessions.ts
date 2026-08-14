@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { userRepository, ETokenType } from '@modules/users';
-import type { IToken } from '@modules/users';
+import { userRepository, TokenType } from '@modules/users';
+import type { Token } from '@modules/users';
 import type { Session } from '@types';
 
 /**
@@ -13,7 +13,7 @@ import type { Session } from '@types';
  * caller's own refresh cookie. A caller authenticating by bearer token alone has no cookie, and
  * an access token does not identify a session, so every entry is honestly `current: false`.
  */
-const toSession = (token: IToken, cookieToken?: string): Session => ({
+const toSession = (token: Token, cookieToken?: string): Session => ({
     id: String(token._id),
     ...(token.expiration ? { expiration: token.expiration.toISOString() } : {}),
     current: cookieToken !== undefined && token.token === cookieToken
@@ -44,7 +44,7 @@ export const getSessions = (request: Request, response: Response) => {
                  * not sessions, and listing them would leak that such an operation is pending.
                  */
                 const sessions = user.tokens
-                    .filter((token) => token.type === String(ETokenType.REFRESH))
+                    .filter((token) => token.type === String(TokenType.REFRESH))
                     .map((token) => toSession(token, cookieToken));
 
                 successResponse(response, { sessions });

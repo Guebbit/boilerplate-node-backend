@@ -1,9 +1,9 @@
 import { paymentModel, applyPaymentTransform } from './model';
-import type { IPaymentDocument, TPaymentStatus } from './model';
+import type { PaymentDocument, PaymentStatus } from './model';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -15,23 +15,23 @@ import {
  * a single `findOneAndUpdate({ orderId }, …, { upsert: true })` with no read in front of it.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-export const paymentRepository: IBaseRepository<IPaymentDocument> & {
-    findByOrderId: (orderId: string) => Promise<IPaymentDocument | null>;
+export const paymentRepository: BaseRepository<PaymentDocument> & {
+    findByOrderId: (orderId: string) => Promise<PaymentDocument | null>;
     upsertIntent: (
         orderId: string,
         userId: string,
         data: { amount: number; currency: string; provider: string }
-    ) => Promise<IPaymentDocument | null>;
+    ) => Promise<PaymentDocument | null>;
     updateStatusIfIn: (
         orderId: string,
-        from: readonly TPaymentStatus[],
-        to: TPaymentStatus,
-        extra?: Partial<IPaymentDocument>
-    ) => Promise<IPaymentDocument | null>;
+        from: readonly PaymentStatus[],
+        to: PaymentStatus,
+        extra?: Partial<PaymentDocument>
+    ) => Promise<PaymentDocument | null>;
 } = {
-    ...createBaseRepository<IPaymentDocument>(paymentModel, {
+    ...createBaseRepository<PaymentDocument>(paymentModel, {
         transform: applyPaymentTransform
     }),
 

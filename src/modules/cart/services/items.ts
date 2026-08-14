@@ -9,22 +9,22 @@
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { cartRepository } from '../repository';
-import { readCartLines, toCartView, type ICartLine, type ICartView } from './view';
+import { readCartLines, toCartView, type CartLine, type CartView } from './view';
 
 /**
  * Get user cart, each line joined with its product.
  */
-export const cartGet = (userId: string): Promise<ICartLine[]> =>
+export const cartGet = (userId: string): Promise<CartLine[]> =>
     cartRepository.findByUserId(userId).then((cart) => readCartLines(cart));
 
 /**
  * Get user cart with computed summary (item count, total quantity, total price).
  */
-export const cartGetWithSummary = (userId: string): Promise<ICartView> =>
+export const cartGetWithSummary = (userId: string): Promise<CartView> =>
     cartRepository.findByUserId(userId).then((cart) => toCartView(cart));
 
 /*
@@ -48,19 +48,19 @@ const upsertCartItem = (
     id: string,
     quantity: number,
     mode: 'set' | 'add'
-): Promise<ICartView> =>
+): Promise<CartView> =>
     cartRepository.upsertLine(userId, id, quantity, mode).then((cart) => toCartView(cart));
 
 /**
  * Set quantity of target product in cart (by ID).
  */
-export const cartItemSetById = (userId: string, id: string, quantity = 1): Promise<ICartView> =>
+export const cartItemSetById = (userId: string, id: string, quantity = 1): Promise<CartView> =>
     upsertCartItem(userId, id, quantity, 'set');
 
 /**
  * Add quantity of target product to existing quantity in cart (by ID).
  */
-export const cartItemAddById = (userId: string, id: string, quantity = 1): Promise<ICartView> =>
+export const cartItemAddById = (userId: string, id: string, quantity = 1): Promise<CartView> =>
     upsertCartItem(userId, id, quantity, 'add');
 
 /**
@@ -73,7 +73,7 @@ export const cartItemAddById = (userId: string, id: string, quantity = 1): Promi
 export const cartItemRemoveById = (
     userId: string,
     id: string
-): Promise<IResponseSuccess<ICartView> | IResponseReject> =>
+): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     cartRepository.removeLine(userId, id).then((cart) => {
         if (!cart) return generateReject(404, []);
         return toCartView(cart).then((view) => generateSuccess(view, 200));
@@ -85,5 +85,5 @@ export const cartItemRemoveById = (
  * Idempotent: a user with no cart document is already in the state this asks for, and the empty
  * view says so.
  */
-export const cartRemove = (userId: string): Promise<ICartView> =>
+export const cartRemove = (userId: string): Promise<CartView> =>
     cartRepository.clearLines(userId).then((cart) => toCartView(cart));

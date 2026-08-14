@@ -39,7 +39,7 @@ jest.mock('@infrastructure/http/response', () => ({
     rejectResponse: jest.fn()
 }));
 
-interface IOverview {
+interface Overview {
     auth: { loginSuccess: number; loginFailure: number; signupSuccess: number };
     business: { checkoutSuccess: number; ordersCreated: number };
 }
@@ -56,10 +56,10 @@ const counter = (name: string) =>
     };
 
 /** Run the controller and return the payload it handed to `successResponse`. */
-const runOverview = async (): Promise<IOverview> => {
+const runOverview = async (): Promise<Overview> => {
     await getObservabilityMetricsOverview({} as never, {} as never);
     const calls = (successResponse as jest.Mock).mock.calls;
-    return calls.at(-1)?.[1] as IOverview;
+    return calls.at(-1)?.[1] as Overview;
 };
 
 describe('observability metrics overview', () => {

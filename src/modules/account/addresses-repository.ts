@@ -1,9 +1,9 @@
 import { addressBookModel, applyAddressBookTransform } from './addresses-model';
-import type { IAddressBookDocument, IAddressItem } from './addresses-model';
+import type { AddressBookDocument, AddressItem } from './addresses-model';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -18,20 +18,20 @@ import {
  * enough: the loser retries by hand, it does not oversell anything.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-export const addressBookRepository: IBaseRepository<IAddressBookDocument> & {
-    findByUserId: (userId: string) => Promise<IAddressBookDocument | null>;
-    addEntry: (userId: string, entry: Omit<IAddressItem, '_id'>) => Promise<IAddressBookDocument>;
+export const addressBookRepository: BaseRepository<AddressBookDocument> & {
+    findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
+    addEntry: (userId: string, entry: Omit<AddressItem, '_id'>) => Promise<AddressBookDocument>;
     updateEntry: (
         userId: string,
         addressId: string,
-        changes: Partial<Omit<IAddressItem, '_id'>>
-    ) => Promise<IAddressBookDocument | null>;
-    removeEntry: (userId: string, addressId: string) => Promise<IAddressBookDocument | null>;
+        changes: Partial<Omit<AddressItem, '_id'>>
+    ) => Promise<AddressBookDocument | null>;
+    removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
 } = {
-    ...createBaseRepository<IAddressBookDocument>(addressBookModel, {
+    ...createBaseRepository<AddressBookDocument>(addressBookModel, {
         transform: applyAddressBookTransform
     }),
 
@@ -49,7 +49,7 @@ export const addressBookRepository: IBaseRepository<IAddressBookDocument> & {
      * asked, a later entry claiming `default: true` demotes the current holder, and a later
      * entry that claims nothing changes nothing.
      */
-    addEntry: async (userId: string, entry: Omit<IAddressItem, '_id'>) => {
+    addEntry: async (userId: string, entry: Omit<AddressItem, '_id'>) => {
         const book =
             (await addressBookModel.findOne({ userId: toObjectId(userId) }).exec()) ??
             new addressBookModel({ userId: toObjectId(userId), items: [] });
@@ -72,7 +72,7 @@ export const addressBookRepository: IBaseRepository<IAddressBookDocument> & {
     updateEntry: async (
         userId: string,
         addressId: string,
-        changes: Partial<Omit<IAddressItem, '_id'>>
+        changes: Partial<Omit<AddressItem, '_id'>>
     ) => {
         const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
         const entry = book?.items.find((item) => String(item._id) === addressId);

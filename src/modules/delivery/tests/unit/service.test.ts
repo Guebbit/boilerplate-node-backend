@@ -25,7 +25,7 @@ import deliveryModule from '@modules/delivery/module';
 import ordersModule from '@modules/orders/module';
 import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
-import type { IResponseReject } from '@infrastructure/http/response';
+import type { ResponseReject } from '@infrastructure/http/response';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -35,7 +35,7 @@ const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail
 
 setupTestDb();
 
-const asReject = (result: unknown) => result as IResponseReject;
+const asReject = (result: unknown) => result as ResponseReject;
 
 const shippedOrderFor = async () => {
     const user = await createUser();

@@ -11,5 +11,5 @@
 export { auditLogService } from './service';
 export { auditLogRepository } from './repository';
 export { auditLogModel } from './model';
-export type { IAuditLogDocument } from './model';
-export type { IAuditLogSearchFilters } from './repository';
+export type { AuditLogDocument } from './model';
+export type { AuditLogSearchFilters } from './repository';

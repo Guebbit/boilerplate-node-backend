@@ -1,7 +1,7 @@
 import { auditLogRepository } from './repository';
-import type { IAuditLogSearchFilters } from './repository';
-import type { IAuditEntry } from '@infrastructure/observability/audit';
-import type { IAuditLogDocument } from './model';
+import type { AuditLogSearchFilters } from './repository';
+import type { AuditEntry } from '@infrastructure/observability/audit';
+import type { AuditLogDocument } from './model';
 import { logger } from '@infrastructure/adapters/logger';
 
 /**
@@ -10,7 +10,7 @@ import { logger } from '@infrastructure/adapters/logger';
  */
 
 /**
- * Store an emitted audit entry. This is the {@link IAuditSink} implementation `app.ts` registers.
+ * Store an emitted audit entry. This is the {@link AuditSink} implementation `app.ts` registers.
  *
  * Fire-and-forget by contract: it returns `void`, and every failure is swallowed into a log line.
  * That is not laziness about errors — it is the fail-open property the whole audit path depends
@@ -23,8 +23,8 @@ import { logger } from '@infrastructure/adapters/logger';
  * rejected write from surfacing as an unhandled rejection — which, unlike the failed write, would
  * genuinely be able to take the process down.
  */
-export const record = (entry: IAuditEntry): void => {
-    void auditLogRepository.create(entry as Partial<IAuditLogDocument>).catch((error: Error) =>
+export const record = (entry: AuditEntry): void => {
+    void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: Error) =>
         logger.warn({
             message: 'audit entry not persisted',
             action: entry.action,
@@ -40,8 +40,8 @@ export const record = (entry: IAuditEntry): void => {
  * request for the data, so a failed read is a failed request rather than something to hide.
  */
 export const search = (
-    filters: IAuditLogSearchFilters
-): Promise<{ items: IAuditLogDocument[]; total: number }> => auditLogRepository.search(filters);
+    filters: AuditLogSearchFilters
+): Promise<{ items: AuditLogDocument[]; total: number }> => auditLogRepository.search(filters);
 
 export const auditLogService = {
     record,

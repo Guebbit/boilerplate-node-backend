@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
 import { userRepository, USER_DELETED } from '@modules/users';
@@ -62,4 +62,4 @@ export default {
         onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
     },
     locales: path.join(__dirname, 'locales')
-} satisfies IAppModule;
+} satisfies AppModule;

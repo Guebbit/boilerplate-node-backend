@@ -1,9 +1,9 @@
 import { stockMovementModel, applyStockMovementTransform } from './model';
-import type { IStockMovementDocument } from './model';
+import type { StockMovementDocument } from './model';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /** How much history one read answers. The ledger is append-only; nobody pages a demo forever. */
@@ -14,12 +14,12 @@ const MOVEMENTS_PAGE_SIZE = 50;
  * Standard CRUD via the base factory, plus the one read the ledger serves.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-export const stockMovementRepository: IBaseRepository<IStockMovementDocument> & {
-    findLatest: (productId?: string) => Promise<IStockMovementDocument[]>;
+export const stockMovementRepository: BaseRepository<StockMovementDocument> & {
+    findLatest: (productId?: string) => Promise<StockMovementDocument[]>;
 } = {
-    ...createBaseRepository<IStockMovementDocument>(stockMovementModel, {
+    ...createBaseRepository<StockMovementDocument>(stockMovementModel, {
         transform: applyStockMovementTransform
     }),
 

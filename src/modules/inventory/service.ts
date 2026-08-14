@@ -11,23 +11,23 @@ import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { productRepository, STOCK_MOVED } from '@modules/products';
 import { stockMovementRepository } from './repository';
-import type { IStockMovementDocument, TMovementReason } from './model';
+import type { StockMovementDocument, MovementReason } from './model';
 
 /** The `STOCK_MOVED` listener — one announcement, one row. */
 export const recordMovement = (movement: {
     productId: string;
     delta: number;
-    reason: TMovementReason;
+    reason: MovementReason;
     reference?: string;
 }): Promise<unknown> =>
     // The cast bridges the payload's string id to the schema's ObjectId; Mongoose casts it.
-    stockMovementRepository.create(movement as unknown as Partial<IStockMovementDocument>);
+    stockMovementRepository.create(movement as unknown as Partial<StockMovementDocument>);
 
 /**
  * The latest movements, for the admin's ledger view.
@@ -36,7 +36,7 @@ export const recordMovement = (movement: {
  */
 export const listMovements = (
     productId?: string
-): Promise<IResponseSuccess<{ items: IStockMovementDocument[] }>> =>
+): Promise<ResponseSuccess<{ items: StockMovementDocument[] }>> =>
     stockMovementRepository.findLatest(productId).then((items) => generateSuccess({ items }));
 
 /**
@@ -52,7 +52,7 @@ export const listMovements = (
 export const restock = async (
     productId: string,
     quantity: number
-): Promise<IResponseSuccess<{ productId: string; stock: number }> | IResponseReject> => {
+): Promise<ResponseSuccess<{ productId: string; stock: number }> | ResponseReject> => {
     const product = await productRepository.findByIdRaw(productId);
     if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 

@@ -1,15 +1,15 @@
 import type { UpdateWriteOpResult } from 'mongoose';
 import { cartModel, applyCartTransform } from './model';
-import type { ICartDocument } from './model';
+import type { CartDocument } from './model';
 import { isDuplicateKey } from '@infrastructure/http/errors';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /** How {@link upsertLine} treats a quantity for a line already in the cart. */
-export type TCartLineMode = 'set' | 'add';
+export type CartLineMode = 'set' | 'add';
 
 /**
  * Set or increment one cart line, creating the cart if the user has none.
@@ -32,9 +32,9 @@ const upsertLine = (
     userId: string,
     productId: string,
     quantity: number,
-    mode: TCartLineMode,
+    mode: CartLineMode,
     attemptsLeft = 3
-): Promise<ICartDocument> => {
+): Promise<CartDocument> => {
     const owner = { userId: toObjectId(userId) };
     const line = toObjectId(productId);
 
@@ -73,23 +73,23 @@ const upsertLine = (
  * enough for each mutation, and it is why no caller ever has to fetch a cart before changing it.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize an
- * inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-export const cartRepository: IBaseRepository<ICartDocument> & {
-    findByUserId: (userId: string) => Promise<ICartDocument | null>;
+export const cartRepository: BaseRepository<CartDocument> & {
+    findByUserId: (userId: string) => Promise<CartDocument | null>;
     upsertLine: (
         userId: string,
         productId: string,
         quantity: number,
-        mode: TCartLineMode
-    ) => Promise<ICartDocument>;
-    removeLine: (userId: string, productId: string) => Promise<ICartDocument | null>;
-    clearLines: (userId: string) => Promise<ICartDocument | null>;
-    clearLinesIfUnchanged: (userId: string, version: number) => Promise<ICartDocument | null>;
+        mode: CartLineMode
+    ) => Promise<CartDocument>;
+    removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
+    clearLines: (userId: string) => Promise<CartDocument | null>;
+    clearLinesIfUnchanged: (userId: string, version: number) => Promise<CartDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createBaseRepository<ICartDocument>(cartModel, {
+    ...createBaseRepository<CartDocument>(cartModel, {
         transform: applyCartTransform
     }),
 

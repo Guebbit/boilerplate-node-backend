@@ -9,7 +9,7 @@ import type { Product } from '@types';
 /**
  * Product Document interface
  */
-export interface IProductDocument
+export interface ProductDocument
     extends Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>, Document {
     createdAt?: Date;
     updatedAt?: Date;
@@ -19,14 +19,14 @@ export interface IProductDocument
 /**
  * Product Document instance methods
  */
-export type IProductMethods = unknown;
+export type ProductMethods = unknown;
 
 /**
  * Product Document model type.
  * Business logic (search, remove, validate) lives in the service (`./service`); queries live in
  * the repository (`./repository`).
  */
-export type IProductModel = Model<IProductDocument, unknown, IProductMethods>;
+export type ProductModel = Model<ProductDocument, unknown, ProductMethods>;
 
 /**
  * Zod Schema for product data validation.
@@ -59,7 +59,7 @@ export const zodProductSchema = CreateProductBody.extend({
 /**
  * Mongoose Schema for the Product model
  */
-export const productSchema = new Schema<IProductDocument, IProductModel, IProductMethods>(
+export const productSchema = new Schema<ProductDocument, ProductModel, ProductMethods>(
     {
         title: {
             type: String,
@@ -147,4 +147,4 @@ export const applyProductTransform = applySerialization(productSchema);
 /**
  * Mongoose model for product CRUD operations.
  */
-export const productModel = model<IProductDocument, IProductModel>('Product', productSchema);
+export const productModel = model<ProductDocument, ProductModel>('Product', productSchema);

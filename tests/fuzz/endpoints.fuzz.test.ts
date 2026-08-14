@@ -36,7 +36,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 // Imported for its side effect: it calls `jestOpenAPI(openapi.yaml)`, which is what
 // registers the `toSatisfyApiSpec()` matcher used below.
 import '@tests/contract';
-import { listOperations, unsupportedKeywords, type IOperation } from '@tests/spec-walk';
+import { listOperations, unsupportedKeywords, type Operation } from '@tests/spec-walk';
 import { bodyArbitraryFor } from '@tests/spec-arbitraries';
 
 setupTestDb();
@@ -78,7 +78,7 @@ const NO_BODY = fc.constant(undefined);
 const OBJECT_ID = '65dc8a99604c307b702b5ccc';
 
 /** Fill path parameters with something well-formed; the handler's 404 is a fine outcome. */
-const buildUrl = (operation: IOperation): string => {
+const buildUrl = (operation: Operation): string => {
     let url = operation.path;
     for (const name of operation.pathParameters)
         url = url.replace(`{${name}}`, name.toLowerCase().includes('token') ? 'tok' : OBJECT_ID);

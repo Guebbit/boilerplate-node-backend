@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { seedUsersCollection } from './seeds';
 import './events';
@@ -20,4 +20,4 @@ export default {
     routes: router,
     seeds: seedUsersCollection,
     locales: path.join(__dirname, 'locales')
-} satisfies IAppModule;
+} satisfies AppModule;

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import ejs from 'ejs';
-import type { IPdfJobPayload } from '@types';
+import type { PdfJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 
@@ -13,7 +13,7 @@ export { PDF_QUEUE } from '@infrastructure/adapters/queue';
  *
  * Typed parameter, `Partial` because it came off a broker — see `handleEmailJob` for the reasoning.
  */
-export const handlePdfJob = (job: Partial<IPdfJobPayload>): Promise<boolean> => {
+export const handlePdfJob = (job: Partial<PdfJobPayload>): Promise<boolean> => {
     // Both ends of the render: what to render, and where to write it. The check narrows on its
     // own — see the same guard in `email.worker.ts`.
     if (!job?.templatePath || !job.outputPath) {

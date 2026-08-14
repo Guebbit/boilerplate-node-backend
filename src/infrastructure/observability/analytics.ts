@@ -69,11 +69,11 @@ export const shutdownAnalytics = async (): Promise<void> => {
 // emits the same funnel from the other end. `analytics-events.ts` owns them and is guarded by
 // `check:spec-identity`; this module owns the transport.
 
-import { type TSharedAnalyticsEventName } from '@infrastructure/observability/analytics-events';
+import { type SharedAnalyticsEventName } from '@infrastructure/observability/analytics-events';
 
 export {
     analyticsEvents,
-    type TSharedAnalyticsEventName
+    type SharedAnalyticsEventName
 } from '@infrastructure/observability/analytics-events';
 
 // ─── Payload schema ───────────────────────────────────────────────────────────
@@ -81,11 +81,11 @@ export {
 /*
  * Core fields shared by every analytics event
  */
-export interface IAnalyticsEvent {
+export interface AnalyticsEvent {
     /** PostHog distinct_id: authenticated user ID or a session/anonymous ID. */
     distinctId: string;
     /** Event name from the shared `analyticsEvents` catalogue. */
-    event: TSharedAnalyticsEventName;
+    event: SharedAnalyticsEventName;
     /** ISO-8601 timestamp; defaults to now if omitted. */
     timestamp?: Date;
     /** OTel trace ID for cross-signal correlation. */
@@ -100,13 +100,13 @@ export interface IAnalyticsEvent {
  * Build common analytics fields from a request context.
  * Reduces boilerplate in controllers that always pass distinctId + traceId.
  *
- * Typed as `Pick<...>` so it stays in lockstep with `IAnalyticsEvent`: renaming a field there
+ * Typed as `Pick<...>` so it stays in lockstep with `AnalyticsEvent`: renaming a field there
  * breaks this signature at compile time instead of silently producing a wrong shape.
  * Usage: `analytics({ ...buildAnalyticsBase(request), event: analyticsEvents.CART_VIEWED })`
  */
 export const buildAnalyticsBase = (request: {
     authContext?: { id?: string } | null;
-}): Pick<IAnalyticsEvent, 'distinctId' | 'traceId'> => ({
+}): Pick<AnalyticsEvent, 'distinctId' | 'traceId'> => ({
     // CAVEAT: unauthenticated traffic all collapses onto the literal 'anonymous' id, so
     // pre-login events cannot be told apart per visitor. Passing a session/cookie id instead
     // would be the fix if pre-signup funnels ever matter.
@@ -122,7 +122,7 @@ export const buildAnalyticsBase = (request: {
  * Returns `void` (fire-and-forget): analytics must never delay or fail a user request, so
  * there is nothing to await and nothing to handle.
  */
-export const emitAnalyticsEvent = (event: IAnalyticsEvent): void => {
+export const emitAnalyticsEvent = (event: AnalyticsEvent): void => {
     // Guard before `getClient()`, so a disabled configuration never constructs the client
     // (and never dereferences the missing API key).
     if (!isPostHogEnabled()) return;

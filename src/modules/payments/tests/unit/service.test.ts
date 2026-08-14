@@ -32,13 +32,13 @@ import usersModule from '@modules/users/module';
 import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
-import type { IResponseReject } from '@infrastructure/http/response';
+import type { ResponseReject } from '@infrastructure/http/response';
 
 setupTestDb();
 
 const GOOD_CARD = '4242 4242 4242 4242';
 
-const asReject = (result: unknown) => result as IResponseReject;
+const asReject = (result: unknown) => result as ResponseReject;
 
 /** One paying customer with one two-line order, the fixture most tests start from. */
 const orderFor = async (price = 25, quantity = 2) => {

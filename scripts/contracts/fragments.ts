@@ -39,16 +39,16 @@ export const REPO_ROOT = path.resolve(__dirname, '..', '..');
  * array or a TypeScript object. Each fragment is right-trimmed before joining so it can be stored
  * with the trailing newline every editor adds.
  */
-export interface IFragmentGroup {
+export interface FragmentGroup {
     parts: readonly string[];
     separator: string;
 }
 
 /** A slice of a bundle: one file pasted verbatim, or several joined into a list. */
-export type TSegment = string | IFragmentGroup;
+export type Segment = string | FragmentGroup;
 
 /** One committed document and the fragments it is assembled from. */
-export interface IContractBundle {
+export interface ContractBundle {
     /** CLI handle — `npm run contracts:bundle -- openapi`. */
     name: string;
     /** What the bundle is called on disk, for messages. */
@@ -59,7 +59,7 @@ export interface IContractBundle {
      * The document, in order. A function rather than an array so a bundle can derive its segments
      * from its section list instead of restating every path.
      */
-    segments: () => readonly TSegment[];
+    segments: () => readonly Segment[];
     /**
      * True when this bundle's own fragments are generated rather than authored — today the three
      * client collections, which are derived from `openapi.yaml`. It is what orders a full run:
@@ -77,7 +77,7 @@ export interface IContractBundle {
  * endpoints, events or fixtures the other no longer has, with `check:spec-identity` the only thing
  * left to notice.
  */
-const readFragment = (bundle: IContractBundle, file: string): string => {
+const readFragment = (bundle: ContractBundle, file: string): string => {
     if (!existsSync(file))
         throw new Error(
             `[${bundle.name}] ${bundle.label} names a fragment that does not exist:\n` +
@@ -89,7 +89,7 @@ const readFragment = (bundle: IContractBundle, file: string): string => {
 };
 
 /** One segment as it appears in the output: a verbatim paste, or a separator-joined list. */
-const renderSegment = (bundle: IContractBundle, segment: TSegment): string =>
+const renderSegment = (bundle: ContractBundle, segment: Segment): string =>
     typeof segment === 'string'
         ? readFragment(bundle, segment)
         : segment.parts
@@ -101,7 +101,7 @@ const renderSegment = (bundle: IContractBundle, segment: TSegment): string =>
  *
  * No parse, no serialise, nothing that could normalise a quote or drop a comment.
  */
-export const assembleBundle = (bundle: IContractBundle): string =>
+export const assembleBundle = (bundle: ContractBundle): string =>
     bundle
         .segments()
         .map((segment) => renderSegment(bundle, segment))
@@ -115,11 +115,11 @@ export const assembleBundle = (bundle: IContractBundle): string =>
  * "stale, write it" is the answer the caller is asking this function to help give. Crashing here
  * turns the one command that would fix the state into the command that cannot run.
  */
-export const readCommittedBundle = (bundle: IContractBundle): string =>
+export const readCommittedBundle = (bundle: ContractBundle): string =>
     existsSync(bundle.output) ? readFileSync(bundle.output, 'utf8') : '';
 
 /** Every fragment a bundle is built from, flattened — what a staleness check watches. */
-export const bundleFragments = (bundle: IContractBundle): string[] =>
+export const bundleFragments = (bundle: ContractBundle): string[] =>
     bundle
         .segments()
         .flatMap((segment) => (typeof segment === 'string' ? [segment] : [...segment.parts]));

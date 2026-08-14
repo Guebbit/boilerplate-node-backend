@@ -14,7 +14,7 @@ export const feedbackAuditActions = {
 } as const;
 
 declare module '@infrastructure/observability/audit' {
-    interface IAuditActionMap {
+    interface AuditActionMap {
         feedback: (typeof feedbackAuditActions)[keyof typeof feedbackAuditActions];
     }
 }

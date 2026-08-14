@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { STOCK_MOVED } from '@modules/products';
 import { router } from './routes';
@@ -25,4 +25,4 @@ export default {
         onDomainEvent(STOCK_MOVED, (movement) => recordMovement(movement));
     },
     locales: path.join(__dirname, 'locales')
-} satisfies IAppModule;
+} satisfies AppModule;

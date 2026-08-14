@@ -21,7 +21,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * `productId` is an `ObjectId` and stays one — the service reads ids before any populate, the
  * same discipline `cart`'s `readCartLines` documents.
  */
-export interface IWishlistItem {
+export interface WishlistItem {
     productId: Types.ObjectId;
 }
 
@@ -31,15 +31,15 @@ export interface IWishlistItem {
  * No contract type to extend: `WishlistResponse` is `{ items }` — a view, not this document.
  * A wishlist id never reaches the wire.
  */
-export interface IWishlistDocument extends Document {
+export interface WishlistDocument extends Document {
     userId: Types.ObjectId;
-    items: IWishlistItem[];
+    items: WishlistItem[];
     createdAt?: Date;
     updatedAt?: Date;
 }
 
 /** Wishlist Document model type. Queries live in `./repository`, rules in `./service`. */
-export type IWishlistModel = Model<IWishlistDocument>;
+export type WishlistModel = Model<WishlistDocument>;
 
 /**
  * Schema for a single wishlist line.
@@ -66,7 +66,7 @@ const wishlistItemSchema = new Schema(
  * cart's does — every mutation stays a single `findOneAndUpdate({ userId }, …, { upsert: true })`
  * with no read in front of it.
  */
-export const wishlistSchema = new Schema<IWishlistDocument>(
+export const wishlistSchema = new Schema<WishlistDocument>(
     {
         userId: {
             type: Schema.Types.ObjectId,
@@ -100,4 +100,4 @@ export const applyWishlistTransform = applySerialization(wishlistSchema);
 /**
  * Model
  */
-export const wishlistModel = model<IWishlistDocument, IWishlistModel>('Wishlist', wishlistSchema);
+export const wishlistModel = model<WishlistDocument, WishlistModel>('Wishlist', wishlistSchema);

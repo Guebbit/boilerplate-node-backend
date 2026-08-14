@@ -57,7 +57,7 @@ import accountModule from '@modules/account/module';
 import deliveryModule from '@modules/delivery/module';
 import { orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
-import type { IResponseReject } from '@infrastructure/http/response';
+import type { ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 
 setupTestDb();
@@ -68,7 +68,7 @@ const MISSING_ID = '507f1f77bcf86cd799439011';
 /** What every read answers for a user with nothing in their cart. */
 const EMPTY_CART = { items: [], summary: { itemsCount: 0, totalQuantity: 0, total: 0 } };
 
-const asReject = (result: unknown) => result as IResponseReject;
+const asReject = (result: unknown) => result as ResponseReject;
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */
 const storedQuantity = async (userId: string, productId: string): Promise<number | undefined> => {

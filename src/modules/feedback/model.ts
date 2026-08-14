@@ -6,7 +6,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /** Mongoose document type for feedback tickets. Overrides the API-generated
  * FeedbackRequest's 'respondedAt'/'createdAt'/'updatedAt' (string vs Date). */
-export interface IFeedbackRequestDocument
+export interface FeedbackRequestDocument
     extends Omit<FeedbackRequest, 'id' | 'respondedAt' | 'createdAt' | 'updatedAt'>, Document {
     respondedAt?: Date;
     createdAt?: Date;
@@ -14,12 +14,12 @@ export interface IFeedbackRequestDocument
 }
 
 /** Mongoose model + query helper types. */
-export type IFeedbackRequestModel = Model<IFeedbackRequestDocument>;
+export type FeedbackRequestModel = Model<FeedbackRequestDocument>;
 /** Shorthand type for Mongoose query filters on the feedback collection. */
-export type IFeedbackRequestQueryFilter = QueryFilter<IFeedbackRequestDocument>;
+export type FeedbackRequestQueryFilter = QueryFilter<FeedbackRequestDocument>;
 
 /** Feedback collection schema. */
-export const feedbackRequestSchema = new Schema<IFeedbackRequestDocument, IFeedbackRequestModel>(
+export const feedbackRequestSchema = new Schema<FeedbackRequestDocument, FeedbackRequestModel>(
     {
         name: {
             type: String
@@ -70,7 +70,7 @@ feedbackRequestSchema.index({ status: 1, createdAt: -1 });
 export const applyFeedbackRequestTransform = applySerialization(feedbackRequestSchema);
 
 /** Feedback model entrypoint. */
-export const feedbackRequestModel = model<IFeedbackRequestDocument, IFeedbackRequestModel>(
+export const feedbackRequestModel = model<FeedbackRequestDocument, FeedbackRequestModel>(
     'FeedbackRequest',
     feedbackRequestSchema
 );

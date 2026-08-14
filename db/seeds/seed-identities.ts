@@ -44,12 +44,12 @@ export const SEED_ADMIN_PASSWORD = 'rootroot';
 export const SEED_USER_EMAIL = 'gino@pino.it';
 export const SEED_USER_PASSWORD = 'password';
 
-export interface ISeedCartItem {
+export interface SeedCartItem {
     productId: string;
     quantity: number;
 }
 
-export interface ISeedUser {
+export interface SeedUser {
     id: string;
     username: string;
     email: string;
@@ -62,10 +62,10 @@ export interface ISeedUser {
      * these — see the note in `mockProfiles.ts` — but they belong to the identity, so a drift in
      * what the backend serves is still visible in one `diff`. */
     imageUrl: string;
-    cart: ISeedCartItem[];
+    cart: SeedCartItem[];
 }
 
-export const seedUsers: ISeedUser[] = [
+export const seedUsers: SeedUser[] = [
     {
         id: '65dd2bdb923652b7800fe180',
         username: 'root',
@@ -89,7 +89,7 @@ export const seedUsers: ISeedUser[] = [
     }
 ];
 
-export interface ISeedProduct {
+export interface SeedProduct {
     id: string;
     title: string;
     description: string;
@@ -111,7 +111,7 @@ export interface ISeedProduct {
     deletedAt?: string;
 }
 
-export const seedProducts: ISeedProduct[] = [
+export const seedProducts: SeedProduct[] = [
     {
         id: '65dc8a99604c307b702b5ccc',
         title: 'Sallyno Panino',
@@ -170,11 +170,11 @@ export const seedProducts: ISeedProduct[] = [
     }
 ];
 
-export interface ISeedOrder {
+export interface SeedOrder {
     id: string;
     userId: string;
     email: string;
-    items: ISeedCartItem[];
+    items: SeedCartItem[];
     /* ISO 8601, or absent. Present on exactly one order, for the same reason it is on exactly one
      * product: `isOrderVisibleToCaller` (frontend) and `visibleScope` (backend) both branch on it,
      * and a branch with no fixture behind it is a branch nothing tests. It sits on the non-admin
@@ -193,7 +193,7 @@ export interface ISeedOrder {
  * differs from today's product (to exercise exactly that "price changed since" case), it needs an
  * explicit override here — deriving it would silently erase the difference.
  */
-export const seedOrders: ISeedOrder[] = [
+export const seedOrders: SeedOrder[] = [
     {
         id: '65de73a69ca05739be2b5e85',
         userId: '65dd2bdb923652b7800fe180',
@@ -220,7 +220,7 @@ export const seedOrders: ISeedOrder[] = [
     }
 ];
 
-export interface ISeedWishlist {
+export interface SeedWishlist {
     /** The owner — one of `seedUsers` by id. */
     userId: string;
     /* Product ids from `seedProducts`, saved without quantity — a wishlist answers "do I want
@@ -229,7 +229,7 @@ export interface ISeedWishlist {
     productIds: string[];
 }
 
-export const seedWishlists: ISeedWishlist[] = [
+export const seedWishlists: SeedWishlist[] = [
     {
         /* root — one saved product, enough for the admin account to show a non-empty page. */
         userId: '65dd2bdb923652b7800fe180',

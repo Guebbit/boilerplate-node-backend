@@ -7,4 +7,4 @@
 export { cartService } from './services';
 export { cartRepository } from './repository';
 export { cartModel } from './model';
-export type { ICartDocument } from './model';
+export type { CartDocument } from './model';

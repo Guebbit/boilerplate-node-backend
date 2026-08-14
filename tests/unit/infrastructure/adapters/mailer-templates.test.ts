@@ -8,7 +8,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import ejs from 'ejs';
-import type { IEmailContent } from '@infrastructure/adapters/mailer';
+import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { EMAIL_TEMPLATES_DIR } from '@infrastructure/adapters/mailer';
 import { listSupportedLocales } from '@infrastructure/i18n';
 import {
@@ -67,7 +67,7 @@ describe('email templates', () => {
  * No locale scope anywhere: the builders take the language as an argument and the render takes
  * nothing but their output, which is exactly the production sequence.
  */
-const contentFor = (locale: string): Record<string, IEmailContent> => ({
+const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.registration-confirm.ejs': registrationConfirmEmail(locale, 'Ada'),
     'account.verify-request.ejs': verifyRequestEmail(locale, 'Ada', 'a-token'),
     'account.reset-request.ejs': resetRequestEmail(locale, 'Ada', 'a-token'),

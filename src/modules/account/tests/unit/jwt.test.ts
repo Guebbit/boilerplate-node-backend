@@ -25,8 +25,8 @@ import {
     createRefreshToken,
     createAccessToken
 } from '@modules/account/jwt';
-import { ERefreshTokenExpiryTime } from '@modules/account';
-import { ETokenType } from '@modules/users';
+import { RefreshTokenExpiryTime } from '@modules/account';
+import { TokenType } from '@modules/users';
 import { userRepository } from '@modules/users';
 
 setupTestDb();
@@ -97,7 +97,7 @@ describe('verifyRefreshToken', () => {
     it('resolves when the token is signed AND present on the user document', async () => {
         const user = await createUser();
         const token = sign({ id: String(user._id) }, REFRESH_SECRET, { expiresIn: 3600 });
-        await user.tokenAdd(ETokenType.REFRESH, 3_600_000, token);
+        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: String(user._id) });
     });
@@ -114,12 +114,12 @@ describe('verifyRefreshToken', () => {
     it('rejects once the token has been removed from the user document', async () => {
         const user = await createUser();
         const token = sign({ id: String(user._id) }, REFRESH_SECRET, { expiresIn: 3600 });
-        await user.tokenAdd(ETokenType.REFRESH, 3_600_000, token);
+        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         // Precondition: it works before revocation, so the assertion below cannot pass vacuously.
         await expect(verifyRefreshToken(token)).resolves.toBeDefined();
 
-        await user.tokenRemoveAll(ETokenType.REFRESH);
+        await user.tokenRemoveAll(TokenType.REFRESH);
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
     });
@@ -127,7 +127,7 @@ describe('verifyRefreshToken', () => {
     it('rejects a token signed with the access secret', async () => {
         const user = await createUser();
         const token = sign({ id: String(user._id) }, ACCESS_SECRET, { expiresIn: 3600 });
-        await user.tokenAdd(ETokenType.REFRESH, 3_600_000, token);
+        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         // Even though it is stored, the signature is checked first and must fail.
         await expect(verifyRefreshToken(token)).rejects.toThrow();
@@ -136,7 +136,7 @@ describe('verifyRefreshToken', () => {
     it('rejects an expired refresh token without consulting the database', async () => {
         const user = await createUser();
         const token = sign({ id: String(user._id) }, REFRESH_SECRET, { expiresIn: -10 });
-        await user.tokenAdd(ETokenType.REFRESH, 3_600_000, token);
+        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         await expect(verifyRefreshToken(token)).rejects.toThrow();
     });
@@ -146,7 +146,7 @@ describe('createRefreshToken', () => {
     it('persists a verifiable refresh token on the user document', async () => {
         const user = await createUser();
 
-        const issued = await createRefreshToken(String(user._id), ERefreshTokenExpiryTime.SHORT);
+        const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
 
         // Round-trip through the verifier rather than inspecting the string: what matters is
         // that the token this function produced is one the system will later accept.
@@ -156,7 +156,7 @@ describe('createRefreshToken', () => {
     it('stores the token under the REFRESH type with an expiry', async () => {
         const user = await createUser();
 
-        const issued = await createRefreshToken(String(user._id), ERefreshTokenExpiryTime.SHORT);
+        const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
 
         // `tokens` is select:false, so it has to be re-read explicitly — the same way the
         // revocation lookup does.
@@ -166,7 +166,7 @@ describe('createRefreshToken', () => {
         expect(stored).toBeDefined();
         // The type matters: `tokenRemoveAll(REFRESH)` is what logout calls, and a token filed
         // under any other type would survive it.
-        expect(stored!.type).toBe(ETokenType.REFRESH);
+        expect(stored!.type).toBe(TokenType.REFRESH);
         // 3600s tier ⇒ a real future expiry, not the undefined that `expirationMs > 0` produces
         // when the tier resolves to 0.
         expect(stored!.expiration!.getTime()).toBeGreaterThan(Date.now());
@@ -175,15 +175,15 @@ describe('createRefreshToken', () => {
     it('rejects for an unknown user id', async () => {
         // A signed token must never be issued for an identity that does not exist.
         await expect(
-            createRefreshToken('507f1f77bcf86cd799439011', ERefreshTokenExpiryTime.SHORT)
+            createRefreshToken('507f1f77bcf86cd799439011', RefreshTokenExpiryTime.SHORT)
         ).rejects.toThrow('User not found');
     });
 
     it('accumulates tokens rather than replacing them, so multi-device login works', async () => {
         const user = await createUser();
 
-        const first = await createRefreshToken(String(user._id), ERefreshTokenExpiryTime.SHORT);
-        const second = await createRefreshToken(String(user._id), ERefreshTokenExpiryTime.SHORT);
+        const first = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
+        const second = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
 
         // Both must remain individually verifiable: signing in on a phone must not sign the
         // laptop out. A `tokens = [new]` assignment instead of a push would break exactly this.
@@ -191,7 +191,7 @@ describe('createRefreshToken', () => {
         await expect(verifyRefreshToken(second)).resolves.toMatchObject({ id: String(user._id) });
 
         const reloaded = await userRepository.findByIdWithCredentials(String(user._id));
-        const refreshTokens = reloaded!.tokens.filter((entry) => entry.type === ETokenType.REFRESH);
+        const refreshTokens = reloaded!.tokens.filter((entry) => entry.type === TokenType.REFRESH);
         expect(refreshTokens).toHaveLength(2);
     });
 });
@@ -201,7 +201,7 @@ describe('createAccessToken', () => {
         const user = await createUser();
         const refreshToken = await createRefreshToken(
             String(user._id),
-            ERefreshTokenExpiryTime.SHORT
+            RefreshTokenExpiryTime.SHORT
         );
 
         const accessToken = await createAccessToken(refreshToken);
@@ -216,7 +216,7 @@ describe('createAccessToken', () => {
         const user = await createUser();
         const refreshToken = await createRefreshToken(
             String(user._id),
-            ERefreshTokenExpiryTime.SHORT
+            RefreshTokenExpiryTime.SHORT
         );
 
         // Revoke the way the real logout path does: reload with credentials, then revoke. The
@@ -224,7 +224,7 @@ describe('createAccessToken', () => {
         // atomic `$pull` and no longer depends on it (see the note above `tokenAdd` in the user
         // model, and the guard immediately below this test).
         const loaded = await userRepository.findByIdWithCredentials(String(user._id));
-        await loaded!.tokenRemoveAll(ETokenType.REFRESH);
+        await loaded!.tokenRemoveAll(TokenType.REFRESH);
 
         await expect(createAccessToken(refreshToken)).rejects.toThrow('Forbidden');
     });
@@ -245,13 +245,13 @@ describe('createAccessToken', () => {
         const user = await createUser();
         const refreshToken = await createRefreshToken(
             String(user._id),
-            ERefreshTokenExpiryTime.SHORT
+            RefreshTokenExpiryTime.SHORT
         );
 
         const bare = await userRepository.findById(String(user._id));
         expect(bare!.tokens).toBeUndefined();
 
-        await expect(bare!.tokenRemoveAll(ETokenType.REFRESH)).resolves.toBeUndefined();
+        await expect(bare!.tokenRemoveAll(TokenType.REFRESH)).resolves.toBeUndefined();
 
         await expect(createAccessToken(refreshToken)).rejects.toThrow('Forbidden');
     });
@@ -265,7 +265,7 @@ describe('createAccessToken', () => {
         const other = await createUser({ email: 'other@example.com' });
         const refreshToken = await createRefreshToken(
             String(owner._id),
-            ERefreshTokenExpiryTime.SHORT
+            RefreshTokenExpiryTime.SHORT
         );
 
         const accessToken = await createAccessToken(refreshToken);

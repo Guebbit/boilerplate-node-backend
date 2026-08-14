@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
@@ -30,4 +30,4 @@ export default {
     },
     seeds: seedWishlistsCollection,
     locales: path.join(__dirname, 'locales')
-} satisfies IAppModule;
+} satisfies AppModule;

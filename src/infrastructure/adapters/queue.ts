@@ -178,7 +178,7 @@ export const PDF_QUEUE = 'pdfs';
 
 // ─── Publish ──────────────────────────────────────────────────────────────────
 
-export interface IPublishOptions<TPayload = unknown> {
+export interface PublishOptions<TPayload = unknown> {
     /** Queue name to publish to. */
     queue: string;
     /** Message payload (will be JSON-serialized). */
@@ -199,13 +199,13 @@ export interface IPublishOptions<TPayload = unknown> {
  * Publishes to the *default exchange* (empty name), where the routing key is taken as a
  * literal queue name. That is the simplest AMQP topology: no exchange/binding setup needed.
  *
- * `TPayload` is the job envelope. A producer that names it — `publishToQueue<IEmailJob>(…)` in
+ * `TPayload` is the job envelope. A producer that names it — `publishToQueue<EmailJob>(…)` in
  * `enqueueEmail` — gets the same type checked here that its consumer declares, so a field added
  * on one side and forgotten on the other is a compile error rather than a message the worker
  * discards at 3am. Left inferred, it behaves exactly as the old `unknown` did.
  */
 export const publishToQueue = <TPayload = unknown>(
-    options: IPublishOptions<TPayload>
+    options: PublishOptions<TPayload>
 ): Promise<boolean> =>
     getChannel().then((ch) => {
         if (!ch) return false;
@@ -242,7 +242,7 @@ export const publishToQueue = <TPayload = unknown>(
 
 // ─── Consume ──────────────────────────────────────────────────────────────────
 
-export interface IConsumeOptions<TPayload = unknown> {
+export interface ConsumeOptions<TPayload = unknown> {
     /** Queue name to consume from. */
     queue: string;
     /** Handler called for each message. Return true to ack, false to nack. */
@@ -267,11 +267,11 @@ export interface IConsumeOptions<TPayload = unknown> {
  * A dead-letter exchange is the usual fix once volume justifies it.
  *
  * `TPayload` is inferred from the handler, which is how a worker gets to declare its own job type
- * (`handleEmailJob(job: Partial<IEmailJob>)`) instead of taking `unknown` and asserting its way
+ * (`handleEmailJob(job: Partial<EmailJob>)`) instead of taking `unknown` and asserting its way
  * back to it. The type is a *claim about the wire*, never a check — see the assertion below.
  */
 export const consumeFromQueue = <TPayload = unknown>(
-    options: IConsumeOptions<TPayload>
+    options: ConsumeOptions<TPayload>
 ): Promise<void> =>
     getChannel().then((ch) => {
         if (!ch) return;

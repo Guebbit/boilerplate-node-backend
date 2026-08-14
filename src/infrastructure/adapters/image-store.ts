@@ -18,7 +18,7 @@ import path from 'node:path';
 import { deleteFile, moveFile } from '@infrastructure/adapters/filesystem';
 import { toPosixPath } from '@infrastructure/http/uploads';
 
-export interface IImageStore {
+export interface ImageStore {
     /**
      * Take a staged upload into storage, and return the value to persist in `imageUrl`.
      *
@@ -77,7 +77,7 @@ const isRemoteUrl = (value: string) =>
  * The store this API has always had: files under `NODE_PUBLIC_PATH/images/`, served by
  * `express.static`, addressed by the server-relative path `/images/<name>`.
  */
-export const filesystemImageStore: IImageStore = {
+export const filesystemImageStore: ImageStore = {
     put: async (stagedPath) => {
         const key = path.basename(stagedPath);
         await moveFile(stagedPath, path.join(publicRoot(), IMAGES_SEGMENT, key));
@@ -130,7 +130,7 @@ export const filesystemImageStore: IImageStore = {
  *
  * Uploads land on the container's own filesystem, so **rebuilding the container loses every
  * uploaded image** and two replicas do not share what they store. Swapping in an object store
- * means one more {@link IImageStore} implementation and nothing else — the migration, and the
+ * means one more {@link ImageStore} implementation and nothing else — the migration, and the
  * traps in it, are written up in `docs/theory/known-gaps.md`.
  */
-export const imageStore: IImageStore = filesystemImageStore;
+export const imageStore: ImageStore = filesystemImageStore;

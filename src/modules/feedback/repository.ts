@@ -1,5 +1,5 @@
 import { feedbackRequestModel, applyFeedbackRequestTransform } from './model';
-import type { IFeedbackRequestDocument } from './model';
+import type { FeedbackRequestDocument } from './model';
 import { createBaseRepository } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -9,7 +9,7 @@ import { createBaseRepository } from '@infrastructure/persistence/base-repositor
  * `status` is deliberately absent from the search spec: it is a closed enum, and mapping a raw
  * string onto it is a domain decision the service makes before handing the result down as a scope.
  */
-export const feedbackRequestRepository = createBaseRepository<IFeedbackRequestDocument>(
+export const feedbackRequestRepository = createBaseRepository<FeedbackRequestDocument>(
     feedbackRequestModel,
     {
         transform: applyFeedbackRequestTransform,

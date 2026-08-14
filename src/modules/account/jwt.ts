@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { sign, verify } from 'jsonwebtoken';
-import { userModel as Users, ETokenType } from '@modules/users';
-import type { IToken } from '@modules/users';
+import { userModel as Users, TokenType } from '@modules/users';
+import type { Token } from '@modules/users';
 import type { CastError } from 'mongoose';
 import {
     getAccessTokenSecret,
@@ -10,7 +10,7 @@ import {
     getExpiryTime,
     getExpiryTimeMilliseconds
 } from './tokens';
-import type { ERefreshTokenExpiryTime } from './tokens';
+import type { RefreshTokenExpiryTime } from './tokens';
 
 /*
  * JWT creation and verification. Secrets and TTLs come from `./tokens`, which owns the policy.
@@ -20,22 +20,22 @@ import type { ERefreshTokenExpiryTime } from './tokens';
  * stored refresh tokens, which is exactly the dependency the manifest already declares.
  */
 
-export interface ITokenData {
+export interface TokenData {
     id: string;
 }
 
-export { ERefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from './tokens';
+export { RefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from './tokens';
 
 /*
  * Verify an access token (stateless JWT check only).
  * @param token - signed JWT string
  * @returns decoded payload
  */
-export const verifyAccessToken = (token: string): Promise<ITokenData> =>
+export const verifyAccessToken = (token: string): Promise<TokenData> =>
     new Promise((resolve, reject) => {
         verify(token, getAccessTokenSecret(), (error, data) => {
             if (error) return reject(error);
-            resolve(data as ITokenData);
+            resolve(data as TokenData);
         });
     });
 
@@ -45,7 +45,7 @@ export const verifyAccessToken = (token: string): Promise<ITokenData> =>
  * @param token - refresh JWT string
  * @returns decoded payload
  */
-export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
+export const verifyRefreshToken = (token: string): Promise<TokenData> =>
     new Promise((resolve, reject) => {
         verify(token, getRefreshTokenSecret(), (error, data) => {
             if (error) {
@@ -60,7 +60,7 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
                         reject(new Error('Forbidden'));
                         return;
                     }
-                    resolve(data as ITokenData);
+                    resolve(data as TokenData);
                 })
                 .catch((error: Error | CastError) => reject(error));
         });
@@ -72,7 +72,7 @@ export const verifyRefreshToken = (token: string): Promise<ITokenData> =>
  * @param remember - optional expiry tier
  * @returns updated user document
  */
-export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTime) =>
+export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime) =>
     Users.findById(id)
         .select('+tokens')
         .then((user) => {
@@ -91,12 +91,12 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
              * addressed one session, and now it does. Verification is unaffected: `jti` is a
              * registered claim that `verify` carries through without checking.
              */
-            const token = sign({ id } as ITokenData, getRefreshTokenSecret(), {
+            const token = sign({ id } as TokenData, getRefreshTokenSecret(), {
                 expiresIn: getExpiryTime(remember),
                 algorithm: 'HS256',
                 jwtid: randomUUID()
-            }) as IToken['token'];
-            return user.tokenAdd(ETokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
+            }) as Token['token'];
+            return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
 /*
@@ -106,7 +106,7 @@ export const createRefreshToken = (id: string, remember?: ERefreshTokenExpiryTim
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id }) =>
-        sign({ id } as ITokenData, getAccessTokenSecret(), {
+        sign({ id } as TokenData, getAccessTokenSecret(), {
             expiresIn: getAccessTokenTTL(),
             algorithm: 'HS256'
         })

@@ -44,7 +44,7 @@ export const SEED_ADMIN_PASSWORD = 'rootroot';
 export const SEED_USER_EMAIL = 'gino@pino.it';
 export const SEED_USER_PASSWORD = 'password';
 
-export interface ISeedCartItem {
+export interface SeedCartItem {
     productId: string;
     quantity: number;
 }

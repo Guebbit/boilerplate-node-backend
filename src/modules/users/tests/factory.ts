@@ -28,7 +28,7 @@
  *   const loginResult = await userService.login(user.email, PLAIN_PASSWORD);
  */
 
-import type { IUser, IUserDocument } from '@modules/users';
+import type { UserRecord, UserDocument } from '@modules/users';
 import { userRepository } from '@modules/users';
 
 /** Plain-text password used by the default factory.  Re-export so tests can
@@ -44,8 +44,8 @@ export const PLAIN_PASSWORD = 'Password1!';
  * build a deactivated account; it is independent of `deletedAt`, so any of the four combinations
  * is constructible.
  */
-type CreateUserInput = Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'tokens'> &
-    Partial<Pick<IUser, 'imageUrl' | 'deletedAt' | 'active' | 'verified'>>;
+type CreateUserInput = Pick<UserRecord, 'email' | 'username' | 'password' | 'admin' | 'tokens'> &
+    Partial<Pick<UserRecord, 'imageUrl' | 'deletedAt' | 'active' | 'verified'>>;
 
 /**
  * Build a valid user payload.
@@ -69,15 +69,15 @@ export const makeUser = (overrides: Partial<CreateUserInput> = {}): CreateUserIn
  *
  * @param overrides - Fields to override the factory defaults.
  */
-export const createUser = (overrides: Partial<CreateUserInput> = {}): Promise<IUserDocument> =>
-    userRepository.create(makeUser(overrides) as Partial<IUserDocument>);
+export const createUser = (overrides: Partial<CreateUserInput> = {}): Promise<UserDocument> =>
+    userRepository.create(makeUser(overrides) as Partial<UserDocument>);
 
 /**
  * Insert an admin user (admin: true) into the test database.
  *
  * @param overrides - Additional overrides applied on top of the admin defaults.
  */
-export const createAdminUser = (overrides: Partial<CreateUserInput> = {}): Promise<IUserDocument> =>
+export const createAdminUser = (overrides: Partial<CreateUserInput> = {}): Promise<UserDocument> =>
     createUser({
         admin: true,
         email: 'admin@example.com',

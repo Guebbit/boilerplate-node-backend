@@ -19,18 +19,15 @@
  * Seeded. Any counterexample gets written back as an example with its seed in a comment.
  */
 import fc from 'fast-check';
-import {
-    applySerialization,
-    type TSerializeTransform
-} from '@infrastructure/persistence/serialize';
+import { applySerialization, type SerializeTransform } from '@infrastructure/persistence/serialize';
 
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
 
-/** A stand-in for the one method the wiring touches — see `ISerializableSchema` in the source. */
+/** A stand-in for the one method the wiring touches — see `SerializableSchema` in the source. */
 const fakeSchema = () => ({ set: () => 0 });
 
 /** Build a transform without needing a real Mongoose schema. */
-const buildTransform = (options?: Parameters<typeof applySerialization>[1]): TSerializeTransform =>
+const buildTransform = (options?: Parameters<typeof applySerialization>[1]): SerializeTransform =>
     applySerialization(fakeSchema(), options);
 
 /**

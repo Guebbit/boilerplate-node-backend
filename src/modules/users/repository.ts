@@ -1,10 +1,10 @@
-import { userModel, applyUserTransform, ETokenType } from './model';
-import type { IUserDocument } from './model';
+import { userModel, applyUserTransform, TokenType } from './model';
+import type { UserDocument } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -22,20 +22,20 @@ const CREDENTIAL_FIELDS = '+password +tokens';
  * Standard CRUD via the base factory, plus credential reads and soft-delete scoping.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-export const userRepository: IBaseRepository<IUserDocument> & {
+export const userRepository: BaseRepository<UserDocument> & {
     updateMany: (
-        filter: QueryFilter<IUserDocument>,
-        update: UpdateQuery<IUserDocument>
+        filter: QueryFilter<UserDocument>,
+        update: UpdateQuery<UserDocument>
     ) => Promise<UpdateWriteOpResult>;
-    findByIdWithCredentials: (id: string) => Promise<IUserDocument | null>;
-    findOneWithCredentials: (where: QueryFilter<IUserDocument>) => Promise<IUserDocument | null>;
+    findByIdWithCredentials: (id: string) => Promise<UserDocument | null>;
+    findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createBaseRepository<IUserDocument>(userModel, {
+    ...createBaseRepository<UserDocument>(userModel, {
         transform: applyUserTransform,
         searchable: {
             objectIds: { id: '_id' },
@@ -52,7 +52,7 @@ export const userRepository: IBaseRepository<IUserDocument> & {
     /**
      * Update multiple user documents matching the filter.
      */
-    updateMany: (filter: QueryFilter<IUserDocument>, update: UpdateQuery<IUserDocument>) =>
+    updateMany: (filter: QueryFilter<UserDocument>, update: UpdateQuery<UserDocument>) =>
         userModel.updateMany(filter, update).exec(),
 
     /**
@@ -64,7 +64,7 @@ export const userRepository: IBaseRepository<IUserDocument> & {
     /**
      * Fetch the first user matching the filter WITH its credential fields.
      */
-    findOneWithCredentials: (where: QueryFilter<IUserDocument>) =>
+    findOneWithCredentials: (where: QueryFilter<UserDocument>) =>
         userModel.findOne(where).select(CREDENTIAL_FIELDS).exec(),
 
     /**
@@ -132,7 +132,7 @@ export const userRepository: IBaseRepository<IUserDocument> & {
         userModel
             .updateOne(
                 { _id: toObjectId(id) },
-                { $pull: { tokens: { _id: toObjectId(sessionId), type: ETokenType.REFRESH } } },
+                { $pull: { tokens: { _id: toObjectId(sessionId), type: TokenType.REFRESH } } },
                 { timestamps: false }
             )
             .exec()

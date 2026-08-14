@@ -41,8 +41,8 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { REPO_ROOT } from './fragments';
-import { SECTION_ORDER, sectionFragment, type TSectionName } from './openapi';
-import { collectionFragment, COLLECTION_TOOLS, type TCollectionTool } from './clientCollections';
+import { SECTION_ORDER, sectionFragment, type SectionName } from './openapi';
+import { collectionFragment, COLLECTION_TOOLS, type CollectionTool } from './clientCollections';
 import {
     SEED_ADMIN_EMAIL,
     SEED_ADMIN_PASSWORD,
@@ -57,78 +57,78 @@ import {
  * The contract, read as data
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-type TJson = null | boolean | number | string | TJson[] | { [key: string]: TJson };
+type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
-interface ISchema {
+interface Schema {
     $ref?: string;
     type?: string;
     format?: string;
-    enum?: TJson[];
-    example?: TJson;
-    default?: TJson;
-    properties?: Record<string, ISchema>;
+    enum?: Json[];
+    example?: Json;
+    default?: Json;
+    properties?: Record<string, Schema>;
     required?: string[];
-    items?: ISchema;
-    allOf?: ISchema[];
-    oneOf?: ISchema[];
-    anyOf?: ISchema[];
+    items?: Schema;
+    allOf?: Schema[];
+    oneOf?: Schema[];
+    anyOf?: Schema[];
     minimum?: number;
     minItems?: number;
 }
 
-interface IParameter {
+interface Parameter {
     $ref?: string;
     name?: string;
     in?: 'path' | 'query' | 'header' | 'cookie';
     required?: boolean;
     description?: string;
-    schema?: ISchema;
+    schema?: Schema;
 }
 
-interface IMediaType {
-    schema?: ISchema;
-    example?: TJson;
+interface MediaType {
+    schema?: Schema;
+    example?: Json;
 }
 
-interface IResponse {
+interface Response {
     $ref?: string;
     description?: string;
-    content?: Record<string, IMediaType>;
+    content?: Record<string, MediaType>;
 }
 
-interface IOperationSpec {
+interface OperationSpec {
     operationId?: string;
     summary?: string;
     description?: string;
     tags?: string[];
-    parameters?: IParameter[];
+    parameters?: Parameter[];
     security?: unknown[];
-    requestBody?: { content?: Record<string, IMediaType> };
-    responses?: Record<string, IResponse>;
+    requestBody?: { content?: Record<string, MediaType> };
+    responses?: Record<string, Response>;
 }
 
-interface IContract {
+interface Contract {
     info: { title: string; version: string };
     servers?: { url: string; description?: string }[];
-    paths: Record<string, Record<string, IOperationSpec | IParameter[]>>;
+    paths: Record<string, Record<string, OperationSpec | Parameter[]>>;
     components?: {
-        schemas?: Record<string, ISchema>;
-        parameters?: Record<string, IParameter>;
-        responses?: Record<string, IResponse>;
+        schemas?: Record<string, Schema>;
+        parameters?: Record<string, Parameter>;
+        responses?: Record<string, Response>;
     };
 }
 
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
-type THttpMethod = (typeof HTTP_METHODS)[number];
+type HttpMethod = (typeof HTTP_METHODS)[number];
 
-const isMethod = (key: string): key is THttpMethod =>
+const isMethod = (key: string): key is HttpMethod =>
     (HTTP_METHODS as readonly string[]).includes(key);
 
-const readContract = (): IContract =>
-    parseYaml(readFileSync(path.join(REPO_ROOT, 'openapi.yaml'), 'utf8')) as IContract;
+const readContract = (): Contract =>
+    parseYaml(readFileSync(path.join(REPO_ROOT, 'openapi.yaml'), 'utf8')) as Contract;
 
 /** Follow a local `#/components/...` pointer. Remote refs do not occur in a bundled document. */
-const dereference = <T>(contract: IContract, node: T & { $ref?: string }): T => {
+const dereference = <T>(contract: Contract, node: T & { $ref?: string }): T => {
     if (!node?.$ref) return node;
     const segments = node.$ref.replace(/^#\//, '').split('/');
     let current: unknown = contract;
@@ -144,7 +144,7 @@ const dereference = <T>(contract: IContract, node: T & { $ref?: string }): T => 
 const PATH_LINE = /^ {4}(\/\S*):\s*$/;
 
 /** Every path filed under a section, in the order its fragment declares them. */
-const sectionPaths = (section: TSectionName): string[] =>
+const sectionPaths = (section: SectionName): string[] =>
     readFileSync(sectionFragment(section, 'paths'), 'utf8')
         .split('\n')
         .map((line) => PATH_LINE.exec(line)?.[1])
@@ -165,7 +165,7 @@ const [seedOrder] = seedOrders;
  * `{"productId": ""}` is a request whoever opens the collection has to fix before it does anything.
  * Anything not named here falls through to a type- and format-shaped default.
  */
-const SEEDED_VALUES: Record<string, TJson> = {
+const SEEDED_VALUES: Record<string, Json> = {
     id: seedProduct.id,
     email: SEED_USER_EMAIL,
     password: SEED_USER_PASSWORD,
@@ -194,7 +194,7 @@ const SEEDED_VALUES: Record<string, TJson> = {
  * returns a non-admin token makes every admin-only request in the collection fail with a 403, and
  * the first thing anyone would do with the collection is log in.
  */
-const BODY_OVERRIDES: Record<string, TJson> = {
+const BODY_OVERRIDES: Record<string, Json> = {
     'POST /account/login': { email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
     'POST /account/signup': {
         username: seedUser.username,
@@ -210,7 +210,7 @@ const BODY_OVERRIDES: Record<string, TJson> = {
  * /products/{id}` example and the row that answers it are the same record. Only the properties the
  * schema declares survive, so a field the contract drops stops appearing here on the next run.
  */
-const ENTITY_SEEDS: Record<string, Record<string, TJson>> = {
+const ENTITY_SEEDS: Record<string, Record<string, Json>> = {
     User: {
         id: seedUser.id,
         username: seedUser.username,
@@ -298,7 +298,7 @@ const applyTokens = (text: string): string =>
     });
 
 /** The same, through a whole JSON body. */
-const applyTokensDeep = (value: TJson): TJson => {
+const applyTokensDeep = (value: Json): Json => {
     if (typeof value === 'string') return applyTokens(value);
     if (Array.isArray(value)) return value.map((item) => applyTokensDeep(item));
     if (value && typeof value === 'object')
@@ -309,7 +309,7 @@ const applyTokensDeep = (value: TJson): TJson => {
 };
 
 /** One hand-declared request, as a module's `dev/probes.yml` writes it. */
-interface IProbe {
+interface Probe {
     name: string;
     /** Why it exists — becomes the request's description in both tools. */
     why: string;
@@ -319,11 +319,11 @@ interface IProbe {
     /** `bearer` sends the collection's token; omit for an anonymous call. */
     auth?: 'bearer';
     headers?: Record<string, string>;
-    body?: TJson;
+    body?: Json;
 }
 
 /** Where a module declares its probes. Absence is the normal case. */
-const probesFile = (section: TSectionName): string =>
+const probesFile = (section: SectionName): string =>
     section === 'system'
         ? path.join(REPO_ROOT, 'shared', 'contracts', 'probes.yml')
         : path.join(REPO_ROOT, 'src', 'modules', section, 'dev', 'probes.yml');
@@ -334,11 +334,11 @@ const probesFile = (section: TSectionName): string =>
  * They carry no `responses`: a probe exists to show what the API does with an input the contract
  * does not describe, and inventing the answer here would defeat the point of sending it.
  */
-const moduleProbes = (section: TSectionName): ICollectionRequest[] => {
+const moduleProbes = (section: SectionName): CollectionRequest[] => {
     const file = probesFile(section);
     if (!existsSync(file)) return [];
 
-    const probes = (parseYaml(readFileSync(file, 'utf8')) ?? []) as IProbe[];
+    const probes = (parseYaml(readFileSync(file, 'utf8')) ?? []) as Probe[];
 
     return probes.map((probe) => {
         const [pathOnly, query = ''] = applyTokens(probe.path).split('?');
@@ -361,11 +361,11 @@ const moduleProbes = (section: TSectionName): ICollectionRequest[] => {
 };
 
 /** Every module's probes, flattened — what a coverage check has to account for. */
-export const allProbes = (): ICollectionRequest[] =>
+export const allProbes = (): CollectionRequest[] =>
     SECTION_ORDER.flatMap((section) => moduleProbes(section));
 
 /** A scalar for a schema that named no example and no property this file knows. */
-const scalarFor = (schema: ISchema): TJson => {
+const scalarFor = (schema: Schema): Json => {
     if (schema.enum?.length) return schema.enum[0];
     switch (schema.type) {
         case 'integer':
@@ -404,11 +404,11 @@ const scalarFor = (schema: ISchema): TJson => {
  * until the stack gives out, and a collection is not the place to discover that.
  */
 const exampleFor = (
-    contract: IContract,
-    rawSchema: ISchema | undefined,
+    contract: Contract,
+    rawSchema: Schema | undefined,
     propertyName = '',
     seen: ReadonlySet<string> = new Set()
-): TJson => {
+): Json => {
     if (!rawSchema) return null;
 
     const reference = rawSchema.$ref;
@@ -432,10 +432,10 @@ const exampleFor = (
         );
 
     if (schema.allOf)
-        return schema.allOf.reduce<Record<string, TJson>>(
+        return schema.allOf.reduce<Record<string, Json>>(
             (merged, part) => ({
                 ...merged,
-                ...(exampleFor(contract, part, propertyName, nextSeen) as Record<string, TJson>)
+                ...(exampleFor(contract, part, propertyName, nextSeen) as Record<string, Json>)
             }),
             {}
         );
@@ -460,14 +460,14 @@ const exampleFor = (
  * The request model every emitter reads
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-export interface ICollectionResponse {
+export interface CollectionResponse {
     status: number;
     label: string;
-    body: TJson;
+    body: Json;
 }
 
-export interface ICollectionRequest {
-    section: TSectionName;
+export interface CollectionRequest {
+    section: SectionName;
     method: string;
     /** The contract's path template, `/products/{id}`. */
     template: string;
@@ -481,9 +481,9 @@ export interface ICollectionRequest {
     secured: boolean;
     /** Extra headers a probe asks for; contract-derived requests declare none. */
     headers?: Record<string, string>;
-    body?: TJson;
+    body?: Json;
     /** One example per declared response. Probes have none — see `moduleProbes`. */
-    responses: ICollectionResponse[];
+    responses: CollectionResponse[];
 }
 
 /** Reason-phrase for the status codes this contract declares. */
@@ -499,7 +499,7 @@ const STATUS_TEXT: Record<number, string> = {
     503: 'Service Unavailable'
 };
 
-const requestName = (operation: IOperationSpec, method: string, template: string): string =>
+const requestName = (operation: OperationSpec, method: string, template: string): string =>
     operation.summary ?? operation.operationId ?? `${method} ${template}`;
 
 /**
@@ -510,7 +510,7 @@ const requestName = (operation: IOperationSpec, method: string, template: string
  * type's placeholder in both — a 404 body claiming `"status": 1` — which is exactly the kind of
  * plausible-looking wrong value someone copies into a test.
  */
-const envelope = (body: TJson, status: number, label: string): TJson => {
+const envelope = (body: Json, status: number, label: string): Json => {
     if (body === null || typeof body !== 'object' || Array.isArray(body)) return body;
 
     return {
@@ -521,7 +521,7 @@ const envelope = (body: TJson, status: number, label: string): TJson => {
 };
 
 /** Every operation the contract declares, grouped by the module that owns its path. */
-export const collectionRequests = (contract: IContract = readContract()): ICollectionRequest[] =>
+export const collectionRequests = (contract: Contract = readContract()): CollectionRequest[] =>
     SECTION_ORDER.flatMap((section) =>
         sectionPaths(section).flatMap((template) => {
             const pathItem = contract.paths[template];
@@ -531,12 +531,12 @@ export const collectionRequests = (contract: IContract = readContract()): IColle
                         `  Re-bundle the contract first: npm run contracts:bundle`
                 );
 
-            const shared = (pathItem.parameters ?? []) as IParameter[];
+            const shared = (pathItem.parameters ?? []) as Parameter[];
 
             return Object.entries(pathItem)
                 .filter(([key]) => isMethod(key))
                 .map(([method, raw]) => {
-                    const operation = raw as IOperationSpec;
+                    const operation = raw as OperationSpec;
                     const parameters = [...shared, ...(operation.parameters ?? [])].map(
                         (parameter) => dereference(contract, parameter)
                     );
@@ -655,19 +655,19 @@ const jsonBlock = (value: unknown, spaces: number): string =>
     indent(JSON.stringify(value, undefined, 2).trimEnd(), spaces) + '\n';
 
 /** The label a folder carries: the module's own name, title-cased the way the tools display it. */
-const folderName = (section: TSectionName): string =>
+const folderName = (section: SectionName): string =>
     section === 'system'
         ? 'System'
         : section.replaceAll(/(^|-)([a-z])/g, (_match, _lead: string, letter: string) =>
               letter.toUpperCase()
           );
 
-const bodyText = (body: TJson | undefined): string | undefined =>
+const bodyText = (body: Json | undefined): string | undefined =>
     body === undefined ? undefined : JSON.stringify(body, undefined, 2);
 
 /* ── Bruno ──────────────────────────────────────────────────────────────────────────────────── */
 
-const brunoRequest = (request: ICollectionRequest, sequence: number): unknown => {
+const brunoRequest = (request: CollectionRequest, sequence: number): unknown => {
     const url = `{{baseUrl}}${request.resolvedPath}${request.query}`;
     const body = bodyText(request.body);
 
@@ -730,8 +730,8 @@ const brunoRequest = (request: ICollectionRequest, sequence: number): unknown =>
 };
 
 const brunoSection = (
-    section: TSectionName,
-    requests: ICollectionRequest[],
+    section: SectionName,
+    requests: CollectionRequest[],
     sequence: number
 ): string =>
     yamlBlock(
@@ -747,7 +747,7 @@ const brunoSection = (
         2
     );
 
-const brunoHeader = (contract: IContract): string =>
+const brunoHeader = (contract: Contract): string =>
     stringifyYaml(
         {
             opencollection: '1.0.0',
@@ -768,7 +768,7 @@ const brunoFooter = (): string =>
 
 /* ── Insomnia ───────────────────────────────────────────────────────────────────────────────── */
 
-const insomniaRequest = (request: ICollectionRequest, sortKey: number): unknown => {
+const insomniaRequest = (request: CollectionRequest, sortKey: number): unknown => {
     const body = bodyText(request.body);
     const identity = `${request.method} ${request.template}`;
 
@@ -807,8 +807,8 @@ const insomniaRequest = (request: ICollectionRequest, sortKey: number): unknown 
 };
 
 const insomniaSection = (
-    section: TSectionName,
-    requests: ICollectionRequest[],
+    section: SectionName,
+    requests: CollectionRequest[],
     sortKey: number
 ): string =>
     yamlBlock(
@@ -847,7 +847,7 @@ const insomniaHeader = (): string =>
         { lineWidth: 0 }
     ).replace(/collection: null\n$/, 'collection:\n');
 
-const insomniaFooter = (contract: IContract): string =>
+const insomniaFooter = (contract: Contract): string =>
     stringifyYaml(
         {
             environments: {
@@ -873,7 +873,7 @@ const insomniaFooter = (contract: IContract): string =>
 const mockoonEndpoint = (template: string): string =>
     template.replace(/^\//, '').replaceAll(/\{(\w+)}/g, ':$1');
 
-const mockoonRoute = (request: ICollectionRequest): unknown => {
+const mockoonRoute = (request: CollectionRequest): unknown => {
     const identity = `${request.method} ${request.template}`;
 
     return {
@@ -907,7 +907,7 @@ const mockoonRoute = (request: ICollectionRequest): unknown => {
     };
 };
 
-const mockoonSection = (requests: ICollectionRequest[]): string =>
+const mockoonSection = (requests: CollectionRequest[]): string =>
     jsonBlock(
         requests.map((request) => mockoonRoute(request)),
         4
@@ -915,7 +915,7 @@ const mockoonSection = (requests: ICollectionRequest[]): string =>
         .replace(/^ {4}\[\n/, '')
         .replace(/\n {4}]\n$/, '\n');
 
-const mockoonTree = (requests: ICollectionRequest[]): string =>
+const mockoonTree = (requests: CollectionRequest[]): string =>
     jsonBlock(
         requests.map((request) => ({
             type: 'route',
@@ -988,7 +988,7 @@ const mockoonFooter = (): string =>
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
 /** Where a tool's shared scaffolding lives. Mirrors `collectionFragment` for the module slices. */
-export const collectionSharedFragment = (tool: TCollectionTool, part: string): string =>
+export const collectionSharedFragment = (tool: CollectionTool, part: string): string =>
     path.join(
         REPO_ROOT,
         'shared',
@@ -1006,7 +1006,7 @@ export const collectionSharedFragment = (tool: TCollectionTool, part: string): s
 export const generateCollectionFragments = (): Map<string, string> => {
     const contract = readContract();
     const requests = collectionRequests(contract);
-    const bySection = new Map<TSectionName, ICollectionRequest[]>(
+    const bySection = new Map<SectionName, CollectionRequest[]>(
         SECTION_ORDER.map((section) => [
             section,
             requests.filter((request) => request.section === section)

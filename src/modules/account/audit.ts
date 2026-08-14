@@ -33,7 +33,7 @@ export const accountAuditActions = {
 } as const;
 
 declare module '@infrastructure/observability/audit' {
-    interface IAuditActionMap {
+    interface AuditActionMap {
         account: (typeof accountAuditActions)[keyof typeof accountAuditActions];
     }
 }

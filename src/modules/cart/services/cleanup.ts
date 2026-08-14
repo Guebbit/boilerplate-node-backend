@@ -9,8 +9,8 @@
 import type { CastError } from 'mongoose';
 import {
     generateSuccess,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { cartRepository } from '../repository';
@@ -30,7 +30,7 @@ export const cartDeleteByUserId = (userId: string): Promise<void> =>
  */
 export const productRemoveFromCartsById = (
     id: string
-): Promise<IResponseSuccess<undefined> | IResponseReject> =>
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     cartRepository
         .removeProductFromAll(id)
         .then((result) =>

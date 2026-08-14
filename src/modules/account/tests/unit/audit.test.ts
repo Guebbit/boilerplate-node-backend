@@ -16,7 +16,7 @@
  * action added or removed without the decision being written down here.
  */
 
-import type { TAuditAction } from '@infrastructure/observability/audit';
+import type { AuditAction } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../../audit';
 
 describe('the account audit vocabulary', () => {
@@ -56,14 +56,14 @@ describe('the account audit vocabulary', () => {
     });
 
     /*
-     * The `declare module` augmentation in `audit.ts` is what puts these into `TAuditAction`.
+     * The `declare module` augmentation in `audit.ts` is what puts these into `AuditAction`.
      * Drop it and the module still compiles on its own — but `emitAuditEvent` then rejects every
      * action this module owns, at the call sites rather than here. Checked at type-check time:
      * `tsconfig.json` includes the whole `src` tree, so this line is compiled even though jest
      * does not type-check it.
      */
     it('registers its actions in the app-wide union', () => {
-        const action: TAuditAction = accountAuditActions.AUTH_LOGIN_SUCCEEDED;
+        const action: AuditAction = accountAuditActions.AUTH_LOGIN_SUCCEEDED;
 
         expect(action).toBe('auth.login.succeeded');
     });

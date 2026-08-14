@@ -150,7 +150,7 @@ export const getRouteLabel = (request: Request): string =>
     normalizeRoutePath(request.path || request.originalUrl || '/');
 
 /** Input for `recordRequestMetric` — an object rather than four positional args, so a caller cannot transpose method and route. */
-interface IRequestMetricInput {
+interface RequestMetricInput {
     method: string;
     /** Already normalized — see `getRouteLabel`. */
     route: string;
@@ -167,7 +167,7 @@ export const recordRequestMetric = ({
     route,
     statusCode,
     durationMs
-}: IRequestMetricInput): void => {
+}: RequestMetricInput): void => {
     // Label values must be strings in the Prometheus exposition format.
     const labels = { method, route, status_code: String(statusCode) };
     // `inc()` with no amount increments by 1.
@@ -204,7 +204,7 @@ const sumMetricValues = (values: Array<{ value: number }>) =>
     values.reduce((sum, value) => sum + value.value, 0);
 
 /** One histogram bucket: its upper bound and the *cumulative* count at or below it. */
-interface ILatencyBucket {
+interface LatencyBucket {
     upperBound: number;
     /** Cumulative, not per-bucket — Prometheus histograms are cumulative by definition. */
     cumulativeCount: number;
@@ -221,7 +221,7 @@ const aggregateLatencyBuckets = (
         labels: Record<string, string | number | undefined>;
         metricName?: string;
     }>
-): { buckets: ILatencyBucket[]; totalCount: number } => {
+): { buckets: LatencyBucket[]; totalCount: number } => {
     // Keyed by bucket boundary, summing across every method/route series — the goal is one
     // service-wide latency distribution, not a per-route one.
     const totals = new Map<number, number>();
@@ -267,7 +267,7 @@ const aggregateLatencyBuckets = (
  * @param percentile - fraction in [0, 1], e.g. 0.95
  */
 export const percentileFromHistogramBuckets = (
-    buckets: ILatencyBucket[],
+    buckets: LatencyBucket[],
     totalCount: number,
     percentile: number
 ): number => {

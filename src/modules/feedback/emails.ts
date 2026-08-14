@@ -12,10 +12,10 @@
  * builder returns what its template prints — nothing more.
  */
 
-import type { IEmailContent } from '@infrastructure/adapters/mailer';
+import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 
-export interface IContactRequest {
+export interface ContactRequest {
     name?: string;
     email: string;
     subject: string;
@@ -24,7 +24,7 @@ export interface IContactRequest {
 }
 
 /** Operator-facing notification for a new contact request. */
-export const contactRequestEmail = (locale: string, feedback: IContactRequest): IEmailContent => {
+export const contactRequestEmail = (locale: string, feedback: ContactRequest): EmailContent => {
     const t = translator(locale);
     return {
         template: 'feedback.contact.ejs',

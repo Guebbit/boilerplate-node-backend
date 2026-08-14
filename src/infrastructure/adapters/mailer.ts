@@ -27,7 +27,7 @@ import {
     ATTR_MESSAGING_SYSTEM,
     ATTR_MESSAGING_DESTINATION_NAME
 } from '@opentelemetry/semantic-conventions/incubating';
-import type { IEmailJobPayload } from '@types';
+import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { createLocaleContext, getCurrentLocale } from '@infrastructure/i18n';
 import { withSpan } from '@infrastructure/observability/tracer';
@@ -47,7 +47,7 @@ import { isQueueEnabled, publishToQueue, EMAIL_QUEUE } from '@infrastructure/ada
  * name a caller passes travels through RabbitMQ to a consumer that may be another process: a bare
  * filename resolved against the consumer's own directory stays portable, where a path into
  * `src/modules` would bind the payload to one checkout's layout. The owner lives in the filename
- * prefix instead — see {@link IEmailContent.template}.
+ * prefix instead — see {@link EmailContent.template}.
  *
  * `tests/unit/infrastructure/adapters/mailer-templates.test.ts` asserts every template resolves under this
  * directory, so the path cannot silently rot.
@@ -211,7 +211,7 @@ export const nodemailer = (
  * straight to `sendMail`. Anything non-plain in there (streams, Buffers, functions) still will not
  * survive `JSON.stringify` — see the note at the publish site.
  */
-export interface IEmailJob extends Omit<IEmailJobPayload, 'request'> {
+export interface EmailJob extends Omit<EmailJobPayload, 'request'> {
     request: SendMailOptions;
 }
 
@@ -223,7 +223,7 @@ export interface IEmailJob extends Omit<IEmailJobPayload, 'request'> {
  * grows a paragraph grows a field here, in the one file that builds it, rather than in whichever
  * controllers happened to send that email.
  */
-export interface IEmailContent {
+export interface EmailContent {
     /**
      * Template file name inside {@link EMAIL_TEMPLATES_DIR}, prefixed with the module that owns
      * it — `orders.order-confirm.ejs`. The templates sit in one flat directory so this stays a
@@ -264,7 +264,7 @@ export const enqueueEmail = (
 
     // The type argument is the point: this literal is checked against the very type the worker
     // declares, so producer and consumer cannot drift apart silently.
-    return publishToQueue<IEmailJob>({
+    return publishToQueue<EmailJob>({
         queue: EMAIL_QUEUE,
         // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
         // (streams, Buffers, functions) in `request` would not survive the round trip.

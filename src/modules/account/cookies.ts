@@ -1,5 +1,5 @@
 import type { Response } from 'express';
-import { type ERefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './tokens';
+import { type RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './tokens';
 
 /**
  * Cookie Service
@@ -13,7 +13,7 @@ import { type ERefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './token
 export const createRefreshCookie = (
     response: Response,
     token: string,
-    remember?: ERefreshTokenExpiryTime
+    remember?: RefreshTokenExpiryTime
 ) => {
     response.cookie('jwt', token, {
         httpOnly: true,
@@ -39,7 +39,7 @@ export const destroyRefreshCookie = (response: Response) => {
 /**
  * Non-secure UI-hint cookie indicating logged-in state.
  */
-export const createLoggedCookie = (response: Response, remember?: ERefreshTokenExpiryTime) => {
+export const createLoggedCookie = (response: Response, remember?: RefreshTokenExpiryTime) => {
     response.cookie('isAuth', 'true', {
         maxAge: getExpiryTimeMilliseconds(remember),
         sameSite: 'lax',

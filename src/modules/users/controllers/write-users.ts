@@ -16,7 +16,7 @@ import type {
     UpdateUserByIdRequestMultipart,
     User
 } from '@types';
-import type { IUser } from '../model';
+import type { UserRecord } from '../model';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { usersAuditActions } from '../audit';
 
@@ -97,7 +97,7 @@ export const writeUsers = (
         return userService
             .create({
                 // After validation it will be compatible for sure
-                ...(request.body as IUser),
+                ...(request.body as UserRecord),
                 ...validated
             })
             .then((user) => {

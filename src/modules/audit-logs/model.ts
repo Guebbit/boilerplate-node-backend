@@ -19,11 +19,11 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  */
 
 /**
- * A stored audit entry. Structurally identical to `IAuditEntry` in
+ * A stored audit entry. Structurally identical to `AuditEntry` in
  * `@infrastructure/observability/audit`, which is deliberate — the sink persists what it is handed, and the
  * controller returns what it reads, so no shape translation exists in either direction to drift.
  */
-export interface IAuditLogDocument extends Document {
+export interface AuditLogDocument extends Document {
     actor_user_id: string;
     actor_role: 'admin' | 'user' | 'anonymous';
     action: string;
@@ -40,9 +40,9 @@ export interface IAuditLogDocument extends Document {
 }
 
 /** Mongoose model + query helper types. */
-export type IAuditLogModel = Model<IAuditLogDocument>;
+export type AuditLogModel = Model<AuditLogDocument>;
 /** Shorthand type for Mongoose query filters on the audit collection. */
-export type IAuditLogQueryFilter = QueryFilter<IAuditLogDocument>;
+export type AuditLogQueryFilter = QueryFilter<AuditLogDocument>;
 
 /**
  * How long an entry survives, in days. Read at import time because a TTL index is created once,
@@ -51,7 +51,7 @@ export type IAuditLogQueryFilter = QueryFilter<IAuditLogDocument>;
 const retentionDays = Number.parseInt(process.env.NODE_AUDIT_RETENTION_DAYS ?? '90', 10);
 
 /** Audit collection schema. */
-export const auditLogSchema = new Schema<IAuditLogDocument, IAuditLogModel>(
+export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
     {
         actor_user_id: {
             type: String,
@@ -158,4 +158,4 @@ export const applyAuditLogTransform = applySerialization(auditLogSchema, {
 });
 
 /** Audit model entrypoint. */
-export const auditLogModel = model<IAuditLogDocument, IAuditLogModel>('AuditLog', auditLogSchema);
+export const auditLogModel = model<AuditLogDocument, AuditLogModel>('AuditLog', auditLogSchema);

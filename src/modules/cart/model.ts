@@ -29,7 +29,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * place at runtime, so the id has to be read BEFORE populating — `./service` `readCartLines`
  * is the one place that does it, and it returns the id and the joined product as separate fields.
  */
-export interface ICartItem {
+export interface CartItem {
     productId: Types.ObjectId;
     quantity: number;
 }
@@ -40,9 +40,9 @@ export interface ICartItem {
  * No contract type to extend: `CartResponse` is `{ items, summary }` — a computed view, not this
  * document. A cart id never reaches the wire.
  */
-export interface ICartDocument extends Document {
+export interface CartDocument extends Document {
     userId: Types.ObjectId;
-    items: ICartItem[];
+    items: CartItem[];
     createdAt?: Date;
     updatedAt?: Date;
     /**
@@ -59,7 +59,7 @@ export interface ICartDocument extends Document {
 }
 
 /** Cart Document model type. Queries live in `./repository`, rules in `./service`. */
-export type ICartModel = Model<ICartDocument>;
+export type CartModel = Model<CartDocument>;
 
 /**
  * Schema for a single cart line.
@@ -91,7 +91,7 @@ const cartItemSchema = new Schema(
  * something every write path has to remember, and it is what lets every mutation be a single
  * `findOneAndUpdate({ userId }, …, { upsert: true })`.
  */
-export const cartSchema = new Schema<ICartDocument>(
+export const cartSchema = new Schema<CartDocument>(
     {
         userId: {
             type: Schema.Types.ObjectId,
@@ -131,4 +131,4 @@ export const applyCartTransform = applySerialization(cartSchema);
 /**
  * Model
  */
-export const cartModel = model<ICartDocument, ICartModel>('Cart', cartSchema);
+export const cartModel = model<CartDocument, CartModel>('Cart', cartSchema);

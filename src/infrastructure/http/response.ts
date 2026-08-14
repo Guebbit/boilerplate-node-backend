@@ -9,7 +9,7 @@
 import type { Response } from 'express';
 
 /** Fields shared by both outcomes — the discriminant plus human/machine status. */
-export interface IResponseNeutral {
+export interface ResponseNeutral {
     /** The discriminant. `true` → read `data`; `false` → read `errors`. */
     success: boolean;
     /** Mirrors the HTTP status in the body, which survives proxies that rewrite status codes. */
@@ -18,7 +18,7 @@ export interface IResponseNeutral {
     message: string;
 }
 
-export interface IResponseSuccess<T> extends IResponseNeutral {
+export interface ResponseSuccess<T> extends ResponseNeutral {
     // message: "ok"
     /** Generic payload — the endpoint's actual result. */
     data?: T;
@@ -31,7 +31,7 @@ export interface IResponseSuccess<T> extends IResponseNeutral {
 }
 
 /** One machine-readable failure. Endpoints can return several (e.g. per-field validation). */
-export interface IResponseErrorItem {
+export interface ResponseErrorItem {
     /** Stable code for client logic — clients must branch on this, never on `message`. */
     code: string;
     /** Human-readable, translatable text safe to show a user. */
@@ -40,13 +40,13 @@ export interface IResponseErrorItem {
     details?: Record<string, unknown>;
 }
 
-export interface IResponseReject extends IResponseNeutral {
+export interface ResponseReject extends ResponseNeutral {
     // explicit undefined keeps `result.data` union-safe
     // (the key is present, so `result.data` type-checks on both branches of the union
     // instead of erroring as a missing property).
     data: undefined;
     // structured errors for machines and UIs
-    errors: IResponseErrorItem[];
+    errors: ResponseErrorItem[];
 }
 
 /**
@@ -63,7 +63,7 @@ export const generateSuccess = <T>(data: T, status = 200, message = '') =>
         data
         // `as` cast is required because `errors: never` cannot be satisfied by any literal:
         // the field is deliberately absent at runtime and exists only to drive narrowing.
-    }) as IResponseSuccess<T>;
+    }) as ResponseSuccess<T>;
 
 /**
  * Serialize the success envelope immediately when a controller is done with its work.
@@ -79,7 +79,7 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
     // `.json()` sets Content-Type and ends the response; the cast just types the return value
     // so controllers can `return successResponse(...)` and keep their signature accurate.
     response.status(status).json(generateSuccess(data, status, message)) as Response<
-        IResponseSuccess<T>
+        ResponseSuccess<T>
     >;
 
 /**
@@ -146,8 +146,8 @@ export const resolveErrorMessage = (status: number) => {
  */
 const normalizeErrors = (
     status: number,
-    errors: Array<string | IResponseErrorItem>
-): IResponseErrorItem[] => {
+    errors: Array<string | ResponseErrorItem>
+): ResponseErrorItem[] => {
     const fallbackMessage = resolveErrorMessage(status);
     // Guarantee at least one item: a failure response with `errors: []` would force every
     // client to special-case it.
@@ -182,15 +182,15 @@ const normalizeErrors = (
  * There is no `message` parameter on purpose — see {@link resolveErrorMessage}. `errors` is where
  * a caller says something specific, and it is the half the client is meant to read.
  */
-export const generateReject = (status = 400, errors: Array<string | IResponseErrorItem> = []) =>
+export const generateReject = (status = 400, errors: Array<string | ResponseErrorItem> = []) =>
     ({
         success: false,
         status,
         message: resolveErrorMessage(status),
-        // Explicitly present-but-undefined; see `IResponseReject.data`.
+        // Explicitly present-but-undefined; see `ResponseReject.data`.
         data: undefined,
         errors: normalizeErrors(status, errors)
-    }) as IResponseReject;
+    }) as ResponseReject;
 
 /**
  * Send a normalized error payload instead of leaking framework-specific response shapes.
@@ -202,5 +202,5 @@ export const generateReject = (status = 400, errors: Array<string | IResponseErr
 export const rejectResponse = (
     response: Response,
     status = 400,
-    errors: Array<string | IResponseErrorItem> = []
-) => response.status(status).json(generateReject(status, errors)) as Response<IResponseReject>;
+    errors: Array<string | ResponseErrorItem> = []
+) => response.status(status).json(generateReject(status, errors)) as Response<ResponseReject>;

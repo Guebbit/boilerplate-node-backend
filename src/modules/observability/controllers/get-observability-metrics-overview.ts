@@ -8,7 +8,7 @@ import {
 } from '@infrastructure/observability/metrics-http';
 
 /** One sample of a prom-client counter. */
-interface IMetricSample {
+interface MetricSample {
     value: number;
     labels: Record<string, string | number | undefined>;
 }
@@ -25,17 +25,17 @@ interface IMetricSample {
  * this build, and the overview reports zero for that row. The response shape is fixed by
  * `openapi.yaml` and is the same either way, so a client never has to know which modules exist.
  */
-const readCounter = async (name: string): Promise<IMetricSample[]> => {
+const readCounter = async (name: string): Promise<MetricSample[]> => {
     const metric = metricsRegistry.getSingleMetric(name);
     if (!metric) return [];
-    const result = (await metric.get()) as { values?: IMetricSample[] };
+    const result = (await metric.get()) as { values?: MetricSample[] };
     return result.values ?? [];
 };
 
 /**
  * Sum values for a specific label across a prom-client metric result.
  */
-const sumByLabel = (values: IMetricSample[], labelKey: string, labelValue: string): number =>
+const sumByLabel = (values: MetricSample[], labelKey: string, labelValue: string): number =>
     values.filter((v) => v.labels[labelKey] === labelValue).reduce((sum, v) => sum + v.value, 0);
 
 /**

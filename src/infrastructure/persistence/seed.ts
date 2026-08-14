@@ -9,7 +9,7 @@
 import type { Types } from 'mongoose';
 
 /** Whether a fixture was written or was already present. Counted by the runner. */
-export type TSeedOutcome = 'created' | 'skipped';
+export type SeedOutcome = 'created' | 'skipped';
 
 /**
  * The slice of a repository seeding needs. Structural, so every module's repository satisfies it.
@@ -19,7 +19,7 @@ export type TSeedOutcome = 'created' | 'skipped';
  * `as never` at the one call site that actually passes something. Naming the type instead means
  * the fixture is checked against the repository that will store it.
  */
-export interface ISeedRepository<TFixture> {
+export interface SeedRepository<TFixture> {
     findById: (id: string) => PromiseLike<unknown>;
     create: (data: TFixture) => Promise<unknown>;
 }
@@ -38,9 +38,9 @@ export interface ISeedRepository<TFixture> {
  * @param fixture - a document with a pinned `_id`
  */
 export const upsertById = async <TFixture extends { _id: Types.ObjectId }>(
-    repository: ISeedRepository<TFixture>,
+    repository: SeedRepository<TFixture>,
     fixture: TFixture
-): Promise<TSeedOutcome> => {
+): Promise<SeedOutcome> => {
     const existing = await repository.findById(fixture._id.toString());
     if (existing) return 'skipped';
     await repository.create(fixture);

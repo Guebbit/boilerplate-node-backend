@@ -5,8 +5,8 @@ import { createProduct, makeProduct } from '@modules/products/tests/factory';
 import * as productService from '@modules/products/service';
 import { productRepository } from '@modules/products';
 import { cartRepository } from '@modules/cart';
-import type { IResponseReject } from '@infrastructure/http/response';
-import type { IProductDocument } from '@modules/products';
+import type { ResponseReject } from '@infrastructure/http/response';
+import type { ProductDocument } from '@modules/products';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import productsModule from '@modules/products/module';
@@ -326,7 +326,7 @@ describe('productService.updateById', () => {
         });
 
         expect(result.success).toBe(true);
-        const updated = (result as { data: IProductDocument }).data;
+        const updated = (result as { data: ProductDocument }).data;
         expect(updated.title).toBe('Updated Title');
         expect(updated.price).toBe(49.99);
         expect(updated.description).toBe('New description');
@@ -338,7 +338,7 @@ describe('productService.updateById', () => {
 
         const result = await productService.updateById(id, { active: false });
 
-        expect((result as { data: IProductDocument }).data.active).toBe(false);
+        expect((result as { data: ProductDocument }).data.active).toBe(false);
     });
 
     it('updates the imageUrl and removes the old image from the store', async () => {
@@ -361,7 +361,7 @@ describe('productService.updateById', () => {
         const result = await productService.updateById(id, { title: 'Renamed Product' });
 
         expect(imageStore.remove).not.toHaveBeenCalled();
-        expect((result as { data: IProductDocument }).data.imageUrl).toBe('/images/keep.jpg');
+        expect((result as { data: ProductDocument }).data.imageUrl).toBe('/images/keep.jpg');
     });
 
     /* Re-submitting the same url is not a replacement — deleting here would delete the live image. */
@@ -493,7 +493,7 @@ describe('productService.removeById', () => {
         const result = await productService.removeById('000000000000000000000000', false);
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(404);
+        expect((result as ResponseReject).status).toBe(404);
     });
 });
 

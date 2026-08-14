@@ -17,21 +17,21 @@ import { logger } from '@infrastructure/adapters/logger';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { orderService, orderRepository, sumLineItems, ORDER_STATUS_CHANGED } from '@modules/orders';
-import { resolvePaymentProvider, type ICardDetails } from './providers';
+import { resolvePaymentProvider, type CardDetails } from './providers';
 import { paymentRepository } from './repository';
-import type { IPaymentDocument } from './model';
+import type { PaymentDocument } from './model';
 
 /** The demo's money is one currency, set per deployment. Carried onto every payment document. */
 const defaultCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
 
 /** Ownership, payments-style: yours or you are staff — anything else reads as absence. */
 const isOwnedBy = (
-    payment: IPaymentDocument,
+    payment: PaymentDocument,
     authContext?: { id?: string; admin?: boolean }
 ): boolean => Boolean(authContext?.admin) || String(payment.userId) === authContext?.id;
 
@@ -48,7 +48,7 @@ const isOwnedBy = (
 export const createIntent = (
     orderId: string,
     authContext?: { id?: string; admin?: boolean }
-): Promise<IResponseSuccess<IPaymentDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
         if (order.status !== 'pending')
@@ -88,9 +88,9 @@ export const createIntent = (
  */
 export const confirmPayment = (
     paymentId: string,
-    card: ICardDetails,
+    card: CardDetails,
     authContext?: { id?: string; admin?: boolean }
-): Promise<IResponseSuccess<IPaymentDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findById(paymentId).then(async (payment) => {
         if (!payment || !isOwnedBy(payment, authContext))
             return generateReject(404, [t('payments.not-found')]);
@@ -156,7 +156,7 @@ export const confirmPayment = (
 export const getForOrder = (
     orderId: string,
     authContext?: { id?: string; admin?: boolean }
-): Promise<IResponseSuccess<IPaymentDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (!payment || !isOwnedBy(payment, authContext))
             return generateReject(404, [t('payments.not-found')]);

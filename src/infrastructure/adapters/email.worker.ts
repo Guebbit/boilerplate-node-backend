@@ -1,4 +1,4 @@
-import type { IEmailJob } from '@infrastructure/adapters/mailer';
+import type { EmailJob } from '@infrastructure/adapters/mailer';
 import { nodemailer } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 
@@ -6,7 +6,7 @@ import { logger } from '@infrastructure/adapters/logger';
 export { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 
 /* Payload shape for email jobs — declared with the producer, re-exported for this queue's callers. */
-export type { IEmailJob } from '@infrastructure/adapters/mailer';
+export type { EmailJob } from '@infrastructure/adapters/mailer';
 
 /**
  * Process a single email job from the queue.
@@ -17,7 +17,7 @@ export type { IEmailJob } from '@infrastructure/adapters/mailer';
  * `Partial` is the honest half of that — the broker delivers whatever was published, possibly by an
  * older version of the producer, so every field is a claim until `isSendable` checks it.
  */
-export const handleEmailJob = (job: Partial<IEmailJob>): Promise<boolean> => {
+export const handleEmailJob = (job: Partial<EmailJob>): Promise<boolean> => {
     // The optional chain does the narrowing on its own — past this point TypeScript knows both
     // fields are there, which is why no type predicate is needed to say so.
     if (!job?.request?.to || !job.templateName) {

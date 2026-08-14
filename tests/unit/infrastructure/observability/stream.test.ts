@@ -36,7 +36,7 @@ import {
 const UPDATE_INTERVAL_MS = 5000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
-interface IFakeResponse {
+interface FakeResponse {
     response: Response;
     /** Every string handed to `write`, in order. */
     frames: string[];
@@ -54,7 +54,7 @@ interface IFakeResponse {
  * Hand-built rather than a real Express response: the point is to read the exact bytes written and
  * to fire `close` on demand, neither of which a real socket makes easy.
  */
-const makeResponse = (): IFakeResponse => {
+const makeResponse = (): FakeResponse => {
     const frames: string[] = [];
     const headers: Record<string, string> = {};
     const closeHandlers: (() => void)[] = [];
@@ -104,7 +104,7 @@ const parseFrame = (frame: string) => {
 
 describe('the SSE metrics stream', () => {
     /** Responses opened by a test, disconnected afterwards so the module-level Set starts empty. */
-    let opened: IFakeResponse[] = [];
+    let opened: FakeResponse[] = [];
 
     const open = () => {
         const fake = makeResponse();

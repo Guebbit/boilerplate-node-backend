@@ -1,9 +1,9 @@
 /**
  * Transport-safe auth context DTO.
  * Decouples HTTP/auth flow from Mongoose document internals.
- * Controllers and middleware should depend on this interface rather than IUserDocument.
+ * Controllers and middleware should depend on this interface rather than UserDocument.
  */
-export interface IAuthContext {
+export interface AuthContext {
     id: string;
     email: string;
     username: string;

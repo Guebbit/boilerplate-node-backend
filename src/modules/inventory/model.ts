@@ -14,16 +14,16 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 
 export const MOVEMENT_REASONS = ['order', 'order-cancelled', 'adjustment', 'restock'] as const;
 
-export type TMovementReason = (typeof MOVEMENT_REASONS)[number];
+export type MovementReason = (typeof MOVEMENT_REASONS)[number];
 
 /**
  * Stock Movement Document interface.
  */
-export interface IStockMovementDocument extends Document {
+export interface StockMovementDocument extends Document {
     productId: Types.ObjectId;
     /** Signed: a sale is negative, a return or restock positive. */
     delta: number;
-    reason: TMovementReason;
+    reason: MovementReason;
     /** What caused it, when something did — the order, typically. */
     reference?: string;
     createdAt?: Date;
@@ -31,9 +31,9 @@ export interface IStockMovementDocument extends Document {
 }
 
 /** Stock Movement Document model type. Queries live in `./repository`, rules in `./service`. */
-export type IStockMovementModel = Model<IStockMovementDocument>;
+export type StockMovementModel = Model<StockMovementDocument>;
 
-export const stockMovementSchema = new Schema<IStockMovementDocument>(
+export const stockMovementSchema = new Schema<StockMovementDocument>(
     {
         productId: {
             type: Schema.Types.ObjectId,
@@ -70,7 +70,7 @@ export const applyStockMovementTransform = applySerialization(stockMovementSchem
 /**
  * Model
  */
-export const stockMovementModel = model<IStockMovementDocument, IStockMovementModel>(
+export const stockMovementModel = model<StockMovementDocument, StockMovementModel>(
     'StockMovement',
     stockMovementSchema
 );

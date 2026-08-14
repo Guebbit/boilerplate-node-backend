@@ -9,6 +9,6 @@
  */
 
 export { SHIPPING_METHODS, findShippingMethod, priceShipping } from './domain';
-export type { IShippingMethod } from './domain';
+export type { ShippingMethod } from './domain';
 export { shipmentRepository } from './repository';
-export type { IShipmentDocument } from './model';
+export type { ShipmentDocument } from './model';

@@ -12,10 +12,10 @@
  */
 
 import type { Router } from 'express';
-import type { TSeedOutcome } from '@infrastructure/persistence/seed';
+import type { SeedOutcome } from '@infrastructure/persistence/seed';
 
 /** What every module declares, whether or not it serves HTTP. */
-interface IAppModuleCommon {
+interface AppModuleCommon {
     /** Registry identity. Must match the folder name under `src/modules/`. */
     name: string;
 
@@ -52,11 +52,11 @@ interface IAppModuleCommon {
      * Declared here so the seeder can run without naming a domain: it walks `enabledModules` and
      * calls whatever it finds. A module with no demo data simply omits it.
      */
-    seeds?: () => Promise<TSeedOutcome[]>;
+    seeds?: () => Promise<SeedOutcome[]>;
 }
 
 /** A module that serves HTTP. `basePath` and `routes` are meaningless apart, so they arrive together. */
-interface IRoutedModule extends IAppModuleCommon {
+interface RoutedModule extends AppModuleCommon {
     /** Mount point for `routes`, e.g. `/products`. */
     basePath: string;
 
@@ -72,7 +72,7 @@ interface IRoutedModule extends IAppModuleCommon {
  * router without a mount point, or a mount point with nothing to mount, is a type error at the
  * manifest rather than a route that silently never registers.
  */
-interface IHeadlessModule extends IAppModuleCommon {
+interface HeadlessModule extends AppModuleCommon {
     basePath?: never;
     routes?: never;
 }
@@ -84,7 +84,7 @@ interface IHeadlessModule extends IAppModuleCommon {
  * should do the thing itself, behind its own barrel. The cost of a wide manifest is that every
  * module has to be read against it to know which half applies.
  */
-export type IAppModule = IRoutedModule | IHeadlessModule;
+export type AppModule = RoutedModule | HeadlessModule;
 
 /**
  * Reject duplicate names, unknown dependencies and dependency cycles.
@@ -95,8 +95,8 @@ export type IAppModule = IRoutedModule | IHeadlessModule;
  *
  * @param appModules - the enabled module list, in registration order
  */
-export const validateModules = (appModules: IAppModule[]): void => {
-    const byName = new Map<string, IAppModule>();
+export const validateModules = (appModules: AppModule[]): void => {
+    const byName = new Map<string, AppModule>();
 
     // Pass 1 — index by name, rejecting a duplicate registration on the way.
     for (const appModule of appModules) {
@@ -148,7 +148,7 @@ export const validateModules = (appModules: IAppModule[]): void => {
  *
  * @param appModules - the enabled module list
  */
-export const registerModules = (appModules: IAppModule[]): void => {
+export const registerModules = (appModules: AppModule[]): void => {
     validateModules(appModules);
     // After validation, so a handler may safely reach any sibling it declared in `dependsOn`.
     for (const appModule of appModules) appModule.subscribe?.();

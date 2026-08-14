@@ -12,12 +12,12 @@
  * the *recipient's* language rather than the requester's — states that in the call rather than
  * wrapping it in a locale scope and hoping everything inside reads the same store.
  *
- * Each builder returns the whole `IEmailContent`: the template name, the subject and the complete
+ * Each builder returns the whole `EmailContent`: the template name, the subject and the complete
  * render context, down to the `locale` the markup puts in `<html lang>` and the footer line the
  * shared partial prints. Template and copy therefore change together, in this file.
  */
 
-import type { IEmailContent } from '@infrastructure/adapters/mailer';
+import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 
 /**
@@ -31,7 +31,7 @@ const accountLink = (route: string, token: string): string =>
     `${process.env.NODE_URL ?? ''}account/${route}/${token}`;
 
 /** Welcome email, sent once the account exists. */
-export const registrationConfirmEmail = (locale: string, name: string): IEmailContent => {
+export const registrationConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.registration-confirm.ejs',
@@ -48,7 +48,7 @@ export const registrationConfirmEmail = (locale: string, name: string): IEmailCo
 };
 
 /** Email verification: the email carrying the one-time confirmation link. */
-export const verifyRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
+export const verifyRequestEmail = (locale: string, name: string, token: string): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.verify-request.ejs',
@@ -68,7 +68,7 @@ export const verifyRequestEmail = (locale: string, name: string, token: string):
 };
 
 /** Password reset: the email carrying the one-time link. */
-export const resetRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
+export const resetRequestEmail = (locale: string, name: string, token: string): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.reset-request.ejs',
@@ -88,7 +88,7 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
 };
 
 /** Password reset: the confirmation, after the password actually changed. */
-export const resetConfirmEmail = (locale: string, name: string): IEmailContent => {
+export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.reset-confirm.ejs',
@@ -105,7 +105,7 @@ export const resetConfirmEmail = (locale: string, name: string): IEmailContent =
 };
 
 /** Account deletion: the email carrying the one-time confirmation link. */
-export const deleteRequestEmail = (locale: string, name: string, token: string): IEmailContent => {
+export const deleteRequestEmail = (locale: string, name: string, token: string): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.delete-request.ejs',
@@ -125,7 +125,7 @@ export const deleteRequestEmail = (locale: string, name: string, token: string):
 };
 
 /** Account deletion: the goodbye, sent after the row is gone. */
-export const deleteConfirmEmail = (locale: string, name: string): IEmailContent => {
+export const deleteConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.delete-confirm.ejs',

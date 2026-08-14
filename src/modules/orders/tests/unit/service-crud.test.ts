@@ -34,15 +34,15 @@ import {
 } from '@modules/orders/service';
 import { orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
-import type { IOrderDocument } from '@modules/orders';
-import type { IResponseReject, IResponseSuccess } from '@infrastructure/http/response';
+import type { OrderDocument } from '@modules/orders';
+import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 
 setupTestDb();
 
 const MISSING_ID = '507f1f77bcf86cd799439011';
 
-const asReject = (result: unknown) => result as IResponseReject;
-const asSuccess = (result: unknown) => result as IResponseSuccess<IOrderDocument>;
+const asReject = (result: unknown) => result as ResponseReject;
+const asSuccess = (result: unknown) => result as ResponseSuccess<OrderDocument>;
 
 /** Creates an order through the service, returning the persisted document. */
 const seedOrder = async () => {

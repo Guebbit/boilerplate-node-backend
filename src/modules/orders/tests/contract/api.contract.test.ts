@@ -16,13 +16,13 @@ import { createProduct } from '@modules/products/tests/factory';
 import { createOrder } from '@modules/orders/tests/factory';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import { orderRepository } from '@modules/orders';
-import type { IOrderDocumentItem } from '@modules/orders';
+import type { OrderDocumentItem } from '@modules/orders';
 
 setupTestDb();
 
 const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
     const product = await createProduct();
-    return createOrder(user, [{ product, quantity: 2 } as unknown as IOrderDocumentItem]);
+    return createOrder(user, [{ product, quantity: 2 } as unknown as OrderDocumentItem]);
 };
 
 describe('GET /orders', () => {

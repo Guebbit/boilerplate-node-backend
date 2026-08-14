@@ -18,12 +18,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
 
-export type THttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
+export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
-const METHODS: THttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
+const METHODS: HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
 
 /** A JSON Schema node, in the subset this repo's spec actually uses. */
-export interface ISchemaNode {
+export interface SchemaNode {
     type?: string;
     format?: string;
     enum?: unknown[];
@@ -36,24 +36,24 @@ export interface ISchemaNode {
     pattern?: string;
     nullable?: boolean;
     required?: string[];
-    properties?: Record<string, ISchemaNode>;
-    items?: ISchemaNode;
-    additionalProperties?: boolean | ISchemaNode;
-    oneOf?: ISchemaNode[];
-    anyOf?: ISchemaNode[];
-    allOf?: ISchemaNode[];
+    properties?: Record<string, SchemaNode>;
+    items?: SchemaNode;
+    additionalProperties?: boolean | SchemaNode;
+    oneOf?: SchemaNode[];
+    anyOf?: SchemaNode[];
+    allOf?: SchemaNode[];
     $ref?: string;
 }
 
-export interface IOperation {
+export interface Operation {
     /** Templated path exactly as the spec declares it, e.g. `/products/{id}`. */
     path: string;
-    method: THttpMethod;
+    method: HttpMethod;
     operationId?: string;
     /** Path parameter names, in declaration order. */
     pathParameters: string[];
     /** Resolved `application/json` request body schema, when the operation takes one. */
-    bodySchema?: ISchemaNode;
+    bodySchema?: SchemaNode;
     /** True when the operation declares a `multipart/form-data` body (skipped by the fuzzer). */
     isMultipart: boolean;
     /** True when the operation requires a bearer token. */
@@ -62,18 +62,18 @@ export interface IOperation {
     documentedStatuses: string[];
 }
 
-interface ISpecDocument {
+interface SpecDocument {
     paths: Record<string, Record<string, unknown>>;
-    components?: { schemas?: Record<string, ISchemaNode> };
+    components?: { schemas?: Record<string, SchemaNode> };
 }
 
 const SPEC_PATH = path.join(__dirname, '..', '..', 'openapi.yaml');
 
-let cached: ISpecDocument | undefined;
+let cached: SpecDocument | undefined;
 
 /** The parsed spec. Read once — it is a 120 KB document and every test file would re-parse it. */
-export const readSpec = (): ISpecDocument => {
-    cached ??= YAML.parse(readFileSync(SPEC_PATH, 'utf8')) as ISpecDocument;
+export const readSpec = (): SpecDocument => {
+    cached ??= YAML.parse(readFileSync(SPEC_PATH, 'utf8')) as SpecDocument;
     return cached;
 };
 
@@ -85,10 +85,10 @@ export const readSpec = (): ISpecDocument => {
  * message anyone can act on.
  */
 export const resolveSchema = (
-    schema: ISchemaNode | undefined,
-    spec: ISpecDocument = readSpec(),
+    schema: SchemaNode | undefined,
+    spec: SpecDocument = readSpec(),
     seen: Set<string> = new Set()
-): ISchemaNode | undefined => {
+): SchemaNode | undefined => {
     if (!schema) return undefined;
 
     if (schema.$ref) {
@@ -99,7 +99,7 @@ export const resolveSchema = (
     }
 
     if (schema.allOf) {
-        const merged: ISchemaNode = { type: 'object', properties: {}, required: [] };
+        const merged: SchemaNode = { type: 'object', properties: {}, required: [] };
         for (const part of schema.allOf) {
             const resolved = resolveSchema(part, spec, new Set(seen));
             Object.assign(merged.properties!, resolved?.properties);
@@ -109,7 +109,7 @@ export const resolveSchema = (
     }
 
     if (schema.properties) {
-        const properties: Record<string, ISchemaNode> = {};
+        const properties: Record<string, SchemaNode> = {};
         for (const [key, value] of Object.entries(schema.properties))
             properties[key] = resolveSchema(value, spec, new Set(seen)) ?? {};
         return { ...schema, properties };
@@ -121,8 +121,8 @@ export const resolveSchema = (
 };
 
 /** Every operation the spec declares, in document order. */
-export const listOperations = (spec: ISpecDocument = readSpec()): IOperation[] => {
-    const operations: IOperation[] = [];
+export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => {
+    const operations: Operation[] = [];
 
     for (const [pathName, pathItem] of Object.entries(spec.paths)) {
         for (const method of METHODS) {
@@ -131,7 +131,7 @@ export const listOperations = (spec: ISpecDocument = readSpec()): IOperation[] =
 
             const content = (
                 operation.requestBody as
-                    | { content?: Record<string, { schema?: ISchemaNode }> }
+                    | { content?: Record<string, { schema?: SchemaNode }> }
                     | undefined
             )?.content;
 
@@ -199,7 +199,7 @@ export const SUPPORTED_KEYWORDS = new Set([
  * list reports the entire domain model as unsupported. That was the first version's bug, and it
  * is worth naming because it is the failure mode of any "walk the JSON and look at keys" check.
  */
-export const unsupportedKeywords = (spec: ISpecDocument = readSpec()): string[] => {
+export const unsupportedKeywords = (spec: SpecDocument = readSpec()): string[] => {
     const found = new Set<string>();
 
     const visitSchema = (node: unknown): void => {

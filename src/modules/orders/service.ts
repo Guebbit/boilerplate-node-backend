@@ -1,11 +1,11 @@
 import { t } from '@infrastructure/i18n';
 import type { SearchOrdersRequest, CartItem, OrderStatus } from '@types';
-import type { IOrderDocument, IOrderDocumentItem } from './model';
+import type { OrderDocument, OrderDocumentItem } from './model';
 import {
     generateReject,
     generateSuccess,
-    type IResponseReject,
-    type IResponseSuccess
+    type ResponseReject,
+    type ResponseSuccess
 } from '@infrastructure/http/response';
 import { productRepository, STOCK_MOVED } from '@modules/products';
 import { emitDomainEvent } from '@kernel/events';
@@ -39,7 +39,7 @@ export const search = (
     search: SearchOrdersRequest = {},
     scope?: Record<string, unknown>
 ): Promise<{
-    items: IOrderDocument[];
+    items: OrderDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }> => orderRepository.search(search, scope);
 
@@ -53,8 +53,8 @@ export const search = (
 export const getById = (
     id: string | undefined,
     scope?: Record<string, unknown>
-): Promise<IOrderDocument | undefined> => {
-    if (!id) return Promise.resolve<IOrderDocument | undefined>(undefined);
+): Promise<OrderDocument | undefined> => {
+    if (!id) return Promise.resolve<OrderDocument | undefined>(undefined);
     return orderRepository.findByIdScoped(id, scope);
 };
 
@@ -70,7 +70,7 @@ export const create = (
     userId: string,
     email: string,
     items: CartItem[]
-): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     // One rule call, two outcomes. `Promise.all([])` settles without a query, so an empty basket
     // still costs no round trip. The rule is in `domain/rules.ts`; mapping it to a status code
     // and translated copy is this layer's job.
@@ -109,9 +109,9 @@ export const create = (
             taken.push({ productId: item.productId, quantity: item.quantity });
         }
 
-        const orderItems: IOrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
-            // lean() returns a plain object compatible with IProductDocument at runtime
-            product: product! as IOrderDocumentItem['product'],
+        const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
+            // lean() returns a plain object compatible with ProductDocument at runtime
+            product: product! as OrderDocumentItem['product'],
             quantity: item.quantity
         }));
 
@@ -120,7 +120,7 @@ export const create = (
                 userId: toObjectId(userId),
                 email,
                 items: orderItems
-            } as Partial<IOrderDocument>)
+            } as Partial<OrderDocument>)
             .then(async (order) => {
                 // The shelf already moved; the ledger hears why, now that the order has an id.
                 for (const line of taken)
@@ -143,14 +143,14 @@ export const create = (
  * @param data
  */
 export const update = (
-    order: IOrderDocument,
+    order: OrderDocument,
     data: {
         status?: string;
         email?: string;
         userId?: string;
         items?: CartItem[];
     }
-): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const previousStatus = order.status;
     if (data.status !== undefined) order.status = data.status as OrderStatus;
     if (data.email !== undefined) order.email = data.email;
@@ -169,8 +169,8 @@ export const update = (
                   if (missingProduct) return generateReject(404, [t('products.not-found')]);
 
                   order.items = resolvedItems.map(({ item, product }) => ({
-                      // lean() returns a plain object compatible with IProductDocument at runtime
-                      product: product! as IOrderDocumentItem['product'],
+                      // lean() returns a plain object compatible with ProductDocument at runtime
+                      product: product! as OrderDocumentItem['product'],
                       quantity: item.quantity
                   }));
               })
@@ -207,7 +207,7 @@ export const updateById = (
         userId?: string;
         items?: CartItem[];
     }
-): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
         return update(order, data);
@@ -225,9 +225,9 @@ export const updateById = (
  * @param hardDelete
  */
 export const remove = (
-    order: IOrderDocument,
+    order: OrderDocument,
     hardDelete = false
-): Promise<IResponseSuccess<IOrderDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     // HARD delete
     if (hardDelete)
         return orderRepository
@@ -254,7 +254,7 @@ export const remove = (
 export const removeById = (
     id: string,
     hardDelete = false
-): Promise<IResponseSuccess<IOrderDocument> | IResponseSuccess<undefined> | IResponseReject> =>
+): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> =>
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
         return remove(order, hardDelete);
@@ -307,7 +307,7 @@ const CANCELLABLE_ORDER_STATUSES: readonly string[] = ['pending', 'paid'];
 export const cancelById = (
     id: string,
     authContext?: { id?: string; admin?: boolean }
-): Promise<IResponseSuccess<IOrderDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     orderRepository
         .updateStatusIfIn(
             id,

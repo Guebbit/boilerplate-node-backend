@@ -21,25 +21,25 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
 import { authService } from '@modules/account/service';
 import { userRepository } from '@modules/users';
-import { ETokenType, type IToken, type IUserDocument } from '@modules/users';
-import type { IResponseReject, IResponseSuccess } from '@infrastructure/http/response';
+import { TokenType, type Token, type UserDocument } from '@modules/users';
+import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 
 setupTestDb();
 
 const VALID_PASSWORD = 'correct-horse-battery';
 
 /** Narrow to the reject arm, failing the test (rather than the type check) when it succeeded. */
-const asReject = (response: IResponseSuccess<IUserDocument> | IResponseReject): IResponseReject => {
+const asReject = (response: ResponseSuccess<UserDocument> | ResponseReject): ResponseReject => {
     expect(response.success).toBe(false);
-    return response as IResponseReject;
+    return response as ResponseReject;
 };
 
 /** Narrow to the success arm, and to a present `data` — the reject arm declares it `undefined`. */
 const asSuccess = (
-    response: IResponseSuccess<IUserDocument> | IResponseReject
-): IResponseSuccess<IUserDocument> & { data: IUserDocument } => {
+    response: ResponseSuccess<UserDocument> | ResponseReject
+): ResponseSuccess<UserDocument> & { data: UserDocument } => {
     expect(response.success).toBe(true);
-    return response as IResponseSuccess<IUserDocument> & { data: IUserDocument };
+    return response as ResponseSuccess<UserDocument> & { data: UserDocument };
 };
 
 describe('signup', () => {
@@ -136,7 +136,7 @@ describe('signup', () => {
 });
 
 describe('login', () => {
-    const createLoginUser = (overrides: Partial<IUserDocument> = {}) =>
+    const createLoginUser = (overrides: Partial<UserDocument> = {}) =>
         createUser({
             email: 'login@example.com',
             username: 'loginuser',
@@ -180,7 +180,7 @@ describe('login', () => {
         // `deletedAt: undefined` in the filter is the whole of this rule, and it is one key in an
         // object literal. Dropping it lets someone who deleted their account keep signing in —
         // and every other login test still passes, because they use live accounts.
-        await createLoginUser({ deletedAt: new Date() } as Partial<IUserDocument>);
+        await createLoginUser({ deletedAt: new Date() } as Partial<UserDocument>);
 
         const response = asReject(await authService.login('login@example.com', VALID_PASSWORD));
 
@@ -281,14 +281,14 @@ describe('tokenAdd', () => {
     it('appends a token of the requested type and returns it', async () => {
         const user = await createUser({ email: 'tokenadd@example.com' });
 
-        const token = await authService.tokenAdd(user, ETokenType.PASSWORD_RESET);
+        const token = await authService.tokenAdd(user, TokenType.PASSWORD_RESET);
 
         const stored = await userRepository.findOneWithCredentials({
             email: 'tokenadd@example.com'
         });
         expect(stored?.tokens).toHaveLength(1);
         expect(stored?.tokens[0]?.token).toBe(token);
-        expect(stored?.tokens[0]?.type).toBe(ETokenType.PASSWORD_RESET);
+        expect(stored?.tokens[0]?.type).toBe(TokenType.PASSWORD_RESET);
     });
 
     it('returns 32 hex characters, so the token is 16 bytes of real entropy', () => {
@@ -296,7 +296,7 @@ describe('tokenAdd', () => {
         // anything shorter is a guessable reset link, and the value is only ever compared for
         // equality, so nothing else in the system would complain.
         return createUser({ email: 'entropy@example.com' })
-            .then((user) => authService.tokenAdd(user, ETokenType.PASSWORD_RESET))
+            .then((user) => authService.tokenAdd(user, TokenType.PASSWORD_RESET))
             .then((token) => {
                 expect(token).toMatch(/^[\da-f]{32}$/);
             });
@@ -317,8 +317,8 @@ describe('tokenAdd', () => {
         const other = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
         const [first, second] = await Promise.all([
-            authService.tokenAdd(user, ETokenType.PASSWORD_RESET),
-            authService.tokenAdd(other, ETokenType.PASSWORD_RESET)
+            authService.tokenAdd(user, TokenType.PASSWORD_RESET),
+            authService.tokenAdd(other, TokenType.PASSWORD_RESET)
         ]);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
@@ -330,8 +330,8 @@ describe('tokenAdd', () => {
     it('issues a different token every time', async () => {
         const user = await createUser({ email: 'distinct@example.com' });
 
-        const first = await authService.tokenAdd(user, ETokenType.PASSWORD_RESET);
-        const second = await authService.tokenAdd(user, ETokenType.PASSWORD_RESET);
+        const first = await authService.tokenAdd(user, TokenType.PASSWORD_RESET);
+        const second = await authService.tokenAdd(user, TokenType.PASSWORD_RESET);
 
         expect(first).not.toBe(second);
     });
@@ -340,8 +340,8 @@ describe('tokenAdd', () => {
         const user = await createUser({ email: 'expiry@example.com' });
         const before = Date.now();
 
-        await authService.tokenAdd(user, ETokenType.PASSWORD_RESET, 60_000);
-        await authService.tokenAdd(user, ETokenType.REFRESH);
+        await authService.tokenAdd(user, TokenType.PASSWORD_RESET, 60_000);
+        await authService.tokenAdd(user, TokenType.REFRESH);
 
         const stored = await userRepository.findOneWithCredentials({ email: 'expiry@example.com' });
         const [withExpiry, withoutExpiry] = stored!.tokens;
@@ -361,17 +361,17 @@ const createUserWithBothTokenTypes = () =>
     createUser({
         email: 'removeall@example.com',
         tokens: [
-            { type: ETokenType.REFRESH, token: 'refresh-a' },
-            { type: ETokenType.REFRESH, token: 'refresh-b' },
-            { type: ETokenType.PASSWORD_RESET, token: 'reset-a' }
-        ] as IToken[]
+            { type: TokenType.REFRESH, token: 'refresh-a' },
+            { type: TokenType.REFRESH, token: 'refresh-b' },
+            { type: TokenType.PASSWORD_RESET, token: 'reset-a' }
+        ] as Token[]
     });
 
 describe('tokenRemoveAll', () => {
     it('removes every token of the given type', async () => {
         const user = await createUserWithBothTokenTypes();
 
-        asSuccess(await authService.tokenRemoveAll(String(user._id), ETokenType.REFRESH));
+        asSuccess(await authService.tokenRemoveAll(String(user._id), TokenType.REFRESH));
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
@@ -384,7 +384,7 @@ describe('tokenRemoveAll', () => {
         // removed type alone would catch.
         const user = await createUserWithBothTokenTypes();
 
-        await authService.tokenRemoveAll(String(user._id), ETokenType.PASSWORD_RESET);
+        await authService.tokenRemoveAll(String(user._id), TokenType.PASSWORD_RESET);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['refresh-a', 'refresh-b']);
@@ -392,7 +392,7 @@ describe('tokenRemoveAll', () => {
 
     it('answers 404 for a user that does not exist', async () => {
         const response = asReject(
-            await authService.tokenRemoveAll('64b7f2a1c2d3e4f5a6b7c8d9', ETokenType.REFRESH)
+            await authService.tokenRemoveAll('64b7f2a1c2d3e4f5a6b7c8d9', TokenType.REFRESH)
         );
 
         expect(response.status).toBe(404);
@@ -412,7 +412,7 @@ describe('tokenRemoveAll', () => {
         const user = await createUserWithBothTokenTypes();
         const staleCopy = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
-        await authService.tokenRemoveAll(String(user._id), ETokenType.REFRESH);
+        await authService.tokenRemoveAll(String(user._id), TokenType.REFRESH);
         await authService.tokenAdd(staleCopy, 'delete', 3600);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
@@ -423,9 +423,7 @@ describe('tokenRemoveAll', () => {
         // A malformed id reaches mongoose as a CastError. It must come back as a client error,
         // not as the 500 an uncaught cast produces — the same failure `databaseErrorInterpreter`
         // was fixed for elsewhere.
-        const response = asReject(
-            await authService.tokenRemoveAll('not-an-id', ETokenType.REFRESH)
-        );
+        const response = asReject(await authService.tokenRemoveAll('not-an-id', TokenType.REFRESH));
 
         expect(response.status).toBe(422);
     });

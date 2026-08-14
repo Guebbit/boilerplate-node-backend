@@ -7,7 +7,7 @@
  * `stripe.ts` beside it, adds one line to the registry below, and changes one env var — the
  * contract, the service and the frontend never hear about it.
  *
- * Same shape as `IImageStore` in `@infrastructure/adapters/image-store`, with the selection made
+ * Same shape as `ImageStore` in `@infrastructure/adapters/image-store`, with the selection made
  * env-driven the way the mailer picks its transport: read lazily inside the function (tests vary
  * the environment per case), memoised, with a `reset` seam.
  */
@@ -15,14 +15,14 @@
 import { fakePaymentProvider } from './fake';
 
 /** What the provider needs to know about the card. The demo asks for no more than the number. */
-export interface ICardDetails {
+export interface CardDetails {
     cardNumber: string;
 }
 
 /** What a charge attempt can come back as. Everything else a provider can say is a throw. */
-export type TChargeOutcome = 'succeeded' | 'declined';
+export type ChargeOutcome = 'succeeded' | 'declined';
 
-export interface IPaymentProvider {
+export interface PaymentProvider {
     /** The name persisted on each payment document, so a row says who handled it. */
     name: string;
 
@@ -34,10 +34,7 @@ export interface IPaymentProvider {
      * @returns the outcome — a decline is an answer, not an error; only transport-level
      *   failures throw
      */
-    charge(
-        charge: { amount: number; currency: string },
-        card: ICardDetails
-    ): Promise<TChargeOutcome>;
+    charge(charge: { amount: number; currency: string }, card: CardDetails): Promise<ChargeOutcome>;
 
     /**
      * Return the money of a succeeded charge. Idempotent at the provider's side; the caller
@@ -47,11 +44,11 @@ export interface IPaymentProvider {
 }
 
 /** Every implementation this build knows. A typo'd env value must fail loudly, not fall back. */
-const PROVIDERS: Record<string, IPaymentProvider> = {
+const PROVIDERS: Record<string, PaymentProvider> = {
     fake: fakePaymentProvider
 };
 
-let provider: IPaymentProvider | undefined;
+let provider: PaymentProvider | undefined;
 
 /**
  * The configured provider, memoised on first use.
@@ -60,7 +57,7 @@ let provider: IPaymentProvider | undefined;
  * @throws when the env names a provider this build does not carry — a deployment
  *   misconfiguration that must surface at the first payment, not as silent fake charges
  */
-export const resolvePaymentProvider = (): IPaymentProvider => {
+export const resolvePaymentProvider = (): PaymentProvider => {
     if (provider) return provider;
     const name = process.env.NODE_PAYMENT_PROVIDER ?? 'fake';
     const resolved = PROVIDERS[name];

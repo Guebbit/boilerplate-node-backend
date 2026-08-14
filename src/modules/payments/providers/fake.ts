@@ -15,12 +15,12 @@
  * disagree.
  */
 
-import type { IPaymentProvider } from './index';
+import type { PaymentProvider } from './index';
 
 /** The one number that is refused — the same digits Stripe's test mode declines. */
 export const FAKE_DECLINE_CARD = '4000000000000002';
 
-export const fakePaymentProvider: IPaymentProvider = {
+export const fakePaymentProvider: PaymentProvider = {
     name: 'fake',
 
     charge: (_charge, card) =>

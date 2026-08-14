@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 
 /**
@@ -14,4 +14,4 @@ export default {
     basePath: '/feedback',
     routes: router,
     locales: path.join(__dirname, 'locales')
-} satisfies IAppModule;
+} satisfies AppModule;

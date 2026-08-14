@@ -17,8 +17,8 @@ import { createUser } from '@modules/users/tests/factory';
 import * as authService from '@modules/account/service';
 import { userRepository, userService } from '@modules/users';
 import { getDefaultLocale, runWithLocale } from '@infrastructure/i18n';
-import type { IResponseSuccess } from '@infrastructure/http/response';
-import type { IUserDocument } from '@modules/users';
+import type { ResponseSuccess } from '@infrastructure/http/response';
+import type { UserDocument } from '@modules/users';
 
 setupTestDb();
 
@@ -29,7 +29,7 @@ describe('a user’s persisted locale', () => {
         );
 
         expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserDocument>).data!.locale).toBe('it');
+        expect((result as ResponseSuccess<UserDocument>).data!.locale).toBe('it');
     });
 
     it('falls back to the boot locale outside a request', async () => {
@@ -40,7 +40,7 @@ describe('a user’s persisted locale', () => {
             'Password1!'
         );
 
-        expect((result as IResponseSuccess<IUserDocument>).data!.locale).toBe(getDefaultLocale());
+        expect((result as ResponseSuccess<UserDocument>).data!.locale).toBe(getDefaultLocale());
     });
 
     it('is editable afterwards', async () => {
@@ -49,7 +49,7 @@ describe('a user’s persisted locale', () => {
         const updated = await userService.updateById(String(user._id), { locale: 'it' });
 
         expect(updated.success).toBe(true);
-        expect((updated as IResponseSuccess<IUserDocument>).data!.locale).toBe('it');
+        expect((updated as ResponseSuccess<UserDocument>).data!.locale).toBe('it');
     });
 
     it('is left alone by an update that does not mention it', async () => {

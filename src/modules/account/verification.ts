@@ -14,16 +14,16 @@
 
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import type { IUserDocument } from '@modules/users';
+import type { UserDocument } from '@modules/users';
 import { authService } from './service';
 import { verifyRequestEmail } from './emails';
 
 /**
  * The `tokens.type` under which verification tokens are stored.
  *
- * A string like `'password'` and `'delete'`, not an `ETokenType` member: the enum names the two
+ * A string like `'password'` and `'delete'`, not an `TokenType` member: the enum names the two
  * types the JWT layer knows about, and this one belongs to the account endpoints alone — see the
- * note on `IUserMethods.tokenAdd`.
+ * note on `UserMethods.tokenAdd`.
  */
 export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
 
@@ -37,7 +37,7 @@ export const EMAIL_VERIFY_TOKEN_TTL_MS = 86_400_000;
  * @param requestLocale - fallback language when the account has no stored preference
  * @returns resolves when the job is queued — the send itself happens in the email worker
  */
-export const sendVerificationEmail = (user: IUserDocument, requestLocale?: string): Promise<void> =>
+export const sendVerificationEmail = (user: UserDocument, requestLocale?: string): Promise<void> =>
     user
         .tokenRemoveAll(EMAIL_VERIFY_TOKEN_TYPE)
         .then(() => authService.tokenAdd(user, EMAIL_VERIFY_TOKEN_TYPE, EMAIL_VERIFY_TOKEN_TTL_MS))

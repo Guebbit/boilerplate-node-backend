@@ -1,10 +1,10 @@
 import type { UpdateWriteOpResult } from 'mongoose';
 import { wishlistModel, applyWishlistTransform } from './model';
-import type { IWishlistDocument } from './model';
+import type { WishlistDocument } from './model';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -18,16 +18,16 @@ import {
  * the race the cart resolves with a filtered two-step write does not exist here.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-export const wishlistRepository: IBaseRepository<IWishlistDocument> & {
-    findByUserId: (userId: string) => Promise<IWishlistDocument | null>;
-    addLine: (userId: string, productId: string) => Promise<IWishlistDocument>;
-    removeLine: (userId: string, productId: string) => Promise<IWishlistDocument | null>;
+export const wishlistRepository: BaseRepository<WishlistDocument> & {
+    findByUserId: (userId: string) => Promise<WishlistDocument | null>;
+    addLine: (userId: string, productId: string) => Promise<WishlistDocument>;
+    removeLine: (userId: string, productId: string) => Promise<WishlistDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createBaseRepository<IWishlistDocument>(wishlistModel, {
+    ...createBaseRepository<WishlistDocument>(wishlistModel, {
         transform: applyWishlistTransform
     }),
 

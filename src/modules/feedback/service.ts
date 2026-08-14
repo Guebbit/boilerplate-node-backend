@@ -4,13 +4,13 @@ import {
     type UpdateFeedbackRequestStatusRequest,
     type CreateFeedbackRequest
 } from '@types';
-import type { IFeedbackRequestDocument } from './model';
+import type { FeedbackRequestDocument } from './model';
 import { feedbackRequestRepository } from './repository';
 import {
     generateReject,
     generateSuccess,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 
@@ -31,7 +31,7 @@ const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
 const toFeedbackStatus = (status?: string): FeedbackRequestStatus | undefined =>
     status ? STATUS_MAP[status] : undefined;
 
-export const create = (payload: CreateFeedbackRequest): Promise<IFeedbackRequestDocument> =>
+export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> =>
     feedbackRequestRepository.create({
         name: payload.name?.trim() || undefined,
         email: payload.email.trim().toLowerCase(),
@@ -50,7 +50,7 @@ export const search = (
         pageSize?: string | number;
     } = {}
 ): Promise<{
-    items: IFeedbackRequestDocument[];
+    items: FeedbackRequestDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }> =>
     // `status` is mapped here rather than declared on the repository: turning a raw string into
@@ -62,9 +62,9 @@ export const search = (
     );
 
 export const updateStatus = (
-    feedback: IFeedbackRequestDocument,
+    feedback: FeedbackRequestDocument,
     payload: UpdateFeedbackRequestStatusRequest
-): Promise<IResponseSuccess<IFeedbackRequestDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<FeedbackRequestDocument> | ResponseReject> => {
     const nextStatus = toFeedbackStatus(payload.status);
     if (nextStatus !== undefined) feedback.status = nextStatus;
     if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
@@ -76,7 +76,7 @@ export const updateStatus = (
 export const updateStatusById = (
     id: string,
     payload: UpdateFeedbackRequestStatusRequest
-): Promise<IResponseSuccess<IFeedbackRequestDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<FeedbackRequestDocument> | ResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
         return updateStatus(feedback, payload);

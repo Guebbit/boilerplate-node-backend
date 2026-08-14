@@ -9,9 +9,9 @@
 
 import { Types } from 'mongoose';
 import { seedUsers } from '@seed-identities';
-import type { TSeedOutcome } from '@infrastructure/persistence/seed';
+import type { SeedOutcome } from '@infrastructure/persistence/seed';
 import { cartRepository } from './repository';
-import type { ICartDocument } from './model';
+import type { CartDocument } from './model';
 
 /*
  * Only users with something in their cart get a document: absence and an empty cart are the same
@@ -28,13 +28,13 @@ export const cartFixtures = seedUsers
     }));
 
 /** Upsert one cart fixture by its OWNER rather than by id. */
-const upsertByOwner = async (fixture: (typeof cartFixtures)[number]): Promise<TSeedOutcome> => {
+const upsertByOwner = async (fixture: (typeof cartFixtures)[number]): Promise<SeedOutcome> => {
     const existing = await cartRepository.findByUserId(fixture.userId.toString());
     if (existing) return 'skipped';
-    await cartRepository.create(fixture as Partial<ICartDocument>);
+    await cartRepository.create(fixture as Partial<CartDocument>);
     return 'created';
 };
 
 /** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
-export const seedCartsCollection = (): Promise<TSeedOutcome[]> =>
+export const seedCartsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(cartFixtures.map((cart) => upsertByOwner(cart)));

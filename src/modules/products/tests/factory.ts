@@ -13,7 +13,7 @@
  *   const product = await createProduct({ title: 'Gadget', price: 49.99 });
  */
 
-import type { IProductDocument } from '@modules/products';
+import type { ProductDocument } from '@modules/products';
 import { productRepository } from '@modules/products';
 
 /**
@@ -25,8 +25,8 @@ import { productRepository } from '@modules/products';
  * @param overrides - Fields to override the factory defaults.
  */
 export const makeProduct = (
-    overrides: Partial<IProductDocument> = {}
-): Partial<IProductDocument> => ({
+    overrides: Partial<ProductDocument> = {}
+): Partial<ProductDocument> => ({
     title: 'Test Product',
     price: 9.99,
     description: 'A description for the test product.',
@@ -40,6 +40,5 @@ export const makeProduct = (
  *
  * @param overrides - Fields to override the factory defaults.
  */
-export const createProduct = (
-    overrides: Partial<IProductDocument> = {}
-): Promise<IProductDocument> => productRepository.create(makeProduct(overrides));
+export const createProduct = (overrides: Partial<ProductDocument> = {}): Promise<ProductDocument> =>
+    productRepository.create(makeProduct(overrides));

@@ -30,19 +30,19 @@
  */
 
 import path from 'node:path';
-import { REPO_ROOT, type IContractBundle, type TSegment } from './fragments';
-import { SECTION_ORDER, type TSectionName } from './openapi';
+import { REPO_ROOT, type ContractBundle, type Segment } from './fragments';
+import { SECTION_ORDER, type SectionName } from './openapi';
 
 /** The three tools, and the order this file names them in. */
 export const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon'] as const;
 
-export type TCollectionTool = (typeof COLLECTION_TOOLS)[number];
+export type CollectionTool = (typeof COLLECTION_TOOLS)[number];
 
 /** What separates two entries of a JSON array, and follows none of them. */
 const ENTRY_SEPARATOR = ',\n';
 
 /** Mockoon files are JSON; the other two are YAML whatever their extension claims. */
-const extensionFor = (tool: TCollectionTool): string => (tool === 'mockoon' ? 'json' : 'yml');
+const extensionFor = (tool: CollectionTool): string => (tool === 'mockoon' ? 'json' : 'yml');
 
 /**
  * Where a section's slice of a collection lives.
@@ -50,8 +50,8 @@ const extensionFor = (tool: TCollectionTool): string => (tool === 'mockoon' ? 'j
  * `kind` is `routes` for everything except Mockoon's second slice, the `rootChildren` order tree.
  */
 export const collectionFragment = (
-    tool: TCollectionTool,
-    section: TSectionName,
+    tool: CollectionTool,
+    section: SectionName,
     kind: 'routes' | 'tree' = 'routes'
 ): string => {
     // Only Mockoon has a second slice, so only Mockoon's filenames need to say which one they are.
@@ -75,11 +75,11 @@ export const collectionFragment = (
 };
 
 /** A collection's shared scaffolding: its name, environments, server settings, cookie jar. */
-const sharedPart = (tool: TCollectionTool, part: string): string =>
+const sharedPart = (tool: CollectionTool, part: string): string =>
     path.join(REPO_ROOT, 'shared', 'contracts', `${tool}.${part}.${extensionFor(tool)}`);
 
 /** Every section's slice of one tool, in the contract's own order. */
-const sectionsOf = (tool: TCollectionTool, kind: 'routes' | 'tree' = 'routes'): string[] =>
+const sectionsOf = (tool: CollectionTool, kind: 'routes' | 'tree' = 'routes'): string[] =>
     SECTION_ORDER.map((section) => collectionFragment(tool, section, kind));
 
 /*
@@ -89,38 +89,38 @@ const sectionsOf = (tool: TCollectionTool, kind: 'routes' | 'tree' = 'routes'): 
  * the hand-written versions rotted unnoticed for months.
  */
 
-export const brunoBundle: IContractBundle = {
+export const brunoBundle: ContractBundle = {
     name: 'bruno',
     generated: true,
     label: 'contract.bruno.yml',
     output: path.join(REPO_ROOT, 'contract.bruno.yml'),
-    segments: (): TSegment[] => [
+    segments: (): Segment[] => [
         sharedPart('bruno', 'header'),
         ...sectionsOf('bruno'),
         sharedPart('bruno', 'footer')
     ]
 };
 
-export const insomniaBundle: IContractBundle = {
+export const insomniaBundle: ContractBundle = {
     name: 'insomnia',
     generated: true,
     label: 'contract.insomnia.json',
     // Named `.json` after the tool's own export convention, and YAML inside — Insomnia's
     // importer accepts either and keys on the content, not the extension.
     output: path.join(REPO_ROOT, 'contract.insomnia.json'),
-    segments: (): TSegment[] => [
+    segments: (): Segment[] => [
         sharedPart('insomnia', 'header'),
         ...sectionsOf('insomnia'),
         sharedPart('insomnia', 'footer')
     ]
 };
 
-export const mockoonBundle: IContractBundle = {
+export const mockoonBundle: ContractBundle = {
     name: 'mockoon',
     generated: true,
     label: 'contract.mockoon.json',
     output: path.join(REPO_ROOT, 'contract.mockoon.json'),
-    segments: (): TSegment[] => [
+    segments: (): Segment[] => [
         sharedPart('mockoon', 'header'),
         { parts: sectionsOf('mockoon'), separator: ENTRY_SEPARATOR },
         sharedPart('mockoon', 'tree.header'),

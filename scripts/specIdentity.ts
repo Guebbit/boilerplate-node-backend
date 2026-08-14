@@ -27,7 +27,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 /** Which of the paired repos a checkout is. */
-export type TRepoRole = 'backend' | 'frontend';
+export type RepoRole = 'backend' | 'frontend';
 
 /**
  * One shared file, named on both sides.
@@ -37,16 +37,16 @@ export type TRepoRole = 'backend' | 'frontend';
  * for their generator here and for their consumer there. A single-path list could not express
  * either, which is why they went unguarded.
  */
-export interface ISharedFile {
+export interface SharedFile {
     backend: string;
     frontend: string;
 }
 
 /** Which side this checkout is. The one value that differs from the frontend's copy. */
-export const THIS_REPO: TRepoRole = 'backend';
+export const THIS_REPO: RepoRole = 'backend';
 
 /** The other side, whichever this one is. */
-export const siblingRole = (role: TRepoRole): TRepoRole =>
+export const siblingRole = (role: RepoRole): RepoRole =>
     role === 'backend' ? 'frontend' : 'backend';
 
 /**
@@ -73,7 +73,7 @@ export const siblingRole = (role: TRepoRole): TRepoRole =>
  * output. Editing the copy is the failure this list is worst at describing and best at catching —
  * the next re-bundle reverts it, and the diff looks like the backend broke something.
  */
-export const SHARED_FILES: readonly ISharedFile[] = [
+export const SHARED_FILES: readonly SharedFile[] = [
     /* The contract itself, and the ruleset both sides lint it under. */
     { backend: 'openapi.yaml', frontend: 'openapi.yaml' },
     { backend: 'asyncapi.yaml', frontend: 'asyncapi.yaml' },
@@ -134,9 +134,9 @@ export const SHARED_FILES: readonly ISharedFile[] = [
     { backend: 'scripts/gen-asyncapi-types.ts', frontend: 'scripts/gen-asyncapi-types.ts' }
 ] as const;
 
-export type TSpecComparisonStatus = 'match' | 'drift' | 'missing-here' | 'missing-there';
+export type SpecComparisonStatus = 'match' | 'drift' | 'missing-here' | 'missing-there';
 
-export interface ISpecComparison {
+export interface SpecComparison {
     /** This repo's path for the file — what a reader of the failure message has to go open. */
     file: string;
     /** The sibling's path. Equal to `file` for everything but the cross-path pairs. */
@@ -145,7 +145,7 @@ export interface ISpecComparison {
     ours?: string;
     /** sha256 of the sibling's copy, or undefined when the file is absent there. */
     theirs?: string;
-    status: TSpecComparisonStatus;
+    status: SpecComparisonStatus;
 }
 
 /**
@@ -171,8 +171,8 @@ export const hashFile = (filePath: string): string =>
 export const compareSharedFiles = (
     siblingRoot: string,
     here: string = process.cwd(),
-    role: TRepoRole = THIS_REPO
-): ISpecComparison[] =>
+    role: RepoRole = THIS_REPO
+): SpecComparison[] =>
     SHARED_FILES.map((shared) => {
         const file = shared[role];
         const siblingFile = shared[siblingRole(role)];
@@ -200,11 +200,11 @@ export const compareSharedFiles = (
     });
 
 /** Every comparison that is not a clean match — i.e. everything worth printing. */
-export const sharedFileProblems = (comparisons: ISpecComparison[]): ISpecComparison[] =>
+export const sharedFileProblems = (comparisons: SpecComparison[]): SpecComparison[] =>
     comparisons.filter(({ status }) => status !== 'match');
 
 /** How a pair is named in a message: one path, or both when they differ between the repos. */
-const describe = ({ file, siblingFile }: ISpecComparison): string =>
+const describe = ({ file, siblingFile }: SpecComparison): string =>
     file === siblingFile ? file : `${file} ↔ ${siblingFile}`;
 
 /**
@@ -212,7 +212,7 @@ const describe = ({ file, siblingFile }: ISpecComparison): string =>
  * Returns an empty string when there is nothing wrong, so callers can branch on truthiness.
  */
 export const formatSharedFileProblems = (
-    comparisons: ISpecComparison[],
+    comparisons: SpecComparison[],
     siblingRoot: string
 ): string => {
     const problems = sharedFileProblems(comparisons);

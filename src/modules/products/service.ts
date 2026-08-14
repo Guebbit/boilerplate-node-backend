@@ -4,14 +4,14 @@ import type { SearchProductsRequest, Product } from '@types';
 import {
     generateReject,
     generateSuccess,
-    type IResponseReject,
-    type IResponseSuccess
+    type ResponseReject,
+    type ResponseSuccess
 } from '@infrastructure/http/response';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { emitDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED, STOCK_MOVED } from './events';
 import { zodProductSchema } from './model';
-import type { IProductDocument } from './model';
+import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 
 /**
@@ -54,7 +54,7 @@ export const search = (
     filters: SearchProductsRequest = {},
     admin = false
 ): Promise<{
-    items: IProductDocument[];
+    items: ProductDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }> =>
     // The only product-domain decision left here: admins see everything, everyone else sees the
@@ -84,7 +84,7 @@ export const getById = (id: string | undefined, admin = false) => {
  */
 export const create = (
     data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
-): Promise<IProductDocument> =>
+): Promise<ProductDocument> =>
     productRepository.create({
         ...data,
         categories: sanitizeStringArray(data.categories),
@@ -99,9 +99,9 @@ export const create = (
  * @param data
  */
 export const update = (
-    product: IProductDocument,
+    product: ProductDocument,
     data: Partial<Omit<Product, 'id'>>
-): Promise<IProductDocument> => {
+): Promise<ProductDocument> => {
     // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
     if (data.price !== undefined) product.price = data.price;
@@ -154,7 +154,7 @@ export const update = (
 export const updateById = (
     id: string,
     data: Partial<Omit<Product, 'id'>>
-): Promise<IResponseSuccess<IProductDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
     productRepository.findById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
         return update(product, data).then((updated) => generateSuccess(updated));
@@ -174,9 +174,9 @@ export const updateById = (
  * @param hardDelete
  */
 export const remove = (
-    product: IProductDocument,
+    product: ProductDocument,
     hardDelete = false
-): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+): Promise<ResponseSuccess<ProductDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     const id = (product._id as Types.ObjectId).toString();
 
     // HARD delete
@@ -205,7 +205,7 @@ export const remove = (
 export const removeById = (
     id: string,
     hardDelete = false
-): Promise<IResponseSuccess<IProductDocument> | IResponseSuccess<undefined> | IResponseReject> =>
+): Promise<ResponseSuccess<ProductDocument> | ResponseSuccess<undefined> | ResponseReject> =>
     productRepository.findById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
         return remove(product, hardDelete);

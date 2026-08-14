@@ -1,8 +1,8 @@
-export interface ISeedOrder {
+export interface SeedOrder {
     id: string;
     userId: string;
     email: string;
-    items: ISeedCartItem[];
+    items: SeedCartItem[];
     /* ISO 8601, or absent. Present on exactly one order, for the same reason it is on exactly one
      * product: `isOrderVisibleToCaller` (frontend) and `visibleScope` (backend) both branch on it,
      * and a branch with no fixture behind it is a branch nothing tests. It sits on the non-admin
@@ -21,7 +21,7 @@ export interface ISeedOrder {
  * differs from today's product (to exercise exactly that "price changed since" case), it needs an
  * explicit override here — deriving it would silently erase the difference.
  */
-export const seedOrders: ISeedOrder[] = [
+export const seedOrders: SeedOrder[] = [
     {
         id: '65de73a69ca05739be2b5e85',
         userId: '65dd2bdb923652b7800fe180',

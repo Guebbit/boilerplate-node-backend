@@ -4,11 +4,11 @@ import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
 import * as orderService from '@modules/orders/service';
-import type { IOrderDocument } from '@modules/orders';
+import type { OrderDocument } from '@modules/orders';
 
 setupTestDb();
 
-type OrderWithTotals = IOrderDocument & {
+type OrderWithTotals = OrderDocument & {
     totalItems: number;
     totalQuantity: number;
     totalPrice: number;

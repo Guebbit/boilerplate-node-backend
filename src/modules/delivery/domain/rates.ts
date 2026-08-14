@@ -8,7 +8,7 @@
  */
 
 /** A way of getting the parcel to the customer, priced. */
-export interface IShippingMethod {
+export interface ShippingMethod {
     /** Stable id, frozen onto orders — never rename one that shipped. */
     id: string;
     /** Flat rate, in the shop's currency. */
@@ -23,14 +23,14 @@ export interface IShippingMethod {
  * Flat rates on purpose: weight/zone matrices are real-project concerns with no demo value.
  * `pickup` is the zero-cost proof that "cheapest method" and "no method" stay distinguishable.
  */
-export const SHIPPING_METHODS: readonly IShippingMethod[] = [
+export const SHIPPING_METHODS: readonly ShippingMethod[] = [
     { id: 'standard', price: 5, freeAbove: 100 },
     { id: 'express', price: 15 },
     { id: 'pickup', price: 0 }
 ];
 
 /** The method behind an id, or undefined — the caller decides what absence answers. */
-export const findShippingMethod = (methodId: string): IShippingMethod | undefined =>
+export const findShippingMethod = (methodId: string): ShippingMethod | undefined =>
     SHIPPING_METHODS.find(({ id }) => id === methodId);
 
 /**
@@ -40,5 +40,5 @@ export const findShippingMethod = (methodId: string): IShippingMethod | undefine
  * @param itemsTotal - the order's lines total, the number `freeAbove` compares against
  * @returns the cost — `0` once the threshold is met, the flat rate otherwise
  */
-export const priceShipping = (method: IShippingMethod, itemsTotal: number): number =>
+export const priceShipping = (method: ShippingMethod, itemsTotal: number): number =>
     method.freeAbove !== undefined && itemsTotal >= method.freeAbove ? 0 : method.price;

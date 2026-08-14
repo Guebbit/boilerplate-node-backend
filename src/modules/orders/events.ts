@@ -12,7 +12,7 @@
 import type { OrderStatus } from '@types';
 
 declare module '@kernel/events' {
-    interface IDomainEventMap {
+    interface DomainEventMap {
         /**
          * A customer's cancel went through — the conditional status move matched, the stock is
          * back on the shelf. Emitted AFTER the write: a cancellation is a fact by the time

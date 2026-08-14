@@ -7,13 +7,13 @@ import { LoginBody, UpdateAccountBody } from '@api/schemas.zod';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema } from '@modules/users';
-import { ETokenType } from '@modules/users';
-import type { IUserDocument } from '@modules/users';
+import { TokenType } from '@modules/users';
+import type { UserDocument } from '@modules/users';
 import { userRepository, userService } from '@modules/users';
 
 /**
@@ -26,7 +26,7 @@ import { userRepository, userService } from '@modules/users';
  * Tokens are consumed by the appropriate flow (passwordChange, etc.).
  */
 export const tokenAdd = (
-    user: IUserDocument,
+    user: UserDocument,
     type: string,
     expirationTime?: number
 ): Promise<string> => {
@@ -80,10 +80,10 @@ export const validatePasswordChange = (password = '', passwordConfirm = ''): str
  * Change user password with validation.
  */
 export const passwordChange = (
-    user: IUserDocument,
+    user: UserDocument,
     password = '',
     passwordConfirm = ''
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
 
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
@@ -91,7 +91,7 @@ export const passwordChange = (
     user.password = password;
     return userRepository
         .save(user)
-        .then((savedUser) => generateSuccess<IUserDocument>(savedUser))
+        .then((savedUser) => generateSuccess<UserDocument>(savedUser))
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 };
 
@@ -132,7 +132,7 @@ const zodProfileSchema = zodUserSchema
 export const updateProfile = (
     userId: string,
     data: unknown
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = zodProfileSchema.safeParse(data);
 
     if (!parseResult.success)
@@ -148,7 +148,7 @@ export const updateProfile = (
             // Credentials included: the caller may follow a successful email change with
             // `sendVerificationEmail`, which pushes a token onto this same document.
             .findByIdWithCredentials(userId)
-            .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
+            .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
                 if (!user) return generateReject(404, []);
 
                 if (parseResult.data.email !== undefined && parseResult.data.email !== user.email)
@@ -177,7 +177,7 @@ export const passwordChangeWithCurrent = (
     currentPassword = '',
     password = '',
     passwordConfirm = ''
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
@@ -185,7 +185,7 @@ export const passwordChangeWithCurrent = (
         userRepository
             // `password` is select:false — comparing against it is this flow's whole point.
             .findByIdWithCredentials(userId)
-            .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
+            .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
                 if (!user) return generateReject(404, []);
 
                 return bcrypt.compare(currentPassword, user.password).then((doMatch) => {
@@ -210,7 +210,7 @@ export const signup = (
     // "expected string, received null" and is rejected before the `?? ''` below could see it.
     // The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
     imageUrl?: string
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = zodUserSchema
         .extend({
             passwordConfirm: z.string()
@@ -240,7 +240,7 @@ export const signup = (
 
     return userRepository
         .findOne({ email })
-        .then<IResponseSuccess<IUserDocument> | IResponseReject>((user) => {
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
             if (user) return generateReject(409, [t('account.signup.email-already-used')]);
             return userRepository
                 .create({
@@ -253,7 +253,7 @@ export const signup = (
                     // Editable afterwards from the user endpoints.
                     locale: getCurrentLocale()
                 })
-                .then((createdUser) => generateSuccess<IUserDocument>(createdUser));
+                .then((createdUser) => generateSuccess<UserDocument>(createdUser));
         })
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 };
@@ -264,7 +264,7 @@ export const signup = (
 export const login = (
     email?: string,
     password?: string
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = LoginBody.safeParse({
         email,
         password
@@ -287,7 +287,7 @@ export const login = (
 
                 return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
                     if (!doMatch) return generateReject(401, [t('account.login.wrong-data')]);
-                    return generateSuccess<IUserDocument>(user);
+                    return generateSuccess<UserDocument>(user);
                 });
             })
             .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
@@ -300,8 +300,8 @@ export const login = (
  */
 export const tokenRemoveAll = (
     userId: string,
-    type: ETokenType
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+    type: TokenType
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     userRepository
         // `tokens` is select:false — needed here to filter and re-save them
         .findByIdWithCredentials(userId)
@@ -309,9 +309,9 @@ export const tokenRemoveAll = (
             (
                 user
             ):
-                | IResponseSuccess<IUserDocument>
-                | IResponseReject
-                | Promise<IResponseSuccess<IUserDocument>> => {
+                | ResponseSuccess<UserDocument>
+                | ResponseReject
+                | Promise<ResponseSuccess<UserDocument>> => {
                 if (!user) return generateReject(404, []);
                 // `$pull` rather than filter-and-save, for the reason above read in the other
                 // direction: `user.tokens = user.tokens.filter(...)` is a rebuild, so it writes
@@ -319,7 +319,7 @@ export const tokenRemoveAll = (
                 // and its write. That window is small and cannot be opened deterministically from
                 // a test, which is the argument for closing it in the implementation rather than
                 // asserting about it — `$pull` describes a change, so there is no window at all.
-                return user.tokenRemoveAll(type).then(() => generateSuccess<IUserDocument>(user));
+                return user.tokenRemoveAll(type).then(() => generateSuccess<UserDocument>(user));
             }
         )
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));

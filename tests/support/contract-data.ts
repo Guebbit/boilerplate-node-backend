@@ -92,7 +92,7 @@ const randomWords = (): string =>
 
 // ─── zod v4 introspection ───────────────────────────────────────────────────────
 
-interface IZodCheckDef {
+interface ZodCheckDef {
     check: string;
     minimum?: number;
     maximum?: number;
@@ -101,24 +101,23 @@ interface IZodCheckDef {
     pattern?: RegExp;
 }
 
-interface IZodDef {
+interface ZodDef {
     type: string;
     shape?: Record<string, ZodTypeAny>;
     element?: ZodTypeAny;
     innerType?: ZodTypeAny;
     valueType?: ZodTypeAny;
     format?: string;
-    checks?: { _zod: { def: IZodCheckDef } }[];
+    checks?: { _zod: { def: ZodCheckDef } }[];
     entries?: Record<string, unknown>;
     values?: unknown[];
     options?: ZodTypeAny[];
 }
 
-const defOf = (schema: ZodTypeAny): IZodDef =>
-    (schema as unknown as { _zod: { def: IZodDef } })._zod.def;
+const defOf = (schema: ZodTypeAny): ZodDef =>
+    (schema as unknown as { _zod: { def: ZodDef } })._zod.def;
 
-const checksOf = (def: IZodDef): IZodCheckDef[] =>
-    (def.checks ?? []).map((check) => check._zod.def);
+const checksOf = (def: ZodDef): ZodCheckDef[] => (def.checks ?? []).map((check) => check._zod.def);
 
 /**
  * Whether the field may be omitted from a payload entirely.
@@ -188,7 +187,7 @@ const PATTERN_SAMPLES: Record<string, string> = {
  * Ensures `value` satisfies every `regex` check on the field, substituting a known-good sample
  * when it does not.
  */
-const satisfyPattern = (value: string, checks: IZodCheckDef[]): string => {
+const satisfyPattern = (value: string, checks: ZodCheckDef[]): string => {
     let result = value;
 
     for (const check of checks) {
@@ -209,7 +208,7 @@ const satisfyPattern = (value: string, checks: IZodCheckDef[]): string => {
     return result;
 };
 
-const clampStringLength = (value: string, checks: IZodCheckDef[]): string => {
+const clampStringLength = (value: string, checks: ZodCheckDef[]): string => {
     const minLength = checks.find((check) => check.check === 'min_length')?.minimum;
     const maxLength = checks.find((check) => check.check === 'max_length')?.maximum;
     let result = value;
@@ -296,7 +295,7 @@ export const validPayload = <T = Record<string, unknown>>(schema: ZodTypeAny): T
     return buildValue(schema) as T;
 };
 
-export interface IInvalidPayloadCase {
+export interface InvalidPayloadCase {
     field: string;
     violation: string;
     payload: Record<string, unknown>;
@@ -388,14 +387,14 @@ const violationsForField = (fieldSchema: ZodTypeAny): { violation: string; value
  * (for a field carrying a min/max/format constraint). Only object schemas are supported; every
  * `*Body` export in `api/schemas.zod.ts` is one.
  */
-export const invalidPayloads = (schema: ZodTypeAny): IInvalidPayloadCase[] => {
+export const invalidPayloads = (schema: ZodTypeAny): InvalidPayloadCase[] => {
     ensureSeeded();
     const def = defOf(schema);
     if (def.type !== 'object')
         throw new Error(`invalidPayloads: expected an object schema, got "${def.type}"`);
 
     const basePayload = buildValue(schema) as Record<string, unknown>;
-    const cases: IInvalidPayloadCase[] = [];
+    const cases: InvalidPayloadCase[] = [];
 
     for (const [key, fieldSchema] of Object.entries(def.shape ?? {})) {
         if (!isOptionalField(fieldSchema)) {

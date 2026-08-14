@@ -13,25 +13,25 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 
 export const SHIPMENT_STATUSES = ['shipped', 'delivered'] as const;
 
-export type TShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
+export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 
 /**
  * Shipment Document interface.
  */
-export interface IShipmentDocument extends Document {
+export interface ShipmentDocument extends Document {
     orderId: Types.ObjectId;
     /** The courier's handle on the parcel — fake here, but shaped like the real thing. */
     trackingCode: string;
-    status: TShipmentStatus;
+    status: ShipmentStatus;
     deliveredAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
 }
 
 /** Shipment Document model type. Queries live in `./repository`, rules in `./service`. */
-export type IShipmentModel = Model<IShipmentDocument>;
+export type ShipmentModel = Model<ShipmentDocument>;
 
-export const shipmentSchema = new Schema<IShipmentDocument>(
+export const shipmentSchema = new Schema<ShipmentDocument>(
     {
         orderId: {
             type: Schema.Types.ObjectId,
@@ -66,4 +66,4 @@ export const applyShipmentTransform = applySerialization(shipmentSchema);
 /**
  * Model
  */
-export const shipmentModel = model<IShipmentDocument, IShipmentModel>('Shipment', shipmentSchema);
+export const shipmentModel = model<ShipmentDocument, ShipmentModel>('Shipment', shipmentSchema);

@@ -1,4 +1,4 @@
-export interface ISeedProduct {
+export interface SeedProduct {
     id: string;
     title: string;
     description: string;
@@ -20,7 +20,7 @@ export interface ISeedProduct {
     deletedAt?: string;
 }
 
-export const seedProducts: ISeedProduct[] = [
+export const seedProducts: SeedProduct[] = [
     {
         id: '65dc8a99604c307b702b5ccc',
         title: 'Sallyno Panino',

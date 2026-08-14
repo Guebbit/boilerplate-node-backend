@@ -4,7 +4,7 @@
  */
 
 /** A cart line as the rules see it. `null` is what `populate()` writes for a deleted product. */
-export interface ICartLineCandidate {
+export interface CartLineCandidate {
     quantity?: number;
     /** The joined product. Only `stock` is read; an absent `stock` means the column predates
      *  the backfill and the line is treated as unconstrained. */
@@ -12,7 +12,7 @@ export interface ICartLineCandidate {
 }
 
 /** Reasons are named, not numbered: the checkout-failure analytics event reports them verbatim. */
-export type TCheckoutVerdict =
+export type CheckoutVerdict =
     | { ok: true }
     | { ok: false; reason: 'empty' }
     | { ok: false; reason: 'product-unavailable' }
@@ -30,7 +30,7 @@ export type TCheckoutVerdict =
  * @param lines - the cart's lines, already joined to their products
  * @returns `ok`, or the reason checkout is refused
  */
-export const evaluateCheckout = (lines: readonly ICartLineCandidate[]): TCheckoutVerdict => {
+export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutVerdict => {
     if (lines.length === 0) return { ok: false, reason: 'empty' };
     if (lines.some(({ product }) => product === undefined || product === null))
         return { ok: false, reason: 'product-unavailable' };

@@ -6,8 +6,8 @@
  * Passing the emitters in on the request makes them substitutable with plain spies.
  */
 
-import { emitAuditEvent, type IAuditEvent } from '@infrastructure/observability/audit';
-import { emitAnalyticsEvent, type IAnalyticsEvent } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, type AuditEvent } from '@infrastructure/observability/audit';
+import { emitAnalyticsEvent, type AnalyticsEvent } from '@infrastructure/observability/analytics';
 
 /**
  * Observability context bundled per-request.
@@ -17,11 +17,11 @@ import { emitAnalyticsEvent, type IAnalyticsEvent } from '@infrastructure/observ
  * Both members return `void`: emitting is fire-and-forget by design, so a controller can never
  * accidentally await — or fail on — telemetry.
  */
-export interface IObservabilityContext {
+export interface ObservabilityContext {
     /** Security/compliance trail — see `observability/audit`. */
-    audit: (event: IAuditEvent) => void;
+    audit: (event: AuditEvent) => void;
     /** Product analytics — see `observability/analytics`. */
-    analytics: (event: IAnalyticsEvent) => void;
+    analytics: (event: AnalyticsEvent) => void;
 }
 
 /**
@@ -31,7 +31,7 @@ export interface IObservabilityContext {
  * Just function references, not wrappers — there is no indirection cost, and a test swaps the
  * whole object for `{ audit: jest.fn(), analytics: jest.fn() }`.
  */
-export const defaultObservabilityContext: IObservabilityContext = {
+export const defaultObservabilityContext: ObservabilityContext = {
     audit: emitAuditEvent,
     analytics: emitAnalyticsEvent
 };

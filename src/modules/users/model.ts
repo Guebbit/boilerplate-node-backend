@@ -9,7 +9,7 @@ export { zodUserSchema } from './validation';
 /**
  * Token types used in jwt-auth
  */
-export enum ETokenType {
+export enum TokenType {
     REFRESH = 'refresh',
     PASSWORD_RESET = 'password'
 }
@@ -18,7 +18,7 @@ export enum ETokenType {
  * User tokens
  * Token is like an ID, but not really an ID
  */
-export interface IToken {
+export interface Token {
     /**
      * The subdocument id Mongoose gives every entry in the array.
      *
@@ -37,12 +37,12 @@ export interface IToken {
  * User interface
  */
 /*
- * `deletedAt` is omitted from the contract type and redeclared, the same way `IProductDocument`
+ * `deletedAt` is omitted from the contract type and redeclared, the same way `ProductDocument`
  * does it: the wire contract carries an ISO string, the document carries a real `Date`. It only
  * started clashing when `deletedAt` was added to the `User` schema in `openapi.yaml` — before
  * that the contract had no such field for this one to disagree with.
  */
-export interface IUser extends Omit<User, 'deletedAt'> {
+export interface UserRecord extends Omit<User, 'deletedAt'> {
     /**
      * User attributes
      */
@@ -56,13 +56,13 @@ export interface IUser extends Omit<User, 'deletedAt'> {
      * - 2fa
      * - etc
      */
-    tokens: IToken[];
+    tokens: Token[];
 }
 
 /**
  * User Document interface
  */
-export interface IUserDocument extends IUser, IUserMethods, Document {
+export interface UserDocument extends UserRecord, UserMethods, Document {
     /** String version of _id — provided by Mongoose's Document getter */
     id: string;
 }
@@ -70,27 +70,27 @@ export interface IUserDocument extends IUser, IUserMethods, Document {
 /**
  * User Document instance methods.
  */
-export type IUserMethods = {
-    // `IToken['type']` rather than `ETokenType`: the enum names the two token types the JWT
+export type UserMethods = {
+    // `Token['type']` rather than `TokenType`: the enum names the two token types the JWT
     // layer knows about, while `tokens` also carries the account-deletion type the account
     // endpoints issue. The stored field is a string, and the method has to accept every value
     // that legitimately appears in it.
-    tokenAdd: (type: IToken['type'], expirationMs: number, token: string) => Promise<string>;
-    tokenRemoveAll: (type: IToken['type']) => Promise<void>;
+    tokenAdd: (type: Token['type'], expirationMs: number, token: string) => Promise<string>;
+    tokenRemoveAll: (type: Token['type']) => Promise<void>;
 };
 
 /**
  * User Document model type.
  * Business logic is now handled by the service and repository layers.
  */
-export type IUserModel = Model<IUserDocument, unknown, IUserMethods> & {
+export type UserModel = Model<UserDocument, unknown, UserMethods> & {
     tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
 };
 
 /**
  * User Schema
  */
-export const userSchema = new Schema<IUserDocument, IUserModel, IUserMethods>(
+export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
     {
         email: {
             type: String,
@@ -280,17 +280,17 @@ userSchema.pre('save', function () {
  * Returns the token string so callers can use it directly.
  */
 userSchema.methods.tokenAdd = function (
-    type: IToken['type'],
+    type: Token['type'],
     expirationMs: number,
     token: string
 ): Promise<string> {
-    const entry: IToken = {
+    const entry: Token = {
         type,
         token,
         expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
     };
 
-    return (this.constructor as IUserModel)
+    return (this.constructor as UserModel)
         .updateOne({ _id: this._id }, { $push: { tokens: entry } }, { timestamps: false })
         .then(() => {
             // Guarded: see the note above `tokenAdd` — `tokens` is `select: false`, so an
@@ -303,14 +303,14 @@ userSchema.methods.tokenAdd = function (
 /**
  * Remove all tokens of the given type from this user document and persist it.
  */
-userSchema.methods.tokenRemoveAll = function (type: IToken['type']) {
-    return (this.constructor as IUserModel)
+userSchema.methods.tokenRemoveAll = function (type: Token['type']) {
+    return (this.constructor as UserModel)
         .updateOne({ _id: this._id }, { $pull: { tokens: { type } } }, { timestamps: false })
         .then(() => {
             // Guarded: see the note above `tokenAdd`. The `$pull` above has already revoked the
             // tokens in the database — reporting a failure here would be a lie about a logout
             // that succeeded.
-            if (this.tokens) this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
+            if (this.tokens) this.tokens = this.tokens.filter((t: Token) => t.type !== type);
         });
 };
 
@@ -358,4 +358,4 @@ export const applyUserTransform = applySerialization(userSchema, {
 /**
  * Model
  */
-export const userModel = model<IUserDocument, IUserModel>('User', userSchema);
+export const userModel = model<UserDocument, UserModel>('User', userSchema);

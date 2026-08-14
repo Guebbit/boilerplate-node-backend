@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { seedOrdersCollection } from './seeds';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
@@ -22,4 +22,4 @@ export default {
     dependsOn: ['products'],
     seeds: seedOrdersCollection,
     locales: path.join(__dirname, 'locales')
-} satisfies IAppModule;
+} satisfies AppModule;

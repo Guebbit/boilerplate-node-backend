@@ -17,9 +17,9 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import { authService, passwordChangeWithCurrent, updateProfile } from '@modules/account/service';
 import { sendVerificationEmail, EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/verification';
-import { userRepository, ETokenType } from '@modules/users';
-import type { IUserDocument } from '@modules/users';
-import type { IResponseReject, IResponseSuccess } from '@infrastructure/http/response';
+import { userRepository, TokenType } from '@modules/users';
+import type { UserDocument } from '@modules/users';
+import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 
 setupTestDb();
 
@@ -27,17 +27,17 @@ const CURRENT_PASSWORD = 'correct-horse-battery';
 const NEW_PASSWORD = 'staple-gun-tuesday';
 
 /** Narrow to the reject arm, failing the test (rather than the type check) when it succeeded. */
-const asReject = (response: IResponseSuccess<IUserDocument> | IResponseReject): IResponseReject => {
+const asReject = (response: ResponseSuccess<UserDocument> | ResponseReject): ResponseReject => {
     expect(response.success).toBe(false);
-    return response as IResponseReject;
+    return response as ResponseReject;
 };
 
 /** Narrow to the success arm, and to a present `data`. */
 const asSuccess = (
-    response: IResponseSuccess<IUserDocument> | IResponseReject
-): IResponseSuccess<IUserDocument> & { data: IUserDocument } => {
+    response: ResponseSuccess<UserDocument> | ResponseReject
+): ResponseSuccess<UserDocument> & { data: UserDocument } => {
     expect(response.success).toBe(true);
-    return response as IResponseSuccess<IUserDocument> & { data: IUserDocument };
+    return response as ResponseSuccess<UserDocument> & { data: UserDocument };
 };
 
 /** The stored tokens of a user, credentials re-selected. */
@@ -168,8 +168,8 @@ describe('passwordChangeWithCurrent', () => {
 describe('sessionRemove', () => {
     it('revokes exactly the named refresh token', async () => {
         const user = await createUser();
-        await user.tokenAdd(ETokenType.REFRESH, 60_000, 'refresh-a');
-        await user.tokenAdd(ETokenType.REFRESH, 60_000, 'refresh-b');
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-a');
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-b');
 
         const tokens = await readTokens(user.id);
         const target = tokens.find((token) => token.token === 'refresh-a');
@@ -195,7 +195,7 @@ describe('sessionRemove', () => {
     it("cannot revoke another user's session", async () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
         const attacker = await createUser({ email: 'attacker@example.com', username: 'attacker' });
-        await owner.tokenAdd(ETokenType.REFRESH, 60_000, 'owner-session');
+        await owner.tokenAdd(TokenType.REFRESH, 60_000, 'owner-session');
 
         const [ownerToken] = await readTokens(owner.id);
         const result = await userRepository.sessionRemove(attacker.id, String(ownerToken?._id));
@@ -208,8 +208,8 @@ describe('sessionRemove', () => {
 describe('tokenRemoveByValue', () => {
     it('removes one session and leaves the siblings', async () => {
         const user = await createUser();
-        await user.tokenAdd(ETokenType.REFRESH, 60_000, 'phone');
-        await user.tokenAdd(ETokenType.REFRESH, 60_000, 'laptop');
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'phone');
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'laptop');
 
         await userRepository.tokenRemoveByValue('phone');
 
@@ -244,7 +244,7 @@ describe('sendVerificationEmail', () => {
 
     it('leaves the other token kinds alone', async () => {
         const user = await createUser();
-        await user.tokenAdd(ETokenType.REFRESH, 60_000, 'live-session');
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'live-session');
 
         await sendVerificationEmail(user);
 

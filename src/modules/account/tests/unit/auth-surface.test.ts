@@ -39,7 +39,7 @@ const COOKIE_EXPORTS = [
  * every request and needs the same rules that issued it.
  */
 const POLICY_EXPORTS = [
-    'ERefreshTokenExpiryTime',
+    'RefreshTokenExpiryTime',
     'getExpiryTime',
     'getExpiryTimeMilliseconds',
     'getAccessTokenSecret',

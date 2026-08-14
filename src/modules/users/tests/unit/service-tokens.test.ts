@@ -23,7 +23,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
 import * as userService from '@modules/users/service';
 import { userRepository } from '@modules/users';
-import type { IToken } from '@modules/users';
+import type { Token } from '@modules/users';
 
 setupTestDb();
 
@@ -34,7 +34,7 @@ const createUserWithTokens = () =>
         tokens: [
             { type: 'password', token: 'reset-token-value' },
             { type: 'delete', token: 'delete-token-value' }
-        ] as IToken[]
+        ] as Token[]
     });
 
 describe('userService.findByEmail', () => {

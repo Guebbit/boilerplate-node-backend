@@ -13,13 +13,13 @@
  */
 
 /** A priced line. Loose: order items arrive as raw aggregate output, cart items as DTOs. */
-export interface ILineItem {
+export interface LineItem {
     quantity?: unknown;
     /** `unknown` because it is raw aggregate output; `null` is an unpopulated ref. */
     product?: { price?: unknown } | null;
 }
 
-export interface ILineItemTotals {
+export interface LineItemTotals {
     /** Number of distinct line items. */
     count: number;
     /** Sum of `quantity` across every line. */
@@ -56,7 +56,7 @@ const toFiniteNumber = (value: unknown): number => {
  * @param items - the priced lines
  * @returns line count, total quantity and total price rounded to cents
  */
-export const sumLineItems = (items: readonly ILineItem[]): ILineItemTotals => {
+export const sumLineItems = (items: readonly LineItem[]): LineItemTotals => {
     let quantity = 0;
     let price = 0;
 

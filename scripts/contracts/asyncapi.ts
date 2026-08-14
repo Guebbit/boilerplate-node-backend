@@ -17,21 +17,18 @@
  */
 
 import path from 'node:path';
-import { REPO_ROOT, type IContractBundle, type TSegment } from './fragments';
+import { REPO_ROOT, type ContractBundle, type Segment } from './fragments';
 
 /** The order the document's per-section fragments are assembled in, within each of its sections. */
 export const ASYNC_SECTION_ORDER = ['observability', 'workers'] as const;
 
-export type TAsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
+export type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
 
 /** The three places every section appears: its channels, its messages, its payload schemas. */
-export type TAsyncFragmentKind = 'channels' | 'messages' | 'schemas';
+export type AsyncFragmentKind = 'channels' | 'messages' | 'schemas';
 
 /** Where a section's fragment of `kind` lives in THIS repo. */
-export const asyncSectionFragment = (
-    section: TAsyncSectionName,
-    kind: TAsyncFragmentKind
-): string =>
+export const asyncSectionFragment = (section: AsyncSectionName, kind: AsyncFragmentKind): string =>
     section === 'workers'
         ? path.join(REPO_ROOT, 'shared', 'contracts', `asyncapi.workers.${kind}.yaml`)
         : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi', `${kind}.yaml`);
@@ -48,14 +45,14 @@ const COMPONENTS_KEY_FRAGMENT = sharedFragment('components.header');
 const SCHEMAS_KEY_FRAGMENT = sharedFragment('schemas.header');
 
 /** Every section's fragment of one kind, in canonical order. */
-const sectionsOf = (kind: TAsyncFragmentKind): string[] =>
+const sectionsOf = (kind: AsyncFragmentKind): string[] =>
     ASYNC_SECTION_ORDER.map((section) => asyncSectionFragment(section, kind));
 
-export const asyncapiBundle: IContractBundle = {
+export const asyncapiBundle: ContractBundle = {
     name: 'asyncapi',
     label: 'asyncapi.yaml',
     output: path.join(REPO_ROOT, 'asyncapi.yaml'),
-    segments: (): TSegment[] => [
+    segments: (): Segment[] => [
         ASYNC_HEADER_FRAGMENT,
         CHANNELS_KEY_FRAGMENT,
         ...sectionsOf('channels'),

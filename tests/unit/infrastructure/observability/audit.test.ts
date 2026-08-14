@@ -3,8 +3,8 @@ import {
     extractRequestContext,
     registerAuditSink,
     coreAuditActions,
-    type IAuditEvent,
-    type IAuditEntry
+    type AuditEvent,
+    type AuditEntry
 } from '@infrastructure/observability/audit';
 import { auditLogger } from '@infrastructure/adapters/logger';
 
@@ -28,7 +28,7 @@ describe('emitAuditEvent', () => {
     beforeEach(() => jest.clearAllMocks());
 
     it('calls auditLogger.log with "info" level for success outcome', () => {
-        const event: IAuditEvent = {
+        const event: AuditEvent = {
             action: 'auth.login.succeeded',
             actor_user_id: 'user-123',
             actor_role: 'user',
@@ -40,7 +40,7 @@ describe('emitAuditEvent', () => {
         emitAuditEvent(event);
 
         expect(auditLogger.log).toHaveBeenCalledTimes(1);
-        const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, IAuditEvent];
+        const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
         expect(call[0]).toBe('info');
         expect(call[1]).toBe('auth.login.succeeded');
         expect(call[2].actor_user_id).toBe('user-123');
@@ -48,7 +48,7 @@ describe('emitAuditEvent', () => {
     });
 
     it('calls auditLogger.log with "warn" level for failure outcome', () => {
-        const event: IAuditEvent = {
+        const event: AuditEvent = {
             action: 'auth.login.failed',
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
@@ -63,7 +63,7 @@ describe('emitAuditEvent', () => {
     });
 
     it('passes all event fields through to the logger', () => {
-        const event: IAuditEvent = {
+        const event: AuditEvent = {
             action: 'admin.user.deleted',
             actor_user_id: 'admin-456',
             actor_role: 'admin',
@@ -77,7 +77,7 @@ describe('emitAuditEvent', () => {
 
         emitAuditEvent(event);
 
-        const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, IAuditEvent];
+        const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
         expect(call[2].action).toBe('admin.user.deleted');
         expect(call[2].target_type).toBe('user');
         expect(call[2].target_id).toBe('user-789');
@@ -104,7 +104,7 @@ describe('registerAuditSink', () => {
     // an inert sink back, or it would keep receiving the *next* test's events.
     afterEach(() => registerAuditSink(() => {}));
 
-    const event: IAuditEvent = {
+    const event: AuditEvent = {
         action: 'auth.login.succeeded',
         actor_user_id: 'user-123',
         actor_role: 'user',
@@ -118,7 +118,7 @@ describe('registerAuditSink', () => {
         emitAuditEvent(event);
 
         expect(sink).toHaveBeenCalledTimes(1);
-        const entry = sink.mock.calls[0][0] as IAuditEntry;
+        const entry = sink.mock.calls[0][0] as AuditEntry;
         expect(entry.action).toBe('auth.login.succeeded');
         expect(entry.actor_user_id).toBe('user-123');
     });
@@ -129,7 +129,7 @@ describe('registerAuditSink', () => {
 
         emitAuditEvent({ ...event, outcome: 'failure' });
 
-        const entry = sink.mock.calls[0][0] as IAuditEntry;
+        const entry = sink.mock.calls[0][0] as AuditEntry;
         // A Date, not an ISO string: the model stores it as a BSON date so the TTL index and the
         // `timestamp: -1` sort work on a real date rather than on lexicographic string order.
         expect(entry.timestamp).toBeInstanceOf(Date);

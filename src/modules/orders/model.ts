@@ -1,18 +1,18 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema, applyProductTransform } from '@modules/products';
-import type { IProductDocument } from '@modules/products';
+import type { ProductDocument } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { sumLineItems, type ILineItem } from './domain/totals';
+import { sumLineItems, type LineItem } from './domain/totals';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 
 /**
  * A single item stored inside an order document.
- * Uses IProductDocument (or ObjectId before populate) rather than the OpenAPI
+ * Uses ProductDocument (or ObjectId before populate) rather than the OpenAPI
  * OrderItem class, because Mongoose embeds the product snapshot directly.
  */
-export interface IOrderDocumentItem {
+export interface OrderDocumentItem {
     /**
      * The product snapshot, embedded.
      *
@@ -20,23 +20,23 @@ export interface IOrderDocumentItem {
      * with no `ref`, so there is nothing for `populate()` to resolve and the un-joined case cannot
      * occur. An order must keep what was bought, not what the catalogue says today.
      */
-    product: IProductDocument;
+    product: ProductDocument;
     quantity: number;
 }
 
 /**
  * Order Document interface.
  * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string),
- * 'items' (embedded IOrderDocumentItem instead of OpenAPI OrderItem), and 'status'.
+ * 'items' (embedded OrderDocumentItem instead of OpenAPI OrderItem), and 'status'.
  *
  * `totalItems`, `totalQuantity` and `totalPrice` are omitted rather than inherited: they are
  * required on the wire but never persisted — `applyOrderTransform` derives them at serialization
  * time — so declaring them here would claim a stored field that does not exist.
  *
- * `deletedAt` is omitted and redeclared for the same reason it is in `IProductDocument` and
- * `IUser`: the contract types it as an ISO string, the schema stores a `Date`.
+ * `deletedAt` is omitted and redeclared for the same reason it is in `ProductDocument` and
+ * `User`: the contract types it as an ISO string, the schema stores a `Date`.
  */
-export interface IOrderDocument
+export interface OrderDocument
     extends
         Omit<
             Order,
@@ -55,7 +55,7 @@ export interface IOrderDocument
     userId: Types.ObjectId;
     status: OrderStatus;
     notes?: string;
-    items: IOrderDocumentItem[];
+    items: OrderDocumentItem[];
     createdAt?: Date;
     updatedAt?: Date;
     deletedAt?: Date;
@@ -66,7 +66,7 @@ export interface IOrderDocument
  * Business logic lives in the service (`./service`); queries live in the repository
  * (`./repository`).
  */
-export type IOrderModel = Model<IOrderDocument, unknown, unknown>;
+export type OrderModel = Model<OrderDocument, unknown, unknown>;
 
 /**
  * Schema for a single embedded order item.
@@ -95,7 +95,7 @@ const orderItemSchema = new Schema(
 /**
  * Mongoose schema for persisted order documents.
  */
-export const orderSchema = new Schema<IOrderDocument>(
+export const orderSchema = new Schema<OrderDocument>(
     {
         userId: {
             type: Schema.Types.ObjectId,
@@ -204,7 +204,7 @@ const applyOrderItems = (serialized: Record<string, unknown>) => {
  */
 const applyOrderTotals = (serialized: Record<string, unknown>) => {
     const { count, quantity, price } = sumLineItems(
-        Array.isArray(serialized.items) ? (serialized.items as ILineItem[]) : []
+        Array.isArray(serialized.items) ? (serialized.items as LineItem[]) : []
     );
 
     serialized.totalItems = count;
@@ -234,4 +234,4 @@ export const applyOrderTransform = applySerialization(orderSchema, {
 /**
  * Mongoose model for order CRUD operations.
  */
-export const orderModel = model<IOrderDocument, IOrderModel>('Order', orderSchema);
+export const orderModel = model<OrderDocument, OrderModel>('Order', orderSchema);

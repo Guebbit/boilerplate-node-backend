@@ -35,7 +35,7 @@ import {
     findBundle,
     readCommittedBundle,
     REPO_ROOT,
-    type IContractBundle
+    type ContractBundle
 } from './contracts';
 import {
     generateCollectionFragments,
@@ -56,11 +56,11 @@ if (unknown.length > 0) {
 }
 
 const relative = (file: string): string => path.relative(REPO_ROOT, file);
-const isStale = (bundle: IContractBundle): boolean =>
+const isStale = (bundle: ContractBundle): boolean =>
     assembleBundle(bundle) !== readCommittedBundle(bundle);
 
 /** Assemble the given bundles, writing only the ones that actually drifted. */
-const bundle = (bundles: readonly IContractBundle[]): IContractBundle[] => {
+const bundle = (bundles: readonly ContractBundle[]): ContractBundle[] => {
     const stale = bundles.filter(isStale);
     if (!checkOnly) for (const item of stale) writeFileSync(item.output, assembleBundle(item));
     return stale;
@@ -94,7 +94,7 @@ const fail = (message: string): never => {
 if (named.length > 0) {
     // Narrowed: one phase, exactly the bundles asked for. Deliberately does NOT regenerate the
     // collection fragments — that is what a full run is for, and a narrowed run is for iterating.
-    const selected = named.map((name) => findBundle(name) as IContractBundle);
+    const selected = named.map((name) => findBundle(name) as ContractBundle);
     const stale = bundle(selected);
 
     if (checkOnly && stale.length > 0) {

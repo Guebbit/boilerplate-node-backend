@@ -3,7 +3,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factory';
-import type { IProductDocument } from '@modules/products';
+import type { ProductDocument } from '@modules/products';
 import { orderRepository } from '@modules/orders';
 
 setupTestDb();
@@ -39,7 +39,7 @@ describe('orderRepository', () => {
             const order = await createOrder(user, [toOrderItem(product, 1)]);
 
             // The product object is embedded, not referenced by ObjectId
-            const snapshot = order.items[0].product as IProductDocument;
+            const snapshot = order.items[0].product as ProductDocument;
             expect(snapshot.title).toBe('Snapshot Test');
             expect(snapshot.price).toBe(29.99);
         });
@@ -151,7 +151,7 @@ describe('orderRepository', () => {
      * `applyOrderTransform`. What makes that safe is a single guarantee: **`id` resolves on both
      * branches, `_id` on only one.**
      *
-     * These pin exactly that, because nothing else can. TypeScript cannot — `IOrderDocument`
+     * These pin exactly that, because nothing else can. TypeScript cannot — `OrderDocument`
      * extends `Document`, so `_id` type-checks on a value that will not carry it at runtime — and
      * neither can a response-body assertion, since the transform is also the schema's `toJSON` and
      * the two shapes serialize identically. The gap is only visible to code reading the value

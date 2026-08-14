@@ -4,10 +4,10 @@
  * No mocks, no database, no fake timers — the rules take arguments and return verdicts.
  */
 
-import { checkOrderLines, type IOrderLineCandidate } from '../../domain/rules';
+import { checkOrderLines, type OrderLineCandidate } from '../../domain/rules';
 
 /** A line whose product resolved. */
-const line = (quantity = 1): IOrderLineCandidate => ({ quantity, product: { price: 10 } });
+const line = (quantity = 1): OrderLineCandidate => ({ quantity, product: { price: 10 } });
 
 describe('checkOrderLines', () => {
     it('refuses an empty set, naming the reason', () => {

@@ -54,24 +54,24 @@ export const MUTATION_BASELINE_PATH = 'mutation-baseline.json';
 export const SCORE_TOLERANCE = 1;
 
 /** The subset of Stryker's JSON report this reads. */
-interface IMutationReport {
+interface MutationReport {
     files: Record<string, { mutants: { status: string }[] }>;
 }
 
-export interface IMutationBaseline {
+export interface MutationBaseline {
     /** When the baseline was last written, so a stale one is visible. */
     generatedAt: string;
     /** Per-file mutation score, as a percentage of mutants killed. */
     files: Record<string, number>;
 }
 
-export type TFileVerdict = 'held' | 'improved' | 'regressed' | 'new' | 'removed';
+export type FileVerdict = 'held' | 'improved' | 'regressed' | 'new' | 'removed';
 
-export interface IFileComparison {
+export interface FileComparison {
     file: string;
     baseline?: number;
     current?: number;
-    verdict: TFileVerdict;
+    verdict: FileVerdict;
 }
 
 /**
@@ -86,7 +86,7 @@ const KILLED = new Set(['Killed', 'Timeout']);
 const NOT_VIABLE = new Set(['RuntimeError', 'CompileError', 'Ignored']);
 
 /** Per-file score from a Stryker JSON report, as a percentage with two decimals. */
-export const scoresFromReport = (report: IMutationReport): Record<string, number> => {
+export const scoresFromReport = (report: MutationReport): Record<string, number> => {
     const scores: Record<string, number> = {};
 
     for (const [file, { mutants }] of Object.entries(report.files)) {
@@ -113,16 +113,16 @@ export const readReport = (root = process.cwd()): Record<string, number> => {
                 `the \`json\` reporter in stryker.config.json is what writes it.`
         );
 
-    return scoresFromReport(JSON.parse(readFileSync(reportPath, 'utf8')) as IMutationReport);
+    return scoresFromReport(JSON.parse(readFileSync(reportPath, 'utf8')) as MutationReport);
 };
 
-export const readBaseline = (root = process.cwd()): IMutationBaseline | undefined => {
+export const readBaseline = (root = process.cwd()): MutationBaseline | undefined => {
     const baselinePath = path.join(root, MUTATION_BASELINE_PATH);
     if (!existsSync(baselinePath)) return undefined;
-    return JSON.parse(readFileSync(baselinePath, 'utf8')) as IMutationBaseline;
+    return JSON.parse(readFileSync(baselinePath, 'utf8')) as MutationBaseline;
 };
 
-export const writeBaseline = (baseline: IMutationBaseline, root = process.cwd()): void => {
+export const writeBaseline = (baseline: MutationBaseline, root = process.cwd()): void => {
     writeFileSync(
         path.join(root, MUTATION_BASELINE_PATH),
         `${JSON.stringify(baseline, undefined, 4)}\n`
@@ -138,8 +138,8 @@ export const writeBaseline = (baseline: IMutationBaseline, root = process.cwd())
  */
 export const compareToBaseline = (
     current: Record<string, number>,
-    baseline?: IMutationBaseline
-): IFileComparison[] => {
+    baseline?: MutationBaseline
+): FileComparison[] => {
     const previous = baseline?.files ?? {};
     const files = [...new Set([...Object.keys(previous), ...Object.keys(current)])].toSorted();
 
@@ -171,7 +171,7 @@ export const compareToBaseline = (
  */
 export const missingFromReport = (
     current: Record<string, number>,
-    baseline?: IMutationBaseline
+    baseline?: MutationBaseline
 ): string[] =>
     Object.keys(baseline?.files ?? {})
         .filter((file) => !(file in current))
@@ -186,8 +186,8 @@ export const missingFromReport = (
  */
 export const nextBaseline = (
     current: Record<string, number>,
-    baseline?: IMutationBaseline
-): IMutationBaseline => {
+    baseline?: MutationBaseline
+): MutationBaseline => {
     const previous = baseline?.files ?? {};
     const files: Record<string, number> = {};
 
@@ -200,7 +200,7 @@ export const nextBaseline = (
 };
 
 /** Human-readable summary. Empty string when nothing regressed. */
-export const formatRegressions = (comparisons: IFileComparison[]): string => {
+export const formatRegressions = (comparisons: FileComparison[]): string => {
     const regressed = comparisons.filter(({ verdict }) => verdict === 'regressed');
     if (regressed.length === 0) return '';
 

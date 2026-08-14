@@ -1,4 +1,4 @@
-export interface ISeedWishlist {
+export interface SeedWishlist {
     /** The owner — one of `seedUsers` by id. */
     userId: string;
     /* Product ids from `seedProducts`, saved without quantity — a wishlist answers "do I want
@@ -7,7 +7,7 @@ export interface ISeedWishlist {
     productIds: string[];
 }
 
-export const seedWishlists: ISeedWishlist[] = [
+export const seedWishlists: SeedWishlist[] = [
     {
         /* root — one saved product, enough for the admin account to show a non-empty page. */
         userId: '65dd2bdb923652b7800fe180',

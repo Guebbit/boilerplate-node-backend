@@ -27,9 +27,9 @@
  */
 
 import { Types } from 'mongoose';
-import type { IOrderDocument, IOrderDocumentItem } from '@modules/orders';
-import type { IUserDocument } from '@modules/users';
-import type { IProductDocument } from '@modules/products';
+import type { OrderDocument, OrderDocumentItem } from '@modules/orders';
+import type { UserDocument } from '@modules/users';
+import type { ProductDocument } from '@modules/products';
 import { orderRepository } from '@modules/orders';
 
 /**
@@ -39,7 +39,7 @@ import { orderRepository } from '@modules/orders';
  * @param product  - The persisted product document.
  * @param quantity - How many units were ordered (default: 1).
  */
-export const toOrderItem = (product: IProductDocument, quantity = 1): IOrderDocumentItem => ({
+export const toOrderItem = (product: ProductDocument, quantity = 1): OrderDocumentItem => ({
     product,
     quantity
 });
@@ -51,9 +51,9 @@ export const toOrderItem = (product: IProductDocument, quantity = 1): IOrderDocu
  * @param items - Array of { product, quantity } pairs (use toOrderItem).
  */
 export const makeOrder = (
-    user: IUserDocument,
-    items: IOrderDocumentItem[]
-): Partial<IOrderDocument> => ({
+    user: UserDocument,
+    items: OrderDocumentItem[]
+): Partial<OrderDocument> => ({
     userId: user._id as Types.ObjectId,
     email: user.email,
     items
@@ -66,6 +66,6 @@ export const makeOrder = (
  * @param items - Array of { product, quantity } pairs (use toOrderItem).
  */
 export const createOrder = (
-    user: IUserDocument,
-    items: IOrderDocumentItem[]
-): Promise<IOrderDocument> => orderRepository.create(makeOrder(user, items));
+    user: UserDocument,
+    items: OrderDocumentItem[]
+): Promise<OrderDocument> => orderRepository.create(makeOrder(user, items));

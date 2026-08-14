@@ -11,7 +11,7 @@
 export { productService } from './service';
 export { productRepository } from './repository';
 export { productModel, zodProductSchema } from './model';
-export type { IProductDocument } from './model';
+export type { ProductDocument } from './model';
 
 /**
  * The mongoose schema and its serialization transform, for modules that embed a product rather

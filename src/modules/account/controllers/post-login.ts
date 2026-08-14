@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { Types } from 'mongoose';
 import { authService } from '../service';
-import { createRefreshToken, createAccessToken, ERefreshTokenExpiryTime } from '../jwt';
+import { createRefreshToken, createAccessToken, RefreshTokenExpiryTime } from '../jwt';
 import { createRefreshCookie, createLoggedCookie } from '../cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -62,7 +62,7 @@ export const postLogin = (
     request: Request<
         Record<string, string>,
         unknown,
-        LoginRequest & { remember?: ERefreshTokenExpiryTime }
+        LoginRequest & { remember?: RefreshTokenExpiryTime }
     >,
     response: Response
 ) => {

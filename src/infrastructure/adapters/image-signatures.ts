@@ -20,7 +20,7 @@ import { open } from 'node:fs/promises';
  * `offset` exists because some formats do not start at byte 0 — WebP's marker sits at 8, after
  * the RIFF header — so it is modelled from the start rather than bolted on later.
  */
-interface IImageSignature {
+interface ImageSignature {
     mime: string;
     offset: number;
     bytes: readonly number[];
@@ -30,7 +30,7 @@ interface IImageSignature {
  * Raster formats only. No SVG: it is XML that browsers execute, so accepting it means accepting
  * script upload, and no amount of sniffing makes that safe.
  */
-const IMAGE_SIGNATURES: readonly IImageSignature[] = [
+const IMAGE_SIGNATURES: readonly ImageSignature[] = [
     // \x89PNG\r\n\x1a\n — the trailing bytes exist to catch transfers that mangled line endings,
     // which is exactly why matching all eight is worth more than matching the first four.
     {

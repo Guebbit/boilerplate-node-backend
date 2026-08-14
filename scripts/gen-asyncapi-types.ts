@@ -10,10 +10,10 @@
  * It emits a SUPERSET of what either repo needs, so neither has to rename anything:
  *
  *   - the modelina-generated payload interfaces          (both)
- *   - `I<MessageName>` aliases for components.messages   (both)
+ *   - `<MessageName>` aliases for components.messages    (both)
  *   - `<NAMESPACE>_CHANNELS` constant objects            (backend: OBSERVABILITY_CHANNELS, …)
- *   - `T<Namespace>Channel` unions                       (backend: TObservabilityChannel, …)
- *   - `REALTIME_SSE_EVENT_NAMES` + `ISseEventPayloadMap` (frontend: per-event payload typing)
+ *   - `<Namespace>Channel` unions                        (backend: ObservabilityChannel, …)
+ *   - `REALTIME_SSE_EVENT_NAMES` + `SseEventPayloadMap` (frontend: per-event payload typing)
  *
  * Unused exports are harmless — tree-shaken in the frontend bundle, type-only in the backend.
  *
@@ -25,38 +25,38 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
-interface IAsyncApiOperation {
+interface AsyncApiOperation {
     message?: {
         $ref?: string;
     };
 }
 
-interface IAsyncApiChannel {
-    publish?: IAsyncApiOperation;
-    subscribe?: IAsyncApiOperation;
+interface AsyncApiChannel {
+    publish?: AsyncApiOperation;
+    subscribe?: AsyncApiOperation;
 }
 
-interface IAsyncApiMessage {
-    payload?: IJsonSchema;
+interface AsyncApiMessage {
+    payload?: JsonSchema;
 }
 
-interface IJsonSchema {
+interface JsonSchema {
     $ref?: string;
     type?: string;
     enum?: unknown[];
-    oneOf?: IJsonSchema[];
-    anyOf?: IJsonSchema[];
-    allOf?: IJsonSchema[];
+    oneOf?: JsonSchema[];
+    anyOf?: JsonSchema[];
+    allOf?: JsonSchema[];
     required?: string[];
-    properties?: Record<string, IJsonSchema>;
-    items?: IJsonSchema;
-    additionalProperties?: boolean | IJsonSchema;
+    properties?: Record<string, JsonSchema>;
+    items?: JsonSchema;
+    additionalProperties?: boolean | JsonSchema;
 }
 
-interface IAsyncApiDocument {
-    channels?: Record<string, IAsyncApiChannel>;
+interface AsyncApiDocument {
+    channels?: Record<string, AsyncApiChannel>;
     components?: {
-        messages?: Record<string, IAsyncApiMessage>;
+        messages?: Record<string, AsyncApiMessage>;
     };
 }
 
@@ -96,21 +96,20 @@ const toPascalCase = (value: string): string =>
         .join('');
 
 /*
- * Formats a model/message identifier with the project interface prefix.
+ * Formats a model/message identifier as a PascalCase type name.
  *
  * @param value Raw model or message name.
- * @returns Interface-style type name prefixed with `I`.
+ * @returns PascalCase type name.
  */
-const toInterfaceName = (value: string): string => `I${toPascalCase(value)}`;
+const toModelName = (value: string): string => toPascalCase(value);
 
 /*
- * Resolves `#/components/...` refs to frontend interface type names.
+ * Resolves `#/components/...` refs to their generated type names.
  *
  * @param reference AsyncAPI `$ref` value.
  * @returns TypeScript type name for the referenced model.
  */
-const refToTypeName = (reference: string): string =>
-    toInterfaceName(reference.split('/').pop() ?? '');
+const refToTypeName = (reference: string): string => toModelName(reference.split('/').pop() ?? '');
 
 /*
  * Converts an object key into a valid TypeScript property declaration key.
@@ -128,7 +127,7 @@ const formatPropertyKey = (property: string): string =>
  * @param depth Current recursive indentation depth.
  * @returns TypeScript type representation.
  */
-const schemaToType = (schema: IJsonSchema | undefined, depth = 0): string => {
+const schemaToType = (schema: JsonSchema | undefined, depth = 0): string => {
     const indentation = '    '.repeat(depth);
     const childIndentation = '    '.repeat(depth + 1);
 
@@ -190,7 +189,7 @@ const schemaToType = (schema: IJsonSchema | undefined, depth = 0): string => {
  * @returns Ordered entries containing channel names and referenced message type names.
  */
 const collectChannelMessageEntries = (
-    channels: Record<string, IAsyncApiChannel>,
+    channels: Record<string, AsyncApiChannel>,
     prefix: string,
     operation: 'publish' | 'subscribe'
 ): Array<{ channelName: string; messageType: string }> =>
@@ -261,7 +260,7 @@ const toConstantKey = (channelName: string, prefix: string): string =>
 const renderChannelNamespace = (namespace: string, channelNames: string[]): string => {
     const prefix = `${namespace}.`;
     const constantName = `${namespace.toUpperCase()}_CHANNELS`;
-    const unionName = `T${toPascalCase(namespace)}Channel`;
+    const unionName = `${toPascalCase(namespace)}Channel`;
     const entries = channelNames
         .map((channelName) => `    ${toConstantKey(channelName, prefix)}: '${channelName}',`)
         .join('\n');
@@ -295,7 +294,7 @@ const groupChannelsByNamespace = (channelNames: string[]): Map<string, string[]>
 };
 
 const modelNameConstraints = typeScriptDefaultModelNameConstraints({
-    NAMING_FORMATTER: (value: string) => toInterfaceName(value)
+    NAMING_FORMATTER: (value: string) => toModelName(value)
 });
 
 const generator = new TypeScriptGenerator({
@@ -308,7 +307,7 @@ const generator = new TypeScriptGenerator({
 });
 
 const specText = readFileSync(INPUT, 'utf8');
-const document = parse(specText) as IAsyncApiDocument;
+const document = parse(specText) as AsyncApiDocument;
 
 const channels = document.channels ?? {};
 const messages = document.components?.messages ?? {};
@@ -321,7 +320,7 @@ const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels
 
 const messageTypeBlocks = Object.entries(messages)
     .map(([messageName, message]) => {
-        const aliasName = toInterfaceName(messageName);
+        const aliasName = toModelName(messageName);
         if (message.payload?.$ref) {
             const targetName = refToTypeName(message.payload.$ref);
             // Skip self-referential aliases (message name resolves to same type as schema)
@@ -357,9 +356,9 @@ const buildOutput = (modelBlocks: string[]): string => {
             'REALTIME_SSE_EVENT_NAMES',
             sseEntries.map(({ channelName }) => channelName)
         ),
-        'export type ISseEventName = (typeof REALTIME_SSE_EVENT_NAMES)[number];',
-        renderPayloadMap('ISseEventPayloadMap', sseEntries),
-        'export type ISseEventPayload<TEventName extends ISseEventName> = ISseEventPayloadMap[TEventName];',
+        'export type SseEventName = (typeof REALTIME_SSE_EVENT_NAMES)[number];',
+        renderPayloadMap('SseEventPayloadMap', sseEntries),
+        'export type SseEventPayload<TEventName extends SseEventName> = SseEventPayloadMap[TEventName];',
         ''
     ];
 

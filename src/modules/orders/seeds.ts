@@ -5,9 +5,9 @@
 
 import { Types } from 'mongoose';
 import { seedOrders, seedProducts } from '@seed-identities';
-import { upsertById, type TSeedOutcome } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { orderRepository } from './repository';
-import type { IOrderDocument } from './model';
+import type { OrderDocument } from './model';
 
 /*
  * An order item embeds a snapshot of the product as it was when the order was placed.
@@ -56,9 +56,9 @@ export const orderFixtures = seedOrders.map((order) => ({
 }));
 
 /** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
-export const seedOrdersCollection = (): Promise<TSeedOutcome[]> =>
+export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(
         orderFixtures.map((order) =>
-            upsertById(orderRepository, order as Partial<IOrderDocument> & { _id: Types.ObjectId })
+            upsertById(orderRepository, order as Partial<OrderDocument> & { _id: Types.ObjectId })
         )
     );

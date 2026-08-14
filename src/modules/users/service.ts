@@ -2,11 +2,11 @@ import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { zodUserSchema } from './model';
-import type { IUserDocument, IUser, IToken } from './model';
+import type { UserDocument, UserRecord, Token } from './model';
 import type { SearchUsersRequest } from '@types';
 import { userRepository } from './repository';
 import { emitDomainEvent } from '@kernel/events';
@@ -49,7 +49,7 @@ export const validateData = (userData: unknown, requirePassword = true): string[
 export const search = (
     filters: SearchUsersRequest = {}
 ): Promise<{
-    items: IUserDocument[];
+    items: UserDocument[];
     meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
 }> => userRepository.search(filters);
 
@@ -71,18 +71,20 @@ export const getById = (id?: string) => {
  * first so a caller that explicitly passes one still wins.
  */
 export const create = (
-    data: Pick<IUser, 'email' | 'username' | 'password'> &
-        Partial<Pick<IUser, 'admin' | 'imageUrl' | 'locale' | 'verified'>>
-): Promise<IUserDocument> => userRepository.create({ verified: true, ...data });
+    data: Pick<UserRecord, 'email' | 'username' | 'password'> &
+        Partial<Pick<UserRecord, 'admin' | 'imageUrl' | 'locale' | 'verified'>>
+): Promise<UserDocument> => userRepository.create({ verified: true, ...data });
 
 /**
  * Update an existing user document.
  * Returns a result envelope instead of throwing (LSP) — the protocol every service here follows.
  */
 export const update = (
-    user: IUserDocument,
-    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>>
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> => {
+    user: UserDocument,
+    data: Partial<
+        Pick<UserRecord, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>
+    >
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
     if (data.username !== undefined) user.username = data.username;
     if (data.admin !== undefined) user.admin = data.admin;
@@ -100,8 +102,10 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    data: Partial<Pick<IUser, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>>
-): Promise<IResponseSuccess<IUserDocument> | IResponseReject> =>
+    data: Partial<
+        Pick<UserRecord, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>
+    >
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.
     userRepository.findByIdWithCredentials(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
@@ -121,9 +125,9 @@ export const updateById = (
  * both ways. Only the hard path emits, because a soft delete is a restore waiting to happen.
  */
 export const remove = (
-    user: IUserDocument,
+    user: UserDocument,
     hardDelete = false
-): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> => {
+): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
         return emitDomainEvent(USER_DELETED, { userId: user.id })
             .then(() => userRepository.deleteOne(user))
@@ -142,7 +146,7 @@ export const remove = (
  *
  * @param email
  */
-export const findByEmail = (email: string): Promise<IUserDocument | undefined | null> =>
+export const findByEmail = (email: string): Promise<UserDocument | undefined | null> =>
     // Credentials included: both callers (reset-request, delete-request) immediately push a
     // token onto the document, which `select: false` would otherwise leave undefined.
     userRepository.findOneWithCredentials({ email });
@@ -167,8 +171,8 @@ export const findByEmail = (email: string): Promise<IUserDocument | undefined | 
  */
 const findByToken = (
     token: string,
-    type: IToken['type']
-): Promise<IUserDocument | undefined | null> =>
+    type: Token['type']
+): Promise<UserDocument | undefined | null> =>
     userRepository.findOneWithCredentials({ tokens: { $elemMatch: { token, type } } });
 
 /**
@@ -177,9 +181,8 @@ const findByToken = (
  *
  * @param token
  */
-export const findByPasswordResetToken = (
-    token: string
-): Promise<IUserDocument | undefined | null> => findByToken(token, 'password');
+export const findByPasswordResetToken = (token: string): Promise<UserDocument | undefined | null> =>
+    findByToken(token, 'password');
 
 /**
  * Find a user that holds an account-deletion token.
@@ -187,9 +190,8 @@ export const findByPasswordResetToken = (
  *
  * @param token
  */
-export const findByAccountDeleteToken = (
-    token: string
-): Promise<IUserDocument | undefined | null> => findByToken(token, 'delete');
+export const findByAccountDeleteToken = (token: string): Promise<UserDocument | undefined | null> =>
+    findByToken(token, 'delete');
 
 /**
  * Find a user that holds an email-verification token.
@@ -197,7 +199,7 @@ export const findByAccountDeleteToken = (
  *
  * @param token
  */
-export const findByEmailVerifyToken = (token: string): Promise<IUserDocument | undefined | null> =>
+export const findByEmailVerifyToken = (token: string): Promise<UserDocument | undefined | null> =>
     findByToken(token, 'verify');
 
 /**
@@ -221,7 +223,7 @@ export const findByEmailVerifyToken = (token: string): Promise<IUserDocument | u
  * @param user - the loaded document, kept in step with the write for callers that read it back
  * @param token - the token value to spend
  */
-export const consumeToken = (user: IUserDocument, token: string): Promise<boolean> =>
+export const consumeToken = (user: UserDocument, token: string): Promise<boolean> =>
     userRepository.tokenRemove(user.id, token).then(({ modifiedCount }) => {
         user.tokens = user.tokens.filter((tk) => tk.token !== token);
         // `true` only for the caller whose write actually removed it. Two simultaneous uses of one
@@ -237,7 +239,7 @@ export const consumeToken = (user: IUserDocument, token: string): Promise<boolea
 export const removeById = (
     id: string,
     hardDelete = false
-): Promise<IResponseSuccess<IUserDocument> | IResponseSuccess<undefined> | IResponseReject> =>
+): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> =>
     userRepository.findById(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
         return remove(user, hardDelete);

@@ -26,10 +26,9 @@ import path from 'node:path';
 const REPO_ROOT = path.resolve(__dirname, '..');
 
 const ENGINES = ['docker', 'podman'] as const;
-type TEngine = (typeof ENGINES)[number];
+type Engine = (typeof ENGINES)[number];
 
-const isEngine = (value: string | undefined): value is TEngine =>
-    ENGINES.includes(value as TEngine);
+const isEngine = (value: string | undefined): value is Engine => ENGINES.includes(value as Engine);
 
 /** `CONTAINER_ENGINE=podman` in `.env`, read without pulling in the app's config loader. */
 const engineFromEnvironmentFile = (): string | undefined => {
@@ -43,10 +42,10 @@ const engineFromEnvironmentFile = (): string | undefined => {
 };
 
 /** Whether the binary answers at all — `--version` is the cheapest question both engines accept. */
-const installed = (engine: TEngine): boolean =>
+const installed = (engine: Engine): boolean =>
     spawnSync(engine, ['--version'], { stdio: 'ignore' }).status === 0;
 
-const resolveEngine = (): TEngine => {
+const resolveEngine = (): Engine => {
     const requested = process.env.CONTAINER_ENGINE ?? engineFromEnvironmentFile();
 
     if (requested !== undefined && !isEngine(requested)) {

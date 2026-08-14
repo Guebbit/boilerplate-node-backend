@@ -12,7 +12,7 @@
  * | `cleanup.ts`  | tearing down carts when a user or product is deleted      |
  */
 
-export type { ICartLine, ICartView } from './view';
+export type { CartLine, CartView } from './view';
 
 export {
     cartGet,

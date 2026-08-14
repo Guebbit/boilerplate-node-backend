@@ -4,12 +4,12 @@
  */
 
 /** A line as the rules see it. Absent `product` means the reference no longer resolves. */
-export interface IOrderLineCandidate {
+export interface OrderLineCandidate {
     quantity?: number;
     product?: unknown;
 }
 
-export type TOrderLinesVerdict =
+export type OrderLinesVerdict =
     | { ok: true }
     | { ok: false; reason: 'no-lines' }
     | { ok: false; reason: 'product-missing' };
@@ -20,7 +20,7 @@ export type TOrderLinesVerdict =
  * @param lines - candidate lines, already joined to their products
  * @returns `ok`, or the reason the whole set is refused
  */
-export const checkOrderLines = (lines: readonly IOrderLineCandidate[]): TOrderLinesVerdict => {
+export const checkOrderLines = (lines: readonly OrderLineCandidate[]): OrderLinesVerdict => {
     if (lines.length === 0) return { ok: false, reason: 'no-lines' };
     if (lines.some(({ product }) => product === undefined || product === null))
         return { ok: false, reason: 'product-missing' };

@@ -19,7 +19,7 @@
  */
 
 export {
-    ERefreshTokenExpiryTime,
+    RefreshTokenExpiryTime,
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getAccessTokenSecret,
@@ -28,7 +28,7 @@ export {
 } from './tokens';
 
 export {
-    type ITokenData,
+    type TokenData,
     verifyAccessToken,
     verifyRefreshToken,
     createRefreshToken,
@@ -47,4 +47,4 @@ export {
  * The CRUD stays internal — it is served by this module's own routes.
  */
 export { addressForCheckout } from './addresses-service';
-export type { IAddressItem } from './addresses-model';
+export type { AddressItem } from './addresses-model';

@@ -8,7 +8,7 @@
  *
  * WHAT STAYS SHARED is what more than one domain reads: the four credentials (the users own them,
  * the orders quote them, and the frontend's e2e specs type them into a real login form) and
- * `ISeedCartItem`, which describes both a line in a user's cart and a line in an order.
+ * `SeedCartItem`, which describes both a line in a user's cart and a line in an order.
  *
  * `cart` contributes no fragment, and that is correct rather than an omission: a cart is embedded
  * in its user, so the cart records live in the users fragment. A module with nothing to seed simply
@@ -24,18 +24,18 @@
  */
 
 import path from 'node:path';
-import { REPO_ROOT, type IContractBundle, type TSegment } from './fragments';
+import { REPO_ROOT, type ContractBundle, type Segment } from './fragments';
 
 /** The domains that contribute records, in declaration order. */
 export const SEED_SECTION_ORDER = ['users', 'products', 'orders', 'wishlist'] as const;
 
-export type TSeedSectionName = (typeof SEED_SECTION_ORDER)[number];
+export type SeedSectionName = (typeof SEED_SECTION_ORDER)[number];
 
 /** One blank line between two top-level declarations — the file's own spacing. */
 const SECTION_SEPARATOR = '\n\n';
 
 /** Where a module's slice of the dataset lives. */
-export const seedFragment = (section: TSeedSectionName): string =>
+export const seedFragment = (section: SeedSectionName): string =>
     path.join(REPO_ROOT, 'src', 'modules', section, 'seed-identities.fragment.ts');
 
 /** The prose, the credentials, and the one interface two domains share. */
@@ -46,11 +46,11 @@ const HEADER_FRAGMENT = path.join(
     'seed-identities.header.fragment.ts'
 );
 
-export const seedIdentitiesBundle: IContractBundle = {
+export const seedIdentitiesBundle: ContractBundle = {
     name: 'seed-identities',
     label: 'db/seeds/seed-identities.ts',
     output: path.join(REPO_ROOT, 'db', 'seeds', 'seed-identities.ts'),
-    segments: (): TSegment[] => [
+    segments: (): Segment[] => [
         {
             parts: [HEADER_FRAGMENT, ...SEED_SECTION_ORDER.map((section) => seedFragment(section))],
             separator: SECTION_SEPARATOR

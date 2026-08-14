@@ -1,4 +1,4 @@
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { registerAuditSink } from '@infrastructure/observability/audit';
 import { auditLogService } from './service';
 
@@ -24,4 +24,4 @@ registerAuditSink(auditLogService.record);
 
 export default {
     name: 'audit-logs'
-} satisfies IAppModule;
+} satisfies AppModule;

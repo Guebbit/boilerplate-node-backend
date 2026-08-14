@@ -32,9 +32,9 @@ import { parse } from 'yaml';
 const ROOT = path.resolve(__dirname, '../..');
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
-type TSource = 'params' | 'body' | 'query';
+type Source = 'params' | 'body' | 'query';
 
-interface IMountedRoute {
+interface MountedRoute {
     method: string;
     /** Full express path, e.g. `/products/:id/hard`. */
     expressPath: string;
@@ -127,9 +127,9 @@ const readControllerImports = (source: string, routeFile: string): Map<string, s
  * everything before it is middleware, and `routeFlag('hardDelete')` in particular is a call, not
  * a bare identifier, so it never wins.
  */
-const readMountedRoutes = (): IMountedRoute[] => {
+const readMountedRoutes = (): MountedRoute[] => {
     const prefixes = readMountPrefixes();
-    const routes: IMountedRoute[] = [];
+    const routes: MountedRoute[] = [];
 
     for (const [routeFile, prefix] of prefixes) {
         let source: string | undefined;
@@ -168,13 +168,13 @@ const readMountedRoutes = (): IMountedRoute[] => {
  * (`['params', 'body']`) that happens to also respond — a controller calling it reads those two
  * sources just as surely as if it had written them out.
  */
-const readDeclaredSources = (controllerFile: string): Set<TSource> => {
+const readDeclaredSources = (controllerFile: string): Set<Source> => {
     const source = read(controllerFile);
-    const declared = new Set<TSource>();
+    const declared = new Set<Source>();
 
     for (const [, list] of source.matchAll(/sources:\s*\[([^\]]*)]/g))
         for (const [, name] of list.matchAll(/'(params|body|query)'/g))
-            declared.add(name as TSource);
+            declared.add(name as Source);
 
     if (source.includes('extractAndValidateId(')) {
         declared.add('params');
@@ -188,36 +188,36 @@ const readDeclaredSources = (controllerFile: string): Set<TSource> => {
  * dependency to carry for three fields, and anything this does not name is something the
  * comparison does not look at.
  */
-interface ISpecParameter {
+interface SpecParameter {
     in?: string;
     $ref?: string;
 }
 
-interface ISpecOperation {
-    parameters?: ISpecParameter[];
+interface SpecOperation {
+    parameters?: SpecParameter[];
     requestBody?: unknown;
 }
 
-type TSpecPathItem = Record<string, ISpecOperation | undefined> & {
-    parameters?: ISpecParameter[];
+type SpecPathItem = Record<string, SpecOperation | undefined> & {
+    parameters?: SpecParameter[];
 };
 
-interface ISpec {
-    paths: Record<string, TSpecPathItem>;
+interface Spec {
+    paths: Record<string, SpecPathItem>;
 }
 
 /** The sources `openapi.yaml` allows for one operation. */
 const readAllowedSources = (
-    spec: ISpec,
+    spec: Spec,
     specPath: string,
     method: string
-): Set<TSource> | undefined => {
+): Set<Source> | undefined => {
     const pathItem = spec.paths[specPath];
     const operation = pathItem?.[method];
     if (!operation) return undefined;
 
-    const allowed = new Set<TSource>();
-    const parameters: ISpecParameter[] = [
+    const allowed = new Set<Source>();
+    const parameters: SpecParameter[] = [
         ...(pathItem.parameters ?? []),
         ...(operation.parameters ?? [])
     ];
@@ -237,7 +237,7 @@ const readAllowedSources = (
     return allowed;
 };
 
-const spec = parse(read('openapi.yaml')) as ISpec;
+const spec = parse(read('openapi.yaml')) as Spec;
 const mountedRoutes = readMountedRoutes();
 
 describe('request sources agree with openapi.yaml', () => {
@@ -286,7 +286,7 @@ describe('request sources agree with openapi.yaml', () => {
      * the open question that doc's "deliberately not done yet" section holds.
      */
     it('no controller reads a source none of its routes declare', () => {
-        const byController = new Map<string, IMountedRoute[]>();
+        const byController = new Map<string, MountedRoute[]>();
         for (const route of mountedRoutes) {
             if (!route.controllerFile) continue;
             const existing = byController.get(route.controllerFile) ?? [];
@@ -297,7 +297,7 @@ describe('request sources agree with openapi.yaml', () => {
         const violations: string[] = [];
 
         for (const [controllerFile, routes] of byController) {
-            const allowed = new Set<TSource>();
+            const allowed = new Set<Source>();
             for (const route of routes)
                 for (const source of readAllowedSources(spec, route.specPath, route.method) ?? [])
                     allowed.add(source);

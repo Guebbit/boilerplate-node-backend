@@ -19,8 +19,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as authService from '@modules/account/service';
 import { userRepository } from '@modules/users';
-import type { IUserDocument } from '@modules/users';
-import type { IResponseSuccess, IResponseReject } from '@infrastructure/http/response';
+import type { UserDocument } from '@modules/users';
+import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 
 setupTestDb();
 
@@ -34,7 +34,7 @@ describe('authService.signup', () => {
         );
 
         expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserDocument>).data!.email).toBe('new@example.com');
+        expect((result as ResponseSuccess<UserDocument>).data!.email).toBe('new@example.com');
     });
 
     it('rejects when passwords do not match', async () => {
@@ -46,7 +46,7 @@ describe('authService.signup', () => {
         );
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).errors).toHaveLength(1);
+        expect((result as ResponseReject).errors).toHaveLength(1);
     });
 
     it('rejects with 409 when the email is already registered', async () => {
@@ -60,7 +60,7 @@ describe('authService.signup', () => {
         );
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(409);
+        expect((result as ResponseReject).status).toBe(409);
     });
 
     it('rejects with 422 when the email format is invalid', async () => {
@@ -69,14 +69,14 @@ describe('authService.signup', () => {
         expect(result.success).toBe(false);
         // 422 across the board for validation failures, auth included — that is what
         // openapi.yaml declares, and it never declares 400 at all.
-        expect((result as IResponseReject).status).toBe(422);
+        expect((result as ResponseReject).status).toBe(422);
     });
 
     it('rejects with 422 when the password is too short', async () => {
         const result = await authService.signup('short@example.com', 'shortpwd', 'abc', 'abc');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(422);
+        expect((result as ResponseReject).status).toBe(422);
     });
 });
 
@@ -87,7 +87,7 @@ describe('authService.login', () => {
         const result = await authService.login('login@example.com', PLAIN_PASSWORD);
 
         expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserDocument>).data!.email).toBe('login@example.com');
+        expect((result as ResponseSuccess<UserDocument>).data!.email).toBe('login@example.com');
     });
 
     it('rejects with 401 for the wrong password', async () => {
@@ -96,14 +96,14 @@ describe('authService.login', () => {
         const result = await authService.login('login@example.com', 'WrongPassword!');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(401);
+        expect((result as ResponseReject).status).toBe(401);
     });
 
     it('rejects with 401 for a non-existent email', async () => {
         const result = await authService.login('nobody@example.com', PLAIN_PASSWORD);
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(401);
+        expect((result as ResponseReject).status).toBe(401);
     });
 
     it('rejects soft-deleted users', async () => {
@@ -112,7 +112,7 @@ describe('authService.login', () => {
         const result = await authService.login('deleted@example.com', PLAIN_PASSWORD);
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(401);
+        expect((result as ResponseReject).status).toBe(401);
     });
 });
 
@@ -162,7 +162,7 @@ describe('authService.passwordChange', () => {
         const result = await authService.passwordChange(user, 'NewPassword1!', 'Different1!');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(422);
+        expect((result as ResponseReject).status).toBe(422);
     });
 
     it('rejects when the new password is too short', async () => {
@@ -170,7 +170,7 @@ describe('authService.passwordChange', () => {
         const result = await authService.passwordChange(user, 'abc', 'abc');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(422);
+        expect((result as ResponseReject).status).toBe(422);
     });
 
     it('actually changes the password so the new one can be used to log in', async () => {

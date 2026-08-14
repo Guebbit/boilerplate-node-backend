@@ -12,7 +12,7 @@ import { logger } from '@infrastructure/adapters/logger';
 jest.mock('@infrastructure/adapters/logger', () => ({ logger: { error: jest.fn() } }));
 
 declare module '@kernel/events' {
-    interface IDomainEventMap {
+    interface DomainEventMap {
         'test.thing-happened': { id: string };
     }
 }

@@ -18,7 +18,7 @@ import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factory';
 import { createOrder } from '@modules/orders/tests/factory';
 import { createUser } from '@modules/users/tests/factory';
-import type { IOrderDocumentItem } from '@modules/orders';
+import type { OrderDocumentItem } from '@modules/orders';
 
 setupTestDb();
 
@@ -277,8 +277,8 @@ describe('POST /cart/reorder/{orderId}', () => {
         const keyboard = await createProduct({ title: 'Keyboard' });
         const mouse = await createProduct({ title: 'Mouse' });
         const order = await createOrder(user, [
-            { product: keyboard, quantity: 2 } as unknown as IOrderDocumentItem,
-            { product: mouse, quantity: 1 } as unknown as IOrderDocumentItem
+            { product: keyboard, quantity: 2 } as unknown as OrderDocumentItem,
+            { product: mouse, quantity: 1 } as unknown as OrderDocumentItem
         ]);
 
         const response = await api()
@@ -306,7 +306,7 @@ describe('POST /cart/reorder/{orderId}', () => {
 
         // The same product arrives again via a reorder of an old order holding 3 of it.
         const order = await createOrder(user, [
-            { product, quantity: 3 } as unknown as IOrderDocumentItem
+            { product, quantity: 3 } as unknown as OrderDocumentItem
         ]);
 
         const response = await api()
@@ -323,8 +323,8 @@ describe('POST /cart/reorder/{orderId}', () => {
         const alive = await createProduct({ title: 'Alive' });
         const retired = await createProduct({ title: 'Retired', active: false });
         const order = await createOrder(user, [
-            { product: alive, quantity: 1 } as unknown as IOrderDocumentItem,
-            { product: retired, quantity: 4 } as unknown as IOrderDocumentItem
+            { product: alive, quantity: 1 } as unknown as OrderDocumentItem,
+            { product: retired, quantity: 4 } as unknown as OrderDocumentItem
         ]);
 
         const response = await api()
@@ -341,7 +341,7 @@ describe('POST /cart/reorder/{orderId}', () => {
         const { bearer, user } = await authenticateAs('user');
         const retired = await createProduct({ title: 'Retired', active: false });
         const order = await createOrder(user, [
-            { product: retired, quantity: 1 } as unknown as IOrderDocumentItem
+            { product: retired, quantity: 1 } as unknown as OrderDocumentItem
         ]);
 
         const response = await api()
@@ -357,7 +357,7 @@ describe('POST /cart/reorder/{orderId}', () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
         const product = await createProduct();
         const order = await createOrder(owner, [
-            { product, quantity: 1 } as unknown as IOrderDocumentItem
+            { product, quantity: 1 } as unknown as OrderDocumentItem
         ]);
         const { bearer } = await authenticateAs('user');
 

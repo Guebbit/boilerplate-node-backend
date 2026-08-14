@@ -1,12 +1,12 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { auditLogRepository } from '@modules/audit-logs';
-import { coreAuditActions, type IAuditEntry } from '@infrastructure/observability/audit';
-import type { IAuditLogDocument } from '@modules/audit-logs';
+import { coreAuditActions, type AuditEntry } from '@infrastructure/observability/audit';
+import type { AuditLogDocument } from '@modules/audit-logs';
 
 setupTestDb();
 
 /** A complete entry, shaped exactly as `emitAuditEvent` hands one to the sink. */
-const makeEntry = (overrides: Partial<IAuditEntry> = {}): Partial<IAuditLogDocument> =>
+const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocument> =>
     ({
         actor_user_id: 'user-1',
         actor_role: 'user',
@@ -15,7 +15,7 @@ const makeEntry = (overrides: Partial<IAuditEntry> = {}): Partial<IAuditLogDocum
         timestamp: new Date('2026-08-01T10:00:00.000Z'),
         level: 'info',
         ...overrides
-    }) as Partial<IAuditLogDocument>;
+    }) as Partial<AuditLogDocument>;
 
 /*
  * Every fixture below uses `coreAuditActions`, never a domain's.
@@ -48,7 +48,7 @@ describe('auditLogRepository', () => {
         it('rejects an entry missing a required field', async () => {
             const incomplete = {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED
-            } as Partial<IAuditLogDocument>;
+            } as Partial<AuditLogDocument>;
 
             await expect(auditLogRepository.create(incomplete)).rejects.toThrow();
         });

@@ -22,7 +22,7 @@
  */
 
 import path from 'node:path';
-import { REPO_ROOT, type IContractBundle, type TSegment } from './fragments';
+import { REPO_ROOT, type ContractBundle, type Segment } from './fragments';
 
 /** The order the groups appear in — auth first, then the path a user walks through the shop. */
 export const ANALYTICS_SECTION_ORDER = [
@@ -34,13 +34,13 @@ export const ANALYTICS_SECTION_ORDER = [
     'payments'
 ] as const;
 
-export type TAnalyticsSectionName = (typeof ANALYTICS_SECTION_ORDER)[number];
+export type AnalyticsSectionName = (typeof ANALYTICS_SECTION_ORDER)[number];
 
 /** Comma, blank line: what goes BETWEEN two groups of entries and after none of them. */
 const SECTION_SEPARATOR = ',\n\n';
 
 /** Where a module's slice of the event names lives. */
-export const analyticsFragment = (section: TAnalyticsSectionName): string =>
+export const analyticsFragment = (section: AnalyticsSectionName): string =>
     path.join(REPO_ROOT, 'src', 'modules', section, 'analytics.fragment.ts');
 
 /** The prose, and the opening of the object literal. */
@@ -59,11 +59,11 @@ const FOOTER_FRAGMENT = path.join(
     'analytics-events.footer.fragment.ts'
 );
 
-export const analyticsEventsBundle: IContractBundle = {
+export const analyticsEventsBundle: ContractBundle = {
     name: 'analytics-events',
     label: 'src/infrastructure/observability/analytics-events.ts',
     output: path.join(REPO_ROOT, 'src', 'infrastructure', 'observability', 'analytics-events.ts'),
-    segments: (): TSegment[] => [
+    segments: (): Segment[] => [
         HEADER_FRAGMENT,
         {
             parts: ANALYTICS_SECTION_ORDER.map((section) => analyticsFragment(section)),

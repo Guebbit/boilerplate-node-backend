@@ -15,7 +15,7 @@
  */
 
 import {
-    ERefreshTokenExpiryTime,
+    RefreshTokenExpiryTime,
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getAccessTokenSecret,
@@ -60,9 +60,9 @@ describe('getExpiryTime', () => {
         process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM = '86400';
         process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
 
-        expect(getExpiryTime(ERefreshTokenExpiryTime.SHORT)).toBe(3600);
-        expect(getExpiryTime(ERefreshTokenExpiryTime.MEDIUM)).toBe(86_400);
-        expect(getExpiryTime(ERefreshTokenExpiryTime.LONG)).toBe(2_592_000);
+        expect(getExpiryTime(RefreshTokenExpiryTime.SHORT)).toBe(3600);
+        expect(getExpiryTime(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400);
+        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(2_592_000);
     });
 
     it('falls back to the access-token variable when no tier is given', () => {
@@ -75,7 +75,7 @@ describe('getExpiryTime', () => {
 
     it('returns 0 when the variable is unset', () => {
         expect(getExpiryTime()).toBe(0);
-        expect(getExpiryTime(ERefreshTokenExpiryTime.LONG)).toBe(0);
+        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(0);
     });
 
     it('returns 0 for an empty variable rather than NaN', () => {
@@ -97,14 +97,14 @@ describe('getExpiryTimeMilliseconds', () => {
     it('is the seconds value scaled by exactly 1000', () => {
         process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM = '86400';
 
-        expect(getExpiryTimeMilliseconds(ERefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
+        expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
     });
 
     it('honours the same tier routing as getExpiryTime', () => {
         process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '60';
         process.env.NODE_TOKEN_ACCESS_TIME = '900';
 
-        expect(getExpiryTimeMilliseconds(ERefreshTokenExpiryTime.SHORT)).toBe(60_000);
+        expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.SHORT)).toBe(60_000);
         expect(getExpiryTimeMilliseconds()).toBe(900_000);
     });
 

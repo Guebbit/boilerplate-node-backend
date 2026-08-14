@@ -4,9 +4,9 @@
  * No mocks, no database. The verdict-to-status mapping is covered in `service.test.ts`.
  */
 
-import { evaluateCheckout, type ICartLineCandidate } from '../../domain/rules';
+import { evaluateCheckout, type CartLineCandidate } from '../../domain/rules';
 
-const line = (quantity = 1, stock?: number): ICartLineCandidate => ({
+const line = (quantity = 1, stock?: number): CartLineCandidate => ({
     quantity,
     product: stock === undefined ? {} : { stock }
 });

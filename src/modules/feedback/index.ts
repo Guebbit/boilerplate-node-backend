@@ -11,4 +11,4 @@
 export { feedbackRequestService } from './service';
 export { feedbackRequestRepository } from './repository';
 export { feedbackRequestModel } from './model';
-export type { IFeedbackRequestDocument } from './model';
+export type { FeedbackRequestDocument } from './model';

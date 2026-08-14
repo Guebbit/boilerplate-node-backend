@@ -4,51 +4,51 @@
  * Source: asyncapi.yaml  |  Regenerate: npm run gen:asyncapi
  */
 
-export interface IObservabilityMetricsPayload {
+export interface ObservabilityMetricsPayload {
   'timestamp': string;
   'uptimeSeconds': number;
-  'memory': IAnonymousSchema3;
-  'http': IAnonymousSchema8;
-  'realtime': IAnonymousSchema11;
+  'memory': AnonymousSchema3;
+  'http': AnonymousSchema8;
+  'realtime': AnonymousSchema11;
 }
-export interface IAnonymousSchema3 {
+export interface AnonymousSchema3 {
   'rss': number;
   'heapUsed': number;
   'heapTotal': number;
   'external': number;
 }
-export interface IAnonymousSchema8 {
+export interface AnonymousSchema8 {
   'totalRequests': number;
   'totalErrors': number;
 }
-export interface IAnonymousSchema11 {
+export interface AnonymousSchema11 {
   'sseClients': number;
 }
-export interface IEmailJobPayload {
-  'request': IAnonymousSchema13;
+export interface EmailJobPayload {
+  'request': AnonymousSchema13;
   'from'?: string;
   'templateName': string;
   'data': Record<string, unknown>;
 }
-export interface IAnonymousSchema13 {
+export interface AnonymousSchema13 {
   'to': string;
   'subject'?: string;
   'text'?: string;
   'html'?: string;
 }
-export interface IPdfJobPayload {
+export interface PdfJobPayload {
   'templatePath': string;
   'templateData': Record<string, unknown>;
   'outputPath': string;
 }
 
-export type IMetricsSnapshotEvent = IObservabilityMetricsPayload;
-export type IMetricsUpdatedEvent = IObservabilityMetricsPayload;
-export type IHeartbeatEvent = IObservabilityMetricsPayload;
-export type IEmailJobMessage = IEmailJobPayload;
-export type IPdfJobMessage = IPdfJobPayload;
-export type IEmailJobConsumeMessage = IEmailJobPayload;
-export type IPdfJobConsumeMessage = IPdfJobPayload;
+export type MetricsSnapshotEvent = ObservabilityMetricsPayload;
+export type MetricsUpdatedEvent = ObservabilityMetricsPayload;
+export type HeartbeatEvent = ObservabilityMetricsPayload;
+export type EmailJobMessage = EmailJobPayload;
+export type PdfJobMessage = PdfJobPayload;
+export type EmailJobConsumeMessage = EmailJobPayload;
+export type PdfJobConsumeMessage = PdfJobPayload;
 
 /* Channel name constants (canonical identifiers from asyncapi.yaml) */
 
@@ -60,7 +60,7 @@ export const OBSERVABILITY_CHANNELS = {
 } as const;
 
 /* Union of every "observability." channel name */
-export type TObservabilityChannel = (typeof OBSERVABILITY_CHANNELS)[keyof typeof OBSERVABILITY_CHANNELS];
+export type ObservabilityChannel = (typeof OBSERVABILITY_CHANNELS)[keyof typeof OBSERVABILITY_CHANNELS];
 
 /* Channel names in the "worker." namespace */
 export const WORKER_CHANNELS = {
@@ -69,17 +69,17 @@ export const WORKER_CHANNELS = {
 } as const;
 
 /* Union of every "worker." channel name */
-export type TWorkerChannel = (typeof WORKER_CHANNELS)[keyof typeof WORKER_CHANNELS];
+export type WorkerChannel = (typeof WORKER_CHANNELS)[keyof typeof WORKER_CHANNELS];
 
 export const REALTIME_SSE_EVENT_NAMES = [
     "observability.heartbeat",
     "observability.metrics.snapshot",
     "observability.metrics.updated",
 ] as const;
-export type ISseEventName = (typeof REALTIME_SSE_EVENT_NAMES)[number];
-export interface ISseEventPayloadMap {
-    "observability.heartbeat": IHeartbeatEvent;
-    "observability.metrics.snapshot": IMetricsSnapshotEvent;
-    "observability.metrics.updated": IMetricsUpdatedEvent;
+export type SseEventName = (typeof REALTIME_SSE_EVENT_NAMES)[number];
+export interface SseEventPayloadMap {
+    "observability.heartbeat": HeartbeatEvent;
+    "observability.metrics.snapshot": MetricsSnapshotEvent;
+    "observability.metrics.updated": MetricsUpdatedEvent;
 }
-export type ISseEventPayload<TEventName extends ISseEventName> = ISseEventPayloadMap[TEventName];
+export type SseEventPayload<TEventName extends SseEventName> = SseEventPayloadMap[TEventName];

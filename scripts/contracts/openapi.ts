@@ -18,7 +18,7 @@
  */
 
 import path from 'node:path';
-import { REPO_ROOT, type IContractBundle, type TSegment } from './fragments';
+import { REPO_ROOT, type ContractBundle, type Segment } from './fragments';
 
 /**
  * The canonical order the document is assembled in, by path-group prefix.
@@ -41,10 +41,10 @@ export const SECTION_ORDER = [
     'inventory'
 ] as const;
 
-export type TSectionName = (typeof SECTION_ORDER)[number];
+export type SectionName = (typeof SECTION_ORDER)[number];
 
 /** Where a section's fragment of `kind` lives in THIS repo. */
-export const sectionFragment = (section: TSectionName, kind: 'paths' | 'schemas'): string =>
+export const sectionFragment = (section: SectionName, kind: 'paths' | 'schemas'): string =>
     section === 'system'
         ? path.join(REPO_ROOT, 'shared', 'contracts', `system.${kind}.yaml`)
         : path.join(REPO_ROOT, 'src', 'modules', section, 'openapi', `${kind}.yaml`);
@@ -63,11 +63,11 @@ export const SHARED_SCHEMAS_FRAGMENT = path.join(REPO_ROOT, 'shared', 'contracts
 /** The lone `paths:` key, between the components and the path fragments. */
 export const PATHS_KEY_FRAGMENT = path.join(REPO_ROOT, 'shared', 'contracts', 'paths.header.yaml');
 
-export const openapiBundle: IContractBundle = {
+export const openapiBundle: ContractBundle = {
     name: 'openapi',
     label: 'openapi.yaml',
     output: path.join(REPO_ROOT, 'openapi.yaml'),
-    segments: (): TSegment[] => [
+    segments: (): Segment[] => [
         HEADER_FRAGMENT,
         SHARED_SCHEMAS_FRAGMENT,
         ...SECTION_ORDER.map((section) => sectionFragment(section, 'schemas')),

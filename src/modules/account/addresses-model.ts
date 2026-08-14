@@ -16,7 +16,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  */
 
 /** A stored address-book entry. */
-export interface IAddressItem {
+export interface AddressItem {
     _id?: Types.ObjectId;
     label?: string;
     fullName: string;
@@ -34,15 +34,15 @@ export interface IAddressItem {
 }
 
 /** Address book Document interface. A book id never reaches the wire. */
-export interface IAddressBookDocument extends Document {
+export interface AddressBookDocument extends Document {
     userId: Types.ObjectId;
-    items: IAddressItem[];
+    items: AddressItem[];
     createdAt?: Date;
     updatedAt?: Date;
 }
 
 /** Address book Document model type. Queries live in `./addresses-repository`. */
-export type IAddressBookModel = Model<IAddressBookDocument>;
+export type AddressBookModel = Model<AddressBookDocument>;
 
 const addressItemSchema = new Schema(
     {
@@ -66,7 +66,7 @@ const addressItemSchema = new Schema(
  * `unique: true` on `userId` — one book per user is a database fact, and every mutation is a
  * single `findOneAndUpdate({ userId }, …)`.
  */
-export const addressBookSchema = new Schema<IAddressBookDocument>(
+export const addressBookSchema = new Schema<AddressBookDocument>(
     {
         userId: {
             type: Schema.Types.ObjectId,
@@ -93,7 +93,7 @@ export const applyAddressBookTransform = applySerialization(addressBookSchema);
 /**
  * Model
  */
-export const addressBookModel = model<IAddressBookDocument, IAddressBookModel>(
+export const addressBookModel = model<AddressBookDocument, AddressBookModel>(
     'AddressBook',
     addressBookSchema
 );

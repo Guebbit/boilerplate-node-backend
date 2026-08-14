@@ -65,4 +65,4 @@ export const analyticsEvents = {
 } as const;
 
 /** Any name declared above. */
-export type TSharedAnalyticsEventName = (typeof analyticsEvents)[keyof typeof analyticsEvents];
+export type SharedAnalyticsEventName = (typeof analyticsEvents)[keyof typeof analyticsEvents];

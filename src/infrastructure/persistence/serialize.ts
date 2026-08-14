@@ -21,9 +21,9 @@ import type { ToObjectOptions } from 'mongoose';
  */
 
 /** A model's serializer: mutates a plain object into its wire shape and returns it. */
-export type TSerializeTransform = (serialized: Record<string, unknown>) => Record<string, unknown>;
+export type SerializeTransform = (serialized: Record<string, unknown>) => Record<string, unknown>;
 
-export interface ISerializeOptions {
+export interface SerializeOptions {
     /**
      * Delete `_id` instead of renaming it to `id`.
      *
@@ -43,11 +43,11 @@ export interface ISerializeOptions {
  * The one method this needs from a schema, named structurally.
  *
  * `Schema` cannot be spelled here as a parameter type: its generics carry the document type, so
- * `Schema<never>` rejects every real schema and `Schema<IProductDocument>` would only accept one
+ * `Schema<never>` rejects every real schema and `Schema<ProductDocument>` would only accept one
  * of the five. What the wiring actually touches is a single `set('toJSON', …)` call, so that is
  * what the signature asks for.
  */
-interface ISerializableSchema {
+interface SerializableSchema {
     set: (key: 'toJSON', value: ToObjectOptions) => unknown;
 }
 
@@ -59,10 +59,10 @@ interface ISerializableSchema {
  * keeps both halves — the `toJSON` wiring and the exported serializer — on one line per model.
  */
 export const applySerialization = (
-    schema: ISerializableSchema,
-    { dropId = false, omit = [], after, virtuals = true }: ISerializeOptions = {}
-): TSerializeTransform => {
-    const transform: TSerializeTransform = (serialized) => {
+    schema: SerializableSchema,
+    { dropId = false, omit = [], after, virtuals = true }: SerializeOptions = {}
+): SerializeTransform => {
+    const transform: SerializeTransform = (serialized) => {
         if (dropId) delete serialized._id;
         else if (serialized._id) {
             serialized.id = serialized._id.toString();

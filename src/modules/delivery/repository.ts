@@ -1,9 +1,9 @@
 import { shipmentModel, applyShipmentTransform } from './model';
-import type { IShipmentDocument } from './model';
+import type { ShipmentDocument } from './model';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -11,14 +11,14 @@ import {
  * Standard CRUD via the base factory, plus the lookups the courier actually makes.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-export const shipmentRepository: IBaseRepository<IShipmentDocument> & {
-    findByOrderId: (orderId: string) => Promise<IShipmentDocument | null>;
-    upsertForOrder: (orderId: string, trackingCode: string) => Promise<IShipmentDocument>;
-    findAllShipped: () => Promise<IShipmentDocument[]>;
+export const shipmentRepository: BaseRepository<ShipmentDocument> & {
+    findByOrderId: (orderId: string) => Promise<ShipmentDocument | null>;
+    upsertForOrder: (orderId: string, trackingCode: string) => Promise<ShipmentDocument>;
+    findAllShipped: () => Promise<ShipmentDocument[]>;
 } = {
-    ...createBaseRepository<IShipmentDocument>(shipmentModel, {
+    ...createBaseRepository<ShipmentDocument>(shipmentModel, {
         transform: applyShipmentTransform
     }),
 

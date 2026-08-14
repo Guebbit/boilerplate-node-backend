@@ -6,7 +6,7 @@
  */
 
 declare module '@kernel/events' {
-    interface IDomainEventMap {
+    interface DomainEventMap {
         /**
          * A user account is about to be destroyed. **Hard delete only.**
          *

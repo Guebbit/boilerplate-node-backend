@@ -1,4 +1,4 @@
-export interface ISeedUser {
+export interface SeedUser {
     id: string;
     username: string;
     email: string;
@@ -11,10 +11,10 @@ export interface ISeedUser {
      * these — see the note in `mockProfiles.ts` — but they belong to the identity, so a drift in
      * what the backend serves is still visible in one `diff`. */
     imageUrl: string;
-    cart: ISeedCartItem[];
+    cart: SeedCartItem[];
 }
 
-export const seedUsers: ISeedUser[] = [
+export const seedUsers: SeedUser[] = [
     {
         id: '65dd2bdb923652b7800fe180',
         username: 'root',

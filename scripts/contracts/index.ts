@@ -15,14 +15,14 @@
  * cross-cutting test all iterate this list.
  */
 
-import type { IContractBundle } from './fragments';
+import type { ContractBundle } from './fragments';
 import { openapiBundle } from './openapi';
 import { asyncapiBundle } from './asyncapi';
 import { analyticsEventsBundle } from './analyticsEvents';
 import { seedIdentitiesBundle } from './seedIdentities';
 import { brunoBundle, insomniaBundle, mockoonBundle } from './clientCollections';
 
-export const CONTRACT_BUNDLES: readonly IContractBundle[] = [
+export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,
     asyncapiBundle,
     analyticsEventsBundle,
@@ -33,7 +33,7 @@ export const CONTRACT_BUNDLES: readonly IContractBundle[] = [
 ] as const;
 
 /** One bundle by its CLI handle. */
-export const findBundle = (name: string): IContractBundle | undefined =>
+export const findBundle = (name: string): ContractBundle | undefined =>
     CONTRACT_BUNDLES.find((bundle) => bundle.name === name);
 
 export * from './fragments';

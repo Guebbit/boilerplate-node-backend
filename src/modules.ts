@@ -9,7 +9,7 @@
  * from `dependsOn`, not from position. Keep it alphabetical so diffs stay boring.
  */
 
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import account from './modules/account/module';
 import auditLogs from './modules/audit-logs/module';
 import cart from './modules/cart/module';
@@ -24,7 +24,7 @@ import products from './modules/products/module';
 import users from './modules/users/module';
 import wishlist from './modules/wishlist/module';
 
-export const enabledModules: IAppModule[] = [
+export const enabledModules: AppModule[] = [
     account,
     auditLogs,
     cart,

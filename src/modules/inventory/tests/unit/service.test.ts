@@ -26,7 +26,7 @@ import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
-import type { IResponseReject } from '@infrastructure/http/response';
+import type { ResponseReject } from '@infrastructure/http/response';
 
 // The confirmation email rides checkout; this suite is about the ledger, not the copy.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -36,7 +36,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 
 setupTestDb();
 
-const asReject = (result: unknown) => result as IResponseReject;
+const asReject = (result: unknown) => result as ResponseReject;
 
 beforeEach(() => {
     registerModules([

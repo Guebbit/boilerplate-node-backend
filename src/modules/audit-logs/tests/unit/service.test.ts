@@ -21,8 +21,8 @@
 import { auditLogService } from '@modules/audit-logs';
 import { auditLogRepository } from '@modules/audit-logs';
 import { logger } from '@infrastructure/adapters/logger';
-import { type IAuditEntry } from '@infrastructure/observability/audit';
-import type { IAuditLogDocument } from '@modules/audit-logs';
+import { type AuditEntry } from '@infrastructure/observability/audit';
+import type { AuditLogDocument } from '@modules/audit-logs';
 
 jest.mock('@modules/audit-logs/repository', () => ({
     auditLogRepository: {
@@ -38,7 +38,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 const mockedRepository = auditLogRepository as jest.Mocked<typeof auditLogRepository>;
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
-const makeEntry = (overrides: Partial<IAuditEntry> = {}): IAuditEntry =>
+const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry =>
     ({
         actor_user_id: 'user-1',
         actor_role: 'user',
@@ -47,11 +47,11 @@ const makeEntry = (overrides: Partial<IAuditEntry> = {}): IAuditEntry =>
         timestamp: new Date('2026-08-01T10:00:00.000Z'),
         level: 'info',
         ...overrides
-    }) as IAuditEntry;
+    }) as AuditEntry;
 
 describe('auditLogService.record', () => {
     it('hands the entry to the repository unchanged', () => {
-        mockedRepository.create.mockResolvedValue({} as IAuditLogDocument);
+        mockedRepository.create.mockResolvedValue({} as AuditLogDocument);
         const entry = makeEntry({ target_id: 'prod-9' });
 
         auditLogService.record(entry);
@@ -62,7 +62,7 @@ describe('auditLogService.record', () => {
     it('returns void rather than the write, so no caller can await it', () => {
         // The signature is the contract: a caller that could await this would be able to make a
         // request wait on the audit trail, which is the coupling `record` exists to avoid.
-        mockedRepository.create.mockResolvedValue({} as IAuditLogDocument);
+        mockedRepository.create.mockResolvedValue({} as AuditLogDocument);
 
         expect(auditLogService.record(makeEntry())).toBeUndefined();
     });
@@ -117,7 +117,7 @@ describe('auditLogService.record', () => {
 
 describe('auditLogService.search', () => {
     it('passes the filters through untouched', async () => {
-        const page = { items: [] as IAuditLogDocument[], total: 0 };
+        const page = { items: [] as AuditLogDocument[], total: 0 };
         mockedRepository.search.mockResolvedValue(page);
         const filters = { actor: 'user-1', outcome: 'failure' as const, limit: 25 };
 

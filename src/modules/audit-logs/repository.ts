@@ -1,5 +1,5 @@
 import { auditLogModel, applyAuditLogTransform } from './model';
-import type { IAuditLogDocument } from './model';
+import type { AuditLogDocument } from './model';
 import { createBaseRepository } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -11,7 +11,7 @@ import { createBaseRepository } from '@infrastructure/persistence/base-repositor
  */
 
 /** What `search` accepts, mirroring the query parameters `GET /observability/audit` declares. */
-export interface IAuditLogSearchFilters {
+export interface AuditLogSearchFilters {
     actor?: string;
     action?: string;
     outcome?: 'success' | 'failure';
@@ -20,7 +20,7 @@ export interface IAuditLogSearchFilters {
     limit?: number;
 }
 
-const base = createBaseRepository<IAuditLogDocument>(auditLogModel, {
+const base = createBaseRepository<AuditLogDocument>(auditLogModel, {
     transform: applyAuditLogTransform,
     searchable: {
         // All three are closed vocabularies or opaque ids — matched verbatim, never as a regex.
@@ -46,8 +46,8 @@ const base = createBaseRepository<IAuditLogDocument>(auditLogModel, {
  * 3,412" instead of "50 of 50".
  */
 const search = (
-    filters: IAuditLogSearchFilters = {}
-): Promise<{ items: IAuditLogDocument[]; total: number }> => {
+    filters: AuditLogSearchFilters = {}
+): Promise<{ items: AuditLogDocument[]; total: number }> => {
     const where = base.buildWhere(filters);
     if (filters.since) where.timestamp = { $gt: filters.since };
 

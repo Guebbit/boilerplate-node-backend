@@ -12,23 +12,23 @@ import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { toObjectId } from '@infrastructure/persistence/base-repository';
 import { orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
-import type { IProductDocument } from '@modules/products';
+import type { ProductDocument } from '@modules/products';
 import { cartRepository } from '../repository';
-import { toCartView, type ICartView } from './view';
+import { toCartView, type CartView } from './view';
 
 /** A line the order asks for, resolved against today's catalogue. */
-interface IReorderLine {
+interface ReorderLine {
     productId: string;
     quantity: number;
     /** `null` when the product is gone, inactive or soft-deleted — not addable. */
-    product: IProductDocument | null;
+    product: ProductDocument | null;
 }
 
 /**
@@ -56,10 +56,10 @@ interface IReorderLine {
 export const reorderIntoCart = (
     userId: string,
     orderId: string
-): Promise<IResponseSuccess<ICartView> | IResponseReject> =>
+): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     orderRepository
         .findByIdScoped(orderId, orderRepository.visibleScope(userId))
-        .then<IResponseSuccess<ICartView> | IResponseReject>((order) => {
+        .then<ResponseSuccess<CartView> | ResponseReject>((order) => {
             if (!order) return generateReject(404, [t('cart.reorder.order-not-found')]);
 
             /*
@@ -78,7 +78,7 @@ export const reorderIntoCart = (
 
             return Promise.all(
                 requested.map(
-                    (line): Promise<IReorderLine> =>
+                    (line): Promise<ReorderLine> =>
                         productRepository
                             .findOne({
                                 _id: toObjectId(line.productId),

@@ -3,7 +3,7 @@ import {
     emitAnalyticsEvent,
     shutdownAnalytics,
     analyticsEvents,
-    type IAnalyticsEvent
+    type AnalyticsEvent
 } from '@infrastructure/observability/analytics';
 
 // ─── Mock posthog-node ────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ describe('emitAnalyticsEvent()', () => {
 
     it('calls client.capture with correct distinctId and event', () => {
         enablePostHog();
-        const event: IAnalyticsEvent = {
+        const event: AnalyticsEvent = {
             distinctId: 'user-42',
             event: analyticsEvents.CART_ITEM_ADDED,
             properties: { product_id: 'prod-7', quantity: 2 }

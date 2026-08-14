@@ -10,7 +10,7 @@
 
 import { Types } from 'mongoose';
 import { seedUsers } from '@seed-identities';
-import { upsertById, type TSeedOutcome } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { userRepository } from './repository';
 
 export const userFixtures = seedUsers.map((user) => ({
@@ -30,5 +30,5 @@ export const userFixtures = seedUsers.map((user) => ({
 }));
 
 /** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
-export const seedUsersCollection = (): Promise<TSeedOutcome[]> =>
+export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => upsertById(userRepository, user)));

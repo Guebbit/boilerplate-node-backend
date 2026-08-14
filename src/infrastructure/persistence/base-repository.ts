@@ -7,12 +7,12 @@ import {
     addRegexFilter,
     escapeRegex,
     DEFAULT_SORT,
-    type IPaginatedMeta,
-    type IPaginationInput
+    type PaginatedMeta,
+    type PaginationInput
 } from './search';
 
 /** Pagination/sort options shared across all repository `findAll` calls. */
-export interface IFindAllOptions {
+export interface FindAllOptions {
     sort?: Record<string, 1 | -1>;
     skip?: number;
     limit?: number;
@@ -28,7 +28,7 @@ export interface IFindAllOptions {
  * Empty/blank/nullish values are skipped throughout — `?text=` is an absent filter, not a
  * request to match the empty string.
  */
-export interface ISearchSpec {
+export interface SearchSpec {
     /** Holds a document id. Coerced to `ObjectId` — a string never matches one. */
     objectIds?: Record<string, string>;
     /** Matched verbatim (trimmed). */
@@ -58,7 +58,7 @@ export interface ISearchSpec {
  * TypeScript denies an implicit index signature, so the stricter type would force every caller
  * to cast. The one cast that makes keys readable lives in `buildWhere` instead.
  */
-export type TSearchFilters = object;
+export type SearchFilters = object;
 
 /**
  * A model's wire-shape serializer — `applySerialization`'s return value, exported by each model
@@ -69,7 +69,7 @@ export type TSearchFilters = object;
  * objects still carry `_id`/`__v`. Passing it to the factory is what lets repositories return
  * serialized results instead of every service remembering to map.
  */
-export type TTransform = (serialized: Record<string, unknown>) => Record<string, unknown>;
+export type Transform = (serialized: Record<string, unknown>) => Record<string, unknown>;
 
 /** Treat empty/blank/nullish as "the caller did not filter on this". */
 const isPresent = (value: unknown): boolean =>
@@ -90,8 +90,8 @@ export const toObjectId = (value: unknown): Types.ObjectId => new Types.ObjectId
  * Reached through the bound `buildWhere` on the factory result — the order repository uses it
  * to build an aggregation `$match` from the same rules.
  */
-const buildWhere = (filters: TSearchFilters, spec: ISearchSpec): Record<string, unknown> => {
-    // The one cast, confined here — see `TSearchFilters`.
+const buildWhere = (filters: SearchFilters, spec: SearchSpec): Record<string, unknown> => {
+    // The one cast, confined here — see `SearchFilters`.
     const bag = filters as Record<string, unknown>;
     const where: Record<string, unknown> = {};
 
@@ -136,16 +136,16 @@ const buildWhere = (filters: TSearchFilters, spec: ISearchSpec): Record<string, 
 };
 
 /** A page of already-normalized results plus its pagination meta. */
-export interface IPaginatedResult<TDocument> {
+export interface PaginatedResult<TDocument> {
     items: TDocument[];
-    meta: IPaginatedMeta;
+    meta: PaginatedMeta;
 }
 
-export interface IBaseRepositoryOptions {
+export interface BaseRepositoryOptions {
     /** The model's wire-shape serializer, applied by `normalize` — and so by `search`. */
-    transform: TTransform;
+    transform: Transform;
     /** What `search()` accepts. Omit for collections that are never searched. */
-    searchable?: ISearchSpec;
+    searchable?: SearchSpec;
 }
 
 /**
@@ -155,7 +155,7 @@ export interface IBaseRepositoryOptions {
  * inferred shape at an export boundary (TS7056) once it is spread into a repository object.
  * Naming the contract fixes that, and doubles as the one place to read what a repository can do.
  */
-export interface IBaseRepository<TDocument extends Document> {
+export interface BaseRepository<TDocument extends Document> {
     /**
      * Fetch one document by `_id`, as a hydrated document.
      *
@@ -175,7 +175,7 @@ export interface IBaseRepository<TDocument extends Document> {
      */
     findByIdRaw: (id: string) => Promise<TDocument | null>;
     /** Fetch a filtered, sorted, paginated list as lean objects — **not** normalized. */
-    findAll: (where?: QueryFilter<TDocument>, options?: IFindAllOptions) => Promise<TDocument[]>;
+    findAll: (where?: QueryFilter<TDocument>, options?: FindAllOptions) => Promise<TDocument[]>;
     /** Count the documents matching a filter. */
     count: (where?: QueryFilter<TDocument>) => Promise<number>;
     /** Insert a new document. */
@@ -186,14 +186,14 @@ export interface IBaseRepository<TDocument extends Document> {
     deleteOne: (document: TDocument) => Promise<void>;
     /** Filter → count → page → normalize, per the declared search spec. */
     search: (
-        filters?: TSearchFilters,
+        filters?: SearchFilters,
         scope?: Record<string, unknown>,
         sort?: Record<string, 1 | -1>
-    ) => Promise<IPaginatedResult<TDocument>>;
+    ) => Promise<PaginatedResult<TDocument>>;
     /** Apply the model's transform to lean/aggregate output. */
     normalize: (items: unknown[]) => TDocument[];
     /** Build a Mongo filter from a filter bag, per the declared search spec. */
-    buildWhere: (filters: TSearchFilters) => Record<string, unknown>;
+    buildWhere: (filters: SearchFilters) => Record<string, unknown>;
 }
 
 /**
@@ -204,8 +204,8 @@ export interface IBaseRepository<TDocument extends Document> {
  */
 export function createBaseRepository<TDocument extends Document>(
     mongooseModel: Model<TDocument>,
-    options: IBaseRepositoryOptions
-): IBaseRepository<TDocument> {
+    options: BaseRepositoryOptions
+): BaseRepository<TDocument> {
     const { transform, searchable = {} } = options;
 
     /**
@@ -239,7 +239,7 @@ export function createBaseRepository<TDocument extends Document>(
      */
     const findAll = (
         where: QueryFilter<TDocument> = {},
-        { sort = { createdAt: -1 as const }, skip = 0, limit = 10 }: IFindAllOptions = {}
+        { sort = { createdAt: -1 as const }, skip = 0, limit = 10 }: FindAllOptions = {}
     ): Promise<TDocument[]> =>
         mongooseModel
             .find({ ...where })
@@ -278,13 +278,13 @@ export function createBaseRepository<TDocument extends Document>(
      * reject, never throw synchronously.
      */
     const search = async (
-        filters: TSearchFilters = {},
+        filters: SearchFilters = {},
         scope: Record<string, unknown> = {},
         // Total sort by default: `count` and `findAll` are separate queries, so a tie can put
         // one document on two pages — see `DEFAULT_SORT`.
         sort: Record<string, 1 | -1> = DEFAULT_SORT
-    ): Promise<IPaginatedResult<TDocument>> => {
-        const pagination = normalizePagination(filters as IPaginationInput);
+    ): Promise<PaginatedResult<TDocument>> => {
+        const pagination = normalizePagination(filters as PaginationInput);
         // `scope` merged last and wins: it is the caller's authorization boundary (own rows,
         // publicly visible rows), which no client-supplied filter may widen.
         const where = { ...buildWhere(filters, searchable), ...scope } as QueryFilter<TDocument>;
@@ -311,6 +311,6 @@ export function createBaseRepository<TDocument extends Document>(
         search,
         normalize,
         // Bound to this collection's spec, so callers pass filters only.
-        buildWhere: (filters: TSearchFilters) => buildWhere(filters, searchable)
+        buildWhere: (filters: SearchFilters) => buildWhere(filters, searchable)
     };
 }

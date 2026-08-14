@@ -12,9 +12,9 @@
 
 export { userService } from './service';
 export { userRepository } from './repository';
-export { userModel, applyUserTransform, ETokenType } from './model';
+export { userModel, applyUserTransform, TokenType } from './model';
 export { zodUserSchema } from './validation';
-export type { IUserDocument, IUser, IToken } from './model';
+export type { UserDocument, UserRecord, Token } from './model';
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
 export { USER_DELETED } from './events';

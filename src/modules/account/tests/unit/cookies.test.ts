@@ -22,7 +22,7 @@ import {
     createLoggedCookie,
     destroyLoggedCookie
 } from '@modules/account/cookies';
-import { ERefreshTokenExpiryTime } from '@modules/account';
+import { RefreshTokenExpiryTime } from '@modules/account';
 
 /** Captures the (name, value, options) triples the module hands to Express. */
 const makeResponse = () =>
@@ -89,7 +89,7 @@ describe('createRefreshCookie', () => {
     it('derives maxAge from the requested expiry tier', () => {
         const response = makeResponse();
 
-        createRefreshCookie(response, 'token', ERefreshTokenExpiryTime.SHORT);
+        createRefreshCookie(response, 'token', RefreshTokenExpiryTime.SHORT);
 
         // 3600s from NODE_TOKEN_REFRESH_TIME_SHORT, in milliseconds.
         expect(response.cookie.mock.calls[0][2].maxAge).toBe(3_600_000);
@@ -133,7 +133,7 @@ describe('createLoggedCookie', () => {
     it('sets a readable isAuth hint rather than a credential', () => {
         const response = makeResponse();
 
-        createLoggedCookie(response, ERefreshTokenExpiryTime.SHORT);
+        createLoggedCookie(response, RefreshTokenExpiryTime.SHORT);
 
         const [name, value, options] = response.cookie.mock.calls[0];
         expect(name).toBe('isAuth');
@@ -148,7 +148,7 @@ describe('createLoggedCookie', () => {
     it('expires in step with the refresh cookie it describes', () => {
         const response = makeResponse();
 
-        createLoggedCookie(response, ERefreshTokenExpiryTime.SHORT);
+        createLoggedCookie(response, RefreshTokenExpiryTime.SHORT);
 
         // If the hint outlived the credential the UI would show a logged-in state for a session
         // the API has already stopped honouring.

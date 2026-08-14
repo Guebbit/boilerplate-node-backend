@@ -4,7 +4,7 @@
  * require changes in one place instead of every service.
  */
 
-export interface IPaginationInput {
+export interface PaginationInput {
     // `unknown` rather than `number | string | null`: these values come straight off a request,
     // where a repeated query key arrives as an array and a JSON body can hold anything. The
     // coercion below already copes; a narrower type would only force callers to cast.
@@ -12,13 +12,13 @@ export interface IPaginationInput {
     pageSize?: unknown;
 }
 
-export interface IPaginationResult {
+export interface PaginationResult {
     page: number;
     pageSize: number;
     skip: number;
 }
 
-export interface IPaginatedMeta {
+export interface PaginatedMeta {
     page: number;
     pageSize: number;
     totalItems: number;
@@ -56,7 +56,7 @@ const MAX_CONFIGURED_PAGE_SIZE = 100;
  * `NODE_SETTINGS_PAGINATION_PAGE_SIZE` makes the default deployment-tunable without touching
  * route code. It is a *default*, not a cap: an explicit `pageSize` from the caller still wins.
  */
-export const normalizePagination = (input: IPaginationInput = {}): IPaginationResult => {
+export const normalizePagination = (input: PaginationInput = {}): PaginationResult => {
     const page = Math.max(1, Number(input.page ?? 1) || 1);
     // `|| 0` collapses '', null, NaN and 0 alike into "the caller did not ask", which is what
     // lets the fallback below take over.
@@ -73,9 +73,9 @@ export const normalizePagination = (input: IPaginationInput = {}): IPaginationRe
  * Build pagination meta from total count.
  */
 export const buildPaginatedMeta = (
-    pagination: IPaginationResult,
+    pagination: PaginationResult,
     totalItems: number
-): IPaginatedMeta => ({
+): PaginatedMeta => ({
     page: pagination.page,
     pageSize: pagination.pageSize,
     totalItems,

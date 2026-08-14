@@ -21,15 +21,15 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { create, search, updateStatus, updateStatusById } from '@modules/feedback/service';
 import { feedbackRequestRepository } from '@modules/feedback';
 import { FeedbackRequestStatus } from '@types';
-import type { IResponseReject, IResponseSuccess } from '@infrastructure/http/response';
-import type { IFeedbackRequestDocument } from '@modules/feedback';
+import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
+import type { FeedbackRequestDocument } from '@modules/feedback';
 
 setupTestDb();
 
 const MISSING_ID = '507f1f77bcf86cd799439011';
 
-const asSuccess = (result: unknown) => result as IResponseSuccess<IFeedbackRequestDocument>;
-const asReject = (result: unknown) => result as IResponseReject;
+const asSuccess = (result: unknown) => result as ResponseSuccess<FeedbackRequestDocument>;
+const asReject = (result: unknown) => result as ResponseReject;
 
 /** A valid creation payload; overrides let each test vary one field at a time. */
 const makePayload = (overrides: Record<string, string> = {}) => ({

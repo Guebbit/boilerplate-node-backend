@@ -1,9 +1,9 @@
 import { productModel, applyProductTransform } from './model';
-import type { IProductDocument } from './model';
+import type { ProductDocument } from './model';
 import {
     createBaseRepository,
     toObjectId,
-    type IBaseRepository
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 
 /**
@@ -11,21 +11,21 @@ import {
  * Standard CRUD via the base factory, plus the catalogue's own query rules.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `IBaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
 /** One facet value with its count, as the aggregation returns it. */
-export interface IFacetCount {
+export interface FacetCount {
     name: string;
     count: number;
 }
 
-export const productRepository: IBaseRepository<IProductDocument> & {
+export const productRepository: BaseRepository<ProductDocument> & {
     publicScope: () => Record<string, unknown>;
-    facets: () => Promise<{ categories: IFacetCount[]; tags: IFacetCount[] }>;
+    facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
     decrementStock: (productId: string, quantity: number) => Promise<boolean>;
     incrementStock: (productId: string, quantity: number) => Promise<void>;
 } = {
-    ...createBaseRepository<IProductDocument>(productModel, {
+    ...createBaseRepository<ProductDocument>(productModel, {
         transform: applyProductTransform,
         searchable: {
             objectIds: { id: '_id' },

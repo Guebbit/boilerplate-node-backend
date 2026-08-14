@@ -9,9 +9,9 @@
  */
 
 import { sumLineItems } from '@modules/orders';
-import type { IProductDocument } from '@modules/products';
+import type { ProductDocument } from '@modules/products';
 import type { CartItem } from '@types';
-import type { ICartDocument } from '../model';
+import type { CartDocument } from '../model';
 
 /**
  * A cart line joined with the product it references.
@@ -21,13 +21,13 @@ import type { ICartDocument } from '../model';
  * the id off that field afterwards loses it exactly when a caller most needs to know which
  * product a broken line pointed at. {@link readCartLines} captures the id first.
  */
-export interface ICartLine extends CartItem {
+export interface CartLine extends CartItem {
     /** The joined product, or `null` for a reference that resolves to nothing. */
-    product: IProductDocument | null;
+    product: ProductDocument | null;
 }
 
 /** A cart line whose reference resolved — what an order may be built from. */
-export type TJoinedCartLine = ICartLine & { product: IProductDocument };
+export type JoinedCartLine = CartLine & { product: ProductDocument };
 
 /**
  * The cart as `openapi.yaml` declares it: `CartResponse`, built rather than serialized.
@@ -35,7 +35,7 @@ export type TJoinedCartLine = ICartLine & { product: IProductDocument };
  * Every cart endpoint answers with this — the reads directly, the mutations as their payload —
  * which is why no controller has to re-read the cart after changing it.
  */
-export interface ICartView {
+export interface CartView {
     items: CartItem[];
     summary: { itemsCount: number; totalQuantity: number; total: number };
 }
@@ -47,12 +47,12 @@ export interface ICartView {
  * cast. Spelled as the whole `items` key because `populate<T>` merges `T` over the document's
  * top-level properties — a dotted path is not a key it can merge on.
  */
-interface IPopulatedCart {
-    items: { productId: IProductDocument | null; quantity: number }[];
+interface PopulatedCart {
+    items: { productId: ProductDocument | null; quantity: number }[];
 }
 
 /** Narrow a line to one whose product actually exists. */
-export const isJoined = (line: ICartLine): line is TJoinedCartLine => line.product !== null;
+export const isJoined = (line: CartLine): line is JoinedCartLine => line.product !== null;
 
 /**
  * Join a cart's lines to their products, in one query.
@@ -60,13 +60,13 @@ export const isJoined = (line: ICartLine): line is TJoinedCartLine => line.produ
  * The ids are read before `populate()` runs, because populate replaces the reference field with
  * the fetched document — or with `null` for a product that has since been deleted.
  */
-export const readCartLines = (cart: ICartDocument | null): Promise<ICartLine[]> => {
+export const readCartLines = (cart: CartDocument | null): Promise<CartLine[]> => {
     if (!cart) return Promise.resolve([]);
 
     const productIds = cart.items.map(({ productId }) => productId.toString());
 
     // No `items = []` fallback: the schema defaults the array, so a hydrated cart always has one.
-    return cart.populate<IPopulatedCart>('items.productId').then(({ items }) =>
+    return cart.populate<PopulatedCart>('items.productId').then(({ items }) =>
         items.map(({ productId, quantity }, index) => ({
             productId: productIds[index],
             quantity,
@@ -84,7 +84,7 @@ export const readCartLines = (cart: ICartDocument | null): Promise<ICartLine[]> 
  * the cart from `productId`/`quantity` and looks products up in its own store. Use `cartGet`
  * where the joined product is actually needed.
  */
-export const toCartView = (cart: ICartDocument | null): Promise<ICartView> =>
+export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
     readCartLines(cart).then((lines) => {
         const { count, quantity, price } = sumLineItems(lines);
         return {

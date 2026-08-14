@@ -3,8 +3,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as userService from '@modules/users/service';
 import { userRepository } from '@modules/users';
-import type { IResponseSuccess, IResponseReject } from '@infrastructure/http/response';
-import type { IUserDocument } from '@modules/users';
+import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
+import type { UserDocument } from '@modules/users';
 
 setupTestDb();
 
@@ -292,7 +292,7 @@ describe('userService.updateById', () => {
         });
 
         expect(result.success).toBe(true);
-        const updated = (result as { data: IUserDocument }).data;
+        const updated = (result as { data: UserDocument }).data;
         expect(updated.username).toBe('new-name');
         expect(updated.admin).toBe(true);
     });
@@ -335,7 +335,7 @@ describe('userService.update', () => {
         const result = await userService.update(user, { username: 'direct-update' });
 
         expect(result.success).toBe(true);
-        expect((result as IResponseSuccess<IUserDocument>).data!.username).toBe('direct-update');
+        expect((result as ResponseSuccess<UserDocument>).data!.username).toBe('direct-update');
     });
 });
 
@@ -374,7 +374,7 @@ describe('userService.removeById', () => {
         const result = await userService.removeById('000000000000000000000000');
 
         expect(result.success).toBe(false);
-        expect((result as IResponseReject).status).toBe(404);
+        expect((result as ResponseReject).status).toBe(404);
     });
 });
 

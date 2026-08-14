@@ -5,7 +5,7 @@
  * text, and whatever renders it later resolves nothing. See that file for why.
  */
 
-import type { IEmailContent } from '@infrastructure/adapters/mailer';
+import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 
 /** "Your order is on its way", tracking code included — sent when an order reaches `shipped`. */
@@ -13,7 +13,7 @@ export const shipmentShippedEmail = (
     locale: string,
     name: string,
     trackingCode: string
-): IEmailContent => {
+): EmailContent => {
     const t = translator(locale);
     return {
         template: 'delivery.shipment-shipped.ejs',

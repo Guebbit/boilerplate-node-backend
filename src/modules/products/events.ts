@@ -6,7 +6,7 @@
  */
 
 declare module '@kernel/events' {
-    interface IDomainEventMap {
+    interface DomainEventMap {
         /**
          * A product is about to stop being reachable — soft-deleted, hard-deleted, or restored.
          *

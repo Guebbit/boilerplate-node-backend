@@ -15,13 +15,13 @@ import { createProduct } from '@modules/products/tests/factory';
 import { createOrder } from '@modules/orders/tests/factory';
 import { orderService } from '@modules/orders/service';
 import { orderRepository } from '@modules/orders';
-import type { IOrderDocumentItem } from '@modules/orders';
+import type { OrderDocumentItem } from '@modules/orders';
 
 setupTestDb();
 
 const seedOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
     const product = await createProduct();
-    return createOrder(user, [{ product, quantity: 1 } as unknown as IOrderDocumentItem]);
+    return createOrder(user, [{ product, quantity: 1 } as unknown as OrderDocumentItem]);
 };
 
 const asUser = (user: { id: string }) => ({ id: user.id, admin: false });

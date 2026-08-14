@@ -25,7 +25,7 @@
 import type { Response } from 'express';
 
 /** A `Response` whose `status`/`json` are jest mocks, so tests can assert on what was sent. */
-export type TResponseStub = Response & { status: jest.Mock; json: jest.Mock };
+export type ResponseStub = Response & { status: jest.Mock; json: jest.Mock };
 
 /**
  * A chainable Express response stub.
@@ -33,11 +33,11 @@ export type TResponseStub = Response & { status: jest.Mock; json: jest.Mock };
  * @returns a `Response` whose `status()` and `json()` record their arguments and return the
  *          response itself, so `status(...).json(...)` works as it does in production code
  */
-export const makeResponseStub = (): TResponseStub => {
+export const makeResponseStub = (): ResponseStub => {
     const response = {
         status: jest.fn(),
         json: jest.fn()
-    } as unknown as TResponseStub;
+    } as unknown as ResponseStub;
 
     response.status.mockReturnValue(response);
     response.json.mockReturnValue(response);

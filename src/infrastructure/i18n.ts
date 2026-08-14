@@ -194,12 +194,12 @@ export const loadLocaleResources = (): Resource =>
 /**
  * What a request carries: the negotiated locale and a `t` bound to it.
  */
-export interface ILocaleContext {
+export interface LocaleContext {
     locale: string;
     t: TFunction;
 }
 
-const localeStorage = new AsyncLocalStorage<ILocaleContext>();
+const localeStorage = new AsyncLocalStorage<LocaleContext>();
 
 /**
  * A `t` bound to one language, touching no global and no ambient store.
@@ -213,7 +213,7 @@ export const translator = (locale: string): TFunction => i18next.getFixedT(local
 /**
  * Binds a `t` to one language without touching the global instance.
  */
-export const createLocaleContext = (locale: string): ILocaleContext => ({
+export const createLocaleContext = (locale: string): LocaleContext => ({
     locale,
     t: translator(locale)
 });
@@ -221,7 +221,7 @@ export const createLocaleContext = (locale: string): ILocaleContext => ({
 /**
  * Runs `callback` — and everything it awaits, however deep — with `context` as the ambient locale.
  */
-export const runWithLocaleContext = <T>(context: ILocaleContext, callback: () => T): T =>
+export const runWithLocaleContext = <T>(context: LocaleContext, callback: () => T): T =>
     localeStorage.run(context, callback);
 
 /**
@@ -234,7 +234,7 @@ export const runWithLocale = <T>(locale: string, callback: () => T): T =>
 /**
  * The ambient context, or `undefined` outside a request.
  */
-export const getLocaleContext = (): ILocaleContext | undefined => localeStorage.getStore();
+export const getLocaleContext = (): LocaleContext | undefined => localeStorage.getStore();
 
 /**
  * The locale in effect right now: the request's, or the instance's boot language.

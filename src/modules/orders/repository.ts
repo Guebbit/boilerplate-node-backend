@@ -1,16 +1,16 @@
 import { orderModel, applyOrderTransform } from './model';
-import type { IOrderDocument } from './model';
+import type { OrderDocument } from './model';
 import type { PipelineStage } from 'mongoose';
 import {
     createBaseRepository,
     toObjectId,
-    type TSearchFilters,
-    type IBaseRepository
+    type SearchFilters,
+    type BaseRepository
 } from '@infrastructure/persistence/base-repository';
 import {
     normalizePagination,
     buildPaginatedMeta,
-    type IPaginatedMeta
+    type PaginatedMeta
 } from '@infrastructure/persistence/search';
 
 /**
@@ -20,7 +20,7 @@ import {
  * embeds a product snapshot, and filtering on `items.product._id` is a pipeline concern. The
  * base factory still supplies plain CRUD; search is overridden below.
  */
-const base = createBaseRepository<IOrderDocument>(orderModel, {
+const base = createBaseRepository<OrderDocument>(orderModel, {
     transform: applyOrderTransform,
     searchable: {
         objectIds: {
@@ -37,7 +37,7 @@ const base = createBaseRepository<IOrderDocument>(orderModel, {
 /**
  * Run an aggregation pipeline against the Order collection.
  */
-const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =>
+const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =>
     orderModel.aggregate<T>(pipeline);
 
 /**
@@ -52,9 +52,9 @@ const aggregate = <T = IOrderDocument>(pipeline: PipelineStage[]): Promise<T[]> 
  * otherwise the caller's `.catch()` is bypassed and the client gets a 500 instead of a 422.
  */
 const search = async (
-    filters: TSearchFilters = {},
+    filters: SearchFilters = {},
     scope: Record<string, unknown> = {}
-): Promise<{ items: IOrderDocument[]; meta: IPaginatedMeta }> => {
+): Promise<{ items: OrderDocument[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
     // Scope merged last: it is the authorization boundary, and no client filter may widen it.
     const match = { ...base.buildWhere(filters), ...scope };
@@ -94,7 +94,7 @@ const search = async (
  * **What a caller may read is therefore `id`, never `_id`.** `id` resolves on both branches: on
  * the document it is Mongoose's virtual, on the plain object it is written by the transform,
  * which deletes `_id` on the very next line (`@infrastructure/persistence/serialize`). `_id`
- * resolves only on the admin branch, and TypeScript cannot catch the difference — `IOrderDocument`
+ * resolves only on the admin branch, and TypeScript cannot catch the difference — `OrderDocument`
  * extends `Document`, so `_id` type-checks on a value that will not carry it at runtime. The
  * failure is silent, role-dependent and survives a green suite: it reads as `undefined` for
  * exactly the callers who are not admins. That is not hypothetical — the invoice filename and
@@ -103,7 +103,7 @@ const search = async (
 const findByIdScoped = (
     id: string,
     scope?: Record<string, unknown>
-): Promise<IOrderDocument | undefined> => {
+): Promise<OrderDocument | undefined> => {
     if (!scope) return base.findById(id).then((order) => order ?? undefined);
 
     return aggregate([{ $match: { _id: toObjectId(id), ...scope } }, { $limit: 1 }]).then(
@@ -159,7 +159,7 @@ const updateStatusIfIn = (
     from: readonly string[],
     to: string,
     scope?: Record<string, unknown>
-): Promise<IOrderDocument | null> =>
+): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), ...scope, status: { $in: [...from] } },
@@ -175,16 +175,16 @@ const updateStatusIfIn = (
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056).
  */
-export const orderRepository: Omit<IBaseRepository<IOrderDocument>, 'search'> & {
-    aggregate: <T = IOrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
+export const orderRepository: Omit<BaseRepository<OrderDocument>, 'search'> & {
+    aggregate: <T = OrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
     search: (
-        filters?: TSearchFilters,
+        filters?: SearchFilters,
         scope?: Record<string, unknown>
-    ) => Promise<{ items: IOrderDocument[]; meta: IPaginatedMeta }>;
+    ) => Promise<{ items: OrderDocument[]; meta: PaginatedMeta }>;
     findByIdScoped: (
         id: string,
         scope?: Record<string, unknown>
-    ) => Promise<IOrderDocument | undefined>;
+    ) => Promise<OrderDocument | undefined>;
     ownerScope: (userId: string) => Record<string, unknown>;
     visibleScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
@@ -192,7 +192,7 @@ export const orderRepository: Omit<IBaseRepository<IOrderDocument>, 'search'> & 
         from: readonly string[],
         to: string,
         scope?: Record<string, unknown>
-    ) => Promise<IOrderDocument | null>;
+    ) => Promise<OrderDocument | null>;
 } = {
     ...base,
     aggregate,

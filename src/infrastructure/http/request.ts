@@ -118,7 +118,7 @@ export type RequestInputSource = 'params' | 'body' | 'query';
  * of the surface, stated once below, and a new shape has to be added deliberately — where it can
  * be reviewed against the spec.
  */
-export type TRequestSurface = 'search' | 'write' | 'delete' | 'path';
+export type RequestSurface = 'search' | 'write' | 'delete' | 'path';
 
 /**
  * The sources each surface reads, HIGHEST precedence first.
@@ -133,7 +133,7 @@ export type TRequestSurface = 'search' | 'write' | 'delete' | 'path';
  *   /cart/{productId}` declares no body, and could not use one: the route cannot match without
  *   the segment, so a body `productId` was unreachable rather than merely undocumented.
  */
-const SURFACE_SOURCES: Record<TRequestSurface, readonly RequestInputSource[]> = {
+const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
     search: ['body', 'query'],
     write: ['params', 'body'],
     delete: ['params', 'query', 'body'],
@@ -148,11 +148,11 @@ const SURFACE_SOURCES: Record<TRequestSurface, readonly RequestInputSource[]> = 
  * every key present in any source the surface reads ends up on the result regardless — they only
  * say how a few specific fields are resolved or decoded on the way in.
  */
-export interface IRequestInputDeclaration<Id extends string> {
+export interface RequestInputDeclaration<TId extends string> {
     /** Which route surface this is, and therefore which sources it reads. */
-    surface: TRequestSurface;
+    surface: RequestSurface;
     /** Scalar identifiers: a repeated key collapses to its first entry. */
-    ids?: readonly Id[];
+    ids?: readonly TId[];
     /** Fields declared boolean by the contract — decoded on the string transports. */
     booleans?: readonly string[];
     /** Fields declared numeric by the contract — decoded on the string transports. */
@@ -166,8 +166,8 @@ export interface IRequestInputDeclaration<Id extends string> {
  * not validate, and whatever it could not recognise has to reach the schema downstream intact.
  * Declared ids are the one exception, because their resolution rule already determines their type.
  */
-export type IRequestInput<Id extends string> = Record<string, unknown> & {
-    [K in Id]?: string;
+export type RequestInput<TId extends string> = Record<string, unknown> & {
+    [K in TId]?: string;
 };
 
 /**
@@ -191,10 +191,10 @@ export type IRequestInput<Id extends string> = Record<string, unknown> & {
  *   coming from either is always decoded. A body is decoded only when it is multipart, because a
  *   JSON body carries its own types and coercing it is what swallows a contract violation.
  */
-export const readInput = <Id extends string = never>(
+export const readInput = <TId extends string = never>(
     request: Request<ParamsDictionary>,
-    declaration: IRequestInputDeclaration<Id>
-): IRequestInput<Id> => {
+    declaration: RequestInputDeclaration<TId>
+): RequestInput<TId> => {
     const booleans = declaration.booleans ?? [];
     const numbers = declaration.numbers ?? [];
     const stringArrays = declaration.stringArrays ?? [];
@@ -255,7 +255,7 @@ export const readInput = <Id extends string = never>(
     }
 
     // The declared shape is what the loops above just built; a record cannot express it.
-    return result as IRequestInput<Id>;
+    return result as RequestInput<TId>;
 };
 
 /**

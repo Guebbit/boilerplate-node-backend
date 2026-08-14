@@ -14,8 +14,8 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { orderService, orderRepository, ORDER_STATUS_CHANGED } from '@modules/orders';
@@ -23,8 +23,8 @@ import { userRepository } from '@modules/users';
 import { SHIPPING_METHODS } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
-import type { IShipmentDocument } from './model';
-import type { IShippingMethod } from './domain';
+import type { ShipmentDocument } from './model';
+import type { ShippingMethod } from './domain';
 
 /**
  * The tracking code an order's parcel travels under. Deterministic from the order id — the fake
@@ -34,7 +34,7 @@ import type { IShippingMethod } from './domain';
 const trackingCodeFor = (orderId: string): string => `TRK-${orderId.slice(-8).toUpperCase()}`;
 
 /** The methods list, for the checkout page's selector. Static, so always a success. */
-export const listMethods = (): IResponseSuccess<{ methods: readonly IShippingMethod[] }> =>
+export const listMethods = (): ResponseSuccess<{ methods: readonly ShippingMethod[] }> =>
     generateSuccess({ methods: SHIPPING_METHODS });
 
 /**
@@ -49,7 +49,7 @@ export const listMethods = (): IResponseSuccess<{ methods: readonly IShippingMet
 export const getForOrder = (
     orderId: string,
     authContext?: { id?: string; admin?: boolean }
-): Promise<IResponseSuccess<IShipmentDocument> | IResponseReject> =>
+): Promise<ResponseSuccess<ShipmentDocument> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
         return shipmentRepository.findByOrderId(orderId).then((shipment) => {

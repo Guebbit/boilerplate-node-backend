@@ -362,7 +362,7 @@ export default tseslint.config(
                     trailingUnderscore: 'allow'
                 },
                 {
-                    selector: ['class', 'typeLike', 'typeParameter', 'enum'],
+                    selector: ['class', 'typeLike', 'enum'],
                     format: ['PascalCase']
                 },
                 {
@@ -375,7 +375,15 @@ export default tseslint.config(
                     format: ['PascalCase'],
                     custom: {
                         regex: '^I[A-Z]',
-                        match: true
+                        match: false
+                    }
+                },
+                {
+                    selector: 'typeAlias',
+                    format: ['PascalCase'],
+                    custom: {
+                        regex: '^[TI][A-Z]',
+                        match: false
                     }
                 },
                 {
@@ -383,6 +391,14 @@ export default tseslint.config(
                     format: ['PascalCase'],
                     custom: {
                         regex: '^E[A-Z]',
+                        match: false
+                    }
+                },
+                {
+                    selector: 'typeParameter',
+                    format: ['PascalCase'],
+                    custom: {
+                        regex: '^T[A-Z]?',
                         match: true
                     }
                 },

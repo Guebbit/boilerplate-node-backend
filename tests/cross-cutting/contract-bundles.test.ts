@@ -25,7 +25,7 @@ import {
     CONTRACT_BUNDLES,
     readCommittedBundle,
     REPO_ROOT,
-    type IContractBundle
+    type ContractBundle
 } from '../../scripts/contracts';
 import { SECTION_ORDER, sectionFragment } from '../../scripts/contracts/openapi';
 import {
@@ -40,7 +40,7 @@ import { analyticsEvents } from '../../src/infrastructure/observability/analytic
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>
     groups.reduce((total, group) => total + (group.items ?? group.children ?? []).length, 0);
 
-const bundleByName = (name: string): IContractBundle => {
+const bundleByName = (name: string): ContractBundle => {
     const bundle = CONTRACT_BUNDLES.find((candidate) => candidate.name === name);
     if (!bundle) throw new Error(`no bundle named ${name}`);
     return bundle;

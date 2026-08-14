@@ -2,15 +2,15 @@ import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
     generateReject,
-    type IResponseSuccess,
-    type IResponseReject
+    type ResponseSuccess,
+    type ResponseReject
 } from '@infrastructure/http/response';
 import { toObjectId } from '@infrastructure/persistence/base-repository';
 import { productRepository } from '@modules/products';
 import { cartService } from '@modules/cart';
 import type { WishlistItem } from '@types';
 import { wishlistRepository } from './repository';
-import type { IWishlistDocument } from './model';
+import type { WishlistDocument } from './model';
 
 /**
  * Wishlist Service
@@ -21,19 +21,19 @@ import type { IWishlistDocument } from './model';
  */
 
 /** The wishlist as `openapi.yaml` declares it: `WishlistResponse`, built rather than serialized. */
-export interface IWishlistView {
+export interface WishlistView {
     items: WishlistItem[];
 }
 
 /** Turn a wishlist document (or its absence) into the response the contract declares. */
-const toWishlistView = (wishlist: IWishlistDocument | null): IWishlistView => ({
+const toWishlistView = (wishlist: WishlistDocument | null): WishlistView => ({
     items: (wishlist?.items ?? []).map(({ productId }) => ({ productId: String(productId) }))
 });
 
 /**
  * Get the user's wishlist. Absence and emptiness are the same state — an empty view, never 404.
  */
-export const wishlistGet = (userId: string): Promise<IWishlistView> =>
+export const wishlistGet = (userId: string): Promise<WishlistView> =>
     wishlistRepository.findByUserId(userId).then((wishlist) => toWishlistView(wishlist));
 
 /**
@@ -46,7 +46,7 @@ export const wishlistGet = (userId: string): Promise<IWishlistView> =>
 export const wishlistAdd = (
     userId: string,
     productId: string
-): Promise<IResponseSuccess<IWishlistView> | IResponseReject> =>
+): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     productRepository
         .findOne({ _id: toObjectId(productId), ...productRepository.publicScope() })
         .then((product) => {
@@ -67,7 +67,7 @@ export const wishlistAdd = (
 export const wishlistRemove = (
     userId: string,
     productId: string
-): Promise<IResponseSuccess<IWishlistView> | IResponseReject> =>
+): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     wishlistRepository.removeLine(userId, productId).then((wishlist) => {
         if (!wishlist) return generateReject(404, [t('wishlist.not-found')]);
         return generateSuccess(toWishlistView(wishlist), 200, t('wishlist.removed'));
@@ -84,7 +84,7 @@ export const wishlistRemove = (
 export const wishlistMoveToCart = (
     userId: string,
     productId: string
-): Promise<IResponseSuccess<IWishlistView> | IResponseReject> =>
+): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     wishlistRepository.findByUserId(userId).then((wishlist) => {
         const saved = wishlist?.items.some((item) => String(item.productId) === productId);
         if (!saved) return generateReject(404, [t('wishlist.not-found')]);

@@ -1,7 +1,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
-import { userModel as Users, ETokenType, type IUserDocument } from '@modules/users';
+import { userModel as Users, TokenType, type UserDocument } from '@modules/users';
 import { Types } from 'mongoose';
 
 setupTestDb();
@@ -9,7 +9,7 @@ setupTestDb();
 describe('userRepository', () => {
     describe('create', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
-            const user = await userRepository.create(makeUser() as Partial<IUserDocument>);
+            const user = await userRepository.create(makeUser() as Partial<UserDocument>);
 
             expect(user._id).toBeDefined();
             expect(user.email).toBe('user@example.com');
@@ -19,7 +19,7 @@ describe('userRepository', () => {
         });
 
         it('sets admin to false by default', async () => {
-            const user = await userRepository.create(makeUser() as Partial<IUserDocument>);
+            const user = await userRepository.create(makeUser() as Partial<UserDocument>);
 
             expect(user.admin).toBe(false);
         });
@@ -219,31 +219,31 @@ describe('userRepository', () => {
             const user = await createUser({
                 tokens: [
                     {
-                        type: ETokenType.REFRESH,
+                        type: TokenType.REFRESH,
                         token: 'refresh-1',
                         expiration: new Date(Date.now() + 60_000)
                     },
                     {
-                        type: ETokenType.REFRESH,
+                        type: TokenType.REFRESH,
                         token: 'refresh-2',
                         expiration: new Date(Date.now() + 120_000)
                     },
                     {
-                        type: ETokenType.PASSWORD_RESET,
+                        type: TokenType.PASSWORD_RESET,
                         token: 'password-1',
                         expiration: new Date(Date.now() + 120_000)
                     }
                 ]
             });
 
-            await user.tokenRemoveAll(ETokenType.REFRESH);
+            await user.tokenRemoveAll(TokenType.REFRESH);
             const refreshed = await userRepository.findByIdWithCredentials(
                 (user._id as Types.ObjectId).toString()
             );
 
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
-            expect(refreshed!.tokens[0].type).toBe(ETokenType.PASSWORD_RESET);
+            expect(refreshed!.tokens[0].type).toBe(TokenType.PASSWORD_RESET);
         });
 
         it('tokenRemoveExpired removes expired tokens and keeps valid ones', async () => {
@@ -253,12 +253,12 @@ describe('userRepository', () => {
             const user = await createUser({
                 tokens: [
                     {
-                        type: ETokenType.REFRESH,
+                        type: TokenType.REFRESH,
                         token: 'expired-token',
                         expiration: expired
                     },
                     {
-                        type: ETokenType.REFRESH,
+                        type: TokenType.REFRESH,
                         token: 'valid-token',
                         expiration: futureExpiration
                     }

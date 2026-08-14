@@ -23,6 +23,6 @@ export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 // only the service has the recipient's record in scope for the language it goes out in.
 export { orderConfirmEmail } from './emails';
 export { orderModel } from './model';
-export type { IOrderDocument, IOrderDocumentItem } from './model';
+export type { OrderDocument, OrderDocumentItem } from './model';
 export { sumLineItems } from './domain';
-export type { ILineItem, ILineItemTotals } from './domain';
+export type { LineItem, LineItemTotals } from './domain';

@@ -29,37 +29,37 @@ export const coreAuditActions = {
     SECURITY_RATE_LIMIT_HIT: 'security.rate_limit_hit'
 } as const;
 
-type TCoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
+type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
 
 /**
  * Module name → that module's action strings. Augmented per module; see
  * `modules/account/audit.ts` for the shape.
  *
- * Intentionally empty here, exactly like `IDomainEventMap` in `kernel/events.ts`: this is the
+ * Intentionally empty here, exactly like `DomainEventMap` in `kernel/events.ts`: this is the
  * extension point, and its members live with the domains that emit them. The augmentation is
  * type-only, so the vocabulary stays closed and `infrastructure` still imports nothing from a module.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface IAuditActionMap {}
+export interface AuditActionMap {}
 
 /**
  * Every action this build can emit: the app-level three, plus whatever the enabled modules
  * declare. Delete a module and its actions leave the union with it.
  */
-export type TAuditAction = TCoreAuditAction | IAuditActionMap[keyof IAuditActionMap];
+export type AuditAction = CoreAuditAction | AuditActionMap[keyof AuditActionMap];
 
 /*
  * See docs/tools/winston.md for field descriptions and examples.
  * snake_case field names (unlike the camelCase used elsewhere in the codebase) because these
  * are log *data*, consumed by SIEM/log tooling rather than by TypeScript callers.
  */
-export interface IAuditEvent {
+export interface AuditEvent {
     /** Who acted. 'unknown' when unresolvable — never omitted, so queries can rely on it. */
     actor_user_id: string;
     /** Privilege level at the time of the action, so a later role change cannot rewrite history. */
     actor_role: 'admin' | 'user' | 'anonymous';
     /** What was attempted (see the enum above). */
-    action: TAuditAction;
+    action: AuditAction;
     /** Whether it worked. Failures are the security-relevant half: repeated ones signal attack. */
     outcome: 'success' | 'failure';
     /** Source IP — the primary pivot when investigating an incident. */
@@ -78,10 +78,10 @@ export interface IAuditEvent {
 }
 
 /*
- * Emitted audit event — IAuditEvent enriched with timestamp and log level.
+ * Emitted audit event — AuditEvent enriched with timestamp and log level.
  * The two extra fields are added at emit time rather than being the caller's responsibility.
  */
-export interface IAuditEntry extends IAuditEvent {
+export interface AuditEntry extends AuditEvent {
     /** When the action happened, not when the write landed. */
     timestamp: Date;
     /** Derived from `outcome`; retained so a stored entry matches what was logged. */
@@ -95,13 +95,13 @@ export interface IAuditEntry extends IAuditEvent {
  * which is the bottom of the dependency graph and is forbidden by `no-restricted-imports` from
  * reaching up into `@repositories/*` or `@models/*`. Inverting it keeps that rule intact — infrastructure
  * states what it needs, and `app.ts` supplies the implementation at boot. It is the same shape as
- * `IImageStore` in `@infrastructure/adapters/image-store`, and it has the same payoff: the durable store
+ * `ImageStore` in `@infrastructure/adapters/image-store`, and it has the same payoff: the durable store
  * can be swapped for a log-backend writer without a single audit call site changing.
  *
  * Implementations MUST NOT throw and MUST NOT reject. See {@link registerAuditSink}.
  */
-export interface IAuditSink {
-    (entry: IAuditEntry): void;
+export interface AuditSink {
+    (entry: AuditEntry): void;
 }
 
 /**
@@ -111,7 +111,7 @@ export interface IAuditSink {
  * database, and the queue workers audit nothing. In that state `emitAuditEvent` still writes the
  * log line, which is the compliance record — persistence is the queryable *convenience* on top.
  */
-let auditSink: IAuditSink | undefined;
+let auditSink: AuditSink | undefined;
 
 /**
  * Install the persistence sink. Called once from `app.ts` after the database connects.
@@ -121,7 +121,7 @@ let auditSink: IAuditSink | undefined;
  * throwing. A failure to *store* an audit entry must never become a failed request, and must never
  * lose the log line that already went out above it.
  */
-export const registerAuditSink = (sink: IAuditSink): void => {
+export const registerAuditSink = (sink: AuditSink): void => {
     auditSink = sink;
 };
 
@@ -130,7 +130,7 @@ export const registerAuditSink = (sink: IAuditSink): void => {
  * Writes the durable log line, then hands the entry to the persistence sink if one is registered.
  * @param event - fully populated audit event (normally built by `buildAuditEvent`)
  */
-export const emitAuditEvent = (event: IAuditEvent): void => {
+export const emitAuditEvent = (event: AuditEvent): void => {
     // Level mirrors the outcome, so an ops alert on `level: warn` in the audit stream picks up
     // failed logins and permission denials without needing to know the action vocabulary.
     const level = event.outcome === 'success' ? 'info' : ('warn' as const);
@@ -140,7 +140,7 @@ export const emitAuditEvent = (event: IAuditEvent): void => {
 
     if (!auditSink) return;
 
-    const entry: IAuditEntry = { ...event, timestamp: new Date(), level };
+    const entry: AuditEntry = { ...event, timestamp: new Date(), level };
     // Belt and braces: the sink contract forbids throwing, and this catch is what makes a sink
     // that breaks the contract anyway unable to take down the request that triggered it.
     try {
@@ -156,7 +156,7 @@ export const emitAuditEvent = (event: IAuditEvent): void => {
 /*
  * Extract common request fields (ip, user-agent, request-id, trace-id) for audit events.
  * @param request - minimal request shape
- * @returns partial IAuditEvent with context fields
+ * @returns partial AuditEvent with context fields
  */
 export const extractRequestContext = (request: {
     ip?: string;
@@ -164,7 +164,7 @@ export const extractRequestContext = (request: {
     requestId?: string;
     // Structurally typed rather than `express.Request`: it keeps this callable from workers and
     // unit tests with a plain object literal, no Express instance required.
-}): Pick<IAuditEvent, 'ip' | 'user_agent' | 'request_id' | 'trace_id'> => {
+}): Pick<AuditEvent, 'ip' | 'user_agent' | 'request_id' | 'trace_id'> => {
     const rawUserAgent = request.headers?.['user-agent'];
     return {
         // Note: `request.ip` reflects the proxy's address unless Express `trust proxy` is
@@ -188,7 +188,7 @@ export const extractRequestContext = (request: {
  */
 export const resolveActorRole = (request: {
     authContext?: { admin?: boolean } | null;
-}): IAuditEvent['actor_role'] => {
+}): AuditEvent['actor_role'] => {
     // Order matters: most-privileged first, since an admin also satisfies the `user` check.
     if (request.authContext?.admin) return 'admin';
     // Context present but not admin → an authenticated regular user.
@@ -203,7 +203,7 @@ export const resolveActorRole = (request: {
  * Caller-provided actor_user_id / actor_role override the derived defaults.
  * @param request - Express-like request with auth context
  * @param fields - action, outcome, and optional overrides
- * @returns fully populated IAuditEvent
+ * @returns fully populated AuditEvent
  */
 export const buildAuditEvent = (
     request: {
@@ -215,14 +215,14 @@ export const buildAuditEvent = (
     // The type says: `action` and `outcome` are mandatory, everything else optional. That is the
     // whole ergonomic point — a call site cannot forget what happened or whether it succeeded,
     // but never has to restate context the request already carries.
-    fields: Pick<IAuditEvent, 'action' | 'outcome'> &
+    fields: Pick<AuditEvent, 'action' | 'outcome'> &
         Partial<
             Pick<
-                IAuditEvent,
+                AuditEvent,
                 'actor_user_id' | 'actor_role' | 'target_type' | 'target_id' | 'metadata'
             >
         >
-): IAuditEvent => ({
+): AuditEvent => ({
     // Explicit override wins, then the authenticated user, then 'unknown'. The override matters
     // for failed logins, where there is no auth context but the *attempted* identity (the
     // submitted email) is the single most useful field in the record.

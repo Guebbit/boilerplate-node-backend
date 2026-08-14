@@ -9,9 +9,9 @@
 
 import { Types } from 'mongoose';
 import { seedWishlists } from '@seed-identities';
-import type { TSeedOutcome } from '@infrastructure/persistence/seed';
+import type { SeedOutcome } from '@infrastructure/persistence/seed';
 import { wishlistRepository } from './repository';
-import type { IWishlistDocument } from './model';
+import type { WishlistDocument } from './model';
 
 export const wishlistFixtures = seedWishlists.map((wishlist) => ({
     userId: new Types.ObjectId(wishlist.userId),
@@ -21,13 +21,13 @@ export const wishlistFixtures = seedWishlists.map((wishlist) => ({
 }));
 
 /** Upsert one wishlist fixture by its OWNER rather than by id. */
-const upsertByOwner = async (fixture: (typeof wishlistFixtures)[number]): Promise<TSeedOutcome> => {
+const upsertByOwner = async (fixture: (typeof wishlistFixtures)[number]): Promise<SeedOutcome> => {
     const existing = await wishlistRepository.findByUserId(fixture.userId.toString());
     if (existing) return 'skipped';
-    await wishlistRepository.create(fixture as Partial<IWishlistDocument>);
+    await wishlistRepository.create(fixture as Partial<WishlistDocument>);
     return 'created';
 };
 
 /** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
-export const seedWishlistsCollection = (): Promise<TSeedOutcome[]> =>
+export const seedWishlistsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(wishlistFixtures.map((wishlist) => upsertByOwner(wishlist)));

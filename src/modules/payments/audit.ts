@@ -15,7 +15,7 @@ export const paymentsAuditActions = {
 } as const;
 
 declare module '@infrastructure/observability/audit' {
-    interface IAuditActionMap {
+    interface AuditActionMap {
         payments: (typeof paymentsAuditActions)[keyof typeof paymentsAuditActions];
     }
 }

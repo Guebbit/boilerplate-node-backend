@@ -1,5 +1,5 @@
 import { rm } from 'node:fs/promises';
-import { instanceDataRoot, type ITestGlobals } from './global-setup';
+import { instanceDataRoot, type TestGlobals } from './global-setup';
 
 /**
  * Runs once per jest instance, after the last worker exits.
@@ -13,7 +13,7 @@ import { instanceDataRoot, type ITestGlobals } from './global-setup';
  * prompt.
  */
 const globalTeardown = async () => {
-    await (globalThis as ITestGlobals).__testMongoServer?.stop().catch(() => {});
+    await (globalThis as TestGlobals).__testMongoServer?.stop().catch(() => {});
     await rm(instanceDataRoot(), { recursive: true, force: true }).catch(() => {});
 };
 

@@ -6,7 +6,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
  * The one handle `globalSetup` has to hand `globalTeardown`. Jest runs both in the same process but
  * as separate modules, so `globalThis` is the only channel — `process.env` carries strings only.
  */
-export interface ITestGlobals {
+export interface TestGlobals {
     __testMongoServer?: MongoMemoryServer;
 }
 
@@ -108,7 +108,7 @@ const globalSetup = async () => {
 
     const server = await MongoMemoryServer.create({ instance: { dbPath } });
     process.env.NODE_TEST_MONGO_URI = server.getUri();
-    (globalThis as ITestGlobals).__testMongoServer = server;
+    (globalThis as TestGlobals).__testMongoServer = server;
 };
 
 export default globalSetup;

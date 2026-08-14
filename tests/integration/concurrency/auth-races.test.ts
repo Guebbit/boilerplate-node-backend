@@ -33,7 +33,7 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
-import { userModel, ETokenType } from '@modules/users';
+import { userModel, TokenType } from '@modules/users';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
 setupTestDb();
@@ -179,7 +179,7 @@ describe('one-time tokens under contention', () => {
         // A reset token is one-time. Two uses of it must not both change the password, and the
         // loser must be rejected rather than 500.
         const user = await createUser({ email: 'reset@example.com' });
-        await user.tokenAdd(ETokenType.PASSWORD_RESET, 60 * 60 * 1000, 'one-time-reset-token');
+        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'one-time-reset-token');
 
         const results = await raceN(2, () =>
             api().post('/account/reset-confirm').send({

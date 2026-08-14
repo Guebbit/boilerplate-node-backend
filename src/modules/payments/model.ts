@@ -24,19 +24,19 @@ export const PAYMENT_STATUSES = [
     'refunded'
 ] as const;
 
-export type TPaymentStatus = (typeof PAYMENT_STATUSES)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 /**
  * Payment Document interface.
  */
-export interface IPaymentDocument extends Document {
+export interface PaymentDocument extends Document {
     orderId: Types.ObjectId;
     userId: Types.ObjectId;
     /** What the intent froze the price at — the order's total when the intent was created. */
     amount: number;
     /** ISO-4217, from `NODE_DEFAULT_CURRENCY`. Carried per document: config can change. */
     currency: string;
-    status: TPaymentStatus;
+    status: PaymentStatus;
     /** Which provider implementation handled it — 'fake' in the demo, 'stripe' one day. */
     provider: string;
     /** The only card digits a payment system may remember. */
@@ -46,9 +46,9 @@ export interface IPaymentDocument extends Document {
 }
 
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
-export type IPaymentModel = Model<IPaymentDocument>;
+export type PaymentModel = Model<PaymentDocument>;
 
-export const paymentSchema = new Schema<IPaymentDocument>(
+export const paymentSchema = new Schema<PaymentDocument>(
     {
         orderId: {
             type: Schema.Types.ObjectId,
@@ -97,4 +97,4 @@ export const applyPaymentTransform = applySerialization(paymentSchema);
 /**
  * Model
  */
-export const paymentModel = model<IPaymentDocument, IPaymentModel>('Payment', paymentSchema);
+export const paymentModel = model<PaymentDocument, PaymentModel>('Payment', paymentSchema);

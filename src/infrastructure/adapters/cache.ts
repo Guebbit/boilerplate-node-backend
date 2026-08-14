@@ -429,7 +429,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
  * the honest answer for an empty cache *and* the answer a dead Redis produces. Callers that
  * exist to clear the cache need to tell those apart.
  */
-export interface IClearCacheResult {
+export interface ClearCacheResult {
     /** Keys actually removed. Always `0` when `reachable` is false. */
     deleted: number;
     /**
@@ -463,7 +463,7 @@ export interface IClearCacheResult {
  * `reachable` on purpose (§9: an unreachable Redis must not break seeding); `db:cache:clear`
  * exits non-zero on it, because clearing the cache is the entire job.
  */
-export const clearCache = (): Promise<IClearCacheResult> =>
+export const clearCache = (): Promise<ClearCacheResult> =>
     getClient()
         .then((redisClient) => {
             if (!redisClient) {

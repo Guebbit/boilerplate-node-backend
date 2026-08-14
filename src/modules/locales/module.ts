@@ -1,4 +1,4 @@
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 
 /**
@@ -18,4 +18,4 @@ export default {
     name: 'locales',
     basePath: '/locales',
     routes: router
-} satisfies IAppModule;
+} satisfies AppModule;

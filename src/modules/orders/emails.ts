@@ -8,17 +8,17 @@
  * email through the queue, the invoice through Puppeteer — so neither template resolves a key.
  */
 
-import type { IEmailContent } from '@infrastructure/adapters/mailer';
+import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { sumLineItems } from './domain';
 
 /**
  * The minimum either document needs from an order: a title and a price per line.
  *
- * Structural rather than `IOrderDocument`: what the documents print is the lines, and asking for
+ * Structural rather than `OrderDocument`: what the documents print is the lines, and asking for
  * less than the whole document keeps both builders callable from a test with a two-line fixture.
  */
-export interface IOrderLines {
+export interface OrderLines {
     items: { quantity: number; product: { title: string; price: number } }[];
 }
 
@@ -33,8 +33,8 @@ export interface IOrderLines {
 export const orderConfirmEmail = (
     locale: string,
     name: string,
-    order: IOrderLines
-): IEmailContent => {
+    order: OrderLines
+): EmailContent => {
     const t = translator(locale);
     return {
         template: 'orders.order-confirm.ejs',
@@ -65,18 +65,18 @@ export const orderConfirmEmail = (
  * on the caller's scope — an admin gets a hydrated document, an owner gets a transformed plain
  * object with `_id` already deleted. `id` is the half that resolves on both.
  */
-export interface IInvoiceOrder extends IOrderLines {
+export interface InvoiceOrder extends OrderLines {
     id?: unknown;
 }
 
 /**
  * Render context for the invoice PDF.
  *
- * Not an `IEmailContent`: there is no envelope and no subject, just the document's own copy. The
+ * Not an `EmailContent`: there is no envelope and no subject, just the document's own copy. The
  * per-line strings are built here, in a loop, because `orders.invoice.line` interpolates values
  * from each item — the one piece of copy that cannot be a single string decided up front.
  */
-export const invoiceDocument = (locale: string, order: IInvoiceOrder): Record<string, unknown> => {
+export const invoiceDocument = (locale: string, order: InvoiceOrder): Record<string, unknown> => {
     const t = translator(locale);
     return {
         locale,
