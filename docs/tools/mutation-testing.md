@@ -276,13 +276,20 @@ sandbox, so:
 
 ```bash
 find . -name '*.heapsnapshot'
-npx tsx scripts/heap-report.ts <file.heapsnapshot>
+npx tsx scripts/heap-report.ts <file.heapsnapshot>                       # what is in there
+NODE_OPTIONS=--max-old-space-size=10240 \
+  npx tsx scripts/heap-retainers.ts <file.heapsnapshot>                  # who is holding it
 ```
 
 `scripts/heap-report.ts` groups every object by kind and prints the largest. **One dominant kind is a
 finding; an even spread is a working set** — and that single line is the difference between "we have
-a leak" and "this suite is simply heavy". Chrome DevTools' memory panel reads the same file and is
-better at retainer chains; this is for the first question, which is whose bug it is.
+a leak" and "this suite is simply heavy".
+
+Then run `scripts/heap-retainers.ts`, and do not skip it. Knowing the kind tells you nothing about
+the owner: the dominant kind here was megabyte-sized binary buffers, which look exactly like network
+I/O and were not. The second script walks the graph backwards and names the variable holding them.
+Chrome DevTools reads the same file and computes true dominators, which is better still once you
+know which objects to ask about.
 
 ### Finding the culprit
 
@@ -349,7 +356,7 @@ NODE_OPTIONS="--max-old-space-size=900 --heapsnapshot-near-heap-limit=1" \
   npx jest --config jest.config.mutation.js tests/unit tests/cross-cutting 'src/modules/.*/tests/unit' --runInBand
 ```
 
-All 110 suites and 1527 tests — including the 33 that start a real `mongod` — complete in ~68
+All 109 suites and 1500 tests — including the 37 that reach a real `mongod` — complete in ~13
 seconds and never approach a 900 MB ceiling. **The suite is not heavy.** Whatever consumes gigabytes
 is the harness around it, which narrows the search from "our code" to "how Stryker runs our code"
 and rules out every theory about the tests themselves in one command.
@@ -367,15 +374,119 @@ heap total 2404.1 MB across 15,028,338 objects
 ```
 
 Everything after the first line is an even spread — millions of small objects, which is what a
-running program looks like. The first line is 958 objects averaging **1.1 MB each**: raw binary
-buffers, the signature of network and database I/O rather than of compilation or of application
-state. That single group-by is what turns "something leaks" into "these bytes, of this kind".
+running program looks like. The first line is 958 raw binary buffers. That single group-by is what
+turns "something leaks" into "these bytes, of this kind".
+
+It does **not** turn it into "these bytes, held by this code" — and the gap between those two
+sentences is where this investigation lost most of its time. Buffers of roughly a megabyte look like
+network and database I/O, so that is what they were assumed to be, and three fixes were built on the
+assumption before anything tested it. See
+[the case study](#case-study-the-buffers-were-not-io-at-all) for what they actually were.
 
 **One trap to avoid when repeating this measurement:** take the reading during the MUTATION phase,
-not the dry run. The dry run executes the whole suite once — including all 33 database-backed
-suites — so a worker reaches gigabytes there regardless of which file is being mutated, and a
+not the dry run. The dry run executes the whole suite once — including every database-backed
+suite — so a worker reaches gigabytes there regardless of which file is being mutated, and a
 sample taken then says nothing about the file under test. Watch for `0/N tested` in the progress
 line; while it reads zero, the number on screen is the dry run's.
+
+**And take it the same way every time.** `--heapsnapshot-near-heap-limit` fires when V8's old space
+approaches its cap, which is a moment you do not control and — for this leak — may never arrive at
+all, because the bytes sit outside old space. Two readings taken at different triggers are not
+comparable, and comparing them produced a confident wrong answer here. Prefer
+`--heapsnapshot-signal=SIGUSR2`, which lets you choose the moment:
+
+```bash
+NODE_OPTIONS="--max-old-space-size=4096 --heapsnapshot-signal=SIGUSR2" npx stryker run --concurrency 1 &
+# wait for the progress line to reach a chosen mutant, then:
+kill -USR2 "$(pgrep -f child-process-proxy-worker | head -1)"
+```
+
+Pick a cap high enough that the worker does not restart mid-measurement: a restart resets the
+accumulation, and a snapshot of a freshly restarted worker looks like a heap that never grew.
+
+### Case study: the buffers were not I/O at all
+
+A short account of a four-hypothesis investigation, kept because the wrong turns are the reusable
+part. Measured 2026-08-14 on a 16-core / 30 GB machine.
+
+**The symptom.** `npm run test:mutation` grew until Node killed the worker, restarted it having
+finished nothing, and reported a remaining time that climbed rather than fell — 36 hours after 90
+minutes at 3%. A heap dump said half the process was ~1000 raw binary buffers of about a megabyte
+each.
+
+**The three hypotheses that were wrong.** Each was plausible, each improved the symptom, and none was
+the cause — which is precisely why "it got better" is not a diagnosis:
+
+| Hypothesis                  | What was built                        | What happened                                              |
+| --------------------------- | ------------------------------------- | ---------------------------------------------------------- |
+| ts-jest's type-check cache  | swapped the transform to swc          | suite got ~2× faster; growth continued                     |
+| a `mongod` started per file | one shared server for the whole run   | 88 GB of stranded data directories fixed; growth continued |
+| per-file mongoose connects  | planned: share one socket via `useDb` | never built — the measurement below killed it              |
+
+All three shared one unexamined premise: that megabyte-sized buffers must be I/O. They looked like
+network buffers, so the search stayed inside the database stack for hours.
+
+**The measurement that broke it.** The premise is testable in one line of reasoning: if the buffers
+come from database connections, running fewer database suites must leave fewer buffers. So the same
+run was taken three times — with all 37 database-backed suites, with 10, and with none — every
+reading at the identical point (end of the dry run, one full suite pass), under a cap high enough
+that no worker restarted mid-measurement:
+
+| database-backed suites | buffers | buffer bytes | heap total |
+| ---------------------- | ------- | ------------ | ---------- |
+| 37                     | 431     | 511.6 MB     | 1251.6 MB  |
+| 10                     | 430     | 511.5 MB     | 1225.4 MB  |
+| 0                      | 423     | 511.1 MB     | 1220.0 MB  |
+
+Removing **every** database suite changed the buffer count by 8 and the bytes by 0.5 MB. Repeated
+five mutants into the mutation phase the curve is not merely flat but non-monotonic — 1329 buffers
+with no database against 1185 with all of them. There is no relationship to connections in either
+phase, and the `useDb` work would have been a week spent on 0.1% of the problem.
+
+**What they actually were.** A heap snapshot forces a full GC before it is written, so everything in
+one is genuinely reachable rather than merely uncollected. Walking the reference graph _backwards_
+from the buffers — which `scripts/heap-report.ts` cannot do, since it aggregates nodes and never
+reads edges — named the owner immediately:
+
+```
+1326.0 MB   78   ArrayBuffer .backing_store  <-  Buffer .buffer  <-  system / Context .buffer
+```
+
+78 buffers, 95% of all buffer bytes, **17.0 MB each**, held by a variable named `buffer` in a module
+scope. That is `node_modules/bson/lib/bson.cjs`:
+
+```js
+const MAXSIZE = 1024 * 1024 * 17;
+let buffer = ByteUtils.allocate(MAXSIZE); // allocated on every evaluation of the module
+```
+
+`bson` reserves a 17 MiB scratch buffer the moment it is loaded — enough for MongoDB's 16 MiB
+document ceiling. Jest gives every test **file** a fresh module registry, because that is what test
+isolation means, so every file that reaches mongoose evaluates `bson` again and pays 17 MiB again. A
+normal `npm test` never notices: files run in worker processes that exit and return the memory.
+Stryker does not exit — it runs the suite once per mutant inside one long-lived worker — so the
+copies accumulate, roughly ten per mutant.
+
+**Why every earlier fix missed it.** The buffer belongs to the library that _encodes_ documents, not
+to any connection: it is allocated at import time, before a connection exists and whether or not one
+ever does. Sharing a server could not touch it, sharing a connection could not either, and removing
+the database suites did not — because unit tests still import models, models import mongoose, and
+mongoose imports bson.
+
+**Why the heap cap never contained it.** `--max-old-space-size` bounds V8's old space.
+`ArrayBuffer` backing stores are external to it, so V8 sees a comfortable heap, feels no pressure to
+collect, and the process grows regardless: a worker capped at 1400 MB was measured at 6.6 GB RSS.
+The cap only ever decided _when_ the worker died, never _whether_ it grew.
+
+**What is left.** The repo cannot share one `bson` across registries: jest routes even
+`createRequire` through its own resolver, and `process` and the core-module objects are re-created
+per test file, so every channel a shim could use is isolated by design. The remaining levers are
+Stryker's `maxTestRunnerReuse` (restart the runner every _n_ mutants — supported, and documented
+upstream for exactly this situation) and an upstream report against `bson`.
+
+**The rule this earns.** Group-by tells you _what_ is in a heap; only the edges tell you _who holds
+it_. Identifying a kind of object and then guessing its owner from what that kind is usually for is
+not a diagnosis — it is the same guess with a number attached to it.
 
 ### The fix
 
@@ -411,8 +522,10 @@ example in its comments.
 - **Cap the worker heap deliberately** instead of inheriting Node's default. That default is derived
   from total system RAM, so a bigger machine hands each worker a longer runway before the same crash.
 
-**A cap is containment, not a fix.** A unit suite that reaches gigabytes is retaining something it
-should be releasing; the cap only decides how long it takes to notice.
+**A cap is containment, not a fix** — and for this leak it is weaker containment than it looks.
+`--max-old-space-size` bounds V8's old space only; `ArrayBuffer` backing stores live outside it, so a
+worker capped at 1400 MB was measured at 6.6 GB RSS. Against external memory the cap does not decide
+how much a worker accumulates, only how early V8 panics about the part it can see.
 
 ## Why it never gates a PR
 
@@ -663,6 +776,8 @@ After that the rule is: raise `break` when a score **sustains** a higher band; n
 | `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.  |
 | `scripts/mutationBaseline.ts`        | Ratchet logic — scoring, comparison, the "never lower" rule                    |
 | `scripts/check-mutation-baseline.ts` | CLI for the two commands below                                                 |
+| `scripts/heap-report.ts`             | Groups a `.heapsnapshot` by kind — what a runaway worker is holding            |
+| `scripts/heap-retainers.ts`          | Walks the same snapshot backwards — which code is holding it                   |
 | `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                |
 | `reports/mutation/index.html`        | Human-readable report (generated per run)                                      |
 | `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                      |

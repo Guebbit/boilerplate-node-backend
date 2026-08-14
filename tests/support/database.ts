@@ -5,20 +5,20 @@ import mongoose from 'mongoose';
  * Connects this test file to the jest instance's shared in-memory Mongo.
  *
  * ── ONE SERVER PER JEST INSTANCE, NOT ONE PER FILE ───────────────────────────────────────────────
- * `setupTestDb()` calls this from `beforeAll`, so it runs once per TEST FILE. Starting a
- * `MongoMemoryServer` here — which is what it used to do — meant spawning and killing a real `mongod`
- * 33 times per pass, once for each suite that touches the database.
+ * `setupTestDb()` calls this from `beforeAll`, so it runs once per TEST FILE. A `MongoMemoryServer`
+ * started here would spawn and kill a real `mongod` once for every suite that touches the database —
+ * 37 times per pass, and once per MUTANT under Stryker, which runs the suite in a loop. Each server
+ * also costs ~200 MB of `dbpath` that only a clean `stop()` removes, and Stryker kills workers as a
+ * matter of course: that combination stranded 88 GB across 212 directories in a single run.
  *
- * A normal `npm test` absorbs that. Stryker does not: it runs the suite once per MUTANT inside one
- * long-lived process, so 33 servers per pass became thousands per run, and the driver's ~1 MB
- * connection buffers accumulated in a process that never exits. Measured 2026-08-14: 958 buffers
- * holding 1.08 GB, 45% of the heap, ending in a worker killed and restarted every 15–25 seconds.
- * See `docs/tools/mutation-testing.md`.
+ * `globalSetup` therefore starts ONE server and publishes its uri; each file takes its own DATABASE
+ * on it. `process.env` is the channel because jest gives every test file a fresh module registry, so
+ * a module-level singleton here would be re-created per file, while the environment crosses both
+ * that boundary and the one into worker processes.
  *
- * `globalSetup` now starts ONE server and publishes its uri; each file takes its own DATABASE on it.
- * `process.env` is the channel because jest gives every test file a fresh module registry — a
- * module-level singleton here would be re-created per file, which is the bug this replaces — while
- * the environment crosses both that boundary and the one into worker processes.
+ * This bounds the DISK cost and the process count. It is not what bounds the worker's memory — that
+ * growth is `bson`'s 17 MiB module-scope buffer, re-allocated per module registry and unrelated to
+ * connections; see the case study in `docs/tools/mutation-testing.md`.
  *
  * ── ISOLATION IS UNCHANGED ───────────────────────────────────────────────────────────────────────
  * A database name per file keeps files apart, `clearAll` still empties collections between cases,

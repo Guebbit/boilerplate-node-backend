@@ -5,7 +5,8 @@ import { connect, disconnect, clearAll } from './database';
  * test file — not inside a `describe`, or the hooks only wrap that block.
  *
  * ── What it guarantees ───────────────────────────────────────────────────────────────────────
- * An in-memory mongod per jest worker, and an EMPTY database at the start of every `it()`. That
+ * Its own database on the run's shared in-memory mongod, and an EMPTY one at the start of every
+ * `it()`. That
  * second half is what lets each case create exactly the documents it talks about and assert on
  * absolute counts — `expect(found).toHaveLength(2)` rather than "two more than before".
  *
