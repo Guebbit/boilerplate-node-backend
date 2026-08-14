@@ -80,20 +80,19 @@ describe('getFormFiles', () => {
     });
 
     /**
-     * INCONSISTENCY — pinned, not endorsed.
+     * The same normalization, through the OTHER multer shape — and the pair is the point.
      *
-     * The docblock promises "present but empty → undefined so callers have one falsy case to
-     * check", but only the `.fields()` branch does it. The `.array()` branch returns `[]`
-     * unchanged, and `[]` is truthy — so `if (getFormFiles(req))` behaves differently depending
-     * on which multer variant the route used, which is the exact distinction this function
-     * exists to hide.
+     * This branch used to return `[]` unchanged while `.fields()` returned `undefined`, so
+     * `if (getFormFiles(req))` answered differently depending on which multer variant a route
+     * mounted — the exact distinction this function exists to hide. It was harmless only by
+     * accident: both callers happen to test `length === 0` as well as falsiness.
      *
-     * Harmless today: the only caller is `resolveImageUrl`, whose `?.[0]` handles both. Pinned
-     * rather than fixed because fixing it is a source change, not a test change — see the
-     * accompanying report for the one-line fix.
+     * Asserted next to the `.fields()` case above rather than merged into it: what has to hold
+     * is that the two agree, and two assertions that can disagree are the only way to keep
+     * proving it.
      */
-    it('returns an empty array (NOT undefined) for an empty array upload', () => {
-        expect(getFormFiles(requestWith({ files: [] }))).toEqual([]);
+    it('normalizes an empty array upload to undefined, exactly as a fields upload', () => {
+        expect(getFormFiles(requestWith({ files: [] }))).toBeUndefined();
     });
 });
 

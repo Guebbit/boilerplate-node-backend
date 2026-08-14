@@ -219,11 +219,39 @@ describe('createAccessToken', () => {
             ERefreshTokenExpiryTime.SHORT
         );
 
-        // Revoke the way the real logout path does — `tokens` is select:false, so calling
-        // tokenRemoveAll() on a document that never loaded them filters an empty array and
-        // saves nothing. Reloading with credentials first is mandatory, not incidental.
+        // Revoke the way the real logout path does: reload with credentials, then revoke. The
+        // reload is what keeps the in-memory `tokens` in step — the database write itself is an
+        // atomic `$pull` and no longer depends on it (see the note above `tokenAdd` in the user
+        // model, and the guard immediately below this test).
         const loaded = await userRepository.findByIdWithCredentials(String(user._id));
         await loaded!.tokenRemoveAll(ETokenType.REFRESH);
+
+        await expect(createAccessToken(refreshToken)).rejects.toThrow('Forbidden');
+    });
+
+    /**
+     * The same revocation, from a document that never loaded its tokens — the call site the
+     * reload above exists to avoid.
+     *
+     * `tokens` is `select: false`, so `this.tokens` is `undefined` here rather than `[]`. The
+     * atomic `$pull` does not care: the revocation lands in the database either way. What used to
+     * break is what happens next — the in-memory resync ran `undefined.filter(...)` and threw,
+     * *after* the write had succeeded, so a logout that revoked every session reported a 500.
+     *
+     * Both halves are asserted, because either one alone is satisfiable by the wrong code: a
+     * revocation that resolves but does not revoke, or a revocation that revokes and then throws.
+     */
+    it('revokes without throwing on a document whose tokens were never loaded', async () => {
+        const user = await createUser();
+        const refreshToken = await createRefreshToken(
+            String(user._id),
+            ERefreshTokenExpiryTime.SHORT
+        );
+
+        const bare = await userRepository.findById(String(user._id));
+        expect(bare!.tokens).toBeUndefined();
+
+        await expect(bare!.tokenRemoveAll(ETokenType.REFRESH)).resolves.toBeUndefined();
 
         await expect(createAccessToken(refreshToken)).rejects.toThrow('Forbidden');
     });

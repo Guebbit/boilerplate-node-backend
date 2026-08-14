@@ -39,14 +39,15 @@ export function getFormFiles(request: Request): string[] | undefined {
 
     // Multiple file upload (multer.array() or multer.fields())
     if (request.files) {
-        // `.array()` case — already a flat list.
-        if (Array.isArray(request.files)) return request.files.map((file) => file.path);
+        // `.array()` is already a flat list. `.fields()` is an object keyed by field name, each
+        // value an array — flattened across fields, since callers want paths, not the field
+        // structure. Collected rather than returned per-branch so the normalization below
+        // applies to both: returning `[]` from one branch and `undefined` from the other is the
+        // exact difference this function exists to hide, and it is truthy on one side only.
+        const paths: string[] = Array.isArray(request.files)
+            ? request.files.map((file) => file.path)
+            : Object.values(request.files).flatMap((files) => files.map((file) => file.path));
 
-        // multer.fields() returns an object keyed by field name, each value being an array —
-        // flatten across fields, since callers want paths, not the field structure.
-        const paths: string[] = [];
-        for (const files of Object.values(request.files))
-            paths.push(...files.map((file) => file.path));
         // Normalize "present but empty" to undefined so callers have one falsy case to check.
         return paths.length > 0 ? paths : undefined;
     }

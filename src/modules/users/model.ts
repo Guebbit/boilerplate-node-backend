@@ -264,6 +264,15 @@ userSchema.pre('save', function () {
  * The local `this.tokens` is kept in step by hand afterwards, because callers do read it back
  * (`post-login` reads the array to build its response). `timestamps: false` on the update keeps a
  * token write from touching `updatedAt`, which is about the account, not its sessions.
+ *
+ * That resync is GUARDED, and the guard is not decoration. `tokens` is `select: false`, so a
+ * document loaded by any query that did not ask for it has `this.tokens` **undefined** — not an
+ * empty array — and `undefined.push`/`undefined.filter` throws. The throw would land *after* the
+ * atomic write had already succeeded, so the caller would see a rejected promise (a 500) for an
+ * operation that did in fact happen: a logout that revoked every token and then reported failure.
+ * The service layer avoids it by reloading through `findByIdWithCredentials` first, but that is a
+ * convention no signature enforces, and the failure it prevents is worse than the missing resync.
+ * Absent locally means "not loaded", never "none exist" — so there is nothing to keep in step.
  */
 
 /**
@@ -284,7 +293,9 @@ userSchema.methods.tokenAdd = function (
     return (this.constructor as IUserModel)
         .updateOne({ _id: this._id }, { $push: { tokens: entry } }, { timestamps: false })
         .then(() => {
-            this.tokens.push(entry);
+            // Guarded: see the note above `tokenAdd` — `tokens` is `select: false`, so an
+            // unloaded array is `undefined` and pushing to it would throw after the write landed.
+            this.tokens?.push(entry);
             return token;
         });
 };
@@ -296,7 +307,10 @@ userSchema.methods.tokenRemoveAll = function (type: IToken['type']) {
     return (this.constructor as IUserModel)
         .updateOne({ _id: this._id }, { $pull: { tokens: { type } } }, { timestamps: false })
         .then(() => {
-            this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
+            // Guarded: see the note above `tokenAdd`. The `$pull` above has already revoked the
+            // tokens in the database — reporting a failure here would be a lie about a logout
+            // that succeeded.
+            if (this.tokens) this.tokens = this.tokens.filter((t: IToken) => t.type !== type);
         });
 };
 

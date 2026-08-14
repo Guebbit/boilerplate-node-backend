@@ -8,9 +8,9 @@
  * has `npm run host -- db:seed` cheerfully seed a different one, silently, with no output naming
  * which.
  *
- * So the wrapper blanks `NODE_DB_URI` / `NODE_REDIS_URL` and sets only `*_HOST=localhost`, letting
+ * So the wrapper blanks `NODE_DB_URI` / `NODE_REDIS_URL` and sets only `*_HOST=127.0.0.1`, letting
  * both resolvers fall through to their host/port/name fragments — which come from `.env`, the
- * single source of truth. Four things have to stay true for that to keep working, and each is
+ * single source of truth. Five things have to stay true for that to keep working, and each is
  * asserted below:
  *
  *   1. The wrapper does not reintroduce a literal URI.
@@ -20,8 +20,18 @@
  *   4. `migrate-mongo-config.js` resolves the same URI as the application, despite having to
  *      reimplement the logic — it is CommonJS loaded by migrate-mongo's own resolver, and it
  *      cannot import a TypeScript module.
+ *   5. The redirect target is the LITERAL loopback address, not the name `localhost`.
  *
  * (3) is the load-bearing one and the easiest to break by "tidying" a truthiness check.
+ *
+ * (5) is the one that looks like a style choice and is not. `localhost` is a name, and on a
+ * dual-stack machine it resolves to BOTH `::1` and `127.0.0.1` — with the order decided by the
+ * resolver, not by this repo. Node returns addresses verbatim, so whichever the resolver puts
+ * first is the one the driver dials. Docker and podman publish a port to `0.0.0.0` by default,
+ * which is IPv4 only: nothing is listening on `::1`. So on a machine that happens to answer
+ * `localhost` with the IPv6 address first, every `npm run host …` fails to reach a container that
+ * is running and healthy — as `ECONNRESET`, or as a hang until something times out, never as
+ * anything that names the cause. `127.0.0.1` cannot be reordered.
  */
 
 import { readFileSync } from 'node:fs';
@@ -92,9 +102,17 @@ describe('the host script', () => {
         // the fragments; without the paired host override it would fall through to `.env`'s
         // container hostname, which does not resolve from the host.
         expect(hostScript).toContain('NODE_DB_URI= ');
-        expect(hostScript).toContain('NODE_MONGODB_HOST=localhost');
+        expect(hostScript).toContain('NODE_MONGODB_HOST=127.0.0.1');
         expect(hostScript).toContain('NODE_REDIS_URL= ');
-        expect(hostScript).toContain('NODE_REDIS_HOST=localhost');
+        expect(hostScript).toContain('NODE_REDIS_HOST=127.0.0.1');
+    });
+
+    it('redirects to the literal loopback address, never to the name `localhost`', () => {
+        // See (5) in the file header. `localhost` is resolver-dependent on a dual-stack machine
+        // and container runtimes publish to IPv4 only, so the name reaches a port that is not
+        // listening about half the time — and does it without ever naming the reason. Asserted
+        // separately from the mechanism above so the failure message says which rule broke.
+        expect(hostScript).not.toContain('localhost');
     });
 
     it('delegates rather than naming a command of its own', () => {
@@ -108,7 +126,7 @@ describe('the host script', () => {
         // `db:cache:clear:host` had already drifted — it blanked Redis but not Mongo. One wrapper
         // cannot drift from itself, so the invariant worth guarding is that it stays one.
         const redirectors = Object.entries(packageScripts)
-            .filter(([, command]) => command.includes('_HOST=localhost'))
+            .filter(([, command]) => /_HOST=(?:127\.0\.0\.1|localhost)/.test(command))
             .map(([name]) => name);
 
         expect(redirectors).toEqual(['host']);

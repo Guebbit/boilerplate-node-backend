@@ -58,9 +58,15 @@ export const orderConfirmEmail = (
     };
 };
 
-/** What the invoice needs beyond the lines: the order's id, for the document title. */
+/**
+ * What the invoice needs beyond the lines: the order's id, for the document title.
+ *
+ * `id`, not `_id`. The order arrives from `orderRepository.findByIdScoped`, whose shape depends
+ * on the caller's scope — an admin gets a hydrated document, an owner gets a transformed plain
+ * object with `_id` already deleted. `id` is the half that resolves on both.
+ */
 export interface IInvoiceOrder extends IOrderLines {
-    _id?: unknown;
+    id?: unknown;
 }
 
 /**
@@ -74,7 +80,7 @@ export const invoiceDocument = (locale: string, order: IInvoiceOrder): Record<st
     const t = translator(locale);
     return {
         locale,
-        pageMetaTitle: t('orders.invoice.meta-title', { order: String(order._id) }),
+        pageMetaTitle: t('orders.invoice.meta-title', { order: String(order.id) }),
         pageMetaLinks: [],
         title: t('orders.invoice.title'),
         lines: order.items.map((item) =>

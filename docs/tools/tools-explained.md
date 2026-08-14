@@ -3,6 +3,84 @@
 This page answers three questions for every tool in the stack: **what it is**, **what problem it solves**, and **what it does in this repo**.
 Each section links to the dedicated page for configuration details and code pointers.
 
+## The whole stack on one page
+
+Colour is the job a tool does, not the layer it sits in.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 45}}}%%
+flowchart TD
+    subgraph RUN["Runtime & language"]
+        NODE["Node.js · tsx"]
+        TS["TypeScript"]
+        EXPRESS["Express 5"]
+    end
+
+    subgraph DATA["Data"]
+        MONGOOSE["Mongoose"]
+        MONGO[("MongoDB")]
+        REDIS[("Redis")]
+        RMQ[("RabbitMQ")]
+        MIGRATE["migrate-mongo"]
+    end
+
+    subgraph SEC["Request edge"]
+        HELMET["helmet"]
+        CORS["cors"]
+        RATE["express-rate-limit"]
+        JWT["jsonwebtoken · bcrypt"]
+        ZOD["Zod"]
+        MULTER["multer"]
+    end
+
+    subgraph CONTRACT["Contract"]
+        ORVAL["Orval"]
+        SPECTRAL["Spectral"]
+        MODELINA["Modelina"]
+        PRISM["Prism"]
+    end
+
+    subgraph TEST["Testing"]
+        JEST["Jest · ts-jest"]
+        SUPERTEST["supertest"]
+        MEMSERVER["mongodb-memory-server"]
+        FC["fast-check"]
+        STRYKER["Stryker"]
+        AUTOCANNON["autocannon"]
+    end
+
+    subgraph OBS["Telemetry"]
+        OTEL["OpenTelemetry"]
+        PROM["prom-client"]
+        WINSTON["Winston"]
+        POSTHOG["PostHog"]
+    end
+
+    SEC --> RUN
+    RUN --> DATA
+    RUN --> OBS
+    CONTRACT --> RUN
+    TEST -.-> RUN
+
+    classDef run fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef data fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef sec fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef contract fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef test fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef obs fill:#fce7f3,stroke:#db2777,color:#111827;
+    class NODE,TS,EXPRESS run;
+    class MONGOOSE,MONGO,REDIS,RMQ,MIGRATE data;
+    class HELMET,CORS,RATE,JWT,ZOD,MULTER sec;
+    class ORVAL,SPECTRAL,MODELINA,PRISM contract;
+    class JEST,SUPERTEST,MEMSERVER,FC,STRYKER,AUTOCANNON test;
+    class OTEL,PROM,WINSTON,POSTHOG obs;
+```
+
+**Contract points into the runtime, never the other way round.** `openapi.yaml` is assembled from
+per-module fragments and generates everything under `api/`, which both this repository and the
+paired frontend import. Editing generated output is the one mistake this diagram exists to
+prevent.
+
 ---
 
 ## Core stack

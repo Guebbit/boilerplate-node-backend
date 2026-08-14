@@ -124,7 +124,7 @@ describe('email templates render in every supported locale', () => {
         const html = await ejs.renderFile(
             path.resolve('shared', 'views', 'templates-files', 'orders.invoice.ejs'),
             invoiceDocument(locale, {
-                _id: 'an-order-id',
+                id: 'an-order-id',
                 items: [{ product: { title: 'A product', price: 10 }, quantity: 2 }]
             })
         );

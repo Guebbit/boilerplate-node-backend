@@ -51,7 +51,7 @@ const invoiceJob = (locale = 'en') => ({
     templatePath: 'shared/views/templates-files/orders.invoice.ejs',
     outputPath: '/tmp/invoice-test.pdf',
     templateData: invoiceDocument(locale, {
-        _id: 'an-order-id',
+        id: 'an-order-id',
         items: [{ product: { title: 'A product', price: 10 }, quantity: 2 }]
     })
 });
@@ -87,6 +87,30 @@ describe('the PDF worker renders the copy it was given', () => {
         await expect(handlePdfJob(invoiceJob('en'))).resolves.toBe(true);
 
         expect(renderedHtml()).toContain(escaped(enOrders.orders.invoice.title));
+    });
+
+    /**
+     * The document names the order it is for — and it has to do so for the caller who actually
+     * downloads invoices, which is the customer.
+     *
+     * `invoiceJob`'s order is deliberately the shape an OWNER's read produces: a plain object
+     * carrying `id`, with no `_id`, because `orderRepository.findByIdScoped` runs a scoped read
+     * through `applyOrderTransform` and the serializer deletes `_id` after writing `id`. An
+     * admin's unscoped read resolves a hydrated document instead, which carries both — so code
+     * reading `_id` works for an admin, and interpolates the literal string `undefined` for
+     * everyone else. That is precisely what shipped, in this title and in the PDF's filename,
+     * and no assertion existed to see it: the two shapes serialize identically on the wire, so
+     * only a value read before serialization can tell them apart.
+     */
+    it('names the order in the title for an owner-shaped read, not `undefined`', async () => {
+        const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
+
+        await expect(handlePdfJob(invoiceJob('en'))).resolves.toBe(true);
+
+        expect(renderedHtml()).toContain(
+            escaped(enOrders.orders.invoice['meta-title'].replace('{{order}}', 'an-order-id'))
+        );
+        expect(renderedHtml()).not.toContain('undefined');
     });
 
     /**

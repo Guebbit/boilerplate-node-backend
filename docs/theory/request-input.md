@@ -9,6 +9,41 @@ What is _not_ deliberate is re-deriving the rules of that polymorphism at every 
 page is the single written statement of which sources each endpoint reads, in what order, and what
 happens to the value on the way in.
 
+## The shape in one picture
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
+flowchart TD
+    subgraph IN["Where a value can arrive"]
+        P["route params"]
+        Q["query string"]
+        B["body"]
+    end
+
+    P --> RI["readInput(request, { surface })"]
+    Q --> RI
+    B --> RI
+
+    RI --> SS["SURFACE_SOURCES<br/>search · write · delete · path"]
+    SS --> MERGE["merge in precedence order<br/>highest source wins"]
+    MERGE --> ZOD["Zod schema<br/>coerce · validate"]
+    ZOD -->|"ok"| CTRL["controller logic"]
+    ZOD -->|"fail"| E422["422 with the issue messages"]
+
+    classDef src fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef ok fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class P,Q,B src;
+    class RI,SS,MERGE,ZOD step;
+    class CTRL ok;
+    class E422 bad;
+```
+
+The load-bearing part is the middle: a controller names **which surface it is**, not which sources
+to read. That is what keeps precedence a property of the endpoint's kind rather than of whichever
+array the newest controller happened to pass.
+
 ## The table
 
 Read "sources" left-to-right as precedence, highest first. A controller does not spell this array:

@@ -52,6 +52,7 @@ export default withMermaid(
                             { text: 'Package Dependencies', link: '/tools/package-dependencies' },
                             { text: 'Package Scripts', link: '/tools/package-scripts' },
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
+                            { text: 'Pairing & Ports', link: '/tools/pairing-and-ports' },
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Security', link: '/tools/security' }
                         ]

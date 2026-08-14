@@ -7,6 +7,35 @@ up, who reads it, and which to reach for.
 
 If you only remember one thing: **pick by who reads it**, not by what happened.
 
+## Seven signals, four destinations
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 35, 'rankSpacing': 60}}}%%
+flowchart LR
+    LOG["logger"] --> STDOUT["stdout"]
+    AUDIT["emitAuditEvent"] --> STDOUT
+    AUDIT --> MONGO[("Mongo<br/>auditlogs")]
+    STDOUT --> LOKI[("Loki")]
+
+    ANALYTICS["emitAnalyticsEvent"] --> POSTHOG[("PostHog")]
+    METRICS["metric counters"] --> PROM[("Prometheus")]
+    TRACES["withSpan"] --> TEMPO[("Tempo")]
+
+    STREAM["streamObservabilityMetrics"] ==> SSE["SSE · admin dashboard"]
+    QUEUE["enqueueEmail<br/>publishToQueue"] ==> RMQ["RabbitMQ · workers"]
+
+    classDef sig fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef sink fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef cross fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class LOG,AUDIT,ANALYTICS,METRICS,TRACES,STREAM,QUEUE sig;
+    class STDOUT,LOKI,MONGO,POSTHOG,PROM,TEMPO sink;
+    class SSE,RMQ cross;
+```
+
+The thick arrows are the two that **cross a process boundary** and can therefore fail, retry or
+arrive late. Everything else is a one-way recording that never comes back — which is why none of
+them belongs on a code path whose correctness depends on the write succeeding.
+
 ## The signals at a glance
 
 | Signal                | Entry point                                                           | Where it goes                                            | Who reads it               | Detailed page                                                       |

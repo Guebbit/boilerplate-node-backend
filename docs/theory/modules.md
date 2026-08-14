@@ -294,7 +294,7 @@ rather than a special case:
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart LR
     IAM["IAppModule"]
-    R["<b>routed</b><br/>basePath + routes<br/><i>8 modules</i>"]
+    R["<b>routed</b><br/>basePath + routes<br/><i>12 modules</i>"]
     H["<b>headless</b><br/>basePath?: never<br/>routes?: never<br/><i>audit-logs</i>"]
     IAM --> R
     IAM --> H

@@ -217,6 +217,76 @@ db:seed`); `load:test*` became `test:load*`, keeping everything test-shaped unde
 
 ### Fixed
 
+- **The invoice named the wrong thing — for everyone except an admin.** `orderService.getById` is
+  polymorphic by scope, deliberately: unscoped (an admin, whose `callerScope` is `undefined`)
+  resolves a hydrated Mongoose document, scoped (an owner) resolves an aggregate row already
+  through `applyOrderTransform`. Both serialize identically on the wire, because that transform is
+  also the schema's `toJSON` — so a response body can never show the difference. Code reading the
+  value _before_ serialization can: `id` resolves on both branches, `_id` only on the admin's,
+  because the serializer deletes it after writing `id`.
+
+    Two call sites read `_id`. `get-order-invoice.ts` put it in the `Content-Disposition`, so a
+    customer downloading their own invoice got `invoice-undefined.pdf`; `emails.ts` put it in the
+    document's `<title>`, so the PDF called itself `Invoice — order undefined`. Admins saw neither.
+    Nothing failed: TypeScript types `_id` on both (`IOrderDocument` extends `Document`), and the
+    suite asserted response bodies, which are identical. The polymorphism is now written down where
+    it is decided (`findByIdScoped`), the two reads take `id`, and `IInvoiceOrder` declares the
+    field that actually exists on both shapes. Guarded from both ends: the repository specs pin
+    that `id` resolves on either branch and that `_id` does not survive the scoped one, and the
+    invoice spec renders the document from an owner-shaped order and refuses the string `undefined`.
+
+- **`getFormFiles` contradicted its own docblock.** It promises "present but empty → `undefined`, so
+  callers have one falsy case to check", and only the `.fields()` branch did it — `.array()`
+  returned `[]`, which is truthy. So `if (getFormFiles(request))` answered differently depending on
+  which multer variant a route mounted, which is the one distinction the function exists to hide.
+  Both shapes now collect into one list and normalize once. Harmless in practice only by accident
+  (both callers also test `length === 0`); the test that pinned the inconsistency as a known defect
+  now asserts the two branches agree.
+
+- **A logout could revoke every session and then report failure.** `tokenAdd`/`tokenRemoveAll`
+  write atomically (`$push`/`$pull`) and then resync the in-memory `this.tokens` by hand, because
+  callers read it back. But `tokens` is `select: false`, so a document loaded by a query that did
+  not ask for it has `this.tokens` **undefined** — not empty — and the resync threw
+  `Cannot read properties of undefined`. The throw landed _after_ the write had succeeded: the
+  tokens were gone from the database and the caller got a rejected promise. The service layer
+  reloads through `findByIdWithCredentials` first and so never hit it, but that is a convention no
+  signature enforces. The resync is now guarded — absent locally means "not loaded", never "none
+  exist", so there is nothing to keep in step. (The older, opposite defect, where the whole
+  operation was a silent no-op on such a document, was fixed when these moved to atomic updates.)
+
+- **`npm run host` could not reach a container that was running and healthy.** The wrapper redirected
+  to the NAME `localhost`, which on a dual-stack machine resolves to both `::1` and `127.0.0.1`,
+  with the order chosen by the resolver rather than by this repo. Node dials them verbatim, and
+  docker/podman publish a port to `0.0.0.0` — IPv4 only — so wherever the resolver puts the IPv6
+  address first, every `npm run host …` fails against a healthy container: as `ECONNRESET`, or as a
+  hang until something else times out, never as anything naming the cause. It now redirects to the
+  literal `127.0.0.1`, which cannot be reordered, and `tests/unit/db/host-scripts.test.ts` asserts
+  the name never comes back.
+
+    This is also what made the paired frontend's live E2E profile unrunnable. `cy.resetState()`
+    shells out to `npm --prefix <backend> run host -- db:seed:reset`, which hung until Cypress'
+    60-second `cy.exec` timeout and failed every `before each`. The same command now returns in
+    under a second, and with it the entry saying the pairing with `boilerplate-vue-frontend` had
+    never been confirmed in a browser is answered. A real browser
+    (Electron 138, `npm run test:e2e:live`) against this API on `localhost:3000` runs 118 of 136
+    specs green, 13 of 17 files clean, including `parity.cy.ts` (the mock-versus-live comparison)
+    9/9 and `uploads.cy.ts` 14/14. The eight failures are frontend-side — fixture assumptions about
+    session counts, an unhandled rejection in app code — not contract disagreements.
+
+- **Three things this repo had only ever asserted have now been run against a live stack.** Each
+  was an absence of evidence rather than a defect, so closing them took a session at a running
+  stack rather than a change to the code:
+    - **The image pipeline, through a container with the bind-mounted volume behind it.** The app
+      image, `.:/app`, a real multipart upload over a real socket, the returned `imageUrl` fetched
+      back: `200`, `Content-Type: image/png`, bytes identical to what was sent, and the file the
+      container wrote is the same inode the host sees. The suite drove this loop before, but
+      through supertest against the app object.
+    - **The repair migration.** `20260806140000-image-url-separators.js` ran against a live
+      database, along with the other nine.
+    - **`NODE_MONGODB_NAME` targeting.** `npm run host db:seed` against an overridden name created
+      and populated that database (13 documents) and left the default one holding nothing but its
+      migration changelog — the manual check the entry says nobody had performed.
+
 - **`contracts:bundle` ran its two steps in the wrong order** — collections generated from
   `openapi.yaml` BEFORE the bundle rebuilt it, so any contract change failed the run (or worse,
   regenerated collections one edit behind). This was fix #6 on `DELETABILITY_TEST.md`'s ranked
@@ -236,8 +306,7 @@ nine self-registering modules over a four-tier substrate (`infrastructure`, `ker
 `modules`); the shared contracts became per-module fragments assembled into committed bundles; and
 every derived artefact — client collections, seed identities, analytics events, realtime types —
 is generated from those bundles rather than maintained by hand. The measurement that the
-architecture delivers what it promises is `DELETABILITY_TEST.md`. A wave's "Known issues" records
-what was true when that wave closed; later waves above it document the fixes.
+architecture delivers what it promises is `DELETABILITY_TEST.md`.
 
 ### ⚠ Breaking
 
@@ -1942,55 +2011,3 @@ no-store` on the whole account router via `noStore` (`src/middlewares/cache.ts`)
 - Auditing the other three models for the same over-serialization class found nothing — unlike
   `User`, they carry no credential-shaped fields, and their OpenAPI schemas line up with what the
   models store.
-
-### Known issues
-
-- **`databaseErrorInterpreter`'s CastError branch is inverted** (`src/infrastructure/http/errors.ts`). It
-  returns `[Number.parseInt(error.message), error.kind]`, but `.message` is prose and `.kind` is a
-  schema type name — so a malformed ObjectId in a URL yields an HTTP status of `NaN` and a message
-  of `'ObjectId'`. Pinned by tests named as a known defect rather than silently corrected, since
-  the module's own CAVEAT says callers may depend on the current shape. The fix is to swap the two
-  and pick a real status (400 is the honest one for an unparseable id).
-
-- **`users.email` has no uniqueness constraint.** `db/migrations/…-initial-indexes.js` creates
-  `{ email: 1 }` without `unique: true`, and the schema declares none either, so uniqueness rests
-  entirely on the non-atomic `findOne({ email })` check in `authService.signup`. Two concurrent
-  signups for the same address can both pass that check and both insert; `login` then does
-  `findOneWithCredentials({ email })` and gets whichever document Mongo returns first, so which
-  account wins is arbitrary and can change between requests. The fix is a unique index plus
-  catching the duplicate-key error as the existing 409.
-
-- **`orderService.getById` returns two different shapes from one signature.** Without a `scope` it
-  returns a Mongoose document (identified by `_id`); with one it returns an aggregation piped
-  through `applyOrderTransform`, where `_id` has been renamed to `id`. So a caller reading `_id`
-  works on the admin path and gets `undefined` on the owner path — role-dependent behaviour that
-  survives a green suite because `id` happens to resolve on both (it is a Mongoose virtual).
-
-- **`getFormFiles` contradicts its own docblock** (`src/infrastructure/http/uploads.ts`). It promises
-  "present but empty → `undefined` so callers have one falsy case to check", but only the
-  `.fields()` branch does it; the `.array()` branch returns `[]`, which is truthy. Harmless today —
-  both callers (`validateUploadedImages` and `storeUploadedImages`) test `length === 0` as well as
-  falsiness — but hiding that difference is the function's entire reason to exist.
-
-- **`tokenRemoveAll()` is a silent no-op** on a user document whose `select: false` `tokens` were
-  never loaded: it filters an empty array and saves nothing. The service layer gets this right by
-  reloading through `findByIdWithCredentials` first; any new call site that does not will appear
-  to log a user out while leaving every refresh token live.
-
-- The two `openapi.yaml` copies (this repo and the frontend's) are hand-synced. They are byte-identical
-  as of this entry, but nothing enforces that — keeping them so is still a manual step on every
-  contract change.
-- **The image pipeline has not been exercised against a running stack.** The integration suite does
-  drive the whole loop over HTTP — upload, take the returned `imageUrl`, `GET` it, assert an image
-  content type — but through supertest against the app object, not against a container with a
-  mounted volume behind it. The repair migration has likewise been written and never run against a
-  live database.
-- `.env-example`'s JWT secrets are literal placeholders that `validateRequiredEnvironment` accepts,
-  since it only checks for non-emptiness.
-- **The `:host` scripts have not been run against a live database since being rewritten.** The
-  tests assert the URI each one resolves to — which is the thing that was wrong — but not that
-  Mongo and Redis answer on it. Setting `NODE_MONGODB_NAME` to something else and confirming
-  `db:seed:host` targets it is still a manual check nobody has performed.
-- **The pairing with `boilerplate-vue-frontend` has never been confirmed in a browser.** Both
-  stacks up, a real request visible in this API's logs: that check is still outstanding. Everything
-  claimed about the pairing rests on `compose config` output, the Vite sources and this suite.

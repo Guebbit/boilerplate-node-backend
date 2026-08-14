@@ -144,4 +144,72 @@ describe('orderRepository', () => {
             expect(page2).toHaveLength(2);
         });
     });
+
+    /**
+     * `findByIdScoped` is polymorphic by scope, deliberately — unscoped (admin) resolves a
+     * hydrated document, scoped (owner) resolves an aggregate row already through
+     * `applyOrderTransform`. What makes that safe is a single guarantee: **`id` resolves on both
+     * branches, `_id` on only one.**
+     *
+     * These pin exactly that, because nothing else can. TypeScript cannot — `IOrderDocument`
+     * extends `Document`, so `_id` type-checks on a value that will not carry it at runtime — and
+     * neither can a response-body assertion, since the transform is also the schema's `toJSON` and
+     * the two shapes serialize identically. The gap is only visible to code reading the value
+     * before it is serialized, which is where the invoice filename and the invoice's own title
+     * both read `_id` and both said `undefined` for every non-admin caller.
+     */
+    describe('findByIdScoped', () => {
+        it('exposes a usable `id` on both the scoped and the unscoped branch', async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)]);
+            const expected = (order._id as Types.ObjectId).toString();
+
+            const asAdmin = await orderRepository.findByIdScoped(expected);
+            const asOwner = await orderRepository.findByIdScoped(
+                expected,
+                orderRepository.visibleScope(String(user._id))
+            );
+
+            // Not `toBeDefined()`: the failure this guards against is a value that stringifies
+            // to the literal 'undefined', which is defined enough to pass a laxer assertion.
+            expect(String((asAdmin as unknown as { id?: unknown }).id)).toBe(expected);
+            expect(String((asOwner as unknown as { id?: unknown }).id)).toBe(expected);
+        });
+
+        it('drops `_id` on the scoped branch, which is why `id` is the field to read', async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            const order = await createOrder(user, [toOrderItem(product, 1)]);
+
+            const asOwner = await orderRepository.findByIdScoped(
+                String(order._id),
+                orderRepository.visibleScope(String(user._id))
+            );
+
+            // The serializer deletes `_id` after writing `id`. Asserted here rather than left
+            // implicit: it is the half of the contract that makes reading `_id` a silent,
+            // role-dependent bug instead of a loud one.
+            expect(asOwner).toBeDefined();
+            expect((asOwner as unknown as { _id?: unknown })._id).toBeUndefined();
+        });
+
+        it('still refuses an order the scope does not cover', async () => {
+            // The polymorphism must not cost the authorization property the scope is there for.
+            // Distinct emails, not the factory default: `users.email` is unique.
+            const [owner, stranger] = await Promise.all([
+                createUser({ email: 'owner@example.com' }),
+                createUser({ email: 'stranger@example.com' })
+            ]);
+            const product = await createProduct();
+            const order = await createOrder(owner, [toOrderItem(product, 1)]);
+
+            const asStranger = await orderRepository.findByIdScoped(
+                String(order._id),
+                orderRepository.visibleScope(String(stranger._id))
+            );
+
+            expect(asStranger).toBeUndefined();
+        });
+    });
 });

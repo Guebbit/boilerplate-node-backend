@@ -83,6 +83,22 @@ const search = async (
  * Goes through the pipeline rather than `findById` so the `_id` lookup and the authorization
  * scope are applied by the same query — checking ownership after the read is how a scoped find
  * turns into an information leak.
+ *
+ * **The return is polymorphic, deliberately: the scope picks the shape.** Unscoped (an admin,
+ * whose `callerScope` is `undefined`) resolves a *hydrated* Mongoose document — mutable,
+ * `save()`-able. Scoped (an owner) resolves an aggregate row already through
+ * `applyOrderTransform` — a plain object, and `search` does the same for the same reason. Both
+ * serialize identically on the wire, because the transform is also the schema's `toJSON`, so a
+ * response body never shows the difference.
+ *
+ * **What a caller may read is therefore `id`, never `_id`.** `id` resolves on both branches: on
+ * the document it is Mongoose's virtual, on the plain object it is written by the transform,
+ * which deletes `_id` on the very next line (`@infrastructure/persistence/serialize`). `_id`
+ * resolves only on the admin branch, and TypeScript cannot catch the difference — `IOrderDocument`
+ * extends `Document`, so `_id` type-checks on a value that will not carry it at runtime. The
+ * failure is silent, role-dependent and survives a green suite: it reads as `undefined` for
+ * exactly the callers who are not admins. That is not hypothetical — the invoice filename and
+ * the invoice's own title both shipped that way.
  */
 const findByIdScoped = (
     id: string,
