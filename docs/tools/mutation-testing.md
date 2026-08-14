@@ -131,7 +131,288 @@ flowchart TB
 
 Both drive the real app over HTTP against an in-memory Mongo — running either once per mutant would take hours.
 
+**The exclusion does not do as much as its name suggests.** 33 files under `src/modules/*/tests/unit/`
+call `setupTestDb()`, which starts a real `mongod` and connects mongoose to it. They are excluded by
+neither pattern, because they are named `unit`. So a mutation run starts and stops a database
+thousands of times, and the cost the two ignore patterns were written to avoid is paid anyway — just
+by a different directory. Find them with:
+
+```bash
+grep -rl "setupTestDb\|MongoMemoryServer" src/modules/*/tests/unit tests/unit tests/cross-cutting | wc -l
+```
+
+That is the load-bearing fact behind the failure mode below.
+
 **This is also why the controllers are not mutated.** They have no unit tests; they are covered by the contract and integration suites, which Stryker doesn't run. Put them in `mutate` and all ~35 files report ~0% — and that number would not mean "the controllers are untested", it would mean "they were measured with a ruler configured not to touch them". Worse, the ratchet would then record those zeros and defend them forever. Measuring controllers honestly requires running contract + integration under Stryker, which is an hours-per-run decision, not a glob.
+
+## What to be wary of — per-file setup costs
+
+Mutation testing multiplies whatever the suite does on setup by the mutant count. A cost that is
+invisible at `npm test` becomes the whole run here.
+
+The worked example, measured 2026-08-14. `setupTestDb()` runs in `beforeAll`, so it fired once per
+test FILE — and it used to start a `MongoMemoryServer` each time:
+
+|                         | per pass   | per run           |
+| ----------------------- | ---------- | ----------------- |
+| `npm test`              | 33 servers | 33                |
+| `npm run test:mutation` | 33 servers | 33 × 6042 mutants |
+
+Each server is a real `mongod` plus ~200 MB of dbpath and ~1 MB of driver buffers. Under `npm test`
+the process exits and takes them; under Stryker the worker persists across mutants, so the buffers
+accumulated to 1.08 GB — 45% of the heap — and the run stopped converging. Starting **one** server
+per jest instance and giving each file its own DATABASE fixed it without touching a single test.
+
+**The rule:** anything in `beforeAll` is paid once per file per mutant. Before adding a server, a
+container, a browser or a fixture build there, ask what it costs multiplied by the mutant count —
+and prefer one shared instance with per-file isolation over one instance per file.
+
+**How to spot it:** run the suite outside Stryker first (`npx jest <scope> --runInBand`). If it is
+fast and light there but heavy under mutation, the difference is setup being repeated, not your
+tests being slow.
+
+## When a run never finishes — the OOM/strand loop
+
+A mutation run can fail in a way that looks like slowness and is not. Recognising it early is worth a
+great deal, because the run will not converge no matter how long it is left alone.
+
+### What you see
+
+```
+Mutation testing 3% (elapsed: ~1h 29m, remaining: ~36h 45m) 4478/6042 tested
+WARN  ChildProcessProxy       Child process [pid 665821] ran out of memory.
+INFO  RetryRejectedDecorator  Test runner process [665821] ran out of memory. You probably have a
+                              memory leak in your tests.
+```
+
+Three tells, and any one of them is enough:
+
+- **The ETA grows while you watch it.** A healthy run's estimate falls.
+- **`ran out of memory` repeats** — every 15–25 seconds in the measured case.
+- **The percentage and the mutant count disagree.** 3% against 4478/6042 means most of that "tested"
+  count belongs to workers that died before reporting it, and will be redone.
+
+### The mechanism
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 40}}}%%
+flowchart TD
+    START["worker starts<br/>fresh jest instance, new pid"] --> RUN["runs a mutant's tests"]
+    RUN --> DB["33 unit suites call setupTestDb()<br/>starts a real mongod<br/>writes .tmp/mongo/&lt;pid&gt;/worker-XXXX (~200 MB)"]
+    DB --> KEEP["ts-jest type-checks the mutated file<br/>its LanguageService keeps every version"]
+    KEEP --> GROW["heap climbs<br/>~1.1 GB per 4 mutants, measured"]
+    GROW -->|"under the limit"| RUN
+    GROW -->|"hits Node's cap<br/>4288 MB on a 30 GB box"| OOM["V8 aborts the process"]
+    OOM --> STRAND["SIGKILL: afterAll/disconnect and<br/>globalTeardown never run<br/><b>the mongod dbpath survives</b>"]
+    STRAND --> LOST["that worker's in-progress<br/>mutants are discarded"]
+    LOST --> START
+
+    classDef ok fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef warn fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class START,RUN,DB ok;
+    class KEEP,GROW warn;
+    class OOM,STRAND,LOST bad;
+```
+
+Measured 2026-08-14: **212 stranded data directories, 71 GB**, inside one sandbox, in under two hours
+— 88 GB across `.stryker-tmp/` once earlier crashed runs were counted. The loop feeds itself: every
+restart pays the full start-up cost again, so throughput falls as the mess grows.
+
+### Why the cleanup did not catch it
+
+The lifecycle in `tests/support/global-setup.ts` is deliberate and well-argued — each jest instance
+owns `.tmp/mongo/<pid>` and deletes exactly that on the way out. It rests on one assumption:
+
+> one jest instance per run, which reaches `globalTeardown`
+
+Stryker breaks both halves. It starts a **new jest instance per restarted worker**, and it kills them,
+so `globalTeardown` is the one step that never runs. Three consequences, each of which hid the mess:
+
+| Design choice                     | What Stryker does to it                                                                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `globalTeardown` deletes the root | Only on a clean exit — so every OOM strands a directory by definition                                                                          |
+| The root comes from `__dirname`   | Under Stryker that resolves **inside the sandbox**, `.stryker-tmp/sandbox-XXXX/.tmp/`, where the documented `rm -rf .tmp` recovery never looks |
+| Ownership is keyed by pid         | Correct for one instance; across hundreds of restarts each new pid simply claims a new directory beside the last                               |
+
+### The strategy, in order
+
+The trap to avoid has a name: **black-box tuning** — turning knobs from outside the process
+(concurrency, heap cap, transform) and watching whether the symptom improves. It feels like progress
+and it answers the wrong question. "Did it get better" cannot distinguish a fix from a postponement,
+which is how the same investigation produces three different conclusions in an afternoon.
+
+1. **Decide the SHAPE before hunting a cause.** Two very different problems present identically:
+
+    |                         | Symptom                                   | Test                                                     | Fix                       |
+    | ----------------------- | ----------------------------------------- | -------------------------------------------------------- | ------------------------- |
+    | **Unbounded growth**    | dies at any ceiling                       | lower the ceiling — it still dies, just sooner           | find what is retained     |
+    | **Bounded working set** | dies only when the ceiling is close to it | lower the ceiling — it stabilises just under the new one | cap it, or shrink the set |
+
+    V8 does not collect eagerly. Given a ceiling far above what a program needs, it will happily
+    drift toward it, so "RSS is climbing" is **not** evidence of a leak on its own.
+
+2. **Reproduce small.** One file, one worker. A problem you can trigger in ninety seconds is one you
+   can test a hypothesis against.
+3. **Bisect one variable.** Change exactly one thing between two otherwise-identical runs — the
+   control below used two files of near-identical size, one whose tests open a database and one
+   whose tests do not.
+4. **Open the box.** Everything above is still black-box. A heap snapshot says what is actually in
+   memory, and until you have one you are guessing.
+5. **Re-measure the same way after changing anything**, or you have swapped one guess for another.
+
+### Reading the heap itself
+
+Node writes a snapshot at the moment it is about to die:
+
+```bash
+NODE_OPTIONS="--max-old-space-size=1400 --heapsnapshot-near-heap-limit=1" \
+  npx stryker run --mutate 'src/infrastructure/http/response.ts' --concurrency 1
+```
+
+Lower `--max-old-space-size` to make that moment arrive sooner — the composition of the heap is the
+same, it just gets there faster. The file lands in the working directory, which under Stryker is the
+sandbox, so:
+
+```bash
+find . -name '*.heapsnapshot'
+npx tsx scripts/heap-report.ts <file.heapsnapshot>
+```
+
+`scripts/heap-report.ts` groups every object by kind and prints the largest. **One dominant kind is a
+finding; an even spread is a working set** — and that single line is the difference between "we have
+a leak" and "this suite is simply heavy". Chrome DevTools' memory panel reads the same file and is
+better at retainer chains; this is for the first question, which is whose bug it is.
+
+### Finding the culprit
+
+Reproduce small before reproducing large. One file, one worker, is enough:
+
+```bash
+npx stryker run --mutate 'src/modules/orders/repository.ts' --concurrency 1
+```
+
+Watch a worker grow while it runs:
+
+```bash
+watch -n5 'ps -o pid,etime,rss,args -p $(pgrep -f child-process-proxy-worker) | cut -c1-100'
+```
+
+**Read `ELAPSED`, not only `RSS`** — it is the fastest diagnosis on this page. If the parent `stryker`
+process has been up for hours while its workers are minutes old, they are being restarted and the run
+is in this loop rather than making progress.
+
+Count the damage as it accumulates:
+
+```bash
+ls .stryker-tmp/sandbox-*/.tmp/mongo/ | wc -l     # one entry per instance that died
+du -sh .stryker-tmp/                              # what it has cost so far
+grep -c "ran out of memory" <run log>             # restarts, when the log was kept
+```
+
+Mind the dot: `.tmp` is hidden, so a plain `du -sh .stryker-tmp/sandbox-*/*` misses the entire problem
+and reports a few megabytes of source.
+
+Then narrow it with jest's own instruments, which answer different questions:
+
+| Command                                       | Answers                                                                    |
+| --------------------------------------------- | -------------------------------------------------------------------------- |
+| `npx jest <suite> --runInBand --logHeapUsage` | does the heap grow from one test FILE to the next                          |
+| `npx jest <suite> --detectOpenHandles`        | what still holds the process open — sockets, timers, an unstopped `mongod` |
+| `npx jest <suite> --detectLeaks`              | whether a suite's module registry survives collection after teardown       |
+
+The shape of the answer matters. Growth **across files within one jest run** points at module-level
+state. Growth **only across mutants** points at something the process keeps that a module-registry
+reset does not clear.
+
+### What it turned out to be — and how the control proved it
+
+Measured 2026-08-14. The decisive experiment was a **control with one variable changed**: mutate
+`src/infrastructure/http/response.ts` (206 lines, whose covering tests open no database) instead of
+`src/modules/orders/repository.ts` (204 lines, whose tests do). Near-identical size, opposite
+database dependency.
+
+The no-database control leaked just as fast — **3963 → 4447 → 5045 MB across four mutants**, past
+Node's cap. So Mongo is a bystander, and Stryker's own hint (`You probably have a memory leak in
+your tests`) points at the wrong layer.
+
+**ts-jest was the first suspect and it is not the answer.** It does two jobs — translate TypeScript,
+and type-check it — and the second holds a `LanguageService` cache that looked like an obvious
+candidate. Replacing it with swc (see below) roughly halved the suite's wall-clock and lowered the
+run's footprint, but the growth continued. A plausible mechanism that improves the symptom is not a
+diagnosis, and treating it as one cost an hour.
+
+**The measurement that should have come first: run the suite OUTSIDE the tool.**
+
+```bash
+NODE_OPTIONS="--max-old-space-size=900 --heapsnapshot-near-heap-limit=1" \
+  npx jest --config jest.config.mutation.js tests/unit tests/cross-cutting 'src/modules/.*/tests/unit' --runInBand
+```
+
+All 110 suites and 1527 tests — including the 33 that start a real `mongod` — complete in ~68
+seconds and never approach a 900 MB ceiling. **The suite is not heavy.** Whatever consumes gigabytes
+is the harness around it, which narrows the search from "our code" to "how Stryker runs our code"
+and rules out every theory about the tests themselves in one command.
+
+**What the heap actually holds**, dumped at the moment of death and grouped by kind:
+
+```
+heap total 2404.1 MB across 15,028,338 objects
+
+     bytes        count  kind
+ 1081.8 MB          958  native system / JSArrayBufferData     <- 45% of the heap
+  358.5 MB      194,035  array (object properties)
+  272.0 MB    5,078,346  closure
+   55.4 MB    1,079,266  object system / Context
+```
+
+Everything after the first line is an even spread — millions of small objects, which is what a
+running program looks like. The first line is 958 objects averaging **1.1 MB each**: raw binary
+buffers, the signature of network and database I/O rather than of compilation or of application
+state. That single group-by is what turns "something leaks" into "these bytes, of this kind".
+
+**One trap to avoid when repeating this measurement:** take the reading during the MUTATION phase,
+not the dry run. The dry run executes the whole suite once — including all 33 database-backed
+suites — so a worker reaches gigabytes there regardless of which file is being mutated, and a
+sample taken then says nothing about the file under test. Watch for `0/N tested` in the progress
+line; while it reads zero, the number on screen is the dry run's.
+
+### The fix
+
+`jest.config.mutation.js` swaps the transform to `@swc/jest` for the mutation run only. swc
+translates and checks nothing, so it retains nothing between mutants. Types are still checked — once,
+by `npm run ts-check` inside `npm run complete`, which is the right number of times: a mutant
+changes an expression, not a signature, so re-checking per mutant cannot return a different answer.
+
+It is also simply faster. The same 110 suites and 1527 tests:
+
+| Transform                                         | Time       |
+| ------------------------------------------------- | ---------- |
+| ts-jest (`jest.config.js`, the normal run)        | ~21 s      |
+| swc (`jest.config.mutation.js`, the mutation run) | **~9.7 s** |
+
+**One compatibility note, and it is a real semantic difference rather than a quirk.** TypeScript
+emits each `require` where its `import` stood; swc follows ESM and hoists imports to the top. A
+`jest.mock` factory that reads a `const` declared between the two therefore works under ts-jest and
+throws `Cannot access '<name>' before initialization` under swc. The fix is to reach the variable
+from inside a function — a getter, or a wrapping arrow — so the read happens on access rather than
+at factory time. `tests/unit/infrastructure/adapters/mailer-dispatch.test.ts` carries a worked
+example in its comments.
+
+### Preventing it
+
+- **Sweep before the run, not only after it.** A killed process cannot clean up after itself, so the
+  next start has to.
+- **Keep the data root out of the sandbox.** An absolute path passed in through the environment
+  survives the copy; a `__dirname`-derived one does not.
+- **Sweep dead siblings at `globalSetup`.** A directory named for a pid that no longer exists belongs
+  to a dead instance and is safe to remove, which bounds accumulation _within_ a run rather than only
+  between runs.
+- **Cap the worker heap deliberately** instead of inheriting Node's default. That default is derived
+  from total system RAM, so a bigger machine hands each worker a longer runway before the same crash.
+
+**A cap is containment, not a fix.** A unit suite that reaches gigabytes is retaining something it
+should be releasing; the cap only decides how long it takes to notice.
 
 ## Why it never gates a PR
 

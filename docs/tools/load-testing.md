@@ -14,8 +14,8 @@ Start the stack, then point a run at it:
 
 ```bash
 npm run compose:restart     # or: npm run dev
-npm run test:load          # GET /products      — cached read path
-npm run test:load:search   # POST /products/search — uncached, database-backed
+npm run bench          # GET /products      — cached read path
+npm run bench:search   # POST /products/search — uncached, database-backed
 ```
 
 Both use 20 connections for 30 seconds and print a latency histogram (`-l`). They read
@@ -30,11 +30,11 @@ npx autocannon -c 10 -d 20 -H 'Authorization: Bearer <token>' http://localhost:3
 
 ## The two scripts are deliberately different paths
 
-`test:load` hits `GET /products`, which is cached (`setCache(3600, { tags: ['products'] })` in
+`bench` hits `GET /products`, which is cached (`setCache(3600, { tags: ['products'] })` in
 `routes/products.ts`). After the first request nearly every response is a Redis hit, so it
 measures the cache and the HTTP stack. Watch `x-cache: HIT` and expect low, flat latency.
 
-`test:load:search` hits `POST /products/search`, which is **not** cached and runs a regex query
+`bench:search` hits `POST /products/search`, which is **not** cached and runs a regex query
 against Mongo. This is the one that moves `http_request_duration_milliseconds` in an interesting
 way, and the one that shows database time inside a trace.
 

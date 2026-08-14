@@ -48,8 +48,26 @@ setupTestDb();
  */
 const RUNS_PER_OPERATION = 12;
 
-/** One seed for the file, so a failure is reproducible rather than a story about last Tuesday. */
-const SEED = 20_260_809;
+/**
+ * One seed for the file, so a failure is reproducible rather than a story about last Tuesday.
+ *
+ * Rolled fresh per run unless `RANDOM_DATA_SEED` pins it, and printed either way — the same
+ * contract `tests/support/contract-data.ts` follows, and the same variable name the paired frontend
+ * reads for `npm run test:e2e:random`. One vocabulary across three generative suites and two repos,
+ * so a seed quoted from a failing nightly means something wherever it is pasted.
+ *
+ * Rolling rather than pinning is deliberate: a fixed seed tests the same 660 requests forever, which
+ * is a regression test wearing a fuzzer's name. The cost is that a failure needs its seed to
+ * reproduce, which is why the seed is logged before the first case runs.
+ */
+const SEED = (() => {
+    const raw = process.env.RANDOM_DATA_SEED;
+    const parsed = raw ? Number(raw) : Number.NaN;
+    const seed = Number.isFinite(parsed) ? parsed : Math.floor(Math.random() * 1e9);
+    // eslint-disable-next-line no-console
+    console.log(`[fuzz] seed=${seed} (rerun with RANDOM_DATA_SEED=${seed} to reproduce)`);
+    return seed;
+})();
 
 const OPERATIONS = listOperations();
 

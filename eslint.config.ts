@@ -246,6 +246,8 @@ export default tseslint.config(
          * attached, and JSON cannot carry a comment.)
          */
         '**/jest.config.js',
+        // Same reasoning, for the swc-transform override the mutation run uses.
+        '**/jest.config.mutation.js',
         '**/commitlint.config.cjs',
         'db/migrations/**/*.js',
         'docs/**',

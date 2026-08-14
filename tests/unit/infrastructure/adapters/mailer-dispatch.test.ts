@@ -37,10 +37,27 @@ jest.mock('@infrastructure/adapters/queue', () => ({
 }));
 
 const loggerMock = { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() };
+/*
+ * Getters rather than `logger: loggerMock`, and the difference is not stylistic.
+ *
+ * `jest.mock` is hoisted above everything, so the factory runs the moment the mocked module is
+ * first required. How soon that is depends on the transform: TypeScript emits each `require` where
+ * its `import` stood, which puts it after the `const` above, while swc follows ESM and hoists
+ * imports to the top — which puts it BEFORE, and reading `loggerMock` there throws
+ * `Cannot access 'loggerMock' before initialization`.
+ *
+ * A getter body runs on property access instead of at factory time, by which point the `const` is
+ * initialised under either. The two mocks above are already safe for the same reason: each reaches
+ * its variable from inside a function rather than at the top level of the object.
+ */
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,
-    logger: loggerMock,
-    auditLogger: loggerMock
+    get logger() {
+        return loggerMock;
+    },
+    get auditLogger() {
+        return loggerMock;
+    }
 }));
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';

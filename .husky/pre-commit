@@ -1,10 +1,17 @@
-# The full gate, and the only one: build, unit, integration, contract, lint, format check.
+# The full gate, and the only one: build, lint, both spec lints, format check, the contract-bundle
+# and cross-repo contract checks, then unit, cross-cutting, integration and contract tests.
 #
-# About 60 seconds, which is why it is not split into tiers. Integration and contract cost 9s and
-# 29s against an in-memory Mongo — there is nothing worth trading away, and one gate is easier to
+# About 90 seconds, which is why it is not split into tiers. Integration and contract cost 14s and
+# 49s against an in-memory Mongo — there is nothing worth trading away, and one gate is easier to
 # trust than three.
 #
+# `check:spec-identity` SKIPS rather than fails when the paired frontend is not on disk, so a
+# half-cloned pair can still commit. It stays fatal under CI, where a missing sibling means the
+# workflow is misconfigured.
+#
 # Deliberately not here, and run by hand for the occasions that want them: `test:mutation`
-# (re-executes the unit suite once per mutant) and `test:prism` (boots a mock server on a real
-# port).
-npm run complete:check
+# (re-executes the unit suite once per mutant — nightly in CI), `complete:manual` (`test:prism`,
+# which binds a real port), `bench` / `bench:search` (need a running server, and report numbers
+# rather than a verdict), and `test:fuzz` — which is nightly until the 500 it found is fixed, see
+# docs/theory/known-gaps.md §9.
+npm run complete

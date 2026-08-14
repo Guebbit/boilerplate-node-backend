@@ -129,6 +129,32 @@ Merging any two would mean one of those questions stops being asked. The merge t
 
 It is run by hand, not from this repo's CI — the two repos are independently versioned and there is no single pipeline that owns both. Boot sequence and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/live-e2e.md`. The practical implication for changes here: editing `db/seeds/index.ts` or `openapi.yaml` without telling the frontend team is exactly the drift that profile exists to catch, but only the next time someone runs it.
 
+## Test timings
+
+Measured 2026-08-14 on a 16-core / 30 GB machine. They are here so a number that doubles is visible
+as a regression rather than as "tests feel slow lately" — treat them as an order of magnitude, not a
+promise. The paired frontend keeps the same table; its numbers are an order of magnitude larger,
+because Cypress drives a real browser and this suite does not.
+
+| Command                      | Time     | What it runs                                                               |
+| ---------------------------- | -------- | -------------------------------------------------------------------------- |
+| `npm run test:unit`          | **~23s** | 98 suites, 1425 tests                                                      |
+| `npm run test:cross-cutting` | ~3s      | 12 suites, 102 tests — the sweeps                                          |
+| `npm run test:integration`   | ~14s     | 8 suites, 66 tests, `--runInBand`                                          |
+| `npm run test:contract`      | ~49s     | 14 suites, 222 tests, `--runInBand`                                        |
+| `npm test`                   | **~90s** | all four, in that order                                                    |
+| `npm run test:mutation`      | hours    | 6042 mutants; nightly in CI, see [Mutation Testing](./mutation-testing.md) |
+
+The whole suite under the mutation run's swc transform is **~10s** for the same 1527 tests that take
+~26s under ts-jest — the difference is type-checking, which `npm run ts-check` does once for the
+whole project anyway. See `jest.config.mutation.js`.
+
+**`--runInBand` on two of the four is worth re-examining.** It serialises test FILES, and the
+justification recorded in [Concurrency Testing](./concurrency-testing.md) — that parallel workers
+would share one in-memory Mongo — no longer describes the setup: `tests/support/global-setup.ts`
+starts one server and `database.ts` gives each file its own DATABASE on it, so files are already
+isolated from one another. Worth measuring before changing, not assuming.
+
 ## Quality tools
 
 | Tool                                                                                                                        | Why it is here                                                                                                                                           |

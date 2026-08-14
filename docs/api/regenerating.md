@@ -17,7 +17,7 @@ npm run gen:api              # openapi.yaml -> api/ (types + Zod)
 Then the gate that would have caught you anyway:
 
 ```bash
-npm run complete:check      # build + test + lint + format — the same thing pre-commit runs
+npm run complete      # build + test + lint + format — the same thing pre-commit runs
 ```
 
 Nothing else is needed unless you touched `asyncapi` fragments (add `npm run gen:asyncapi`).
@@ -128,7 +128,7 @@ npm run test:contract             # do real responses match the contract?
 | spectral reports a dangling `$ref`                                   | a schema moved into a module fragment while another module still references it              | move it to `shared/contracts/schemas.yaml`              |
 
 Two guards run without you asking: `tests/cross-cutting/contract-bundles.test.ts` asserts every
-bundle equals a fresh assembly on **every** test run (so the pre-commit `complete:check` covers it),
+bundle equals a fresh assembly on **every** test run (so the pre-commit `complete` covers it),
 and CI re-runs `gen:api` and `gen:asyncapi` to prove the committed output is fresh.
 
 ## The generated output is committed, all of it

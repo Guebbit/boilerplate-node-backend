@@ -110,9 +110,19 @@
         "",
         "── CONCURRENCY ──────────────────────────────────────────────────────────────────────────",
         "The ceiling is MEMORY, not cores: each worker is a separate process carrying a full test",
-        "runner and its own in-memory mongod, and the machine is in use while a run happens. 8 on a",
-        "32-core / 30 GB box leaves headroom deliberately; at 12, free RAM fell to ~6 GB and load",
-        "average hit 14. Lower it on a smaller machine rather than raising it on a bigger one.",
+        "runner and its own in-memory mongod, and the machine is in use while a run happens. Lower",
+        "this on a smaller machine rather than raising it on a bigger one.",
+        "",
+        "4 on a 32-core / 30 GB box. It was 8, and 8 stopped fitting: measured 2026-08-14, a run at",
+        "8 held four workers at ~4 GB RSS each, logged 12 'ran out of memory' worker restarts in the",
+        "first five minutes, and then made no progress at all — 1927 of 6040 mutants after five",
+        "minutes and the same 1927 three samples later. A run that thrashes does not merely take",
+        "longer, it stops finishing.",
+        "",
+        "What moved was the project, not the machine: the domain count went from nine modules to",
+        "thirteen and the mutant count from 3241 to 6040, so the same 8 workers now each carry a",
+        "much larger program. THIS NUMBER IS A MEASUREMENT WITH AN EXPIRY DATE. Re-measure it when",
+        "the module count grows again, and treat a stalled progress line as the symptom.",
         "",
         "CI overrides this: mutation.yml passes --concurrency 3, because a standard GitHub runner is",
         "4 vCPU / 16 GB. The safe number is a property of the machine, not of the project.",
@@ -127,7 +137,7 @@
     "testRunner": "jest",
     "jest": {
         "projectType": "custom",
-        "configFile": "jest.config.js",
+        "configFile": "jest.config.mutation.js",
         "enableFindRelatedTests": true,
         "config": {
             "testPathIgnorePatterns": [
@@ -165,5 +175,5 @@
         "break": null
     },
     "timeoutMS": 30000,
-    "concurrency": 8
+    "concurrency": 4
 }

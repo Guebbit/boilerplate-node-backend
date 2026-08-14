@@ -3,7 +3,7 @@ name: CI
 # The merge gate. Everything here runs on every PR and on every push to main, and the aggregate
 # `ci` job at the bottom is the single check branch protection requires.
 #
-# Deliberately many small jobs rather than one `npm run complete:check`: they run in parallel, and
+# Deliberately many small jobs rather than one `npm run complete`: they run in parallel, and
 # a red square names the thing that broke (formatting? contract? integration?) without anyone
 # opening a log. The trade is repeated checkout/setup/install boilerplate in each.
 #

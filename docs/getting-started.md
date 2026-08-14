@@ -47,8 +47,9 @@ curl http://localhost:3000/observability/metrics      # Prometheus exposition
 | RabbitMQ management | `http://localhost:15672` |                                   |
 | Umami               | `http://localhost:3080`  |                                   |
 
-The full list, and the env var for every port, is _Host port map_ in the repo README. This repo owns
-`3000–3099`; the paired frontend owns `8080–8099`, which is what lets both stacks be up at once.
+The full list, and the env var for every port, is in
+[Pairing & Ports](./tools/pairing-and-ports.md). This repo owns `3000–3099`; the paired frontend
+owns `8080–8099`, which is what lets both stacks be up at once.
 
 ## Explore the API without writing a client
 
@@ -64,7 +65,7 @@ They are generated, never hand-written, which is why they cannot rot. See
 
 `npm run dev` alone will **not** work against the shipped `.env`: the hostname `database` only
 resolves inside the compose network. Prefix anything that reaches a datastore with
-`npm run host --`, which redirects the hostnames to `localhost` and changes nothing else — start
+`npm run host --`, which redirects the hostnames to `127.0.0.1` and changes nothing else — start
 the stack (or at least Mongo and Redis) first:
 
 ```bash
@@ -78,10 +79,17 @@ Only the **hostname** moves. The database name, ports and everything else still 
 `.env`, so there is no second env file to keep in sync — see
 [Package Scripts](./tools/package-scripts.md#database--seed-scripts) for the mechanics.
 
+The target is the literal `127.0.0.1`, not the name `localhost`, and that is not a style choice.
+On a dual-stack machine `localhost` resolves to both `::1` and `127.0.0.1`, in an order the
+resolver decides; docker and podman publish a port to `0.0.0.0`, which is IPv4 only. Where the
+resolver answers with the IPv6 address first, the name reaches a port nothing is listening on, and
+a container that is running and healthy refuses every connection — as `ECONNRESET`, or as a hang,
+never as anything that says why.
+
 ## The one command before you commit
 
 ```bash
-npm run complete:check     # build + all tests + lint + format check — ~60s
+npm run complete     # build + all tests + lint + format check — ~60s
 ```
 
 This is exactly what the pre-commit hook runs, so running it by hand only ever saves you a rejected
@@ -99,4 +107,4 @@ minutes), `npm run test:fuzz`, `npm run test:prism` (boots a mock server on a re
 | Understand the folder layout                | [Theory / Modules](./theory/modules.md), [Layers](./theory/layers.md) |
 | Find out what a dependency is doing here    | [Tools Explained](./tools/tools-explained.md)                         |
 | Look up a script                            | [Package Scripts](./tools/package-scripts.md)                         |
-| Run the paired frontend too                 | _Pairing with the frontend_ in the repo README                        |
+| Run the paired frontend too                 | [Pairing & Ports](./tools/pairing-and-ports.md)                       |

@@ -166,7 +166,7 @@ not received the regenerated files yet. See [the shared contract](#the-shared-co
 ### 6 · Check
 
 ```bash
-npm run complete:check
+npm run complete
 ```
 
 ### What it actually cost
@@ -190,7 +190,7 @@ flowchart LR
     A["1 · rm -rf<br/>src/modules/&lt;name&gt;/"] --> B["2 · delete its line<br/>from src/modules.ts"]
     B --> C["3 · delete its<br/>section-order entries"]
     C --> D["4 · re-bundle +<br/>copy to the frontend"]
-    D --> E["5 · npm run complete:check"]
+    D --> E["5 · npm run complete"]
     E --> F["whatever fails is<br/><b>real coupling</b>"]
     classDef s fill:#fee2e2,stroke:#dc2626,color:#111827;
     class A,B,C,D,E,F s;
