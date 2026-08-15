@@ -46,7 +46,7 @@
         "db:seed:reset": "tsx db/seeds/index.ts --reset",
         "db:cache:clear": "tsx db/cache-clear.ts",
         "db:bootstrap": "npm run db:migrate:up && npm run db:seed",
-        "compose": "tsx scripts/compose.ts",
+        "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",
         "compose:kill": "npm run compose -- kill",

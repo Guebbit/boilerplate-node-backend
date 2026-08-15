@@ -22,9 +22,8 @@ was the same string copied N times:
 | `npm run compose -- <cmd>` | `podman:compose` and `docker:compose`    | `npm run compose -- logs -f app` |
 
 `host` blanks `NODE_DB_URI` / `NODE_REDIS_URL` and points both hostnames at `localhost`, then hands
-off to `npm run` — see [Database & seed scripts](#database--seed-scripts). `compose` picks the
-container engine and passes both compose files with `-f` — see
-[Container scripts](#container-scripts).
+off to `npm run` — see [Database & seed scripts](#database--seed-scripts). `compose` expands to
+`${CONTAINER_ENGINE:-podman} compose` — see [Container scripts](#container-scripts).
 
 ## Runtime scripts
 
@@ -142,21 +141,22 @@ hostname-redirecting script appears.
 Three verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
 Promtail override with `-f`, which is what gives Promtail a host log path to tail.
 
-| Script            | Job                                                                                            | Read more                                 |
-| ----------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `compose:restart` | restart the compose stack                                                                      | [Docker & Podman](./docker-and-podman.md) |
-| `compose:rebuild` | rebuild images and restart the stack                                                           | [Docker & Podman](./docker-and-podman.md) |
-| `compose:kill`    | force-stop this project's compose containers                                                   | [Docker & Podman](./docker-and-podman.md) |
-| `compose`         | the `-f base -f override` invocation the three share; call it directly for one-off subcommands | [Docker & Podman](./docker-and-podman.md) |
+| Script            | Job                                                                                   | Read more                                 |
+| ----------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `compose:restart` | restart the compose stack                                                             | [Docker & Podman](./docker-and-podman.md) |
+| `compose:rebuild` | rebuild images and restart the stack                                                  | [Docker & Podman](./docker-and-podman.md) |
+| `compose:kill`    | force-stop this project's compose containers                                          | [Docker & Podman](./docker-and-podman.md) |
+| `compose`         | the bare compose invocation the three share; call it directly for one-off subcommands | [Docker & Podman](./docker-and-podman.md) |
 
 ```bash
 npm run compose -- logs -f app                   # any compose subcommand
-CONTAINER_ENGINE=podman npm run compose:restart  # or set it once in .env
+CONTAINER_ENGINE=docker npm run compose:restart  # podman is the default
 ```
 
-`scripts/compose.ts` picks the engine from `CONTAINER_ENGINE` (environment, then `.env`), falling
-back to whichever is installed and to docker when both are. It prints the engine and the full
-argument list on every run, so a surprising choice is visible rather than silent.
+All four expand to `${CONTAINER_ENGINE:-podman} compose`. Export `CONTAINER_ENGINE` in your shell
+to switch — a **shell** variable, not a `.env` entry, because npm never reads `.env` and so never
+sees what is written there. Compose does read it, which is why every other setting on this page can
+live in `.env` and this one cannot.
 
 ## Maintenance & publishing scripts
 

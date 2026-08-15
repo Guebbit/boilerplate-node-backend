@@ -1,6 +1,10 @@
 # Promtail reads container logs and ships them to Loki.
 # Why this file exists: log shipping/parsing rules are defined by scrape + pipeline stages.
 # Local goal: parse Docker JSON logs, extract useful labels, keep correlation fields.
+#
+# The default — compose mounts this unless PROMTAIL_CONFIG names the podman variant. The host log
+# directory arrives at /var/log/host-containers whichever engine you run, so the glob below is
+# fixed and only CONTAINER_LOGS_PATH in .env changes.
 
 server:
     # Promtail debug/metrics HTTP endpoint.
@@ -23,7 +27,7 @@ scrape_configs:
           - targets: ['localhost']
             labels:
                 job: docker
-                __path__: /var/lib/docker/containers/*/*-json.log
+                __path__: /var/log/host-containers/*/*-json.log
 
       pipeline_stages:
           # Stage 1: parse Docker outer JSON envelope.

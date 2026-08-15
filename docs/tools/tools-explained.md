@@ -359,7 +359,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** Loki does not pull logs — something must push them. Promtail sits on the host, knows where each container writes its log file, and handles the Docker vs Podman format differences without changes to the app itself.
 
-**In this repo.** Two configs ship with the repo: one for Docker (`json-file` log driver) and one for Podman (`k8s-file` / CRI format). The correct config is selected by the `docker-compose.podman.yml` override. Config lives at `.docker/observability/promtail*.config.yaml`.
+**In this repo.** Two configs ship with the repo: one for Docker (`json-file` log driver) and one for Podman (`k8s-file` / CRI format). `PROMTAIL_CONFIG` in `.env` selects which one is mounted (docker's is the default). Config lives at `.docker/observability/promtail*.config.yaml`.
 
 → [Loki](./loki.md) · [Docker & Podman](./docker-and-podman.md)
 

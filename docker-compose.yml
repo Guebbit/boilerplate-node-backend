@@ -250,8 +250,17 @@ services:
         image: grafana/promtail:3.3.2
         restart: unless-stopped
         command: ['-config.file=/etc/promtail/promtail-config.yaml']
+        # The only part of this stack that differs between docker and podman, and it is two
+        # values: where the host keeps container logs, and which parser reads them (docker wraps
+        # each line in a JSON envelope, podman's k8s-file driver writes CRI). Both come from
+        # `.env`, which compose reads on its own — so there is no override file to select and no
+        # `-f` list to get wrong. Defaults are docker's, so docker users set neither.
+        #
+        # The host path is mounted at one fixed location whichever engine you run, which is why
+        # both configs below can hardcode their `__path__` under it.
         volumes:
-            - ./.docker/observability/promtail.config.yaml:/etc/promtail/promtail-config.yaml:Z
+            - ./.docker/observability/${PROMTAIL_CONFIG:-promtail.config.yaml}:/etc/promtail/promtail-config.yaml:Z
+            - ${CONTAINER_LOGS_PATH:-/var/lib/docker/containers}:/var/log/host-containers:ro
         depends_on:
             - loki
 

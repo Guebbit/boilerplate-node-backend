@@ -60,12 +60,12 @@ flowchart LR
 
 ## What is implemented
 
-| Area                | Current implementation                                                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| App image           | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                                 |
-| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                               |
-| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands      |
-| Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` drive either engine through `scripts/compose.ts`; pick one with `CONTAINER_ENGINE` |
+| Area                | Current implementation                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| App image           | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                                    |
+| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                                  |
+| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands         |
+| Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch |
 
 ## Container reference
 
@@ -85,15 +85,15 @@ flowchart LR
 
 ### Observability stack
 
-| Container        | Image                                          | Port(s)                      | Role                                                                                                            |
-| ---------------- | ---------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `otel-collector` | `otel/opentelemetry-collector-contrib:0.114.0` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                           |
-| `tempo`          | `grafana/tempo:2.6.1`                          | internal only                | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                 |
-| `prometheus`     | `prom/prometheus:v2.55.1`                      | `9090`                       | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.               |
-| `alertmanager`   | `prom/alertmanager:v0.27.0`                    | `9093`                       | Receives firing alerts from Prometheus. Routes/groups notifications. Null receiver by default in local dev.     |
-| `loki`           | `grafana/loki:3.3.2`                           | `3100`                       | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                            |
-| `promtail`       | `grafana/promtail:3.3.2`                       | internal only                | Tails container log files and pushes entries to Loki. Needs a runtime override for Docker vs Podman log paths.  |
-| `grafana`        | `grafana/grafana:11.4.0`                       | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev. |
+| Container        | Image                                          | Port(s)                      | Role                                                                                                                       |
+| ---------------- | ---------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `otel-collector` | `otel/opentelemetry-collector-contrib:0.114.0` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                      |
+| `tempo`          | `grafana/tempo:2.6.1`                          | internal only                | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                            |
+| `prometheus`     | `prom/prometheus:v2.55.1`                      | `9090`                       | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                          |
+| `alertmanager`   | `prom/alertmanager:v0.27.0`                    | `9093`                       | Receives firing alerts from Prometheus. Routes/groups notifications. Null receiver by default in local dev.                |
+| `loki`           | `grafana/loki:3.3.2`                           | `3100`                       | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                       |
+| `promtail`       | `grafana/promtail:3.3.2`                       | internal only                | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman. |
+| `grafana`        | `grafana/grafana:11.4.0`                       | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.            |
 
 ## Service groups
 
@@ -115,49 +115,39 @@ Docker writes container logs as `json-file` under `/var/lib/docker/containers`. 
 uses the `k8s-file` log driver (CRI format) and stores them under a different host path. Promtail
 has to be pointed at the right one, or it tails nothing.
 
-The base `docker-compose.yml` therefore mounts **neither**. Each runtime adds its own path through
-a small override file — `docker-compose.docker.yml` or `docker-compose.podman.yml` — and
-`scripts/compose.ts` passes the correct one with `-f`:
+That is the entire difference between the two runtimes, and it is two values in `.env`, which
+compose reads by itself:
 
-```bash
-npm run compose:restart                          # engine auto-detected
-CONTAINER_ENGINE=podman npm run compose:restart  # -f docker-compose.yml -f docker-compose.podman.yml
-CONTAINER_ENGINE=docker npm run compose:restart  # -f docker-compose.yml -f docker-compose.docker.yml
+```dotenv
+CONTAINER_LOGS_PATH=/home/youruser/.local/share/containers/storage/overlay-containers
+PROMTAIL_CONFIG=promtail.podman.config.yaml
 ```
+
+The defaults in `docker-compose.yml` are docker's, so on docker you set neither. Whichever path
+you give is mounted at `/var/log/host-containers`, so the two promtail configs differ only in the
+glob under it and the parser stage — CRI for podman, JSON envelope for docker.
+
+There is no override file and no `-f` list. There used to be both, plus a `scripts/compose.ts`
+that chose between them; the whole apparatus existed to move one volume mount, and it went wrong
+in the way that machinery does — it selected the docker override on a podman-only machine and
+Promtail silently tailed nothing.
 
 ### Choosing the engine
 
-`scripts/compose.ts` resolves it in this order, and prints the result on every run:
-
-1. `CONTAINER_ENGINE` in the environment,
-2. `CONTAINER_ENGINE` in `.env`,
-3. whichever of the two is actually installed,
-4. `docker`.
-
-**Set it in `.env` if you have both installed and want podman** — step 3 cannot tell a preference
-from a coincidence, so it prefers docker when both answer `--version`.
-
-This replaced eight npm scripts (`podman:{restart,rebuild,kill,compose}` and the docker four) that
-differed only in the engine name and the override file. The engine was never the interesting part;
-the `-f` list was, and it now exists in exactly one place, where choosing an engine cannot lose it.
-
-On Podman, one line in `.env` (see `.env-example`) supplies the log path the override needs:
-
-```dotenv
-PODMAN_CONTAINERS_PATH=/home/youruser/.local/share/containers/storage/overlay-containers
+```bash
+npm run compose:restart                          # podman
+CONTAINER_ENGINE=docker npm run compose:restart  # docker
 ```
 
-The Podman override also swaps in `.docker/observability/promtail.podman.config.yaml`, which
-parses the CRI log format.
+`npm run compose` expands `${CONTAINER_ENGINE:-podman} compose`. Export the variable in your shell
+profile if you use docker — and note it is a **shell** variable, not a `.env` one. Compose reads
+`.env`; npm does not, so the one thing `.env` cannot decide is which binary npm invokes. That suits
+it: your engine is a property of your machine, not of this repo.
 
-> **Use the scripts, not a bare `compose up`.** The base file alone gives Promtail no host log
-> path: it starts, tails nothing, and Loki stays empty with no error anywhere — the failure is
-> completely silent, and only shows up as blank log panels in Grafana.
->
-> **Do not set `COMPOSE_FILE` in `.env` to work around this.** Docker Compose honours it there,
-> but podman-compose ignores it (verified 2026-08-05 against podman-compose 1.6.0), so it works
-> on one runtime and silently does nothing on the other — which is why the file list lives in the
-> scripts instead.
+> **Do not set `COMPOSE_FILE` in `.env`.** Docker Compose honours it there, but podman-compose
+> ignores it (verified 2026-08-05 against podman-compose 1.6.0), so anything built on it works on
+> one runtime and silently does nothing on the other. Plain variables like the two above are
+> substituted by both.
 
 ## When Kubernetes starts to make sense
 

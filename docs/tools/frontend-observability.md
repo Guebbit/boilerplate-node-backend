@@ -157,8 +157,8 @@ Because each job is behind an SDK boundary, switching is localized:
    [`src/infrastructure/observability/analytics.ts`](../tools/posthog.md) pointing at `NODE_POSTHOG_HOST`. Point it
    (and the frontend SDK) at a self-hosted PostHog host instead of Umami — the event
    taxonomy does not change.
-3. Add the new services to [`docker-compose.yml`](./docker-and-podman.md) and, for Podman,
-   the `docker-compose.podman.yml` override.
+3. Add the new services to [`docker-compose.yml`](./docker-and-podman.md) — one file, both
+   runtimes.
 
 ## Related pages
 

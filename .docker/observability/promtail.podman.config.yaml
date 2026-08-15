@@ -2,8 +2,11 @@
 # Why this file exists: Podman stores container logs in a different path and
 # uses CRI format instead of Docker JSON format, so a separate config is needed.
 #
-# Used by: docker-compose.podman.yml (compose override for Podman).
-# Docker equivalent: promtail.config.yaml (uses /var/lib/docker/containers).
+# Selected by PROMTAIL_CONFIG=promtail.podman.config.yaml in .env, alongside CONTAINER_LOGS_PATH
+# pointing at your podman storage. Docker equivalent: promtail.config.yaml (the default).
+#
+# Both are mounted at /var/log/host-containers regardless of engine, so the only difference left
+# below is the glob under it and the parser stage.
 
 server:
     # Promtail debug/metrics HTTP endpoint.
@@ -29,7 +32,7 @@ scrape_configs:
           - targets: ['localhost']
             labels:
                 job: podman
-                __path__: /var/lib/containers/overlay-containers/*/userdata/*.log
+                __path__: /var/log/host-containers/*/userdata/*.log
 
       pipeline_stages:
           # Stage 1: parse the CRI envelope written by Podman's k8s-file driver.
