@@ -19,10 +19,10 @@
  * test is the error contract, and a real repository cannot be made to fail on demand.
  */
 import { auditLogService } from '@modules/audit-logs';
-import { auditLogRepository } from '@modules/audit-logs';
+import { auditLogRepository } from '@modules/audit-logs/repository';
 import { logger } from '@infrastructure/adapters/logger';
 import { type AuditEntry } from '@infrastructure/observability/audit';
-import type { AuditLogDocument } from '@modules/audit-logs';
+import type { AuditLogDocument } from '@modules/audit-logs/model';
 
 jest.mock('@modules/audit-logs/repository', () => ({
     auditLogRepository: {

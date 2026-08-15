@@ -66,12 +66,12 @@ shared rule belongs to whichever domain OWNS it, exported through that module's 
 
 So `kernel` is small on purpose. It is the module system, and nothing else:
 
-| File                            | Why it cannot be infrastructure                                            |
-| ------------------------------- | -------------------------------------------------------------------------- |
-| `registry.ts`                   | it _is_ the module system — `IAppModule`, the DAG check, `registerModules` |
-| `events.ts`                     | it exists so two modules can talk without importing each other             |
-| `authentication.ts`             | the socket `account` plugs into, so guards need no module import           |
-| `middlewares/authorizations.ts` | the guard that consumes that socket                                        |
+| File                            | Why it cannot be infrastructure                                           |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| `registry.ts`                   | it _is_ the module system — `AppModule`, the DAG check, `registerModules` |
+| `events.ts`                     | it exists so two modules can talk without importing each other            |
+| `authentication.ts`             | the socket `account` plugs into, so guards need no module import          |
+| `middlewares/authorizations.ts` | the guard that consumes that socket                                       |
 
 Delete `src/modules/` and those four files lose their reason to exist. Everything else that is
 domain-free is `infrastructure`, no matter where it sits in the request lifecycle:
@@ -279,13 +279,30 @@ at all, and the templates interpolate rather than translate.
 ```ts
 export default {
     name: 'orders',
+    subdomain: 'core',
+    language: {
+        Order: 'What a customer bought, frozen. Immutable in substance: only its status moves.'
+        // …
+    },
     basePath: '/orders',
     routes: router,
-    dependsOn: ['products'],
+    dependsOn: [
+        {
+            module: 'products',
+            as: 'conformist',
+            because:
+                'An order item embeds `productSchema` itself, so the catalogue’s shape is this module’s shape too.'
+        }
+    ],
     locales: path.join(__dirname, 'locales'),
     seeds: seedOrdersCollection
-} satisfies IAppModule;
+} satisfies AppModule;
 ```
+
+`subdomain`, `language` and the `as`/`because` on each edge are the module's **strategic**
+declarations — what it is to the business, the words it uses, and what kind of relationship each
+arrow is. Nothing reads them at runtime; `tests/cross-cutting/` reads all three. They are covered in
+[Strategic DDD](./strategic-ddd.md).
 
 It is a union of two alternatives, so a domain that owns data but no URL is a first-class entry
 rather than a special case:
@@ -293,7 +310,7 @@ rather than a special case:
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart LR
-    IAM["IAppModule"]
+    IAM["AppModule"]
     R["<b>routed</b><br/>basePath + routes<br/><i>12 modules</i>"]
     H["<b>headless</b><br/>basePath?: never<br/>routes?: never<br/><i>audit-logs</i>"]
     IAM --> R
@@ -333,6 +350,10 @@ flowchart TD
 
 Solid arrows are `dependsOn` — declared, and validated as a **DAG at boot**. Dotted arrows are
 domain events going the other way.
+
+Every solid arrow also carries a **kind**: `conformist`, `customer-supplier`, `published-language`
+or `shared-kernel`. That label is what makes the map answer "what does changing `products` cost?"
+rather than only "who touches `products`?" — see [Strategic DDD](./strategic-ddd.md).
 
 That pairing is the answer to mutual need. Deleting a product must empty it from every cart, while
 the cart needs the catalogue to price a line. As imports that is a cycle; as one import plus one

@@ -1,7 +1,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
-import { auditLogRepository } from '@modules/audit-logs';
+import { auditLogRepository } from '@modules/audit-logs/repository';
 import { coreAuditActions, type AuditEntry } from '@infrastructure/observability/audit';
-import type { AuditLogDocument } from '@modules/audit-logs';
+import type { AuditLogDocument } from '@modules/audit-logs/model';
 
 setupTestDb();
 

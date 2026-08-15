@@ -18,9 +18,29 @@ import './metrics';
  */
 export default {
     name: 'inventory',
+    /*
+     * A ledger that explains stock without owning it. Specific to running a shop, not the reason
+     * anyone shops here — and deliberately kept downstream, so it can never become a second
+     * authority on how many units exist.
+     */
+    subdomain: 'supporting',
+    language: {
+        'Stock movement':
+            'One row explaining a change in stock: how many, and why. Written after the fact, never as the cause.',
+        Reason: 'What moved the units — a sale, a cancellation, an admin edit, a restock. The whole value of the ledger.',
+        Restock:
+            'The one movement this module originates rather than records. It still announces through `products`.'
+    },
     basePath: '/inventory',
     routes: router,
-    dependsOn: ['products'],
+    dependsOn: [
+        {
+            module: 'products',
+            as: 'conformist',
+            because:
+                'Reads the catalogue’s own counts and listens to `stock.moved`; the shelf number stays the catalogue’s to define.'
+        }
+    ],
     subscribe: () => {
         onDomainEvent(STOCK_MOVED, (movement) => recordMovement(movement));
     },

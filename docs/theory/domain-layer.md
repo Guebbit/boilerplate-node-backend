@@ -278,24 +278,28 @@ one model and one language stop being valid_, not by where you put files.
 
 ## 4. Where this repo stands
 
-**Strategic DDD — largely adopted:**
+**Strategic DDD — adopted, and machine-checked.** Each row is a declaration in the code with a test
+behind it, not a claim about intent. See [Strategic DDD](./strategic-ddd.md) for what each one
+enforces and what it refuses.
 
-| Concept            | Where                                                         |
-| ------------------ | ------------------------------------------------------------- |
-| Bounded context    | one folder per module; `rm -rf` deletes the domain            |
-| Published language | the module barrel, `index.ts` — lint forbids reaching past it |
-| Context map        | `dependsOn` in each `module.ts`, validated as a DAG at boot   |
-| Domain events      | `kernel/events.ts` — `products` emits, `cart` subscribes      |
-| Domain service     | `orders/domain/totals.ts`                                     |
+| Concept                | Where                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| Bounded context        | one folder per module; `rm -rf` deletes the domain                                               |
+| Published language     | the module barrel, `index.ts` — lint forbids reaching past it, and a test forbids widening it    |
+| Context map            | `dependsOn` in each `module.ts`: typed edges, validated as a DAG at boot and against the imports |
+| Ubiquitous language    | `language` in each `module.ts` — per context, so one word may mean two things                    |
+| Subdomain distillation | `subdomain` in each `module.ts` — and a generic module may not carry a `domain/` folder          |
+| Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                         |
+| Domain service         | `orders/domain/totals.ts`                                                                        |
 
-**Tactical DDD — absent:**
+**Tactical DDD — absent, deliberately:**
 
 | Concept                             | Today                                   |
 | ----------------------------------- | --------------------------------------- |
 | Entity                              | none — a Mongoose document is the model |
 | Value object                        | none — money is `number`                |
 | Aggregate root                      | implicit only                           |
-| Repository returning domain objects | no — returns `IOrderDocument`           |
+| Repository returning domain objects | no — returns `OrderDocument`            |
 | Invariants at construction          | no — Mongoose schema validators         |
 
 One tell: the `__v` conditional write in `cart/services/checkout.ts` is **aggregate versioning**,

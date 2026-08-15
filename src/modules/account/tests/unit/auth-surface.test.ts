@@ -1,51 +1,22 @@
 /**
- * `index.ts` is this module's front door, and the authentication surface is the part of it that
- * most needs pinning.
+ * `index.ts` is this module's front door, and it is one function wide.
  *
- * A barrel's only failure mode is a missing or misrouted name. A dropped line is a compile error
- * in a dozen files that TypeScript catches — but a line that re-exports the *wrong* binding, or a
- * name silently resolving to `undefined` after a refactor of the underlying file, is not caught by
- * anything. Both cases are covered here: the surface is pinned by name, and each function is
- * checked to be the same object `./jwt` and `./cookies` export rather than merely to exist.
+ * A barrel's only failure mode is a missing or misrouted name. A dropped line is a compile error in
+ * a dozen files that TypeScript catches — but a line that re-exports the *wrong* binding, or a name
+ * silently resolving to `undefined` after a refactor of the underlying file, is not caught by
+ * anything. Both cases are covered here: the surface is pinned by name, and the function is checked
+ * to be the same object `./addresses-service` exports rather than merely to exist.
  *
+ * The token surface used to be published too, on the theory that authorization would need it. It
+ * does not — the kernel's auth port is what every request goes through, and this module fills it
+ * from `module.ts` with relative imports. `tests/cross-cutting/published-language.test.ts` is what
+ * now stops that kind of export being added back on a theory.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import * as account from '@modules/account';
-import * as jwt from '@modules/account/jwt';
-import * as cookies from '@modules/account/cookies';
-
-/** Re-exported from `./jwt` — creating and verifying the tokens themselves. */
-const JWT_EXPORTS = [
-    'verifyAccessToken',
-    'verifyRefreshToken',
-    'createRefreshToken',
-    'createAccessToken'
-] as const;
-
-/** Re-exported from `./cookies` — the refresh and logged-in cookies that carry them. */
-const COOKIE_EXPORTS = [
-    'createRefreshCookie',
-    'destroyRefreshCookie',
-    'createLoggedCookie',
-    'destroyLoggedCookie'
-] as const;
-
-/**
- * Re-exported from `./tokens` — the expiry and secret policy.
- *
- * These are on the barrel for one caller: `middlewares/authorizations.ts` verifies a token on
- * every request and needs the same rules that issued it.
- */
-const POLICY_EXPORTS = [
-    'RefreshTokenExpiryTime',
-    'getExpiryTime',
-    'getExpiryTimeMilliseconds',
-    'getAccessTokenSecret',
-    'getRefreshTokenSecret',
-    'getAccessTokenTTL'
-] as const;
+import * as addresses from '@modules/account/addresses-service';
 
 /**
  * Re-exported from `./addresses-service` — the address book's ONE cross-module surface: the
@@ -55,23 +26,17 @@ const POLICY_EXPORTS = [
 const ADDRESS_EXPORTS = ['addressForCheckout'] as const;
 
 describe('the account barrel', () => {
-    it.each(JWT_EXPORTS)('re-exports %s from ./jwt unchanged', (name) => {
+    it.each(ADDRESS_EXPORTS)('re-exports %s from ./addresses-service unchanged', (name) => {
         // Identity, not existence: a re-export resolving to a different object means the barrel
         // and the implementation have forked, which is the failure a smoke test misses.
-        expect(account[name]).toBe(jwt[name]);
-    });
-
-    it.each(COOKIE_EXPORTS)('re-exports %s from ./cookies unchanged', (name) => {
-        expect(account[name]).toBe(cookies[name]);
+        expect(account[name]).toBe(addresses[name]);
     });
 
     it('exports nothing beyond the declared groups', () => {
         // Widening a barrel is a design decision — it is a promise to every other module that the
         // shape will not move. This case makes that deliberate rather than incidental: a new
         // export fails here until it is written down above.
-        expect(Object.keys(account).toSorted()).toEqual(
-            [...JWT_EXPORTS, ...COOKIE_EXPORTS, ...POLICY_EXPORTS, ...ADDRESS_EXPORTS].toSorted()
-        );
+        expect(Object.keys(account).toSorted()).toEqual([...ADDRESS_EXPORTS].toSorted());
     });
 });
 

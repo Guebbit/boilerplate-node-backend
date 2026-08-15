@@ -90,23 +90,51 @@ The manifest is the whole contract between the domain and the application:
 ```ts
 // src/modules/wishlist/module.ts
 import path from 'node:path';
-import type { IAppModule } from '@kernel/registry';
+import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { seedWishlistCollection } from './seeds';
 
 export default {
     name: 'wishlist',
+    subdomain: 'supporting',
+    language: {
+        Wishlist: 'One saved list per user. Holds product references and nothing else.'
+    },
     basePath: '/wishlist',
     routes: router,
-    dependsOn: ['products', 'users'],
+    dependsOn: [
+        {
+            module: 'products',
+            as: 'conformist',
+            because:
+                'Reads catalogue documents as they are — a saved line is meaningless without the product it points at.'
+        },
+        {
+            module: 'users',
+            as: 'conformist',
+            because: 'Reads the account the list belongs to, and listens for its destruction.'
+        }
+    ],
     locales: path.join(__dirname, 'locales'),
     seeds: seedWishlistCollection
-} satisfies IAppModule;
+} satisfies AppModule;
 ```
 
 `dependsOn` names **siblings, not files**. Declare it and the registry fails the boot — by name — if
 that sibling is not enabled. Leave it out and the failure is a 500 on the first request that crosses
 the gap.
+
+Three fields on that manifest are strategic rather than operational, and all three are required:
+
+| Field            | What it says                                                       | What refuses it                                                                     |
+| ---------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `subdomain`      | `core`, `supporting` or `generic` — how much modelling is worth it | a `generic` module carrying a `domain/` folder fails `subdomain-discipline.test.ts` |
+| `language`       | the terms this module uses, as it means them                       | an empty or placeholder glossary fails the same suite                               |
+| `as` / `because` | what kind of relationship each edge is, and why                    | an edge nothing imports, or an import no edge declares, fails `context-map.test.ts` |
+
+The temptation is to fill these in later. Do not: the questions are easiest to answer while you
+still remember why you drew the boundary, and hardest once the module is six months old. See
+[Strategic DDD](./strategic-ddd.md).
 
 ::: tip A domain with no URL is a first-class module
 Omit `basePath` and `routes` entirely and you get a headless module — `audit-logs` is one. The
@@ -120,7 +148,7 @@ point is a type error rather than a route that silently never registers.
 // src/modules.ts
 import wishlist from './modules/wishlist/module';
 
-export const enabledModules: IAppModule[] = [account, auditLogs, cart /* … */, wishlist];
+export const enabledModules: AppModule[] = [account, auditLogs, cart /* … */, wishlist];
 ```
 
 Keep the array alphabetical. Order only decides route-mounting sequence, which is irrelevant for

@@ -8,11 +8,23 @@ import type { AppModule } from '@kernel/registry';
  * is strictly worse than one that refuses to boot with the offending path named.
  */
 
+/**
+ * Names alone here: the cases below are about the graph, and every one of them would read worse
+ * with a relationship kind and a sentence attached to an arrow between two modules called `a` and
+ * `b`. The kinds are asserted where they mean something, against the real manifests, in
+ * `tests/cross-cutting/context-map.test.ts`.
+ */
 const makeModule = (name: string, dependsOn: string[] = []): AppModule => ({
     name,
+    subdomain: 'supporting',
+    language: { [name]: `whatever ${name} means` },
     basePath: `/${name}`,
     routes: Router(),
-    dependsOn
+    dependsOn: dependsOn.map((module) => ({
+        module,
+        as: 'conformist' as const,
+        because: `${name} reads ${module}`
+    }))
 });
 
 describe('validateModules', () => {
@@ -56,8 +68,19 @@ describe('validateModules', () => {
         // belongs to `observability`. A headless module is a first-class registry entry, and
         // other modules may still depend on it.
         expect(() =>
-            validateModules([{ name: 'audit-logs' }, makeModule('observability', ['audit-logs'])])
+            validateModules([
+                { name: 'audit-logs', subdomain: 'generic', language: { Entry: 'one action' } },
+                makeModule('observability', ['audit-logs'])
+            ])
         ).not.toThrow();
+    });
+
+    it('rejects a module that depends on itself, by name rather than as a cycle', () => {
+        // Reported separately because it is a typo, not an architecture problem — and the cycle
+        // walk would otherwise describe it as `products → products`, which reads like a finding.
+        expect(() => validateModules([makeModule('products', ['products'])])).toThrow(
+            /"products" declares a dependency on itself/
+        );
     });
 
     it('accepts a diamond, which is not a cycle', () => {

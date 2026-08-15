@@ -10,7 +10,6 @@
 
 export { productService } from './service';
 export { productRepository } from './repository';
-export { productModel, zodProductSchema } from './model';
 export type { ProductDocument } from './model';
 
 /**

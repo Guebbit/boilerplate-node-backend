@@ -14,7 +14,7 @@ describe('product validation messages', () => {
     it('uses the Italian copy verbatim, not a Zod default', async () => {
         const { zodProductSchema } = await loadBeforeI18n(
             'it',
-            () => import('@modules/products'),
+            () => import('@modules/products/model'),
             'products.field-title-min'
         );
 

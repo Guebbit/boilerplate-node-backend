@@ -8,8 +8,9 @@
  * `GET /observability/audit` and reaches the service through this barrel.
  */
 
+/*
+ * One export, because `observability` needs one thing: a service to read the trail with. The
+ * repository, the model and their types are how that reading is done, which is this module's
+ * business and not the dashboard's.
+ */
 export { auditLogService } from './service';
-export { auditLogRepository } from './repository';
-export { auditLogModel } from './model';
-export type { AuditLogDocument } from './model';
-export type { AuditLogSearchFilters } from './repository';

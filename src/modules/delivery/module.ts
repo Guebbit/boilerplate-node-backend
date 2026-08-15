@@ -17,9 +17,38 @@ import { shipOrder } from './service';
  */
 export default {
     name: 'delivery',
+    /*
+     * Shipping is specific to how this shop operates — its methods, its rates, its courier — but it
+     * is not what anyone buys here. Supporting: worth its own rules in `domain/`, not worth an
+     * aggregate.
+     */
+    subdomain: 'supporting',
+    language: {
+        'Shipping method':
+            'A named way to ship, with a rate rule. A closed set in `domain/rates.ts`, not a collection.',
+        'Shipping cost':
+            'What a method charges for a given basket. Computed by a pure function so the cart can quote it without a shipment existing.',
+        Shipment:
+            'The parcel record for an order that has actually shipped. Created on the status change, never before.',
+        Courier:
+            'The carrier moving a shipment. Faked here, behind the same seam a real integration would use.'
+    },
     basePath: '/delivery',
     routes: router,
-    dependsOn: ['orders', 'users'],
+    dependsOn: [
+        {
+            module: 'orders',
+            as: 'customer-supplier',
+            because:
+                'A shipment is about an order: this module reads the order it ships and moves its status.'
+        },
+        {
+            module: 'users',
+            as: 'conformist',
+            because:
+                'Reads the recipient record to address the shipped email in their own language.'
+        }
+    ],
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) => {
             if (to === 'shipped') return shipOrder(orderId);

@@ -23,5 +23,15 @@ import { auditLogService } from './service';
 registerAuditSink(auditLogService.record);
 
 export default {
-    name: 'audit-logs'
+    name: 'audit-logs',
+    /*
+     * "Who did what, kept for N days" is the same requirement everywhere it appears. Generic, and
+     * the reason the ~53 call sites talk to an infrastructure sink rather than to this module.
+     */
+    subdomain: 'generic',
+    language: {
+        'Audit entry': 'One record of an action: the actor, the action, the target, the time.',
+        Actor: 'Who did it — a user id, or the system when no request was responsible.',
+        Retention: 'How long an entry survives. Enforced by a TTL index, not by application code.'
+    }
 } satisfies AppModule;

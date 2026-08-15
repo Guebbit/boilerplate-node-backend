@@ -28,7 +28,8 @@
  *   const loginResult = await userService.login(user.email, PLAIN_PASSWORD);
  */
 
-import type { UserRecord, UserDocument } from '@modules/users';
+import type { UserDocument } from '@modules/users';
+import type { UserRecord } from '@modules/users/model';
 import { userRepository } from '@modules/users';
 
 /** Plain-text password used by the default factory.  Re-export so tests can

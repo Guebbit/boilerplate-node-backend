@@ -17,9 +17,31 @@ import './events';
  */
 export default {
     name: 'orders',
+    /*
+     * The module with the real invariants: what an order totals, which status transitions are legal,
+     * what cancelling restores. Three other modules are downstream of its status changes. If any one
+     * module here ever grows an aggregate, it is this one — see `DDD_EXPLORATION.md` §6.
+     */
+    subdomain: 'core',
+    language: {
+        Order: 'What a customer bought, frozen. Immutable in substance: only its status moves.',
+        'Order item':
+            'A line holding an embedded copy of the product as it stood at purchase time, not a reference to it.',
+        Status: 'Where an order is in its lifecycle. A closed set today enforced at the edge, not a modelled transition table.',
+        Cancellation:
+            'A status change that restores stock and triggers a refund. Legal only from the statuses in `CANCELLABLE_ORDER_STATUSES`.',
+        Total: 'Line price × quantity, summed and rounded to cents. Computed, never stored as truth.'
+    },
     basePath: '/orders',
     routes: router,
-    dependsOn: ['products'],
+    dependsOn: [
+        {
+            module: 'products',
+            as: 'conformist',
+            because:
+                'An order item embeds `productSchema` itself, so the catalogue’s shape is this module’s shape too.'
+        }
+    ],
     seeds: seedOrdersCollection,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

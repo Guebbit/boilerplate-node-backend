@@ -17,7 +17,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { feedbackRequestRepository } from '@modules/feedback';
+import { feedbackRequestRepository } from '@modules/feedback/repository';
 import { FeedbackRequestStatus } from '@types';
 
 setupTestDb();

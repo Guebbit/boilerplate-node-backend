@@ -134,6 +134,7 @@ the point.
 | Understand the big blocks and boundaries | [Architecture](./architecture.md)                   |
 | Understand how domains stay separable    | [Modules](./modules.md)                             |
 | Actually add or remove a domain          | [Adding & Removing a Module](./module-lifecycle.md) |
+| Understand the domain-modelling stance   | [Strategic DDD](./strategic-ddd.md)                 |
 | Read the folder-by-folder explanation    | [Layers](./layers.md)                               |
 | Follow one request end-to-end            | [Request Flow](./request-flow.md)                   |
 | Know which sources an endpoint reads     | [Request Input](./request-input.md)                 |

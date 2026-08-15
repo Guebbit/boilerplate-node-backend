@@ -50,9 +50,34 @@ registerAuthResolver({
 
 export default {
     name: 'account',
+    /*
+     * Signup, login, refresh, reset. There is no version of this that is a competitive advantage,
+     * and every deployment that outgrows it replaces it with an identity provider rather than
+     * modelling it harder.
+     */
+    subdomain: 'generic',
+    language: {
+        Session:
+            'Proof of who is asking, carried in cookies. An access token to spend and a refresh token to renew it.',
+        'Access token':
+            'Short-lived bearer of identity. Never stored — if it is valid it is trusted.',
+        'Refresh token':
+            'Long-lived, revocable, stored on the User record. Losing it is what logging out means.',
+        Address:
+            'An entry in the account’s address book. The one collection this module owns outright.',
+        'Account deletion':
+            'Two steps — a request that issues a token, and a confirm that destroys the record. Never one call.'
+    },
     basePath: '/account',
     routes: router,
-    dependsOn: ['users'],
+    dependsOn: [
+        {
+            module: 'users',
+            as: 'shared-kernel',
+            because:
+                'Both modules read and write the same User record: `users` administers it, this module authenticates it. The only shared kernel in the repo, and the reason the users barrel exports its model and repository at all.'
+        }
+    ],
     /*
      * The one collection this module owns is the address book — the account lifecycle's own
      * data, unlike the User record it administers through `users`. A destroyed account takes

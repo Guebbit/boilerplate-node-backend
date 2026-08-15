@@ -7,27 +7,20 @@ the architecture is less honest than it intends to be.
 Recorded 2026-08-11, at the end of the modular-domain migration. If you are reading this much
 later, verify before acting — some of these are the kind of thing a later change fixes by accident.
 
-## 1. Barrel exports nobody imports
+## 1. Barrel exports nobody imports — RESOLVED
 
-A module's `index.ts` is a promise to every other module that a shape will not move. Seven exports
-currently make that promise to nobody:
+The rule was decided as this entry asked — first, then applied to all thirteen modules at once:
 
-| Module       | Export                                                                        | Notes                                          |
-| ------------ | ----------------------------------------------------------------------------- | ---------------------------------------------- |
-| `products`   | `productModel`                                                                | the model is used only inside the module       |
-| `users`      | `applyUserTransform`                                                          | ditto                                          |
-| `audit-logs` | `auditLogRepository`, `auditLogModel`                                         | only `auditLogService` is reached from outside |
-| `feedback`   | `feedbackRequestService`, `feedbackRequestRepository`, `feedbackRequestModel` | **the entire barrel is unused**                |
+> **A module publishes exactly what a sibling imports. No sibling, no barrel.**
 
-`feedback` is the interesting one. By the rule the other modules follow, a module nothing imports
-should have **no** `index.ts` at all — which is exactly what `observability` and `locales` do. The
-barrel was kept because feedback owns a collection and the first sibling that needs it should find
-a surface rather than a reason to reach for an internal. That is a defensible position, but it is
-the opposite of the one taken two folders away, and the inconsistency is the thing to resolve.
+Thirty-six dead exports went, not the seven recorded here — the count had grown with the five
+modules added since. `feedback` lost its whole `index.ts` and now sits where `observability` and
+`locales` already were, which was the inconsistency worth resolving.
 
-**When you fix this:** decide the rule first, then apply it to all thirteen modules at once. Deleting
-the four dead exports is five minutes; deciding whether `feedback` keeps a barrel is the actual
-decision.
+The decision is enforced by `tests/cross-cutting/published-language.test.ts` rather than left as
+prose, so the surface cannot silently widen again. A module's own specs deliberately do not count as
+consumers; they reach `../model` like the rest of the module. See
+[Strategic DDD](./strategic-ddd.md) §5.
 
 ## 2. Stale paths in docblocks
 

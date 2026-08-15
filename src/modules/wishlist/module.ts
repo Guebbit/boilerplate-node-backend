@@ -19,9 +19,38 @@ import { wishlistDeleteByUserId, productRemoveFromWishlistsById } from './servic
  */
 export default {
     name: 'wishlist',
+    /*
+     * A saved list with one exit into the cart. It holds no rules worth modelling — deleting it
+     * costs the shop a convenience, not a capability — which is the definition of supporting.
+     */
+    subdomain: 'supporting',
+    language: {
+        Wishlist:
+            'One saved list per user. Holds product references and nothing else — no quantity, no price, no expiry.',
+        'Move to cart':
+            'The list’s only exit: a saved line becomes a cart line and leaves the list.'
+    },
     basePath: '/wishlist',
     routes: router,
-    dependsOn: ['cart', 'products', 'users'],
+    dependsOn: [
+        {
+            module: 'cart',
+            as: 'customer-supplier',
+            because:
+                'Move-to-cart asks the cart to add a line; this module never writes a cart document itself.'
+        },
+        {
+            module: 'products',
+            as: 'conformist',
+            because:
+                'Reads catalogue documents as they are — a saved line is meaningless without the product it points at.'
+        },
+        {
+            module: 'users',
+            as: 'conformist',
+            because: 'Reads the account the list belongs to, and listens for its destruction.'
+        }
+    ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) =>
             productRemoveFromWishlistsById(productId)

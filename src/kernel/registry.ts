@@ -14,19 +14,109 @@
 import type { Router } from 'express';
 import type { SeedOutcome } from '@infrastructure/persistence/seed';
 
+/**
+ * How this module treats the one it depends on — the label on the arrow, not just the arrow.
+ *
+ * A bare dependency list says two domains touch. It does not say what kind of touching, and that is
+ * the question that decides what a change upstream costs: whether the downstream absorbs the
+ * upstream's model whole, asks it to do a job, or speaks a vocabulary it publishes. The four names
+ * below are the only shapes this codebase actually has, and each maps to something visible in the
+ * import:
+ *
+ * - `conformist` — the downstream reads the upstream's records as they are, with no translation and
+ *   no say in their shape. Cheapest to write and the one that hurts when the upstream changes:
+ *   `orders` embedding the product schema is the purest case in the repo.
+ * - `customer-supplier` — the downstream asks the upstream to *do* something, and the upstream's
+ *   public surface is shaped by that demand. `cart → orders` exists because a checkout has to
+ *   place an order.
+ * - `published-language` — the upstream offers vocabulary rather than records: pure functions,
+ *   constants and types over plain data. The strongest edge to have, because neither side learns
+ *   the other's storage. `cart → delivery` reaches only `findShippingMethod` and `priceShipping`.
+ * - `shared-kernel` — both modules read and write the same model. Genuinely expensive: a change to
+ *   that model has to be agreed by both, so this is the one to keep near zero. There is exactly one
+ *   (`account → users`), and `tests/cross-cutting/context-map.test.ts` fails if a second appears
+ *   without the allowlist being edited on purpose.
+ *
+ * Anticorruption layer is deliberately absent. It is the right pattern for a model you do not
+ * control, and everything nameable here is a sibling in this repo — `payments` does wrap an outside
+ * provider that way, but behind `./providers`, which is not a registry edge.
+ */
+export type ContextRelationship =
+    | 'conformist'
+    | 'customer-supplier'
+    | 'published-language'
+    | 'shared-kernel';
+
+/** One edge of the context map: who is depended on, how, and why that shape. */
+export interface ContextEdge {
+    /** The sibling module's registry name. */
+    module: string;
+
+    /** What kind of relationship this is. See `ContextRelationship`. */
+    as: ContextRelationship;
+
+    /**
+     * One sentence, present tense, naming what is actually reached across the edge.
+     *
+     * Required rather than optional on purpose: an edge whose reason cannot be written in a line is
+     * usually two edges, or a module boundary in the wrong place. This is the sentence a reader
+     * gets instead of re-deriving the relationship from the import list.
+     */
+    because: string;
+}
+
+/**
+ * Where this module sits in the business, in the strategic-DDD sense — and therefore how much
+ * modelling it is worth.
+ *
+ * The classification is the input to every "should this grow an aggregate?" question, so it lives
+ * in the manifest rather than in a document that can quietly stop matching the code:
+ *
+ * - `core` — the reason the product exists. Worth entities, value objects and invariants.
+ * - `supporting` — specific to this business but not a differentiator. Keep it plain.
+ * - `generic` — a solved problem, interchangeable with an off-the-shelf one. Modelling effort here
+ *   is waste, which is why `tests/cross-cutting/subdomain-discipline.test.ts` refuses a `domain/`
+ *   folder inside a generic module.
+ *
+ * In a boilerplate these values are a worked example, not a finding: a starter kit has no core
+ * domain, and the first real thing a project does is re-decide them. See `DDD_EXPLORATION.md` §7.
+ */
+export type Subdomain = 'core' | 'supporting' | 'generic';
+
 /** What every module declares, whether or not it serves HTTP. */
 interface AppModuleCommon {
     /** Registry identity. Must match the folder name under `src/modules/`. */
     name: string;
 
     /**
-     * Names of modules this one imports from. Declared rather than inferred, because the point is
-     * to fail at boot with a sentence instead of at the first request with a 500.
+     * Which of the three kinds of subdomain this is. Required, because the interesting answer is
+     * the one nobody wants to write down: most modules are not core, and a field that can be
+     * omitted collects only the flattering half of the truth.
+     */
+    subdomain: Subdomain;
+
+    /**
+     * This module's ubiquitous language: the terms it uses, defined as it means them.
+     *
+     * Kept here rather than in a shared glossary because the same word legitimately means different
+     * things in two contexts — that divergence *is* the bounded-context pattern, and a single list
+     * flattens it. It also keeps the promise the rest of this file makes: adding a domain edits no
+     * file outside its own folder, and `rm -rf` takes the vocabulary with the code.
+     *
+     * Write what the term means *in this module*, not what it means in general.
+     */
+    language: Readonly<Record<string, string>>;
+
+    /**
+     * Modules this one imports from, each with the shape of the relationship. Declared rather than
+     * inferred, because the point is to fail at boot with a sentence instead of at the first
+     * request with a 500 — and, since the edges are typed, to make "what does a change to products
+     * cost" answerable by reading one field.
      *
      * This must stay a DAG. Two modules that each need the other are not a dependency pair — they
      * are one module, or they communicate through domain events. See `kernel/events.ts`.
      */
-    dependsOn?: string[];
+    dependsOn?: readonly ContextEdge[];
 
     /**
      * Attach this module's domain-event handlers. Called once at boot, after every module is known
@@ -83,6 +173,13 @@ interface HeadlessModule extends AppModuleCommon {
  * Keep this small. A field that only one module ever fills does not belong here — that module
  * should do the thing itself, behind its own barrel. The cost of a wide manifest is that every
  * module has to be read against it to know which half applies.
+ *
+ * Two of these fields — `subdomain` and `language` — are read by nothing at runtime, which looks
+ * like it breaks that rule. It does not: the manifest is where a module says what it *is* to the
+ * rest of the system, and its place in the business and the words it uses are statements of exactly
+ * that kind. Kept anywhere else they would be a second description of the module, free to drift
+ * from the first. Both are asserted by `tests/cross-cutting/`, so they are checked declarations
+ * rather than comments.
  */
 export type AppModule = RoutedModule | HeadlessModule;
 
@@ -107,12 +204,17 @@ export const validateModules = (appModules: AppModule[]): void => {
 
     // Pass 2 — every named dependency must be enabled, checked before the walk needs it.
     for (const appModule of appModules)
-        for (const dependency of appModule.dependsOn ?? [])
-            if (!byName.has(dependency))
+        for (const edge of appModule.dependsOn ?? []) {
+            if (!byName.has(edge.module))
                 throw new Error(
-                    `Module "${appModule.name}" depends on "${dependency}", which is not enabled. ` +
+                    `Module "${appModule.name}" depends on "${edge.module}", which is not enabled. ` +
                         `Add it to src/modules.ts or drop the dependency.`
                 );
+            // A module that depends on itself is a typo, and the cycle walk below would report it
+            // as a one-hop loop rather than as the mistake it is.
+            if (edge.module === appModule.name)
+                throw new Error(`Module "${appModule.name}" declares a dependency on itself.`);
+        }
 
     // `settled` is proven acyclic; `walking` is the current path, so a hit on it IS the cycle.
     const settled = new Set<string>();
@@ -129,8 +231,7 @@ export const validateModules = (appModules: AppModule[]): void => {
             );
 
         walking.add(name);
-        for (const dependency of byName.get(name)?.dependsOn ?? [])
-            walk(dependency, [...trail, name]);
+        for (const edge of byName.get(name)?.dependsOn ?? []) walk(edge.module, [...trail, name]);
         // Off the current path, onto the settled set: this subtree is clean.
         walking.delete(name);
         settled.add(name);

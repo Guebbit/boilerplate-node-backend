@@ -23,8 +23,8 @@
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factory';
-import { cartModel } from '@modules/cart';
-import { orderModel } from '@modules/orders';
+import { cartModel } from '@modules/cart/model';
+import { orderModel } from '@modules/orders/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
 setupTestDb();

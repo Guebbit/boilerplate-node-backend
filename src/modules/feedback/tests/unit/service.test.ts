@@ -19,10 +19,10 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { create, search, updateStatus, updateStatusById } from '@modules/feedback/service';
-import { feedbackRequestRepository } from '@modules/feedback';
+import { feedbackRequestRepository } from '@modules/feedback/repository';
 import { FeedbackRequestStatus } from '@types';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
-import type { FeedbackRequestDocument } from '@modules/feedback';
+import type { FeedbackRequestDocument } from '@modules/feedback/model';
 
 setupTestDb();
 

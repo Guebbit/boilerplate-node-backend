@@ -19,9 +19,52 @@ import { cartDeleteByUserId, productRemoveFromCartsById } from './services';
  */
 export default {
     name: 'cart',
+    /*
+     * Checkout is where every rule in the shop has to agree at once — price, stock, address,
+     * shipping, and the order that comes out the other side. The five edges below are not a smell to
+     * be refactored away; they are what a checkout is. See `docs/theory/modules.md` on why this
+     * module is a customer of four contexts rather than an orchestration layer above them.
+     */
+    subdomain: 'core',
+    language: {
+        Cart: 'One open basket per user. Priced against the live catalogue, so its total is a quote and not a promise.',
+        'Cart line': 'A product reference and a quantity. Holds no price — the catalogue does.',
+        Checkout:
+            'The act of turning a cart into an order. Succeeds or leaves the cart untouched; there is no half-checked-out state.',
+        Version:
+            'The count of writes a cart has seen. Guards checkout against a concurrent edit — hand-rolled aggregate versioning, in all but name.'
+    },
     basePath: '/cart',
     routes: router,
-    dependsOn: ['account', 'delivery', 'orders', 'products', 'users'],
+    dependsOn: [
+        {
+            module: 'account',
+            as: 'customer-supplier',
+            because:
+                'Checkout asks the address book for the one address it should ship to (`addressForCheckout`).'
+        },
+        {
+            module: 'delivery',
+            as: 'published-language',
+            because:
+                'Prices a shipping method through `findShippingMethod`/`priceShipping` — pure functions over plain data, no shipment record in sight.'
+        },
+        {
+            module: 'orders',
+            as: 'customer-supplier',
+            because: 'A checkout is the one place an order is created outside the admin routes.'
+        },
+        {
+            module: 'products',
+            as: 'conformist',
+            because: 'Reads catalogue documents as they are to price lines and check stock.'
+        },
+        {
+            module: 'users',
+            as: 'conformist',
+            because: 'Reads the account record a checkout is priced against.'
+        }
+    ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) => productRemoveFromCartsById(productId));
         onDomainEvent(USER_DELETED, ({ userId }) => cartDeleteByUserId(userId));

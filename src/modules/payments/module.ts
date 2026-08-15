@@ -16,9 +16,30 @@ import { refundForOrder } from './service';
  */
 export default {
     name: 'payments',
+    /*
+     * Taking money is not this shop's differentiator, and the provider port exists precisely so the
+     * generic part can be bought. What stays here is the small supporting piece a provider will
+     * never own: which order a payment belongs to, and what cancelling one owes back.
+     */
+    subdomain: 'supporting',
+    language: {
+        Intent: 'A frozen amount for an order, before any money moves. Freezing is the point — the order may still be edited, the amount may not.',
+        Confirm:
+            'The provider’s yes. Moves the order to `paid`; nothing else in the app may set that status.',
+        Refund: 'Money returned because an order was cancelled. Answered to `order.cancelled`, never requested directly.',
+        Provider:
+            'The outside system that actually moves money, reached only through `./providers`.'
+    },
     basePath: '/payments',
     routes: router,
-    dependsOn: ['orders', 'users'],
+    dependsOn: [
+        {
+            module: 'orders',
+            as: 'customer-supplier',
+            because:
+                'A payment is about an order: the intent freezes its total, the confirm moves its status, and `order.cancelled` is what asks for the refund.'
+        }
+    ],
     subscribe: () => {
         onDomainEvent(ORDER_CANCELLED, ({ orderId }) => refundForOrder(orderId));
     },

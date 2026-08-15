@@ -8,7 +8,10 @@
  * this module's `/methods` endpoint quotes can never disagree.
  */
 
-export { SHIPPING_METHODS, findShippingMethod, priceShipping } from './domain';
-export type { ShippingMethod } from './domain';
-export { shipmentRepository } from './repository';
-export type { ShipmentDocument } from './model';
+/*
+ * Two pure functions and nothing else — the narrowest surface in the repo, and the one worth
+ * copying. A caller can price a shipping method without learning that shipments, couriers or a
+ * `shipmentRepository` exist, which is what makes this a published language rather than a handle on
+ * this module's storage.
+ */
+export { findShippingMethod, priceShipping } from './domain';
