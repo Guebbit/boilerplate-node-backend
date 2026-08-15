@@ -22,12 +22,43 @@ import {
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { orderService, orderRepository, sumLineItems, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { userRepository } from '@modules/users';
 import { resolvePaymentProvider, type CardDetails } from './providers';
 import { paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
 
 /** The demo's money is one currency, set per deployment. Carried onto every payment document. */
 const defaultCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
+
+/**
+ * Who is paying, resolved against `users` rather than copied off the order.
+ *
+ * The order already carries a `userId`, and taking it verbatim is what this did before. The
+ * difference matters for the thing a payment IS: a financial record that outlives the order page.
+ * A payment history — "everything this account has ever paid" — is a query on this id, so it wants
+ * to be an id that pointed at a real account at the moment the money moved, not one inherited
+ * from a row that may have been written long before.
+ *
+ * A payer that cannot be resolved does NOT refuse the payment. Orders deliberately survive the
+ * deletion of the account that placed them, so an unresolvable payer is a legitimate state, and
+ * failing here would make a deleted account's outstanding order unpayable rather than merely
+ * unattributed. The order's own id is kept and the gap is logged — the history simply records the
+ * id it was given.
+ *
+ * @param orderUserId - the account id the order carries
+ * @returns the id to persist on the payment
+ */
+const resolvePayerId = (orderUserId: string): Promise<string> =>
+    userRepository
+        .findById(orderUserId)
+        .then((user) => {
+            if (user) return String(user.id);
+            logger.warn(
+                `Payment intent for a user that no longer resolves (${orderUserId}) — recording the order's id unverified`
+            );
+            return orderUserId;
+        })
+        .catch(() => orderUserId);
 
 /** Ownership, payments-style: yours or you are staff — anything else reads as absence. */
 const isOwnedBy = (
@@ -56,12 +87,14 @@ export const createIntent = (
                 { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
             ]);
 
-        return paymentRepository
-            .upsertIntent(orderId, String(order.userId), {
-                amount: sumLineItems(order.items).price,
-                currency: defaultCurrency(),
-                provider: resolvePaymentProvider().name
-            })
+        return resolvePayerId(String(order.userId))
+            .then((payerId) =>
+                paymentRepository.upsertIntent(orderId, payerId, {
+                    amount: sumLineItems(order.items).price,
+                    currency: defaultCurrency(),
+                    provider: resolvePaymentProvider().name
+                })
+            )
             .then((payment) =>
                 payment
                     ? generateSuccess(payment, 201)

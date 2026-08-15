@@ -13,6 +13,12 @@ import { refundForOrder } from './service';
  * to it (`ORDER_CANCELLED`) and this module answers with the refund. Deleting this module leaves
  * a shop where cancelling a paid order restores stock but returns no money — which is exactly
  * the sentence `CANCELLABLE_ORDER_STATUSES` documents.
+ *
+ * It depends on users for the payer, and that is groundwork rather than a current feature. The
+ * order already carries a `userId`; resolving it against the account record is what makes the id
+ * on a payment document worth querying later, when "everything this account has paid" becomes a
+ * screen. The history itself does not exist yet — `service.ts` explains what the resolution buys
+ * and why an unresolvable payer is logged rather than refused.
  */
 export default {
     name: 'payments',
@@ -38,6 +44,12 @@ export default {
             as: 'customer-supplier',
             because:
                 'A payment is about an order: the intent freezes its total, the confirm moves its status, and `order.cancelled` is what asks for the refund.'
+        },
+        {
+            module: 'users',
+            as: 'conformist',
+            because:
+                'Resolves the payer against the account record rather than copying the id off the order, so a payment history is a query on an id that pointed at a real account when the money moved.'
         }
     ],
     subscribe: () => {
