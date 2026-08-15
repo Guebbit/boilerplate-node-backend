@@ -25,6 +25,24 @@ exporters:
             insecure: true
 
 service:
+    # The collector's own metrics — queue depth, exporter failures, spans dropped. Prometheus
+    # scrapes them as the `otel-collector` job, and they are the only place that reports telemetry
+    # being silently discarded, so losing them costs exactly the signal you would want first.
+    #
+    # This block is required, not decorative. Since collector v0.104 the internal telemetry
+    # endpoint defaults to `localhost:8888`, which inside a container means the collector's own
+    # loopback and nothing else: Prometheus is a different container, so it got connection refused
+    # on every scrape and the target sat DOWN with no other symptom anywhere. Leave the default and
+    # the collector still works — it just stops being observable, which is a poor trade for the
+    # component all the other telemetry passes through.
+    #
+    # 0.0.0.0 draws the same "exposes this server to every network interface" warning the OTLP
+    # receivers above already draw, and for the same reason it is acceptable here: nothing in this
+    # compose stack is published outside the host.
+    telemetry:
+        metrics:
+            address: 0.0.0.0:8888
+
     pipelines:
         # Trace pipeline: receive OTLP -> batch -> export to Tempo.
         traces:
