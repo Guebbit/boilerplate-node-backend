@@ -516,8 +516,8 @@ every test passes — a message that names the symptom and nothing else.
 
 Note that eight workers were **faster** than thirty-one: past the point where the machine can hold
 them, extra workers buy contention rather than throughput, so there is no speed being traded away.
-`jest.config.js` now sizes the pool from whichever runs out first, RAM (a quarter of it, at the
-measured ~900 MB apiece) or cores, with `JEST_WORKERS` in `.env` to go lower.
+The number is a property of the machine, so it lives in `.env` as `JEST_WORKERS`, exactly like
+`STRYKER_CONCURRENCY`; `jest.config.js` falls back to `logical CPUs - 2` when it is unset.
 
 ### The fix
 

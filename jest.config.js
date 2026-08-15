@@ -44,43 +44,33 @@ const readEnvFile = () => {
 };
 
 /**
- * Measured RSS of one worker running this suite, in MB.
- *
- * Not a guess: sampled across the 98 unit suites on 2026-08-15, where a worker peaked between
- * 772 MB and 905 MB regardless of how many were running. The figure is stable because it is
- * dominated by fixed per-worker costs — ts-jest's TypeScript program and the module graph — plus
- * `bson`'s 17 MiB module-scope buffer, which jest re-allocates for every test FILE because a
- * fresh module registry is what test isolation means. See the case study in
- * `docs/tools/mutation-testing.md`.
- */
-const WORKER_RSS_MB = 900;
-
-/**
  * How many workers to run.
  *
- * Jest's default is `logical CPUs - 1`, and on this machine that is 31 — which is how a test run
- * came to peak at 17.6 GB of RSS and get two of its workers SIGKILLed by the OOM killer mid-run.
- * The failure reads as `A jest worker process was terminated by another process: signal=SIGKILL`
- * with every test passing, which is not a sentence that points at its own cause.
+ * The safe number is a property of the MACHINE, not of the project, so it lives in `.env` as
+ * `JEST_WORKERS` — the same arrangement `STRYKER_CONCURRENCY` uses, for the same reason.
  *
- * The default is wrong here because it counts CORES for a workload bounded by MEMORY. Measured on
- * the same 98 suites, same machine (32 logical CPUs, 30.5 GB):
+ * Why it needs setting at all: jest's own default is `logical CPUs - 1`, which counts cores for a
+ * workload bounded by memory. A worker peaks at 772-905 MB here whatever the pool size, so on this
+ * machine's 32 logical CPUs the default put 31 of them together and the run peaked at 17.6 GB —
+ * enough, alongside the docker stack, for the OOM killer to take two workers mid-run. It surfaces
+ * as `A jest worker process was terminated by another process: signal=SIGKILL` with every test
+ * passing, which is not a sentence that points at its own cause. Measured over the 98 unit suites:
  *
  *   | workers | wall | peak RSS |
  *   | 31      |  20s | 17.6 GB  |
  *   | 12      |  14s |  9.0 GB  |
  *   |  8      |  13s |  6.3 GB  |
  *
- * Note the direction: eight workers were FASTER than thirty-one. Past the point where the
- * machine can hold them, extra workers buy contention, not throughput — so this cap costs
- * nothing to buy back 11 GB.
+ * Note the direction: eight workers were FASTER than thirty-one. Past the point where the machine
+ * can hold them, extra workers buy contention rather than throughput, so a lower number here is
+ * not paid for in time.
  *
- * The pool is therefore sized from whichever runs out first, RAM or cores. A quarter of total
- * memory is the share taken, deliberately less than half: a test run does not own the machine —
- * on a development box it shares one with the docker stack this repo also starts, and on CI with
- * whatever else the runner hosts.
+ * The fallback is `logical CPUs - 2`, which leaves the machine two threads to stay responsive
+ * with. It is deliberately not a memory calculation: on the boxes big enough for the pool to
+ * matter there is a developer and a `.env`, and CI — where there is neither — runs on 4 vCPU
+ * runners where two workers is already the right answer.
  *
- * @returns the worker count: JEST_WORKERS when set, otherwise the derived cap
+ * @returns the worker count: JEST_WORKERS when set, otherwise `logical CPUs - 2`
  */
 const resolveMaxWorkers = () => {
     // A real environment variable wins over the file, so a one-off run can go lower without
@@ -89,12 +79,8 @@ const resolveMaxWorkers = () => {
     const configured = Number(setting?.trim());
     if (Number.isInteger(configured) && configured > 0) return configured;
 
-    const totalMemoryMb = os.totalmem() / 1024 / 1024;
-    const byMemory = Math.floor((totalMemoryMb * 0.25) / WORKER_RSS_MB);
-    const byCpu = os.cpus().length - 1;
-
-    // At least one, or a small container would compute zero workers and run nothing.
-    return Math.max(1, Math.min(byCpu, byMemory));
+    // At least one, or a single-core container would compute zero workers and run nothing.
+    return Math.max(1, os.cpus().length - 2);
 };
 
 module.exports = {
