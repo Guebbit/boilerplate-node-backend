@@ -16,11 +16,93 @@
  * `docs/theory/known-gaps.md` §4.
  */
 
+const os = require('node:os');
+const path = require('node:path');
+const { existsSync, readFileSync } = require('node:fs');
+const { parseEnv } = require('node:util');
+
+/**
+ * `JEST_WORKERS` out of `.env`, without importing the rest of the file.
+ *
+ * `scripts/mutation.ts` reads its own settings with `process.loadEnvFile()`, and that would be the
+ * obvious thing to copy here — but it is a standalone script and this is the test runner's config.
+ * `loadEnvFile` MERGES `.env` into `process.env`, and jest hands its environment to every worker,
+ * so doing it here silently republishes the whole development environment into the suite. It was
+ * tried: `tests/support/setup.ts` raises the rate limits with `??=`, which assigns only when a
+ * variable is unset, so the real `NODE_RATE_LIMIT_MAX=100` and `NODE_AUTH_RATE_LIMIT_MAX=10`
+ * arrived first and the concurrency suites started answering 429 to their own fixtures.
+ *
+ * `parseEnv` parses the same format and returns a plain object, touching nothing. One variable is
+ * wanted here, so one variable is what crosses over.
+ *
+ * @returns the file's variables, or an empty object when there is no `.env` — the normal case in CI
+ */
+const readEnvFile = () => {
+    const envFile = path.join(__dirname, '.env');
+    // Checked rather than caught: a checkout without a `.env` is ordinary, not exceptional.
+    return existsSync(envFile) ? parseEnv(readFileSync(envFile, 'utf8')) : {};
+};
+
+/**
+ * Measured RSS of one worker running this suite, in MB.
+ *
+ * Not a guess: sampled across the 98 unit suites on 2026-08-15, where a worker peaked between
+ * 772 MB and 905 MB regardless of how many were running. The figure is stable because it is
+ * dominated by fixed per-worker costs — ts-jest's TypeScript program and the module graph — plus
+ * `bson`'s 17 MiB module-scope buffer, which jest re-allocates for every test FILE because a
+ * fresh module registry is what test isolation means. See the case study in
+ * `docs/tools/mutation-testing.md`.
+ */
+const WORKER_RSS_MB = 900;
+
+/**
+ * How many workers to run.
+ *
+ * Jest's default is `logical CPUs - 1`, and on this machine that is 31 — which is how a test run
+ * came to peak at 17.6 GB of RSS and get two of its workers SIGKILLed by the OOM killer mid-run.
+ * The failure reads as `A jest worker process was terminated by another process: signal=SIGKILL`
+ * with every test passing, which is not a sentence that points at its own cause.
+ *
+ * The default is wrong here because it counts CORES for a workload bounded by MEMORY. Measured on
+ * the same 98 suites, same machine (32 logical CPUs, 30.5 GB):
+ *
+ *   | workers | wall | peak RSS |
+ *   | 31      |  20s | 17.6 GB  |
+ *   | 12      |  14s |  9.0 GB  |
+ *   |  8      |  13s |  6.3 GB  |
+ *
+ * Note the direction: eight workers were FASTER than thirty-one. Past the point where the
+ * machine can hold them, extra workers buy contention, not throughput — so this cap costs
+ * nothing to buy back 11 GB.
+ *
+ * The pool is therefore sized from whichever runs out first, RAM or cores. A quarter of total
+ * memory is the share taken, deliberately less than half: a test run does not own the machine —
+ * on a development box it shares one with the docker stack this repo also starts, and on CI with
+ * whatever else the runner hosts.
+ *
+ * @returns the worker count: JEST_WORKERS when set, otherwise the derived cap
+ */
+const resolveMaxWorkers = () => {
+    // A real environment variable wins over the file, so a one-off run can go lower without
+    // editing anything: `JEST_WORKERS=2 npm run test:unit`.
+    const setting = process.env.JEST_WORKERS ?? readEnvFile().JEST_WORKERS;
+    const configured = Number(setting?.trim());
+    if (Number.isInteger(configured) && configured > 0) return configured;
+
+    const totalMemoryMb = os.totalmem() / 1024 / 1024;
+    const byMemory = Math.floor((totalMemoryMb * 0.25) / WORKER_RSS_MB);
+    const byCpu = os.cpus().length - 1;
+
+    // At least one, or a small container would compute zero workers and run nothing.
+    return Math.max(1, Math.min(byCpu, byMemory));
+};
+
 module.exports = {
     preset: 'ts-jest',
     clearMocks: true,
     coverageProvider: 'v8',
     testEnvironment: 'node',
+    maxWorkers: resolveMaxWorkers(),
     testMatch: ['**/tests/**/*.test.ts'],
     testPathIgnorePatterns: ['/node_modules/', '<rootDir>/.stryker-tmp/', '<rootDir>/.tmp/'],
     modulePathIgnorePatterns: ['<rootDir>/.stryker-tmp/', '<rootDir>/.tmp/'],

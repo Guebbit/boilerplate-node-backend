@@ -484,9 +484,40 @@ per test file, so every channel a shim could use is isolated by design. The rema
 Stryker's `maxTestRunnerReuse` (restart the runner every _n_ mutants — supported, and documented
 upstream for exactly this situation) and an upstream report against `bson`.
 
+**The lever that looks right and is not.** Jest's `workerIdleMemoryLimit` recycles a worker once it
+passes a memory bound, which is the plain-jest analogue of `maxTestRunnerReuse` and the first thing
+anyone reaches for here. It cannot work for this leak, for the same reason `--max-old-space-size`
+could not: the child reports `process.memoryUsage().heapUsed` and nothing else —
+`node_modules/jest-worker/build/processChild.js`, one line — so the bound is measured against the
+one number that excludes `ArrayBuffer` backing stores. A worker holding 78 copies of a 17 MiB
+buffer looks small to it. Checked 2026-08-15, jest 30; check it again rather than assuming, but do
+not spend a day rediscovering it.
+
 **The rule this earns.** Group-by tells you _what_ is in a heap; only the edges tell you _who holds
 it_. Identifying a kind of object and then guessing its owner from what that kind is usually for is
 not a diagnosis — it is the same guess with a number attached to it.
+
+### Related: the same arithmetic kills a plain `npm test`
+
+Stryker is where the accumulation becomes unbounded, but the per-worker cost exists in an ordinary
+run too, and it is enough on its own. A worker peaks at 772–905 MB here; jest's default worker count
+is `logical CPUs - 1`, which on a 16-core/32-thread machine is 31 of them. Measured 2026-08-15 over
+the 98 unit suites:
+
+| workers | wall | peak RSS |
+| ------- | ---- | -------- |
+| 31      | 20s  | 17.6 GB  |
+| 12      | 14s  | 9.0 GB   |
+| 8       | 13s  | 6.3 GB   |
+
+At 17.6 GB on a 30.5 GB machine that also runs the docker stack, the OOM killer takes two workers
+and jest reports `A jest worker process was terminated by another process: signal=SIGKILL` while
+every test passes — a message that names the symptom and nothing else.
+
+Note that eight workers were **faster** than thirty-one: past the point where the machine can hold
+them, extra workers buy contention rather than throughput, so there is no speed being traded away.
+`jest.config.js` now sizes the pool from whichever runs out first, RAM (a quarter of it, at the
+measured ~900 MB apiece) or cores, with `JEST_WORKERS` in `.env` to go lower.
 
 ### The fix
 
