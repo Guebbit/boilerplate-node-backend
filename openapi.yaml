@@ -670,7 +670,10 @@ components:
             additionalProperties: false
             properties:
                 loki: { type: boolean }
-                posthog: { type: boolean }
+                # Which backend `emitAnalyticsEvent` is delivering to, not whether one is
+                # configured — the choice is between three implementations, so a boolean
+                # could not tell "unconfigured" from "deliberately collecting nothing".
+                analytics: { type: string, enum: [umami, posthog, none] }
                 otelEnabled: { type: boolean }
                 umami: { type: boolean }
                 faro: { type: boolean }

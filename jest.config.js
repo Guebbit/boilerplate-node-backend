@@ -145,6 +145,19 @@ module.exports = {
             functions: 70,
             lines: 70
         },
+        /*
+         * The analytics providers, one directory deeper. Listed separately because the glob above
+         * ends in `.ts` and matches only files sitting directly in `observability/` — when
+         * `analytics.ts` became `analytics/`, it silently stopped being covered by any threshold
+         * at all. A directory that falls out of this list does not fail the build; it just stops
+         * being measured, which is the failure mode worth naming.
+         */
+        'src/infrastructure/observability/analytics/**/*.ts': {
+            statements: 70,
+            branches: 70,
+            functions: 70,
+            lines: 70
+        },
 
         /*
          * The exemptions, each at its measured value on 2026-08-09 rounded down to a multiple of

@@ -17,7 +17,7 @@ flowchart LR
     AUDIT --> MONGO[("Mongo<br/>auditlogs")]
     STDOUT --> LOKI[("Loki")]
 
-    ANALYTICS["emitAnalyticsEvent"] --> POSTHOG[("PostHog")]
+    ANALYTICS["emitAnalyticsEvent"] --> SINK[("Umami / PostHog")]
     METRICS["metric counters"] --> PROM[("Prometheus")]
     TRACES["withSpan"] --> TEMPO[("Tempo")]
 
@@ -42,7 +42,7 @@ them belongs on a code path whose correctness depends on the write succeeding.
 | --------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
 | **Application log**   | `logger` — `@infrastructure/adapters/logger`                          | stdout → Promtail → Loki                                 | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
 | **Audit trail**       | `emitAuditEvent` — `@infrastructure/observability/audit`              | `auditLogger` → stdout → Loki, **and** Mongo `auditlogs` | admins, compliance         | [Winston & Audit Logs](./winston.md#audit-events)                   |
-| **Product analytics** | `emitAnalyticsEvent` — `@infrastructure/observability/analytics`      | PostHog                                                  | product, marketing         | [PostHog](./posthog.md)                                             |
+| **Product analytics** | `emitAnalyticsEvent` — `@infrastructure/observability/analytics`      | Umami (default), PostHog, or none                        | product, marketing         | [Product Analytics](./analytics.md)                                 |
 | **Metrics**           | counters in `metrics-http.ts` / each module's `metrics.ts`            | Prometheus registry → `GET /observability/metrics`       | ops, alerting              | [Prometheus](./prometheus.md)                                       |
 | **Traces**            | `withSpan` — `@infrastructure/observability/tracer`                   | OTel Collector → Tempo                                   | you, debugging across hops | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md)           |
 | **Live metrics feed** | `streamObservabilityMetrics` — `@infrastructure/observability/stream` | SSE frames on `GET /observability/events`                | the admin dashboard        | [Frontend Observability](./frontend-observability.md)               |
@@ -126,6 +126,6 @@ log lines explaining it are one `request_id` query apart.
 - [Winston & Audit Logs](./winston.md)
 - [Observability Stack Reference](./observability-reference.md) — the infrastructure the signals land in
 - [Observability Endpoints](../api/observability.md)
-- [PostHog](./posthog.md)
+- [Product Analytics](./analytics.md)
 - [Prometheus](./prometheus.md)
 - [RabbitMQ](./rabbitmq.md)

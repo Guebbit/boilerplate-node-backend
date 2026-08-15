@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import os from 'node:os';
 import { successResponse } from '@infrastructure/http/response';
+import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 
 /*
  * Map mongoose readyState integer to the spec enum values.
@@ -34,7 +35,13 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
         database: { status: databaseStatus },
         integrations: {
             loki: Boolean(process.env.NODE_LOKI_HOST),
-            posthog: Boolean(process.env.NODE_POSTHOG_API_KEY),
+            /*
+             * The name of the provider serving `emitAnalyticsEvent`, not a boolean: which
+             * backend receives product events is a deployment choice between three, and
+             * `posthog: false` could not distinguish "PostHog is unconfigured" from "this
+             * deployment uses Umami" or "it collects nothing on purpose".
+             */
+            analytics: resolveAnalyticsProvider().name,
             otelEnabled: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT),
             /* Frontend observability: self-hosted Umami analytics + Grafana Faro collector. */
             umami: Boolean(process.env.NODE_UMAMI_HOST),

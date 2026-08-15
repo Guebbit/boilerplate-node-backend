@@ -251,9 +251,9 @@ prevent.
 
 **Problem it solves.** Infrastructure metrics (Prometheus) tell you the API is healthy but not whether users are actually completing signups or dropping off at checkout. Product analytics answer the "are users doing what we expect?" question from a product/business perspective rather than an infrastructure one.
 
-**In this repo.** Example events (login, product view, checkout) are emitted from controllers via a thin wrapper. PostHog is fully optional — when `NODE_POSTHOG_API_KEY` is not set, all analytics calls are no-ops.
+**In this repo.** Example events (login, product view, checkout) are emitted from controllers through one helper, and `NODE_ANALYTICS_PROVIDER` decides which backend receives them: Umami (the default, self-hosted next to the app), PostHog, or none.
 
-→ [PostHog](./posthog.md)
+→ [Product Analytics](./analytics.md)
 
 ---
 

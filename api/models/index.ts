@@ -101,6 +101,7 @@ export * from './observabilityHealth';
 export * from './observabilityHealthDatabase';
 export * from './observabilityHealthDatabaseStatus';
 export * from './observabilityHealthIntegrations';
+export * from './observabilityHealthIntegrationsAnalytics';
 export * from './observabilityHealthMemory';
 export * from './observabilityHealthResponseEnvelope';
 export * from './observabilityHealthStatus';

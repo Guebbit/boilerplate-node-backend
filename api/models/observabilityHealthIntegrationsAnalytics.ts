@@ -18,12 +18,12 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ObservabilityHealthIntegrationsAnalytics } from './observabilityHealthIntegrationsAnalytics';
 
-export interface ObservabilityHealthIntegrations {
-  loki?: boolean;
-  analytics?: ObservabilityHealthIntegrationsAnalytics;
-  otelEnabled?: boolean;
-  umami?: boolean;
-  faro?: boolean;
-}
+export type ObservabilityHealthIntegrationsAnalytics = typeof ObservabilityHealthIntegrationsAnalytics[keyof typeof ObservabilityHealthIntegrationsAnalytics];
+
+
+export const ObservabilityHealthIntegrationsAnalytics = {
+  umami: 'umami',
+  posthog: 'posthog',
+  none: 'none',
+} as const;

@@ -28,7 +28,7 @@ flowchart LR
         Tempo[Tempo\ntrace storage]
         Loki[Loki\nlog storage]
         Grafana[Grafana\ndashboard UI]
-        PostHog[PostHog\nproduct analytics]
+        Analytics[Analytics\nUmami or PostHog]
     end
 
     subgraph Project["Project workflows"]
@@ -48,7 +48,7 @@ flowchart LR
     classDef project fill:#fce7f3,stroke:#db2777,color:#111827;
     class Runtime,Security,Mongo,Redis core;
     class Rabbit,Mail async;
-    class Winston,Prometheus,OTel,Tempo,Loki,Grafana,PostHog obs;
+    class Winston,Prometheus,OTel,Tempo,Loki,Grafana,Analytics obs;
     class Testing,Dependencies,Scripts,Containers project;
 ```
 
@@ -71,7 +71,7 @@ flowchart LR
 | Observability | **[Tempo](./tempo.md)**                                     | Stores and queries distributed traces; correlates with Loki logs via shared `trace_id`.                                        |
 | Observability | **[Loki](./loki.md)**                                       | Stores and queries log streams; links forward to Tempo traces via injected `trace_id`.                                         |
 | Observability | **[Grafana](./grafana.md)**                                 | Dashboard UI reading Prometheus, Tempo, and Loki in one place — the normal entry point for all observability work.             |
-| Observability | **[PostHog](./posthog.md)**                                 | Product analytics: event funnels, feature flags, session recording.                                                            |
+| Observability | **[Product Analytics](./analytics.md)**                     | Business events behind one provider port: Umami (default), PostHog, or none.                                                   |
 | Observability | **[Frontend Observability](./frontend-observability.md)**   | How the paired frontend reuses this stack (Faro + Alloy, Umami) instead of Sentry/PostHog cloud — plus the heavy upgrade path. |
 | Project       | **[Testing & Docs](./testing-and-docs.md)**                 | Vitest, Supertest, Bruno, and VitePress: how the repo tests itself and generates this docs site.                               |
 | Project       | **[Package Dependencies](./package-dependencies.md)**       | Guided tour of `package.json` grouped by concern (runtime, dev, optional, peer).                                               |

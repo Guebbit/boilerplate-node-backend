@@ -70,6 +70,17 @@ services:
             NODE_LOKI_HOST: 'http://localhost:${LOKI_PORT:-3100}'
             NODE_UMAMI_HOST: 'http://localhost:${UMAMI_PORT:-3080}'
             NODE_FARO_COLLECTOR_URL: 'http://localhost:${ALLOY_FARO_PORT:-12347}/collect'
+            # Where `emitAnalyticsEvent` delivers (see infrastructure/observability/analytics).
+            # `umami` is the default and needs the website id as well as the host above — the
+            # same fixed id `umami-init` seeds and the paired frontend hardcodes, so both halves
+            # of a funnel land on one website instead of two.
+            #
+            # The host is the SERVICE name here, not localhost: unlike NODE_UMAMI_HOST above —
+            # which is declarative, describing what a browser reaches — this one is dialled by
+            # the API from inside the compose network, where `localhost` is its own container.
+            NODE_ANALYTICS_PROVIDER: '${NODE_ANALYTICS_PROVIDER:-umami}'
+            NODE_UMAMI_INGEST_HOST: 'http://umami:3000'
+            NODE_UMAMI_WEBSITE_ID: '${UMAMI_WEBSITE_ID:-00000000-0000-4000-8000-000000000001}'
 
         # Persist data.
         # Compose manages the lifecycle of this volume when up/down

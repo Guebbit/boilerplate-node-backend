@@ -153,8 +153,8 @@ Because each job is behind an SDK boundary, switching is localized:
 1. **Errors:** keep the frontend instrumentation contract; swap the Faro/Alloy target for a
    Sentry (or GlitchTip) DSN. Backend traces stay in Tempo either way, or forward FE traces
    to both during a transition.
-2. **Analytics:** the backend already has a PostHog abstraction in
-   [`src/infrastructure/observability/analytics.ts`](../tools/posthog.md) pointing at `NODE_POSTHOG_HOST`. Point it
+2. **Analytics:** the backend already carries a PostHog implementation behind its provider port
+   ([`analytics/posthog.ts`](./analytics.md)). Set `NODE_ANALYTICS_PROVIDER=posthog` and point it
    (and the frontend SDK) at a self-hosted PostHog host instead of Umami — the event
    taxonomy does not change.
 3. Add the new services to [`docker-compose.yml`](./docker-and-podman.md) — one file, both
@@ -164,5 +164,5 @@ Because each job is behind an SDK boundary, switching is localized:
 
 - [Observability Reference](./observability-reference.md) — the backend stack this reuses
 - [OpenTelemetry](./opentelemetry.md) — how FE traces stitch onto BE traces via Tempo
-- [PostHog](./posthog.md) — the existing analytics abstraction and env config
+- [Product Analytics](./analytics.md) — the provider port, and how to pick between Umami and PostHog
 - [Docker & Podman](./docker-and-podman.md) — where new containers get wired in

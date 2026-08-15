@@ -130,7 +130,7 @@
                       },
                       "integrations": {
                         "loki": true,
-                        "posthog": true,
+                        "analytics": "umami",
                         "otelEnabled": true,
                         "umami": true,
                         "faro": true

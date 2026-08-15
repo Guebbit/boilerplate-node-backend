@@ -96,7 +96,7 @@ export default withMermaid(
                         text: 'Analytics',
                         collapsed: false,
                         items: [
-                            { text: 'PostHog', link: '/tools/posthog' },
+                            { text: 'Product Analytics', link: '/tools/analytics' },
                             {
                                 text: 'Frontend Observability',
                                 link: '/tools/frontend-observability'

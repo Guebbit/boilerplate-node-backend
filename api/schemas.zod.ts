@@ -121,7 +121,7 @@ export const GetObservabilityHealthResponse = zod.object({
 }),
   "integrations": zod.object({
   "loki": zod.boolean().optional(),
-  "posthog": zod.boolean().optional(),
+  "analytics": zod.enum(['umami', 'posthog', 'none']).optional(),
   "otelEnabled": zod.boolean().optional(),
   "umami": zod.boolean().optional(),
   "faro": zod.boolean().optional()
