@@ -1,7 +1,7 @@
 /**
  * The SSE metrics stream.
  *
- * `docs/theory/known-gaps.md` §9 called this one of two honest zeros: a suite could reach it and
+ * This was one of two honest zeros in the mutation report: a suite could reach it and
  * none did. Three things here are only observable from outside the module, and each fails silently:
  *
  *   - **The wire format.** `event:`/`data:` and the blank line that ends a frame are

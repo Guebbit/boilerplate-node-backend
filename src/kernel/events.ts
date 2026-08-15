@@ -79,6 +79,17 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
 /**
  * Drop every subscription. Test seam: suites that register modules per case would otherwise
  * accumulate handlers across cases and see one emit fire N times.
+ *
+ * It is a function shipped to production for the benefit of tests, and that is a real cost rather
+ * than a nitpick: nothing stops application code from calling it and silently unsubscribing every
+ * module. Seven suites depend on it, so it is load-bearing.
+ *
+ * The shape that would not need it is a bus **instance** owned by the registry rather than the
+ * module-level map above: a fresh registry means a fresh bus, and the reset becomes the
+ * constructor. The cost is that `onDomainEvent`/`emitDomainEvent` stop being importable functions
+ * and have to be reached through something — a larger change than the seam is annoying, which is
+ * why it has not been made. Whoever does make it is also deciding where subscription lives
+ * (`AppModule.subscribe`), because those are the same question.
  */
 export const resetDomainEvents = (): void => {
     handlers.clear();

@@ -131,6 +131,6 @@ export const filesystemImageStore: ImageStore = {
  * Uploads land on the container's own filesystem, so **rebuilding the container loses every
  * uploaded image** and two replicas do not share what they store. Swapping in an object store
  * means one more {@link ImageStore} implementation and nothing else — the migration, and the
- * traps in it, are written up in `docs/theory/known-gaps.md`.
+ * traps in it, are written up in `docs/theory/roadmap.md`.
  */
 export const imageStore: ImageStore = filesystemImageStore;

@@ -5,7 +5,7 @@ import {
     buildPaginatedMeta,
     addTextFilter,
     addRegexFilter,
-    escapeRegex,
+    toSearchPattern,
     DEFAULT_SORT,
     type PaginatedMeta,
     type PaginationInput
@@ -109,14 +109,13 @@ const buildWhere = (filters: SearchFilters, spec: SearchSpec): Record<string, un
     for (const [key, path] of Object.entries(spec.regex ?? {}))
         addRegexFilter(where, path, bag[key] as string | undefined);
 
-    for (const [key, path] of Object.entries(spec.arrayRegex ?? {}))
-        if (isPresent(bag[key]))
-            where[path] = {
-                $elemMatch: {
-                    $regex: escapeRegex(String(bag[key]).trim()),
-                    $options: 'i'
-                }
-            };
+    // `toSearchPattern` rather than `escapeRegex`: this is caller text on its way into a pattern,
+    // so it needs the control-character strip too — a NUL here is a 500 from `POST /products/search`.
+    // `undefined` means nothing searchable survived, and an absent filter is the honest answer.
+    for (const [key, path] of Object.entries(spec.arrayRegex ?? {})) {
+        const pattern = toSearchPattern(bag[key]);
+        if (pattern !== undefined) where[path] = { $elemMatch: { $regex: pattern, $options: 'i' } };
+    }
 
     if (spec.text && spec.text.length > 0)
         addTextFilter(where, bag.text as string | undefined, spec.text);

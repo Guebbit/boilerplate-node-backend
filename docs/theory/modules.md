@@ -323,7 +323,7 @@ The `never`s are the point: declaring a router with no mount point, or a mount p
 mount, is a type error at the manifest rather than a route that silently never registers.
 
 **Keep it small.** A field only one module fills does not belong here — that module should do the
-thing itself. `subscribe` currently breaks this rule; see [Known gaps](./known-gaps.md#3-subscribe-is-a-manifest-field-with-one-user).
+thing itself. `subscribe` was the one field that broke it; six modules fill it today, which settled the question in favour of keeping it.
 
 ## The dependency graph
 
@@ -377,6 +377,21 @@ Handlers are **awaited in registration order**, so the dependent rows are gone b
 disappears. A handler that throws is logged and does not fail the emitter — a listener must not roll
 back an operation that was already authorised.
 
+### The bus is not transactional, and must not be made so
+
+That last sentence has a consequence worth stating outright, because it looks like a bug the first
+time you meet it: if cart cleanup throws while a product is being hard-deleted, **the product is
+still deleted and the orphaned cart lines stay**.
+
+This is deliberate. The emitting module cannot reason about the failure modes of code it has never
+heard of, and a subscriber must not be able to veto an operation it never authorised.
+
+**The thing to not do:** if a future flow needs cross-module cleanup to be all-or-nothing, this is
+the wrong primitive and must not be bent into one. Awaiting handlers inside the emitter's
+transaction makes every subscriber a participant in a transaction it cannot see — which is how the
+dependency arrow this bus exists to remove comes back, pointing the other way. Either that cleanup
+belongs in the owning module, or the two modules were one module.
+
 ## Boot order
 
 ```mermaid
@@ -426,7 +441,7 @@ line, three section-order entries, and **zero** edits to any existing file. Dele
 The zeroes are the verdict: **the application tier genuinely does not know which domains exist.**
 The rest is residue in test and script code — two of those sixteen are correct and must not be
 "fixed", and the largest remaining group is sweep canaries pinned to the current module count. See
-[Known gaps §7](./known-gaps.md#7-what-still-breaks-when-domains-are-deleted).
+[Re-running the deletability check](./module-lifecycle.md#re-running-the-deletability-check).
 
 If a module you delete was named in another module's `dependsOn`, the registry stops the boot with
 the offending pair named rather than 500-ing on the first request that crosses the gap.
@@ -465,4 +480,4 @@ fire is a comment.
 - [Layers](./layers.md) — the layer stack inside one module
 - [Architecture](./architecture.md) — the runtime shape of the service
 - [Request Flow](./request-flow.md) — what happens to one request
-- [Known gaps](./known-gaps.md) — what is deliberately unfinished
+- [Roadmap](./roadmap.md) — what is planned but not built

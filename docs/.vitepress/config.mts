@@ -35,7 +35,7 @@ export default withMermaid(
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' },
-                            { text: 'Known Gaps', link: '/theory/known-gaps' }
+                            { text: 'Roadmap', link: '/theory/roadmap' }
                         ]
                     }
                 ],

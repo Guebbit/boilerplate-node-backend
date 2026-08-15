@@ -135,9 +135,19 @@ describe('migrations and models agree about indexes', () => {
 
     it('actually registered a model from every module that ships one', () => {
         // The canary for the discovery walk above: an empty registry would make every assertion
-        // in this file pass over nothing. Six modules own a collection today.
-        expect(registeredModels.length).toBeGreaterThanOrEqual(6);
-        expect(Object.keys(mongoose.models).length).toBeGreaterThanOrEqual(6);
+        // in this file pass over nothing.
+        //
+        // Compared against the disk rather than against a literal. "Six modules own a collection"
+        // is a copy of `src/modules.ts` expressed as an integer, and it stops being true on the
+        // commit that adds a domain rather than on the commit that breaks this walk — which makes
+        // it a false alarm exactly when it fires.
+        const modelsOnDisk = fs
+            .readdirSync(MODULES_ROOT)
+            .filter((name) => fs.existsSync(path.join(MODULES_ROOT, name, 'model.ts')));
+
+        expect(modelsOnDisk.length).toBeGreaterThan(0);
+        expect(registeredModels).toHaveLength(modelsOnDisk.length);
+        expect(Object.keys(mongoose.models).length).toBeGreaterThanOrEqual(modelsOnDisk.length);
     });
 
     it('leaves each collection holding exactly the indexes its schema declares', async () => {

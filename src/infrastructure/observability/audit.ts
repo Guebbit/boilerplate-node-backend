@@ -93,7 +93,7 @@ export interface AuditEntry extends AuditEvent {
  *
  * A port rather than a direct call, for a structural reason: this module lives in `src/infrastructure/**`,
  * which is the bottom of the dependency graph and is forbidden by `no-restricted-imports` from
- * reaching up into `@repositories/*` or `@models/*`. Inverting it keeps that rule intact — infrastructure
+ * reaching up into `@modules/*` or `@kernel/*`. Inverting it keeps that rule intact — infrastructure
  * states what it needs, and `app.ts` supplies the implementation at boot. It is the same shape as
  * `ImageStore` in `@infrastructure/adapters/image-store`, and it has the same payoff: the durable store
  * can be swapped for a log-backend writer without a single audit call site changing.

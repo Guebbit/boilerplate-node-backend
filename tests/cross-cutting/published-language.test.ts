@@ -10,7 +10,7 @@
  *
  *   **A module publishes exactly what a sibling imports. No sibling, no barrel.**
  *
- * Which resolves the inconsistency `docs/theory/known-gaps.md` §1 recorded — `feedback` carrying a
+ * Which resolves a long-standing inconsistency — `feedback` carrying a
  * full barrel nothing imported while `observability` and `locales`, in the same position, carried
  * none. `feedback` now has none either, and the lint boundary makes that structural: with no
  * `index.ts` a sibling cannot import the module at all, rather than being asked politely not to.
@@ -94,8 +94,12 @@ const consumedFromBarrels = (): Map<string, Set<string>> => {
 describe('a barrel publishes exactly what a sibling imports', () => {
     it('finds the barrels it is meant to check', () => {
         // A canary: an empty sweep must mean "no module publishes anything", not "the sweep broke".
+        // Against the disk, with a floor of one — a literal here would be a copy of
+        // `src/modules.ts`, stale on the next commit that adds or deletes a domain.
         const withBarrels = moduleNames().filter((name) => publishedBy(name) !== undefined);
-        expect(withBarrels.length).toBeGreaterThanOrEqual(5);
+
+        expect(moduleNames().length).toBeGreaterThan(0);
+        expect(withBarrels.length).toBeGreaterThanOrEqual(1);
     });
 
     it('promises nothing to nobody', () => {

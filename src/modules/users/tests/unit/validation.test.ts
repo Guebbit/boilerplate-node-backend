@@ -1,5 +1,5 @@
 /**
- * `src/models/user-validation.ts` — the six message thunks on `zodUserSchema`.
+ * `src/modules/users/validation.ts` — the six message thunks on `zodUserSchema`.
  *
  * The module is a declaration, so there is nothing to call and it reports 100% of statements
  * covered by anything that merely imports it. What that number does not say is whether the

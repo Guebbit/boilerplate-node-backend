@@ -122,7 +122,7 @@ generated client and the paired frontend both depend on.
 | Add or delete a domain                        | [Adding & Removing a Module](./module-lifecycle.md) |
 | Change an endpoint's contract                 | [OpenAPI Workflow](../api/openapi-workflow.md)      |
 | Know which tool does what, and why it is here | [Tools Explained](../tools/tools-explained.md)      |
-| Know what is deliberately unfinished          | [Known Gaps](./known-gaps.md)                       |
+| Know what is planned but unbuilt              | [Roadmap](./roadmap.md)                             |
 
 ---
 

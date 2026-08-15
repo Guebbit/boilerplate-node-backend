@@ -92,19 +92,19 @@ Four ideas carry the whole repository:
 
 ## The map
 
-| You want to                   | Read                                                                                                                    |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Get it running                | [Getting Started](./docs/getting-started.md)                                                                            |
-| **Read the code, first time** | **[Reading Path](./docs/theory/reading-path.md)** — nine files, in order                                                |
-| Understand the shape          | [Architecture](./docs/theory/architecture.md) · [Layers](./docs/theory/layers.md) · [Modules](./docs/theory/modules.md) |
-| Add or remove a domain        | [Adding & Removing a Module](./docs/theory/module-lifecycle.md)                                                         |
-| Change an endpoint            | [OpenAPI Workflow](./docs/api/openapi-workflow.md) · [Regenerating](./docs/api/regenerating.md)                         |
-| Run the pair                  | [Pairing & Ports](./docs/tools/pairing-and-ports.md)                                                                    |
-| Look up a script              | [Package Scripts](./docs/tools/package-scripts.md)                                                                      |
-| Understand a dependency       | [Tools Explained](./docs/tools/tools-explained.md)                                                                      |
-| Test something                | [Testing overview](./docs/tools/testing-and-docs.md)                                                                    |
-| Know what is unfinished       | [Known Gaps](./docs/theory/known-gaps.md)                                                                               |
-| Deploy it                     | `.docker/Dockerfile.production` · `docker-compose.production.yml`                                                       |
+| You want to                      | Read                                                                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Get it running                   | [Getting Started](./docs/getting-started.md)                                                                            |
+| **Read the code, first time**    | **[Reading Path](./docs/theory/reading-path.md)** — nine files, in order                                                |
+| Understand the shape             | [Architecture](./docs/theory/architecture.md) · [Layers](./docs/theory/layers.md) · [Modules](./docs/theory/modules.md) |
+| Add or remove a domain           | [Adding & Removing a Module](./docs/theory/module-lifecycle.md)                                                         |
+| Change an endpoint               | [OpenAPI Workflow](./docs/api/openapi-workflow.md) · [Regenerating](./docs/api/regenerating.md)                         |
+| Run the pair                     | [Pairing & Ports](./docs/tools/pairing-and-ports.md)                                                                    |
+| Look up a script                 | [Package Scripts](./docs/tools/package-scripts.md)                                                                      |
+| Understand a dependency          | [Tools Explained](./docs/tools/tools-explained.md)                                                                      |
+| Test something                   | [Testing overview](./docs/tools/testing-and-docs.md)                                                                    |
+| Know what is planned but unbuilt | [Roadmap](./docs/theory/roadmap.md)                                                                                     |
+| Deploy it                        | `.docker/Dockerfile.production` · `docker-compose.production.yml`                                                       |
 
 ---
 

@@ -1,7 +1,7 @@
 /**
  * The HTML → PDF adapter.
  *
- * `docs/theory/known-gaps.md` §9 called this one of two honest zeros: a suite could reach it and
+ * This was one of two honest zeros in the mutation report: a suite could reach it and
  * none did. What it holds is not rendering — that is Chromium's — but four decisions that are only
  * observable from outside:
  *

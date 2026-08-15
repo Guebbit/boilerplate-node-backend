@@ -275,12 +275,12 @@ tier named a domain, and that is the thing the four tiers exist to prevent.
 Breaks under `tests/**` and `scripts/**` are residue. They are worth fixing, but they do not
 invalidate the claim — and some of them are **supposed** to break:
 
-| Break                                                             | Verdict                                                                                     |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| an integration test asserting a race between two deleted modules  | correct — no modules, no race                                                               |
-| `spec-identity` reporting the shared bundles as forked            | correct — deleting a domain **is** a two-repo change, and this is it saying so              |
-| a sweep canary whose floor was calibrated to the old module count | residue — see [Known gaps §7](./known-gaps.md#7-what-still-breaks-when-domains-are-deleted) |
-| a central spec importing the deleted module                       | residue — the spec used a domain as sample data                                             |
+| Break                                                             | Verdict                                                                                               |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| an integration test asserting a race between two deleted modules  | correct — no modules, no race                                                                         |
+| `spec-identity` reporting the shared bundles as forked            | correct — deleting a domain **is** a two-repo change, and this is it saying so                        |
+| a sweep canary whose floor was calibrated to the old module count | residue — compare the sweep against the disk instead, see [What it finds today](#what-it-finds-today) |
+| a central spec importing the deleted module                       | residue — the spec used a domain as sample data                                                       |
 
 ---
 
@@ -335,6 +335,32 @@ Pick domains that are **depended upon**, not leaves — deleting a leaf proves v
 above are the interesting set because `cart → products`, `cart → orders` and `orders → products` are
 all declared edges.
 
+### What it finds today
+
+Re-run 2026-08-15, at thirteen modules: **52 type errors, 46 of them under `src/`.** Read them in
+two piles, because only one is a problem.
+
+**Legitimate — nine production files across four modules.** `delivery`, `inventory`, `payments` and
+`wishlist` stop compiling because they genuinely depend on what was deleted, and each one
+**declares** that in `dependsOn`. This is the DAG working: deleting a supplier breaks its customers,
+the registry would refuse the boot with the offending pair named, and the answer is to delete the
+dependents too or pick a different set. An earlier run of this check reported "zero files in `src/`"
+— that was true when those four modules did not exist, not a property that was lost.
+
+**Residue — the rest.** Specs reaching for a deleted domain's factories from a module that does not
+depend on it (`account`'s own tests import `products` and `cart` factories),
+`tests/contract/request-contract.test.ts`, and the two cases named above:
+`mailer-templates.test.ts` using three domains as sample data, and
+`scripts/contracts/generateCollections.ts` importing `seedProducts`/`seedOrders` by name.
+
+The sweep canaries are **no longer in that pile.** They stated their floor as a literal calibrated
+to the nine-module build — `expect(files.length).toBeGreaterThanOrEqual(6)` and friends — and the
+interesting part is how they failed: not by breaking, but by going **slack**. Nine-module floors
+against a thirteen-module repo pass even with three domains deleted, so they had stopped asserting
+anything at all. Each now compares the sweep against the disk (`owners` equals the modules that have
+a `tests/` directory) with a floor of `≥ 1`, which both survives a deletion and actually bites when
+a walk silently misses a module.
+
 ### Why this is a procedure and not a test
 
 Nothing in the suite runs the deletion, and that is deliberate — the interesting failures are the
@@ -365,4 +391,4 @@ the spec and every spec operation mounted. Neither is a substitute for actually 
 - [Modules](./modules.md) — why the shape is what it is
 - [Layers](./layers.md) — the layer stack inside one module
 - [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) — how fragments become bundles
-- [Known gaps](./known-gaps.md) — what is deliberately unfinished
+- [Roadmap](./roadmap.md) — what is planned but not built

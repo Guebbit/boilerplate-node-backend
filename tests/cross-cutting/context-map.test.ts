@@ -74,7 +74,10 @@ const declaredEdges = (): { from: string; to: string; as: ContextRelationship }[
 describe('the context map describes the imports that exist', () => {
     it('finds the modules it is meant to check', () => {
         // A canary: an empty sweep must mean "nothing depends on anything", not "the sweep broke".
-        expect(declaredEdges().length).toBeGreaterThanOrEqual(10);
+        // A literal floor would be a copy of `src/modules.ts` written as an integer, which goes
+        // stale on the commit that adds a domain rather than on the commit that breaks this file.
+        expect(enabledModules.length).toBeGreaterThan(0);
+        expect(declaredEdges().length).toBeGreaterThanOrEqual(1);
     });
 
     it('declares no edge that nothing imports', () => {

@@ -58,8 +58,18 @@ const readModuleImports = (file: string): string[] =>
 describe('co-located specs respect the module boundary', () => {
     it('finds specs in every module that has them', () => {
         // A canary: an empty sweep must mean "no module has specs", not "the sweep broke".
+        //
+        // Asserted as agreement with the disk rather than as a floor. A literal here is a copy of
+        // `src/modules.ts` written as an integer — and the equality is the stronger statement
+        // anyway: a module whose `tests/` the walk fails to reach is a module whose specs are
+        // unguarded, which a floor of "at least eight" would happily pass over.
         const owners = new Set(listModuleSpecs().map((spec) => spec.owner));
-        expect(owners.size).toBeGreaterThanOrEqual(8);
+        const withTests = readdirSync(MODULES_ROOT).filter((name) =>
+            existsSync(path.join(MODULES_ROOT, name, 'tests'))
+        );
+
+        expect(withTests.length).toBeGreaterThan(0);
+        expect([...owners].toSorted()).toEqual(withTests.toSorted());
     });
 
     it('never reaches into a sibling module past its barrel, manifest or tests', () => {

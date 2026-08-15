@@ -52,9 +52,14 @@ describe('audit actions across modules', () => {
         const files = listAuditFiles();
 
         // A canary, as in the controller sweep: an empty result must mean "nothing declares
-        // actions", not "the sweep stopped finding files". Six modules audit today; account,
-        // users, products, orders, feedback and cart. `audit-logs` stores them and emits none.
-        expect(files.length).toBeGreaterThanOrEqual(6);
+        // actions", not "the sweep stopped finding files".
+        //
+        // Stated against the disk rather than as a count. A literal floor here is a copy of
+        // `src/modules.ts` written as an integer, in a file that names no domain — so it goes
+        // stale the day a domain is added or deleted, which is precisely when nobody is looking
+        // at this line.
+        expect(readdirSync(MODULES_ROOT).length).toBeGreaterThan(0);
+        expect(files.length).toBeGreaterThanOrEqual(1);
 
         for (const { module, file } of files)
             expect(Object.keys(await readActions(file)).length).toBeGreaterThan(0);

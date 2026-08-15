@@ -106,15 +106,53 @@ export const buildPaginatedMeta = (
 export const escapeRegex = (value: string): string =>
     value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
 
+/**
+ * C0 controls and DEL — everything a search box cannot produce and a pattern must not carry.
+ *
+ * A NUL is the one that actually breaks: MongoDB compiles `$regex` as a C string, so a pattern
+ * containing `\u0000` is rejected by the server and surfaces as a **500 on a public endpoint**.
+ * `escapeRegex` never covered it, because escaping is about metacharacters — a NUL is not one, it
+ * is a byte the pattern language has no way to hold.
+ *
+ * The rest of the range goes with it rather than being special-cased: none of it is typeable into
+ * a search box, none of it is meaningful to match on, and a rule with one exception is a rule
+ * someone has to remember.
+ */
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
+
+/**
+ * Turn caller text into a safe `$regex` pattern, or `undefined` when it says nothing.
+ *
+ * The one place a search term becomes a pattern, so the two things that make that safe cannot get
+ * out of step: strip what the pattern language cannot hold, then escape what it would otherwise
+ * interpret.
+ *
+ * `undefined` rather than an empty pattern is the load-bearing part. `$regex: ''` matches every
+ * document, so a term that vanishes under stripping would silently turn a filter into "everything"
+ * — the exact inversion of what the caller asked for. Returning `undefined` lets the caller drop
+ * the filter instead, which is what it already does for a blank string.
+ *
+ * `"shoes\u0000"` therefore searches for `shoes`, which is what a client sending an accidental NUL
+ * meant; `"\u0000"` alone is treated as blank, the same as `""` or `"   "`.
+ *
+ * @param value - raw text off the request
+ * @returns an escaped pattern, or `undefined` if nothing searchable remains
+ */
+export const toSearchPattern = (value: unknown): string | undefined => {
+    if (value === undefined || value === null) return undefined;
+    const cleaned = String(value).replaceAll(CONTROL_CHARACTERS, '').trim();
+    return cleaned === '' ? undefined : escapeRegex(cleaned);
+};
+
 export const addTextFilter = (
     where: Record<string, unknown>,
     text: string | undefined | null,
     fields: string[]
 ): void => {
-    if (!text || String(text).trim() === '') return;
-    const trimmed = String(text).trim();
+    const pattern = toSearchPattern(text);
+    if (pattern === undefined) return;
     where.$or = fields.map((field) => ({
-        [field]: { $regex: escapeRegex(trimmed), $options: 'i' }
+        [field]: { $regex: pattern, $options: 'i' }
     }));
 };
 
@@ -126,9 +164,10 @@ export const addRegexFilter = (
     field: string,
     value: string | undefined | null
 ): void => {
-    if (!value || String(value).trim() === '') return;
+    const pattern = toSearchPattern(value);
+    if (pattern === undefined) return;
     where[field] = {
-        $regex: escapeRegex(String(value).trim()),
+        $regex: pattern,
         $options: 'i'
     };
 };

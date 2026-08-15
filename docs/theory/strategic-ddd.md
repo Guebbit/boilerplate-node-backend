@@ -174,7 +174,7 @@ Two things deliberately do not count as a consumer:
 
 Applying that rule removed 36 exports and one whole barrel. `feedback` now has no `index.ts` — the
 same position `observability` and `locales` were already in, and the inconsistency
-`known-gaps.md` §1 recorded. With no barrel, the lint boundary makes it structural: a sibling cannot
+an earlier audit recorded. With no barrel, the lint boundary makes it structural: a sibling cannot
 import the module at all, rather than being asked politely not to.
 
 The narrowest surface in the repo is `delivery`: two pure functions. The widest is `users`, and it is

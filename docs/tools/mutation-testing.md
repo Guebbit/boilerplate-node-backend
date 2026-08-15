@@ -655,7 +655,6 @@ flowchart TB
 ```json
 "mutate": [
     "src/infrastructure/**/*.ts",
-    "src/app/**/*.ts",
     "src/kernel/**/*.ts",
     "src/modules/*/**/*.ts",
     "!src/modules/*/index.ts",
@@ -668,9 +667,30 @@ A counterintuitive but important consequence of the table above: **untested file
 
 That is why the list above is so short. The bar for excluding something is **"a mutant here could not mean anything to anyone"**, not "our tests would not kill it" — an unkilled mutant is a finding, while a file missing from the report is a blind spot, since an absent file reads exactly like a file with no survivors. Only three things clear that bar: `*.fragment.ts` slices, which nothing imports (the assembled bundle is what runs, so a mutant there is unobservable by construction); a module's `index.ts`, a barrel whose mutants ask whether a re-export changed; and `tests/**`, which is not the code under test.
 
-### Reading a 0%, and why it is kept
+### Reading a 0% — and the one case where it was excluded instead
 
-Everything else stays in scope, including code this runner cannot reach. `src/app/**` — the Express wiring — measured **0.00% across all eight files: 126 mutants, every one `NoCoverage`, not a single survivor.** That zero is kept on purpose, because it is a true statement: the wiring is exercised by `tests/integration` and `tests/contract`, both excluded from this _runner_ by `testPathIgnorePatterns` (they drive the real app against a live database and fail the dry run), and by no unit test at all.
+Everything else stays in scope, including code this runner cannot reach, because a 0% is usually a
+true statement worth keeping in front of people.
+
+`src/app/**` is the exception, and it is worth understanding why it is not a precedent. The Express
+wiring measured **0.00% across all eight files: 126 mutants, every one `NoCoverage`, not a single
+survivor** — because it is exercised by `tests/integration` and `tests/contract`, both excluded from
+this _runner_ by `testPathIgnorePatterns` (they drive the real app against a live database and fail
+the dry run), and by no unit test at all.
+
+That made it a different animal from an honest zero. An honest zero is code a suite _could_ reach
+and none does — a finding, and actionable. These 126 mutants had **no test that could ever kill
+them**, so they dragged the global number down permanently while telling nobody anything, and they
+put a global `break` of 70 out of reach by construction rather than by neglect.
+
+So the tier was excluded, taking the global score from ~65.7% to ~68.3%. What is lost is a standing
+reminder, and it is recorded here and in `stryker.config.json` instead: **the Express wiring has no
+unit tests.** If that changes, put it back in scope — then its number would mean something.
+
+The bar this cleared, and that a future exclusion has to clear too: _no configured suite can reach
+this code at all._ "Our tests would not kill it" is not that bar. The paired frontend answers the
+same question the same way for `.vue` files, on mirror-image reasoning — Stryker cannot mutate
+template expressions, so a score there would imply coverage nobody has.
 
 The three outcomes are different findings, and the columns keep them apart:
 
@@ -767,6 +787,40 @@ test is needed to defend it.
 `high` and `low` only colour the report. `break` is the one that fails a run, and it comes from a real measurement or it is not set at all — which is why it is currently `null`: the scope was repointed at the current module layout and nothing has measured it yet. The first full run supplies the number, and it goes in below that run's score, so it answers "has something collapsed" rather than "did the number move".
 
 After that the rule is: raise `break` when a score **sustains** a higher band; never lower it to make a run pass. The single sanctioned exception is a change to `mutate` — which changes the population, so old and new numbers are not measurements of the same thing — re-recorded in the same commit with both numbers and the reason.
+
+### The measurement backlog
+
+`break` wants to be **70**, with `high: 80` as the aspirational band. Getting there is a sequence,
+and doing it out of order is how a threshold becomes something everyone passes `--force` past.
+
+The last completed full run was 2026-08-12 — **65.69% overall, 72.22% on covered code** — and it is
+now several feature commits stale. It also predates two changes that move the number in opposite
+directions: thirteen modules of newer code that has never been measured, and the `src/app/**`
+exclusion above (~+2.6 points, and a change of population, so it is not comparable to the 65.69%
+at all).
+
+| Area                    | Mutants | Score | Note                                        |
+| ----------------------- | ------- | ----- | ------------------------------------------- |
+| `src/kernel/**`         | 127     | 80.3% | already past the target                     |
+| `src/infrastructure/**` | 1584    | 72.2% |                                             |
+| `src/modules/**`        | 1404    | 63.0% | where the remaining points and findings are |
+
+**The order:**
+
+1. **Take a fresh baseline.** `mutation-baseline.json` is absent deliberately — its keys were
+   pre-migration paths, and the ratchet seeds a fresh one from the first report rather than being
+   edited into shape. `npm run test:mutation` is the step; nothing gates on it, because `break` is
+   `null` until a real run supplies a number.
+2. **Work the `src/modules/**` number\*\*, which is the only area below the target.
+3. **Then** move `break`, once a run has actually sustained the new floor.
+
+Two files also lost their coverage floor in the modular migration and have not had it restored —
+`src/modules/account/tokens.ts` (was floored by `src/services/**`) and
+`src/modules/users/validation.ts` (was `src/models/**`). `jest.config.js` floors `model.ts`,
+`repository.ts` and `service.ts` per module, and the newer per-module files (`audit.ts`,
+`metrics.ts`, `seeds.ts`, `events.ts`, `routes.ts`) have never had floors and may not need them.
+Left alone on purpose: the floors are being redone from the ground up once this sequence completes,
+and a floor moved twice is worse than a floor moved once.
 
 ## File map
 

@@ -24,7 +24,7 @@
         "check:spec-identity": "tsx scripts/check-spec-identity.ts",
         "gen:api": "rm -rf ./api && orval --config orval.config.ts",
         "gen:asyncapi": "tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.ts",
-        "test": "npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract",
+        "test": "npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract && npm run test:fuzz",
         "test:unit": "jest tests/unit 'src/modules/.*/tests/unit'",
         "test:cross-cutting": "jest tests/cross-cutting",
         "test:unit:coverage": "jest tests/unit tests/cross-cutting 'src/modules/.*/tests/unit' --coverage --runInBand",

@@ -141,4 +141,4 @@ the point.
 | Understand process model & shutdown      | [Clustering & Shutdown](./clustering.md)            |
 | Understand dependency choices            | [Tools](../tools/)                                  |
 | Change contract, types, or mocks         | [API](../api/)                                      |
-| See what is deliberately unfinished      | [Known Gaps](./known-gaps.md)                       |
+| See what is planned but unbuilt          | [Roadmap](./roadmap.md)                             |
