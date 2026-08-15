@@ -16,6 +16,25 @@ processors:
     # Batch spans before export to reduce chattiness and improve throughput.
     batch:
 
+# A connector is an exporter on one pipeline and a receiver on another: spans go in, metrics come
+# out. That is how a signal is derived from another signal without a second SDK in the app.
+connectors:
+    # Derives request-rate / error-rate / latency *between services* by pairing each client span
+    # with the server span it caused. The output is the `traces_service_graph_request_*` family,
+    # which is precisely what Grafana's Tempo datasource queries for its Service Graph tab.
+    #
+    # Without this nothing produces those series, and the `serviceMap` setting in
+    # `grafana.datasources.yaml` points at a Prometheus that has never held a single one of them —
+    # the tab renders empty with no indication that the metrics were never generated.
+    servicegraph:
+        # Where the *derived metrics* are sent (a pipeline name below), not where traces go.
+        latency_histogram_buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+        store:
+            # How long a client span waits for its matching server span before being dropped as
+            # unpaired. Generous for a local stack where a cold container can be slow to answer.
+            ttl: 10s
+            max_items: 10000
+
 exporters:
     # Send traces to Tempo over the internal Docker network.
     otlp/tempo:
@@ -23,6 +42,13 @@ exporters:
         tls:
             # Internal local stack; no TLS termination between collector and Tempo.
             insecure: true
+
+    # Expose the derived service-graph metrics for Prometheus to scrape. This is a *pull*
+    # endpoint on the collector itself (job `otel-collector-spanmetrics` in prometheus.config.yaml),
+    # deliberately not the same port as the collector's own internal telemetry on 8888 — mixing
+    # them would make "is the collector healthy" and "what did the collector derive" one target.
+    prometheus:
+        endpoint: 0.0.0.0:8889
 
 service:
     # The collector's own metrics — queue depth, exporter failures, spans dropped. Prometheus
@@ -44,8 +70,15 @@ service:
             address: 0.0.0.0:8888
 
     pipelines:
-        # Trace pipeline: receive OTLP -> batch -> export to Tempo.
+        # Trace pipeline: receive OTLP -> batch -> store in Tempo, and fork the same spans into
+        # the servicegraph connector. Both exporters get every span; Tempo keeps them, the
+        # connector counts them and throws them away.
         traces:
             receivers: [otlp]
             processors: [batch]
-            exporters: [otlp/tempo]
+            exporters: [otlp/tempo, servicegraph]
+
+        # Metrics pipeline: the connector's output, published for Prometheus to scrape.
+        metrics/servicegraph:
+            receivers: [servicegraph]
+            exporters: [prometheus]

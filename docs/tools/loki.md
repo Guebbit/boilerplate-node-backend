@@ -45,6 +45,16 @@ Open **Grafana → Explore → Loki**:
 {service="api"} | json | trace_id="abc123..."
 ```
 
+::: warning Those labels depend on the log line being JSON
+`service` and `level` are not attached by Loki — Promtail parses each line as JSON and promotes
+the fields out of it. So the queries above work only while the app is emitting JSON, which is why
+`resolveConsoleFormat` keys off `process.stdout.isTTY` rather than `NODE_ENV`: a container has no
+TTY and gets JSON, a developer's terminal gets the colourised layout. Key that choice off
+`NODE_ENV` instead and the compose stack (`NODE_ENV=development`) ships colourised prose — the
+lines still arrive in Loki, but carry no labels and match none of these selectors, with no error
+anywhere to say so.
+:::
+
 ## Trace ↔ log correlation
 
 Because Winston logs include a `trace_id` field, you can:

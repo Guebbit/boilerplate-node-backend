@@ -158,7 +158,7 @@ const baseFormat = winston.format.combine(
 );
 
 /**
- * Readable local format for non-production runs.
+ * Readable format for a person watching a terminal.
  *
  * Same pipeline as `baseFormat` up to redaction, then ANSI colour plus a single-line
  * human layout instead of JSON.
@@ -179,7 +179,27 @@ const prettyFormat = winston.format.combine(
 );
 
 /**
- * Main application logger. JSON to stdout in prod/test; pretty in dev.
+ * Pick the console format from who is reading the output, not from `NODE_ENV`.
+ *
+ * The two are not the same question, and conflating them is what silently breaks log shipping:
+ * the compose stack runs `NODE_ENV=development`, so an environment-keyed choice hands every
+ * container line to Promtail as colourised prose. Promtail's pipeline parses each line as JSON to
+ * lift `level`, `service` and `trace_id` out of it, so those lines reach Loki carrying no labels
+ * at all — `{service="api"}` and `{level="error"}` match nothing, and the log-to-trace link never
+ * fires. The logs ship and are unqueryable, with no error anywhere to say so.
+ *
+ * `isTTY` answers the question that actually matters. It is true only when stdout is an
+ * interactive terminal — someone running `npm run dev` by hand — and false whenever the stream is
+ * a pipe or a container log file, which is exactly when something downstream has to parse it.
+ * Production stays JSON regardless, because a TTY there would mean a container started
+ * interactively and its logs are still collected.
+ */
+/* Exported so the matrix can be asserted rather than assumed. */
+export const resolveConsoleFormat = (): winston.Logform.Format =>
+    process.env.NODE_ENV !== 'production' && process.stdout.isTTY ? prettyFormat : baseFormat;
+
+/**
+ * Main application logger. Pretty on an interactive terminal, JSON everywhere else.
  *
  * `winston.createLogger()` returns the object every module imports as `logger`.
  * Call it as `logger.info('text')` or `logger.info({ message: 'text', ...meta })`.
@@ -199,7 +219,7 @@ export const logger = winston.createLogger({
         // stdout only, deliberately: in containers the platform owns log collection and
         // rotation, so writing files inside the container would just fill the layer up.
         new winston.transports.Console({
-            format: process.env.NODE_ENV === 'production' ? baseFormat : prettyFormat
+            format: resolveConsoleFormat()
         })
     ]
 });

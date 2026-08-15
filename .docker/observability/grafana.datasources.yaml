@@ -14,7 +14,9 @@ datasources:
       isDefault: true
       jsonData:
           httpMethod: GET
-          # Enables service graph links powered by Prometheus metrics.
+          # Enables service graph links powered by Prometheus metrics. The series themselves are
+          # derived by the collector's servicegraph connector (see otel-collector.config.yaml);
+          # this setting only says which Prometheus to read them from.
           serviceMap:
               datasourceUid: prometheus
           # Enables "view logs for this trace" jump into Loki.
@@ -22,6 +24,18 @@ datasources:
               datasourceUid: loki
               filterByTraceID: true
               filterBySpanID: false
+              # `tags` maps a span attribute onto the Loki *stream label* that carries the same
+              # value, and it is what turns the jump into a query. Omitting it does not mean
+              # "match everything": Grafana falls back to its own defaults (cluster, hostname,
+              # namespace, pod, service.name) and builds `{service_name="api"}` — a label this
+              # stack never sets, so the panel opens on an empty result with no error.
+              #
+              # `service` is the label Promtail promotes from the `service` field Winston stamps
+              # on every record, and the one Alloy attaches to frontend telemetry — so this one
+              # mapping covers both halves of a stitched trace.
+              tags:
+                  - key: 'service.name'
+                    value: 'service'
 
     # Prometheus datasource: metrics and alert rule visualizations.
     - name: Prometheus

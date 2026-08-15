@@ -17,7 +17,8 @@ import {
     serializeError,
     SENSITIVE_FIELDS,
     redactFormat,
-    resolveLogLevel
+    resolveLogLevel,
+    resolveConsoleFormat
 } from '@infrastructure/adapters/logger';
 
 describe('redactSensitiveFields', () => {
@@ -394,6 +395,84 @@ describe('resolveLogLevel', () => {
         process.env.NODE_ENV = 'development';
 
         expect(resolveLogLevel()).toBe('debug');
+    });
+});
+
+/**
+ * `resolveConsoleFormat` decides whether a log line is machine-readable, and getting it wrong is
+ * invisible: the app keeps logging, the container keeps writing, and only the *labels* in Loki go
+ * missing — `{service="api"}` and `{level="error"}` silently match nothing, because Promtail
+ * parses each line as JSON and colourised prose is not JSON.
+ *
+ * So the assertions are made on the rendered line rather than on which format object came back:
+ * the property that matters downstream is "can a collector parse this", not "is this the
+ * prettyFormat constant".
+ */
+
+/** Pretend stdout is (or is not) an interactive terminal for the duration of one case. */
+const setTty = (isTty: boolean) => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: isTty, configurable: true });
+};
+
+describe('resolveConsoleFormat', () => {
+    /** Winston stashes the finished output line on the record under this well-known symbol. */
+    const MESSAGE = Symbol.for('message');
+    /**
+     * And the *uncoloured* level under this one. `colorize` looks the colour up by this symbol
+     * rather than by `info.level`, precisely so it still works after it has rewritten
+     * `info.level` into an escape-wrapped string — so a record without it throws instead of
+     * colouring.
+     */
+    const LEVEL = Symbol.for('level');
+
+    const originalEnvironment = process.env.NODE_ENV;
+    const originalIsTty = process.stdout.isTTY;
+
+    afterEach(() => {
+        if (originalEnvironment === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = originalEnvironment;
+        setTty(originalIsTty);
+    });
+
+    /**
+     * Render one record through whichever format the resolver picks, and return the line.
+     *
+     * The record is shaped the way winston hands one to a format — including the `LEVEL` symbol,
+     * without which the colourising branch cannot run at all.
+     */
+    const render = (): string => {
+        const format = resolveConsoleFormat();
+        const rendered = format.transform({ level: 'info', message: 'hello', [LEVEL]: 'info' });
+        return (rendered as Record<symbol, string>)[MESSAGE];
+    };
+
+    it('emits parseable JSON when stdout is not a terminal, which is every collected runtime', () => {
+        // A container writing to its log file, a pipe, a CI job: nobody is reading this by eye
+        // and something downstream has to parse it.
+        process.env.NODE_ENV = 'development';
+        setTty(false);
+
+        expect(() => JSON.parse(render())).not.toThrow();
+        expect(JSON.parse(render())).toMatchObject({ level: 'info', message: 'hello' });
+    });
+
+    it('emits the human layout only when a person is watching a terminal', () => {
+        process.env.NODE_ENV = 'development';
+        setTty(true);
+
+        const line = render();
+
+        expect(() => JSON.parse(line)).toThrow();
+        expect(line).toContain('hello');
+    });
+
+    it('stays JSON in production even on a terminal', () => {
+        // A production container started interactively still has its logs collected, so the
+        // terminal says nothing about who ends up reading them.
+        process.env.NODE_ENV = 'production';
+        setTty(true);
+
+        expect(() => JSON.parse(render())).not.toThrow();
     });
 });
 

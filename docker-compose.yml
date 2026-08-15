@@ -60,6 +60,16 @@ services:
             # Observability: send traces to OTel Collector, which fans out to backends.
             OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
+            # The three URLs `GET /observability/health` reports as `integrations.loki`,
+            # `integrations.umami` and `integrations.faro`. They are declarative — the app never
+            # calls them — but they are set here rather than left to `.env` because this file is
+            # what starts those three containers. Left unset, health answered `false` for all
+            # three while they were running in this very stack, which makes the one endpoint you
+            # would check to find out what is wired up the least trustworthy thing in it.
+            # Host-facing URLs, not service names: they describe what a browser can reach.
+            NODE_LOKI_HOST: 'http://localhost:${LOKI_PORT:-3100}'
+            NODE_UMAMI_HOST: 'http://localhost:${UMAMI_PORT:-3080}'
+            NODE_FARO_COLLECTOR_URL: 'http://localhost:${ALLOY_FARO_PORT:-12347}/collect'
 
         # Persist data.
         # Compose manages the lifecycle of this volume when up/down

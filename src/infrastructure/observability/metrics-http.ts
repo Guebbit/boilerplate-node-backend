@@ -14,6 +14,7 @@
  */
 
 import type { Request } from 'express';
+import { getHeapStatistics } from 'node:v8';
 import { register, Counter, Histogram, Gauge, collectDefaultMetrics } from 'prom-client';
 
 /**
@@ -48,6 +49,28 @@ const _processUptimeGauge = new Gauge({
     // maintained by a timer. `this` is the gauge, hence the non-arrow function.
     collect() {
         this.set(process.uptime());
+    }
+});
+
+/**
+ * The ceiling V8 will not grow the heap past, in bytes.
+ *
+ * prom-client ships `nodejs_heap_size_used_bytes` and `nodejs_heap_size_total_bytes` but no
+ * limit, and the two it does ship do not describe saturation: `total` is the heap V8 has
+ * *committed so far*, which it grows on demand, so `used / total` sits near 1 on a perfectly
+ * healthy process and an alert written against that ratio fires permanently. `heap_size_limit`
+ * is the fixed ceiling (`--max-old-space-size`), so `used / limit` is the ratio that actually
+ * means "close to OOM" — see the `HighHeapUsage` rule in `prometheus.alert-rules.yaml`.
+ *
+ * Read at scrape time like the uptime gauge above; the value is constant for the life of the
+ * process, but reading it on demand keeps it correct if the process is ever resized.
+ */
+const _heapSizeLimitGauge = new Gauge({
+    name: 'nodejs_heap_size_limit_bytes',
+    help: 'Maximum heap size V8 will allocate for this process, in bytes.',
+    registers: [metricsRegistry],
+    collect() {
+        this.set(getHeapStatistics().heap_size_limit);
     }
 });
 
