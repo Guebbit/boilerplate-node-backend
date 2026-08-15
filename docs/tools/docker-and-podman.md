@@ -111,21 +111,27 @@ flowchart LR
 
 ## Podman and Promtail log collection
 
-Docker writes container logs as `json-file` under `/var/lib/docker/containers`. Rootless Podman
-uses the `k8s-file` log driver (CRI format) and stores them under a different host path. Promtail
-has to be pointed at the right one, or it tails nothing.
+Docker writes container logs as `json-file` under `/var/lib/docker/containers`. Podman can write
+the same kind of thing with its `k8s-file` driver (CRI format) under its own storage path — but
+**it does not do so by default.** Podman's default driver is `journald`, which puts log lines in
+the systemd journal and writes no file at all. Promtail tails files, so with the default it tails a
+glob matching nothing, Loki stays empty, and Grafana's log panels are blank with no error anywhere
+to explain it.
 
-That is the entire difference between the two runtimes, and it is two values in `.env`, which
+That is the entire difference between the two runtimes, and it is three values in `.env`, which
 compose reads by itself:
 
 ```dotenv
 CONTAINER_LOGS_PATH=/home/youruser/.local/share/containers/storage/overlay-containers
 PROMTAIL_CONFIG=promtail.podman.config.yaml
+CONTAINER_LOG_DRIVER=k8s-file
 ```
 
-The defaults in `docker-compose.yml` are docker's, so on docker you set neither. Whichever path
-you give is mounted at `/var/log/host-containers`, so the two promtail configs differ only in the
-glob under it and the parser stage — CRI for podman, JSON envelope for docker.
+The defaults in `docker-compose.yml` are docker's, so on docker you set none of them. The driver is
+applied to every service through a YAML anchor rather than per service, because Promtail scrapes
+the whole directory and any service left on the default would simply be missing from the logs.
+Whichever path you give is mounted at `/var/log/host-containers`, so the two promtail configs
+differ only in the glob under it and the parser stage — CRI for podman, JSON envelope for docker.
 
 There is no override file and no `-f` list. There used to be both, plus a `scripts/compose.ts`
 that chose between them; the whole apparatus existed to move one volume mount, and it went wrong

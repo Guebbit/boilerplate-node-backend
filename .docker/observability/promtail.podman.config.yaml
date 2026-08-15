@@ -1,4 +1,7 @@
-# Promtail config for rootless Podman (default k8s-file log driver).
+# Promtail config for rootless Podman running the k8s-file log driver.
+#
+# Podman's DEFAULT is journald, which writes no file for Promtail to tail — the stack sets
+# CONTAINER_LOG_DRIVER=k8s-file to get these files at all. See .env-example.
 # Why this file exists: Podman stores container logs in a different path and
 # uses CRI format instead of Docker JSON format, so a separate config is needed.
 #

@@ -16,8 +16,8 @@ cp .env-example .env
 npm run compose:restart          # or: npm run compose:restart
 ```
 
-On Podman, also set `CONTAINER_LOGS_PATH` and `PROMTAIL_CONFIG` in `.env` (see `.env-example` →
-_Promtail Log Collection_). Nothing to set on Docker.
+On Podman, also set `CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG` and `CONTAINER_LOG_DRIVER` in `.env`
+(see `.env-example` → _Promtail Log Collection_). Nothing to set on Docker.
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the server,
 so the database is migrated and seeded on first boot — you get demo products, users and orders

@@ -1,7 +1,21 @@
+# How each container's stdout is stored on the host, and therefore whether Promtail can read it.
+#
+# Promtail tails log FILES. Docker writes them by default (`json-file`), podman does not: its
+# default here is `journald`, which keeps log lines in the systemd journal and writes no file at
+# all — so Promtail tails a glob that matches nothing, Loki stays empty, and Grafana's log panels
+# are blank with no error anywhere. `k8s-file` is podman's file-based driver and writes the CRI
+# format `promtail.podman.config.yaml` already parses.
+#
+# Anchored rather than repeated: every service needs the same driver, because Promtail scrapes the
+# whole directory and a service left on the default would simply be missing from the logs.
+x-logging: &container-logging
+    driver: ${CONTAINER_LOG_DRIVER:-json-file}
+
 # Top level block where each service (container) is defined
 services:
     # Single service (container). Name used as network hostname
     app:
+        logging: *container-logging
         # (Optional) Custom container name
         # container_name: boilerplate-node
 
@@ -115,6 +129,7 @@ services:
 
     # Another container
     database:
+        logging: *container-logging
         # Same
         # container_name: boilerplate-mongodb
 
@@ -151,6 +166,7 @@ services:
     # requests are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is lost),
     # which is fine since Redis here is cache-only, not a primary store.
     redis:
+        logging: *container-logging
         image: redis:7
         restart: unless-stopped
         # Redis defaults to `maxmemory 0` — unlimited — and would grow until the host or the
@@ -173,6 +189,7 @@ services:
 
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.).
     rabbitmq:
+        logging: *container-logging
         image: rabbitmq:3-management
         restart: unless-stopped
         environment:
@@ -186,6 +203,7 @@ services:
 
     # Tempo: stores OpenTelemetry traces. Receives OTLP/gRPC from the OTel Collector.
     tempo:
+        logging: *container-logging
         image: grafana/tempo:2.6.1
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
@@ -197,6 +215,7 @@ services:
     # OTel Collector: single ingestion point for all telemetry signals from the app.
     # Receives OTLP/HTTP on :4318 and OTLP/gRPC on :4317, then fans out to Tempo.
     otel-collector:
+        logging: *container-logging
         image: otel/opentelemetry-collector-contrib:0.114.0
         restart: unless-stopped
         command: ['--config=/etc/otel-collector-config.yaml']
@@ -210,6 +229,7 @@ services:
 
     # Prometheus: scrapes /metrics from the app and stores numeric time-series.
     prometheus:
+        logging: *container-logging
         image: prom/prometheus:v2.55.1
         restart: unless-stopped
         command:
@@ -226,6 +246,7 @@ services:
 
     # Alertmanager: receives firing alerts from Prometheus and routes notifications.
     alertmanager:
+        logging: *container-logging
         image: prom/alertmanager:v0.27.0
         restart: unless-stopped
         command: ['--config.file=/etc/alertmanager/alertmanager.yml']
@@ -236,6 +257,7 @@ services:
 
     # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
     loki:
+        logging: *container-logging
         image: grafana/loki:3.3.2
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
@@ -247,6 +269,7 @@ services:
 
     # Promtail: tails Docker container log files and ships them to Loki.
     promtail:
+        logging: *container-logging
         image: grafana/promtail:3.3.2
         restart: unless-stopped
         command: ['-config.file=/etc/promtail/promtail-config.yaml']
@@ -266,6 +289,7 @@ services:
 
     # Grafana: single UI to explore traces (Tempo), metrics (Prometheus), and logs (Loki).
     grafana:
+        logging: *container-logging
         image: grafana/grafana:11.4.0
         restart: unless-stopped
         environment:
@@ -287,6 +311,7 @@ services:
     # Receives errors/logs/web-vitals/traces from the browser on the Faro port, then fans
     # them into Loki (logs) and the OTel Collector -> Tempo (traces). See the config for wiring.
     alloy:
+        logging: *container-logging
         image: grafana/alloy:v1.5.1
         restart: unless-stopped
         command:
@@ -306,6 +331,7 @@ services:
     # Umami: self-hosted product analytics (pageviews + custom events) — replaces PostHog cloud.
     # The frontend loads its tracking script from this origin; events land in umami-db.
     umami:
+        logging: *container-logging
         image: ghcr.io/umami-software/umami:postgresql-v2.14.0
         restart: unless-stopped
         environment:
@@ -323,6 +349,7 @@ services:
 
     # Postgres backing store for Umami (kept separate from the app's MongoDB).
     umami-db:
+        logging: *container-logging
         image: postgres:16-alpine
         restart: unless-stopped
         environment:
@@ -340,6 +367,7 @@ services:
     # Umami init: one-shot job that stamps the admin username/password from .env onto
     # Umami's default seeded account, so the stack comes up ready to log in (no manual step).
     umami-init:
+        logging: *container-logging
         image: postgres:16-alpine
         restart: 'no'
         entrypoint: ['/bin/sh', '/umami-init.sh']
@@ -361,6 +389,7 @@ services:
 
     # Docs: VitePress static site served by Nginx.
     docs:
+        logging: *container-logging
         build:
             context: .
             dockerfile: .docker/Dockerfile.docs
