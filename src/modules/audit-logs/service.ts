@@ -10,7 +10,8 @@ import { logger } from '@infrastructure/adapters/logger';
  */
 
 /**
- * Store an emitted audit entry. This is the {@link AuditSink} implementation `app.ts` registers.
+ * Store an emitted audit entry. This is the {@link AuditSink} implementation that
+ * `@modules/audit-logs/module` registers at import time.
  *
  * Fire-and-forget by contract: it returns `void`, and every failure is swallowed into a log line.
  * That is not laziness about errors — it is the fail-open property the whole audit path depends

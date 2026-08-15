@@ -114,7 +114,11 @@ export interface AuditSink {
 let auditSink: AuditSink | undefined;
 
 /**
- * Install the persistence sink. Called once from `app.ts` after the database connects.
+ * Install the persistence sink. Called once, at import time, from `@modules/audit-logs/module`.
+ *
+ * That is module LOAD, not database connect: anything importing the app registers the sink whether
+ * or not a connection exists or ever will. The sink is therefore written to cope with being called
+ * while disconnected — see `bufferCommands: false` on the audit-log schema.
  *
  * The sink is invoked on paths that are already answering a request — every login, every blocked
  * permission — so it must be fire-and-forget on the caller's side: no awaiting, no rejecting, no

@@ -108,7 +108,28 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         // No `timestamps: true`: the entry carries its own `timestamp`, stamped at the moment the
         // action happened rather than the moment the write landed. A second, near-identical
         // `createdAt` would only invite queries to pick the wrong one.
-        timestamps: false
+        timestamps: false,
+        /*
+         * Fail an offline write immediately instead of queueing it.
+         *
+         * Mongoose's default is to BUFFER any operation issued while disconnected and hold it for
+         * `bufferTimeoutMS` — ten seconds — before rejecting. For every other collection here that
+         * is the right behaviour: it rides out a reconnect and the request that is waiting on the
+         * answer gets one.
+         *
+         * This collection is the exception, because nothing waits on it. `auditLogService.record`
+         * is fire-and-forget by contract and the audit LOG LINE is the compliance record — the
+         * stored copy is the queryable convenience on top of it. So buffering cannot save an
+         * entry that matters; it only converts "not persisted, logged, moved on" into a pending
+         * timer per audited request, held for ten seconds each, for as long as Mongo is away.
+         *
+         * It showed up as a test that would not exit: `tests/integration/locale.test.ts` drives
+         * `POST /account/signup` and deliberately runs with no database, so every rejected signup
+         * emitted `auth.signup.failed`, buffered the insert, and left a 10s timer holding the
+         * worker's event loop open. Jest waited its one second and force-killed the worker —
+         * `A worker process has failed to exit gracefully` — which names the symptom and not this.
+         */
+        bufferCommands: false
     }
 );
 
