@@ -3,6 +3,7 @@ api
 contract.bruno.yml
 contract.insomnia.json
 contract.mockoon.json
+contract.postman.json
 src/types/asyncapi.ts
 
 # Contract fragments are verbatim SLICES of a committed document, not standalone files: each one
@@ -16,5 +17,4 @@ src/types/asyncapi.ts
 shared/contracts/*
 src/modules/*/openapi/*.yaml
 src/modules/*/asyncapi/*.yaml
-src/modules/*/dev/*
 **/*.fragment.ts

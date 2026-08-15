@@ -1,9 +1,0 @@
-type: collection.insomnia.rest/5.0
-schema_version: "5.1"
-name: Ecommerce Demo API
-meta:
-  id: wrk_d41589f5d3049341b6b9db46f495edaa
-  created: 1767225600000
-  modified: 1767225600000
-  description: ""
-collection:

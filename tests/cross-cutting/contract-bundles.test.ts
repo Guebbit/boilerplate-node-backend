@@ -1,14 +1,20 @@
 /**
- * Every committed document is exactly what its fragments say it is.
+ * Every committed document is exactly what it says it is built from.
  *
- * Seven documents in this repo list every domain the app has and are ALSO byte-identical with the
- * paired frontend: the two specs, the demo dataset's identities, the analytics event names and the
- * three API client collections. Each is split per module — a domain owns its endpoints, its events,
- * its records and its requests — while the assembled document stays COMMITTED, because it is what
- * spectral, orval, Prism, `jest-openapi`, the seed runner, Bruno, Insomnia and Mockoon all read.
+ * The documents come in two kinds, and both are pinned here.
+ *
+ * ASSEMBLED — the two specs, the demo dataset's identities and the analytics event names. Each is
+ * split per module, so a domain owns its endpoints, its events and its records, and each is ALSO
+ * byte-identical with the paired frontend. The assembled document stays COMMITTED, because it is
+ * what spectral, orval, Prism, `jest-openapi` and the seed runner read.
+ *
+ * GENERATED — the four API client collections, produced whole from `openapi.yaml` and the seed
+ * dataset. They have no fragments: nothing on disk stands between the contract and the document, so
+ * there is no intermediate for anyone to hand-edit.
  *
  * Two sources for one document is a fork waiting to happen, and this is the assertion that stops
- * it: edit a fragment without re-bundling, or hand-edit a bundle, and this fails.
+ * it: edit a fragment without re-bundling, hand-edit a bundle, or change what the generator does
+ * without regenerating, and this fails.
  *
  * It also pins the property that made fragmentation possible at all. Every YAML bundler parses and
  * re-serialises, which drops `openapi.yaml`'s 149 comment lines and reflows ~390 more. The bundler
@@ -32,7 +38,7 @@ import {
     ANALYTICS_SECTION_ORDER,
     analyticsFragment
 } from '../../scripts/contracts/analyticsEvents';
-import { allProbes, staleCollectionFragments } from '../../scripts/contracts/generateCollections';
+import { allProbes } from '../../scripts/contracts/generateCollections';
 import { SHARED_FILES } from '../../scripts/specIdentity';
 import { analyticsEvents } from '../../src/infrastructure/observability/analytics-events';
 
@@ -70,18 +76,20 @@ describe('every contract bundle', () => {
          * hand-written fragments is also compared against the frontend's copy, because a fork in
          * one of those is a fork in what the two sides believe they share.
          *
-         * The three client collections are exempt, and the exemption is the invariant: their
-         * fragments are GENERATED from `openapi.yaml` (which is guarded) and the committed
-         * bundles are pinned to a fresh generation by the byte-for-byte case above, so a
-         * frontend copy could never disagree without `openapi.yaml` disagreeing first — which is
-         * why the frontend holds none. A new authored bundle must land in `SHARED_FILES`; a new
-         * generated one must land here instead.
+         * The client collections are exempt, and the exemption is the invariant: their fragments
+         * are GENERATED from `openapi.yaml` (which is guarded) and the committed bundles are
+         * pinned to a fresh generation by the byte-for-byte case above, so a frontend copy could
+         * never disagree without `openapi.yaml` disagreeing first — which is why the frontend
+         * holds none. A new authored bundle must land in `SHARED_FILES`.
+         *
+         * Which bundles those are is read from `generated` rather than listed here: a list of tool
+         * names is a copy of `COLLECTION_TOOLS`, and the copy goes stale the first time a fourth
+         * tool is added — silently, by exempting nothing and demanding the new bundle be shared.
          */
-        const generatedFromTheContract = new Set(['bruno', 'insomnia', 'mockoon']);
         const guarded = new Set(SHARED_FILES.map(({ backend }) => backend));
 
         for (const bundle of CONTRACT_BUNDLES)
-            if (!generatedFromTheContract.has(bundle.name))
+            if (!bundle.generated)
                 expect(guarded).toContain(path.relative(REPO_ROOT, bundle.output));
     });
 });
@@ -222,13 +230,20 @@ describe('the API client collections', () => {
         expect(new Set(probes.map(({ name }) => name)).size).toBe(probes.length);
     });
 
-    it('are exactly what the contract generates', () => {
-        // The collections are derived, so the question is not "do they agree with each other" but
-        // "is the committed output a fresh run". A generator whose output nobody verifies is a
-        // second source of truth that agrees with the first only by habit.
-        expect(staleCollectionFragments().map((file) => path.relative(REPO_ROOT, file))).toEqual(
-            []
-        );
+    it('are generated whole, with nothing on disk in between', () => {
+        /*
+         * "Is the committed output a fresh run" is already answered for these by the byte-for-byte
+         * case above, which now covers generated bundles as well as assembled ones.
+         *
+         * What this adds is the property that makes that answer trustworthy: there is no
+         * intermediate. A per-module slice of a collection would be a second place the output
+         * lives, editable by hand, and a generator whose output nobody verifies is a second source
+         * of truth that agrees with the first only by habit.
+         */
+        const collections = CONTRACT_BUNDLES.filter(({ generated }) => generated);
+
+        expect(collections.length).toBeGreaterThan(0);
+        for (const bundle of collections) expect(bundleFragments(bundle)).toEqual([]);
     });
 
     it('carry one request per operation the contract declares, in all three', () => {

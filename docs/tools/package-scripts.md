@@ -79,7 +79,6 @@ Change](../api/regenerating.md).
 | Script                   | Stage    | Job                                                                                                               | Read more                                                  |
 | ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `contracts:bundle`       | bundle   | rebuild all seven committed bundles from their fragments (to narrow, call `scripts/bundle-contracts.ts` directly) | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `contracts:collections`  | bundle   | regenerate only the Bruno/Insomnia/Mockoon **fragments** from `openapi.yaml` + seed identities                    | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `check:contracts-bundle` | verify   | fail if a bundle is stale or a collection is out of date — the CI/`--check` twin                                  | [Regenerating](../api/regenerating.md)                     |
 | `check:spec-identity`    | verify   | fail if the paired frontend holds different bytes of a shared document                                            | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval                                 | [OpenAPI Workflow](../api/openapi-workflow.md)             |

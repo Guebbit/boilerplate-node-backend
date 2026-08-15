@@ -20,7 +20,7 @@ import { openapiBundle } from './openapi';
 import { asyncapiBundle } from './asyncapi';
 import { analyticsEventsBundle } from './analyticsEvents';
 import { seedIdentitiesBundle } from './seedIdentities';
-import { brunoBundle, insomniaBundle, mockoonBundle } from './clientCollections';
+import { brunoBundle, insomniaBundle, mockoonBundle, postmanBundle } from './generateCollections';
 
 export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,
@@ -29,7 +29,8 @@ export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     seedIdentitiesBundle,
     brunoBundle,
     insomniaBundle,
-    mockoonBundle
+    mockoonBundle,
+    postmanBundle
 ] as const;
 
 /** One bundle by its CLI handle. */

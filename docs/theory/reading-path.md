@@ -131,14 +131,14 @@ generated client and the paired frontend both depend on.
 Not because it is unimportant — because none of it changes your mental model of the codebase, and
 all of it is easier to read once you have one.
 
-| Skip                                                                 | Until                                                                                                                                     |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/infrastructure/adapters/*` (cache, queue, storage, mailer, pdf) | You need that specific capability. Each is self-contained.                                                                                |
-| `src/infrastructure/observability/*`                                 | You are debugging a trace or adding a metric.                                                                                             |
-| `src/modules/*/dev/*` and `src/modules/*/openapi/*`                  | Never read by hand — generated fragments and contract source. See [Contract Ownership & Fragmentation](../api/contract-fragmentation.md). |
-| `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `products` first.                            |
-| `src/cluster.ts`                                                     | You are changing process management. See [Clustering & Shutdown](./clustering.md).                                                        |
-| `eslint.config.ts`, `stryker.config.json`, `jest.config.js`          | You are changing the gate itself.                                                                                                         |
+| Skip                                                                 | Until                                                                                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `src/infrastructure/adapters/*` (cache, queue, storage, mailer, pdf) | You need that specific capability. Each is self-contained.                                                                 |
+| `src/infrastructure/observability/*`                                 | You are debugging a trace or adding a metric.                                                                              |
+| `src/modules/*/openapi/*`                                            | The contract, one module at a time. Authored — see [Contract Ownership & Fragmentation](../api/contract-fragmentation.md). |
+| `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `products` first.             |
+| `src/cluster.ts`                                                     | You are changing process management. See [Clustering & Shutdown](./clustering.md).                                         |
+| `eslint.config.ts`, `stryker.config.json`, `jest.config.js`          | You are changing the gate itself.                                                                                          |
 
 ---
 

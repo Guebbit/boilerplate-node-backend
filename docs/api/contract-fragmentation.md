@@ -9,35 +9,37 @@ repositories and is easy to get wrong from either side.
 > This repository **owns** the shared, domain-shaped documents. The frontend **holds
 > byte-identical copies** of the four it consumes and never edits them.
 
-## The seven bundles
+## The eight bundles
 
-`openapi.yaml` is not a special case. Seven documents are assembled here from per-module
-fragments; the first four also exist in `boilerplate-vue-frontend` as byte-identical copies,
-because the frontend's toolchain reads them. The three client collections stay in this repo
+`openapi.yaml` is not a special case. Eight documents are produced here from per-module
+sources; the first four also exist in `boilerplate-vue-frontend` as byte-identical copies,
+because the frontend's toolchain reads them. The four client collections stay in this repo
 only — they are derived from `openapi.yaml`, so a frontend copy could never disagree without
 the spec disagreeing first, and nothing there reads them:
 
-| Bundle            | Committed at                                | Fragments live in                                              |
+| Bundle            | Committed at                                | Built from                                                     |
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
 | `openapi`         | `openapi.yaml`                              | `src/modules/<name>/openapi/{paths,schemas}.yaml`               |
 | `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi/{channels,messages,schemas}.yaml`  |
 | `analytics-events`| `src/infrastructure/observability/analytics-events.ts`| `src/modules/<name>/analytics.fragment.ts`                      |
 | `seed-identities` | `db/seeds/seed-identities.ts`               | `src/modules/<name>/seed-identities.fragment.ts`                |
-| `bruno`           | `contract.bruno.yml`                        | `src/modules/<name>/dev/bruno.yml` — **generated**              |
-| `insomnia`        | `contract.insomnia.json`                    | `src/modules/<name>/dev/insomnia.yml` — **generated**           |
-| `mockoon`         | `contract.mockoon.json`                     | `src/modules/<name>/dev/mockoon.{routes,tree}.json` — **generated** |
+| `bruno`           | `contract.bruno.yml`                        | `openapi.yaml` + the seed dataset — **generated whole**         |
+| `insomnia`        | `contract.insomnia.json`                    | `openapi.yaml` + the seed dataset — **generated whole**         |
+| `mockoon`         | `contract.mockoon.json`                     | `openapi.yaml` + the seed dataset — **generated whole**         |
+| `postman`         | `contract.postman.json`                     | `openapi.yaml` + the seed dataset — **generated whole**         |
 
 Whatever more than one domain reads stays in `shared/contracts/`, and each bundle's section order,
 layout and shared parts are declared in one file under `scripts/contracts/`.
 
-The first four are authored fragment by fragment. The three client collections are one step longer:
-their fragments are themselves generated from `openapi.yaml`, because a hand-written restatement of
-the contract is a copy, and copies rot — see [The three client collections](#the-three-client-collections).
+The first four are ASSEMBLED, fragment by fragment. The four client collections are GENERATED —
+produced whole from `openapi.yaml` and the seed dataset, with nothing on disk in between, because a
+hand-written restatement of the contract is a copy and copies rot. See
+[The client collections](#the-client-collections).
 
 ```bash
-npm run contracts:bundle              # bundle the specs, regenerate the collections, rebuild all seven
-npm run contracts:collections         # only the generated collection fragments
-npm run check:contracts-bundle        # fail if a bundle is stale or a collection is out of date
+npm run contracts:bundle              # assemble the specs, then regenerate the collections from them
+npm run contracts:bundle -- bruno     # just one, from the committed contract
+npm run check:contracts-bundle        # fail if any of the eight is stale
 ```
 
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
@@ -75,8 +77,8 @@ flowchart TD
     class B,ORVAL,CLIENT tool;
 ```
 
-The picture is drawn for `openapi.yaml`; the other six bundles differ only in what reads the output
-(the seed runner, the analytics tracker, three API clients). Three properties fall out of it, and
+The picture is drawn for `openapi.yaml`; the other seven bundles differ only in what reads the output
+(the seed runner, the analytics tracker, four API clients). Three properties fall out of it, and
 each is load-bearing:
 
 1. **Fragments are authored here, and only here.** A module owns its slice of every shared document
@@ -305,7 +307,7 @@ its user, so those records live in the users fragment. A module's own `seeds.ts`
 the **bundle** (`@seed-identities`), not from the fragment beside it: fragments are text, not
 modules, and nothing imports one.
 
-### The three client collections — generated, because a restatement is a copy
+### The client collections — generated, because a restatement is a copy
 
 These were written by hand, and they rotted exactly as a copy does. Measured before the generator
 existed:
@@ -324,6 +326,12 @@ worse than no mock server.**
 
 So `scripts/contracts/generateCollections.ts` writes their fragments instead:
 
+The traversal, the example synthesis and the three emitters live in
+[`@guebbit/openapi-runnable-collections`](https://www.npmjs.com/package/@guebbit/openapi-runnable-collections),
+which knows nothing about this repo. That file is **configuration**: which module owns which path,
+where the values come from, where the probes are, and where the output lands. Everything below is a
+property of that configuration rather than of the package.
+
 - **shapes come from `openapi.yaml`** — every operation, its auth, its request body, one example per
   declared response;
 - **values come from `seed-identities.ts`** — `GET /products/{id}` asks for a product the database
@@ -339,12 +347,18 @@ Two assertions hold it in place: the committed fragments must equal a fresh run,
 collections must carry one request per operation the contract declares — which is precisely the
 check that was missing while they rotted.
 
-**A request the contract cannot describe still has a home — `dev/probes.yml`.** A collection is
-also where you keep the requests that prove the API *rejects* things, and a spec describes valid
-calls and their declared answers, so no generator can derive them. A module declares its probes as
-data — method, path, headers, body, and a `why` that becomes the description — and they are
-generated into Bruno and Insomnia after its contract-derived requests. Not into Mockoon: a mock
-server answers requests, it does not send them.
+**A request the contract cannot describe still has a home — `src/modules/<name>/probes.ts`.** A
+collection is also where you keep the requests that prove the API *rejects* things, and a spec
+describes valid calls and their declared answers, so no generator can derive them. A module declares
+its probes as data — method, path, headers, body, and a `why` that becomes the description — and
+they are emitted after its contract-derived requests. Not into Mockoon: a mock server answers
+requests, it does not send them.
+
+They are TypeScript rather than YAML, and the generator is called with them directly. That buys two
+things a data file cannot: the seed tokens and the probe shape are typechecked, and a module deleted
+without its probes leaving `scripts/contracts/generateCollections.ts` stops the build — which is the
+failure [module lifecycle](../theory/module-lifecycle.md) asks for, rather than a collection that
+silently comes out short.
 
 There are 14 today, and each one is a question a contract cannot ask:
 

@@ -33,18 +33,16 @@ flowchart LR
     subgraph AUTH["you edit these"]
         MF["src/modules/*/openapi/*.yaml"]
         SH["shared/contracts/*.yaml"]
-        PR["src/modules/*/dev/probes.yml"]
+        PR["src/modules/*/probes.ts"]
     end
 
     MF --> B[contracts:bundle]
     SH --> B
     B --> ROOT["openapi.yaml<br/><i>committed</i>"]
 
-    ROOT --> COL[contracts:collections]
+    ROOT --> COL[generate]
     PR --> COL
-    COL --> DEVFRAG["modules/*/dev/*<br/><i>generated fragments</i>"]
-    DEVFRAG --> B2[contracts:bundle]
-    B2 --> DEV["contract.{bruno,insomnia,mockoon}.*"]
+    COL --> DEV["contract.{bruno,insomnia,mockoon,postman}.*<br/><i>generated whole</i>"]
 
     ROOT --> G[gen:api] --> API["api/models · api/schemas.zod.ts"]
     ROOT --> FE["copy to the frontend"]
@@ -57,15 +55,14 @@ flowchart LR
     class B,B2,COL,G tool;
 ```
 
-That double `contracts:bundle` is why the script reads the way it does:
+The four client collections are **generated from `openapi.yaml`**, so the contract has to be
+assembled before they can be produced. `scripts/bundle-contracts.ts` owns that ordering — the
+authored documents first, then everything — so a single `npm run contracts:bundle` is all there is
+to remember.
 
-```json
-"contracts:bundle": "tsx scripts/bundle-contracts.ts openapi asyncapi analytics-events seed-identities && npm run contracts:collections && tsx scripts/bundle-contracts.ts"
-```
-
-The three client collections are **generated from `openapi.yaml`**, so the contract has to be
-bundled before their fragments can be written, and the fragments have to exist before they can be
-bundled in turn. One command, three phases, no ordering for you to remember.
+The ordering deliberately does not live in `package.json` as commands joined by `&&`: npm appends
+`--` arguments to the LAST command of a chain only, so a narrowing flag would silently apply to one
+phase and not the others.
 
 ## I changed X — run Y
 
@@ -76,27 +73,27 @@ bundled in turn. One command, three phases, no ordering for you to remember.
 | `src/modules/*/asyncapi/*.yaml`                       | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml`, then `src/types/asyncapi.ts`     |
 | `src/modules/*/analytics.fragment.ts`                 | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.ts` |
 | `src/modules/*/seed-identities.fragment.ts`           | `contracts:bundle` → `db:seed:reset`                | rebuilds `db/seeds/seed-identities.ts`; the collections embed its values, and the database holds the old records |
-| `src/modules/*/dev/probes.yml`                        | `contracts:bundle`                                  | probes are hand-authored, then generated into Bruno and Insomnia |
+| `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | A route, controller or service (no contract change)   | nothing                                             | no bundle reads source code                       |
 | `openapi.yaml` / `asyncapi.yaml` **directly**         | stop — edit the fragment instead                    | the next bundle overwrites you, and `contracts:bundle --check` fails first |
-| `src/modules/*/dev/bruno.yml`, `insomnia.yml`, `mockoon.*.json` | stop — these are generated                | edit the contract or the probes; a hand edit is reverted by the next run |
+| `contract.{bruno,insomnia,mockoon,postman}.*`         | stop — these are generated                          | edit the contract or the probes; a hand edit is reverted by the next run |
 
 When in doubt, `npm run contracts:bundle` on its own is always safe: it compares before it writes
 and touches only the bundles that actually drifted.
 
 ## Regenerate one bundle only
 
-Useful while iterating on a single document — it skips the collection generation entirely. Call the
-underlying script, **not** `npm run contracts:bundle --`:
+Useful while iterating on a single document. A named bundle is produced from what is COMMITTED, so
+a collection named here regenerates from the contract on disk rather than one this run just built:
 
 ```bash
-npx tsx scripts/bundle-contracts.ts openapi     # just openapi.yaml
-npx tsx scripts/bundle-contracts.ts asyncapi    # just asyncapi.yaml
-npm run contracts:collections                   # just the generated collection fragments
+npm run contracts:bundle -- openapi     # just openapi.yaml
+npm run contracts:bundle -- asyncapi    # just asyncapi.yaml
+npm run contracts:bundle -- bruno       # just contract.bruno.yml
 ```
 
 Known names: `openapi`, `asyncapi`, `analytics-events`, `seed-identities`, `bruno`, `insomnia`,
-`mockoon`. An unknown name exits with the list rather than doing nothing.
+`mockoon`, `postman`. An unknown name exits with the list rather than doing nothing.
 
 ::: warning `npm run contracts:bundle -- openapi` does not narrow the run
 `contracts:bundle` is three commands joined by `&&`, and npm appends `--` arguments to the **last**
@@ -173,12 +170,14 @@ src/modules/<name>/openapi/schemas.yaml     the types only it uses
 src/modules/<name>/asyncapi/*.yaml          its channels, messages, schemas
 src/modules/<name>/analytics.fragment.ts    the events it emits
 src/modules/<name>/seed-identities.fragment.ts  the demo records it owns
-src/modules/<name>/dev/probes.yml           the requests a spec cannot describe
+src/modules/<name>/probes.ts                 the requests a spec cannot describe
 ```
 
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
 good sign rather than an omission. Deleting a module is `rm -rf` of the folder, one line out of
-`src/modules.ts`, and one line out of each section list it appeared in.
+`src/modules.ts`, and one line out of each section list it appeared in. A module that declared
+probes is also named in `scripts/contracts/generateCollections.ts`, and that one announces itself:
+the import stops compiling.
 
 ## Related pages
 

@@ -22,7 +22,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: API health check
+          description: Public ping endpoint. Returns a simple liveness indicator confirming the API process is running.
           sortKey: 1
         method: GET
         headers:
@@ -55,7 +55,12 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Supported languages
+          description: |
+            Which languages this deployment can answer in, plus its default and fallback.
+
+            Public, unauthenticated and cacheable: it is static copy that changes only on
+            deploy, and a client that has just failed to reach the API is exactly who needs
+            it.
           sortKey: 1001
         method: GET
         headers:
@@ -80,7 +85,12 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: API message dictionary
+          description: |
+            This API's own dictionary for one language.
+
+            Normally unnecessary — the API resolves its keys itself and puts finished text on
+            the wire. It earns its place when no response arrives at all (a network failure, a
+            bare 502) and the client must produce the copy itself, in the active language.
           sortKey: 1002
         method: GET
         headers:
@@ -113,7 +123,9 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Observability SSE stream
+          description: |
+            Live Server-Sent Events stream for demo dashboards.
+            Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
           sortKey: 2001
         method: GET
         headers:
@@ -138,7 +150,10 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Health snapshot
+          description: |
+            Full JSON health snapshot for dashboard use.
+            Includes uptime, database status, memory, integrations, and system info.
+            Requires admin role.
           sortKey: 2002
         method: GET
         headers:
@@ -162,7 +177,10 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Prometheus metrics
+          description: |
+            Raw Prometheus text (exposition format 0.0.4).
+            Intended for Prometheus scraping, not for browser clients.
+            Use `GET /observability/metrics/overview` for a JSON summary suitable for dashboards.
           sortKey: 2003
         method: GET
         headers:
@@ -187,7 +205,10 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Metrics overview (JSON)
+          description: |
+            Key operational metrics derived from Prometheus counters/histograms,
+            returned as structured JSON for dashboard KPI cards and charts.
+            Requires admin role.
           sortKey: 2004
         method: GET
         headers:
@@ -211,7 +232,12 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Recent audit events
+          description: |
+            Returns the most recent audit events, newest first, from the persisted audit trail.
+            Events include auth flows, admin CRUD actions, and security blocks.
+            Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
+            `total` counts every event matching the filters, not just the returned page.
+            Requires admin role.
           sortKey: 2005
         method: GET
         headers:
@@ -243,7 +269,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Current user info
+          description: Returns the full profile of the currently authenticated user
           sortKey: 3001
         method: GET
         headers:
@@ -267,7 +293,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Update own profile
+          description: Updates the authenticated user's own profile — email, username, locale, image. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email resets `verified` and sends a fresh verification email to the new address.
           sortKey: 3002
         method: PUT
         body:
@@ -302,7 +328,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Request account deletion
+          description: Initiates the account-deletion flow for the authenticated user. A one-time confirmation token is sent to the user's email address. The token must then be submitted to `/account/delete-confirm` to complete the deletion.
           sortKey: 3003
         method: DELETE
         headers:
@@ -326,7 +352,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Change password
+          description: Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Other sessions stay live — revoke them with `POST /account/logout-all` or per session via `DELETE /account/sessions/{sessionId}`.
           sortKey: 3004
         method: POST
         body:
@@ -360,7 +386,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Logout this session
+          description: Logs out the CURRENT session only — revokes the refresh token carried by the `jwt` cookie and clears the authentication cookies. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
           sortKey: 3005
         method: POST
         headers:
@@ -385,7 +411,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List active sessions
+          description: Lists the authenticated user's live refresh tokens as sessions — issue-agnostic handles with an expiry and a `current` marker, never the token values themselves. The one carried by the caller's own refresh cookie is flagged `current`.
           sortKey: 3006
         method: GET
         headers:
@@ -409,7 +435,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Revoke one session
+          description: Revokes a single refresh token by its session id — "log out that device". Revoking the current session is allowed and equivalent to `POST /account/logout`, except that the cookies of OTHER clients cannot be cleared from here; their next refresh simply fails.
           sortKey: 3007
         method: DELETE
         headers:
@@ -433,7 +459,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List saved addresses
+          description: The authenticated user's address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named.
           sortKey: 3008
         method: GET
         headers:
@@ -457,7 +483,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Add an address
+          description: Adds an entry to the authenticated user's address book. The first entry becomes the default automatically; a later entry claims the default slot only by sending `default true`, which demotes the previous holder.
           sortKey: 3009
         method: POST
         body:
@@ -496,7 +522,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Update an address
+          description: Updates one entry of the caller's own book. `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
           sortKey: 3010
         method: PUT
         body:
@@ -535,7 +561,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Remove an address
+          description: Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default.
           sortKey: 3011
         method: DELETE
         headers:
@@ -559,7 +585,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Request email verification
+          description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived.
           sortKey: 3012
         method: POST
         headers:
@@ -583,7 +609,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Confirm email verification
+          description: Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/verify-request` and, if valid, marks the account's email address as verified.
           sortKey: 3013
         method: POST
         body:
@@ -616,7 +642,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Confirm account deletion
+          description: Completes the account-deletion flow. Validates the one-time token issued by `DELETE /account` and, if valid, permanently removes the user account.
           sortKey: 3014
         method: DELETE
         body:
@@ -649,7 +675,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Login
+          description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests.
           sortKey: 3015
         method: POST
         body:
@@ -683,7 +709,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Signup
+          description: Registers a new user account with optional image upload. Returns the newly created user profile on success.
           sortKey: 3016
         method: POST
         body:
@@ -786,7 +812,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Refresh access token
+          description: Creates a new short-lived access token from the refresh token in the `jwt` cookie. The cookie is `HttpOnly`, so the token is never readable by page scripts and never appears in a URL, a proxy log or a `Referer` header.
           sortKey: 3019
         method: GET
         headers:
@@ -811,7 +837,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Logout from all devices
+          description: Logs out the authenticated user from ALL devices by removing all refresh tokens from the database and clearing authentication cookies.
           sortKey: 3020
         method: POST
         headers:
@@ -835,7 +861,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Remove expired tokens
+          description: Removes all expired tokens (refresh, password-reset, etc.) from every user record in the database. Restricted to administrators.
           sortKey: 3021
         method: DELETE
         headers:
@@ -997,7 +1023,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List users (paginated)
+          description: Returns a paginated list of user accounts.
           sortKey: 4001
         method: GET
         headers:
@@ -1021,7 +1047,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Create user
+          description: Creates a new user account with the supplied email, username, and password. Optional image can be uploaded.
           sortKey: 4002
         method: POST
         body:
@@ -1059,7 +1085,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Edit user
+          description: Updates an existing user's email or password. Optional image can be uploaded.
           sortKey: 4003
         method: PUT
         body:
@@ -1098,7 +1124,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Delete user
+          description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record.
           sortKey: 4004
         method: DELETE
         body:
@@ -1131,7 +1157,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: User details
+          description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
           sortKey: 4005
         method: GET
         headers:
@@ -1155,7 +1181,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Edit user
+          description: Updates the email or password of the user identified by `{id}` in the path. Optional image can be uploaded.
           sortKey: 4006
         method: PUT
         body:
@@ -1192,7 +1218,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Delete user
+          description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`.
           sortKey: 4007
         method: DELETE
         body:
@@ -1224,7 +1250,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Permanently delete user
+          description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
           sortKey: 4008
         method: DELETE
         headers:
@@ -1248,7 +1274,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Search users (DTO-friendly)
+          description: Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
           sortKey: 4009
         method: POST
         body:
@@ -1294,7 +1320,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Submit contact request
+          description: Creates a user feedback/contact request and notifies admins via email.
           sortKey: 5001
         method: POST
         body:
@@ -1330,7 +1356,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List feedback requests
+          description: Returns feedback/contact requests for admin review.
           sortKey: 5002
         method: GET
         body:
@@ -1366,7 +1392,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Update feedback request status
+          description: Updates status/notes of a feedback request.
           sortKey: 5003
         method: PUT
         body:
@@ -1407,7 +1433,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List products (paginated)
+          description: Returns a paginated list of products.
           sortKey: 6001
         method: GET
         headers:
@@ -1432,7 +1458,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Create product
+          description: Creates a new product with optional image upload
           sortKey: 6002
         method: POST
         body:
@@ -1475,7 +1501,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Edit product
+          description: Updates an existing product with optional image upload
           sortKey: 6003
         method: PUT
         body:
@@ -1519,7 +1545,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Delete product
+          description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record
           sortKey: 6004
         method: DELETE
         body:
@@ -1552,7 +1578,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Catalogue facets
+          description: Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so a chip can never lead to an empty page.
           sortKey: 6005
         method: GET
         headers:
@@ -1577,7 +1603,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Product details
+          description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`.
           sortKey: 6006
         method: GET
         headers:
@@ -1602,7 +1628,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Edit product
+          description: Updates the product identified by `{id}` in the path with optional image upload. Functionally equivalent to `PUT /products` with the id in the body.
           sortKey: 6007
         method: PUT
         body:
@@ -1645,7 +1671,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Delete product
+          description: Deletes the product identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /products`.
           sortKey: 6008
         method: DELETE
         body:
@@ -1677,7 +1703,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Permanently delete product
+          description: Permanently removes the product identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /products/{id}?hardDelete=true`.
           sortKey: 6009
         method: DELETE
         headers:
@@ -1701,7 +1727,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Search products (DTO-friendly)
+          description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
           sortKey: 6010
         method: POST
         body:
@@ -1885,7 +1911,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Get cart
+          description: Returns all items currently in the authenticated user's cart along with a computed summary
           sortKey: 7001
         method: GET
         headers:
@@ -1909,7 +1935,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Add/Edit cart item
+          description: Adds or edit a product to the authenticated user's cart. Returns the updated cart.
           sortKey: 7002
         method: POST
         body:
@@ -1942,7 +1968,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Empty cart or, if productId is set, remove target cart item
+          description: Clear cart or, ir productId is set, removes a specific product from the authenticated user's cart. Returns the updated cart (can be empty)
           sortKey: 7003
         method: DELETE
         body:
@@ -1974,7 +2000,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Set cart item quantity
+          description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
           sortKey: 7004
         method: PUT
         body:
@@ -2007,7 +2033,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Remove item from cart
+          description: Removes the cart line for the product identified by `{productId}` in the path from the authenticated user's cart. Returns the updated cart.
           sortKey: 7005
         method: DELETE
         headers:
@@ -2031,7 +2057,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Get cart summary
+          description: Returns a lightweight summary of the authenticated user's cart.
           sortKey: 7006
         method: GET
         headers:
@@ -2055,7 +2081,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Checkout (place order from cart)
+          description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. An optional email address and order notes can be supplied in the request body. Returns the created order.
           sortKey: 7007
         method: POST
         body:
@@ -2097,7 +2123,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Reorder (refill cart from a past order)
+          description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the returned cart view is the record of what actually landed. Admins are scoped to their own orders too — the cart being filled is the caller's.
           sortKey: 7008
         method: POST
         headers:
@@ -2219,7 +2245,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Get wishlist
+          description: Returns the authenticated user's saved products — ids only, like the cart's lines; clients render them from their own product store. Absence and emptiness are the same state, so this never answers 404.
           sortKey: 8001
         method: GET
         headers:
@@ -2243,7 +2269,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Save a product
+          description: Adds a product to the authenticated user's wishlist. Idempotent — saving what is already saved answers the same 200, because a double-clicked heart icon is not an error. The product must be publicly visible; a hidden or soft-deleted product answers 404 exactly as it would from the catalogue.
           sortKey: 8002
         method: POST
         body:
@@ -2275,7 +2301,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Remove a saved product
+          description: Removes the line for the product identified by `{productId}` from the authenticated user's wishlist. A line the caller does not hold is a 404 — the client's view is stale and it needs to know.
           sortKey: 8003
         method: DELETE
         headers:
@@ -2299,7 +2325,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Move a saved product into the cart
+          description: The wishlist's exit — the saved line becomes one cart line (quantity 1, incremented if the cart already holds the product) and leaves the wishlist. The cart is written before the wishlist line is removed, so a failure part-way leaves the product SAVED rather than lost. Returns the updated wishlist; read the cart for its own new state.
           sortKey: 8004
         method: POST
         headers:
@@ -2331,7 +2357,9 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List orders (paginated)
+          description: |
+            Returns a paginated list of orders.
+            Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
           sortKey: 9001
         method: GET
         headers:
@@ -2355,7 +2383,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Create order
+          description: Creates a new order directly from the supplied payload.
           sortKey: 9002
         method: POST
         body:
@@ -2394,7 +2422,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Update order
+          description: Updates an existing order identified by id in the request body.
           sortKey: 9003
         method: PUT
         body:
@@ -2435,7 +2463,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Delete order
+          description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record
           sortKey: 9004
         method: DELETE
         body:
@@ -2468,7 +2496,9 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Search orders (DTO-friendly)
+          description: |
+            Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
+            Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
           sortKey: 9005
         method: POST
         body:
@@ -2505,7 +2535,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Order details
+          description: Returns the full details of the order identified by `{id}`. Functionally equivalent to `GET /orders?id={id}`.
           sortKey: 9006
         method: GET
         headers:
@@ -2529,7 +2559,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Edit order
+          description: Updates the order identified by `{id}` in the path.
           sortKey: 9007
         method: PUT
         body:
@@ -2569,7 +2599,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Delete order
+          description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /orders`.
           sortKey: 9008
         method: DELETE
         body:
@@ -2601,7 +2631,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Permanently delete order
+          description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`.
           sortKey: 9009
         method: DELETE
         headers:
@@ -2625,7 +2655,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Cancel order
+          description: Cancels the order identified by `{id}` — the one order write a customer can make. A `pending` or `paid` order can be cancelled this way; cancelling a paid one refunds its payment. `processing` and later statuses each need their own flow (return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
           sortKey: 9010
         method: POST
         headers:
@@ -2649,7 +2679,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Download order invoice (PDF)
+          description: Generates and returns the invoice for the order identified by `{id}` as a binary PDF file. The client should save or stream the response with an appropriate `Content-Disposition` header.
           sortKey: 9011
         method: GET
         headers:
@@ -2729,7 +2759,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Create a payment intent
+          description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact); an order whose money already moved answers 409. The intent is the thing the card dialog confirms.
           sortKey: 10001
         method: POST
         body:
@@ -2761,7 +2791,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Get the payment behind an order
+          description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. Admins read anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
           sortKey: 10002
         method: GET
         headers:
@@ -2785,7 +2815,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Confirm a payment
+          description: The card dialog's submit. The provider charges first (that is how PSPs work — the money moves before your database hears about it), then the order is moved `pending → paid` by a conditional write; if the order slipped away in between, the charge is refunded on the spot. A decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable — submit the same payment again with another card. The fake provider declines exactly one number, documented on `ConfirmPaymentRequest.cardNumber`.
           sortKey: 10003
         method: POST
         body:
@@ -2825,7 +2855,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List shipping methods
+          description: The shipping methods this shop offers — flat rates and free-above thresholds. Public, because what shipping costs is pre-purchase information; the authoritative pricing still happens at checkout, against the lines actually bought, so a client showing these numbers cannot commit the shop to a stale rate.
           sortKey: 11001
         method: GET
         headers:
@@ -2850,7 +2880,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Get the shipment behind an order
+          description: The parcel for one of the caller's orders — tracking code and whether it has arrived. Ownership is the order's, read through the same scope every order read uses. No parcel yet (the order has not reached `shipped`) is a 404 — absence is the answer.
           sortKey: 11002
         method: GET
         headers:
@@ -2874,7 +2904,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Advance the fake courier
+          description: Every parcel currently `shipped` arrives — the order moves `shipped → delivered` through the same conditional write the rest of the status machine uses, then the shipment is stamped. Admin, and deliberately a button rather than a schedule — this repo has no cron, so an operator (or the demo) is the timer, exactly like the expired-token purge.
           sortKey: 11003
         method: POST
         headers:
@@ -2906,7 +2936,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: List stock movements
+          description: The ledger, newest first — every signed change to a shelf count with the why attached (order, cancel, adjustment, restock). Optionally one product's story via `productId`. Admin — customers see stock as a number on the product page.
           sortKey: 12001
         method: GET
         headers:
@@ -2930,7 +2960,7 @@ collection:
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Restock a product
+          description: Puts units on a shelf through the same conditional increment every other movement uses, and writes the ledger row through the same announcement — so a restock and a sale tell the same kind of story. Answers the shelf count after the units landed.
           sortKey: 12002
         method: POST
         body:

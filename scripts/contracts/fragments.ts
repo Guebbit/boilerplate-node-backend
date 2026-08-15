@@ -47,26 +47,44 @@ export interface FragmentGroup {
 /** A slice of a bundle: one file pasted verbatim, or several joined into a list. */
 export type Segment = string | FragmentGroup;
 
-/** One committed document and the fragments it is assembled from. */
-export interface ContractBundle {
+/** What every committed document declares, however it is produced. */
+interface BundleIdentity {
     /** CLI handle — `npm run contracts:bundle -- openapi`. */
     name: string;
     /** What the bundle is called on disk, for messages. */
     label: string;
     /** Absolute path of the committed document this produces. */
     output: string;
+}
+
+/** A document assembled from authored fragments on disk. */
+export interface AssembledBundle extends BundleIdentity {
     /**
      * The document, in order. A function rather than an array so a bundle can derive its segments
      * from its section list instead of restating every path.
      */
     segments: () => readonly Segment[];
-    /**
-     * True when this bundle's own fragments are generated rather than authored — today the three
-     * client collections, which are derived from `openapi.yaml`. It is what orders a full run:
-     * every authored bundle is assembled first, so the generator has a current contract to read.
-     */
-    generated?: boolean;
+    generated?: false;
 }
+
+/**
+ * A document produced whole, from a document this repo already committed.
+ *
+ * The client collections are these: they are derived from `openapi.yaml` rather than written, so
+ * there is nothing on disk to concatenate and no intermediate for anyone to hand-edit. `generated`
+ * is what orders a full run — every authored bundle is assembled first, so the generator has a
+ * current contract to read.
+ */
+export interface GeneratedBundle extends BundleIdentity {
+    content: () => string;
+    generated: true;
+}
+
+/** One committed document, and how it comes to exist. */
+export type ContractBundle = AssembledBundle | GeneratedBundle;
+
+const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =>
+    bundle.generated === true;
 
 /**
  * Read a fragment, failing with the reason rather than an ENOENT.
@@ -97,15 +115,19 @@ const renderSegment = (bundle: ContractBundle, segment: Segment): string =>
               .join(segment.separator) + '\n';
 
 /**
- * Reassemble a document from its fragments.
+ * Produce a document: concatenate its fragments, or ask the generator for the whole thing.
  *
- * No parse, no serialise, nothing that could normalise a quote or drop a comment.
+ * The assembled path does no parse and no serialise, so nothing can normalise a quote or drop a
+ * comment. The generated path has no fragments to preserve — its input is `openapi.yaml`, which the
+ * assembled path already produced faithfully.
  */
 export const assembleBundle = (bundle: ContractBundle): string =>
-    bundle
-        .segments()
-        .map((segment) => renderSegment(bundle, segment))
-        .join('');
+    isGenerated(bundle)
+        ? bundle.content()
+        : bundle
+              .segments()
+              .map((segment) => renderSegment(bundle, segment))
+              .join('');
 
 /**
  * The bundle as committed on disk.
@@ -118,8 +140,14 @@ export const assembleBundle = (bundle: ContractBundle): string =>
 export const readCommittedBundle = (bundle: ContractBundle): string =>
     existsSync(bundle.output) ? readFileSync(bundle.output, 'utf8') : '';
 
-/** Every fragment a bundle is built from, flattened — what a staleness check watches. */
+/**
+ * Every fragment a bundle is built from, flattened — what a staleness check watches.
+ *
+ * A generated bundle has none: nothing on disk stands between `openapi.yaml` and its output.
+ */
 export const bundleFragments = (bundle: ContractBundle): string[] =>
-    bundle
-        .segments()
-        .flatMap((segment) => (typeof segment === 'string' ? [segment] : [...segment.parts]));
+    isGenerated(bundle)
+        ? []
+        : bundle
+              .segments()
+              .flatMap((segment) => (typeof segment === 'string' ? [segment] : [...segment.parts]));

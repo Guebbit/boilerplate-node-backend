@@ -19,7 +19,6 @@
         "prettier:check": "prettier . --check",
         "prettier:fix": "prettier . --write",
         "contracts:bundle": "tsx scripts/bundle-contracts.ts",
-        "contracts:collections": "tsx scripts/gen-collections.ts",
         "check:contracts-bundle": "tsx scripts/bundle-contracts.ts --check",
         "check:spec-identity": "tsx scripts/check-spec-identity.ts",
         "gen:api": "rm -rf ./api && orval --config orval.config.ts",
@@ -65,6 +64,7 @@
         "@asyncapi/modelina": "^5.10.1",
         "@commitlint/cli": "^21.2.1",
         "@commitlint/config-conventional": "^21.2.0",
+        "@guebbit/openapi-runnable-collections": "file:../openapi-runnable-collections",
         "@stoplight/prism-cli": "^5.6.0",
         "@stoplight/spectral-cli": "^6.15.0",
         "@stoplight/spectral-rulesets": "^1.22.0",
@@ -146,5 +146,8 @@
         "tsx": "^4.21.0",
         "winston": "^3.19.0",
         "zod": "^4.3.6"
+    },
+    "allowScripts": {
+        "file:../../../openapi-runnable-collections": true
     }
 }
