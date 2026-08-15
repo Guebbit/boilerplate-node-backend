@@ -22,6 +22,7 @@ export default withMermaid(
                         text: 'Theory',
                         items: [
                             { text: 'Overview', link: '/theory/' },
+                            { text: 'Reading Path', link: '/theory/reading-path' },
                             { text: 'Architecture', link: '/theory/architecture' },
                             { text: 'Modules', link: '/theory/modules' },
                             {

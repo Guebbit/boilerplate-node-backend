@@ -130,6 +130,7 @@ the point.
 
 | Need                                     | Go to                                               |
 | ---------------------------------------- | --------------------------------------------------- |
+| **Open the code for the first time**     | **[Reading Path](./reading-path.md)**               |
 | Understand the big blocks and boundaries | [Architecture](./architecture.md)                   |
 | Understand how domains stay separable    | [Modules](./modules.md)                             |
 | Actually add or remove a domain          | [Adding & Removing a Module](./module-lifecycle.md) |
