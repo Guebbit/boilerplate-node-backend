@@ -3,6 +3,15 @@
 Use this page for the **big blocks and their boundaries**.
 If you want the exact folder order, jump to [Layers](./layers.md).
 
+::: warning This page describes one axis of two
+The blocks below are **layers** — what a file does on the way from a request to the database. They
+are real, but none of them is a directory. The repo is divided first by **domain**: thirteen module
+folders, each containing all of these blocks top to bottom, and `src/controllers`, `src/services`
+and `src/models` were deleted with the last domain that was migrated out of them. Read
+[Modules](./modules.md) for the axis that actually decides where a file lives, and
+[Layers](./layers.md) for how the two compose.
+:::
+
 ## Architecture frame
 
 ```mermaid
@@ -62,9 +71,13 @@ The [Layers](./layers.md) page maps each block to an exact folder.
 ## Design rules used here
 
 - **SOLID**: each layer should have one main reason to change.
-- **DRY**: shared logic belongs in services, repositories, or utilities.
+- **DRY**: shared logic belongs to whichever **domain owns it**, exported through that module's
+  barrel — never to a shared `utils/`. Two modules needing a rule is not a reason to push it
+  downward; see the `infrastructure` / `kernel` line in [Modules](./modules.md).
 - **KISS**: keep flows boring and predictable.
-- **Future proof**: prefer seams where a database or framework could be swapped later.
+- **Future proof**: prefer seams where a database or framework could be swapped later — and note
+  that a seam does not have to be substrate-tier: `payments/providers/` is a port owned by the
+  domain whose business it is.
 
 ## Related pages
 

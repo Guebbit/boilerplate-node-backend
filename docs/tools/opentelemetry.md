@@ -66,7 +66,7 @@ This means the three signals stay linked without extra effort:
 4. The request ends → all spans are flushed to the OTel Collector → Tempo.
 5. [Loki](./loki.md) has the log lines. [Tempo](./tempo.md) has the span tree. Both share the same `trace_id`.
 
-In [Grafana](./grafana.md): find the log line in Loki Explore → click the `trace_id` link → land on the exact Tempo trace. Or go the other way: find a slow Tempo span → click "Loki logs" → see the surrounding log lines. → [Trace ↔ log correlation](./loki.md#trace--log-correlation)
+In [Grafana](./grafana.md): find the log line in Loki Explore → click the `trace_id` link → land on the exact Tempo trace. Or go the other way: find a slow Tempo span → click "Loki logs" → see the surrounding log lines. → [Trace ↔ log correlation](./loki.md#trace-log-correlation)
 
 ## Works with
 

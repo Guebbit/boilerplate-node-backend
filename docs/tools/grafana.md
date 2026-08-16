@@ -61,7 +61,7 @@ The `/observability/*` endpoints expose the same metrics as Grafana but as a **p
 
 - **[Prometheus](./prometheus.md)** — Grafana reads all metric time-series from Prometheus. Every chart, KPI panel, and Explore metric query uses Prometheus as the data source. Prometheus stores the numbers; Grafana makes them visual and queryable.
 - **[Tempo](./tempo.md)** — Grafana is the only UI for Tempo. Go to Explore → Tempo to search traces by `service.name`, `trace_id`, HTTP route, or error. Clicking a Loki log's `trace_id` link also lands here.
-- **[Loki](./loki.md)** — Grafana is the only UI for Loki. Go to Explore → Loki and use LogQL to filter logs. The derived-field config makes every `trace_id` in a log line a clickable link that jumps to Tempo. → [Trace ↔ log correlation](./loki.md#trace--log-correlation)
+- **[Loki](./loki.md)** — Grafana is the only UI for Loki. Go to Explore → Loki and use LogQL to filter logs. The derived-field config makes every `trace_id` in a log line a clickable link that jumps to Tempo. → [Trace ↔ log correlation](./loki.md#trace-log-correlation)
 
 ## External references
 

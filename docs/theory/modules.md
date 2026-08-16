@@ -72,8 +72,17 @@ So `kernel` is small on purpose. It is the module system, and nothing else:
 | `events.ts`                     | it exists so two modules can talk without importing each other            |
 | `authentication.ts`             | the socket `account` plugs into, so guards need no module import          |
 | `middlewares/authorizations.ts` | the guard that consumes that socket                                       |
+| `seed-accounts.ts`              | the two demo identities four modules point at, owned by none of them      |
 
-Delete `src/modules/` and those four files lose their reason to exist. Everything else that is
+`seed-accounts.ts` is the one that looks like it does not belong, so it is worth a sentence. `users`
+seeds the demo accounts, but `orders`, `cart` and `wishlist` each seed a row that belongs to a
+person and need that person's id to name them. Reaching into `@modules/users` for six string
+literals would buy three registry edges — one of them a `shared-kernel` — for pure data; repeating
+the ids in four files buys a dangling reference nothing catches. So the kernel holds the handles and
+not the records, which is the same inversion as the auth port: a sibling gets what it needs to name
+a person without taking on the shape of a user. The file's own header carries the full argument.
+
+Delete `src/modules/` and those five files lose their reason to exist. Everything else that is
 domain-free is `infrastructure`, no matter where it sits in the request lifecycle:
 
 | Feature                        | Home                                                | Why it is not kernel                          |
@@ -92,7 +101,7 @@ The test that keeps this honest: a `kernel` file may be imported by a module, bu
 must dissolve if modules do. Being domain-free is not enough — most of `infrastructure` is
 domain-free too.
 
-Both tables describe the tree as it is. `src/kernel/` holds four files.
+Both tables describe the tree as it is. `src/kernel/` holds five files.
 
 ### Why these names, and what everyone else calls them
 
@@ -130,7 +139,7 @@ the precedent supports "platform ≈ services", not "platform ≈ plugin host". 
 belongs to platform engineering, where "the platform" is the base layer everything runs on. That is
 this repo's `infrastructure`. Read cold, the two old names pointed at each other's contents.
 
-`kernel` carries none of that. These four files are a **microkernel**: a small fixed host that
+`kernel` carries none of that. These files are a **microkernel**: a small fixed host that
 loads, validates and connects plugins it has never heard of — the pattern under its textbook name.
 The folder says what it is, and so does the tier beneath it.
 
@@ -231,6 +240,7 @@ flowchart TD
         SV["service.ts"]
         RP["repository.ts"]
         MD["model.ts"]
+        CN["<b>openapi.yaml</b> · probes.ts<br/>its slice of the contract"]
         EX["audit.ts · metrics.ts · seeds.ts<br/>locales/ · events.ts · emails.ts"]
         TS["tests/unit · tests/contract"]
     end
@@ -248,22 +258,64 @@ flowchart TD
     classDef side fill:#f1f5f9,stroke:#64748b,color:#111827;
     class IDX,MAN front;
     class RT,CT,SV,RP,MD layer;
-    class EX,TS side;
+    class CN,EX,TS side;
 ```
 
-| File                                                              | Required?                             | What it is                                                   |
-| ----------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------ |
-| `module.ts`                                                       | **yes**                               | the manifest — the only file `src/modules.ts` imports        |
-| `index.ts`                                                        | only if a sibling imports this module | the public barrel; `observability` and `locales` have none   |
-| `routes.ts` + `controllers/`                                      | only if the domain serves HTTP        | `audit-logs` has neither                                     |
-| `service.ts` · `repository.ts` · `model.ts`                       | only if it owns data                  | `account` has no model — it is a second service over `users` |
-| `audit.ts` · `metrics.ts` · `seeds.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries      |
-| `emails.ts`                                                       | only if the domain sends email        | the finished copy of its emails — see below                  |
-| `tests/unit/` · `tests/contract/`                                 | yes, in practice                      | deleted with the module                                      |
+| File                                                              | Required?                             | What it is                                                                  |
+| ----------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
+| `module.ts`                                                       | **yes**                               | the manifest — the only file `src/modules.ts` imports                       |
+| `index.ts`                                                        | only if a sibling imports this module | the public barrel; a module nothing imports has none                        |
+| `routes.ts` + `controllers/`                                      | only if the domain serves HTTP        | `audit-logs` has neither                                                    |
+| `service.ts` · `repository.ts` · `model.ts`                       | only if it owns data                  | `locales` and `observability` own none — they serve URLs over other domains |
+| `services/`                                                       | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                  |
+| `domain/`                                                         | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                       |
+| `openapi.yaml`                                                    | if it serves HTTP                     | its standalone slice of the REST contract                                   |
+| `asyncapi.yaml`                                                   | if it owns a channel                  | the same, for the async contract — `observability` is the only one          |
+| `probes.ts`                                                       | as needed                             | the requests a spec cannot describe — see below                             |
+| `providers/`                                                      | if the domain has an outbound port    | `payments` is the only one — see below                                      |
+| `audit.ts` · `metrics.ts` · `seeds.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries                     |
+| `analytics.ts` · `factory.ts`                                     | as needed                             | the event names it emits; how its records are built                         |
+| `emails.ts`                                                       | only if the domain sends email        | the finished copy of its emails — see below                                 |
+| `tests/unit/` · `tests/contract/`                                 | yes, in practice                      | deleted with the module                                                     |
+
+The table lists what a module MAY have. What decides **where** in the module a file goes is one
+rule, and `account` is the module that forced it to be written down:
+
+> A module root holds the manifest, the barrel, the contract files, the single-file layers and the
+> self-registering slots. Everything else goes in a folder named for what it holds.
+
+Under it, `account`'s eight loose root files sorted into three piles: `jwt.ts`, `cookies.ts` and
+`tokens.ts` were the token surface and became `session/` (with `tokens.ts` renamed `config.ts`, since
+it holds no token — it reads how long they live); `verification.ts`, `token-cleanup.ts` and
+`addresses-service.ts` were behaviour and joined `services/`, where `service.ts` had already been
+split into `authentication.ts` and `profile.ts`; and `addresses-model.ts` / `addresses-repository.ts`
+were simply this module's `model.ts` and `repository.ts` under a prefix that dated from when it had
+no collection at all. `users/validation.ts` merged into `users/model.ts` for the same reason. The
+rule is what makes the table above readable as a shape rather than a suggestion: a file at the root
+is a layer, and a folder is a subject.
 
 Nothing central enumerates these. `audit.ts`, `metrics.ts` and `events.ts` register or augment
 themselves on import; `seeds` and `locales` are declared in the manifest so the seeder and the i18n
 boot can walk the registry without naming a domain.
+
+`probes.ts` is the one row that is not obvious from the name. A generated API collection can only
+contain the calls the contract describes, and a contract describes valid calls and their declared
+answers — so the requests that prove the API _rejects_ things have nowhere to come from. A module
+declares those as data (method, path, headers, body, and a `why` that becomes the description) and
+the collection generator emits them after its contract-derived requests. Four modules carry one, and
+a module deleted without removing its entry from `scripts/contracts/generateCollections.ts` stops
+the build rather than shipping a short collection. See
+[Contract Ownership & Fragmentation](../api/contract-fragmentation.md#the-client-collections-generated).
+
+`providers/` is a **module-tier port**: the same inversion as `IAuditSink` and `IImageStore`, owned
+by a domain instead of by the substrate. `payments/providers/` declares what a payment provider must
+do, ships a `fake` implementation, and picks between them on `NODE_PAYMENT_PROVIDER` — so going live
+means writing `stripe.ts` beside it and changing an env var, while the contract, the service and the
+frontend hear nothing. It belongs to `payments` and not to `infrastructure` for the reason the
+`infrastructure` / `kernel` line already gives: charging a card is this domain's business, and a
+substrate that knew what a charge was would be holding a business rule. The pattern is already being
+copied — `infrastructure/observability/analytics/index.ts` cites it by name for its own
+`NODE_ANALYTICS_PROVIDER` seam.
 
 `emails.ts` is the newest of them and exists for a boundary reason. An email is rendered by
 `infrastructure/adapters/email.worker.ts`, which drains a queue possibly in another process, long after
@@ -328,28 +380,54 @@ thing itself. `subscribe` was the one field that broke it; six modules fill it t
 ## The dependency graph
 
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 60}}}%%
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
 flowchart TD
+    wishlist --> cart
+    wishlist --> products
+    wishlist --> users
+    cart --> account
+    cart --> delivery
+    cart --> orders
     cart --> products
     cart --> users
-    cart --> orders
+    payments --> orders
+    payments --> users
+    delivery --> orders
+    delivery --> users
     orders --> products
+    inventory --> products
     account --> users
     observability --> audit-logs
     feedback["feedback<br/><i>leaf</i>"]
     locales["locales<br/><i>leaf</i>"]
 
-    products -.->|"product.deleted"| cart
-    users -.->|"user.deleted"| cart
-
     classDef domain fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef leaf fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class cart,orders,account,observability domain;
+    class cart,orders,account,observability,wishlist,payments,delivery,inventory domain;
     class products,users,feedback,locales,audit-logs leaf;
 ```
 
-Solid arrows are `dependsOn` — declared, and validated as a **DAG at boot**. Dotted arrows are
-domain events going the other way.
+Every arrow is a `dependsOn` — declared, and validated as a **DAG at boot**. Four modules declare
+nothing and are depended on instead (`products`, `users`, `audit-logs`) or by nobody at all
+(`feedback`, `locales`). `cart` is the busiest node with five edges, which is not a smell to
+refactor away: a checkout is the one operation that genuinely needs the catalogue, the customer, the
+order it becomes, the address it ships to and the price of getting it there.
+
+The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
+exactly the edge that would have made the import graph a cycle:
+
+| Event                  | Emitted by | Handled by                    |
+| ---------------------- | ---------- | ----------------------------- |
+| `product.deleted`      | `products` | `cart`, `wishlist`            |
+| `product.stock_moved`  | `products` | `inventory`                   |
+| `user.deleted`         | `users`    | `cart`, `wishlist`, `account` |
+| `order.status_changed` | `orders`   | `delivery` (on `shipped`)     |
+| `order.cancelled`      | `orders`   | `payments` (refunds)          |
+
+Note who emits: every one comes from a module that declares **no** `dependsOn` edge of its own, or
+from `orders`, which declares only `products`. That is the pattern rather than a coincidence — a
+module low in the graph cannot import its dependants, so an event is the only way for it to tell
+them anything.
 
 Every solid arrow also carries a **kind**: `conformist`, `customer-supplier`, `published-language`
 or `shared-kernel`. That label is what makes the map answer "what does changing `products` cost?"
@@ -427,20 +505,29 @@ the three `*_SECTION_ORDER` lists are the one exception — the price of a contr
 per-module fragments and shared with the paired frontend.
 
 **And it is measured, in both directions.** `wishlist` was added under it: one folder, one registry
-line, three section-order entries, and **zero** edits to any existing file. Deleting `products`,
-`cart` and `orders` together gives:
+line, its section-order entries, and **zero** edits to any existing file.
 
-| Tier                  | Files that break              |
-| --------------------- | ----------------------------- |
-| `src/**` (production) | **0**                         |
-| `db/**`               | **0**                         |
-| `tests/**`            | 14                            |
-| co-located specs      | 1 (`observability`'s metrics) |
-| `scripts/**`          | 1                             |
+Deleting `products`, `cart` and `orders` together, **re-measured 2026-08-16 at thirteen modules**:
+62 type errors across 26 files.
 
-The zeroes are the verdict: **the application tier genuinely does not know which domains exist.**
-The rest is residue in test and script code — two of those sixteen are correct and must not be
-"fixed", and the largest remaining group is sweep canaries pinned to the current module count. See
+| Tier                  | Files that break | What they are                                                           |
+| --------------------- | ---------------- | ----------------------------------------------------------------------- |
+| `db/**`               | **0**            | —                                                                       |
+| `src/**` (production) | 10               | four modules that **declare** the edge in `dependsOn` — the DAG working |
+| co-located specs      | 10               | five modules' own tests, reaching for a deleted domain's factories      |
+| `tests/**`            | 4                | central specs using a domain as sample data, or asserting one           |
+| `scripts/**`          | 2                | the section lists, announcing the entry you have not deleted yet        |
+
+**The `db/**`zero is the verdict**, and it is a narrower claim than the one this table used to
+make. An earlier run reported zero in`src/\*\*`too; that was true when`delivery`, `inventory`,
+`payments`and`wishlist` did not exist, and it was never the property being defended. Those four
+break because they genuinely depend on what was deleted and said so in their manifest — the registry
+would refuse the boot naming the offending pair, which is the failure mode the DAG exists to
+produce. What must stay at zero is the tier that names domains without declaring them, and it has.
+
+The rest is residue in test and script code — the two `scripts/**` breaks are the hard errors the
+removal procedure tells you to fix in step 3, and some of the test breaks are **correct** and must
+not be "fixed". Which is which, and how to re-run it, is
 [Re-running the deletability check](./module-lifecycle.md#re-running-the-deletability-check).
 
 If a module you delete was named in another module's `dependsOn`, the registry stops the boot with
@@ -469,10 +556,30 @@ Some of these rules are relational — what a file may import depends on which m
 | Every language declares the same keys across every module                             | `locale-parity.test.ts`            |
 | `infrastructure`'s shared scalars still match every operation in `openapi.yaml`       | `contract-scalars.test.ts`         |
 | Every controller handles its own rejections                                           | `every-controller-catches.test.ts` |
+| **A function added to a service but forgotten in its namespace**                      | `service-namespaces.test.ts`       |
+| Every declared `dependsOn` edge is imported, and every import is declared             | `context-map.test.ts`              |
+| A `generic` module carrying a `domain/` folder                                        | `subdomain-discipline.test.ts`     |
+| Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`         |
 | Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`          |
 
 Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
-fire is a comment.
+fire is a comment. All but the last live in `tests/cross-cutting/`; `request-sources.test.ts` sits
+in `tests/contract/`, because it needs the loaded spec the contract harness already registers.
+
+**`service-namespaces.test.ts` is the newest and the least obvious**, because the thing it catches
+never fails on its own. Every module is reached through exactly one `*Service` namespace — the
+convention was 9 modules to 3 before the test existed, with `delivery`, `inventory` and `payments`
+exporting loose functions instead. Both styles work, which is precisely why the split survived: what
+it cost was a spec copied from a module that does `jest.spyOn(service, 'fn')` not running against a
+module with no object to spy on. The second property is the one a convention alone cannot hold —
+**the namespace must hold every function the service exports** — because adding one and forgetting
+to list it is silent. The loose export keeps working, callers that already import by name never
+notice, and the namespace quietly stops being the whole surface it claims to be.
+
+What the test deliberately does **not** assert is that the object is named after its module.
+`feedback` exports `feedbackRequestService` and `audit-logs` exports `auditLogService`, both named
+for the record they serve rather than for the folder. A rule that failed those two would be a rule
+about spelling rather than about structure — so neither is a violation.
 
 ## Related pages
 

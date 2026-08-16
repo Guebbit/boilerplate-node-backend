@@ -78,12 +78,12 @@ That second one is worth internalising: a property that fails on your own assert
 
 ## File map
 
-| Path                                                | Contents                                                          |
-| --------------------------------------------------- | ----------------------------------------------------------------- |
-| `tests/unit/infrastructure/totals.property.test.ts` | Arithmetic invariants, totality against hostile line items        |
-| `tests/unit/models/serialize.property.test.ts`      | Serializer guarantees over arbitrary document shapes              |
-| `tests/unit/repositories/search.property.test.ts`   | `escapeRegex` as a denial-of-service control; pagination totality |
-| `tests/unit/repositories/search-regex.test.ts`      | The example-based half — timing, named metacharacters, negatives  |
+| Path                                                    | Contents                                                          |
+| ------------------------------------------------------- | ----------------------------------------------------------------- |
+| `src/modules/orders/tests/unit/totals.property.test.ts` | Arithmetic invariants, totality against hostile line items        |
+| `tests/cross-cutting/serialize.property.test.ts`        | Serializer guarantees over arbitrary document shapes              |
+| `tests/cross-cutting/search.property.test.ts`           | `escapeRegex` as a denial-of-service control; pagination totality |
+| `tests/cross-cutting/search-regex.test.ts`              | The example-based half — timing, named metacharacters, negatives  |
 
 The same technique and the same two rules apply in the paired frontend, over `utils/formatters.ts` and `utils/uploads.ts`.
 

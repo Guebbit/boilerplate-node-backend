@@ -17,10 +17,22 @@
  *
  * Unused exports are harmless — tree-shaken in the frontend bundle, type-only in the backend.
  *
+ * ── `--check` ────────────────────────────────────────────────────────────────────────────────────
+ * With `--check` nothing is written: the content this run would generate is compared against the
+ * file already at `--out`, and a mismatch exits 1. It is what stops a repo shipping types for a
+ * contract it no longer has — the spec and its output agree only while someone regenerates after
+ * every edit to `asyncapi.yaml`, and this is the gate that says so.
+ *
+ * Each repo runs it over its OWN output, which is why the two outputs need no comparison with each
+ * other: the same spec through this deterministic generator produces the same types on both sides,
+ * so a frontend copy could not disagree without `asyncapi.yaml` disagreeing first — and that
+ * document IS compared across the repos, by `scripts/specIdentity.ts`.
+ *
  * Usage: tsx scripts/gen-asyncapi-types.ts --out <path>
+ *        tsx scripts/gen-asyncapi-types.ts --out <path> --check
  */
 import { TypeScriptGenerator, typeScriptDefaultModelNameConstraints } from '@asyncapi/modelina';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
@@ -79,6 +91,9 @@ const resolveOutputPath = (): string => {
 };
 
 const OUTPUT = resolveOutputPath();
+
+/** `--check` compares and reports; without it the file is written. */
+const checkOnly = process.argv.includes('--check');
 
 /*
  * Converts source names into `PascalCase`.
@@ -367,13 +382,31 @@ const buildOutput = (modelBlocks: string[]): string => {
 };
 
 /*
- * Generates contract models and writes the final realtime types file.
+ * Generates contract models, then writes the realtime types file or asserts it is already current.
  */
 generator.generate(specText).then((models) => {
     const modelBlocks = models.map(
         (model) =>
             `export ${model.result.replaceAll('Map<string, any>', 'Record<string, unknown>')}`
     );
-    writeFileSync(OUTPUT, buildOutput(modelBlocks), 'utf8');
-    console.log(`✓ Generated ${OUTPUT}`);
+    const output = buildOutput(modelBlocks);
+
+    if (!checkOnly) {
+        writeFileSync(OUTPUT, output, 'utf8');
+        console.log(`✓ Generated ${OUTPUT}`);
+        return;
+    }
+
+    if (existsSync(OUTPUT) && readFileSync(OUTPUT, 'utf8') === output) {
+        console.log(`✓ ${OUTPUT} is current with asyncapi.yaml`);
+        return;
+    }
+
+    // Names the one command that fixes it: the file is an output, so there is nothing to decide.
+    console.error(
+        `${OUTPUT} is not what asyncapi.yaml generates.\n` +
+            `  Run: npm run gen:asyncapi\n` +
+            `  Then commit the result.`
+    );
+    process.exit(1);
 });

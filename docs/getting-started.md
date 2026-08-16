@@ -53,8 +53,8 @@ owns `8080–8099`, which is what lets both stacks be up at once.
 
 ## Explore the API without writing a client
 
-The repo root holds three generated collections — `contract.bruno.yml`, `contract.insomnia.json`
-and `contract.mockoon.json` — with one request per
+The repo root holds four generated collections — `contract.bruno.yml`, `contract.insomnia.json`,
+`contract.mockoon.json` and `contract.postman.json` — with one request per
 operation the contract declares, pre-filled with **values the seeded database actually holds**. Import
 one and start clicking; `POST /account/login` already carries credentials that work.
 
@@ -77,7 +77,7 @@ npm run host -- db:cache:clear
 
 Only the **hostname** moves. The database name, ports and everything else still come from your
 `.env`, so there is no second env file to keep in sync — see
-[Package Scripts](./tools/package-scripts.md#database--seed-scripts) for the mechanics.
+[Package Scripts](./tools/package-scripts.md#database-seed-scripts) for the mechanics.
 
 The target is the literal `127.0.0.1`, not the name `localhost`, and that is not a style choice.
 On a dual-stack machine `localhost` resolves to both `::1` and `127.0.0.1`, in an order the

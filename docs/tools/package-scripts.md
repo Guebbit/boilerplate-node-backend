@@ -22,7 +22,7 @@ was the same string copied N times:
 | `npm run compose -- <cmd>` | `podman:compose` and `docker:compose`    | `npm run compose -- logs -f app` |
 
 `host` blanks `NODE_DB_URI` / `NODE_REDIS_URL` and points both hostnames at `localhost`, then hands
-off to `npm run` — see [Database & seed scripts](#database--seed-scripts). `compose` expands to
+off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `compose` expands to
 `${CONTAINER_ENGINE:-podman} compose` — see [Container scripts](#container-scripts).
 
 ## Runtime scripts
@@ -38,17 +38,18 @@ off to `npm run` — see [Database & seed scripts](#database--seed-scripts). `co
 
 ## Validation scripts
 
-| Script                            | Job                                                                                                             | Read more                               |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `ts-check`                        | TypeScript no-emit type check                                                                                   | [Testing & Docs](./testing-and-docs.md) |
-| `lint` / `lint:fix`               | ESLint check or autofix                                                                                         | [Testing & Docs](./testing-and-docs.md) |
-| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                       | [Testing & Docs](./testing-and-docs.md) |
-| `build`                           | `ts-check` + `lint` composite gate                                                                              | [Testing & Docs](./testing-and-docs.md) |
-| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI     | [Testing & Docs](./testing-and-docs.md) |
-| `complete`                        | the gate: build + lint + both spec lints + prettier:check + both contract checks + tests                        | [Testing & Docs](./testing-and-docs.md) |
-| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                              | [Testing & Docs](./testing-and-docs.md) |
-| `complete:manual`                 | what the gate cannot run for you: `test:prism`, which binds a real port                                         | [Testing & Docs](./testing-and-docs.md) |
-| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:` | [Load Testing](./load-testing.md)       |
+| Script                            | Job                                                                                                             | Read more                                        |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `ts-check`                        | TypeScript no-emit type check                                                                                   | [Testing & Docs](./testing-and-docs.md)          |
+| `lint` / `lint:fix`               | ESLint check or autofix                                                                                         | [Testing & Docs](./testing-and-docs.md)          |
+| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                       | [Testing & Docs](./testing-and-docs.md)          |
+| `build`                           | `ts-check` + `lint` composite gate                                                                              | [Testing & Docs](./testing-and-docs.md)          |
+| `check:asyncapi-types`            | fail if `src/types/asyncapi.generated.ts` is not what `asyncapi.yaml` generates; writes nothing                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
+| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI     | [Testing & Docs](./testing-and-docs.md)          |
+| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                        | [Testing & Docs](./testing-and-docs.md)          |
+| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                              | [Testing & Docs](./testing-and-docs.md)          |
+| `complete:manual`                 | what the gate cannot run for you: `test:prism`, which binds a real port                                         | [Testing & Docs](./testing-and-docs.md)          |
+| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:` | [Load Testing](./load-testing.md)                |
 
 ## Test scripts
 
@@ -82,14 +83,25 @@ Change](../api/regenerating.md).
 | `check:contracts-bundle` | verify   | fail if a bundle is stale or a collection is out of date — the CI/`--check` twin                                  | [Regenerating](../api/regenerating.md)                     |
 | `check:spec-identity`    | verify   | fail if the paired frontend holds different bytes of a shared document                                            | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval                                 | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.ts` from `asyncapi.yaml`                                                           | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:openapi`           | verify   | lint OpenAPI contract with Spectral                                                                               | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `lint:asyncapi`          | verify   | validate `asyncapi.yaml`                                                                                          | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `check:asyncapi-types`   | verify   | the same generation, compared instead of written — the freshness gate                                             | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                     | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `spectral.modules.yaml`                            | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `lint:asyncapi`          | verify   | validate the bundled `asyncapi.yaml`                                                                              | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:asyncapi:modules`  | verify   | the same for each section document, against `spectral.asyncapi.modules.yaml`                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `seed:export`            | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/seeds/dataset.json`       | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `check:seed-export`      | verify   | fail if `dataset.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`      | [Regenerating](../api/regenerating.md)                     |
+| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                | [Contract Fragmentation](../api/contract-fragmentation.md) |
+
+The `:modules` pair is the property the whole-document layout bought. Each module's contract is a
+valid document on its own, so it can be linted where it is written rather than only after bundling —
+which the old fragment layout could never do, because a fragment parsed as nothing until it was
+concatenated.
 
 `contracts:bundle` is safe to run at any time: it compares before it writes and touches only the
-bundles that actually drifted. It bundles twice on purpose — the client collections are generated
-_from_ `openapi.yaml`, so the contract must exist before their fragments can be written, and the
-fragments must exist before they can be bundled in turn.
+bundles that actually drifted. It runs in two stages on purpose — the client collections are
+generated _from_ `openapi.yaml`, so the contract must be rebuilt before they are. That ordering
+lives in `scripts/bundle-contracts.ts`, which is why `-- <name>` narrows the run properly.
 
 ## Docs scripts
 

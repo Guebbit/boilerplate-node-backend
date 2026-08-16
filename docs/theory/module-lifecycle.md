@@ -18,11 +18,23 @@ one line.
 A module is named in exactly four places, and three of them are conditional. Knowing which ones
 apply to your domain is most of both procedures:
 
-| Registry             | File                                   | Applies when                     |
-| -------------------- | -------------------------------------- | -------------------------------- |
-| `enabledModules`     | `src/modules.ts`                       | **always**                       |
-| `SECTION_ORDER`      | `scripts/contracts/openapi.ts`         | the domain serves HTTP           |
-| `ANALYTICS_SECTIONS` | `scripts/contracts/analyticsEvents.ts` | the domain has an `analytics.ts` |
+| Registry              | File                                   | Applies when                       |
+| --------------------- | -------------------------------------- | ---------------------------------- |
+| `enabledModules`      | `src/modules.ts`                       | **always**                         |
+| `MODULE_SECTIONS`     | `scripts/contracts/openapi.ts`         | the domain serves HTTP             |
+| `ANALYTICS_SECTIONS`  | `scripts/contracts/analyticsEvents.ts` | the domain has an `analytics.ts`   |
+| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`        | the domain owns an `asyncapi.yaml` |
+
+A fifth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
+imported by name in `scripts/contracts/generateCollections.ts`. It is not in the table because it
+needs no discipline — it is a real import, so deleting the module stops the build on its own rather
+than waiting for a bundle to come out quietly short.
+
+There used to be a `SEED_SECTION_ORDER` here too. It is gone: the demo dataset stopped being
+assembled from per-module text and is now **published** — `npm run seed:export` seeds a throwaway
+database with the real seeders and writes what the API answers to `db/seeds/dataset.json`. A module
+states its records in an ordinary `seeds.ts` that its own code imports, so there is nothing to list.
+Its staleness check is `npm run check:seed-export`.
 
 Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the audit vocabulary and
 the metrics registry all walk the registry instead — which is why none of them appears in either
@@ -66,18 +78,26 @@ src/modules/<name>/
     routes.ts                      if it serves HTTP
     controllers/*.ts               ditto
     service.ts                     if it has behaviour
+    services/                      instead of service.ts, once one file stops being readable
     repository.ts · model.ts       if it owns a collection
+    domain/                        if it has rules worth proving without a database
+    providers/                     if it owns an outbound port — see payments/
     index.ts                       ONLY if a sibling imports this module
     locales/{en,it,es}.json        if it produces user-facing text
-    seeds.ts                       if it ships fixtures
     audit.ts · metrics.ts          if it records actions or numbers
     events.ts · emails.ts          if it publishes events or sends mail
     openapi.yaml                   its standalone slice of the REST contract
+    asyncapi.yaml                  the same, if it owns a channel
+    probes.ts                      the requests a spec cannot describe
     analytics.ts                   the event names it emits
     factory.ts · seeds.ts          how its records are built, and the demo ones
     tests/unit/ · tests/contract/  co-located, deleted with the module
-    dev/                           GENERATED — do not hand-write
 ```
+
+Everything at that root is a layer or a self-registering slot; everything that is a **subject**
+is a folder named for it. That is the rule, and it is what decides where a new file goes when the
+list above has no row for it. `openapi.yaml` and `probes.ts` are the contract slice this module
+owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is what reads them.
 
 `wishlist` is the reference: it was the first module added after the registry existed, and its tree
 is exactly the list above minus the parts it does not need (no `index.ts`, since nothing imports it;
@@ -158,7 +178,9 @@ already — nothing below applies.
 ### 3 · The fragments and their section entries
 
 Write `openapi.yaml`, add the domain to `MODULE_SECTIONS`, and add its paths to the root's index. Do
-the same for `ANALYTICS_SECTION_ORDER` and `SEED_SECTION_ORDER` if you wrote those fragments.
+the same for `ANALYTICS_SECTIONS` if you wrote an `analytics.ts`, and for `ASYNC_SECTION_ORDER` if
+you wrote an `asyncapi.yaml`. A `seeds.ts` needs no entry anywhere — the dataset is published from a
+real seeding run, not assembled from a list.
 
 A section entry with no fragment on disk is the hard error shown above. A fragment on disk with no
 section entry is worse — it is silently ignored, and the endpoint ships undocumented.
@@ -170,12 +192,12 @@ npm run contracts:bundle          # assembles openapi.yaml, asyncapi.yaml, analy
 npm run lint:openapi              # spectral
 ```
 
-`contracts:bundle` bundles the fragment-authored documents **first**, then generates the collection
-fragments from the fresh `openapi.yaml`, then assembles the client bundles. That order matters and
-is already correct in the script — you do not need the two-step workaround that older notes describe.
+`contracts:bundle` bundles the contract documents **first**, then generates the four client
+collections from the fresh `openapi.yaml` and the seed dataset. That order matters and is already
+correct in the script — you do not need the two-step workaround that older notes describe.
 
-The four files under `dev/` appear on their own. They are generated, committed, and never
-hand-edited.
+`contract.{bruno,insomnia,mockoon,postman}.*` at the repo root are rewritten on their own. They are
+generated, committed, and never hand-edited.
 
 ### 5 · The paired repo
 
@@ -199,12 +221,12 @@ npm run complete
 
 `wishlist`, measured:
 
-|                                                  |                                                  |
-| ------------------------------------------------ | ------------------------------------------------ |
-| files added                                      | one folder                                       |
-| lines changed elsewhere                          | 1 in `src/modules.ts` + 3 section-order entries  |
-| existing files needing an edit to accommodate it | **0**                                            |
-| generated unasked                                | 4 `dev/` fragments, the collections, the bundles |
+|                                                  |                                                                |
+| ------------------------------------------------ | -------------------------------------------------------------- |
+| files added                                      | one folder                                                     |
+| lines changed elsewhere                          | 1 in `src/modules.ts` + its section-order entries              |
+| existing files needing an edit to accommodate it | **0**                                                          |
+| generated unasked                                | the bundles, and the four client collections rebuilt from them |
 
 ---
 
@@ -227,7 +249,8 @@ flowchart LR
 ```bash
 rm -rf src/modules/<name>
 # delete the import and the array entry in src/modules.ts
-# delete its entry from SECTION_ORDER / ANALYTICS_SECTION_ORDER / SEED_SECTION_ORDER
+# delete its entry from MODULE_SECTIONS / ANALYTICS_SECTIONS / ASYNC_SECTION_ORDER
+# and, if it declared probes, from scripts/contracts/generateCollections.ts
 ```
 
 Deleting a module named in another module's `dependsOn` stops the boot with the offending pair
@@ -321,9 +344,12 @@ cd "$SB"
 
 rm -rf src/modules/{products,cart,orders}
 # drop the imports + array entries from src/modules.ts
-npx tsc --noEmit                                  # THE assertion: 0 errors in src/** and db/**
+npx tsc --noEmit                                  # THE assertion: 0 errors in db/**, and none
+                                                  # in src/** from a module that did not DECLARE
+                                                  # the dependency in its manifest
 
-# drop them from SECTION_ORDER, ANALYTICS_SECTION_ORDER, SEED_SECTION_ORDER
+# drop them from MODULE_SECTIONS, ANALYTICS_SECTIONS, ASYNC_SECTION_ORDER,
+# and from generateCollections.ts if any of them declared probes
 npm run contracts:bundle
 npx spectral lint openapi.yaml --ruleset spectral.yaml
 npm test                                          # everything else: a report, not a verdict
@@ -335,21 +361,31 @@ all declared edges.
 
 ### What it finds today
 
-Re-run 2026-08-15, at thirteen modules: **52 type errors, 46 of them under `src/`.** Read them in
-two piles, because only one is a problem.
+Re-run 2026-08-16, at thirteen modules: **62 type errors across 26 files, 47 of them under `src/`.**
+Read them in three piles, because only one is a problem — and it is empty.
 
-**Legitimate — nine production files across four modules.** `delivery`, `inventory`, `payments` and
+**Legitimate — ten production files across four modules.** `delivery`, `inventory`, `payments` and
 `wishlist` stop compiling because they genuinely depend on what was deleted, and each one
 **declares** that in `dependsOn`. This is the DAG working: deleting a supplier breaks its customers,
 the registry would refuse the boot with the offending pair named, and the answer is to delete the
 dependents too or pick a different set. An earlier run of this check reported "zero files in `src/`"
-— that was true when those four modules did not exist, not a property that was lost.
+— that was true when those four modules did not exist, not a property that was lost. **`db/**` is
+still at zero\*\*, and that is the number this exercise is actually defending.
 
-**Residue — the rest.** Specs reaching for a deleted domain's factories from a module that does not
-depend on it (`account`'s own tests import `products` and `cart` factories),
-`tests/contract/request-contract.test.ts`, and the two cases named above:
-`mailer-templates.test.ts` using three domains as sample data, and
-`scripts/contracts/generateCollections.ts` importing `seedProducts`/`seedOrders` by name.
+**Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
+errors are `scripts/contracts/analyticsEvents.ts` and `generateCollections.ts` naming
+`products`/`cart`/`orders`, which is step 3 of the removal procedure announcing itself rather than
+residue. Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
+go with their modules.
+
+**Residue — the rest.** Central specs using a domain as sample data:
+`tests/unit/infrastructure/observability/analytics.test.ts` (three modules' `analytics.ts`),
+`mailer-templates.test.ts` (three modules' `emails.ts`),
+`tests/integration/concurrency/cart-races.test.ts` (correct — no modules, no race) and
+`tests/contract/request-contract.test.ts`. Plus one worth naming separately: `account`'s own
+address-book specs import `products` and `cart` factories from a module `account` does not depend
+on, which `module-test-boundaries.test.ts` permits (a sibling's `tests/` is a legal reach) and only
+this exercise makes visible.
 
 The sweep canaries are **no longer in that pile.** They stated their floor as a literal calibrated
 to the nine-module build — `expect(files.length).toBeGreaterThanOrEqual(6)` and friends — and the
@@ -377,6 +413,15 @@ ones a sweep cannot express:
   `db/seeds/dataset.json` now and indexes into `collections.products` / `collections.orders`, which
   is _whatever the seeders produced_ rather than two domain-shaped identifiers. Kept here as the
   worked example: the fix was not a lint rule, it was removing the reason the import existed.
+
+    The same file imports domain names again today — `src/modules/<name>/probes.ts`, for the four
+    modules that declare probes — and that one is deliberate. The difference is what the import is
+    _for_: `seedProducts` was a domain used as a convenient handle on data the file could have read
+    generically, while a probe is a thing the module genuinely owns and nothing else can supply. So
+    the break it produces is informative rather than annoying, which is the whole test. An import that
+    fails loudly when a module goes away is not coupling to design out; it is the checklist entry the
+    compiler is holding for you.
+
 - **A whole-word scan for domain names.** Tried and rejected: `observability` and `locales` are
   module names _and_ infrastructure folder names, and `db/migrations/**` names collections forever
   by design. The false-positive rate makes it unusable.

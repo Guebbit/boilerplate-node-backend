@@ -32,10 +32,10 @@ export type RepoRole = 'backend' | 'frontend';
 /**
  * One shared file, named on both sides.
  *
- * Two paths rather than one because identity does not imply a shared location: the seed fixtures
- * are production data here and test scaffolding there, and the generated realtime types are named
- * for their generator here and for their consumer there. A single-path list could not express
- * either, which is why they went unguarded.
+ * Two paths rather than one because identity does not imply a shared location: the demo dataset is
+ * published seed data here and test scaffolding there, and the analytics names sit under a
+ * filename each repo's lint config insists on. A single-path list could not express either, which
+ * is why they went unguarded.
  */
 export interface SharedFile {
     backend: string;
@@ -78,14 +78,18 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * by requirement — either repo may legitimately change its own icon or formatting width, and a
  * gate that fails on that trains people to ignore it.
  *
- * FOUR OF THESE ARE PRODUCED IN THE BACKEND and copied here — the two specs, the demo dataset and
- * the analytics names. Every one of them covers every domain, so every one is produced there from
- * per-module sources: the specs and the analytics names by assembling fragments
- * (`npm run contracts:bundle`), the dataset by seeding a database and reading it back
- * (`npm run seed:export`). For those, "decide which side is right" has one answer: the backend's,
- * because the frontend's copy is an output. Editing the copy is the failure this list is worst at
- * describing and best at catching — the next regeneration reverts it, and the diff looks like the
- * backend broke something.
+ * FOUR OF THESE ARE PRODUCED IN THIS REPO and copied to the frontend — the two specs, the demo
+ * dataset and the analytics names. Every one of them covers every domain, so every one is produced
+ * from per-module sources: the specs and the analytics names by `npm run contracts:bundle`, the
+ * dataset by seeding a database and reading it back (`npm run seed:export`). For those, "decide
+ * which side is right" has one answer: this repo's, because the frontend's copy is an output.
+ * Editing the copy is the failure this list is worst at describing and best at catching — the next
+ * regeneration reverts it, and the diff looks like the backend broke something.
+ *
+ * Nothing that either repo can REGENERATE from a file already in this list belongs here. Such a
+ * copy carries no fact the list does not already compare, and every entry costs a manual step per
+ * contract change. `src/types/asyncapi.generated.ts` and the `contract.<tool>.*` collections are
+ * both out for that reason; each is guarded instead by a freshness check inside its own repo.
  */
 export const SHARED_FILES: readonly SharedFile[] = [
     /* The contract itself, and the ruleset both sides lint it under. */
@@ -94,15 +98,17 @@ export const SHARED_FILES: readonly SharedFile[] = [
     { backend: 'spectral.yaml', frontend: 'spectral.yaml', owner: 'mirror' },
 
     /*
-     * The realtime types, generated from `asyncapi.yaml` by the shared generator below. Identity
-     * here is what proves both sides regenerated after the last spec change: the spec matching
-     * while its output does not means one repo is shipping types for a contract it no longer has.
+     * The generated realtime types (`src/types/asyncapi.generated.ts` here,
+     * `src/types/realtime.generated.ts` there) are deliberately NOT in this list, for the same
+     * reason as the API client collections below: they are an OUTPUT of `asyncapi.yaml`, which is
+     * compared above, through `scripts/gen-asyncapi-types.ts`, which is compared at the bottom.
+     * Identical spec plus identical deterministic generator means neither side can hold a
+     * different output without one of those two files forking first.
+     *
+     * What a cross-repo comparison would add is "did this repo regenerate after the last spec
+     * edit" — and `npm run check:asyncapi-types` answers that inside each repo, with no sibling
+     * checkout to find and no file to carry across.
      */
-    {
-        backend: 'src/types/asyncapi.generated.ts',
-        frontend: 'src/types/realtime.generated.ts',
-        owner: 'backend'
-    },
 
     /*
      * The demo dataset, as the API actually serves it. `npm run seed:export` seeds a throwaway
@@ -279,9 +285,9 @@ export const formatSharedFileProblems = (
         `  Four of them are PRODUCED IN THE BACKEND from per-module sources:\n` +
         `    cd <backend> && npm run contracts:bundle   # the two specs and the analytics names\n` +
         `    cd <backend> && npm run seed:export        # the demo dataset\n` +
-        `  then copy each result to the frontend.\n` +
+        `    cd <backend> && npm run sync:frontend      # copies all four over\n` +
         `  The rest are hand-maintained on both sides: decide which copy is right and copy it\n` +
-        `  over the other. Either way, regenerate in BOTH repos afterwards:\n` +
+        `  over the other. Either way, regenerate each repo's OWN outputs afterwards:\n` +
         `    npm run gen:api && npm run gen:asyncapi`
     );
 };

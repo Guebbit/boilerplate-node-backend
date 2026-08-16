@@ -62,31 +62,33 @@ it('matches the contract for an admin caller', async () => {
 });
 ```
 
-Three recurring shapes across `tests/contract/*.test.ts`:
+Three recurring shapes across the per-module `api.contract.test.ts` files:
 
-- **Role branches, both sides.** `orders.test.ts` asserts `GET /orders/{id}` for both an admin caller and a non-admin caller — the suite exists specifically because those two branches once returned _different shapes_ (the non-admin path aggregated computed totals in, the admin path did a plain `findById` and didn't), and nothing before this layer crossed HTTP to notice.
-- **Credential-leak guards as explicit assertions, backed by the contract as the general case.** `users.test.ts` keeps a hand-written `assertNoCredentials()` (checks the serialized JSON for `password`, `tokens`, a bcrypt hash prefix) _and_ `toSatisfyApiSpec()`. The explicit check is a readable statement of intent; the contract check is what makes it general — `openapi.yaml`'s `User` schema declares `additionalProperties: false`, so _any_ undeclared field fails, not just the two named here.
+- **Role branches, both sides.** `orders`' suite asserts `GET /orders/{id}` for both an admin caller and a non-admin caller — the suite exists specifically because those two branches once returned _different shapes_ (the non-admin path aggregated computed totals in, the admin path did a plain `findById` and didn't), and nothing before this layer crossed HTTP to notice.
+- **Credential-leak guards as explicit assertions, backed by the contract as the general case.** `users`' suite keeps a hand-written `assertNoCredentials()` (checks the serialized JSON for `password`, `tokens`, a bcrypt hash prefix) _and_ `toSatisfyApiSpec()`. The explicit check is a readable statement of intent; the contract check is what makes it general — `openapi.yaml`'s `User` schema declares `additionalProperties: false`, so _any_ undeclared field fails, not just the two named here.
 - **Error shapes, not just success shapes.** Every file also drives the 401/403/404/422 branches through the real route and checks those against the spec too — a `ValidationErrorResponse` that drifts from what's declared is exactly as much a contract break as a success response would be.
 
 ## File map
 
-| Path                                      | Contents                                                                                                     |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `tests/support/contract.ts`               | Registers `jest-openapi` against `openapi.yaml`; the "why not Zod" reasoning lives in this file's own header |
-| `tests/contract/system.test.ts`           | `/`, `/observability/*`                                                                                      |
-| `tests/contract/users.test.ts`            | `/users`, `/account` — the credential-leak guard                                                             |
-| `tests/contract/products.test.ts`         | `/products`                                                                                                  |
-| `tests/contract/orders.test.ts`           | `/orders` — the role-branch guard                                                                            |
-| `tests/contract/cart.test.ts`             | `/cart`                                                                                                      |
-| `tests/contract/feedback.test.ts`         | `/feedback`, `/feedback/contact` — the one genuinely public write endpoint                                   |
-| `tests/contract/request-contract.test.ts` | The other half — see [Contract-Derived Request Data](./contract-request-data.md)                             |
-| `tests/support/http.ts`                   | `api()`, `authenticateAs()` — shared with [Integration Testing](./integration-testing.md)                    |
+**A module's contract suite is co-located with the module**, one file per domain, so it is deleted
+along with it. Only the specs that belong to no domain stayed central.
+
+| Path                                                     | Contents                                                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `tests/support/contract.ts`                              | Registers `jest-openapi` against `openapi.yaml`; the "why not Zod" reasoning lives in this file's own header |
+| `src/modules/<name>/tests/contract/api.contract.test.ts` | One per routed module — twelve today. Everything under that module's `basePath`                              |
+| `src/modules/users/tests/contract/…`                     | `/users` — the credential-leak guard, `assertNoCredentials()`                                                |
+| `src/modules/orders/tests/contract/…`                    | `/orders` — the role-branch guard, admin and scoped caller                                                   |
+| `tests/contract/system.test.ts`                          | `/` — the one route that belongs to no module                                                                |
+| `tests/contract/request-sources.test.ts`                 | Every mounted route is in the spec, and every spec operation is mounted                                      |
+| `tests/contract/request-contract.test.ts`                | The other half — see [Contract-Derived Request Data](./contract-request-data.md)                             |
+| `tests/support/http.ts`                                  | `api()`, `authenticateAs()` — shared with [Integration Testing](./integration-testing.md)                    |
 
 ## Commands
 
-| Command                 | Effect                            |
-| ----------------------- | --------------------------------- |
-| `npm run test:contract` | `jest tests/contract --runInBand` |
+| Command                 | Effect                                                            |
+| ----------------------- | ----------------------------------------------------------------- |
+| `npm run test:contract` | `jest tests/contract 'src/modules/.*/tests/contract' --runInBand` |
 
 ## Related pages
 

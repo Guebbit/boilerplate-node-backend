@@ -91,7 +91,7 @@ and copy are delivery concerns; the same verdict serves a queue consumer or a CL
 
 ### Why bother
 
-`tests/unit/totals.property.test.ts` runs **13 properties × 300 generated baskets, seeded, with no
+`src/modules/orders/tests/unit/totals.property.test.ts` runs **13 properties × 300 generated baskets, seeded, with no
 `setupTestDb`, no `beforeAll` and no mocks** — there is nothing to set up, because the file under
 test cannot reach anything. It proves things like _"a total is never `NaN`, for every possible
 input"_, which is a claim about all inputs that no table of examples can make. A `NaN` total
@@ -186,8 +186,16 @@ Both halves are live:
 
 ### The folder is optional
 
-Only `orders` and `cart` have one. Creating an empty `domain/` to match a shape is how ceremony
-starts.
+Three modules have one — `orders`, `cart` and `delivery` — out of thirteen. Creating an empty
+`domain/` to match a shape is how ceremony starts.
+
+**`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
+two pure functions, `findShippingMethod` and `priceShipping`, and they are the module's _entire_
+barrel: a sibling prices a shipping method without learning that shipments, couriers or a
+`shipmentRepository` exist. That is what stops `cart`'s checkout and `GET /delivery/methods` from
+ever quoting different numbers — there is one function and both call it — and it is a published
+language rather than a handle on this module's storage, which is the distinction
+[Strategic DDD](./strategic-ddd.md) draws between kinds of dependency edge.
 
 ---
 

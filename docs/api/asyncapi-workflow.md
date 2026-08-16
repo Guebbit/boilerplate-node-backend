@@ -14,26 +14,38 @@ Current scope of `asyncapi.yaml`:
 
 ## Where to edit it
 
-`asyncapi.yaml` at the repo root is **assembled from fragments** — do not hand-edit it. Each
-section owns its channels, its messages and its payload schemas:
+`asyncapi.yaml` at the repo root is **merged from one complete document per section** — do not
+hand-edit it. Each section is a valid AsyncAPI document on its own, carrying its own channels,
+messages and payload schemas:
 
 ```
-src/modules/observability/asyncapi/{channels,messages,schemas}.yaml   the SSE stream
-shared/contracts/asyncapi.workers.{channels,messages,schemas}.yaml    the RabbitMQ queues
-shared/contracts/asyncapi.{header,channels.header,components.header,schemas.header}.yaml
+src/modules/observability/asyncapi.yaml        the SSE stream — a module's own document,
+                                               exactly as it carries one openapi.yaml
+shared/contracts/asyncapi.workers.yaml         the RabbitMQ queues, which belong to no domain
+shared/contracts/asyncapi.root.yaml            version, id, info, tags, servers — and no channels
 ```
 
 The worker queues are shared rather than owned by a module because the email and PDF workers are
-substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by whichever domain
-needs a mail sent.
+substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by whichever
+domain needs a mail sent. It is the async twin of filing `GET /` under `system` in the REST contract.
+
+This replaced a three-fragment layout (`channels.yaml`, `messages.yaml`, `schemas.yaml` per section)
+whose pieces were half-objects that parsed as nothing until concatenated in the right order at the
+right indentation. A whole document can be linted and opened in Studio on its own:
 
 ```bash
-npm run contracts:bundle        # rebuild asyncapi.yaml (and every other bundle) from fragments
+npm run contracts:bundle        # rebuild asyncapi.yaml (and every other bundle) from its sources
+npm run lint:asyncapi:modules   # lint each section document by itself
 npm run check:contracts-bundle  # fail if a committed bundle is stale
 ```
 
+**It is a merge, not `asyncapi bundle`.** The CLI dereferences — inlining every payload into every
+channel that names it, 239 lines to 819, and leaving `scripts/gen-asyncapi-types.ts` with no `$ref`
+to follow. `scripts/contracts/asyncapi.ts` copies three maps instead and refuses on a collision; its
+header carries the full argument, and is the file to read before trying the CLI again.
+
 See [Contract Ownership & Fragmentation](./contract-fragmentation.md) for the whole picture,
-including why the bundler never parses YAML.
+including why each bundle uses the verb it does.
 
 ## Servers declared
 
@@ -76,7 +88,15 @@ Because the input (`asyncapi.yaml`) is also identical, the two generated files a
 consumes `ISseEventPayloadMap` for per-event typing. The unused exports are type-only on the
 backend and tree-shaken in the frontend bundle.
 
-**If you change this script, copy it to the other repo.** Nothing enforces it automatically.
+Both the spec and this script are in `SHARED_FILES` (`scripts/specIdentity.ts`), so
+`check:spec-identity` fails on the commit that forks either. **The generated output is not**, and
+deliberately: identical input through an identical deterministic generator cannot produce different
+types, so a cross-repo comparison of the output would only re-ask a question the two entries above
+already answer, at the price of carrying a fifth file to the frontend on every contract change.
+
+What that comparison *would* have added — "did this repo regenerate after the last spec edit" —
+`npm run check:asyncapi-types` answers here, with no sibling checkout to find. The frontend runs the
+same gate over its own copy.
 
 ## Tooling used here
 
@@ -86,9 +106,10 @@ backend and tree-shaken in the frontend bundle.
 ## Commands used in this repo
 
 ```bash
-npm run lint:asyncapi   # validate asyncapi.yaml
-npm run gen:asyncapi     # regenerate src/types/asyncapi.generated.ts
-npm run docs:asyncapi   # open AsyncAPI Studio in browser
+npm run lint:asyncapi         # validate asyncapi.yaml
+npm run gen:asyncapi          # regenerate src/types/asyncapi.generated.ts
+npm run check:asyncapi-types  # fail if the committed types are not what asyncapi.yaml generates
+npm run docs:asyncapi         # open AsyncAPI Studio in browser
 ```
 
 ## How this complements OpenAPI
@@ -129,4 +150,4 @@ There are no handwritten duplicate string constants — `asyncapi.yaml` is the s
 
 ## CI enforcement
 
-CI runs `lint:asyncapi` and `gen:asyncapi`, then verifies `src/types/asyncapi.generated.ts` has no uncommitted changes. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails.
+CI runs `lint:asyncapi`, then `check:asyncapi-types`, which regenerates in memory and compares against the committed `src/types/asyncapi.generated.ts` without writing it. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails and names the one command that fixes it. `npm run complete` runs the same gate locally.

@@ -26,7 +26,7 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 ## Works with
 
 - **[OpenTelemetry](./opentelemetry.md)** — the OTel SDK in the app generates the spans stored here. The OTel Collector receives them and forwards them to Tempo. → [Trace flow](./opentelemetry.md#trace-flow-with-otel-collector)
-- **[Loki](./loki.md)** — every [Winston](./winston.md) log line carries the same `trace_id` as the spans here. In Grafana you can jump from a Loki log entry directly to this trace, or from a Tempo span to the surrounding log lines. → [Trace ↔ log correlation](./loki.md#trace--log-correlation)
+- **[Loki](./loki.md)** — every [Winston](./winston.md) log line carries the same `trace_id` as the spans here. In Grafana you can jump from a Loki log entry directly to this trace, or from a Tempo span to the surrounding log lines. → [Trace ↔ log correlation](./loki.md#trace-log-correlation)
 - **[Grafana](./grafana.md)** — Tempo has no standalone UI. All trace exploration happens through Grafana → Explore → Tempo.
 
 ## External references

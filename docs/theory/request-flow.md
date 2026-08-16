@@ -1,5 +1,9 @@
 # Request Flow
 
+The controller, service, repository and model below are **one module's** files, sitting side by side
+in `src/modules/<name>/` — the flow crosses layers without leaving the directory. The middleware
+chain and the datastores are the shared substrate every module travels through.
+
 ## End-to-end path
 
 ```mermaid
@@ -115,8 +119,8 @@ flowchart LR
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Middleware chain                      | Helmet sets security headers · CORS checks the origin · rate limiter blocks abuse · JWT auth verifies the token (or skips for public routes)                                                         |
 | Redis cache                           | GET requests probe Redis first. A hit returns the stored response immediately — no controller, no database reached. On a write the controller invalidates related tags so stale entries are evicted. |
-| Controller                            | Parses HTTP input, calls the service, formats the final response envelope.                                                                                                                           |
-| Service                               | Applies business rules and validation (Zod). Publishes async jobs to RabbitMQ when needed.                                                                                                           |
+| Controller                            | Reads HTTP input, **validates it against the contract's Zod schema**, calls the service, formats the response envelope. Also where the module emits its audit action.                                |
+| Service                               | Applies business rules over data that is already the right shape. Publishes async jobs to RabbitMQ when needed.                                                                                      |
 | Repository → Mongoose model → MongoDB | Runs the actual database query. Repositories own query shape; models own schema. Controllers never touch either directly.                                                                            |
 | RabbitMQ                              | Receives heavy async jobs (email, PDF). The HTTP handler responds immediately; a separate worker processes the job at its own pace.                                                                  |
 
@@ -127,9 +131,14 @@ flowchart LR
 Things like [Helmet](../tools/security.md), CORS, cookies, auth, and rate limits happen near the edge.
 That keeps the inside layers focused.
 
-### Validation close to intent
+### Validation at the edge, rules inside
 
-Input coercion and business validation happen in services, often with [Zod](../tools/runtime.md), instead of being mixed into repositories.
+Shape validation happens in the **controller**, against the [Zod](../tools/runtime.md) schemas
+generated from `openapi.yaml` — so a service is only ever called with data the contract already
+accepted, and never has to ask whether a field is a string. Which sources a controller reads
+(params, query, body, and in what precedence) is a property of the surface rather than of the
+handler; [Request Input](./request-input.md) is the page for that. Business rules live in the
+service, and the ones worth proving without a database live in `domain/`.
 
 ### Optional acceleration
 

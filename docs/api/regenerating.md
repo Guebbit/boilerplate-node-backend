@@ -68,9 +68,9 @@ phase and not the others.
 
 | You edited                                            | Run                                                | Because                                           |
 | ----------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
-| `src/modules/*/openapi/{paths,schemas}.yaml`           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
-| `shared/contracts/*.yaml` (header, shared schemas, system) | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
-| `src/modules/*/asyncapi/*.yaml`                       | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml`, then `src/types/asyncapi.generated.ts`     |
+| `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
+| `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
+| `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml`, then `src/types/asyncapi.generated.ts`     |
 | `src/modules/*/analytics.ts`                          | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.ts` |
 | `src/modules/*/seeds.ts`                             | `seed:export` → `db:seed:reset`                     | rebuilds `db/seeds/dataset.json`; the collections embed its values, and the database holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
@@ -95,15 +95,17 @@ npm run contracts:bundle -- bruno       # just contract.bruno.yml
 Known names: `openapi`, `asyncapi`, `analytics-events`, `bruno`, `insomnia`,
 `mockoon`, `postman`. An unknown name exits with the list rather than doing nothing.
 
-::: warning `npm run contracts:bundle -- openapi` does not narrow the run
-`contracts:bundle` is three commands joined by `&&`, and npm appends `--` arguments to the **last**
-one only. So that invocation still bundles all four authored documents and regenerates the collection
-fragments — it just skips bundling the three client collections at the end, leaving `contract.<tool>.*` stale.
-The cross-cutting suite catches it, but the failure looks unrelated to what you typed.
+::: tip A narrowed run really does narrow
+It did not always. `contracts:bundle` used to be several commands joined by `&&` in `package.json`,
+and npm appends `--` arguments to the **last** one only — so naming a bundle bundled everything
+except the thing you named. The ordering lives in `scripts/bundle-contracts.ts` now, precisely so
+the flag can mean what it says.
 :::
 
-Finish with a full `npm run contracts:bundle` before committing: a narrowed run leaves every other
-bundle untouched, and staleness is asserted across all seven.
+A named collection regenerates from the **committed** contract, which is the right question while
+iterating: is the state on disk self-consistent? Finish with a full `npm run contracts:bundle`
+before committing — a narrowed run leaves every other bundle untouched, and staleness is asserted
+across all seven.
 
 ## Verifying, and what each failure means
 
@@ -141,7 +143,7 @@ Not one of these is a build artefact you can delete and forget:
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                   |
 | `src/infrastructure/observability/analytics-events.ts` | the analytics tracker                                         |
 | `db/seeds/dataset.json`                                | the generated collections and the paired frontend's mocks     |
-| `contract.{bruno,insomnia,mockoon}.*`                  | you, and whoever explores the API without running it          |
+| `contract.{bruno,insomnia,mockoon,postman}.*`          | you, and whoever explores the API without running it          |
 
 `api/` is the one exception to "review the diff": `npm run gen:api` starts with `rm -rf ./api`, so it
 is fully derived, and the only thing to check is that the diff is limited to what you changed.
@@ -149,8 +151,11 @@ is fully derived, and the only thing to check is that the diff is limited to wha
 
 ## Handing the contract to the frontend
 
-The frontend holds **byte-identical copies** of the seven bundles and never bundles or authors them.
-After a contract change lands here:
+The frontend holds **byte-identical copies** of the three bundles it consumes — `openapi.yaml`,
+`asyncapi.yaml` and `analytics-events.ts` — and never bundles or authors them. The four client
+collections stay here: they are derived from `openapi.yaml`, so a copy there could not disagree
+without the spec disagreeing first, and nothing in that repo reads them. After a contract change
+lands here:
 
 1. `npm run contracts:bundle` here, and commit the result.
 2. Copy the changed bundle(s) to `boilerplate-vue-frontend` verbatim.
@@ -166,12 +171,12 @@ A module joins each bundle by dropping a fragment in the expected place and addi
 bundle's section list under `scripts/contracts/`:
 
 ```
-src/modules/<name>/openapi.yaml            its operations, and the types only it uses
-src/modules/<name>/asyncapi/*.yaml          its channels, messages, schemas
-src/modules/<name>/analytics.ts            the events it emits
-src/modules/<name>/seeds.ts                    the demo records it owns
-src/modules/<name>/factory.ts                  how those records are built
-src/modules/<name>/probes.ts                 the requests a spec cannot describe
+src/modules/<name>/openapi.yaml      its operations, and the types only it uses
+src/modules/<name>/asyncapi.yaml     its channels, messages and schemas — one whole document
+src/modules/<name>/analytics.ts      the events it emits
+src/modules/<name>/seeds.ts          the demo records it owns
+src/modules/<name>/factory.ts        how those records are built
+src/modules/<name>/probes.ts         the requests a spec cannot describe
 ```
 
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a

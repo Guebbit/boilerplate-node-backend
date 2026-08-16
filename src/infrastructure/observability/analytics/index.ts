@@ -50,7 +50,7 @@ export interface AnalyticsEventMap {}
  *
  * The paired frontend emits the same funnel from the other end, so the names are also published as
  * `analytics-events.ts` and guarded by `check:spec-identity`. That file is an ARTEFACT of these
- * declarations rather than their source: `npm run contracts:analytics` writes it, and nothing in
+ * declarations rather than their source: `npm run contracts:bundle` writes it, and nothing in
  * this repo imports it.
  */
 export type SharedAnalyticsEventName = AnalyticsEventMap[keyof AnalyticsEventMap];

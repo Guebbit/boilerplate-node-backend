@@ -92,25 +92,42 @@ rules are untouched. It is written down because the alternative is worse in both
 1,200-line `service.ts` nobody wants to open, or a split that feels like breaking the convention
 and so gets done furtively.
 
-Split by **what the operations do**, never by size alone. `cart` is the worked example, and it is
-the only module past the threshold today:
+Split by **what the operations do**, never by size alone. `cart` is the worked example:
 
 | File          | What is in it                                                  |
 | ------------- | -------------------------------------------------------------- |
 | `view.ts`     | joining lines to products, and the shape the contract declares |
 | `items.ts`    | reading a cart and changing what is in it                      |
 | `checkout.ts` | turning a cart into an order, and the race that guards it      |
+| `reorder.ts`  | building a new cart from a past order                          |
 | `cleanup.ts`  | tearing down carts when a user or product is deleted           |
 
-One of those files is usually internal — here `view.ts`, whose helpers the other three share and no
+One of those files is usually internal — here `view.ts`, whose helpers the others share and no
 caller asks for by name. Export its **types** from the barrel, not its helpers.
+
+`account` took the same step: `services/` holds `authentication.ts`, `profile.ts`, `addresses.ts`,
+`verification.ts` and `token-cleanup.ts` behind one `index.ts` exporting `accountService`.
+
+**One module is over the threshold and has not been split.** `orders/service.ts` is 363 lines. That
+is recorded rather than quietly fixed, because the number's job is to make the split feel sanctioned
+instead of furtive — and a threshold that is silently re-fitted to whatever the largest file happens
+to measure is not a threshold. Read 300 as the line past which a split needs no justification, not
+as a limit something enforces: nothing in the suite checks it, and nothing should.
 
 ### And `domain/`, if the module has rules
 
 A module may also carry `domain/` — pure business rules, lint-guaranteed free of Express, Mongoose
-and every tier. `orders` and `cart` have one; the rest do not, and that is the correct state rather
-than a gap. [Domain Layer](./domain-layer.md) is the full page: what earns a place there, the
+and every tier. A few modules have one; most do not, and that is the correct state rather than a gap.
+[Domain Layer](./domain-layer.md) is the full page: what earns a place there, the
 verdict-not-rejection shape, and when a module should instead go to full tactical DDD.
+
+**`delivery` is the one to read first**, because it is the argument in its shortest form. Its
+`domain/rates.ts` holds `findShippingMethod` and `priceShipping`, and those two functions are the
+module's **entire** barrel — a sibling can price a shipping method without learning that shipments,
+couriers or a `shipmentRepository` exist. That is what makes the export a published language rather
+than a handle on this module's storage, and it is why the number `cart`'s checkout freezes onto an
+order can never disagree with the number `GET /delivery/methods` quotes: there is one function, and
+both call it.
 
 A module may also carry the things that used to live in shared registries, each named for what it
 is: `audit.ts` (the actions it emits), `metrics.ts` (its Prometheus counters), `events.ts` (its
@@ -134,16 +151,24 @@ a re-created folder cannot quietly become a second home for domain code.
 There is also no top-level `middlewares/`, `jobs/`, `routes/` or `workers/`. Each was a directory
 named after a MECHANISM rather than a tier, and three of them held a single file:
 
-| Was                                    | Is now                                    | Why                                            |
-| -------------------------------------- | ----------------------------------------- | ---------------------------------------------- |
-| `src/middlewares/*`                    | `src/infrastructure/http/middlewares/*`   | domain-free pipeline; survives with no modules |
-| `src/middlewares/auth-jwt.ts`          | `src/kernel/middlewares/` + a port        | needed a user; see [Modules](./modules.md)     |
-| `src/modules/account/token-cleanup.ts` | `src/modules/account/`                    | it is account's token lifecycle                |
-| `src/workers/*`                        | `src/infrastructure/adapters/*.worker.ts` | the consumer half of an adapter                |
-| `src/routes/index.ts`                  | `src/app/system-routes.ts`                | the ping belongs to no domain                  |
-| `src/bootstrap/*`                      | `src/app/*`                               | assembling this application                    |
-| `src/core/*`                           | `src/infrastructure/*`                    | the name meant the opposite half elsewhere     |
-| `src/platform/*`                       | `src/kernel/*`                            | it is a microkernel, not a base layer          |
+| Was                           | Is now                                          | Why                                            |
+| ----------------------------- | ----------------------------------------------- | ---------------------------------------------- |
+| `src/middlewares/*`           | `src/infrastructure/http/middlewares/*`         | domain-free pipeline; survives with no modules |
+| `src/middlewares/auth-jwt.ts` | `src/kernel/middlewares/` + a port              | needed a user; see [Modules](./modules.md)     |
+| `src/jobs/token-cleanup.ts`   | `src/modules/account/services/token-cleanup.ts` | it is account's token lifecycle                |
+| `src/workers/*`               | `src/infrastructure/adapters/*.worker.ts`       | the consumer half of an adapter                |
+| `src/routes/index.ts`         | `src/app/system-routes.ts`                      | the ping belongs to no domain                  |
+| `src/bootstrap/*`             | `src/app/*`                                     | assembling this application                    |
+| `src/core/*`                  | `src/infrastructure/*`                          | the name meant the opposite half elsewhere     |
+| `src/platform/*`              | `src/kernel/*`                                  | it is a microkernel, not a base layer          |
+
+The `jobs/` row moved twice, and the second move is the interesting one. Getting it out of a
+mechanism directory answered _which tier_ owns it — expiring a refresh token is `account`'s
+business, not the substrate's. Landing it in `services/` answered _where in the module_, under the
+rule [Modules](./modules.md#what-a-module-contains) states: a module root holds the manifest, the
+barrel, the contract files, the single-file layers and the self-registering slots, and everything
+else goes in a folder named for what it holds. A scheduled job is behaviour, so it sits with the
+rest of the module's behaviour.
 
 `src/app` is the assembly tier: the only place that reaches both `src/infrastructure` and every module.
 
@@ -161,6 +186,24 @@ layer above, and may never import from them. ESLint enforces this.
 Note what is **not** in that table: no `totals.ts`, no shared pricing, no "utils". The substrate
 holds no business rule, however many modules want one — see the `infrastructure` / `kernel` line in
 [Modules](./modules.md).
+
+### A port does not have to be infrastructure
+
+`adapters/image-store` is the familiar shape: an interface, one or more implementations, and an env
+var choosing between them. The tier is not part of the pattern. **A module may own a port of its
+own, in `providers/`**, when the thing behind it is its business rather than the application's.
+
+`payments/providers/` is the one in the tree. It declares what a payment provider must do, ships
+`fake.ts`, and selects on `NODE_PAYMENT_PROVIDER` — so a project going live writes `stripe.ts`
+beside it and changes an env var, while the service, the contract and the frontend hear nothing. It
+is not `infrastructure` for the reason the table above gives: a substrate that knew what a charge
+was would be holding a business rule.
+
+Which tier a port belongs to is the same question as everything else on this page: `image-store`
+survives an application with no modules, and `payments/providers` becomes meaningless without the
+domain that charges the card. The pattern is already being copied in the other direction —
+`infrastructure/observability/analytics/index.ts` cites `@modules/payments/providers` by name as the
+shape its own `NODE_ANALYTICS_PROVIDER` seam follows.
 
 ## How to read a feature
 

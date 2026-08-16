@@ -182,14 +182,10 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
+            # The generator itself compares, so the committed file is never overwritten here and
+            # the job needs no git state to read a verdict out of.
             - name: Check generated AsyncAPI types are fresh
-              run: |
-                  npm run gen:asyncapi
-                  npx prettier --write src/types/asyncapi.ts
-                  if ! git diff --exit-code -- src/types/asyncapi.ts; then
-                      echo "Generated src/types/asyncapi.ts is stale. Run 'npm run gen:asyncapi && npm run prettier:fix' and commit the changes."
-                      exit 1
-                  fi
+              run: npm run check:asyncapi-types
 
     api-freshness:
         # Verify the committed generated API client is up-to-date with openapi.yaml.

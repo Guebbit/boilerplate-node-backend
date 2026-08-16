@@ -3,8 +3,9 @@
 **The first hour in the codebase.** Every other page here explains a concept; this one names the
 files, in order, and says what to skip.
 
-The repository is ~10,000 lines of source across 13 modules. You do not need to read them. Nine
-files carry the shape of the whole thing, and every module is a variation on one of them.
+The repository is ~21,000 lines of production source across 13 modules, and ~33,000 with the
+co-located tests. You do not need to read them. Nine files carry the shape of the whole thing, and
+every module is a variation on one of them.
 
 ::: tip Before the code
 If you want the tool inventory first — what Redis, Prism, Stryker, Orval and the rest are doing

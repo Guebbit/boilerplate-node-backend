@@ -46,7 +46,12 @@ JWT-based authentication. Login returns an `accessToken` (short-lived) and a `re
 | DELETE | `/account/addresses/:id` | user | Remove an address (default promotes a survivor) |
 | POST | `/account/verify-request` | user | Re-send the email-verification link |
 | POST | `/account/verify-confirm` | none | Spend the emailed token, mark the address verified |
-| DELETE | `/account` | user | Delete own account |
+| DELETE | `/account` | user | Request account deletion (sends the confirmation link) |
+| DELETE | `/account/delete-confirm` | none | Spend the emailed token and delete the account |
+| DELETE | `/account/tokens/expired` | admin | Sweep expired refresh tokens out of the database |
+
+`DELETE /account/tokens/expired` is the manual handle on a job that also runs on a schedule
+(`services/token-cleanup.ts`); it is here so an operator can force the sweep without waiting.
 
 ## Products
 
@@ -62,7 +67,8 @@ Standard CRUD for the product catalogue. Read endpoints are public and Redis-cac
 | PUT | `/products` | admin | Bulk update products |
 | PUT | `/products/:id` | admin | Update single product |
 | DELETE | `/products` | admin | Bulk delete products |
-| DELETE | `/products/:id` | admin | Delete single product |
+| DELETE | `/products/:id` | admin | Delete single product (soft, unless `?hardDelete=true`) |
+| DELETE | `/products/:id/hard` | admin | The same operation, with the flag spelled in the path |
 
 ## Cart
 
@@ -105,7 +111,8 @@ Orders are normally created via checkout but can also be created manually by an 
 | PUT | `/orders` | admin | Bulk update orders |
 | PUT | `/orders/:id` | admin | Update single order |
 | DELETE | `/orders` | admin | Bulk delete orders |
-| DELETE | `/orders/:id` | admin | Delete single order |
+| DELETE | `/orders/:id` | admin | Delete single order (soft, unless `?hardDelete=true`) |
+| DELETE | `/orders/:id/hard` | admin | The same operation, with the flag spelled in the path |
 
 ## Payments
 
@@ -149,7 +156,25 @@ Full user management, admin-only. Supports individual and bulk operations. The e
 | PUT | `/users` | admin | Bulk update users |
 | PUT | `/users/:id` | admin | Update single user |
 | DELETE | `/users` | admin | Bulk delete users |
-| DELETE | `/users/:id` | admin | Delete single user |
+| DELETE | `/users/:id` | admin | Delete single user (soft, unless `?hardDelete=true`) |
+| DELETE | `/users/:id/hard` | admin | The same operation, with the flag spelled in the path |
+
+The three `/hard` routes are not extra operations in disguise. Each mounts the same handler as its
+`:id` sibling behind `routeFlag('hardDelete')`, so the destructive variant has a URL of its own —
+which is what makes it something a client asks for deliberately rather than a query string it can
+set by accident.
+
+## Locales
+
+Language discovery and the API's own message dictionary. Public and uncached-by-token on purpose:
+an unauthenticated client that has just failed to reach the API is exactly who needs the
+dictionary, so requiring a token would make it unavailable in the one case it exists for. Both
+responses are cached for an hour — the copy changes only on deploy.
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/locales` | none | Which languages this deployment supports |
+| GET | `/locales/:locale` | none | That locale's dictionary, the API's own keys only |
 
 ## Feedback
 

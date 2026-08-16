@@ -7,8 +7,8 @@
  *
  * The files in `specIdentity.ts` that are NOT here are the ones with nothing to fragment:
  * `spectral.yaml` is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are
- * tooling, and none of them names a domain. `src/types/asyncapi.ts` is absent for the opposite
- * reason — it is generated from `asyncapi.yaml` by `npm run gen:asyncapi`, so it follows a bundle
+ * tooling, and none of them names a domain. `src/types/asyncapi.generated.ts` is absent for the
+ * opposite reason — it is generated from `asyncapi.yaml` by `npm run gen:asyncapi`, so it follows a bundle
  * rather than being one. `db/seeds/dataset.json` is absent for a third reason: it is not assembled
  * from text at all — `npm run seed:export` seeds a throwaway database and publishes what the API
  * serves, so its staleness check is `check:seed-export` rather than this CLI.

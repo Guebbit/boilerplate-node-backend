@@ -108,7 +108,7 @@ describe('SHARED_FILES', () => {
         expect(siblingRole(THIS_REPO)).toBe('frontend');
     });
 
-    it('covers the contract, the demo dataset and the generated realtime types', () => {
+    it('covers the contract, the demo dataset and the analytics names', () => {
         const backendPaths = new Set(SHARED_FILES.map(({ backend }) => backend));
 
         expect(backendPaths).toContain(OPENAPI);
@@ -116,7 +116,17 @@ describe('SHARED_FILES', () => {
         expect(backendPaths).toContain(SPECTRAL);
         // The two that went unguarded until the list could hold differing paths.
         expect(backendPaths).toContain('db/seeds/dataset.json');
-        expect(backendPaths).toContain('src/types/asyncapi.generated.ts');
+        expect(backendPaths).toContain('src/infrastructure/observability/analytics-events.ts');
+    });
+
+    it('excludes anything either repo regenerates from a file already in the list', () => {
+        // A generated output carries no fact the list does not compare already: identical
+        // `asyncapi.yaml` through an identical generator cannot produce different types. Listing
+        // one buys nothing and costs a manual copy per contract change, so `check:asyncapi-types`
+        // guards it inside each repo instead.
+        const backendPaths = new Set(SHARED_FILES.map(({ backend }) => backend));
+
+        expect(backendPaths).not.toContain('src/types/asyncapi.generated.ts');
     });
 
     it('holds at least one pair whose paths differ between the repos', () => {

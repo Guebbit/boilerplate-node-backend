@@ -28,12 +28,7 @@
         "types": ["node", "jest"],
         "typeRoots": ["./src/types", "./node_modules/@types"]
     },
-    /*
-     * The per-module dev directory is excluded — spelled in words here, because a glob's
-     * wildcard-then-slash would close this comment — since `resolveJsonModule` puts `src` JSON in
-     * the program too, and half a Mockoon collection parses as neither JSON nor TypeScript.
-     */
-    "exclude": ["node_modules", "src/modules/*/dev/**"],
+    "exclude": ["node_modules"],
     "include": [
         "api/**/*.ts",
         "src/*.ts",

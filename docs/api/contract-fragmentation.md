@@ -7,12 +7,12 @@ repositories and is easy to get wrong from either side.
 ## The one-line version
 
 > This repository **owns** the shared, domain-shaped documents. The frontend **holds
-> byte-identical copies** of the four it consumes and never edits them.
+> byte-identical copies** of the three it consumes and never edits them.
 
-## The eight bundles
+## The seven bundles
 
-`openapi.yaml` is not a special case. Eight documents are produced here from per-module
-sources; the first four also exist in `boilerplate-vue-frontend` as byte-identical copies,
+`openapi.yaml` is not a special case. Seven documents are produced here from per-module
+sources; the first three also exist in `boilerplate-vue-frontend` as byte-identical copies,
 because the frontend's toolchain reads them. The four client collections stay in this repo
 only — they are derived from `openapi.yaml`, so a frontend copy could never disagree without
 the spec disagreeing first, and nothing there reads them:
@@ -20,7 +20,7 @@ the spec disagreeing first, and nothing there reads them:
 | Bundle            | Committed at                                | Built from                                                     |
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
 | `openapi`         | `openapi.yaml`                              | `src/modules/<name>/openapi.yaml` — **compiled by `redocly bundle`** |
-| `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi/{channels,messages,schemas}.yaml`  |
+| `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi.yaml` + `shared/contracts/asyncapi.{root,workers}.yaml` — **merged** |
 | `analytics-events`| `src/infrastructure/observability/analytics-events.ts`| `src/modules/<name>/analytics.ts` — **sliced from real modules** |
 | `bruno`           | `contract.bruno.yml`                        | `openapi.yaml` + the seed dataset — **generated whole**         |
 | `insomnia`        | `contract.insomnia.json`                    | `openapi.yaml` + the seed dataset — **generated whole**         |
@@ -30,17 +30,22 @@ the spec disagreeing first, and nothing there reads them:
 Whatever more than one domain reads stays in `shared/contracts/`, and each bundle's section order,
 layout and shared parts are declared in one file under `scripts/contracts/`.
 
-`openapi` is COMPILED: its sources are whole OpenAPI documents joined by `redocly bundle`, which
-resolves `$ref` the standard way. The next three are ASSEMBLED, fragment by fragment. The four
-client collections are GENERATED —
-produced whole from `openapi.yaml` and the seed dataset, with nothing on disk in between, because a
-hand-written restatement of the contract is a copy and copies rot. See
-[The client collections](#the-client-collections).
+**Three different verbs, and the difference is not cosmetic:**
+
+| Bundle                   | Verb          | What does it                                                             |
+| ------------------------ | ------------- | ------------------------------------------------------------------------ |
+| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents                  |
+| `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi.ts` copies three maps; `$ref`s stay untouched |
+| `analytics-events.ts`    | **assembled** | each module's `as const` body sliced verbatim and joined by a comma      |
+| the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between |
+
+A hand-written restatement of the contract is a copy and copies rot, which is why the last row
+exists at all. See [The client collections](#the-client-collections-generated).
 
 ```bash
-npm run contracts:bundle              # assemble the specs, then regenerate the collections from them
+npm run contracts:bundle              # build the specs, then regenerate the collections from them
 npm run contracts:bundle -- bruno     # just one, from the committed contract
-npm run check:contracts-bundle        # fail if any of the eight is stale
+npm run check:contracts-bundle        # fail if any of the seven is stale
 ```
 
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
@@ -78,9 +83,9 @@ flowchart TD
     class B,ORVAL,CLIENT tool;
 ```
 
-The picture is drawn for `openapi.yaml`; the other seven bundles differ only in what reads the output
-(the seed runner, the analytics tracker, four API clients). Three properties fall out of it, and
-each is load-bearing:
+The picture is drawn for `openapi.yaml`; the other six bundles differ only in what reads the output
+(the realtime type generator, the analytics tracker, four API clients). Three properties fall out of
+it, and each is load-bearing:
 
 1. **Fragments are authored here, and only here.** A module owns its slice of every shared document
    the same way it owns its routes and its seeds.
@@ -119,10 +124,10 @@ The rule is the one the module registry already uses: **a module owns the paths 
 | Module          | `basePath`       | OpenAPI tag(s)        | Ops |
 | --------------- | ---------------- | --------------------- | --- |
 | `account`       | `/account`       | `Auth` + `Account`    | 21  |
-| `orders`        | `/orders`        | `Orders`              | 12  |
+| `orders`        | `/orders`        | `Orders`              | 11  |
 | `users`         | `/users`         | `Users`               | 9   |
 | `products`      | `/products`      | `Products`            | 10  |
-| `cart`          | `/cart`          | `Cart`                | 7   |
+| `cart`          | `/cart`          | `Cart`                | 8   |
 | `wishlist`      | `/wishlist`      | `Wishlist`            | 4   |
 | `payments`      | `/payments`      | `Payments`            | 3   |
 | `delivery`      | `/delivery`      | `Delivery`            | 3   |
@@ -176,15 +181,15 @@ src/modules/products/
 └── tests/           its own specs
 ```
 
-After fragmentation it also owns `openapi.yaml`, holding the nine operations under
+After fragmentation it also owns `openapi.yaml`, holding the ten operations under
 `/products`:
 
 ```
 GET    /products                POST   /products
 PUT    /products                DELETE /products
-POST   /products/search         GET    /products/{id}
-PUT    /products/{id}           DELETE /products/{id}
-DELETE /products/{id}/hard
+POST   /products/search         GET    /products/categories
+GET    /products/{id}           PUT    /products/{id}
+DELETE /products/{id}           DELETE /products/{id}/hard
 ```
 
 At which point the goal test the whole module architecture exists to satisfy finally includes the
@@ -210,10 +215,10 @@ npm run contracts:bundle              # rebuild every bundle from the fragments
 npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
 
-To rebuild one document while iterating, call the script directly —
-`npx tsx scripts/bundle-contracts.ts openapi`. Passing the name through
-`npm run contracts:bundle --` does not narrow the run; see [Regenerating After a
-Change](./regenerating.md#regenerate-one-bundle-only).
+To rebuild one document while iterating, name it: `npm run contracts:bundle -- openapi`. The
+ordering lives inside `scripts/bundle-contracts.ts` rather than as an `&&` chain in `package.json`,
+which is what makes that flag narrow the run instead of silently doing everything else. See
+[Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
 
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
@@ -258,20 +263,26 @@ to be last.
 
 ### Which schemas stayed shared, and why
 
-73 of the 93 schemas reference nothing outside one module's paths, computed as a transitive closure
-over `$ref` rather than guessed from names. The other 20 stayed in `shared/contracts/openapi.root.yaml`:
+The split was computed as a transitive closure over `$ref` rather than guessed from names. Measured
+2026-08-16: the bundle declares **133 schemas, 107 of them owned by exactly one module** and
+**26 in `shared/contracts/openapi.root.yaml`**:
 
-| Kind | Examples | Why shared |
+| Kind | The 26 | Why shared |
 | ---- | -------- | ---------- |
 | Scalars | `Id`, `Email`, `Password`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl` | referenced everywhere |
-| Envelope machinery | `PaginationMeta`, `ErrorItem`, `ErrorResponse`, `ValidationErrorResponse`, `MessageResponse` | every operation's failure shape |
-| Cross-domain entities | `Product`, `Order`, `OrderItem`, `CartItem`, `User`, `UserEnvelope` | a cart line embeds a product, a checkout returns an order, `account` authenticates the record `users` administers |
+| Envelope machinery | `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `PaginationMeta`, `MessageResponse`, `ErrorItem`, `ErrorResponse`, `ValidationErrorResponse` | every operation's success and failure shape |
+| Cross-domain entities | `Product`, `Order`, `OrderItem`, `OrderAddress`, `CartItem`, `User`, `UserEnvelope` | a cart line embeds a product, a checkout returns an order, `account` authenticates the record `users` administers |
 | Cross-domain requests | `HardDeleteRequest` | products, users and orders all take it |
+| The shell's own | `HealthPing`, `HealthPingEnvelope` | `GET /` belongs to no module, so neither does its answer |
+
+The per-module counts are the same measurement from the other side: `account` 22, `products` 14,
+`observability` 11, `cart` 10, `users` 10, `orders` 8, `delivery` 7, `feedback` 7, `inventory` 6,
+`locales` 4, `payments` 4, `wishlist` 4.
 
 **Duplicating one of these into two module fragments is the failure to watch for** — the bundle
 would carry two definitions that drift apart silently. Deleting `src/modules/products` today removes
-4 paths and 11 schemas and leaves `Product` standing, because order items still embed it; spectral
-confirms no `$ref` is left dangling.
+5 paths and its 14 schemas and leaves `Product` standing, because order items still embed it;
+spectral confirms no `$ref` is left dangling.
 
 ### What the split changed in the bundle
 
@@ -293,14 +304,38 @@ What is already true and does not change:
 
 ## The other six, and what each one taught
 
-### `asyncapi.yaml` — three sections per domain
+### `asyncapi.yaml` — one whole document per section, merged
 
 A domain appears three times in this document (`channels:`, `components.messages:`,
-`components.schemas:`), so it contributes three fragments and the key lines between them are
-fragments of their own. `observability` owns the SSE channels because the module serving
-`/observability/events` decides what it pushes down them. The `worker.*` queues belong to no module
-— the email and PDF workers are substrate, enqueued by whichever domain needs a mail sent — so they
-sit under `workers` in `shared/contracts/`, exactly as `GET /` sits under `system`.
+`components.schemas:`), and it used to contribute a fragment for each — `channels.yaml`,
+`messages.yaml`, `schemas.yaml`, with the key lines between them being fragments of their own.
+That is gone. **A section is now one complete AsyncAPI document**: `src/modules/<name>/asyncapi.yaml`
+for a domain, exactly as it carries one `openapi.yaml`, and
+`shared/contracts/asyncapi.workers.yaml` for the `worker.*` queues that belong to no domain — the
+async twin of filing `GET /` under `system`. `shared/contracts/asyncapi.root.yaml` holds what
+describes the deployment rather than a domain, and no channels.
+
+`observability` owns the SSE channels because the module serving `/observability/events` decides
+what it pushes down them, and it is the only module with a channel today. The `worker.*` queues are
+shared because the email and PDF workers are substrate, enqueued by whichever domain needs a mail
+sent.
+
+What that bought is the property a fragment could never have: **each section is valid on its own** —
+lintable by `npm run lint:asyncapi:modules`, and openable in AsyncAPI Studio. `channels.yaml` and
+its two siblings were half-objects that parsed as nothing until concatenated in the right order at
+the right indentation.
+
+**Why this is a merge and not `asyncapi bundle`.** The obvious symmetry, once the sources are whole
+documents, is to shell out to `@asyncapi/cli` the way `openapi` shells out to Redocly. It was tried
+and it does the wrong thing: **`asyncapi bundle` dereferences.** Every `$ref` is inlined, the
+document grows from 239 lines to 819, each payload is repeated once per channel that names it *and*
+kept under `components` — and `scripts/gen-asyncapi-types.ts`, which walks
+`channels[*].{publish,subscribe}.message.$ref` to decide what to name a generated model, is left
+with nothing to follow. So the merge happens in about thirty lines in
+`scripts/contracts/asyncapi.ts`, deliberately dumber than a bundler: it copies three maps and
+refuses on a collision, carrying `$ref` strings across untouched because every section already
+resolves its own refs internally. That file's header is the full argument, and it is the file to
+read before anyone tries the symmetry again.
 
 ### `analytics-events.ts` — a name lives with the code that emits it
 
@@ -349,7 +384,7 @@ from a reading of the backend's schema defaults and omitted `locale` entirely. F
 document is right when both repos consume the same document. When what they actually need is the
 same ANSWER, publish the answer. See `docs/tools/mongodb-mongoose.md`.
 
-### The client collections — generated, because a restatement is a copy
+### The client collections — generated, because a restatement is a copy {#the-client-collections-generated}
 
 These were written by hand, and they rotted exactly as a copy does. Measured before the generator
 existed:
@@ -366,9 +401,11 @@ than incomplete: its bodies predated the response envelope, so it mocked a bare 
 `{ success, error, traceId }` shape. **A mock server serving shapes the frontend cannot parse is
 worse than no mock server.**
 
-So `scripts/contracts/generateCollections.ts` writes their fragments instead:
+So `scripts/contracts/generateCollections.ts` produces them instead — **one committed file per
+tool, generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
+header to keep in step with a footer, and nothing under `src/` that must never be opened.
 
-The traversal, the example synthesis and the three emitters live in
+The traversal, the example synthesis and the four emitters live in
 [`@guebbit/openapi-runnable-collections`](https://www.npmjs.com/package/@guebbit/openapi-runnable-collections),
 which knows nothing about this repo. That file is **configuration**: which module owns which path,
 where the values come from, where the probes are, and where the output lands. Everything below is a
@@ -378,15 +415,17 @@ property of that configuration rather than of the package.
   declared response;
 - **values come from `db/seeds/dataset.json`** — `GET /products/{id}` asks for a product the database
   actually holds, and `POST /account/login` sends credentials that work. That is the difference
-  between a collection you can click and one you have to fix first;
+  between a collection you can click and one you have to fix first. It is also why the examples carry
+  real derived values: an order's `totalPrice` is the number the serializer computed, not arithmetic
+  this file repeated;
 - **ownership comes from the module contracts** — a path in `src/modules/orders/openapi.yaml`
   is the orders module's, so the mapping is recorded once and a path that moves between modules
-  moves in all three collections with it;
+  moves in all four collections with it;
 - **identifiers are hashed from method and path**, not generated fresh, so regenerating rewrites
-  only what actually changed rather than re-forking all three files against the frontend's copy.
+  only what actually changed rather than re-forking all four files.
 
-Two assertions hold it in place: the committed fragments must equal a fresh run, and all three
-collections must carry one request per operation the contract declares — which is precisely the
+Two assertions hold it in place: each committed collection must equal a fresh run, and every
+collection must carry one request per operation the contract declares — which is precisely the
 check that was missing while they rotted.
 
 **A request the contract cannot describe still has a home — `src/modules/<name>/probes.ts`.** A
@@ -416,10 +455,17 @@ tokens are derived from `dataset.json` (the soft-deleted product is *found*, not
 fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
 tests nothing. An unknown token fails the generator with the list of known ones.
 
-The format differences are the same three as everywhere: Bruno and Insomnia are YAML lists, where an
-item needs no separator; Mockoon is JSON, where every route appears twice — once in `routes`, once as
-a `rootChildren` reference fixing the order its UI shows them in — so a module owns two Mockoon
-fragments and both are joined rather than pasted. A test asserts those two arrays stay in lockstep.
+**Two serialisations, four tools.** Bruno and Insomnia are YAML; Mockoon and Postman are JSON.
+Mockoon needs one thing the others do not — every route appears twice, once in `routes` and once as
+a `rootChildren` reference fixing the order its UI shows them in — and the generator handles that
+inside its own document rather than leaving two lists for this repo to keep in step. A test still
+asserts the two arrays match.
+
+**Why Postman is its own emitter and not a renamed Insomnia**, since the two look interchangeable
+from outside: Insomnia exports `collection.insomnia.rest/5.0` YAML, while Postman reads Collection
+Format v2.1 JSON, which splits a URL into `raw`/`host`/`path`/`query` and reads the *parts* rather
+than the string. The compatibility runs one way only — Insomnia imports Postman, Postman does not
+import Insomnia — so one emitter could not have served both.
 
 ## What the frontend does — and does not — do
 

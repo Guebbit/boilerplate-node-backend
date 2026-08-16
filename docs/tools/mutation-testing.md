@@ -20,7 +20,7 @@ Read this first. The rest of the page uses these words precisely, and several of
 | **Concurrency**        | How many mutants Stryker tests **in parallel**. Each one is a separate OS process running a full test runner _and its own in-memory mongod_, so the limit is memory, not CPU cores.                                                                                                      |
 | **`coverageAnalysis`** | Set to `perTest`: Stryker first records which tests touch which code, then runs **only the covering tests** for each mutant instead of the whole suite. This is the main reason a run is minutes and not days — except for static mutants, below.                                        |
 | **Static mutant**      | A mutant in code that runs when the file is **imported**, not when a test calls it — a `new Schema({...})`, a repository built at module scope, a config object. See [Why a run is slow](#why-a-run-is-slow-static-mutants); it is the single biggest cost in this repo.                 |
-| **Incremental**        | Stryker remembers per-mutant results in a committed file, so the next run only re-mutates what changed. **Enabled**, with the nightly passing `--force` to rebuild from scratch. See [Incremental mode](#incremental-mode--what-it-is).                                                  |
+| **Incremental**        | Stryker remembers per-mutant results in a committed file, so the next run only re-mutates what changed. **Enabled**, with the nightly passing `--force` to rebuild from scratch. See [Incremental mode](#incremental-mode-what-it-is).                                                   |
 
 ## What a mutant actually is
 
@@ -143,7 +143,7 @@ grep -rl "setupTestDb\|MongoMemoryServer" src/modules/*/tests/unit tests/unit te
 
 That is the load-bearing fact behind the failure mode below.
 
-**This is also why the controllers are not mutated.** They have no unit tests; they are covered by the contract and integration suites, which Stryker doesn't run. Put them in `mutate` and all ~35 files report ~0% — and that number would not mean "the controllers are untested", it would mean "they were measured with a ruler configured not to touch them". Worse, the ratchet would then record those zeros and defend them forever. Measuring controllers honestly requires running contract + integration under Stryker, which is an hours-per-run decision, not a glob.
+**This is also why the controllers are not mutated.** They have no unit tests; they are covered by the contract and integration suites, which Stryker doesn't run. Put them in `mutate` and all 60 files report ~0% — and that number would not mean "the controllers are untested", it would mean "they were measured with a ruler configured not to touch them". Worse, the ratchet would then record those zeros and defend them forever. Measuring controllers honestly requires running contract + integration under Stryker, which is an hours-per-run decision, not a glob.
 
 ## What to be wary of — per-file setup costs
 
@@ -404,7 +404,7 @@ kill -USR2 "$(pgrep -f child-process-proxy-worker | head -1)"
 Pick a cap high enough that the worker does not restart mid-measurement: a restart resets the
 accumulation, and a snapshot of a freshly restarted worker looks like a heap that never grew.
 
-### Case study: the buffers were not I/O at all
+### Case study: the buffers were not I/O at all {#case-study-the-buffers-were-not-io-at-all}
 
 A short account of a four-hypothesis investigation, kept because the wrong turns are the reusable
 part. Measured 2026-08-14 on a 16-core / 30 GB machine.
@@ -562,7 +562,7 @@ how much a worker accumulates, only how early V8 panics about the part it can se
 
 A run re-executes the unit suite once per mutant. `.github/workflows/mutation.yml` is a separate workflow from `ci.yml` — **nightly** (`cron: '0 3 * * *'`) plus manual dispatch. Kept structurally separate rather than folded into `ci.yml` behind a conditional: a separate file can't become a PR gate by accident.
 
-## Why a run is slow — static mutants
+## Why a run is slow — static mutants {#why-a-run-is-slow-static-mutants}
 
 This is the thing worth understanding, because it explains an otherwise baffling number.
 
@@ -637,7 +637,7 @@ Two things argue for caution before switching it on here:
 
 The honest position: it is standard and supported, it is probably the right call eventually, and it should be decided from a measurement of _this_ repo — one run with the JSON reporter enumerating exactly which mutants would stop being measured, recorded in the config — rather than from the frontend's numbers.
 
-## Incremental mode — what it is
+## Incremental mode — what it is {#incremental-mode-what-it-is}
 
 **Enabled.** This is what makes mutation testing usable on a pull request rather than only in a nightly.
 
@@ -844,9 +844,12 @@ at all).
 2. **Work the `src/modules/**` number\*\*, which is the only area below the target.
 3. **Then** move `break`, once a run has actually sustained the new floor.
 
-Two files also lost their coverage floor in the modular migration and have not had it restored —
-`src/modules/account/tokens.ts` (was floored by `src/services/**`) and
-`src/modules/users/validation.ts` (was `src/models/**`). `jest.config.js` floors `model.ts`,
+Two files also lost their coverage floor in the modular migration and have not had it restored.
+Both have since moved again, and neither move restored the floor: `src/modules/account/tokens.ts`
+(was floored by `src/services/**`) is now `src/modules/account/session/config.ts`, and
+`src/modules/users/validation.ts` (was `src/models/**`) was merged into `src/modules/users/model.ts`
+— which _is_ floored, so that half is closed by the merge rather than by a config change.
+`jest.config.js` floors `model.ts`,
 `repository.ts` and `service.ts` per module, and the newer per-module files (`audit.ts`,
 `metrics.ts`, `seeds.ts`, `events.ts`, `routes.ts`) have never had floors and may not need them.
 Left alone on purpose: the floors are being redone from the ground up once this sequence completes,
