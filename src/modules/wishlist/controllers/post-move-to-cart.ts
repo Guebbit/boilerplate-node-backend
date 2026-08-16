@@ -3,11 +3,8 @@ import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { wishlistService } from '../service';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { wishlistAnalyticsEvents } from '../analytics';
 
 /**
  * POST /wishlist/:productId/move-to-cart
@@ -33,7 +30,7 @@ export const postMoveToCart = (request: Request<{ productId: string }>, response
 
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.WISHLIST_MOVED_TO_CART,
+                event: wishlistAnalyticsEvents.WISHLIST_MOVED_TO_CART,
                 properties: { product_id: productId }
             });
 

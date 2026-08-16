@@ -217,3 +217,11 @@ export const refundForOrder = (orderId: string): Promise<void> =>
             `Payment for order ${orderId} refunded (${payment.amount} ${payment.currency})`
         );
     });
+
+/** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
+export const paymentService = {
+    createIntent,
+    confirmPayment,
+    getForOrder,
+    refundForOrder
+};

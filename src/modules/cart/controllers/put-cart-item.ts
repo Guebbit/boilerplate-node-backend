@@ -5,11 +5,8 @@ import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { UpdateCartItemByIdRequest } from '@types';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 import { readInput, isValidObjectId } from '@infrastructure/http/request';
 
 /**
@@ -48,7 +45,7 @@ export const putCartItem = (
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.CART_ITEM_UPDATED,
+                event: cartAnalyticsEvents.CART_ITEM_UPDATED,
                 properties: { product_id: productId, quantity }
             });
             successResponse(response, cart);

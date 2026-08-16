@@ -12,11 +12,8 @@ import { orderConfirmEmail } from '../emails';
 import { orderCreatedTotal } from '../metrics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { ordersAnalyticsEvents } from '../analytics';
 
 /**
  * POST /orders — create a new order from an explicit payload (admin).
@@ -98,7 +95,7 @@ export const writeOrders = (
                 );
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(request),
-                    event: analyticsEvents.ORDER_CREATED,
+                    event: ordersAnalyticsEvents.ORDER_CREATED,
                     properties: { order_id: orderId }
                 });
                 successResponse(response, result.data, 201);

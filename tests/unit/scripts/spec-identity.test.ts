@@ -108,20 +108,20 @@ describe('SHARED_FILES', () => {
         expect(siblingRole(THIS_REPO)).toBe('frontend');
     });
 
-    it('covers the contract, the seed fixtures and the generated realtime types', () => {
+    it('covers the contract, the demo dataset and the generated realtime types', () => {
         const backendPaths = new Set(SHARED_FILES.map(({ backend }) => backend));
 
         expect(backendPaths).toContain(OPENAPI);
         expect(backendPaths).toContain(ASYNCAPI);
         expect(backendPaths).toContain(SPECTRAL);
         // The two that went unguarded until the list could hold differing paths.
-        expect(backendPaths).toContain('db/seeds/seed-identities.ts');
-        expect(backendPaths).toContain('src/types/asyncapi.ts');
+        expect(backendPaths).toContain('db/seeds/dataset.json');
+        expect(backendPaths).toContain('src/types/asyncapi.generated.ts');
     });
 
     it('holds at least one pair whose paths differ between the repos', () => {
         // Guards the reason the list is pairs at all: if this ever became empty, the structure
-        // could quietly collapse back to single names and the seed fixtures would fall out.
+        // could quietly collapse back to single names and the demo dataset would fall out.
         expect(CROSS_PATH).toBeDefined();
         expect(CROSS_PATH.backend).not.toBe(CROSS_PATH.frontend);
     });
@@ -150,7 +150,7 @@ describe('compareSharedFiles', () => {
     });
 
     it('matches a cross-path pair across its two different names', () => {
-        // `db/seeds/seed-identities.ts` here, `tests/mocks/shared/seed-identities.ts` there.
+        // `db/seeds/dataset.json` here, `tests/support/mocks/dataset.json` there.
         const here = root(sharedFiles(HERE));
         const there = root(sharedFiles(THERE));
 
@@ -260,7 +260,7 @@ describe('formatSharedFileProblems', () => {
     });
 
     it('names both paths when a cross-path pair forks', () => {
-        // "seed-identities.ts is forked" would send the reader to one of two files with no way to
+        // "dataset.json is forked" would send the reader to one of two files with no way to
         // tell which repo the other one is in.
         const here = root(sharedFiles(HERE));
         const there = root({ ...sharedFiles(THERE), [CROSS_PATH.frontend]: 'forked' });

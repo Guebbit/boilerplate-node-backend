@@ -17,17 +17,25 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { productRepository, STOCK_MOVED } from '@modules/products';
 import { stockMovementRepository } from './repository';
-import type { StockMovementDocument, MovementReason } from './model';
+import { Types } from 'mongoose';
+import type { StockMovement } from '@types';
+import type { StockMovementDocument } from './model';
 
-/** The `STOCK_MOVED` listener — one announcement, one row. */
-export const recordMovement = (movement: {
-    productId: string;
-    delta: number;
-    reason: MovementReason;
-    reference?: string;
-}): Promise<unknown> =>
-    // The cast bridges the payload's string id to the schema's ObjectId; Mongoose casts it.
-    stockMovementRepository.create(movement as unknown as Partial<StockMovementDocument>);
+/**
+ * The `STOCK_MOVED` listener — one announcement, one row.
+ *
+ * Takes the contract's `StockMovement` less the three fields the ledger itself supplies, rather
+ * than a hand-written copy of the other four. The id is converted rather than cast: the payload
+ * carries a string, the column holds an `ObjectId`, and doing that conversion here is the whole
+ * difference between a bridge and a claim that the two were the same all along.
+ */
+export const recordMovement = (
+    movement: Omit<StockMovement, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<unknown> =>
+    stockMovementRepository.create({
+        ...movement,
+        productId: new Types.ObjectId(movement.productId)
+    });
 
 /**
  * The latest movements, for the admin's ledger view.
@@ -69,4 +77,11 @@ export const restock = async (
         200,
         t('inventory.restock-success')
     );
+};
+
+/** The module's one service handle. */
+export const inventoryService = {
+    recordMovement,
+    listMovements,
+    restock
 };

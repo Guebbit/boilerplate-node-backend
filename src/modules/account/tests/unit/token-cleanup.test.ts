@@ -1,17 +1,18 @@
 import { postLogin } from '@modules/account/controllers/post-login';
 import { getRefreshToken } from '@modules/account/controllers/get-refresh-token';
-import { authService } from '@modules/account/service';
-import { runTokenCleanup } from '@modules/account/token-cleanup';
-import { createAccessToken } from '@modules/account/jwt';
+import { accountService, runTokenCleanup } from '@modules/account/services';
+import { createAccessToken } from '@modules/account/session/jwt';
 
-jest.mock('@modules/account/token-cleanup', () => ({
+/*
+ * One factory for the whole service folder. `runTokenCleanup` and `login` used to be two modules
+ * (`../token-cleanup` and `../service`) and so took a `jest.mock` each; they are two members of one
+ * barrel now, and a second `jest.mock` of the same path REPLACES the first rather than merging with
+ * it — which would leave whichever half came first undefined at call time.
+ */
+jest.mock('@modules/account/services', () => ({
     __esModule: true,
-    runTokenCleanup: jest.fn()
-}));
-
-jest.mock('@modules/account/service', () => ({
-    __esModule: true,
-    authService: {
+    runTokenCleanup: jest.fn(),
+    accountService: {
         login: jest.fn()
     }
 }));
@@ -21,13 +22,13 @@ jest.mock('@modules/account/service', () => ({
  * the mocks have to name the implementation files. Mocking the barrel would replace a surface
  * nothing under test imports and every assertion would count zero calls.
  */
-jest.mock('@modules/account/jwt', () => ({
+jest.mock('@modules/account/session/jwt', () => ({
     __esModule: true,
     createRefreshToken: jest.fn(),
     createAccessToken: jest.fn()
 }));
 
-jest.mock('@modules/account/cookies', () => ({
+jest.mock('@modules/account/session/cookies', () => ({
     __esModule: true,
     createRefreshCookie: jest.fn(),
     createLoggedCookie: jest.fn()
@@ -40,7 +41,7 @@ jest.mock('@infrastructure/http/response', () => ({
 }));
 
 const mockRunTokenCleanup = runTokenCleanup as jest.MockedFunction<typeof runTokenCleanup>;
-const mockLogin = authService.login as jest.MockedFunction<typeof authService.login>;
+const mockLogin = accountService.login as jest.MockedFunction<typeof accountService.login>;
 const mockCreateAccessToken = createAccessToken as jest.MockedFunction<typeof createAccessToken>;
 
 describe('Auth controllers token cleanup trigger', () => {

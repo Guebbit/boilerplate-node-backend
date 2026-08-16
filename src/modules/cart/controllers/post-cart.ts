@@ -6,11 +6,8 @@ import { productService } from '@modules/products';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { UpsertCartItemRequest } from '@types';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 import { isValidObjectId } from '@infrastructure/http/request';
 
 /**
@@ -55,7 +52,7 @@ export const postCart = (
             return cartService.cartItemSetById(userId, productId, quantity).then((cart) => {
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(request),
-                    event: analyticsEvents.CART_ITEM_ADDED,
+                    event: cartAnalyticsEvents.CART_ITEM_ADDED,
                     properties: { product_id: productId, quantity }
                 });
                 successResponse(response, cart, 200, t('cart.product-added'));

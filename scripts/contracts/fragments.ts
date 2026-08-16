@@ -68,6 +68,25 @@ export interface AssembledBundle extends BundleIdentity {
 }
 
 /**
+ * A document produced from authored source files by an EXTERNAL bundler.
+ *
+ * `openapi.yaml` is the one. Its sources are standalone OpenAPI documents — one per module, plus a
+ * root holding what no module owns — joined by `redocly bundle`, which resolves `$ref` the way the
+ * rest of the ecosystem does. That trades the bundle's comments away, because a parse cannot keep
+ * them; the comments that mattered are the ones in the module files, and those survive where they
+ * were written.
+ *
+ * Like an assembled bundle and unlike a generated one, this is authored source, so it runs in the
+ * FIRST phase of a full run and the collections downstream read a current contract.
+ */
+export interface CompiledBundle extends BundleIdentity {
+    content: () => string;
+    /** The authored files it is compiled from — what a staleness message points at. */
+    sources: () => readonly string[];
+    compiled: true;
+}
+
+/**
  * A document produced whole, from a document this repo already committed.
  *
  * The client collections are these: they are derived from `openapi.yaml` rather than written, so
@@ -81,10 +100,19 @@ export interface GeneratedBundle extends BundleIdentity {
 }
 
 /** One committed document, and how it comes to exist. */
-export type ContractBundle = AssembledBundle | GeneratedBundle;
+export type ContractBundle = AssembledBundle | CompiledBundle | GeneratedBundle;
 
-const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =>
-    bundle.generated === true;
+/**
+ * Whether this bundle is derived from another committed document rather than from authored source.
+ *
+ * It is what orders a full run: everything authored — concatenated or compiled — is produced first,
+ * so the client collections downstream read a current contract rather than the previous one.
+ */
+export const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =>
+    'generated' in bundle && bundle.generated === true;
+
+const isCompiled = (bundle: ContractBundle): bundle is CompiledBundle =>
+    'compiled' in bundle && bundle.compiled === true;
 
 /**
  * Read a fragment, failing with the reason rather than an ENOENT.
@@ -122,7 +150,7 @@ const renderSegment = (bundle: ContractBundle, segment: Segment): string =>
  * assembled path already produced faithfully.
  */
 export const assembleBundle = (bundle: ContractBundle): string =>
-    isGenerated(bundle)
+    isGenerated(bundle) || isCompiled(bundle)
         ? bundle.content()
         : bundle
               .segments()
@@ -148,6 +176,10 @@ export const readCommittedBundle = (bundle: ContractBundle): string =>
 export const bundleFragments = (bundle: ContractBundle): string[] =>
     isGenerated(bundle)
         ? []
-        : bundle
-              .segments()
-              .flatMap((segment) => (typeof segment === 'string' ? [segment] : [...segment.parts]));
+        : isCompiled(bundle)
+          ? [...bundle.sources()]
+          : bundle
+                .segments()
+                .flatMap((segment) =>
+                    typeof segment === 'string' ? [segment] : [...segment.parts]
+                );

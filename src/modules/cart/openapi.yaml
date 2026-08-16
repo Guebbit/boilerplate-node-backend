@@ -1,0 +1,341 @@
+openapi: 3.0.3
+info:
+    title: cart — module contract
+    version: '2.0.0'
+
+paths:
+    /cart:
+        get:
+            tags: [Cart]
+            summary: Get cart
+            description: Returns all items currently in the authenticated user's cart along with a computed summary
+            operationId: getCart
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Cart items
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Cart]
+            summary: Add/Edit cart item
+            description: Adds or edit a product to the authenticated user's cart. Returns the updated cart.
+            operationId: upsertCartItem
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertCartItemRequest'
+            responses:
+                '200':
+                    description: Add/Edit to cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed product id that matches no product. 422 covers the malformed case.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Cart]
+            summary: Empty cart or, if productId is set, remove target cart item
+            description: Clear cart or, ir productId is set, removes a specific product from the authenticated user's cart. Returns the updated cart (can be empty)
+            operationId: clearCart
+            security:
+                - bearerAuth: []
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RemoveCartItemRequest'
+            responses:
+                '200':
+                    description: Cart cleared
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /cart/{productId}:
+        # Same as POST /cart?productId={productId}
+        put:
+            tags: [Cart]
+            summary: Set cart item quantity
+            description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
+            operationId: updateCartItemById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateCartItemByIdRequest'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Cart]
+            summary: Remove item from cart
+            description: Removes the cart line for the product identified by `{productId}` in the path from the authenticated user's cart. Returns the updated cart.
+            operationId: removeCartItem
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /cart/summary:
+        get:
+            tags: [Cart]
+            summary: Get cart summary
+            description: Returns a lightweight summary of the authenticated user's cart.
+            operationId: getCartSummary
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Cart summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartSummaryResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /cart/checkout:
+        post:
+            tags: [Orders]
+            summary: Checkout (place order from cart)
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. An optional email address and order notes can be supplied in the request body. Returns the created order.
+            operationId: checkout
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CheckoutRequest'
+            responses:
+                '201':
+                    description: Order created
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CheckoutResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # An `addressId` that names none of the caller's saved addresses — the checkout
+                # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Checking out an empty cart. The implementation has always answered 409;
+                # the spec simply never declared it.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /cart/reorder/{orderId}:
+        post:
+            tags: [Cart]
+            summary: Reorder (refill cart from a past order)
+            description: Copies the lines of one of the authenticated user's own orders back into their cart — quantities from the order, added on top of what the cart already holds. The order stores product snapshots, so each line is re-resolved against the catalogue as it is today; products that have since been removed, deactivated or hidden are skipped, and the returned cart view is the record of what actually landed. Admins are scoped to their own orders too — the cart being filled is the caller's.
+            operationId: reorder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed order id that matches none of the caller's own orders.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Every product on the order has left the public catalogue — nothing to add.
+                # `errors[].code` is `REORDER_UNAVAILABLE`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- cart — the schemas only this module's paths reference. ----------
+        CartResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/CartResponse'
+
+        CartSummaryResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/CheckoutResponse'
+
+        UpsertCartItemRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        UpdateCartItemByIdRequest:
+            type: object
+            additionalProperties: false
+            required: [quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        RemoveCartItemRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        CheckoutRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                notes:
+                    type: string
+                    description: Optional order notes
+                addressId:
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }]
+                    description: >-
+                        Which of the caller's saved addresses to ship to. Omitted, the default
+                        address is used when one exists; an id that matches none of the caller's
+                        addresses refuses the checkout with 404 rather than shipping nowhere.
+                shippingMethodId:
+                    type: string
+                    description: >-
+                        Which shipping method (see `GET /delivery/methods`) the order travels by.
+                        Its cost is priced against the lines being bought (free-above thresholds
+                        included) and frozen onto the order. Omitted, the order carries no
+                        shipping; an id that matches no method refuses the checkout with 404,
+                        `errors[].code` `CART_SHIPPING_METHOD_NOT_FOUND`.
+
+        CartSummaryResponse:
+            type: object
+            additionalProperties: false
+            required: [itemsCount, totalQuantity, total]
+            properties:
+                itemsCount:
+                    type: integer
+                    minimum: 0
+                    description: Number of distinct cart lines/items
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of quantities across all items
+                total:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of item prices * quantity (before tax/shipping/discounts)
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. USD)
+
+        CartResponse:
+            type: object
+            additionalProperties: false
+            required: [items, summary]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
+                summary:
+                    $ref: '#/components/schemas/CartSummaryResponse'
+
+        CheckoutResponse:
+            type: object
+            additionalProperties: false
+            required: [order]
+            properties:
+                order:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                message:
+                    type: string
+
+        # ---------- Observability ----------

@@ -1,5 +1,5 @@
 import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
+import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { CreateProductBody } from '@api/schemas.zod';
@@ -7,14 +7,34 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { Product } from '@types';
 
 /**
- * Product Document interface
+ * A product's stored FIELDS, without the Mongoose document machinery.
+ *
+ * The contract owns the field list — this is `Product` from `openapi.yaml` with the three dates
+ * swapped from ISO strings to real `Date`s, which is the one thing storage genuinely disagrees with
+ * the wire about.
+ *
+ * It exists separately from `ProductDocument` because a product is stored in two places, and only
+ * one of them is a document. `orders` EMBEDS a copy of this on every line item, and an embedded
+ * subdocument has none of `Document`'s 54 methods. Typing that copy as `ProductDocument` was an
+ * over-claim that nothing could satisfy, so every producer of one had to cast: the order service
+ * twice, over a comment conceding that a `lean()` result is "compatible at runtime", and the order
+ * factory once more on the way in.
  */
-export interface ProductDocument
-    extends Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>, Document {
+export interface ProductSnapshot extends Omit<
+    Product,
+    'id' | 'createdAt' | 'updatedAt' | 'deletedAt'
+> {
+    /** Spelled exactly as Mongoose spells it on a document, so `ProductDocument` can extend this. */
+    _id: Types.ObjectId;
     createdAt?: Date;
     updatedAt?: Date;
     deletedAt?: Date;
 }
+
+/**
+ * Product Document interface — the stored fields, plus everything Mongoose adds.
+ */
+export interface ProductDocument extends ProductSnapshot, Document {}
 
 /**
  * Product Document instance methods
@@ -41,9 +61,9 @@ export type ProductModel = Model<ProductDocument, unknown, ProductMethods>;
  * bare `.number().refine(v => v != null)` (itself dead: `z.number()` already rejects null and
  * undefined), which meant a negative price was accepted despite the contract forbidding it.
  *
- * Every message is a THUNK — `error: () => t('…')`, never `error: t('…')`. See the same note in
- * `user-validation.ts`: eager `t()` runs before `i18next.init()` and Zod discards the resulting
- * `undefined`; a thunk runs at parse time, in the request's locale.
+ * Every message is a THUNK — `error: () => t('…')`, never `error: t('…')`. See the same note on
+ * `zodUserSchema` in `users/model.ts`: eager `t()` runs before `i18next.init()` and Zod discards
+ * the resulting `undefined`; a thunk runs at parse time, in the request's locale.
  */
 export const zodProductSchema = CreateProductBody.extend({
     title: z

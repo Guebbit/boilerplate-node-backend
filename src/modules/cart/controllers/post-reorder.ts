@@ -4,11 +4,8 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { cartService } from '../services';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { cartAuditActions } from '../audit';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 
 /**
  * POST /cart/reorder/:orderId
@@ -43,7 +40,7 @@ export const postReorder = (request: Request<{ orderId: string }>, response: Res
             );
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.CART_REORDERED,
+                event: cartAnalyticsEvents.CART_REORDERED,
                 properties: { order_id: orderId }
             });
 

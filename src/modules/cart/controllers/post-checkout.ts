@@ -4,11 +4,8 @@ import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { cartCheckoutTotal } from '../metrics';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 
 /**
  * POST /cart/checkout
@@ -32,7 +29,7 @@ export const postCheckout = (request: Request, response: Response) => {
                 cartCheckoutTotal.inc({ status: 'failure' });
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(request),
-                    event: analyticsEvents.CHECKOUT_FAILED,
+                    event: cartAnalyticsEvents.CHECKOUT_FAILED,
                     properties: { reason: result.errors[0]?.code }
                 });
                 rejectResponse(response, result.status, result.errors);
@@ -42,7 +39,7 @@ export const postCheckout = (request: Request, response: Response) => {
             const orderId = result.data?._id?.toString() ?? '';
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.CHECKOUT_COMPLETED,
+                event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
                 properties: { order_id: orderId }
             });
             successResponse(

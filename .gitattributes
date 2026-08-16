@@ -1,0 +1,39 @@
+# Generated files.
+#
+# `linguist-generated=true` is the one marker that works on EVERY format here. Half of these are
+# JSON, which has no comments, so a "do not edit" header can never cover them — the ones whose
+# format allows a comment carry one as well, and this file is what covers the rest.
+#
+# What it buys, all on GitHub: the diff is collapsed by default in pull requests, the file is
+# skipped when computing the repo's language breakdown, and `git diff` shows it as generated rather
+# than as work someone did. It changes nothing about how the files are built or read.
+#
+# NONE of these should ever be hand-edited. Each is rebuilt from sources this repo owns, and a
+# committed copy that disagrees with a fresh run fails the build:
+#
+#   npm run contracts:bundle   -> the specs, the analytics names, the four client collections
+#   npm run seed:export        -> the demo dataset
+#   npm run gen:asyncapi       -> the realtime types
+#   npm run gen:api            -> the orval client
+#
+# See docs/api/contract-fragmentation.md for who owns what.
+
+# ── The REST and realtime contracts ──────────────────────────────────────────────────────────
+openapi.yaml                                          linguist-generated=true
+asyncapi.yaml                                         linguist-generated=true
+
+# ── The API client collections, generated whole from openapi.yaml + the seed dataset ─────────
+contract.bruno.yml                                    linguist-generated=true
+contract.insomnia.json                                linguist-generated=true
+contract.mockoon.json                                 linguist-generated=true
+contract.postman.json                                 linguist-generated=true
+
+# ── The demo dataset, as the API actually serves it ──────────────────────────────────────────
+db/seeds/dataset.json                                 linguist-generated=true
+
+# ── Types and names published to the paired frontend ─────────────────────────────────────────
+src/types/asyncapi.generated.ts                       linguist-generated=true
+src/infrastructure/observability/analytics-events.ts  linguist-generated=true
+
+# ── The orval client, generated from openapi.yaml ────────────────────────────────────────────
+api/**                                                linguist-generated=true

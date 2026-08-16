@@ -1,10 +1,12 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import bcrypt from 'bcrypt';
+import { z } from 'zod';
 import { logger } from '@infrastructure/adapters/logger';
+import { t } from '@infrastructure/i18n';
+import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
 import { type User } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-export { zodUserSchema } from './validation';
 
 /**
  * Token types used in jwt-auth
@@ -42,13 +44,23 @@ export interface Token {
  * started clashing when `deletedAt` was added to the `User` schema in `openapi.yaml` — before
  * that the contract had no such field for this one to disagree with.
  */
-export interface UserRecord extends Omit<User, 'deletedAt'> {
+export interface UserRecord extends Omit<User, 'createdAt' | 'updatedAt' | 'deletedAt'> {
     /**
      * User attributes
      */
     password: string;
     // soft delete
     deletedAt?: Date;
+
+    /*
+     * Redeclared as `Date` for exactly the reason `deletedAt` is, and for the reason
+     * `ProductDocument` and `OrderDocument` already did it: the contract carries ISO strings, the
+     * schema stores `Date`s. This model was the one that never got the treatment, so it claimed
+     * `createdAt: string` while `timestamps: true` wrote a `Date` into it — harmless until a
+     * fixture tried to pin one, which is how it surfaced.
+     */
+    createdAt?: Date;
+    updatedAt?: Date;
 
     /**
      * Tokens
@@ -86,6 +98,44 @@ export type UserMethods = {
 export type UserModel = Model<UserDocument, unknown, UserMethods> & {
     tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
 };
+
+/**
+ * Zod Schema for user data validation.
+ *
+ * Built on the orval-generated `CreateUserBody` (kept in sync with `openapi.yaml`) so only fields
+ * needing custom i18n messages are overridden — `admin`, `active` and `imageUrl` are inherited
+ * from the generated schema and validated with it. `imageUrl` needs no override: the contract
+ * declares it `uri-reference`, which is what a relative upload path is (see `resolveImageUrl`),
+ * so the two agree at the source.
+ *
+ * Beside the Mongoose schema on purpose, exactly as `products/model.ts` carries
+ * `zodProductSchema`: both describe what a valid User is, one for the wire and one for storage,
+ * and a reader checking whether a rule is enforced should not have to guess which of two files
+ * to open. It lived in its own `validation.ts` until then — the only module that had one.
+ *
+ * Every message is a THUNK — `error: () => t('…')`, never `error: t('…')`. This module is
+ * evaluated at import time, which ES module semantics guarantee happens before `i18next.init()`
+ * in `app.ts`'s body; an eagerly-called `t()` returns `undefined` there and Zod silently reads
+ * that as "no custom message" and falls back to its own English. A thunk is called by Zod at
+ * parse time instead, when i18n is up and the request's locale is known (see
+ * `@infrastructure/i18n`).
+ */
+export const zodUserSchema = CreateUserBody.extend({
+    email: z
+        .string()
+        .min(1, { error: () => t('users.field-email-required') })
+        .email({ error: () => t('users.field-email-invalid') }),
+
+    username: z
+        .string()
+        .min(1, { error: () => t('users.field-username-required') })
+        .min(3, { error: () => t('users.field-username-min') }),
+
+    password: z
+        .string()
+        .min(1, { error: () => t('users.field-password-required') })
+        .min(createUserBodyPasswordMin, { error: () => t('users.field-password-min') })
+});
 
 /**
  * User Schema

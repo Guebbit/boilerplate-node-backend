@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
-import { createAccessToken } from '../jwt';
+import { createAccessToken } from '../session/jwt';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
-import { runTokenCleanup } from '../token-cleanup';
+import { runTokenCleanup } from '../services';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { authRefreshTotal } from '../metrics';

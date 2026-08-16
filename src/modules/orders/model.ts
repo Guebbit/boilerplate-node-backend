@@ -1,7 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema, applyProductTransform } from '@modules/products';
-import type { ProductDocument } from '@modules/products';
+import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { sumLineItems, type LineItem } from './domain/totals';
 import { OrderStatus } from '@types';
@@ -9,8 +9,12 @@ import type { Order } from '@types';
 
 /**
  * A single item stored inside an order document.
- * Uses ProductDocument (or ObjectId before populate) rather than the OpenAPI
- * OrderItem class, because Mongoose embeds the product snapshot directly.
+ *
+ * Uses `ProductSnapshot` rather than the OpenAPI `OrderItem`, because Mongoose embeds the product
+ * directly — and rather than `ProductDocument`, because what is embedded is a subdocument with none
+ * of `Document`'s methods on it. Claiming the stronger type meant nothing could produce one without
+ * a cast: this service did it twice and the fixtures once, each over a comment explaining that the
+ * value was fine really.
  */
 export interface OrderDocumentItem {
     /**
@@ -20,7 +24,7 @@ export interface OrderDocumentItem {
      * with no `ref`, so there is nothing for `populate()` to resolve and the un-joined case cannot
      * occur. An order must keep what was bought, not what the catalogue says today.
      */
-    product: ProductDocument;
+    product: ProductSnapshot;
     quantity: number;
 }
 

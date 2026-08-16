@@ -1,0 +1,117 @@
+# The observability module’s async contract — the SSE stream it serves.
+#
+# A complete AsyncAPI document, for the same reason `./openapi.yaml` beside it is a complete
+# OpenAPI one: it can be linted (`npm run lint:asyncapi:modules`), opened in AsyncAPI Studio, and
+# read without the rest of the contract. What makes it a SLICE is only that the bundler merges its
+# channels and components into `asyncapi.yaml` at the repo root — the deployment facts (servers,
+# tags, the real `info`) come from `shared/contracts/asyncapi.root.yaml`, so the `info` block below
+# exists purely to make this file valid on its own.
+#
+# This module owns the SSE channels because it serves `/observability/events`: whoever holds the
+# route decides what goes down it. The payload shape is `stream.ts`’s `buildObservabilityPayload`,
+# and `npm run gen:asyncapi` turns the schemas here into the types that function is checked
+# against — which is what stops the wire and the producer drifting apart.
+asyncapi: 2.6.0
+info:
+    title: Observability async contract
+    version: 1.0.0
+    description: Server-sent metrics events for the observability dashboard.
+channels:
+    observability.metrics.snapshot:
+        description: Initial metrics snapshot sent on SSE connect.
+        subscribe:
+            operationId: sseMetricsSnapshot
+            message:
+                $ref: '#/components/messages/MetricsSnapshotEvent'
+    observability.metrics.updated:
+        description: Periodic SSE metrics update.
+        subscribe:
+            operationId: sseMetricsUpdated
+            message:
+                $ref: '#/components/messages/MetricsUpdatedEvent'
+    observability.heartbeat:
+        description: SSE heartbeat event.
+        subscribe:
+            operationId: sseHeartbeat
+            message:
+                $ref: '#/components/messages/HeartbeatEvent'
+components:
+    messages:
+        MetricsSnapshotEvent:
+            name: MetricsSnapshotEvent
+            messageId: observability.metrics.snapshot
+            title: Initial observability metrics snapshot
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+        MetricsUpdatedEvent:
+            name: MetricsUpdatedEvent
+            messageId: observability.metrics.updated
+            title: Periodic observability metrics update
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+        HeartbeatEvent:
+            name: HeartbeatEvent
+            messageId: observability.heartbeat
+            title: Observability heartbeat
+            payload:
+                $ref: '#/components/schemas/ObservabilityMetricsPayload'
+    schemas:
+        ObservabilityMetricsPayload:
+            type: object
+            required:
+                - timestamp
+                - uptimeSeconds
+                - memory
+                - http
+                - realtime
+            properties:
+                timestamp:
+                    type: string
+                    format: date-time
+                uptimeSeconds:
+                    type: integer
+                    minimum: 0
+                memory:
+                    type: object
+                    required:
+                        - rss
+                        - heapUsed
+                        - heapTotal
+                        - external
+                    properties:
+                        rss:
+                            type: integer
+                            minimum: 0
+                        heapUsed:
+                            type: integer
+                            minimum: 0
+                        heapTotal:
+                            type: integer
+                            minimum: 0
+                        external:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+                http:
+                    type: object
+                    required:
+                        - totalRequests
+                        - totalErrors
+                    properties:
+                        totalRequests:
+                            type: integer
+                            minimum: 0
+                        totalErrors:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+                realtime:
+                    type: object
+                    required:
+                        - sseClients
+                    properties:
+                        sseClients:
+                            type: integer
+                            minimum: 0
+                    additionalProperties: false
+            additionalProperties: false

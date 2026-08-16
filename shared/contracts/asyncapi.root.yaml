@@ -1,0 +1,41 @@
+# The async contract's preamble — everything that describes the DEPLOYMENT rather than a domain.
+#
+# The twin of `openapi.root.yaml`, and it earns the name the same way: version, id, the `info`
+# prose, the tag list and the servers are facts about this service, declared once, rather than
+# something every module restates. What it deliberately does NOT hold is a channel — those belong
+# to whoever owns the events, which is a module (`src/modules/<name>/asyncapi.yaml`) or, for the
+# queues no domain owns, `asyncapi.workers.yaml` beside this file.
+#
+# It is not a standalone AsyncAPI document: a valid one needs `channels`, and this has none until
+# the bundler merges the sections in. That is the one asymmetry with the module documents, which
+# ARE valid on their own and are linted that way.
+asyncapi: 2.6.0
+id: 'urn:boilerplate-node-backend:asyncapi:contracts'
+info:
+    title: Boilerplate Node Backend Async Contracts
+    version: 1.0.0
+    contact:
+        name: Boilerplate maintainers
+        url: https://github.com/Guebbit/boilerplate-node-backend
+        email: noreply@example.com
+    license:
+        name: AGPL-3.0
+    description: |
+        AsyncAPI contract for real-time/event-driven flows in this boilerplate.
+
+        Implemented:
+        - SSE observability events over `/observability/events`
+        - RabbitMQ worker job queues (`worker.*`)
+defaultContentType: application/json
+tags:
+    - name: implemented
+      description: Contracts already implemented in the backend runtime.
+servers:
+    sseLocal:
+        url: localhost:3000
+        protocol: http
+        description: Local HTTP server for SSE (`/observability/events`).
+    rabbitmqLocal:
+        url: localhost:5672
+        protocol: amqp
+        description: Local RabbitMQ broker for async job queues.

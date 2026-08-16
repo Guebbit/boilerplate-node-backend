@@ -4,8 +4,9 @@
  * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA. Each module owns its own slice of the demo
  * dataset in `src/modules/<name>/seeds.ts`; this file is the RUNNER — connection, production gate
  * and the walk over `enabledModules`, nothing else. The upsert policy lives in
- * `@infrastructure/persistence/seed`, and the shared facts behind every fixture live in `./seed-identities`,
- * which is byte-identical with the paired frontend.
+ * `@infrastructure/persistence/seed`. What the API then serves is published by
+ * `npm run seed:export` as `./dataset.json`, which is byte-identical with the paired frontend's
+ * copy — that file is an OUTPUT of this seeder, never an input to it.
  *
  * It runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so
  * it must be:
@@ -54,8 +55,9 @@ async function seed() {
      * module takes its demo data with it without touching this file.
      *
      * Concurrent on purpose, and safe to be: no fixture is derived from another fixture's WRITE.
-     * An order embeds a product snapshot built from `seed-identities`, not read back from Mongo,
-     * and a cart references a user id rather than requiring the user row to exist first.
+     * An order embeds a product snapshot built from the catalogue's own fixtures, not read back
+     * from Mongo, and a cart references a user id rather than requiring the user row to exist
+     * first.
      */
     const perModule = await Promise.all(
         enabledModules.map((appModule) => appModule.seeds?.() ?? [])

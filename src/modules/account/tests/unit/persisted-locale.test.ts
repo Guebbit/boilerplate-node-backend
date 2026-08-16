@@ -14,7 +14,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
-import * as authService from '@modules/account/service';
+import * as accountService from '@modules/account/services';
 import { userRepository, userService } from '@modules/users';
 import { getDefaultLocale, runWithLocale } from '@infrastructure/i18n';
 import type { ResponseSuccess } from '@infrastructure/http/response';
@@ -25,7 +25,7 @@ setupTestDb();
 describe('a user’s persisted locale', () => {
     it('is captured from the request they signed up in', async () => {
         const result = await runWithLocale('it', () =>
-            authService.signup('nuovo@example.com', 'nuovo', 'Password1!', 'Password1!')
+            accountService.signup('nuovo@example.com', 'nuovo', 'Password1!', 'Password1!')
         );
 
         expect(result.success).toBe(true);
@@ -33,7 +33,7 @@ describe('a user’s persisted locale', () => {
     });
 
     it('falls back to the boot locale outside a request', async () => {
-        const result = await authService.signup(
+        const result = await accountService.signup(
             'plain@example.com',
             'plain',
             'Password1!',

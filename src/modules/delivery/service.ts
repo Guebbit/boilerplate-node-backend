@@ -125,3 +125,17 @@ export const runCourierAdvance = async (): Promise<number> => {
     logger.info(`Courier advance: ${advanced} of ${shipments.length} parcels delivered`);
     return advanced;
 };
+
+/**
+ * The module's one service handle.
+ *
+ * `shipOrder` is on it like the rest: it is called by `orders`' status flow through this module's
+ * own subscription, not from outside, and a member left off would be a member a caller has to know
+ * to import differently.
+ */
+export const deliveryService = {
+    listMethods,
+    getForOrder,
+    shipOrder,
+    runCourierAdvance
+};

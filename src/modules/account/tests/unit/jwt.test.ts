@@ -24,8 +24,8 @@ import {
     verifyRefreshToken,
     createRefreshToken,
     createAccessToken
-} from '@modules/account/jwt';
-import { RefreshTokenExpiryTime } from '@modules/account/tokens';
+} from '@modules/account/session/jwt';
+import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { TokenType } from '@modules/users';
 import { userRepository } from '@modules/users';
 

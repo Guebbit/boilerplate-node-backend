@@ -2,11 +2,8 @@ import type { Request, Response } from 'express';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 
 /**
  * DELETE /cart
@@ -24,7 +21,7 @@ export const deleteCart = (request: Request, response: Response) => {
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.CART_CLEARED,
+                event: cartAnalyticsEvents.CART_CLEARED,
                 properties: {}
             });
             successResponse(response, cart);

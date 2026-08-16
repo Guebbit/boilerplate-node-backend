@@ -1,84 +1,41 @@
 /**
- * User factory
+ * User fixtures that touch the test database.
  *
- * Provides two helpers:
+ * The BUILDER lives one level up, in `src/modules/users/factory.ts`, and this file only persists
+ * what it returns. That split is deliberate and recent: there used to be a `makeUser` here and
+ * another one beside the seeds, with different defaults, and no name to tell you which you were
+ * looking at. One module, one `makeUser`.
  *
- *   makeUser(overrides?)   – returns a plain-object payload (no DB write).
- *                            Use it to build data for direct Repository calls
- *                            or to keep a test self-contained.
+ *   makeUser(overrides?)     – a plain payload, no database write. Re-exported from `../factory`
+ *                              so a test importing "the user factory" gets one thing.
+ *   createUser(overrides?)   – inserts and returns the Mongoose document.
+ *   createAdminUser(…)       – the same, with `admin: true`.
  *
- *   createUser(overrides?) – inserts a user into the test database and returns
- *                            the Mongoose document.  Use it whenever a test
- *                            needs an already-persisted user.
- *
- *   createAdminUser(…)     – convenience wrapper that sets admin: true.
- *
- * Password handling
- * -----------------
- * Always pass **plain-text** passwords to the factory.  The User model's
- * `pre('save')` hook hashes them automatically via bcrypt.  When you need to
- * authenticate that user later (e.g. in a login test), use the exported
- * PLAIN_PASSWORD constant so your test stays in sync with the factory default.
- *
- * Usage example
- * -------------
- *   import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+ * Always pass PLAIN-TEXT passwords: the model's `pre('save')` hook hashes them. To authenticate a
+ * fixture later, use `PLAIN_PASSWORD` rather than retyping the string.
  *
  *   const user = await createUser({ email: 'alice@example.com' });
- *   const loginResult = await userService.login(user.email, PLAIN_PASSWORD);
+ *   await userService.login(user.email, PLAIN_PASSWORD);
+ *
+ * A field the schema defaults — `admin`, `active`, `verified`, `locale`, `tokens` — is left unset
+ * unless a test asks for it, so `createUser()` exercises the real default instead of pinning a copy
+ * of it. Override any of them explicitly; `active` and `deletedAt` are independent, so all four
+ * combinations are constructible.
  */
 
 import type { UserDocument } from '@modules/users';
-import type { UserRecord } from '@modules/users/model';
 import { userRepository } from '@modules/users';
+import { makeUser } from '../factory';
+import type { UserOverrides } from '../factory';
 
-/** Plain-text password used by the default factory.  Re-export so tests can
- *  authenticate without duplicating this string everywhere. */
-export const PLAIN_PASSWORD = 'Password1!';
+export { makeUser, PLAIN_PASSWORD, type UserOverrides } from '../factory';
 
-/**
- * The minimal shape accepted by userRepository.create().
- *
- * `active` is optional and deliberately left out of the defaults below, so `createUser()` with no
- * arguments exercises the schema default (`true`) rather than pinning it here — a factory that
- * always sends the field would make the default untestable through it. Override it explicitly to
- * build a deactivated account; it is independent of `deletedAt`, so any of the four combinations
- * is constructible.
- */
-type CreateUserInput = Pick<UserRecord, 'email' | 'username' | 'password' | 'admin' | 'tokens'> &
-    Partial<Pick<UserRecord, 'imageUrl' | 'deletedAt' | 'active' | 'verified'>>;
+/** Insert a user into the test database and return the Mongoose document. */
+export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
+    userRepository.create(makeUser(overrides));
 
-/**
- * Build a valid user payload.
- *
- * All fields have sensible defaults so that most tests only need to override
- * the one or two fields relevant to the scenario under test.
- *
- * @param overrides - Any field from CreateUserInput to override the defaults.
- */
-export const makeUser = (overrides: Partial<CreateUserInput> = {}): CreateUserInput => ({
-    email: 'user@example.com',
-    username: 'testuser',
-    password: PLAIN_PASSWORD, // hashed automatically by the pre-save hook
-    admin: false,
-    tokens: [],
-    ...overrides
-});
-
-/**
- * Insert a user into the test database and return the Mongoose document.
- *
- * @param overrides - Fields to override the factory defaults.
- */
-export const createUser = (overrides: Partial<CreateUserInput> = {}): Promise<UserDocument> =>
-    userRepository.create(makeUser(overrides) as Partial<UserDocument>);
-
-/**
- * Insert an admin user (admin: true) into the test database.
- *
- * @param overrides - Additional overrides applied on top of the admin defaults.
- */
-export const createAdminUser = (overrides: Partial<CreateUserInput> = {}): Promise<UserDocument> =>
+/** Insert an admin user into the test database. */
+export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     createUser({
         admin: true,
         email: 'admin@example.com',

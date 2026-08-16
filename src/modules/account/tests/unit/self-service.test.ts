@@ -15,8 +15,13 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
-import { authService, passwordChangeWithCurrent, updateProfile } from '@modules/account/service';
-import { sendVerificationEmail, EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/verification';
+import {
+    accountService,
+    passwordChangeWithCurrent,
+    updateProfile,
+    sendVerificationEmail,
+    EMAIL_VERIFY_TOKEN_TYPE
+} from '@modules/account/services';
 import { userRepository, TokenType } from '@modules/users';
 import type { UserDocument } from '@modules/users';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
@@ -93,7 +98,7 @@ describe('updateProfile', () => {
         expect(stored?.admin).toBe(false);
         expect(stored?.active).toBe(true);
         // The password is untouched — the factory's original still logs in.
-        const login = await authService.login(user.email, PLAIN_PASSWORD);
+        const login = await accountService.login(user.email, PLAIN_PASSWORD);
         expect(login.success).toBe(true);
     });
 
@@ -133,8 +138,8 @@ describe('passwordChangeWithCurrent', () => {
 
         // The new credential works and the old one is dead — both directions, or the test
         // passes on a no-op.
-        const withNew = await authService.login(user.email, NEW_PASSWORD);
-        const withOld = await authService.login(user.email, CURRENT_PASSWORD);
+        const withNew = await accountService.login(user.email, NEW_PASSWORD);
+        const withOld = await accountService.login(user.email, CURRENT_PASSWORD);
         expect(withNew.success).toBe(true);
         expect(withOld.success).toBe(false);
     });
@@ -148,7 +153,7 @@ describe('passwordChangeWithCurrent', () => {
 
         expect(response.status).toBe(422);
         // And nothing changed.
-        const login = await authService.login(user.email, CURRENT_PASSWORD);
+        const login = await accountService.login(user.email, CURRENT_PASSWORD);
         expect(login.success).toBe(true);
     });
 
@@ -160,7 +165,7 @@ describe('passwordChangeWithCurrent', () => {
         );
 
         expect(response.status).toBe(422);
-        const login = await authService.login(user.email, CURRENT_PASSWORD);
+        const login = await accountService.login(user.email, CURRENT_PASSWORD);
         expect(login.success).toBe(true);
     });
 });

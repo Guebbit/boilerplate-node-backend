@@ -5,11 +5,8 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AddWishlistItemRequest } from '@types';
 import { wishlistService } from '../service';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { wishlistAnalyticsEvents } from '../analytics';
 
 /**
  * POST /wishlist
@@ -46,7 +43,7 @@ export const postWishlist = (
 
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.WISHLIST_ITEM_ADDED,
+                event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
                 properties: { product_id: productId }
             });
 

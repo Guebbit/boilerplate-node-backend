@@ -4,11 +4,8 @@ import { productService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { CastError } from 'mongoose';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { productsAnalyticsEvents } from '../analytics';
 
 /**
  * GET /products/:id
@@ -26,7 +23,7 @@ export const getProductItem = (request: Request, response: Response) =>
             }
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.PRODUCT_VIEWED,
+                event: productsAnalyticsEvents.PRODUCT_VIEWED,
                 properties: { product_id: String(request.params.id) }
             });
             successResponse(response, product);

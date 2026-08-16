@@ -21,8 +21,8 @@ import {
     destroyRefreshCookie,
     createLoggedCookie,
     destroyLoggedCookie
-} from '@modules/account/cookies';
-import { RefreshTokenExpiryTime } from '@modules/account/tokens';
+} from '@modules/account/session/cookies';
+import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 
 /** Captures the (name, value, options) triples the module hands to Express. */
 const makeResponse = () =>

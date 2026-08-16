@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { router } from './routes';
-import { seedCartsCollection } from './seeds';
+import { seedCartsCollection, exportSeededCarts } from './seeds';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
 import { cartDeleteByUserId, productRemoveFromCartsById } from './services';
@@ -70,5 +70,6 @@ export default {
         onDomainEvent(USER_DELETED, ({ userId }) => cartDeleteByUserId(userId));
     },
     seeds: seedCartsCollection,
+    seedExport: exportSeededCarts,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

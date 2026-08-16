@@ -1,0 +1,345 @@
+{
+    "collections": {
+        "addressBooks": [
+            {
+                "createdAt": "2024-02-27T00:29:23.000Z",
+                "id": "65dd2ce31f5b3a9e04c7b210",
+                "items": [
+                    {
+                        "city": "Modena",
+                        "country": "IT",
+                        "default": true,
+                        "fullName": "Root Rootsson",
+                        "id": "65dd2ce31f5b3a9e04c7b211",
+                        "label": "home",
+                        "phone": "+39 059 000001",
+                        "street": "Via del Boilerplate 1",
+                        "zip": "41121"
+                    },
+                    {
+                        "city": "Bologna",
+                        "country": "IT",
+                        "default": false,
+                        "fullName": "Root Rootsson",
+                        "id": "65dd2d1a2c6f4b8d15e9c322",
+                        "label": "office",
+                        "street": "Viale Guebbit 42",
+                        "zip": "40121"
+                    }
+                ],
+                "updatedAt": "2024-02-27T00:29:23.000Z",
+                "userId": "65dd2bdb923652b7800fe180"
+            },
+            {
+                "createdAt": "2024-02-27T22:41:15.000Z",
+                "id": "65de650b3d7e2c1a48f0b104",
+                "items": [
+                    {
+                        "city": "Napoli",
+                        "country": "IT",
+                        "default": true,
+                        "fullName": "Gino Pino",
+                        "id": "65de650b3d7e2c1a48f0b105",
+                        "label": "casa",
+                        "street": "Via Pino 7",
+                        "zip": "80121"
+                    }
+                ],
+                "updatedAt": "2024-02-27T22:41:15.000Z",
+                "userId": "65de646a44f861fd83c13f13"
+            }
+        ],
+        "carts": [
+            {
+                "createdAt": "2024-02-27T00:28:14.000Z",
+                "id": "65dd2c9e1b4a7f3c0d2e5a01",
+                "items": [
+                    {
+                        "productId": "65dc8a99604c307b702b5ccc",
+                        "quantity": 2
+                    },
+                    {
+                        "productId": "65dcdec2b18ad5e4bd597f0f",
+                        "quantity": 3
+                    }
+                ],
+                "updatedAt": "2024-02-27T00:28:14.000Z",
+                "userId": "65dd2bdb923652b7800fe180"
+            }
+        ],
+        "orders": [
+            {
+                "createdAt": "2024-02-27T23:43:34.000Z",
+                "email": "oldpsw@root.it",
+                "id": "65de73a69ca05739be2b5e85",
+                "items": [
+                    {
+                        "product": {
+                            "active": true,
+                            "categories": [],
+                            "createdAt": "2024-02-26T12:56:57.000Z",
+                            "description": "Piccolo Sallyno panino. Da mangiare di coccole",
+                            "id": "65dc8a99604c307b702b5ccc",
+                            "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+                            "price": 100,
+                            "stock": 100,
+                            "tags": [],
+                            "title": "Sallyno Panino",
+                            "updatedAt": "2024-02-26T12:56:57.000Z"
+                        },
+                        "quantity": 1
+                    },
+                    {
+                        "product": {
+                            "active": true,
+                            "categories": [],
+                            "createdAt": "2024-02-26T14:10:49.000Z",
+                            "description": "Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire",
+                            "id": "65dc9be92f2794d1c16741e1",
+                            "imageUrl": "/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg",
+                            "price": 1,
+                            "stock": 100,
+                            "tags": [],
+                            "title": "Miciona inutile",
+                            "updatedAt": "2024-02-26T14:10:49.000Z"
+                        },
+                        "quantity": 10
+                    }
+                ],
+                "status": "pending",
+                "totalItems": 2,
+                "totalPrice": 110,
+                "totalQuantity": 11,
+                "updatedAt": "2024-02-27T23:43:34.000Z",
+                "userId": "65dd2bdb923652b7800fe180"
+            },
+            {
+                "createdAt": "2024-04-15T00:48:26.000Z",
+                "email": "root@root.it",
+                "id": "661c795a9e22bcbef63a5832",
+                "items": [
+                    {
+                        "product": {
+                            "active": true,
+                            "categories": [],
+                            "createdAt": "2024-02-26T18:56:02.000Z",
+                            "description": "Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.",
+                            "id": "65dcdec2b18ad5e4bd597f0f",
+                            "imageUrl": "/images/seed/f12ba2e44fe347010397f1dcba399808.jpg",
+                            "price": 77,
+                            "stock": 100,
+                            "tags": [],
+                            "title": "Micino pufettino",
+                            "updatedAt": "2024-02-26T18:56:02.000Z"
+                        },
+                        "quantity": 20
+                    }
+                ],
+                "shippingAddress": {
+                    "city": "Modena",
+                    "country": "IT",
+                    "fullName": "Root Rootsson",
+                    "phone": "+39 059 000001",
+                    "street": "Via del Boilerplate 1",
+                    "zip": "41121"
+                },
+                "shippingCost": 0,
+                "shippingMethod": "standard",
+                "status": "pending",
+                "totalItems": 1,
+                "totalPrice": 1540,
+                "totalQuantity": 20,
+                "updatedAt": "2024-04-15T00:48:26.000Z",
+                "userId": "65dd2bdb923652b7800fe180"
+            },
+            {
+                "createdAt": "2024-08-07T22:10:09.000Z",
+                "deletedAt": "2024-08-07T09:12:03.114Z",
+                "email": "gino@pino.it",
+                "id": "66b3f0c14d2e8a91c7d4a015",
+                "items": [
+                    {
+                        "product": {
+                            "active": true,
+                            "categories": [],
+                            "createdAt": "2024-02-26T12:56:57.000Z",
+                            "description": "Piccolo Sallyno panino. Da mangiare di coccole",
+                            "id": "65dc8a99604c307b702b5ccc",
+                            "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+                            "price": 100,
+                            "stock": 100,
+                            "tags": [],
+                            "title": "Sallyno Panino",
+                            "updatedAt": "2024-02-26T12:56:57.000Z"
+                        },
+                        "quantity": 4
+                    }
+                ],
+                "status": "pending",
+                "totalItems": 1,
+                "totalPrice": 400,
+                "totalQuantity": 4,
+                "updatedAt": "2024-08-07T22:10:09.000Z",
+                "userId": "65de646a44f861fd83c13f13"
+            }
+        ],
+        "products": [
+            {
+                "active": true,
+                "categories": [
+                    "food"
+                ],
+                "createdAt": "2024-02-26T12:56:57.000Z",
+                "description": "Piccolo Sallyno panino. Da mangiare di coccole",
+                "id": "65dc8a99604c307b702b5ccc",
+                "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+                "price": 100,
+                "stock": 25,
+                "tags": [
+                    "sallyno",
+                    "cute"
+                ],
+                "title": "Sallyno Panino",
+                "updatedAt": "2024-02-26T12:56:57.000Z"
+            },
+            {
+                "active": true,
+                "categories": [
+                    "pets"
+                ],
+                "createdAt": "2024-02-26T12:58:00.000Z",
+                "deletedAt": "2024-02-26T23:34:44.832Z",
+                "description": "Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.",
+                "id": "65dc8ad8604c307b702b5cd4",
+                "imageUrl": "/images/seed/96346b77daf138a279677cb75c400ee9.jpg",
+                "price": 50,
+                "stock": 10,
+                "tags": [
+                    "sallyno",
+                    "illegal"
+                ],
+                "title": "Sallyno Carino",
+                "updatedAt": "2024-02-26T12:58:00.000Z"
+            },
+            {
+                "active": true,
+                "categories": [
+                    "pets"
+                ],
+                "createdAt": "2024-02-26T14:10:49.000Z",
+                "description": "Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire",
+                "id": "65dc9be92f2794d1c16741e1",
+                "imageUrl": "/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg",
+                "price": 1,
+                "stock": 0,
+                "tags": [
+                    "micini",
+                    "useless"
+                ],
+                "title": "Miciona inutile",
+                "updatedAt": "2024-02-26T14:10:49.000Z"
+            },
+            {
+                "active": true,
+                "categories": [
+                    "pets"
+                ],
+                "createdAt": "2024-02-26T18:56:02.000Z",
+                "description": "Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.",
+                "id": "65dcdec2b18ad5e4bd597f0f",
+                "imageUrl": "/images/seed/f12ba2e44fe347010397f1dcba399808.jpg",
+                "price": 77,
+                "stock": 40,
+                "tags": [
+                    "micini",
+                    "cute",
+                    "illegal"
+                ],
+                "title": "Micino pufettino",
+                "updatedAt": "2024-02-26T18:56:02.000Z"
+            },
+            {
+                "active": false,
+                "categories": [
+                    "pets",
+                    "bundles"
+                ],
+                "createdAt": "2024-04-19T19:39:54.000Z",
+                "description": "Produttori di rumori molesti a tutte le ore. Inactive product.",
+                "id": "6622c88a5123b1e286f440f8",
+                "imageUrl": "/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg",
+                "price": 40,
+                "stock": 15,
+                "tags": [
+                    "micini",
+                    "noisy"
+                ],
+                "title": "Bundle micini",
+                "updatedAt": "2024-04-19T19:39:54.000Z"
+            }
+        ],
+        "users": [
+            {
+                "active": true,
+                "admin": true,
+                "createdAt": "2024-02-27T00:24:59.000Z",
+                "email": "root@root.it",
+                "id": "65dd2bdb923652b7800fe180",
+                "imageUrl": "/images/seed/9726c4217f5998511f372afab4800ac8.jpg",
+                "locale": "en",
+                "updatedAt": "2024-02-27T00:24:59.000Z",
+                "username": "root",
+                "verified": true
+            },
+            {
+                "active": true,
+                "admin": false,
+                "createdAt": "2024-02-27T22:38:34.000Z",
+                "email": "gino@pino.it",
+                "id": "65de646a44f861fd83c13f13",
+                "imageUrl": "/images/seed/96346b77daf138a279677cb75c400ee9.jpg",
+                "locale": "en",
+                "updatedAt": "2024-02-27T22:38:34.000Z",
+                "username": "ginopinoshow",
+                "verified": true
+            }
+        ],
+        "wishlists": [
+            {
+                "createdAt": "2024-02-27T00:28:34.000Z",
+                "id": "65dd2cb27c5e8a1f3b9d4602",
+                "items": [
+                    {
+                        "productId": "65dc9be92f2794d1c16741e1"
+                    }
+                ],
+                "updatedAt": "2024-02-27T00:28:34.000Z",
+                "userId": "65dd2bdb923652b7800fe180"
+            },
+            {
+                "createdAt": "2024-02-27T22:40:50.000Z",
+                "id": "65de64f2a3c1d05b7e8f2103",
+                "items": [
+                    {
+                        "productId": "65dc8a99604c307b702b5ccc"
+                    },
+                    {
+                        "productId": "65dcdec2b18ad5e4bd597f0f"
+                    }
+                ],
+                "updatedAt": "2024-02-27T22:40:50.000Z",
+                "userId": "65de646a44f861fd83c13f13"
+            }
+        ]
+    },
+    "credentials": {
+        "admin": {
+            "email": "root@root.it",
+            "password": "rootroot"
+        },
+        "user": {
+            "email": "gino@pino.it",
+            "password": "password"
+        }
+    }
+}

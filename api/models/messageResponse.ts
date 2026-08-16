@@ -18,9 +18,12 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { EnvelopeMessage } from './envelopeMessage';
+import type { EnvelopeStatus } from './envelopeStatus';
+import type { EnvelopeSuccess } from './envelopeSuccess';
 
 export interface MessageResponse {
-  success: true;
-  status: number;
-  message: string;
+  success: EnvelopeSuccess;
+  status: EnvelopeStatus;
+  message: EnvelopeMessage;
 }

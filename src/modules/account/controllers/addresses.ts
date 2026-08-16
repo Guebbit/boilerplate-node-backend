@@ -9,7 +9,7 @@ import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AddressInput, UpdateAddressRequest } from '@types';
-import { addressesService } from '../addresses-service';
+import { accountService } from '../services';
 
 /**
  * GET /account/addresses
@@ -18,7 +18,7 @@ export const getAddresses = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    return addressesService
+    return accountService
         .addressesGet(id)
         .then((view) => {
             successResponse(response, view);
@@ -46,7 +46,7 @@ export const postAddress = (
             parseResult.error.issues.map(({ message }) => message)
         );
 
-    return addressesService
+    return accountService
         .addressAdd(id, parseResult.data)
         .then((result) => {
             if (!result.success) {
@@ -79,7 +79,7 @@ export const putAddress = (
             parseResult.error.issues.map(({ message }) => message)
         );
 
-    return addressesService
+    return accountService
         .addressUpdate(id, addressId, parseResult.data)
         .then((result) => {
             if (!result.success) {
@@ -101,7 +101,7 @@ export const deleteAddress = (request: Request<{ addressId: string }>, response:
     const { id } = request.authContext!;
     const { addressId } = request.params;
 
-    return addressesService
+    return accountService
         .addressRemove(id, addressId)
         .then((result) => {
             if (!result.success) {

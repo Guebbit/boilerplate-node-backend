@@ -3,7 +3,7 @@ import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { CreatePaymentIntentBody } from '@api/schemas.zod';
-import { createIntent } from '../service';
+import { paymentService } from '../service';
 
 /**
  * POST /payments/intent
@@ -24,7 +24,8 @@ export const postPaymentIntent = (request: Request, response: Response) => {
         return Promise.resolve();
     }
 
-    return createIntent(parseResult.data.orderId, request.authContext)
+    return paymentService
+        .createIntent(parseResult.data.orderId, request.authContext)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.errors);

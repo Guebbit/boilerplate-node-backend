@@ -1,7 +1,7 @@
 import { deleteAccountRequest } from '@modules/account/controllers/delete-account-request';
 import { deleteAccountConfirm } from '@modules/account/controllers/delete-account-confirm';
 import { userService } from '@modules/users';
-import { authService } from '@modules/account/service';
+import { accountService } from '@modules/account/services';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { emitAuditEvent } from '@infrastructure/observability/audit';
@@ -16,9 +16,9 @@ jest.mock('@modules/users', () => ({
     }
 }));
 
-jest.mock('@modules/account/service', () => ({
+jest.mock('@modules/account/services', () => ({
     __esModule: true,
-    authService: {
+    accountService: {
         tokenAdd: jest.fn()
     }
 }));
@@ -42,10 +42,7 @@ jest.mock('@infrastructure/observability/audit', () => ({
 
 jest.mock('@infrastructure/observability/analytics', () => ({
     __esModule: true,
-    emitAnalyticsEvent: jest.fn(),
-    analyticsEvents: {
-        ACCOUNT_DELETED: 'account_deleted'
-    }
+    emitAnalyticsEvent: jest.fn()
 }));
 
 jest.mock('@modules/account/metrics', () => ({
@@ -54,7 +51,7 @@ jest.mock('@modules/account/metrics', () => ({
 }));
 
 // The controller reaches `../cookies` directly; see the note in `token-cleanup.test.ts`.
-jest.mock('@modules/account/cookies', () => ({
+jest.mock('@modules/account/session/cookies', () => ({
     __esModule: true,
     destroyRefreshCookie: jest.fn(),
     destroyLoggedCookie: jest.fn()
@@ -67,7 +64,7 @@ const mockFindByAccountDeleteToken = userService.findByAccountDeleteToken as jes
     typeof userService.findByAccountDeleteToken
 >;
 const mockRemove = userService.remove as jest.MockedFunction<typeof userService.remove>;
-const mockTokenAdd = authService.tokenAdd as jest.MockedFunction<typeof authService.tokenAdd>;
+const mockTokenAdd = accountService.tokenAdd as jest.MockedFunction<typeof accountService.tokenAdd>;
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 const mockSuccessResponse = successResponse as jest.MockedFunction<typeof successResponse>;
 const mockRejectResponse = rejectResponse as jest.MockedFunction<typeof rejectResponse>;

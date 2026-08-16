@@ -4,7 +4,7 @@ import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
-import { seedWishlistsCollection } from './seeds';
+import { seedWishlistsCollection, exportSeededWishlists } from './seeds';
 import { wishlistDeleteByUserId, productRemoveFromWishlistsById } from './service';
 
 /**
@@ -58,5 +58,6 @@ export default {
         onDomainEvent(USER_DELETED, ({ userId }) => wishlistDeleteByUserId(userId));
     },
     seeds: seedWishlistsCollection,
+    seedExport: exportSeededWishlists,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -34,6 +34,7 @@ import {
     assembleBundle,
     CONTRACT_BUNDLES,
     findBundle,
+    isGenerated,
     readCommittedBundle,
     REPO_ROOT,
     type ContractBundle
@@ -92,15 +93,23 @@ if (named.length > 0) {
 }
 
 // Full run — phase 1, so the collections generate from a current contract rather than a stale one.
-const authored = CONTRACT_BUNDLES.filter(({ generated }) => !generated);
-bundle(authored);
+const authored = CONTRACT_BUNDLES.filter((item) => !isGenerated(item));
+const rebuiltFirst = bundle(authored);
 
-// Phase 2 — everything, the collections included.
-const stale = bundle(CONTRACT_BUNDLES);
+/*
+ * Phase 2 — everything, the collections included.
+ *
+ * The two phases have to be UNIONED rather than the second one reported on its own: phase 1 has
+ * already written whatever it found stale, so phase 2 re-reads those same files and correctly finds
+ * them current. Reporting only phase 2 made a run that rewrote the contract announce "nothing
+ * written", which is the one thing the message exists to tell you.
+ */
+const rebuiltSecond = bundle(CONTRACT_BUNDLES);
+const stale = [...rebuiltFirst, ...rebuiltSecond.filter((item) => !rebuiltFirst.includes(item))];
 
 if (checkOnly) {
     if (stale.length > 0) {
-        const collections = stale.filter(({ generated }) => generated);
+        const collections = stale.filter((item) => isGenerated(item));
 
         fail(
             `[contracts] STALE — these do not match what they are built from:\n` +

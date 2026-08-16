@@ -1,10 +1,7 @@
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { accountAnalyticsEvents } from '../analytics';
 
 /**
  * GET /account
@@ -17,7 +14,7 @@ export const getAccount = (request: Request, response: Response): void => {
     }
     emitAnalyticsEvent({
         ...buildAnalyticsBase(request),
-        event: analyticsEvents.USER_PROFILE_VIEWED
+        event: accountAnalyticsEvents.USER_PROFILE_VIEWED
     });
     successResponse(response, request.authContext);
 };

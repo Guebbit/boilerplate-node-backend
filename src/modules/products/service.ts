@@ -12,7 +12,7 @@ import { emitDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED, STOCK_MOVED } from './events';
 import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
-import { productRepository } from './repository';
+import { productRepository, type FacetCount } from './repository';
 
 /**
  * Product Service
@@ -211,9 +211,23 @@ export const removeById = (
         return remove(product, hardDelete);
     });
 
+/**
+ * Every category and tag the PUBLIC catalogue carries, with counts.
+ *
+ * A pass-through today: the scoping the storefront needs is already in the aggregation
+ * (`facets()` matches active, non-deleted rows), so there is no decision left to make here. It
+ * exists anyway because a controller reaching past the service is the one shape this layer stack
+ * does not allow — see `docs/theory/layers.md`. The day facets grow an audience (admin counts
+ * including inactive rows) or a cached variant, this is where that goes, and no controller has to
+ * be rewritten to make room for it.
+ */
+export const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
+    productRepository.facets();
+
 export const productService = {
     validateData,
     search,
+    facets,
     getById,
     create,
     update,

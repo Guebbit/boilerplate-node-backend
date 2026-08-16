@@ -8,7 +8,7 @@ import type { VerifyEmailConfirmRequest } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { authEmailVerifyTotal } from '../metrics';
-import { EMAIL_VERIFY_TOKEN_TYPE } from '../verification';
+import { EMAIL_VERIFY_TOKEN_TYPE } from '../services';
 
 /**
  * POST /account/verify-confirm

@@ -1,71 +1,57 @@
 /**
- * Order factory
+ * Order fixtures that touch the test database.
  *
- * Provides:
+ * The BUILDER lives one level up, in `src/modules/orders/factory.ts` — the same file the demo order
+ * book is built from — and this file adapts it to what an integration test has in hand.
  *
- *   toOrderItem(product, qty?) – converts a product document into the
- *                                OpenAPI OrderItem shape expected by the Order schema.
- *
- *   makeOrder(user, items)        – plain-object payload, no DB write.
- *
- *   createOrder(user, items)      – persists an order and returns the document.
- *
- * Why toOrderItem?
- * -------------------
- * The Order schema embeds a full product *snapshot* (not just an ObjectId) so
- * that order history is unaffected by later product edits.  `toOrderItem`
- * strips Mongoose internals via `toObject()` and wraps the result in the
- * `{ product, quantity }` shape the schema expects.
- *
- * Usage example
- * -------------
- *   import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
+ *   toOrderItem(product, qty?)  – a persisted product document → the line an order embeds.
+ *   makeOrder(user, items)      – a plain payload, no database write.
+ *   createOrder(user, items)    – inserts and returns the Mongoose document.
  *
  *   const user    = await createUser();
  *   const product = await createProduct({ price: 19.99 });
  *   const order   = await createOrder(user, [toOrderItem(product, 2)]);
+ *
+ * ## Why this one keeps its own signature
+ *
+ * `../factory`'s `makeOrder` takes a snapshot as DATA — `{ id, title, price, … }` — because the
+ * seeds build orders from catalogue fixtures that were never persisted. A test has real documents,
+ * so this wrapper takes them and does the conversion, rather than making every call site spell out
+ * a snapshot it already holds.
+ *
+ * An order item embeds a full product SNAPSHOT, not a reference, so that repricing a product later
+ * cannot rewrite what a customer was charged. That is why `toOrderItem` copies the document.
  */
 
-import { Types } from 'mongoose';
-import type { OrderDocument, OrderDocumentItem } from '@modules/orders';
+import type { Types } from 'mongoose';
+import type { OrderDocument } from '@modules/orders';
 import type { UserDocument } from '@modules/users';
 import type { ProductDocument } from '@modules/products';
 import { orderRepository } from '@modules/orders';
+import { makeOrder as buildOrder, type OrderFixture, type OrderLineInput } from '../factory';
 
 /**
- * Convert a Mongoose product document into an Order item ready to embed
- * inside an order.
+ * Convert a persisted product document into an order line ready to embed.
  *
- * @param product  - The persisted product document.
- * @param quantity - How many units were ordered (default: 1).
+ * The whole document goes in, minus the two keys that belong to Mongo rather than to the product.
+ * It used to name eight fields explicitly, which made this a third place — after `openapi.yaml` and
+ * the schema — that had an opinion about what a Product is, and the one most likely to quietly stop
+ * copying a newly added column. `toObject()` keeps `Date`s as `Date`s, which is what the embedded
+ * subdocument stores; `toJSON()` would hand over ISO strings.
  */
-export const toOrderItem = (product: ProductDocument, quantity = 1): OrderDocumentItem => ({
-    product,
-    quantity
-});
+export const toOrderItem = (product: ProductDocument, quantity = 1): OrderLineInput => {
+    const { _id, __v, ...snapshot } = product.toObject();
+    return { product: { ...snapshot, id: String(_id) }, quantity };
+};
 
-/**
- * Build a valid order payload from a user and a list of order items.
- *
- * @param user     - The user who placed the order.
- * @param items - Array of { product, quantity } pairs (use toOrderItem).
- */
-export const makeOrder = (
-    user: UserDocument,
-    items: OrderDocumentItem[]
-): Partial<OrderDocument> => ({
-    userId: user._id as Types.ObjectId,
-    email: user.email,
-    items
-});
+/** Build a valid order payload from a user and a list of order lines. */
+export const makeOrder = (user: UserDocument, items: OrderLineInput[]): OrderFixture =>
+    buildOrder({
+        userId: String(user._id),
+        email: user.email,
+        items
+    });
 
-/**
- * Insert an order into the test database and return the Mongoose document.
- *
- * @param user     - The user who placed the order.
- * @param items - Array of { product, quantity } pairs (use toOrderItem).
- */
-export const createOrder = (
-    user: UserDocument,
-    items: OrderDocumentItem[]
-): Promise<OrderDocument> => orderRepository.create(makeOrder(user, items));
+/** Insert an order into the test database and return the Mongoose document. */
+export const createOrder = (user: UserDocument, items: OrderLineInput[]): Promise<OrderDocument> =>
+    orderRepository.create(makeOrder(user, items));

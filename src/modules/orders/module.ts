@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
-import { seedOrdersCollection } from './seeds';
+import { seedOrdersCollection, exportSeededOrders } from './seeds';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import './events';
 
@@ -20,7 +20,7 @@ export default {
     /*
      * The module with the real invariants: what an order totals, which status transitions are legal,
      * what cancelling restores. Three other modules are downstream of its status changes. If any one
-     * module here ever grows an aggregate, it is this one — see `DDD_EXPLORATION.md` §6.
+     * module here ever grows an aggregate, it is this one — see `DDD_EXPLORATION.md` §5.
      */
     subdomain: 'core',
     language: {
@@ -43,5 +43,6 @@ export default {
         }
     ],
     seeds: seedOrdersCollection,
+    seedExport: exportSeededOrders,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

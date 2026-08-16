@@ -3,7 +3,7 @@ import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { userRepository } from '@modules/users';
-import { destroyLoggedCookie, destroyRefreshCookie } from '../cookies';
+import { destroyLoggedCookie, destroyRefreshCookie } from '../session/cookies';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 

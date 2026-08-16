@@ -22,5 +22,11 @@ export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 // `cart` sends the customer's confirmation itself: only the checkout knows the order stood, and
 // only the service has the recipient's record in scope for the language it goes out in.
 export { orderConfirmEmail } from './emails';
-export type { OrderDocument, OrderDocumentItem } from './model';
+/*
+ * `OrderDocumentItem` is deliberately not here. It was published so that tests could hand-build an
+ * order line as `{ product, quantity } as unknown as OrderDocumentItem` — a cast that existed only
+ * because the shape was wrong for what the caller had. `tests/factory.ts`'s `toOrderItem` derives
+ * the line from a product document instead, so nothing outside this module names the type any more.
+ */
+export type { OrderDocument } from './model';
 export { sumLineItems } from './domain';

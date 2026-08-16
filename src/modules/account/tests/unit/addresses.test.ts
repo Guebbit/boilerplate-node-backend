@@ -5,7 +5,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
-import { addressesService } from '@modules/account/addresses-service';
+import { accountService } from '@modules/account/services';
 import { cartService } from '@modules/cart';
 import { productRepository } from '@modules/products';
 import { createProduct } from '@modules/products/tests/factory';
@@ -30,7 +30,7 @@ const OFFICE = {
 };
 
 const defaults = async (userId: string) => {
-    const view = await addressesService.addressesGet(userId);
+    const view = await accountService.addressesGet(userId);
     return view.addresses.filter(({ default: isDefault }) => isDefault);
 };
 
@@ -38,7 +38,7 @@ describe('the one-default invariant', () => {
     it('the first entry becomes default whether or not it asked', async () => {
         const user = await createUser();
 
-        await addressesService.addressAdd(user.id, HOME);
+        await accountService.addressAdd(user.id, HOME);
 
         const holders = await defaults(user.id);
         expect(holders.map(({ label }) => label)).toEqual(['home']);
@@ -46,14 +46,14 @@ describe('the one-default invariant', () => {
 
     it('a later entry claims the slot only by asking, and demotes the holder', async () => {
         const user = await createUser();
-        await addressesService.addressAdd(user.id, HOME);
-        await addressesService.addressAdd(user.id, OFFICE);
+        await accountService.addressAdd(user.id, HOME);
+        await accountService.addressAdd(user.id, OFFICE);
         const before = await defaults(user.id);
         expect(before.map(({ label }) => label)).toEqual(['home']);
 
-        const view = await addressesService.addressesGet(user.id);
+        const view = await accountService.addressesGet(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
-        await addressesService.addressUpdate(user.id, office!.id, { default: true });
+        await accountService.addressUpdate(user.id, office!.id, { default: true });
 
         const after = await defaults(user.id);
         expect(after.map(({ label }) => label)).toEqual(['office']);
@@ -61,9 +61,9 @@ describe('the one-default invariant', () => {
 
     it('adding with `default: true` demotes the holder in the same write', async () => {
         const user = await createUser();
-        await addressesService.addressAdd(user.id, HOME);
+        await accountService.addressAdd(user.id, HOME);
 
-        await addressesService.addressAdd(user.id, { ...OFFICE, default: true });
+        await accountService.addressAdd(user.id, { ...OFFICE, default: true });
 
         const holders = await defaults(user.id);
         expect(holders.map(({ label }) => label)).toEqual(['office']);
@@ -71,10 +71,10 @@ describe('the one-default invariant', () => {
 
     it('`default: false` on an update leaves the assignment alone', async () => {
         const user = await createUser();
-        await addressesService.addressAdd(user.id, HOME);
-        const view = await addressesService.addressesGet(user.id);
+        await accountService.addressAdd(user.id, HOME);
+        const view = await accountService.addressesGet(user.id);
 
-        await addressesService.addressUpdate(user.id, view.addresses[0]!.id, {
+        await accountService.addressUpdate(user.id, view.addresses[0]!.id, {
             default: false,
             city: 'Bologna'
         });
@@ -84,12 +84,12 @@ describe('the one-default invariant', () => {
 
     it('removing the default promotes the oldest remaining entry', async () => {
         const user = await createUser();
-        await addressesService.addressAdd(user.id, HOME);
-        await addressesService.addressAdd(user.id, OFFICE);
-        const view = await addressesService.addressesGet(user.id);
+        await accountService.addressAdd(user.id, HOME);
+        await accountService.addressAdd(user.id, OFFICE);
+        const view = await accountService.addressesGet(user.id);
         const home = view.addresses.find(({ label }) => label === 'home');
 
-        await addressesService.addressRemove(user.id, home!.id);
+        await accountService.addressRemove(user.id, home!.id);
 
         const promoted = await defaults(user.id);
         expect(promoted.map(({ label }) => label)).toEqual(['office']);
@@ -107,21 +107,21 @@ describe('ownership', () => {
     it("someone else's entry answers the same 404 as an invented one", async () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
-        await addressesService.addressAdd(owner.id, HOME);
-        const view = await addressesService.addressesGet(owner.id);
+        await accountService.addressAdd(owner.id, HOME);
+        const view = await accountService.addressesGet(owner.id);
         const entryId = view.addresses[0]!.id;
 
-        const update = await addressesService.addressUpdate(stranger.id, entryId, {
+        const update = await accountService.addressUpdate(stranger.id, entryId, {
             city: 'Hacked'
         });
-        const remove = await addressesService.addressRemove(stranger.id, entryId);
+        const remove = await accountService.addressRemove(stranger.id, entryId);
 
         expect(update.success).toBe(false);
         expect(update.status).toBe(404);
         expect(remove.success).toBe(false);
         expect(remove.status).toBe(404);
         // And the owner's entry is untouched.
-        const after = await addressesService.addressesGet(owner.id);
+        const after = await accountService.addressesGet(owner.id);
         expect(after.addresses[0]?.city).toBe('Modena');
     });
 });
@@ -129,7 +129,7 @@ describe('ownership', () => {
 describe('checkout and the address', () => {
     it('snapshots the default when no id is named', async () => {
         const user = await createUser();
-        await addressesService.addressAdd(user.id, HOME);
+        await accountService.addressAdd(user.id, HOME);
         await cartWith(user.id);
 
         const result = await cartService.orderConfirm(user.id);
@@ -143,10 +143,10 @@ describe('checkout and the address', () => {
 
     it('snapshots the NAMED entry over the default', async () => {
         const user = await createUser();
-        await addressesService.addressAdd(user.id, HOME);
-        await addressesService.addressAdd(user.id, OFFICE);
+        await accountService.addressAdd(user.id, HOME);
+        await accountService.addressAdd(user.id, OFFICE);
         await cartWith(user.id);
-        const view = await addressesService.addressesGet(user.id);
+        const view = await accountService.addressesGet(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
 
         const result = await cartService.orderConfirm(user.id, office!.id);
@@ -157,7 +157,7 @@ describe('checkout and the address', () => {
 
     it('ships nothing rather than nowhere: a stale id refuses the checkout untouched', async () => {
         const user = await createUser();
-        await addressesService.addressAdd(user.id, HOME);
+        await accountService.addressAdd(user.id, HOME);
         const product = await cartWith(user.id);
 
         const result = await cartService.orderConfirm(user.id, '65dc8a99604c307b702b5ccc');

@@ -16,9 +16,14 @@ import {
     emitAnalyticsEvent,
     buildAnalyticsBase,
     shutdownAnalytics,
-    analyticsEvents,
     type AnalyticsEvent
 } from '@infrastructure/observability/analytics';
+// A real name rather than a string literal: the transport is what is under test here, but the
+// event it carries should still be one the app can actually emit.
+import { accountAnalyticsEvents } from '@modules/account/analytics';
+import { productsAnalyticsEvents } from '@modules/products/analytics';
+import { cartAnalyticsEvents } from '@modules/cart/analytics';
+import { ordersAnalyticsEvents } from '@modules/orders/analytics';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -161,7 +166,7 @@ describe('resolveAnalyticsProvider', () => {
 describe('the umami provider', () => {
     it('posts the event to the ingest host', () => {
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
 
         expect(sentRequest().url).toBe('http://umami:3000/api/send');
     });
@@ -169,7 +174,7 @@ describe('the umami provider', () => {
     it('tolerates a trailing slash on the host, because someone will paste one', () => {
         configureUmami();
         process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000/';
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
 
         expect(sentRequest().url).toBe('http://umami:3000/api/send');
     });
@@ -180,14 +185,14 @@ describe('the umami provider', () => {
         process.env.NODE_ANALYTICS_PROVIDER = 'umami';
         process.env.NODE_UMAMI_HOST = 'https://analytics.example.com';
         process.env.NODE_UMAMI_WEBSITE_ID = 'site-uuid';
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
 
         expect(sentRequest().url).toBe('https://analytics.example.com/api/send');
     });
 
     it('sends the website id and the event name', () => {
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.CART_ITEM_ADDED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: cartAnalyticsEvents.CART_ITEM_ADDED });
 
         const { body } = sentRequest();
         expect(body.type).toBe('event');
@@ -197,7 +202,7 @@ describe('the umami provider', () => {
 
     it('ALWAYS sends a User-Agent, because Umami discards the event without one and still says 200', () => {
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.ORDER_CREATED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: ordersAnalyticsEvents.ORDER_CREATED });
 
         expect(sentRequest().headers['User-Agent']).toBeTruthy();
     });
@@ -206,7 +211,7 @@ describe('the umami provider', () => {
         configureUmami();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: analyticsEvents.ORDER_CREATED,
+            event: ordersAnalyticsEvents.ORDER_CREATED,
             userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/131.0.0.0'
         });
 
@@ -219,7 +224,7 @@ describe('the umami provider', () => {
         configureUmami();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: analyticsEvents.ORDER_CREATED,
+            event: ordersAnalyticsEvents.ORDER_CREATED,
             clientIp: '203.0.113.9'
         });
 
@@ -229,14 +234,17 @@ describe('the umami provider', () => {
     it('omits X-Forwarded-For entirely when there is no client address', () => {
         // Sending the header empty would have Umami hash an empty address as if it were one.
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.ORDER_CREATED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: ordersAnalyticsEvents.ORDER_CREATED });
 
         expect('X-Forwarded-For' in sentRequest().headers).toBe(false);
     });
 
     it('carries distinctId as a queryable `user_id`, the only place a user id can live here', () => {
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'user-42', event: analyticsEvents.CHECKOUT_COMPLETED });
+        emitAnalyticsEvent({
+            distinctId: 'user-42',
+            event: cartAnalyticsEvents.CHECKOUT_COMPLETED
+        });
 
         expect(sentRequest().body.payload.data.user_id).toBe('user-42');
     });
@@ -245,13 +253,13 @@ describe('the umami provider', () => {
         configureUmami();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: analyticsEvents.CHECKOUT_COMPLETED,
+            event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
             traceId: 'abc123'
         });
         expect(sentRequest().body.payload.data.trace_id).toBe('abc123');
 
         jest.clearAllMocks();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.CHECKOUT_COMPLETED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: cartAnalyticsEvents.CHECKOUT_COMPLETED });
         expect('trace_id' in sentRequest().body.payload.data).toBe(false);
     });
 
@@ -259,7 +267,7 @@ describe('the umami provider', () => {
         configureUmami();
         emitAnalyticsEvent({
             distinctId: 'real-user',
-            event: analyticsEvents.CART_ITEM_ADDED,
+            event: cartAnalyticsEvents.CART_ITEM_ADDED,
             properties: { product_id: 'prod-7', user_id: 'spoofed' }
         });
 
@@ -274,7 +282,7 @@ describe('the umami provider', () => {
         configureUmami();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: analyticsEvents.PRODUCT_VIEWED,
+            event: productsAnalyticsEvents.PRODUCT_VIEWED,
             hostname: 'localhost:3000'
         });
 
@@ -285,7 +293,7 @@ describe('the umami provider', () => {
         configureUmami();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: analyticsEvents.PRODUCT_VIEWED,
+            event: productsAnalyticsEvents.PRODUCT_VIEWED,
             hostname: '[::1]:3000'
         });
         expect(sentRequest().body.payload.hostname).toBe('[::1]');
@@ -293,7 +301,7 @@ describe('the umami provider', () => {
         jest.clearAllMocks();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: analyticsEvents.PRODUCT_VIEWED,
+            event: productsAnalyticsEvents.PRODUCT_VIEWED,
             hostname: '[::1]'
         });
         expect(sentRequest().body.payload.hostname).toBe('[::1]');
@@ -303,8 +311,8 @@ describe('the umami provider', () => {
         process.env.NODE_ANALYTICS_PROVIDER = 'umami';
         process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000';
 
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
         // Once, not twice: a misconfigured provider would otherwise fill the log with itself.
@@ -314,7 +322,7 @@ describe('the umami provider', () => {
     it('warns when Umami rejects the event, because every later one fails the same way', () => {
         configureUmami();
         (globalThis.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404 });
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
 
         return settle().then(() => {
             expect(mockLoggerWarn).toHaveBeenCalledWith(
@@ -328,7 +336,7 @@ describe('the umami provider', () => {
         (globalThis.fetch as jest.Mock).mockRejectedValue(new Error('ECONNREFUSED'));
 
         expect(() =>
-            emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED })
+            emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED })
         ).not.toThrow();
 
         return settle().then(() => {
@@ -345,8 +353,8 @@ describe('the umami provider', () => {
 describe('the posthog provider', () => {
     it('instantiates the client once and reuses it', () => {
         configurePostHog();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.USER_LOGGED_IN });
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
 
         expect(mockedPostHog).toHaveBeenCalledTimes(1);
         expect(mockedPostHog).toHaveBeenCalledWith(
@@ -359,7 +367,7 @@ describe('the posthog provider', () => {
         configurePostHog();
         const event: AnalyticsEvent = {
             distinctId: 'user-42',
-            event: analyticsEvents.CART_ITEM_ADDED,
+            event: cartAnalyticsEvents.CART_ITEM_ADDED,
             properties: { product_id: 'prod-7', quantity: 2 }
         };
         emitAnalyticsEvent(event);
@@ -377,14 +385,14 @@ describe('the posthog provider', () => {
         configurePostHog();
         emitAnalyticsEvent({
             distinctId: 'u1',
-            event: analyticsEvents.CHECKOUT_COMPLETED,
+            event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
             traceId: 'abc123'
         });
         const traced = mockCapture.mock.calls[0][0] as { properties: Record<string, unknown> };
         expect(traced.properties.trace_id).toBe('abc123');
 
         mockCapture.mockClear();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
         const untraced = mockCapture.mock.calls[0][0] as { properties: Record<string, unknown> };
         expect('trace_id' in untraced.properties).toBe(false);
     });
@@ -392,8 +400,8 @@ describe('the posthog provider', () => {
     it('sends nothing, and warns once, when the credentials are missing', () => {
         process.env.NODE_ANALYTICS_PROVIDER = 'posthog';
 
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.USER_LOGGED_IN });
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
 
         expect(mockedPostHog).not.toHaveBeenCalled();
         expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
@@ -409,7 +417,7 @@ describe('the none provider', () => {
         process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000';
         process.env.NODE_UMAMI_WEBSITE_ID = 'site-uuid';
 
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
         expect(mockedPostHog).not.toHaveBeenCalled();
@@ -422,7 +430,7 @@ describe('the none provider', () => {
 describe('shutdownAnalytics', () => {
     it('flushes a PostHog client that buffered events', () => {
         configurePostHog();
-        emitAnalyticsEvent({ distinctId: 'u1', event: analyticsEvents.USER_SIGNED_UP });
+        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_SIGNED_UP });
 
         return shutdownAnalytics().then(() => {
             expect(mockShutdown).toHaveBeenCalledTimes(1);
@@ -469,20 +477,7 @@ describe('buildAnalyticsBase', () => {
     });
 });
 
-// ─── Catalogue ────────────────────────────────────────────────────────────────
-
-describe('analyticsEvents catalogue', () => {
-    it('defines all expected event names', () => {
-        expect(analyticsEvents.USER_SIGNED_UP).toBe('user_signed_up');
-        expect(analyticsEvents.USER_LOGGED_IN).toBe('user_logged_in');
-        expect(analyticsEvents.PRODUCTS_SEARCHED).toBe('products_searched');
-        expect(analyticsEvents.PRODUCT_VIEWED).toBe('product_viewed');
-        expect(analyticsEvents.CART_ITEM_ADDED).toBe('cart_item_added');
-        expect(analyticsEvents.CART_ITEM_UPDATED).toBe('cart_item_updated');
-        expect(analyticsEvents.CART_ITEM_REMOVED).toBe('cart_item_removed');
-        expect(analyticsEvents.CART_CLEARED).toBe('cart_cleared');
-        expect(analyticsEvents.CHECKOUT_COMPLETED).toBe('checkout_completed');
-        expect(analyticsEvents.CHECKOUT_FAILED).toBe('checkout_failed');
-        expect(analyticsEvents.ORDER_CREATED).toBe('order_created');
-    });
-});
+// The CATALOGUE itself is not asserted here. Each module owns its names in
+// `src/modules/<name>/analytics.ts`, and `tests/cross-cutting/contract-bundles.test.ts` checks
+// that the published `analytics-events.ts` lists exactly what those modules declare. This file
+// owns the transport.

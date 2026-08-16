@@ -1,25 +1,27 @@
 /**
  * Every committed document is exactly what it says it is built from.
  *
- * The documents come in two kinds, and both are pinned here.
+ * The documents come in three kinds, and all of them are pinned here.
  *
- * ASSEMBLED — the two specs, the demo dataset's identities and the analytics event names. Each is
- * split per module, so a domain owns its endpoints, its events and its records, and each is ALSO
- * byte-identical with the paired frontend. The assembled document stays COMMITTED, because it is
- * what spectral, orval, Prism, `jest-openapi` and the seed runner read.
+ * COMPILED — `openapi.yaml`. Its sources are standalone OpenAPI documents, one per module plus the
+ * root, joined by `redocly bundle` resolving `$ref` the way the rest of the ecosystem does.
+ *
+ * ASSEMBLED — `asyncapi.yaml` and the analytics event names, still concatenated from verbatim line
+ * slices. These carry comments the bundle itself has to keep, and no parser preserves those.
  *
  * GENERATED — the four API client collections, produced whole from `openapi.yaml` and the seed
  * dataset. They have no fragments: nothing on disk stands between the contract and the document, so
  * there is no intermediate for anyone to hand-edit.
  *
  * Two sources for one document is a fork waiting to happen, and this is the assertion that stops
- * it: edit a fragment without re-bundling, hand-edit a bundle, or change what the generator does
+ * it: edit a source without re-bundling, hand-edit a bundle, or change what the generator does
  * without regenerating, and this fails.
  *
- * It also pins the property that made fragmentation possible at all. Every YAML bundler parses and
- * re-serialises, which drops `openapi.yaml`'s 149 comment lines and reflows ~390 more. The bundler
- * here never parses — a fragment is a verbatim slice and bundling is concatenation — so identity is
- * structural. If someone swaps in a "real" bundler, this is what reports the lost explanations.
+ * WHERE THE COMMENTS LIVE differs between the first two kinds, and that is the interesting part. A
+ * parse drops them, so an assembled bundle cannot use one. The REST contract stopped needing that
+ * guarantee once its sources became whole documents: the explanations now sit in the module files
+ * where the thing they explain is written, and nobody reads the bundle by hand. `the OpenAPI bundle`
+ * below asserts they are still there — in the sources rather than in the output.
  */
 
 import { readFileSync } from 'node:fs';
@@ -29,18 +31,17 @@ import {
     assembleBundle,
     bundleFragments,
     CONTRACT_BUNDLES,
+    isGenerated,
     readCommittedBundle,
     REPO_ROOT,
     type ContractBundle
 } from '../../scripts/contracts';
-import { SECTION_ORDER, sectionFragment } from '../../scripts/contracts/openapi';
-import {
-    ANALYTICS_SECTION_ORDER,
-    analyticsFragment
-} from '../../scripts/contracts/analyticsEvents';
+import { MODULE_SECTIONS, moduleSpec, ROOT_SPEC } from '../../scripts/contracts/openapi';
+import { ANALYTICS_SECTIONS } from '../../scripts/contracts/analyticsEvents';
 import { allProbes } from '../../scripts/contracts/generateCollections';
 import { SHARED_FILES } from '../../scripts/specIdentity';
 import { analyticsEvents } from '../../src/infrastructure/observability/analytics-events';
+import type { SharedAnalyticsEventName } from '../../src/infrastructure/observability/analytics';
 
 /** How many requests a collection's folders hold, whichever key that tool nests them under. */
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>
@@ -89,7 +90,7 @@ describe('every contract bundle', () => {
         const guarded = new Set(SHARED_FILES.map(({ backend }) => backend));
 
         for (const bundle of CONTRACT_BUNDLES)
-            if (!bundle.generated)
+            if (!isGenerated(bundle))
                 expect(guarded).toContain(path.relative(REPO_ROOT, bundle.output));
     });
 });
@@ -97,41 +98,62 @@ describe('every contract bundle', () => {
 describe('the OpenAPI bundle', () => {
     const openapi = bundleByName('openapi');
 
-    it('keeps every comment the document explains itself with', () => {
-        // The count is a floor, not a fixture: comments get added. A bundler that silently started
-        // parsing would take this to zero, which is the failure worth naming.
-        const comments = readCommittedBundle(openapi)
-            .split('\n')
-            .filter((line) => line.trim().startsWith('#'));
+    it('keeps every comment, in the files that are actually read by hand', () => {
+        /*
+         * `redocly bundle` parses, so the BUNDLE carries no comments and cannot — that is the trade
+         * this layout made deliberately. What had to survive is the explanations, and they live in
+         * the module documents where the thing they explain is written. The count is a floor, not a
+         * fixture: it goes up as modules gain notes, and a collapse to near zero means someone
+         * flattened the sources back into one generated file.
+         */
+        const sources = [ROOT_SPEC, ...MODULE_SECTIONS.map((section) => moduleSpec(section))];
+        const comments = sources.flatMap((file) =>
+            readFileSync(file, 'utf8')
+                .split('\n')
+                .filter((line) => line.trim().startsWith('#'))
+        );
 
-        expect(comments.length).toBeGreaterThanOrEqual(149);
+        expect(comments.length).toBeGreaterThanOrEqual(200);
     });
 
-    it('gives every section a paths and a schemas fragment, neither of them empty', () => {
-        for (const section of SECTION_ORDER) {
-            const paths = readFileSync(sectionFragment(section, 'paths'), 'utf8');
-            expect(paths).toMatch(/^ {4}\//m);
+    it('gives every module a standalone document with both paths and schemas', () => {
+        for (const section of MODULE_SECTIONS) {
+            const document_ = parseYaml(readFileSync(moduleSpec(section), 'utf8')) as {
+                openapi?: string;
+                paths?: Record<string, unknown>;
+                components?: { schemas?: Record<string, unknown> };
+            };
 
-            const schemas = readFileSync(sectionFragment(section, 'schemas'), 'utf8');
-            expect(schemas).toMatch(/^ {8}[A-Za-z]/m);
+            // Standalone means standalone: a module document is valid OpenAPI on its own, which is
+            // what lets it be linted and opened in an editor without the rest of the contract.
+            expect(document_.openapi).toBeDefined();
+            expect(Object.keys(document_.paths ?? {}).length).toBeGreaterThan(0);
+            expect(Object.keys(document_.components?.schemas ?? {}).length).toBeGreaterThan(0);
         }
     });
 
-    it('files every documented path under exactly one fragment', () => {
-        const documented = readCommittedBundle(openapi)
-            .split('\n')
-            .filter((line) => /^ {4}\/[^\s:]*:\s*$/.test(line))
-            .map((line) => line.trim());
-
-        const fromFragments = SECTION_ORDER.flatMap((section) =>
-            readFileSync(sectionFragment(section, 'paths'), 'utf8')
-                .split('\n')
-                .filter((line) => /^ {4}\/[^\s:]*:\s*$/.test(line))
-                .map((line) => line.trim())
+    it('files every documented path under exactly one module, or the root', () => {
+        const documented = Object.keys(
+            (parseYaml(readCommittedBundle(openapi)) as { paths: Record<string, unknown> }).paths
         );
 
-        expect(fromFragments.toSorted()).toEqual(documented.toSorted());
-        expect(new Set(fromFragments).size).toBe(fromFragments.length);
+        const fromModules = MODULE_SECTIONS.flatMap((section) =>
+            Object.keys(
+                (
+                    parseYaml(readFileSync(moduleSpec(section), 'utf8')) as {
+                        paths?: Record<string, unknown>;
+                    }
+                ).paths ?? {}
+            )
+        );
+
+        // Whatever the bundle documents and no module claims belongs to the root — `GET /`, the
+        // application shell answering for itself.
+        const fromRoot = documented.filter((url) => !fromModules.includes(url));
+
+        expect([...fromModules, ...fromRoot].toSorted()).toEqual(documented.toSorted());
+        expect(new Set(fromModules).size).toBe(fromModules.length);
+        expect(fromRoot).toEqual(['/']);
     });
 });
 
@@ -165,14 +187,13 @@ describe('the AsyncAPI bundle', () => {
 describe('the analytics event bundle', () => {
     it('lets no two modules declare the same name or the same value', () => {
         // The failure this file exists to prevent, one level down: two modules that both claim
-        // `CHECKOUT_COMPLETED` produce a duplicate object key the bundle would silently swallow,
-        // and two that spell one event differently split every funnel built on it.
-        const entries = ANALYTICS_SECTION_ORDER.flatMap((section) =>
-            readFileSync(analyticsFragment(section), 'utf8')
-                .split('\n')
-                .map((line) => /^\s{4}([A-Z_]+):\s*'([_a-z]+)'/.exec(line))
-                .filter((match): match is RegExpExecArray => match !== null)
-                .map(([, key, value]) => ({ key, value }))
+        // `CHECKOUT_COMPLETED` produce a duplicate object key the published file would silently
+        // swallow, and two that spell one event differently split every funnel built on it.
+        //
+        // Read from the module's exported VALUE rather than from its text: the names are ordinary
+        // TypeScript now, so the check can be on what the app actually emits.
+        const entries = ANALYTICS_SECTIONS.flatMap(({ events }) =>
+            Object.entries(events).map(([key, value]) => ({ key, value }))
         );
 
         expect(entries.length).toBeGreaterThan(0);
@@ -180,14 +201,23 @@ describe('the analytics event bundle', () => {
         expect(new Set(entries.map(({ value }) => value)).size).toBe(entries.length);
     });
 
-    it('exports exactly the names its fragments declare', () => {
-        const declared = ANALYTICS_SECTION_ORDER.flatMap((section) =>
-            [
-                ...readFileSync(analyticsFragment(section), 'utf8').matchAll(/^\s{4}([A-Z_]+):/gm)
-            ].map(([, key]) => key)
-        );
+    it('publishes exactly the names the modules declare', () => {
+        // `analytics-events.ts` is an artefact nothing here imports — this is what keeps it honest
+        // against the six modules it is sliced out of, and therefore against the frontend's copy.
+        const declared = ANALYTICS_SECTIONS.flatMap(({ events }) => Object.keys(events));
 
         expect(Object.keys(analyticsEvents).toSorted()).toEqual(declared.toSorted());
+    });
+
+    it('declares every name in the union the port exposes', () => {
+        // The augmentation is what makes `emitAnalyticsEvent` reject an unknown name. A module that
+        // exported its constant but forgot the `declare module` block would compile, emit fine, and
+        // silently widen nothing — so the type has to be checked against the values.
+        const published: Record<string, string> = analyticsEvents;
+        for (const value of Object.values(published)) {
+            const name: SharedAnalyticsEventName = value as SharedAnalyticsEventName;
+            expect(typeof name).toBe('string');
+        }
     });
 });
 
@@ -240,7 +270,7 @@ describe('the API client collections', () => {
          * lives, editable by hand, and a generator whose output nobody verifies is a second source
          * of truth that agrees with the first only by habit.
          */
-        const collections = CONTRACT_BUNDLES.filter(({ generated }) => generated);
+        const collections = CONTRACT_BUNDLES.filter((item) => isGenerated(item));
 
         expect(collections.length).toBeGreaterThan(0);
         for (const bundle of collections) expect(bundleFragments(bundle)).toEqual([]);

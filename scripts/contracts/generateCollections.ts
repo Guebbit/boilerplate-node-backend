@@ -20,13 +20,16 @@
  * four emitters live in `@guebbit/openapi-runnable-collections`, which knows nothing about this
  * repo. What stays here is the three things only this repo can answer:
  *
- *   1. WHICH MODULE OWNS WHICH PATH — read from the OpenAPI fragments, never restated. A path in
- *      `src/modules/orders/openapi/paths.yaml` is the orders module's, so a path that moves between
+ *   1. WHICH MODULE OWNS WHICH PATH — read from the module contracts, never restated. A path in
+ *      `src/modules/orders/openapi.yaml` is the orders module's, so a path that moves between
  *      modules moves in all four collections with it.
- *   2. WHERE THE VALUES COME FROM — `db/seeds/seed-identities.ts`, the dataset the backend actually
- *      seeds. That is why a generated request is not a schema-shaped placeholder with empty
- *      strings: `GET /products/{id}` asks for a product that exists, and `POST /account/login`
- *      sends credentials that work against a seeded database.
+ *   2. WHERE THE VALUES COME FROM — `db/seeds/dataset.json`, which is what the API answers with
+ *      after `npm run db:seed`: `npm run seed:export` seeds a throwaway database and records the
+ *      serialized rows. That is why a generated request is not a schema-shaped placeholder full of
+ *      empty strings — `GET /products/{id}` asks for a product that exists, and
+ *      `POST /account/login` sends credentials that work against a seeded database. It is also why
+ *      the examples carry real derived values: an order's `totalPrice` here is the number the
+ *      serializer computed, not arithmetic this file repeated.
  *   3. WHAT THE CONTRACT CANNOT DESCRIBE — each module's `probes.ts`, the requests that prove the
  *      API REJECTS things. A spec declares valid calls and their declared answers, so no generator
  *      can derive an invalid body or a bogus token.
@@ -48,7 +51,6 @@
  * runs one way only: Insomnia imports Postman, Postman does not import Insomnia.
  */
 
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
     generateCollections,
@@ -62,20 +64,12 @@ import {
     type ValueSources
 } from '@guebbit/openapi-runnable-collections';
 import { REPO_ROOT, type ContractBundle } from './fragments';
-import { SECTION_ORDER, sectionFragment, type SectionName } from './openapi';
+import { SECTION_ORDER, sectionPaths, type SectionName } from './openapi';
 import { probes as accountProbes } from '../../src/modules/account/probes';
 import { probes as cartProbes } from '../../src/modules/cart/probes';
 import { probes as ordersProbes } from '../../src/modules/orders/probes';
 import { probes as productsProbes } from '../../src/modules/products/probes';
-import {
-    SEED_ADMIN_EMAIL,
-    SEED_ADMIN_PASSWORD,
-    SEED_USER_EMAIL,
-    SEED_USER_PASSWORD,
-    seedOrders,
-    seedProducts,
-    seedUsers
-} from '../../db/seeds/seed-identities';
+import dataset from '../../db/seeds/dataset.json';
 
 /** The four tools, and the order this file names them in. */
 export const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
@@ -87,16 +81,6 @@ const COLLECTION_NAME = 'Ecommerce Demo API';
  * 1. Which module owns which path — read from the OpenAPI fragments, never restated
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-/** A path key as it appears in a `paths.yaml` fragment: four spaces, then the path. */
-const PATH_LINE = /^ {4}(\/\S*):\s*$/;
-
-/** Every path filed under a section, in the order its fragment declares them. */
-const sectionPaths = (section: SectionName): string[] =>
-    readFileSync(sectionFragment(section, 'paths'), 'utf8')
-        .split('\n')
-        .map((line) => PATH_LINE.exec(line)?.[1])
-        .filter((match): match is string => match !== undefined);
-
 const sections = (): Section[] =>
     SECTION_ORDER.map((name) => ({ name, paths: sectionPaths(name) }));
 
@@ -104,9 +88,18 @@ const sections = (): Section[] =>
  * 2. Where the values come from — the shapes are the contract's, the data is the seed's
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-const [seedAdmin, seedUser] = seedUsers;
-const [seedProduct] = seedProducts;
-const [seedOrder] = seedOrders;
+/*
+ * Positional, and safe to be: every collection in `dataset.json` is sorted by `_id`, so these
+ * indices are stable across exports. The admin sorts before the ordinary user because their
+ * ObjectIds encode the order the two accounts were created in.
+ */
+const { credentials } = dataset;
+const [seedAdmin, seedUser] = dataset.collections.users;
+const [seedProduct] = dataset.collections.products;
+const [seedOrder] = dataset.collections.orders;
+const [seedCart] = dataset.collections.carts;
+const seedProducts = dataset.collections.products;
+const seedOrders = dataset.collections.orders;
 
 const values: ValueSources = {
     /*
@@ -116,9 +109,9 @@ const values: ValueSources = {
      */
     byProperty: {
         id: seedProduct.id,
-        email: SEED_USER_EMAIL,
-        password: SEED_USER_PASSWORD,
-        newPassword: SEED_USER_PASSWORD,
+        email: credentials.user.email,
+        password: credentials.user.password,
+        newPassword: credentials.user.password,
         username: seedUser.username,
         productId: seedProduct.id,
         userId: seedUser.id,
@@ -149,7 +142,7 @@ const values: ValueSources = {
             username: seedUser.username,
             email: seedUser.email,
             admin: seedUser.admin,
-            active: true,
+            active: seedUser.active,
             imageUrl: seedUser.imageUrl
         },
         Product: {
@@ -164,16 +157,18 @@ const values: ValueSources = {
             id: seedOrder.id,
             userId: seedOrder.userId,
             email: seedOrder.email,
-            total: seedProduct.price * seedOrder.items[0].quantity
+            /* The serializer's own total, not this file multiplying a price by a quantity and
+             * hoping it matches what `applyOrderTransform` derives. */
+            total: seedOrder.totalPrice
         },
         OrderItem: {
-            productId: seedOrder.items[0].productId,
+            productId: seedOrder.items[0].product.id,
             quantity: seedOrder.items[0].quantity,
-            price: seedProduct.price
+            price: seedOrder.items[0].product.price
         },
         CartItem: {
-            productId: seedAdmin.cart[0].productId,
-            quantity: seedAdmin.cart[0].quantity
+            productId: seedCart.items[0].productId,
+            quantity: seedCart.items[0].quantity
         }
     } as Record<string, Record<string, Json>>,
 
@@ -184,16 +179,19 @@ const values: ValueSources = {
      * with the collection is log in.
      */
     byOperation: {
-        'POST /account/login': { email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
+        'POST /account/login': {
+            email: credentials.admin.email,
+            password: credentials.admin.password
+        },
         'POST /account/signup': {
             username: seedUser.username,
-            email: SEED_USER_EMAIL,
-            password: SEED_USER_PASSWORD
+            email: credentials.user.email,
+            password: credentials.user.password
         }
     },
 
     /** A credential is the dataset's, never invented: an invented one produces a login that fails. */
-    byFormat: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
+    byFormat: { email: credentials.user.email, password: credentials.user.password },
 
     /** A path parameter's value: the seeded record of whichever domain the path belongs to. */
     pathParam: (name, template) => {
@@ -211,26 +209,27 @@ const values: ValueSources = {
     /*
      * The seed facts a probe may refer to, as `{{token}}`. A probe that pasted
      * `65dc8ad8604c307b702b5cd4` into its URL would be a copy of the seed dataset, and copies drift
-     * — the whole reason `seed-identities.ts` exists. Every one of these is DERIVED from the
-     * records rather than restated, so a fixture that stops being soft-deleted takes its probe with
-     * it instead of leaving one that quietly tests nothing.
+     * — the whole reason the dataset is published rather than retyped. Every one of these is
+     * DERIVED from the records rather than restated, so a fixture that stops being soft-deleted
+     * takes its probe with it instead of leaving one that quietly tests nothing.
      */
     tokens: {
-        seedAdminEmail: SEED_ADMIN_EMAIL,
-        seedAdminPassword: SEED_ADMIN_PASSWORD,
+        seedAdminEmail: credentials.admin.email,
+        seedAdminPassword: credentials.admin.password,
         seedAdminId: seedAdmin.id,
-        seedUserEmail: SEED_USER_EMAIL,
-        seedUserPassword: SEED_USER_PASSWORD,
+        seedUserEmail: credentials.user.email,
+        seedUserPassword: credentials.user.password,
         seedUserId: seedUser.id,
         seedProductId: seedProduct.id,
         seedOrderId: seedOrder.id,
         /* The dataset carries exactly one of each on purpose — see the comments in
-         * `seed-identities.ts`: without them the soft-delete and role-scoping branches have no
-         * fixture behind them, and a branch with no fixture is a branch nothing exercises. */
-        seedSoftDeletedProductId: (seedProducts.find((product) => product.deletedAt) ?? seedProduct)
-            .id,
+         * `src/modules/products/seeds.ts`: without them the soft-delete and role-scoping branches
+         * have no fixture behind them, and a branch with no fixture is a branch nothing exercises. */
+        seedSoftDeletedProductId: (
+            seedProducts.find((product) => 'deletedAt' in product) ?? seedProduct
+        ).id,
         seedInactiveProductId: (seedProducts.find((product) => !product.active) ?? seedProduct).id,
-        seedDeletedOrderId: (seedOrders.find((order) => order.deletedAt) ?? seedOrder).id
+        seedDeletedOrderId: (seedOrders.find((order) => 'deletedAt' in order) ?? seedOrder).id
     }
 };
 

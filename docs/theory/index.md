@@ -122,7 +122,7 @@ the point.
 - **Modular domains**: every domain lives in one folder under `src/modules/`, and adding or removing one is a folder plus a line in `src/modules.ts`. See [Modules](./modules.md).
 - **Layered backend**: routes → middlewares → controllers → services → repositories → models, _inside_ each module. See [Layers](./layers.md).
 - **Database isolation**: [Mongoose](../tools/mongodb-mongoose.md) queries stay near repositories, not scattered through controllers.
-- **Fail-open optional infrastructure**: [Redis](../tools/redis-cache.md), [Winston](../tools/winston.md), [Tempo](../tools/tempo.md), and [PostHog](../tools/posthog.md) improve behavior when configured, but the app keeps running when they are disabled.
+- **Fail-open optional infrastructure**: [Redis](../tools/redis-cache.md), [Winston](../tools/winston.md), [Tempo](../tools/tempo.md), and [product analytics](../tools/analytics.md) improve behavior when configured, but the app keeps running when they are disabled.
 - **Promise-oriented style**: the codebase often prefers promise chaining over large `async` / `await` + `try/catch` blocks.
 - **Boilerplate over product detail**: examples are intentionally generic so the same shape can be reused in other variants.
 

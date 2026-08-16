@@ -18,12 +18,11 @@ one line.
 A module is named in exactly four places, and three of them are conditional. Knowing which ones
 apply to your domain is most of both procedures:
 
-| Registry                  | File                                   | Applies when                                   |
-| ------------------------- | -------------------------------------- | ---------------------------------------------- |
-| `enabledModules`          | `src/modules.ts`                       | **always**                                     |
-| `SECTION_ORDER`           | `scripts/contracts/openapi.ts`         | the domain serves HTTP                         |
-| `ANALYTICS_SECTION_ORDER` | `scripts/contracts/analyticsEvents.ts` | the domain has an `analytics.fragment.ts`      |
-| `SEED_SECTION_ORDER`      | `scripts/contracts/seedIdentities.ts`  | the domain has a `seed-identities.fragment.ts` |
+| Registry             | File                                   | Applies when                     |
+| -------------------- | -------------------------------------- | -------------------------------- |
+| `enabledModules`     | `src/modules.ts`                       | **always**                       |
+| `SECTION_ORDER`      | `scripts/contracts/openapi.ts`         | the domain serves HTTP           |
+| `ANALYTICS_SECTIONS` | `scripts/contracts/analyticsEvents.ts` | the domain has an `analytics.ts` |
 
 Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the audit vocabulary and
 the metrics registry all walk the registry instead — which is why none of them appears in either
@@ -36,7 +35,7 @@ is a hard error naming the missing file:
 ```
 Error: [analytics-events] src/infrastructure/observability/analytics-events.ts
   names a fragment that does not exist:
-  src/modules/products/analytics.fragment.ts
+  src/modules/products/analytics.ts
   Deleting a domain means deleting its entry from the bundle's section list too —
   and mirroring both in the paired repo.
 ```
@@ -73,10 +72,9 @@ src/modules/<name>/
     seeds.ts                       if it ships fixtures
     audit.ts · metrics.ts          if it records actions or numbers
     events.ts · emails.ts          if it publishes events or sends mail
-    openapi/paths.yaml             its slice of openapi.yaml
-    openapi/schemas.yaml           ditto
-    analytics.fragment.ts          its slice of the analytics event catalogue
-    seed-identities.fragment.ts    its slice of the shared seed identities
+    openapi.yaml                   its standalone slice of the REST contract
+    analytics.ts                   the event names it emits
+    factory.ts · seeds.ts          how its records are built, and the demo ones
     tests/unit/ · tests/contract/  co-located, deleted with the module
     dev/                           GENERATED — do not hand-write
 ```
@@ -159,7 +157,7 @@ already — nothing below applies.
 
 ### 3 · The fragments and their section entries
 
-Write `openapi/paths.yaml` and `openapi/schemas.yaml`, then add the domain to `SECTION_ORDER`. Do
+Write `openapi.yaml`, add the domain to `MODULE_SECTIONS`, and add its paths to the root's index. Do
 the same for `ANALYTICS_SECTION_ORDER` and `SEED_SECTION_ORDER` if you wrote those fragments.
 
 A section entry with no fragment on disk is the hard error shown above. A fragment on disk with no
@@ -374,10 +372,11 @@ ones a sweep cannot express:
   modules' `emails.ts` to render every template. Every one of those imports is through a legitimate
   public surface, so no import rule can distinguish it from a correct one. What makes it fragile is
   the _reason_ for the import, and that is a judgement call.
-- **A named export from a generated file.** `scripts/contracts/generateCollections.ts` imports
-  `seedProducts` and `seedOrders` by name from `db/seeds/seed-identities.ts` — a legitimate path,
-  a domain-shaped identifier. It should take the seed dataset as _whatever identities exist_, not as
-  two named exports.
+- **A named export from a generated file.** ~~`generateCollections.ts` imports `seedProducts` and
+  `seedOrders` by name~~ — fixed when the dataset stopped being a bundle. It reads
+  `db/seeds/dataset.json` now and indexes into `collections.products` / `collections.orders`, which
+  is _whatever the seeders produced_ rather than two domain-shaped identifiers. Kept here as the
+  worked example: the fix was not a lint rule, it was removing the reason the import existed.
 - **A whole-word scan for domain names.** Tried and rejected: `observability` and `locales` are
   module names _and_ infrastructure folder names, and `db/migrations/**` names collections forever
   by design. The false-positive rate makes it unusable.

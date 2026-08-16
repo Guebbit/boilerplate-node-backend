@@ -18,11 +18,14 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { EnvelopeMessage } from './envelopeMessage';
+import type { EnvelopeStatus } from './envelopeStatus';
+import type { EnvelopeSuccess } from './envelopeSuccess';
 import type { WishlistResponse } from './wishlistResponse';
 
 export interface WishlistResponseEnvelope {
-  success: true;
-  status: number;
-  message: string;
+  success: EnvelopeSuccess;
+  status: EnvelopeStatus;
+  message: EnvelopeMessage;
   data: WishlistResponse;
 }

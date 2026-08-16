@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+    title: inventory — module contract
+    version: '2.0.0'
+
+paths:
+    /inventory/movements:
+        get:
+            tags: [Inventory]
+            summary: List stock movements
+            description: The ledger, newest first — every signed change to a shelf count with the why attached (order, cancel, adjustment, restock). Optionally one product's story via `productId`. Admin — customers see stock as a number on the product page.
+            operationId: listStockMovements
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: productId
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Narrow to one product's movements
+            responses:
+                '200':
+                    description: The latest movements
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StockMovementsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /inventory/restock:
+        post:
+            tags: [Inventory]
+            summary: Restock a product
+            description: Puts units on a shelf through the same conditional increment every other movement uses, and writes the ledger row through the same announcement — so a restock and a sale tell the same kind of story. Answers the shelf count after the units landed.
+            operationId: restockProduct
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RestockRequest'
+            responses:
+                '200':
+                    description: The shelf after the delivery
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RestockResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ── Inventory module ────────────────────────────────────────────────────
+        # Owned by src/modules/inventory. The ledger explains stock changes; the product's own
+        # `stock` field stays authoritative.
+
+        StockMovement:
+            type: object
+            additionalProperties: false
+            required: [id, productId, delta, reason]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                delta:
+                    type: number
+                    description: Signed — a sale is negative, a return or restock positive.
+                reason:
+                    type: string
+                    enum: [order, order-cancelled, adjustment, restock]
+                    description: Why the units moved.
+                reference:
+                    type: string
+                    description: What caused it, when something did — the order id, typically.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        StockMovementsResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/StockMovement'
+
+        StockMovementsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/StockMovementsResponse'
+
+        RestockRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                    description: How many units arrived. Corrections downward are the admin product form's absolute stock write.
+
+        RestockResponse:
+            type: object
+            additionalProperties: false
+            required: [productId, stock]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                stock:
+                    type: integer
+                    minimum: 0
+                    description: The shelf count after the units landed.
+
+        RestockResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/RestockResponse'

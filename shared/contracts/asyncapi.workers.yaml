@@ -1,0 +1,127 @@
+# The queues that belong to no domain — the async half of what `openapi.root.yaml` files under
+# `system`.
+#
+# Sending an email and rendering a PDF are verbs, not domains: the producer is whichever module
+# needs one, and the consumer is `infrastructure/adapters/{email,pdf}.worker.ts`. Neither half
+# stops making sense in an app with no modules, so the contract for them sits beside the root
+# rather than inside a domain that happens to enqueue the most jobs.
+#
+# Unlike the root, this IS a standalone AsyncAPI document — `info` exists only to make it one, so
+# `npm run lint:asyncapi:modules` can validate it exactly like a module’s.
+asyncapi: 2.6.0
+info:
+    title: Worker job queues
+    version: 1.0.0
+    description: The `worker.*` queues, owned by the application rather than by any domain.
+channels:
+    worker.email.send:
+        description: Email job queue — producers enqueue email requests, the email worker consumes them.
+        servers:
+            - rabbitmqLocal
+        publish:
+            operationId: workerEmailPublish
+            summary: Enqueue an email for async delivery.
+            message:
+                $ref: '#/components/messages/EmailJobMessage'
+        subscribe:
+            operationId: workerEmailConsume
+            summary: Email worker picks up and sends the email.
+            message:
+                $ref: '#/components/messages/EmailJobConsumeMessage'
+    worker.pdf.generate:
+        description: PDF generation job queue — producers enqueue render requests, the PDF worker consumes them.
+        servers:
+            - rabbitmqLocal
+        publish:
+            operationId: workerPdfPublish
+            summary: Enqueue a PDF generation request.
+            message:
+                $ref: '#/components/messages/PdfJobMessage'
+        subscribe:
+            operationId: workerPdfConsume
+            summary: PDF worker renders template to PDF.
+            message:
+                $ref: '#/components/messages/PdfJobConsumeMessage'
+components:
+    messages:
+        EmailJobMessage:
+            name: EmailJobMessage
+            messageId: worker.email.send
+            title: Email delivery job
+            payload:
+                $ref: '#/components/schemas/EmailJobPayload'
+        PdfJobMessage:
+            name: PdfJobMessage
+            messageId: worker.pdf.generate
+            title: PDF generation job
+            payload:
+                $ref: '#/components/schemas/PdfJobPayload'
+        EmailJobConsumeMessage:
+            name: EmailJobConsumeMessage
+            messageId: worker.email.job.consume
+            title: Email delivery job (worker consume)
+            payload:
+                $ref: '#/components/schemas/EmailJobPayload'
+        PdfJobConsumeMessage:
+            name: PdfJobConsumeMessage
+            messageId: worker.pdf.job.consume
+            title: PDF generation job (worker consume)
+            payload:
+                $ref: '#/components/schemas/PdfJobPayload'
+    schemas:
+        EmailJobPayload:
+            type: object
+            required:
+                - request
+                - templateName
+                - data
+            properties:
+                request:
+                    type: object
+                    description: Nodemailer SendMailOptions subset.
+                    required:
+                        - to
+                    properties:
+                        to:
+                            type: string
+                        subject:
+                            type: string
+                        text:
+                            type: string
+                        html:
+                            type: string
+                    additionalProperties: false
+                from:
+                    type: string
+                    description: Optional sender override.
+                templateName:
+                    type: string
+                    description: EJS template name to render.
+                data:
+                    type: object
+                    description: >-
+                        Everything the template prints, already translated by the producer —
+                        including the `<html lang>` value and the footer line. The consumer
+                        interpolates it and resolves nothing, which is why no locale travels
+                        with the job.
+            additionalProperties: false
+        PdfJobPayload:
+            type: object
+            required:
+                - templatePath
+                - templateData
+                - outputPath
+            properties:
+                templatePath:
+                    type: string
+                    description: Path to the EJS template file.
+                templateData:
+                    type: object
+                    description: >-
+                        Everything the template prints, already translated by the producer —
+                        same contract as EmailJobPayload.data, and the same reason no locale
+                        travels with the job.
+                outputPath:
+                    type: string
+                    description: Filesystem path where the generated PDF will be written.
+            additionalProperties: false

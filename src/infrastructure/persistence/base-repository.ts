@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import type { Model, Document, QueryFilter } from 'mongoose';
+import type { Model, Document, QueryFilter, SaveOptions } from 'mongoose';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -177,8 +177,14 @@ export interface BaseRepository<TDocument extends Document> {
     findAll: (where?: QueryFilter<TDocument>, options?: FindAllOptions) => Promise<TDocument[]>;
     /** Count the documents matching a filter. */
     count: (where?: QueryFilter<TDocument>) => Promise<number>;
-    /** Insert a new document. */
-    create: (data: Partial<TDocument>) => Promise<TDocument>;
+    /**
+     * Insert a new document.
+     *
+     * `options` reaches the underlying `save()`, and exists for one caller: seeding passes
+     * `{ timestamps: false }` so a fixture's pinned `createdAt` survives instead of being
+     * overwritten with the moment the seeder ran. See `./factory`.
+     */
+    create: (data: Partial<TDocument>, options?: SaveOptions) => Promise<TDocument>;
     /** Persist in-memory changes to an already-fetched document. */
     save: (document: TDocument) => Promise<TDocument>;
     /** Remove a single document. */
@@ -253,8 +259,16 @@ export function createBaseRepository<TDocument extends Document>(
     const count = (where: QueryFilter<TDocument> = {}): Promise<number> =>
         mongooseModel.countDocuments(where);
 
-    /** Insert a new document. */
-    const create = (data: Partial<TDocument>): Promise<TDocument> => mongooseModel.create(data);
+    /**
+     * Insert a new document.
+     *
+     * The two branches are not stylistic. `Model.create(doc, options)` is ambiguous — mongoose reads
+     * a trailing plain object as a SECOND DOCUMENT to insert — so the options path goes through
+     * `new Model(...).save(options)`, which is what `create` does internally anyway. Callers that
+     * pass no options keep the single-document call they have always made.
+     */
+    const create = (data: Partial<TDocument>, options?: SaveOptions): Promise<TDocument> =>
+        options === undefined ? mongooseModel.create(data) : new mongooseModel(data).save(options);
 
     /** Persist in-memory changes to an already-fetched document. */
     const save = (document: TDocument): Promise<TDocument> => document.save();

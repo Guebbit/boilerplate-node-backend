@@ -4,11 +4,8 @@ import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { RemoveCartItemRequest } from '@types';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { cartAuditActions } from '../audit';
 import { readInput, isValidObjectId } from '@infrastructure/http/request';
@@ -57,7 +54,7 @@ export const deleteCartItem = (
             );
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.CART_ITEM_REMOVED,
+                event: cartAnalyticsEvents.CART_ITEM_REMOVED,
                 properties: { product_id: productId }
             });
             successResponse(response, result.data);

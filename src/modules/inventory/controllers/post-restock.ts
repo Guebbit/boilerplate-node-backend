@@ -5,7 +5,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { RestockProductBody } from '@api/schemas.zod';
 import { inventoryAuditActions } from '../audit';
-import { restock } from '../service';
+import { inventoryService } from '../service';
 
 /**
  * POST /inventory/restock
@@ -24,7 +24,8 @@ export const postRestock = (request: Request, response: Response) => {
     }
 
     const { productId, quantity } = parseResult.data;
-    return restock(productId, quantity)
+    return inventoryService
+        .restock(productId, quantity)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.errors);

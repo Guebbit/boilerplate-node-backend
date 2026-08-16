@@ -13,16 +13,15 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factory';
-import { createOrder } from '@modules/orders/tests/factory';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import { orderRepository } from '@modules/orders';
-import type { OrderDocumentItem } from '@modules/orders';
 
 setupTestDb();
 
 const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
     const product = await createProduct();
-    return createOrder(user, [{ product, quantity: 2 } as unknown as OrderDocumentItem]);
+    return createOrder(user, [toOrderItem(product, 2)]);
 };
 
 describe('GET /orders', () => {

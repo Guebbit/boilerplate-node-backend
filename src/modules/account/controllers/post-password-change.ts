@@ -6,7 +6,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import type { ChangePasswordRequest } from '@types';
-import { authService } from '../service';
+import { accountService } from '../services';
 import { accountAuditActions } from '../audit';
 import { authPasswordChangeTotal } from '../metrics';
 
@@ -38,7 +38,7 @@ export const postPasswordChange = (
 
     const { currentPassword, password, passwordConfirm } = parseResult.data;
 
-    return authService
+    return accountService
         .passwordChangeWithCurrent(id, currentPassword, password, passwordConfirm)
         .then((result) => {
             if (!result.success) {

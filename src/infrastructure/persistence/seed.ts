@@ -21,8 +21,18 @@ export type SeedOutcome = 'created' | 'skipped';
  */
 export interface SeedRepository<TFixture> {
     findById: (id: string) => PromiseLike<unknown>;
-    create: (data: TFixture) => Promise<unknown>;
+    create: (data: TFixture, options?: { timestamps: false }) => Promise<unknown>;
 }
+
+/**
+ * What every seed write passes to `save()`.
+ *
+ * A fixture states its own `createdAt` — read off its pinned `_id`, see `./factory` — and Mongoose's
+ * `timestamps: true` would overwrite it with the instant the seeder ran. That is not a cosmetic
+ * loss: `scripts/export-seed.ts` commits what it reads back, so a run-dependent timestamp would
+ * make `db/seeds/dataset.json` differ on every export and its staleness check could never pass.
+ */
+export const SEED_SAVE_OPTIONS = { timestamps: false } as const;
 
 /**
  * Upsert one fixture by its fixed `_id`.
@@ -43,6 +53,6 @@ export const upsertById = async <TFixture extends { _id: Types.ObjectId }>(
 ): Promise<SeedOutcome> => {
     const existing = await repository.findById(fixture._id.toString());
     if (existing) return 'skipped';
-    await repository.create(fixture);
+    await repository.create(fixture, SEED_SAVE_OPTIONS);
     return 'created';
 };

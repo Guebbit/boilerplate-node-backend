@@ -17,10 +17,18 @@
  * exclusive — which is what makes a forced `true`/`false` fail.
  */
 import { userModel as Users } from '@modules/users';
-import { runTokenCleanup } from '@modules/account/token-cleanup';
+import { runTokenCleanup } from '@modules/account/services';
 import { logger } from '@infrastructure/adapters/logger';
 
+/*
+ * Only `userModel` is replaced. The rest has to stay REAL because this file reaches the job through
+ * `@modules/account/services`, and that barrel evaluates every service beside it — `profile.ts`
+ * builds its zod schema from `zodUserSchema` at module scope, so a mock that omits it throws before
+ * a single test runs. Spreading the actual module keeps the barrel loadable and still lets the one
+ * call this job makes be observed.
+ */
 jest.mock('@modules/users', () => ({
+    ...jest.requireActual('@modules/users'),
     __esModule: true,
     userModel: {
         tokenRemoveExpired: jest.fn()

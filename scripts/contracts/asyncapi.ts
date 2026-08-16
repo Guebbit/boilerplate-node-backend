@@ -1,64 +1,152 @@
 /**
- * `asyncapi.yaml` — the realtime/event contract, assembled the same way the REST one is.
+ * `asyncapi.yaml` — the realtime/event contract, merged from one document per section.
  *
- * The document has three sections that each domain appears in — `channels:`, `components.messages:`
- * and `components.schemas:` — so a section here contributes three fragments rather than the REST
- * contract's two, and the shared key lines between them are fragments of their own.
+ * ## Why this is not `asyncapi bundle`
  *
- * WHO OWNS WHAT. `observability` owns the SSE channels, because the module that serves
- * `/observability/events` is the one that decides what it pushes down them. The `worker.*` queues
- * belong to no module: the email and PDF workers are substrate (`src/app/workers.ts` over
- * `src/infrastructure/adapters/queue.ts`), enqueued by whichever domain happens to need a mail sent, so they
- * are filed under `workers` in `shared/contracts/` for the same reason `GET /` is filed under
- * `system` in the REST contract.
+ * The REST contract is COMPILED by `redocly bundle`, and the obvious symmetry would be to shell out
+ * to `@asyncapi/cli` here. It was tried, and it does the wrong thing: `asyncapi bundle`
+ * DEREFERENCES. Every `$ref` is inlined, the document grows from 239 lines to 819, each payload is
+ * repeated once per channel that names it AND kept under `components`, and
+ * `scripts/gen-asyncapi-types.ts` — which walks `channels[*].{publish,subscribe}.message.$ref` to
+ * decide what to name a generated model — is left with nothing to follow.
  *
- * The output feeds `npm run gen:asyncapi`, whose generated types are themselves a guarded shared
- * file — so a fragment edited without re-bundling forks the types too, one step later.
+ * So the merge happens here, in about thirty lines, and it is deliberately dumber than a bundler:
+ * it copies three maps and refuses on a collision. `$ref` strings are carried across untouched
+ * because every section resolves its own refs internally — a module's messages and schemas travel
+ * with its channels.
+ *
+ * ## What a section is
+ *
+ * One complete AsyncAPI document per section: `src/modules/<name>/asyncapi.yaml` for a domain, and
+ * `shared/contracts/asyncapi.workers.yaml` for the `worker.*` queues that belong to no domain (the
+ * async twin of filing `GET /` under `system` in the REST contract). Each is valid on its own —
+ * lintable, and openable in AsyncAPI Studio — which the three-fragment layout this replaced could
+ * never be: `channels.yaml`, `messages.yaml` and `schemas.yaml` were half-objects that parsed as
+ * nothing until concatenated in the right order at the right indentation.
+ *
+ * The root document holds what describes the deployment rather than a domain, and no channels.
+ *
+ * ## Formatting
+ *
+ * Merged through the YAML AST (`parseDocument`), not through plain objects, so each node keeps the
+ * quoting and scalar style it was authored with — a `$ref` stays single-quoted, a `|` block stays a
+ * block. Only folded scalars are re-emitted, since `lineWidth: 0` unfolds them.
  */
 
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { REPO_ROOT, type ContractBundle, type Segment } from './fragments';
+import { isMap, parseDocument, type Document, type YAMLMap } from 'yaml';
+import { REPO_ROOT, type ContractBundle } from './fragments';
 
-/** The order the document's per-section fragments are assembled in, within each of its sections. */
+/** The order sections are merged in, and therefore the order they appear in the output. */
 export const ASYNC_SECTION_ORDER = ['observability', 'workers'] as const;
 
 export type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
 
-/** The three places every section appears: its channels, its messages, its payload schemas. */
-export type AsyncFragmentKind = 'channels' | 'messages' | 'schemas';
-
-/** Where a section's fragment of `kind` lives in THIS repo. */
-export const asyncSectionFragment = (section: AsyncSectionName, kind: AsyncFragmentKind): string =>
+/** Where a section's document lives — a module's own file, or the shared one for the queues. */
+export const asyncSectionDocument = (section: AsyncSectionName): string =>
     section === 'workers'
-        ? path.join(REPO_ROOT, 'shared', 'contracts', `asyncapi.workers.${kind}.yaml`)
-        : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi', `${kind}.yaml`);
+        ? path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml')
+        : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
 
-/** A shared fragment of the document's scaffolding, by the key it opens. */
-const sharedFragment = (name: string): string =>
-    path.join(REPO_ROOT, 'shared', 'contracts', `asyncapi.${name}.yaml`);
+/** Preamble: version, id, info, content type, tags, servers. Holds no channel. */
+export const ASYNC_ROOT_DOCUMENT = path.join(
+    REPO_ROOT,
+    'shared',
+    'contracts',
+    'asyncapi.root.yaml'
+);
 
-/** Preamble: version, id, info, content type, tags, servers. */
-export const ASYNC_HEADER_FRAGMENT = sharedFragment('header');
+/** The three places a section contributes to, in the order the document declares them. */
+const MERGED_PATHS = [['channels'], ['components', 'messages'], ['components', 'schemas']] as const;
 
-const CHANNELS_KEY_FRAGMENT = sharedFragment('channels.header');
-const COMPONENTS_KEY_FRAGMENT = sharedFragment('components.header');
-const SCHEMAS_KEY_FRAGMENT = sharedFragment('schemas.header');
+/** What the committed contract opens with, so the file says what it is. */
+const MARKER =
+    '# Code generated by `npm run contracts:bundle`. DO NOT EDIT.\n' +
+    '# Sources: shared/contracts/asyncapi.root.yaml, shared/contracts/asyncapi.workers.yaml\n' +
+    '#          and src/modules/*/asyncapi.yaml\n';
 
-/** Every section's fragment of one kind, in canonical order. */
-const sectionsOf = (kind: AsyncFragmentKind): string[] =>
-    ASYNC_SECTION_ORDER.map((section) => asyncSectionFragment(section, kind));
+const read = (file: string): Document =>
+    parseDocument(readFileSync(file, 'utf8'), { keepSourceTokens: true });
+
+/**
+ * Merge one section's map into the target, refusing to overwrite.
+ *
+ * The collision is the guard worth having: two sections claiming `observability.heartbeat`, or two
+ * modules declaring a `MetricsPayload` schema, would otherwise resolve to whichever was merged last
+ * — and the loser's channel would silently vanish from a contract the paired frontend generates its
+ * client from. Named `audit-actions.test.ts`-style, with both owners in the message.
+ */
+const mergeInto = (
+    target: Document,
+    keyPath: readonly string[],
+    section: string,
+    source: unknown
+): void => {
+    if (!isMap(source)) return;
+
+    const existing = target.getIn(keyPath, true);
+    if (!isMap(existing)) {
+        target.setIn(keyPath, source);
+        return;
+    }
+
+    for (const item of (source as YAMLMap).items) {
+        const key = String(item.key);
+        if (existing.has(key))
+            throw new Error(
+                `[asyncapi] two sections declare ${keyPath.join('.')}.${key} — the second is ` +
+                    `\`${section}\`. A channel, message or schema belongs to exactly one section, ` +
+                    `and a merge that overwrote one would drop it from the contract silently.`
+            );
+        existing.items.push(item);
+    }
+};
+
+let compiled: string | undefined;
+
+const compile = (): string => {
+    if (compiled !== undefined) return compiled;
+
+    const document_ = read(ASYNC_ROOT_DOCUMENT);
+
+    /*
+     * The root file's own header explains where channels come from — advice for whoever edits it,
+     * and noise in a generated artefact that opens with `DO NOT EDIT`. Dropped here rather than
+     * left unwritten in the source, because the explanation is worth more at the place it applies.
+     * Section documents lose theirs for free: only their channel/message/schema NODES are copied,
+     * and a file-level comment belongs to the document.
+     *
+     * Cleared off the first KEY, not off the document: `yaml` attaches a leading comment block to
+     * whatever node follows it, and `doc.commentBefore` is only set when a document has no content
+     * to hang it on. Setting that instead silently does nothing, which is how this was written the
+     * first time.
+     */
+    const firstKey = isMap(document_.contents) ? document_.contents.items[0]?.key : undefined;
+    if (firstKey && typeof firstKey === 'object')
+        (firstKey as { commentBefore?: unknown }).commentBefore = undefined;
+
+    for (const section of ASYNC_SECTION_ORDER) {
+        const source = read(asyncSectionDocument(section));
+        for (const keyPath of MERGED_PATHS)
+            mergeInto(document_, keyPath, section, source.getIn(keyPath, true));
+    }
+
+    /* `lineWidth: 0` because a contract line that wraps at a column is a diff nobody asked for:
+     * re-flowing prose on an unrelated edit is exactly the noise `check:contracts-bundle` would
+     * then report as staleness. */
+    compiled = MARKER + document_.toString({ indent: 4, lineWidth: 0 });
+    return compiled;
+};
 
 export const asyncapiBundle: ContractBundle = {
     name: 'asyncapi',
     label: 'asyncapi.yaml',
     output: path.join(REPO_ROOT, 'asyncapi.yaml'),
-    segments: (): Segment[] => [
-        ASYNC_HEADER_FRAGMENT,
-        CHANNELS_KEY_FRAGMENT,
-        ...sectionsOf('channels'),
-        COMPONENTS_KEY_FRAGMENT,
-        ...sectionsOf('messages'),
-        SCHEMAS_KEY_FRAGMENT,
-        ...sectionsOf('schemas')
-    ]
+    content: compile,
+    sources: () => [
+        ASYNC_ROOT_DOCUMENT,
+        ...ASYNC_SECTION_ORDER.map((section) => asyncSectionDocument(section))
+    ],
+    compiled: true
 };

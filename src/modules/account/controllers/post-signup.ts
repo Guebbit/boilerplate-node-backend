@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { authService } from '../service';
+import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { resolveImageUrl } from '@infrastructure/http/uploads';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -9,12 +9,9 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
-import { sendVerificationEmail } from '../verification';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { accountAnalyticsEvents } from '../analytics';
+import { sendVerificationEmail } from '../services';
 
 /**
  * POST /account/signup
@@ -42,7 +39,7 @@ export const postSignup = (
     /**
      * Register
      */
-    return authService
+    return accountService
         .signup(email, username, password, passwordConfirm, imageUrl)
         .then((result) => {
             if (!result.success)
@@ -73,7 +70,7 @@ export const postSignup = (
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
                 distinctId: newUserId,
-                event: analyticsEvents.USER_SIGNED_UP
+                event: accountAnalyticsEvents.USER_SIGNED_UP
             });
             /*
              * Start email verification — the account works either way (`verified` is

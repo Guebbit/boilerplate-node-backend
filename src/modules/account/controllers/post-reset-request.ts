@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { RequestPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@modules/users';
-import { authService } from '../service';
+import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { PasswordResetRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -26,7 +26,7 @@ const lookupResetData = (email?: string) => {
     if (!email) return Promise.resolve();
     return userService.findByEmail(email).then((user) => {
         if (!user) return;
-        return authService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
+        return accountService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
             username: user.username,
             // The account's own language, so the email matches the rest of what this user
             // receives from us rather than the browser that happened to submit the form.

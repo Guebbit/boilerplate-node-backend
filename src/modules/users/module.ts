@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
-import { seedUsersCollection } from './seeds';
+import { seedUsersCollection, exportSeededUsers } from './seeds';
 import './events';
 
 /**
@@ -32,5 +32,6 @@ export default {
     basePath: '/users',
     routes: router,
     seeds: seedUsersCollection,
+    seedExport: exportSeededUsers,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

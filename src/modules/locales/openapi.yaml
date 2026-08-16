@@ -1,0 +1,122 @@
+openapi: 3.0.3
+info:
+    title: locales — module contract
+    version: '2.0.0'
+
+paths:
+    # --------- Locales ---------
+    /locales:
+        get:
+            tags: [System]
+            summary: Supported languages
+            description: |
+                Which languages this deployment can answer in, plus its default and fallback.
+
+                Public, unauthenticated and cacheable: it is static copy that changes only on
+                deploy, and a client that has just failed to reach the API is exactly who needs
+                it.
+            operationId: getLocales
+            responses:
+                '200':
+                    description: Locale capabilities
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/{locale}:
+        get:
+            tags: [System]
+            summary: API message dictionary
+            description: |
+                This API's own dictionary for one language.
+
+                Normally unnecessary — the API resolves its keys itself and puts finished text on
+                the wire. It earns its place when no response arrives at all (a network failure, a
+                bare 502) and the client must produce the copy itself, in the active language.
+            operationId: getLocaleDictionary
+            parameters:
+                - name: locale
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                  description: A language tag from `GET /locales`.
+            responses:
+                '200':
+                    description: Dictionary for the requested locale
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleDictionaryEnvelope'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- locales — the schemas only this module's paths reference. ----------
+        LocaleCapabilities:
+            type: object
+            additionalProperties: false
+            required: [locales, default, fallback]
+            description: >-
+                Which languages a deployment can answer in. Runtime state, not contract state:
+                it is derived from the dictionaries actually deployed, so it cannot be an enum
+                here.
+            properties:
+                locales:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                    description: Every supported language tag.
+                default:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                fallback:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+
+        LocaleCapabilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleCapabilities'
+
+        LocaleDictionary:
+            type: object
+            additionalProperties: false
+            required: [locale, messages]
+            description: >-
+                The API's OWN message dictionary for one language — its API-response copy and
+                nothing else. It is never a client's UI dictionary: the two are authored and
+                deployed in separate repositories, and mixing them would put view copy in the
+                API's keyspace. A client that wants these merges them under a namespace it
+                reserves for the API, never at the root.
+            properties:
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                messages:
+                    type: object
+                    additionalProperties: true
+                    description: Nested key/value dictionary, the same shape the API loads.
+
+        LocaleDictionaryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleDictionary'

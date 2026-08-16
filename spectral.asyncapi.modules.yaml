@@ -1,0 +1,38 @@
+# Linting ONE section of the async contract, on its own — `npm run lint:asyncapi:modules`.
+#
+# `src/modules/<name>/asyncapi.yaml` and `shared/contracts/asyncapi.workers.yaml` are complete
+# AsyncAPI documents, which is what lets each be linted and opened in Studio without the rest of the
+# contract. What neither is, is a complete API: the servers, the tag list, the id and the `info`
+# prose describe the deployment, and they are declared once in `shared/contracts/asyncapi.root.yaml`
+# rather than restated by every section.
+#
+# So the rules turned off below are exactly the ones that ask a section to be the whole contract.
+# They stay ON for the bundle — `npm run lint:asyncapi` runs the AsyncAPI CLI against
+# `asyncapi.yaml`, where a missing server or an undeclared content type is a real defect. This is
+# the async twin of `spectral.modules.yaml`, and it exists for the same reason.
+#
+# `spectral:asyncapi` rather than the AsyncAPI CLI: the CLI takes no custom ruleset, so a section
+# whose channel names a server the root defines fails it with an ERROR that cannot be waived. The
+# alternative was restating `servers:` in every section, which is the duplication this split exists
+# to remove.
+
+extends: [[spectral:asyncapi, recommended]]
+
+rules:
+    # Which server carries a channel is contract information worth keeping; WHERE that server is
+    # belongs to the deployment. `rabbitmqLocal` is declared once, in the root.
+    asyncapi-channel-servers: off
+
+    # The tag list groups the documentation and the server list names the brokers — both are the
+    # deployment's, declared once in the root.
+    #
+    # `id` and `defaultContentType` are root-level facts too and are not named here, because
+    # `spectral:asyncapi` has no rule for either; the warnings about those come from the AsyncAPI
+    # CLI's ruleset, which lints the assembled `asyncapi.yaml` where they do belong.
+    asyncapi-tags: off
+    asyncapi-servers: off
+
+    # A section's `info` block exists only to make the file a valid document. The real title,
+    # contact and licence are the deployment's.
+    asyncapi-info-contact: off
+    asyncapi-info-license: off

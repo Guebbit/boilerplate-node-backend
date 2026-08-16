@@ -1,7 +1,7 @@
 /**
- * `src/modules/users/validation.ts` — the six message thunks on `zodUserSchema`.
+ * `zodUserSchema` in `src/modules/users/model.ts` — its six message thunks.
  *
- * The module is a declaration, so there is nothing to call and it reports 100% of statements
+ * The schema is a declaration, so there is nothing to call and it reports 100% of statements
  * covered by anything that merely imports it. What that number does not say is whether the
  * thunks ever *run*: half of them had never been invoked, because the suites that parse a bad
  * user only ever supplied one kind of bad input.

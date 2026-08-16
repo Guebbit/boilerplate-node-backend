@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { productRepository } from '../repository';
+import { productService } from '../service';
 
 /**
  * GET /products/categories
@@ -10,7 +10,7 @@ import { productRepository } from '../repository';
  * whenever the catalogue changes.
  */
 export const getCatalogueFacets = (request: Request, response: Response) =>
-    productRepository
+    productService
         .facets()
         .then((facets) => {
             successResponse(response, facets);

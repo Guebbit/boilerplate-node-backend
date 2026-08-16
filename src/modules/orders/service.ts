@@ -110,8 +110,7 @@ export const create = (
         }
 
         const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
-            // lean() returns a plain object compatible with ProductDocument at runtime
-            product: product! as OrderDocumentItem['product'],
+            product: product!,
             quantity: item.quantity
         }));
 
@@ -120,7 +119,7 @@ export const create = (
                 userId: toObjectId(userId),
                 email,
                 items: orderItems
-            } as Partial<OrderDocument>)
+            })
             .then(async (order) => {
                 // The shelf already moved; the ledger hears why, now that the order has an id.
                 for (const line of taken)
@@ -169,8 +168,7 @@ export const update = (
                   if (missingProduct) return generateReject(404, [t('products.not-found')]);
 
                   order.items = resolvedItems.map(({ item, product }) => ({
-                      // lean() returns a plain object compatible with ProductDocument at runtime
-                      product: product! as OrderDocumentItem['product'],
+                      product: product!,
                       quantity: item.quantity
                   }));
               })

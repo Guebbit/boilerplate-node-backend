@@ -4,7 +4,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from '../audit';
-import { runCourierAdvance } from '../service';
+import { deliveryService } from '../service';
 
 /**
  * POST /delivery/advance
@@ -13,7 +13,8 @@ import { runCourierAdvance } from '../service';
  * parcel currently on a truck arrives.
  */
 export const postCourierAdvance = (request: Request, response: Response) =>
-    runCourierAdvance()
+    deliveryService
+        .runCourierAdvance()
         .then((advanced) => {
             emitAuditEvent(
                 buildAuditEvent(request, {

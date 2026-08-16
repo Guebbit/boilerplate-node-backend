@@ -2,14 +2,15 @@ import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { userService } from '@modules/users';
-import { destroyRefreshCookie, destroyLoggedCookie } from '../cookies';
+import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AccountDeleteConfirmRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { deleteConfirmEmail } from '../emails';
-import { emitAnalyticsEvent, analyticsEvents } from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent } from '@infrastructure/observability/analytics';
+import { accountAnalyticsEvents } from '../analytics';
 
 /**
  * DELETE /account/delete-confirm
@@ -72,7 +73,7 @@ export const deleteAccountConfirm = (
 
                 emitAnalyticsEvent({
                     distinctId: String(_id),
-                    event: analyticsEvents.ACCOUNT_DELETED
+                    event: accountAnalyticsEvents.ACCOUNT_DELETED
                 });
 
                 destroyRefreshCookie(response);

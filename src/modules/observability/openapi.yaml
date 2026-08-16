@@ -1,0 +1,357 @@
+openapi: 3.0.3
+info:
+    title: observability — module contract
+    version: '2.0.0'
+
+paths:
+    # --------- Observability ---------
+    /observability/events:
+        get:
+            tags: [Observability]
+            summary: Observability SSE stream
+            description: |
+                Live Server-Sent Events stream for demo dashboards.
+                Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
+            operationId: getObservabilityEvents
+            responses:
+                '200':
+                    description: Server-Sent Events stream
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                # Guarded by `isAdminViaCookie`: an EventSource cannot set an Authorization
+                # header, so the HttpOnly refresh cookie is the credential here.
+                '401':
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized'
+                '403':
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden'
+
+    /observability/health:
+        get:
+            tags: [Observability]
+            summary: Health snapshot
+            description: |
+                Full JSON health snapshot for dashboard use.
+                Includes uptime, database status, memory, integrations, and system info.
+                Requires admin role.
+            operationId: getObservabilityHealth
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Health summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ObservabilityHealthResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /observability/metrics:
+        get:
+            tags: [Observability]
+            summary: Prometheus metrics
+            description: |
+                Raw Prometheus text (exposition format 0.0.4).
+                Intended for Prometheus scraping, not for browser clients.
+                Use `GET /observability/metrics/overview` for a JSON summary suitable for dashboards.
+            operationId: getObservabilityMetrics
+            responses:
+                '200':
+                    description: Prometheus exposition text
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+                # Guarded by `isMetricsScraper`, which takes a static bearer credential rather
+                # than the admin JWT — Prometheus cannot log in or refresh a token.
+                '401':
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized'
+                '503':
+                    description: |
+                        `NODE_METRICS_TOKEN` is not configured. The endpoint denies by default
+                        rather than opening: an unauthenticated metrics endpoint is not a state
+                        to arrive at by forgetting an environment variable.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+
+    /observability/metrics/overview:
+        get:
+            tags: [Observability]
+            summary: Metrics overview (JSON)
+            description: |
+                Key operational metrics derived from Prometheus counters/histograms,
+                returned as structured JSON for dashboard KPI cards and charts.
+                Requires admin role.
+            operationId: getObservabilityMetricsOverview
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Metrics overview
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ObservabilityMetricsSummaryResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /observability/audit:
+        get:
+            tags: [Observability]
+            summary: Recent audit events
+            description: |
+                Returns the most recent audit events, newest first, from the persisted audit trail.
+                Events include auth flows, admin CRUD actions, and security blocks.
+                Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
+                `total` counts every event matching the filters, not just the returned page.
+                Requires admin role.
+            operationId: getObservabilityAuditLogs
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: actor
+                  in: query
+                  schema: { type: string }
+                  description: Filter by actor user ID
+                - name: action
+                  in: query
+                  schema: { type: string }
+                  description: 'Filter by action name (e.g. auth.login.failed)'
+                - name: outcome
+                  in: query
+                  schema:
+                      type: string
+                      enum: [success, failure]
+                  description: Filter by outcome
+                - name: since
+                  in: query
+                  schema:
+                      type: string
+                      format: date-time
+                  description: Return events after this ISO-8601 timestamp
+                - name: limit
+                  in: query
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 200
+                      default: 50
+                  description: Maximum number of events to return
+            responses:
+                '200':
+                    description: Audit events
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuditLogsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- observability — the schemas only this module's paths reference. ----------
+        ObservabilityHealthResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ObservabilityHealth'
+
+        ObservabilityMetricsSummaryResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
+
+        AuditLogsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AuditLogsPage'
+
+        ObservabilityHealthIntegrations:
+            type: object
+            additionalProperties: false
+            properties:
+                loki: { type: boolean }
+                # Which backend `emitAnalyticsEvent` is delivering to, not whether one is
+                # configured — the choice is between three implementations, so a boolean
+                # could not tell "unconfigured" from "deliberately collecting nothing".
+                analytics: { type: string, enum: [umami, posthog, none] }
+                otelEnabled: { type: boolean }
+                umami: { type: boolean }
+                faro: { type: boolean }
+
+        ObservabilityHealthMemory:
+            type: object
+            additionalProperties: false
+            required: [heapUsedMb, heapTotalMb, rssMb]
+            properties:
+                heapUsedMb: { type: integer }
+                heapTotalMb: { type: integer }
+                rssMb: { type: integer }
+
+        ObservabilityHealthSystem:
+            type: object
+            additionalProperties: false
+            required: [platform, cpuCount, loadAvg]
+            properties:
+                platform: { type: string }
+                cpuCount: { type: integer }
+                loadAvg:
+                    type: array
+                    items: { type: number }
+
+        ObservabilityHealth:
+            type: object
+            additionalProperties: false
+            required:
+                [status, environment, service, nodeVersion, uptimeSeconds, database, timestamp]
+            properties:
+                status:
+                    type: string
+                    enum: [ok, degraded]
+                environment: { type: string }
+                service: { type: string }
+                nodeVersion: { type: string }
+                uptimeSeconds: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    additionalProperties: false
+                    required: [status]
+                    properties:
+                        status:
+                            type: string
+                            enum: [connected, connecting, disconnected]
+                integrations: { $ref: '#/components/schemas/ObservabilityHealthIntegrations' }
+                memory: { $ref: '#/components/schemas/ObservabilityHealthMemory' }
+                system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
+                timestamp: { type: string, format: date-time }
+
+        ObservabilityMetricsLatency:
+            type: object
+            additionalProperties: false
+            required: [p50, p95]
+            properties:
+                p50: { type: number, description: Median latency in ms }
+                p95: { type: number, description: 95th-percentile latency in ms }
+
+        ObservabilityMetricsSummary:
+            type: object
+            additionalProperties: false
+            required: [http, auth, business, database, process, timestamp]
+            properties:
+                http:
+                    type: object
+                    additionalProperties: false
+                    required: [totalRequests, totalErrors, errorRate, inFlight, latencyMs]
+                    properties:
+                        totalRequests: { type: integer, minimum: 0 }
+                        totalErrors: { type: integer, minimum: 0 }
+                        errorRate:
+                            type: number
+                            minimum: 0
+                            maximum: 1
+                            description: Fraction of requests that returned 4xx/5xx
+                        inFlight: { type: integer, minimum: 0 }
+                        latencyMs: { $ref: '#/components/schemas/ObservabilityMetricsLatency' }
+                auth:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        loginSuccess: { type: integer, minimum: 0 }
+                        loginFailure: { type: integer, minimum: 0 }
+                        signupSuccess: { type: integer, minimum: 0 }
+                business:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        checkoutSuccess: { type: integer, minimum: 0 }
+                        ordersCreated: { type: integer, minimum: 0 }
+                        # Products at or under NODE_LOW_STOCK_THRESHOLD, recounted at read time.
+                        # Zero in builds without the inventory module.
+                        lowStockProducts: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        queriesTotal: { type: integer, minimum: 0 }
+                        errorsTotal: { type: integer, minimum: 0 }
+                process:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        uptimeSeconds: { type: integer, minimum: 0 }
+                        heapUsedMb: { type: integer, minimum: 0 }
+                timestamp: { type: string, format: date-time }
+
+        AuditLogsPage:
+            type: object
+            additionalProperties: false
+            required: [items, total]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEventItem' }
+                total: { type: integer, minimum: 0 }
+        AuditEventItem:
+            type: object
+            additionalProperties: false
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id: { type: string }
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                action:
+                    {
+                        type: string,
+                        description: 'Dot-notation action name (e.g. auth.login.succeeded)'
+                    }
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip: { type: string }
+                user_agent: { type: string }
+                request_id: { type: string }
+                trace_id: { type: string }
+                target_type: { type: string }
+                target_id: { type: string }
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp: { type: string, format: date-time }
+                level:
+                    type: string
+                    enum: [info, warn]

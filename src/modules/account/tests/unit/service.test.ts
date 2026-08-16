@@ -19,7 +19,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
-import { authService } from '@modules/account/service';
+import { accountService } from '@modules/account/services';
 import { userRepository } from '@modules/users';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
@@ -45,7 +45,12 @@ const asSuccess = (
 describe('signup', () => {
     it('creates the account and returns it', async () => {
         const response = asSuccess(
-            await authService.signup('new@example.com', 'newuser', VALID_PASSWORD, VALID_PASSWORD)
+            await accountService.signup(
+                'new@example.com',
+                'newuser',
+                VALID_PASSWORD,
+                VALID_PASSWORD
+            )
         );
 
         expect(response.data.email).toBe('new@example.com');
@@ -60,7 +65,7 @@ describe('signup', () => {
         // The `pre('save')` hook hashes it. If that hook stops firing — or someone "simplifies"
         // this service to write the field directly — every account in the database becomes a
         // plaintext credential, and no happy-path assertion notices.
-        await authService.signup(
+        await accountService.signup(
             'hashed@example.com',
             'hasheduser',
             VALID_PASSWORD,
@@ -77,7 +82,7 @@ describe('signup', () => {
 
     it('rejects a mismatched confirmation with 422 and says so', async () => {
         const response = asReject(
-            await authService.signup(
+            await accountService.signup(
                 'mismatch@example.com',
                 'mismatchuser',
                 VALID_PASSWORD,
@@ -95,7 +100,7 @@ describe('signup', () => {
         await createUser({ email: 'taken@example.com' });
 
         const response = asReject(
-            await authService.signup(
+            await accountService.signup(
                 'taken@example.com',
                 'someoneelse',
                 VALID_PASSWORD,
@@ -111,7 +116,7 @@ describe('signup', () => {
         ['bad-username@example.com', 'ab', VALID_PASSWORD],
         ['short-password@example.com', 'gooduser', 'abc']
     ])('rejects invalid input (%s / %s) with 422', async (email, username, password) => {
-        const response = asReject(await authService.signup(email, username, password, password));
+        const response = asReject(await accountService.signup(email, username, password, password));
 
         expect(response.status).toBe(422);
         expect(response.errors.length).toBeGreaterThan(0);
@@ -122,7 +127,7 @@ describe('signup', () => {
         // is what keeps that default from firing, so an account created without a picture has an
         // empty field the UI can branch on rather than a stock image it cannot tell apart from a
         // deliberate one.
-        await authService.signup(
+        await accountService.signup(
             'noimage@example.com',
             'noimageuser',
             VALID_PASSWORD,
@@ -147,7 +152,7 @@ describe('login', () => {
     it('returns the user for correct credentials', async () => {
         await createLoginUser();
 
-        const response = asSuccess(await authService.login('login@example.com', VALID_PASSWORD));
+        const response = asSuccess(await accountService.login('login@example.com', VALID_PASSWORD));
 
         expect(response.data.email).toBe('login@example.com');
     });
@@ -164,10 +169,10 @@ describe('login', () => {
         await createLoginUser();
 
         const unknownAccount = asReject(
-            await authService.login('nobody@example.com', VALID_PASSWORD)
+            await accountService.login('nobody@example.com', VALID_PASSWORD)
         );
         const wrongPassword = asReject(
-            await authService.login('login@example.com', 'not-the-password')
+            await accountService.login('login@example.com', 'not-the-password')
         );
 
         expect(unknownAccount.status).toBe(401);
@@ -182,7 +187,7 @@ describe('login', () => {
         // and every other login test still passes, because they use live accounts.
         await createLoginUser({ deletedAt: new Date() } as Partial<UserDocument>);
 
-        const response = asReject(await authService.login('login@example.com', VALID_PASSWORD));
+        const response = asReject(await accountService.login('login@example.com', VALID_PASSWORD));
 
         expect(response.status).toBe(401);
     });
@@ -196,8 +201,8 @@ describe('login', () => {
         // the thing the 401s above are careful not to.
         await createLoginUser();
 
-        const existingAccount = asReject(await authService.login('login@example.com', 'x'));
-        const unknownAccount = asReject(await authService.login('nobody@example.com', 'x'));
+        const existingAccount = asReject(await accountService.login('login@example.com', 'x'));
+        const unknownAccount = asReject(await accountService.login('nobody@example.com', 'x'));
 
         expect(existingAccount.status).toBe(422);
         expect(unknownAccount.status).toBe(422);
@@ -211,7 +216,7 @@ describe('login', () => {
     ])('rejects %s with 422, before touching the database', async (_label, email, password) => {
         // 422 rather than 401: the request could not be understood, which is a different fact
         // from "these credentials are wrong" and must not be flattened into it.
-        const response = asReject(await authService.login(email, password));
+        const response = asReject(await accountService.login(email, password));
 
         expect(response.status).toBe(422);
     });
@@ -219,23 +224,23 @@ describe('login', () => {
 
 describe('validatePasswordChange', () => {
     it('returns no messages for an acceptable pair', () => {
-        expect(authService.validatePasswordChange(VALID_PASSWORD, VALID_PASSWORD)).toEqual([]);
+        expect(accountService.validatePasswordChange(VALID_PASSWORD, VALID_PASSWORD)).toEqual([]);
     });
 
     it('reports a mismatch', () => {
-        const messages = authService.validatePasswordChange(VALID_PASSWORD, 'different');
+        const messages = accountService.validatePasswordChange(VALID_PASSWORD, 'different');
 
         expect(messages.length).toBeGreaterThan(0);
     });
 
     it('reports a password that is too short', () => {
-        expect(authService.validatePasswordChange('abc', 'abc').length).toBeGreaterThan(0);
+        expect(accountService.validatePasswordChange('abc', 'abc').length).toBeGreaterThan(0);
     });
 
     it('reports empty input rather than accepting it', () => {
         // Called with no arguments by a caller that forgot to pass the body through. Defaulting
         // to `''` must produce errors, not an empty array meaning "fine".
-        expect(authService.validatePasswordChange().length).toBeGreaterThan(0);
+        expect(accountService.validatePasswordChange().length).toBeGreaterThan(0);
     });
 });
 
@@ -247,7 +252,7 @@ describe('passwordChange', () => {
         });
 
         const response = asSuccess(
-            await authService.passwordChange(user, VALID_PASSWORD, VALID_PASSWORD)
+            await accountService.passwordChange(user, VALID_PASSWORD, VALID_PASSWORD)
         );
 
         expect(response.status).toBe(200);
@@ -255,7 +260,7 @@ describe('passwordChange', () => {
         const stored = await userRepository.findOneWithCredentials({ email: 'change@example.com' });
         expect(stored?.password).toMatch(/^\$2[aby]\$/);
         // And it is the NEW one: the login flow is the honest way to assert that.
-        const loggedIn = await authService.login('change@example.com', VALID_PASSWORD);
+        const loggedIn = await accountService.login('change@example.com', VALID_PASSWORD);
         expect(loggedIn.success).toBe(true);
     });
 
@@ -268,11 +273,13 @@ describe('passwordChange', () => {
             password: 'old-password-123'
         });
 
-        const response = asReject(await authService.passwordChange(user, VALID_PASSWORD, 'nope'));
+        const response = asReject(
+            await accountService.passwordChange(user, VALID_PASSWORD, 'nope')
+        );
 
         expect(response.status).toBe(422);
 
-        const stillWorks = await authService.login('unchanged@example.com', 'old-password-123');
+        const stillWorks = await accountService.login('unchanged@example.com', 'old-password-123');
         expect(stillWorks.success).toBe(true);
     });
 });
@@ -281,7 +288,7 @@ describe('tokenAdd', () => {
     it('appends a token of the requested type and returns it', async () => {
         const user = await createUser({ email: 'tokenadd@example.com' });
 
-        const token = await authService.tokenAdd(user, TokenType.PASSWORD_RESET);
+        const token = await accountService.tokenAdd(user, TokenType.PASSWORD_RESET);
 
         const stored = await userRepository.findOneWithCredentials({
             email: 'tokenadd@example.com'
@@ -296,7 +303,7 @@ describe('tokenAdd', () => {
         // anything shorter is a guessable reset link, and the value is only ever compared for
         // equality, so nothing else in the system would complain.
         return createUser({ email: 'entropy@example.com' })
-            .then((user) => authService.tokenAdd(user, TokenType.PASSWORD_RESET))
+            .then((user) => accountService.tokenAdd(user, TokenType.PASSWORD_RESET))
             .then((token) => {
                 expect(token).toMatch(/^[\da-f]{32}$/);
             });
@@ -317,8 +324,8 @@ describe('tokenAdd', () => {
         const other = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
         const [first, second] = await Promise.all([
-            authService.tokenAdd(user, TokenType.PASSWORD_RESET),
-            authService.tokenAdd(other, TokenType.PASSWORD_RESET)
+            accountService.tokenAdd(user, TokenType.PASSWORD_RESET),
+            accountService.tokenAdd(other, TokenType.PASSWORD_RESET)
         ]);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
@@ -330,8 +337,8 @@ describe('tokenAdd', () => {
     it('issues a different token every time', async () => {
         const user = await createUser({ email: 'distinct@example.com' });
 
-        const first = await authService.tokenAdd(user, TokenType.PASSWORD_RESET);
-        const second = await authService.tokenAdd(user, TokenType.PASSWORD_RESET);
+        const first = await accountService.tokenAdd(user, TokenType.PASSWORD_RESET);
+        const second = await accountService.tokenAdd(user, TokenType.PASSWORD_RESET);
 
         expect(first).not.toBe(second);
     });
@@ -340,8 +347,8 @@ describe('tokenAdd', () => {
         const user = await createUser({ email: 'expiry@example.com' });
         const before = Date.now();
 
-        await authService.tokenAdd(user, TokenType.PASSWORD_RESET, 60_000);
-        await authService.tokenAdd(user, TokenType.REFRESH);
+        await accountService.tokenAdd(user, TokenType.PASSWORD_RESET, 60_000);
+        await accountService.tokenAdd(user, TokenType.REFRESH);
 
         const stored = await userRepository.findOneWithCredentials({ email: 'expiry@example.com' });
         const [withExpiry, withoutExpiry] = stored!.tokens;
@@ -371,7 +378,7 @@ describe('tokenRemoveAll', () => {
     it('removes every token of the given type', async () => {
         const user = await createUserWithBothTokenTypes();
 
-        asSuccess(await authService.tokenRemoveAll(String(user._id), TokenType.REFRESH));
+        asSuccess(await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH));
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
@@ -384,7 +391,7 @@ describe('tokenRemoveAll', () => {
         // removed type alone would catch.
         const user = await createUserWithBothTokenTypes();
 
-        await authService.tokenRemoveAll(String(user._id), TokenType.PASSWORD_RESET);
+        await accountService.tokenRemoveAll(String(user._id), TokenType.PASSWORD_RESET);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['refresh-a', 'refresh-b']);
@@ -392,7 +399,7 @@ describe('tokenRemoveAll', () => {
 
     it('answers 404 for a user that does not exist', async () => {
         const response = asReject(
-            await authService.tokenRemoveAll('64b7f2a1c2d3e4f5a6b7c8d9', TokenType.REFRESH)
+            await accountService.tokenRemoveAll('64b7f2a1c2d3e4f5a6b7c8d9', TokenType.REFRESH)
         );
 
         expect(response.status).toBe(404);
@@ -412,8 +419,8 @@ describe('tokenRemoveAll', () => {
         const user = await createUserWithBothTokenTypes();
         const staleCopy = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
-        await authService.tokenRemoveAll(String(user._id), TokenType.REFRESH);
-        await authService.tokenAdd(staleCopy, 'delete', 3600);
+        await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH);
+        await accountService.tokenAdd(staleCopy, 'delete', 3600);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ type }) => type).toSorted()).toEqual(['delete', 'password']);
@@ -423,7 +430,9 @@ describe('tokenRemoveAll', () => {
         // A malformed id reaches mongoose as a CastError. It must come back as a client error,
         // not as the 500 an uncaught cast produces — the same failure `databaseErrorInterpreter`
         // was fixed for elsewhere.
-        const response = asReject(await authService.tokenRemoveAll('not-an-id', TokenType.REFRESH));
+        const response = asReject(
+            await accountService.tokenRemoveAll('not-an-id', TokenType.REFRESH)
+        );
 
         expect(response.status).toBe(422);
     });

@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
-import { authService } from '../service';
+import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -30,7 +30,7 @@ export const deleteAccountRequest = (request: Request, response: Response) => {
                 authAccountDeleteTotal.inc({ status: 'failure' });
                 return successResponse(response, undefined, 200, t('account.delete.email-sent'));
             }
-            return authService.tokenAdd(user, 'delete', 3_600_000).then((token) => {
+            return accountService.tokenAdd(user, 'delete', 3_600_000).then((token) => {
                 authAccountDeleteTotal.inc({ status: 'success' });
 
                 /*

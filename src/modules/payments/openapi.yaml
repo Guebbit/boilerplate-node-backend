@@ -1,0 +1,169 @@
+openapi: 3.0.3
+info:
+    title: payments — module contract
+    version: '2.0.0'
+
+paths:
+    /payments/intent:
+        post:
+            tags: [Payments]
+            summary: Create a payment intent
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact); an order whose money already moved answers 409. The intent is the thing the card dialog confirms.
+            operationId: createPaymentIntent
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreatePaymentIntentRequest'
+            responses:
+                '201':
+                    description: The payment intent, ready to confirm
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Not `pending` any more, or already paid. `errors[].code` is
+                # `PAYMENT_ORDER_NOT_PAYABLE`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/order/{orderId}:
+        get:
+            tags: [Payments]
+            summary: Get the payment behind an order
+            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. Admins read anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
+            operationId: getPaymentByOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The payment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/{id}/confirm:
+        post:
+            tags: [Payments]
+            summary: Confirm a payment
+            description: The card dialog's submit. The provider charges first (that is how PSPs work — the money moves before your database hears about it), then the order is moved `pending → paid` by a conditional write; if the order slipped away in between, the charge is refunded on the spot. A decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable — submit the same payment again with another card. The fake provider declines exactly one number, documented on `ConfirmPaymentRequest.cardNumber`.
+            operationId: confirmPayment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConfirmPaymentRequest'
+            responses:
+                '200':
+                    description: The payment, `succeeded`; the order is `paid`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Declined by the card issuer (`PAYMENT_DECLINED`), not awaiting confirmation
+                # (`PAYMENT_NOT_CONFIRMABLE`), or the order slipped away between charge and
+                # write (`PAYMENT_ORDER_NOT_PAYABLE` — the charge was refunded on the spot).
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ── Payments module ─────────────────────────────────────────────────────
+        # Owned by src/modules/payments. The Payment is the provider-facing record of an
+        # order's money; the order's own status stays the customer-facing lifecycle.
+
+        Payment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, userId, amount, currency, status, provider]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The order's total as the intent froze it.
+                currency:
+                    type: string
+                    description: ISO-4217 currency code (e.g. EUR)
+                status:
+                    type: string
+                    enum: [requires_confirmation, succeeded, declined, refunded]
+                    description: The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.
+                provider:
+                    type: string
+                    description: Which provider implementation handled it (`fake` in the demo).
+                cardLast4:
+                    type: string
+                    description: The only card digits a payment system may remember.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        PaymentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Payment'
+
+        CreatePaymentIntentRequest:
+            type: object
+            additionalProperties: false
+            required: [orderId]
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        ConfirmPaymentRequest:
+            type: object
+            additionalProperties: false
+            required: [cardNumber]
+            properties:
+                cardNumber:
+                    type: string
+                    minLength: 12
+                    maxLength: 23
+                    pattern: '^[\d ]+$'
+                    description: The card number, digits and optional spaces. The fake provider declines `4000000000000002` and accepts everything else; `4242424242424242` is the conventional success card.

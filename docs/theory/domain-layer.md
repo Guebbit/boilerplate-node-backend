@@ -331,8 +331,8 @@ DDD's own doctrine: spend the modelling effort on the **core domain**, keep supp
 subdomains simple. A boilerplate cannot know which is which, so it ships the cheap option and leaves
 the expensive one one folder away.
 
-`DDD_EXPLORATION.md` (repo root) works the expensive option out in full — target structure,
-before/after code, what breaks, and what it costs.
+`DDD_EXPLORATION.md` (repo root) prices the expensive option in full — the four options open, what
+breaks, what it costs, and the two value types worth taking on their own.
 
 ## Related pages
 

@@ -7,9 +7,9 @@ import { resolveImageUrl } from '@infrastructure/http/uploads';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart } from '@types';
-import { authService } from '../service';
+import { accountService } from '../services';
 import { accountAuditActions } from '../audit';
-import { sendVerificationEmail } from '../verification';
+import { sendVerificationEmail } from '../services';
 
 /**
  * PUT /account
@@ -36,7 +36,7 @@ export const putAccount = (
 
     const { email, username, locale } = request.body as UpdateAccountRequest;
 
-    return authService
+    return accountService
         .updateProfile(id, { email, username, locale, imageUrl })
         .then((result) => {
             if (!result.success)

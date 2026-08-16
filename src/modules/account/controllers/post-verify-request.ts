@@ -6,7 +6,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { userRepository } from '@modules/users';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import { sendVerificationEmail } from '../verification';
+import { sendVerificationEmail } from '../services';
 
 /**
  * POST /account/verify-request

@@ -143,6 +143,21 @@ interface AppModuleCommon {
      * calls whatever it finds. A module with no demo data simply omits it.
      */
     seeds?: () => Promise<SeedOutcome[]>;
+
+    /**
+     * Read this module's seeded rows back in the shape the API serves them, keyed by collection.
+     *
+     * The other half of `seeds`, and declared for the same reason: `scripts/export-seed.ts` walks
+     * `enabledModules` and publishes whatever it finds as `db/seeds/dataset.json`, so it names no
+     * domain and deleting a module takes its section of the dataset with it.
+     *
+     * It must read back through the model's `toJSON` — the real serializer — rather than returning
+     * the fixtures it wrote. That is the entire point of the export: the published dataset records
+     * what the API actually produces, schema defaults and derived fields included, so the paired
+     * frontend's mocks stop guessing at them. A module that returned its own fixtures here would
+     * publish the guess and label it as truth.
+     */
+    seedExport?: () => Promise<Record<string, unknown[]>>;
 }
 
 /** A module that serves HTTP. `basePath` and `routes` are meaningless apart, so they arrive together. */

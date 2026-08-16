@@ -29,17 +29,31 @@ import { posthogAnalyticsProvider } from './posthog';
 import { noneAnalyticsProvider } from './none';
 
 // ─── Event taxonomy ───────────────────────────────────────────────────────────
-//
-// Re-exported rather than declared here: the names are shared with the paired frontend, which
-// emits the same funnel from the other end. `analytics-events.ts` owns them and is guarded by
-// `check:spec-identity`; this module owns the transport.
 
-import { type SharedAnalyticsEventName } from '@infrastructure/observability/analytics-events';
+/**
+ * Module name → that module's event names. Augmented per module; see `modules/cart/analytics.ts`.
+ *
+ * Intentionally empty here, exactly like `AuditActionMap` in `../audit.ts` and `DomainEventMap` in
+ * `kernel/events.ts`: this is the extension point, and its members live with the domains that emit
+ * them. The augmentation is type-only, so the vocabulary stays closed and `infrastructure` still
+ * imports nothing from a module.
+ *
+ * `PRODUCTS_SEARCHED` is a fact about products and `CART_ITEM_ADDED` one about the cart. Both used
+ * to be declared here, in the layer that must know no domain at all; now deleting a module takes
+ * its names out of the funnel with it, and this file is left holding the transport.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AnalyticsEventMap {}
 
-export {
-    analyticsEvents,
-    type SharedAnalyticsEventName
-} from '@infrastructure/observability/analytics-events';
+/**
+ * Every name this build can emit — whatever the enabled modules declare.
+ *
+ * The paired frontend emits the same funnel from the other end, so the names are also published as
+ * `analytics-events.ts` and guarded by `check:spec-identity`. That file is an ARTEFACT of these
+ * declarations rather than their source: `npm run contracts:analytics` writes it, and nothing in
+ * this repo imports it.
+ */
+export type SharedAnalyticsEventName = AnalyticsEventMap[keyof AnalyticsEventMap];
 
 // ─── Payload schema ───────────────────────────────────────────────────────────
 
@@ -54,7 +68,7 @@ export {
 export interface AnalyticsEvent {
     /** Authenticated user ID, or `anonymous`. PostHog's `distinct_id`; a property under Umami. */
     distinctId: string;
-    /** Event name from the shared `analyticsEvents` catalogue. */
+    /** Event name, from the declaring module's own catalogue. */
     event: SharedAnalyticsEventName;
     /** ISO-8601 timestamp; defaults to now if omitted. */
     timestamp?: Date;
@@ -138,7 +152,7 @@ export const resetAnalyticsProvider = (): void => {
  *
  * Typed as `Pick<...>` so it stays in lockstep with `AnalyticsEvent`: renaming a field there
  * breaks this signature at compile time instead of silently producing a wrong shape.
- * Usage: `emitAnalyticsEvent({ ...buildAnalyticsBase(request), event: analyticsEvents.CART_VIEWED })`
+ * Usage: `emitAnalyticsEvent({ ...buildAnalyticsBase(request), event: cartAnalyticsEvents.CART_VIEWED })`
  *
  * @param request - the express request the event happened during
  */

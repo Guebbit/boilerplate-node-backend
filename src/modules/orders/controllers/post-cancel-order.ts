@@ -5,11 +5,8 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { ordersAnalyticsEvents } from '../analytics';
 
 /**
  * POST /orders/:id/cancel
@@ -38,7 +35,7 @@ export const postCancelOrder = (request: Request<{ id?: string }>, response: Res
             );
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.ORDER_CANCELLED,
+                event: ordersAnalyticsEvents.ORDER_CANCELLED,
                 properties: { order_id: String(request.params.id) }
             });
 

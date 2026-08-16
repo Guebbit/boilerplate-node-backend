@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { listMovements } from '../service';
+import { inventoryService } from '../service';
 
 /**
  * GET /inventory/movements
@@ -14,7 +14,8 @@ export const getStockMovements = (request: Request, response: Response) => {
             ? request.query.productId
             : undefined;
 
-    return listMovements(productId)
+    return inventoryService
+        .listMovements(productId)
         .then((result) => {
             successResponse(response, result.data);
         })

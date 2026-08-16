@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import mongoose from 'mongoose';
 import os from 'node:os';
+import { connection } from '@infrastructure/runtime/database';
 import { successResponse } from '@infrastructure/http/response';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 
@@ -22,7 +22,7 @@ const databaseStatusMap: Record<number, 'connected' | 'connecting' | 'disconnect
  */
 export const getObservabilityHealth = (_request: Request, response: Response) => {
     const mem = process.memoryUsage();
-    const databaseReadyState = mongoose.connection.readyState;
+    const databaseReadyState = connection.readyState;
     const databaseStatus = databaseStatusMap[databaseReadyState] ?? 'disconnected';
     const overallStatus = databaseStatus === 'connected' ? 'ok' : 'degraded';
 

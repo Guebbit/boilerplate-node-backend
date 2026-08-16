@@ -2,8 +2,8 @@ import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { ConfirmPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@modules/users';
-import { authService } from '../service';
-import { destroyRefreshCookie, destroyLoggedCookie } from '../cookies';
+import { accountService } from '../services';
+import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { PasswordResetConfirmRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -63,7 +63,7 @@ export const postResetConfirm = (
              * Validation comes first so a mistyped confirmation cannot burn the link. Password
              * writing comes last, so the request that loses the race never changes anything.
              */
-            const errors = authService.validatePasswordChange(password, passwordConfirm);
+            const errors = accountService.validatePasswordChange(password, passwordConfirm);
             if (errors.length > 0) {
                 rejectResponse(response, 422, errors);
                 return;
@@ -78,7 +78,7 @@ export const postResetConfirm = (
                 /**
                  * Change password
                  */
-                return authService
+                return accountService
                     .passwordChange(user, password, passwordConfirm)
                     .then((result) => {
                         if (!result.success) {

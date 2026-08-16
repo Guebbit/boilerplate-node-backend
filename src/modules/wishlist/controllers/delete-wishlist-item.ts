@@ -3,11 +3,8 @@ import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { wishlistService } from '../service';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { wishlistAnalyticsEvents } from '../analytics';
 
 /**
  * DELETE /wishlist/:productId
@@ -32,7 +29,7 @@ export const deleteWishlistItem = (request: Request<{ productId: string }>, resp
 
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.WISHLIST_ITEM_REMOVED,
+                event: wishlistAnalyticsEvents.WISHLIST_ITEM_REMOVED,
                 properties: { product_id: productId }
             });
 

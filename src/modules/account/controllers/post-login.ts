@@ -1,20 +1,17 @@
 import type { Request, Response } from 'express';
 import { Types } from 'mongoose';
-import { authService } from '../service';
-import { createRefreshToken, createAccessToken, RefreshTokenExpiryTime } from '../jwt';
-import { createRefreshCookie, createLoggedCookie } from '../cookies';
+import { accountService } from '../services';
+import { createRefreshToken, createAccessToken, RefreshTokenExpiryTime } from '../session/jwt';
+import { createRefreshCookie, createLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { LoginRequest } from '@types';
-import { runTokenCleanup } from '../token-cleanup';
+import { runTokenCleanup } from '../services';
 import { authLoginTotal } from '../metrics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { accountAnalyticsEvents } from '../analytics';
 
 /**
  * Emit login failure observability (metrics + audit).
@@ -48,7 +45,7 @@ const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) 
     emitAnalyticsEvent({
         ...buildAnalyticsBase(request),
         distinctId: userId,
-        event: analyticsEvents.USER_LOGGED_IN,
+        event: accountAnalyticsEvents.USER_LOGGED_IN,
         properties: { role }
     });
 };
@@ -75,7 +72,7 @@ export const postLogin = (
      * Run token cleanup as a background pre-flight step, then authenticate.
      */
     return runTokenCleanup()
-        .then(() => authService.login(email, password))
+        .then(() => accountService.login(email, password))
         .then((result) => {
             if (!result.success) {
                 // Record failed login before responding

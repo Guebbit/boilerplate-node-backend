@@ -44,7 +44,7 @@ including why the bundler never parses YAML.
 
 ## Generated TypeScript types
 
-Types are generated from `asyncapi.yaml` into `src/types/asyncapi.ts` by a custom script (`scripts/gen-asyncapi-types.ts`).  
+Types are generated from `asyncapi.yaml` into `src/types/asyncapi.generated.ts` by a custom script (`scripts/gen-asyncapi-types.ts`).  
 They are re-exported from `src/types/index.ts` so all app code can import them consistently:
 
 ```ts
@@ -67,7 +67,7 @@ Only the output path differs, and it comes from `--out` in each repo's `gen:asyn
 
 | Repo | Command |
 | --- | --- |
-| Backend | `tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.ts` |
+| Backend | `tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.generated.ts` |
 | Frontend | `tsx scripts/gen-asyncapi-types.ts --out src/types/realtime.generated.ts` |
 
 Because the input (`asyncapi.yaml`) is also identical, the two generated files are identical too —
@@ -87,7 +87,7 @@ backend and tree-shaken in the frontend bundle.
 
 ```bash
 npm run lint:asyncapi   # validate asyncapi.yaml
-npm run gen:asyncapi     # regenerate src/types/asyncapi.ts
+npm run gen:asyncapi     # regenerate src/types/asyncapi.generated.ts
 npm run docs:asyncapi   # open AsyncAPI Studio in browser
 ```
 
@@ -124,9 +124,9 @@ Every channel here describes something that actually crosses a process boundary 
 
 ## Realtime event names
 
-All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.ts`.  
+All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.generated.ts`.  
 There are no handwritten duplicate string constants — `asyncapi.yaml` is the single source of truth.
 
 ## CI enforcement
 
-CI runs `lint:asyncapi` and `gen:asyncapi`, then verifies `src/types/asyncapi.ts` has no uncommitted changes. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails.
+CI runs `lint:asyncapi` and `gen:asyncapi`, then verifies `src/types/asyncapi.generated.ts` has no uncommitted changes. This prevents contract drift — if you edit `asyncapi.yaml` without regenerating types, CI fails.

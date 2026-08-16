@@ -3,15 +3,12 @@ import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { paymentsAnalyticsEvents } from '../analytics';
 import { ConfirmPaymentBody } from '@api/schemas.zod';
 import { paymentsAuditActions } from '../audit';
 import { paymentConfirmTotal } from '../metrics';
-import { confirmPayment } from '../service';
+import { paymentService } from '../service';
 
 /**
  * POST /payments/:id/confirm
@@ -33,11 +30,8 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
     }
 
     const paymentId = String(request.params.id);
-    return confirmPayment(
-        paymentId,
-        { cardNumber: parseResult.data.cardNumber },
-        request.authContext
-    )
+    return paymentService
+        .confirmPayment(paymentId, { cardNumber: parseResult.data.cardNumber }, request.authContext)
         .then((result) => {
             const declined =
                 !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
@@ -56,8 +50,8 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(request),
                     event: result.success
-                        ? analyticsEvents.PAYMENT_SUCCEEDED
-                        : analyticsEvents.PAYMENT_DECLINED,
+                        ? paymentsAnalyticsEvents.PAYMENT_SUCCEEDED
+                        : paymentsAnalyticsEvents.PAYMENT_DECLINED,
                     properties: { payment_id: paymentId }
                 });
             }

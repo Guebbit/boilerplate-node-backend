@@ -5,7 +5,7 @@
  * a dozen files that TypeScript catches — but a line that re-exports the *wrong* binding, or a name
  * silently resolving to `undefined` after a refactor of the underlying file, is not caught by
  * anything. Both cases are covered here: the surface is pinned by name, and the function is checked
- * to be the same object `./addresses-service` exports rather than merely to exist.
+ * to be the same object `./services/addresses` exports rather than merely to exist.
  *
  * The token surface used to be published too, on the theory that authorization would need it. It
  * does not — the kernel's auth port is what every request goes through, and this module fills it
@@ -16,17 +16,17 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import * as account from '@modules/account';
-import * as addresses from '@modules/account/addresses-service';
+import * as addresses from '@modules/account/services';
 
 /**
- * Re-exported from `./addresses-service` — the address book's ONE cross-module surface: the
+ * Re-exported from `./services/addresses` — the address book's ONE cross-module surface: the
  * cart's checkout resolves which address an order ships to. The CRUD stays internal, served by
  * this module's own routes.
  */
 const ADDRESS_EXPORTS = ['addressForCheckout'] as const;
 
 describe('the account barrel', () => {
-    it.each(ADDRESS_EXPORTS)('re-exports %s from ./addresses-service unchanged', (name) => {
+    it.each(ADDRESS_EXPORTS)('re-exports %s from ./services/addresses unchanged', (name) => {
         // Identity, not existence: a re-export resolving to a different object means the barrel
         // and the implementation have forked, which is the failure a smoke test misses.
         expect(account[name]).toBe(addresses[name]);
@@ -44,11 +44,12 @@ describe('the account barrel', () => {
  * The barrel is the boundary, asserted rather than asked for.
  *
  * A docblock claiming nothing imports the implementations directly is PROSE, and prose drifts: a
- * consumer reaching one function through the barrel and another straight from `./tokens` reads
+ * consumer reaching one function through the barrel and another straight from `./session/jwt` reads
  * as perfectly normal in review, and nothing says otherwise.
  *
- * Inside the module, relative imports ARE the right thing: a unit test of `jwt.ts` tests `jwt.ts`,
- * and `cookies.ts` uses `./tokens` because one implementation may use another. What must not
+ * Inside the module, relative imports ARE the right thing: a unit test of `session/jwt.ts` tests
+ * `session/jwt.ts`, and `session/cookies.ts` uses `./config` because one implementation may use
+ * another. What must not
  * happen is a file OUTSIDE `src/modules/account/` reaching past `index.ts`. ESLint enforces that
  * for files under `src/modules/**`, which is why the gap this test fills is everything else:
  * `src/middlewares/`, `src/bootstrap/`, `src/jobs/`, `src/workers/`, `src/infrastructure/`.

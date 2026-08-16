@@ -3,18 +3,23 @@ import type { AppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
 import { userRepository, USER_DELETED } from '@modules/users';
-import { verifyAccessToken, verifyRefreshToken } from './jwt';
-import { addressesDeleteByUserId } from './addresses-service';
+import { verifyAccessToken, verifyRefreshToken } from './session/jwt';
+import { addressesDeleteByUserId } from './services/addresses';
+import { exportSeededAddressBooks, seedAddressBooksCollection } from './seeds';
 import { router } from './routes';
 
 /**
  * Authentication and the account lifecycle: signup, login, refresh, password reset, logout
  * everywhere, and the two-step account deletion.
  *
- * Depends on `users` and owns no collection of its own. It is a second service over the same User
- * record — which is why the users barrel exports the model and repository rather than just its
- * service, and why these are two modules rather than one: `/account` and `/users` are different
- * mounts, and a manifest carries one `basePath`.
+ * Depends on `users`, over whose record it is a second service — which is why the users barrel
+ * exports the model and repository rather than just its service, and why these are two modules
+ * rather than one: `/account` and `/users` are different mounts, and a manifest carries one
+ * `basePath`.
+ *
+ * It does own one collection outright, and only one: the address book (see `seeds` below and
+ * `./model`). The User record is not it — that belongs to `users` and is reached
+ * through its barrel.
  *
  * The arrow points one way. Nothing in `users` reaches back into authentication, so there is no
  * cycle here and no domain event is needed.
@@ -86,5 +91,7 @@ export default {
     subscribe: () => {
         onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
     },
+    seeds: seedAddressBooksCollection,
+    seedExport: exportSeededAddressBooks,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

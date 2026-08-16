@@ -98,11 +98,7 @@ module.exports = {
         '!src/**/*.d.ts',
         // Co-located specs are test code, not covered code. Without this a module's own tests
         // count towards its coverage and every floor below becomes self-satisfying.
-        '!src/**/tests/**',
-        // Contract fragments are text slices assembled by `npm run contracts:bundle`, not modules:
-        // nothing imports one and most are not valid TypeScript alone, so instrumenting them would
-        // report a permanent 0% for files no test can execute. The bundle they build is covered.
-        '!src/**/*.fragment.ts'
+        '!src/**/tests/**'
     ],
     /*
      * PER-FILE floors. The glob syntax is the whole point and it is not cosmetic.
@@ -285,7 +281,6 @@ module.exports = {
     moduleNameMapper: {
         '^@api/(.*)$': '<rootDir>/api/$1',
         '^@types$': '<rootDir>/src/types',
-        '^@seed-identities$': '<rootDir>/db/seeds/seed-identities',
         '^@tests/(.*)$': '<rootDir>/tests/support/$1',
         '^@app/(.*)$': '<rootDir>/src/app/$1',
 

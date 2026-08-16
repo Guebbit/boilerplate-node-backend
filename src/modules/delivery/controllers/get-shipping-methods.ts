@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { listMethods } from '../service';
+import { deliveryService } from '../service';
 
 /**
  * GET /delivery/methods
@@ -8,6 +8,6 @@ import { listMethods } from '../service';
  * a guest deciding whether to sign up deserves to know what shipping costs.
  */
 export const getShippingMethods = (_request: Request, response: Response) => {
-    const result = listMethods();
+    const result = deliveryService.listMethods();
     successResponse(response, result.data);
 };

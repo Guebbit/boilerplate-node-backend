@@ -19,10 +19,9 @@ the spec disagreeing first, and nothing there reads them:
 
 | Bundle            | Committed at                                | Built from                                                     |
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| `openapi`         | `openapi.yaml`                              | `src/modules/<name>/openapi/{paths,schemas}.yaml`               |
+| `openapi`         | `openapi.yaml`                              | `src/modules/<name>/openapi.yaml` — **compiled by `redocly bundle`** |
 | `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi/{channels,messages,schemas}.yaml`  |
-| `analytics-events`| `src/infrastructure/observability/analytics-events.ts`| `src/modules/<name>/analytics.fragment.ts`                      |
-| `seed-identities` | `db/seeds/seed-identities.ts`               | `src/modules/<name>/seed-identities.fragment.ts`                |
+| `analytics-events`| `src/infrastructure/observability/analytics-events.ts`| `src/modules/<name>/analytics.ts` — **sliced from real modules** |
 | `bruno`           | `contract.bruno.yml`                        | `openapi.yaml` + the seed dataset — **generated whole**         |
 | `insomnia`        | `contract.insomnia.json`                    | `openapi.yaml` + the seed dataset — **generated whole**         |
 | `mockoon`         | `contract.mockoon.json`                     | `openapi.yaml` + the seed dataset — **generated whole**         |
@@ -31,7 +30,9 @@ the spec disagreeing first, and nothing there reads them:
 Whatever more than one domain reads stays in `shared/contracts/`, and each bundle's section order,
 layout and shared parts are declared in one file under `scripts/contracts/`.
 
-The first four are ASSEMBLED, fragment by fragment. The four client collections are GENERATED —
+`openapi` is COMPILED: its sources are whole OpenAPI documents joined by `redocly bundle`, which
+resolves `$ref` the standard way. The next three are ASSEMBLED, fragment by fragment. The four
+client collections are GENERATED —
 produced whole from `openapi.yaml` and the seed dataset, with nothing on disk in between, because a
 hand-written restatement of the contract is a copy and copies rot. See
 [The client collections](#the-client-collections).
@@ -47,7 +48,7 @@ every run, so a fragment edited without re-bundling fails the build rather than 
 
 The three shared files that are **not** bundled are the three that name no domain: `spectral.yaml`
 is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are tooling.
-`src/types/asyncapi.ts` is absent for the opposite reason — it is generated from a bundle by
+`src/types/asyncapi.generated.ts` is absent for the opposite reason — it is generated from a bundle by
 `npm run gen:asyncapi`, so it follows one rather than being one.
 
 ## The flow
@@ -56,10 +57,10 @@ is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are 
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TD
     subgraph BE["boilerplate-node-api-mongodb-mongoose  (owns the contract)"]
-        H["shared/contracts/header.yaml<br/><i>preamble · tags · components</i>"] --> B[bundle]
-        F1["modules/products/openapi/paths.yaml"] --> B
-        F2["modules/orders/openapi/paths.yaml"] --> B
-        F3["modules/…/openapi/paths.yaml"] --> B
+        H["shared/contracts/openapi.root.yaml<br/><i>preamble · tags · shared components · GET /</i>"] --> B["redocly bundle"]
+        F1["modules/products/openapi.yaml"] --> B
+        F2["modules/orders/openapi.yaml"] --> B
+        F3["modules/…/openapi.yaml"] --> B
         B --> ROOT["openapi.yaml<br/>committed at the repo root"]
     end
 
@@ -96,15 +97,19 @@ It would be tidier to ship only fragments and bundle on demand. Three reasons no
 - **Byte-identity is enforced by a test.** `scripts/specIdentity.ts` compares this repo's copy with
   the frontend's and fails the build when they fork. That check needs one file on each side to
   compare.
-- **The comments are part of the document.** `openapi.yaml` currently carries **149 comment lines**
-  explaining decisions that no schema can express. No YAML bundler preserves comments, and most
-  re-order keys and re-quote strings besides. So the bundler's output must be committed and
-  hand-reviewed like any other generated file — not regenerated silently on both sides and assumed
-  to match.
+- **Regeneration is not reproducible across repos.** `redocly bundle` output depends on the
+  installed CLI version, so two repos bundling independently can produce different bytes from the
+  same sources. The output must be committed and copied, not rebuilt on both sides and assumed to
+  match.
 
 That last point is the one that bites. **If the bundle step ever produces different bytes here than
 what the frontend holds, `specIdentity` fails and neither repo can build.** Bundle once, commit the
 result, copy that.
+
+The comments do **not** travel into `openapi.yaml` — a parse cannot keep them, and Redocly parses.
+They live in the module documents instead, which is where they are read and edited; the 252 comment
+lines across the sources are asserted by `contract-bundles.test.ts`. See
+[Why the REST contract stopped concatenating](#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not).
 
 ## Which fragment owns which operation
 
@@ -171,7 +176,7 @@ src/modules/products/
 └── tests/           its own specs
 ```
 
-After fragmentation it also owns `openapi/paths.yaml`, holding the nine operations under
+After fragmentation it also owns `openapi.yaml`, holding the nine operations under
 `/products`:
 
 ```
@@ -194,13 +199,10 @@ contract:
 that owns it.
 
 ```
-shared/contracts/header.yaml          preamble · tags · securitySchemes · parameters · responses
-shared/contracts/schemas.yaml         the 20 types more than one module references
-shared/contracts/system.schemas.yaml  HealthPing — the shell answering for itself
-shared/contracts/paths.header.yaml    the `paths:` key
-shared/contracts/system.paths.yaml    GET /
-src/modules/<name>/openapi/schemas.yaml
-src/modules/<name>/openapi/paths.yaml
+shared/contracts/openapi.root.yaml    preamble · tags · securitySchemes · parameters · responses ·
+                                      the 20 shared types · GET / · the per-module path index
+src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module:
+                                      its paths, and the schemas only its paths reference
 ```
 
 ```bash
@@ -216,28 +218,48 @@ Change](./regenerating.md#regenerate-one-bundle-only).
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
 
-### The bundler does not parse YAML, and that is the whole trick
+### Why the REST contract stopped concatenating, and the rest did not
 
-A fragment-and-rebundle round trip cannot reproduce a hand-maintained file through any bundler that
-*parses* — measured, not assumed: a `js-yaml` round trip of this document returns 3453 lines from
-3062, and none of the 149 comments.
+The other bundles are still built by pasting verbatim line slices together, because a parse destroys
+what they carry — measured, not assumed: a `js-yaml` round trip of the old `openapi.yaml` returned
+3453 lines from 3062, and none of the 149 comments.
 
-So `scripts/contracts/fragments.ts` never parses. A fragment is a **verbatim slice of the original
-lines** — comments, indentation, quoting and key order exactly as written — and bundling is string
-concatenation in the order the bundle's section list records. The 149 comments survive **in the
-fragments and in the bundle**, which is the property that matters: the explanation now sits in the
-module folder it explains.
+`openapi.yaml` no longer needs that guarantee, because **the question changed from "does the bundle
+keep its comments" to "do the sources keep theirs"**. A module's contract is now a whole OpenAPI
+document rather than a slice of one, so the explanations sit in the file that is actually read and
+edited, and the bundle is an artefact nobody opens by hand. Once that is true, `redocly bundle` does
+the job the standard way — resolving `$ref` — and the 252 comments across the sources are untouched
+by it.
 
-The one thing concatenation cannot do is separate list items. A JSON array and a TypeScript object
-literal need a comma **between** slices and none after the last, which is a property of the join
-rather than of any fragment — so a segment is either a file pasted verbatim or a group of files
-joined by a separator. Still no parsing, and a module fragment never has to know whether it happens
-to be last, which is what keeps deleting a module a one-line change.
+What this bought, beyond deleting a custom bundler:
+
+- **A module contract is a valid document.** `npm run lint:openapi:modules` lints each one on its
+  own; you can open one in Swagger Editor. A slice was only valid once pasted.
+- **Refs are checkable where they are written.** A module `$ref`s the root across a file boundary
+  instead of assuming a neighbour's text will be concatenated above it.
+- **The layout is one every tool already understands** — no section-order file, no indentation
+  contract between files.
+
+**The anchors had to go, and that is what made it possible at all.** The old fragments shared the
+success-envelope preamble through YAML anchors (`*envelopeSuccess`, 84 uses across 13 files) whose
+definitions lived in `shared/contracts/schemas.yaml`. A YAML anchor cannot cross a file, which is
+precisely why nothing could ever parse a fragment. They are named schemas now — `EnvelopeSuccess`,
+`EnvelopeStatus`, `EnvelopeMessage` — which is the same sharing expressed in a way a `$ref` can
+reach. `additionalProperties: false` is unaffected: it constrains property *names*, so a `$ref` at a
+property's value position is not the `allOf` problem the anchors were avoiding. The migration was
+verified by dereferencing both contracts and deep-comparing: **82 operations before and after, three
+added schemas, nothing else.**
+
+The remaining concatenated bundles keep the one rule concatenation needs: a JSON array and a
+TypeScript object literal need a comma **between** slices and none after the last, which is a
+property of the join rather than of any fragment — so a segment is either a file pasted verbatim or
+a group of files joined by a separator, and a module fragment never has to know whether it happens
+to be last.
 
 ### Which schemas stayed shared, and why
 
 73 of the 93 schemas reference nothing outside one module's paths, computed as a transitive closure
-over `$ref` rather than guessed from names. The other 20 stayed in `shared/contracts/schemas.yaml`:
+over `$ref` rather than guessed from names. The other 20 stayed in `shared/contracts/openapi.root.yaml`:
 
 | Kind | Examples | Why shared |
 | ---- | -------- | ---------- |
@@ -283,7 +305,18 @@ sit under `workers` in `shared/contracts/`, exactly as `GET /` sits under `syste
 ### `analytics-events.ts` — a name lives with the code that emits it
 
 `PRODUCTS_SEARCHED` is a fact about products and `CART_ITEM_ADDED` one about the cart, and both were
-declared in `src/infrastructure/`, the layer that must know no domain at all. Each module now owns its names.
+declared in `src/infrastructure/`, the layer that must know no domain at all. Each module now owns
+its names — as **ordinary TypeScript**, in `src/modules/<name>/analytics.ts`, exported as a normal
+`as const` its own controllers import and augmenting the analytics port's `AnalyticsEventMap` exactly
+as `audit.ts` augments `AuditActionMap`.
+
+`analytics-events.ts` is therefore an ARTEFACT rather than a source: nothing in this repo imports it,
+and it exists only because the frontend holds a byte-identical copy. It is built by slicing each
+module's `as const` body verbatim — the comments explaining *why* a name sits where it does have to
+reach the other repo — and the slice is then checked against the module's actual exported keys, so a
+reformatted declaration or a renamed constant fails the bundle instead of publishing a short
+catalogue. That check is only possible because the sources are real modules now; the old
+`.fragment.ts` slices were text nothing could import, so there was nothing to check them against.
 
 One rule decides which: **the module that emits the event owns it.** So `CHECKOUT_*` sits with
 `cart`, because `POST /cart/checkout` is what reports it — delete that module and the two outcomes
@@ -296,16 +329,25 @@ The entries are an object literal, so this is the bundle where the comma-as-sepa
 keep. Prettier's `trailingComma: 'none'` makes it load-bearing: a fragment that ended with a comma
 would leave a dangling one before `}` and fail `prettier:check`.
 
-### `seed-identities.ts` — the data follows the runner
+### The demo dataset — not a bundle at all, any more
 
-`db/seeds/index.ts` already named no domain; the facts its seeders read did not follow. Each domain
-now owns its records **and** its interface. What stays shared is what more than one reads: the four
-credentials and `ISeedCartItem`, which describes both a line in a cart and a line in an order.
+It used to be one. `db/seeds/seed-identities.ts` was assembled from a
+`seed-identities.fragment.ts` in every module, for the same reason as everything else on this page:
+the frontend needed the same records, one file had to hold them, and no module should own a file
+that lists every domain.
 
-`cart` contributes no fragment, and that is correct rather than an omission — a cart is embedded in
-its user, so those records live in the users fragment. A module's own `seeds.ts` still imports from
-the **bundle** (`@seed-identities`), not from the fragment beside it: fragments are text, not
-modules, and nothing imports one.
+It is gone, and the machinery went with it. The dataset is now **published rather than assembled**:
+`npm run seed:export` seeds a throwaway database with the real seeders and writes what the API
+answers to `db/seeds/dataset.json`. Each module states its records in an ordinary
+`src/modules/<name>/seeds.ts` that its own code imports — no fragment, no text concatenation, no
+staleness check on this CLI. `npm run check:seed-export` is its equivalent.
+
+The reason is worth keeping, because it is the one case on this page where fragmenting the SOURCE
+was the wrong answer. Sharing facts left each repo writing its own mapper over them, and the mappers
+drifted where the facts could not: the frontend's mock hand-wrote `active: true` and `verified: true`
+from a reading of the backend's schema defaults and omitted `locale` entirely. Fragmenting a
+document is right when both repos consume the same document. When what they actually need is the
+same ANSWER, publish the answer. See `docs/tools/mongodb-mongoose.md`.
 
 ### The client collections — generated, because a restatement is a copy
 
@@ -334,10 +376,10 @@ property of that configuration rather than of the package.
 
 - **shapes come from `openapi.yaml`** — every operation, its auth, its request body, one example per
   declared response;
-- **values come from `seed-identities.ts`** — `GET /products/{id}` asks for a product the database
+- **values come from `db/seeds/dataset.json`** — `GET /products/{id}` asks for a product the database
   actually holds, and `POST /account/login` sends credentials that work. That is the difference
   between a collection you can click and one you have to fix first;
-- **ownership comes from the OpenAPI fragments** — a path in `src/modules/orders/openapi/paths.yaml`
+- **ownership comes from the module contracts** — a path in `src/modules/orders/openapi.yaml`
   is the orders module's, so the mapping is recorded once and a path that moves between modules
   moves in all three collections with it;
 - **identifiers are hashed from method and path**, not generated fresh, so regenerating rewrites
@@ -370,7 +412,7 @@ There are 14 today, and each one is a question a contract cannot ask:
 | `orders` | the owner asking for their own soft-deleted order · another user's order |
 
 A probe refers to seed records as `{{seedSoftDeletedProductId}}` rather than pasting an id — the
-tokens are derived from `seed-identities.ts` (the soft-deleted product is *found*, not named), so a
+tokens are derived from `dataset.json` (the soft-deleted product is *found*, not named), so a
 fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
 tests nothing. An unknown token fails the generator with the list of known ones.
 

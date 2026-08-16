@@ -1,74 +1,168 @@
 /**
  * `src/infrastructure/observability/analytics-events.ts` — the event names both repos emit.
  *
- * WHY IT IS FRAGMENTED. `PRODUCTS_SEARCHED` is a fact about the products domain and
- * `CART_ITEM_ADDED` one about the cart, and both used to be declared in the substrate — the layer
- * that must know no domain at all. Each module now owns its own names, so deleting a module takes
- * its events out of the funnel with it, and `src/infrastructure/` is left holding the transport.
+ * WHAT THIS IS. An ARTEFACT, not a source. Each module declares its own names in
+ * `src/modules/<name>/analytics.ts` as ordinary TypeScript — imported by its controllers, typechecked,
+ * linted, and augmenting the analytics port's `AnalyticsEventMap` so the union grows with the enabled
+ * modules. Nothing in this repo imports the file produced here. It exists because the paired frontend
+ * emits the same funnel from the other end and holds a byte-identical copy, which
+ * `check:spec-identity` enforces.
  *
- * WHO OWNS WHAT follows one rule: a name lives with the code that EMITS it. `CHECKOUT_*` sits with
- * `cart` because `POST /cart/checkout` is what reports it — delete that module and the two outcomes
- * leave the funnel with the endpoint that produced them, which is the property the whole split
- * exists for. The frontend emits the same two names from its orders store and applies the same
- * rule to its own code; that is why ownership is a per-repo mapping while the ORDER below, which
- * decides the bytes, is shared.
+ * WHY IT IS SLICED RATHER THAN SERIALISED. The declarations carry comments that say why a name sits
+ * where it does — why `CHECKOUT_*` belongs to `cart` and not to `orders`, what
+ * `WISHLIST_MOVED_TO_CART` ties together — and the frontend reads its copy by hand. Rebuilding the
+ * object from the imported values would drop every one of them, so the body of each module's
+ * `as const` is taken VERBATIM out of its source.
  *
- * THE COMMA IS THE JOIN, not part of any fragment. The entries are an object literal, so exactly
- * one comma belongs between two module slices and none after the last — a property of the list and
- * not of the module that happens to be last in it. Fragments therefore end on their final entry
- * with no comma, and `SECTION_SEPARATOR` supplies both the comma and the blank line that has always
- * separated the groups. Prettier's `trailingComma: 'none'` is what makes this load-bearing: leave a
- * dangling comma in and `prettier:check` fails the build.
+ * That slice is verified rather than trusted: `assertSliceMatches` compares the names it extracted
+ * against the ones actually exported, so a slice that lost an entry, picked up a stray line, or read
+ * a renamed constant fails the bundle instead of publishing a short catalogue. This is the guarantee
+ * the old arrangement could not offer at all — its fragments were text nothing could import, so
+ * there was nothing to check them against.
+ *
+ * THE COMMA IS THE JOIN, not part of any slice. The entries are an object literal, so exactly one
+ * comma belongs between two module slices and none after the last. Prettier's
+ * `trailingComma: 'none'` makes that load-bearing: a dangling comma before `}` fails
+ * `prettier:check`.
  */
 
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { REPO_ROOT, type ContractBundle, type Segment } from './fragments';
+import { REPO_ROOT, type CompiledBundle } from './fragments';
 
-/** The order the groups appear in — auth first, then the path a user walks through the shop. */
-export const ANALYTICS_SECTION_ORDER = [
-    'account',
-    'products',
-    'cart',
-    'wishlist',
-    'orders',
-    'payments'
+import { accountAnalyticsEvents } from '../../src/modules/account/analytics';
+import { productsAnalyticsEvents } from '../../src/modules/products/analytics';
+import { cartAnalyticsEvents } from '../../src/modules/cart/analytics';
+import { wishlistAnalyticsEvents } from '../../src/modules/wishlist/analytics';
+import { ordersAnalyticsEvents } from '../../src/modules/orders/analytics';
+import { paymentsAnalyticsEvents } from '../../src/modules/payments/analytics';
+
+/**
+ * The order the groups appear in — auth first, then the path a user walks through the shop.
+ *
+ * Each entry names the module, its exported constant, and the constant's value. The value is what
+ * makes the slice checkable; listing it here is also what makes deleting a module a compile error
+ * rather than a silently shorter catalogue.
+ */
+const SECTIONS = [
+    { module: 'account', constant: 'accountAnalyticsEvents', events: accountAnalyticsEvents },
+    { module: 'products', constant: 'productsAnalyticsEvents', events: productsAnalyticsEvents },
+    { module: 'cart', constant: 'cartAnalyticsEvents', events: cartAnalyticsEvents },
+    { module: 'wishlist', constant: 'wishlistAnalyticsEvents', events: wishlistAnalyticsEvents },
+    { module: 'orders', constant: 'ordersAnalyticsEvents', events: ordersAnalyticsEvents },
+    { module: 'payments', constant: 'paymentsAnalyticsEvents', events: paymentsAnalyticsEvents }
 ] as const;
 
-export type AnalyticsSectionName = (typeof ANALYTICS_SECTION_ORDER)[number];
+/** The sections, for anything that needs to check the published file against its sources. */
+export const ANALYTICS_SECTIONS = SECTIONS;
+
+export const ANALYTICS_SECTION_ORDER = SECTIONS.map(({ module }) => module);
+
+/** Where a module's names are declared. */
+export const analyticsSource = (module: string): string =>
+    path.join(REPO_ROOT, 'src', 'modules', module, 'analytics.ts');
 
 /** Comma, blank line: what goes BETWEEN two groups of entries and after none of them. */
 const SECTION_SEPARATOR = ',\n\n';
 
-/** Where a module's slice of the event names lives. */
-export const analyticsFragment = (section: AnalyticsSectionName): string =>
-    path.join(REPO_ROOT, 'src', 'modules', section, 'analytics.fragment.ts');
+/** The prose the published file opens with, and the opening of the object literal. */
+const HEADER = `// Code generated by \`npm run contracts:bundle\`. DO NOT EDIT.
+/**
+ * The analytics event names BOTH repos emit.
+ *
+ * ─── Generated, and byte-identical in the paired repository — do not hand-edit ───────────────
+ * Backend:  src/infrastructure/observability/analytics-events.ts
+ * Frontend: src/infrastructure/analyticsEvents.ts
+ * Each domain owns its names in \`src/modules/<name>/analytics.ts\`; the backend runs
+ * \`npm run contracts:bundle\` and the frontend receives a copy. \`npm run check:spec-identity\`
+ * fails the build on the commit that forks them. Two filenames because the lint configs disagree
+ * on case; the CONTENT must match exactly.
+ *
+ * NOTHING IN THE BACKEND IMPORTS THIS FILE. A module's controllers import their own
+ * \`analytics.ts\`; this is the published copy the other repo reads.
+ * ────────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * One funnel is built across both trackers, so a name spelled differently on each side errors
+ * nowhere and silently produces two half-events no dashboard adds up. Hence a closed set, and
+ * snake_case \`noun_pastTenseVerb\`, which PostHog's UI sorts well.
+ *
+ * A \`const\` object rather than an \`enum\`: the frontend's lint requires \`E\`-prefixed enums and the
+ * backend's does not, so no single \`enum\` satisfies both.
+ *
+ * Events only ONE side emits do not belong here.
+ */
+export const analyticsEvents = {
+`;
 
-/** The prose, and the opening of the object literal. */
-const HEADER_FRAGMENT = path.join(
-    REPO_ROOT,
-    'shared',
-    'contracts',
-    'analytics-events.header.fragment.ts'
-);
+const FOOTER = `} as const;
 
-/** The closing of the object literal, and the union type over its values. */
-const FOOTER_FRAGMENT = path.join(
-    REPO_ROOT,
-    'shared',
-    'contracts',
-    'analytics-events.footer.fragment.ts'
-);
+/** Any name declared above. */
+export type SharedAnalyticsEventName = (typeof analyticsEvents)[keyof typeof analyticsEvents];
+`;
 
-export const analyticsEventsBundle: ContractBundle = {
+/**
+ * The body of a module's `as const`, exactly as written.
+ *
+ * Bounded by the declaration line and the closing `} as const;` at column zero, so the comments,
+ * blank lines and indentation between them survive into the published file.
+ */
+const sliceOf = ({ module, constant }: (typeof SECTIONS)[number]): string => {
+    const source = readFileSync(analyticsSource(module), 'utf8');
+    const opening = `export const ${constant} = {\n`;
+    const start = source.indexOf(opening);
+    if (start === -1)
+        throw new Error(
+            `[analytics-events] ${module}/analytics.ts does not declare \`${constant}\`.\n` +
+                `  The published catalogue is sliced out of that declaration, so the name must match.`
+        );
+
+    const from = start + opening.length;
+    const end = source.indexOf('\n} as const;', from);
+    if (end === -1)
+        throw new Error(
+            `[analytics-events] ${module}/analytics.ts: \`${constant}\` has no closing \`} as const;\`.`
+        );
+
+    return source.slice(from, end);
+};
+
+/**
+ * Fail unless the text taken out of the file lists exactly the names the file exports.
+ *
+ * The slice is text and the export is a value, so nothing but this connects them. Without it, a
+ * declaration reformatted onto one line, an entry moved out of the literal, or a second constant
+ * added above would publish a catalogue that quietly disagrees with what the app can emit — and the
+ * frontend would receive it.
+ */
+const assertSliceMatches = (section: (typeof SECTIONS)[number], slice: string): void => {
+    const sliced = [...slice.matchAll(/^ {4}([A-Z][A-Z0-9_]*):/gm)].map((match) => match[1]);
+    const exported = Object.keys(section.events);
+
+    if (sliced.join() !== exported.join())
+        throw new Error(
+            `[analytics-events] the slice taken from ${section.module}/analytics.ts does not match ` +
+                `what it exports.\n` +
+                `  sliced:   ${sliced.join(', ') || '(none)'}\n` +
+                `  exported: ${exported.join(', ')}\n` +
+                `  Keep the names one per line inside \`export const ${section.constant} = {\`.`
+        );
+};
+
+const content = (): string => {
+    const slices = SECTIONS.map((section) => {
+        const slice = sliceOf(section);
+        assertSliceMatches(section, slice);
+        return slice.trimEnd();
+    });
+
+    return HEADER + slices.join(SECTION_SEPARATOR) + '\n' + FOOTER;
+};
+
+export const analyticsEventsBundle: CompiledBundle = {
     name: 'analytics-events',
     label: 'src/infrastructure/observability/analytics-events.ts',
     output: path.join(REPO_ROOT, 'src', 'infrastructure', 'observability', 'analytics-events.ts'),
-    segments: (): Segment[] => [
-        HEADER_FRAGMENT,
-        {
-            parts: ANALYTICS_SECTION_ORDER.map((section) => analyticsFragment(section)),
-            separator: SECTION_SEPARATOR
-        },
-        FOOTER_FRAGMENT
-    ]
+    compiled: true,
+    content,
+    sources: () => SECTIONS.map(({ module }) => analyticsSource(module))
 };

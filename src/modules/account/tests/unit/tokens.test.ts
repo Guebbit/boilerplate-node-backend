@@ -21,7 +21,7 @@ import {
     getAccessTokenSecret,
     getRefreshTokenSecret,
     getAccessTokenTTL
-} from '@modules/account/tokens';
+} from '@modules/account/session/config';
 
 /**
  * Every env var this module reads. Cleared before each test so a value leaking in from the

@@ -104,28 +104,56 @@ Options count too: same key and name but a different `unique`, `expireAfterSecon
 Seeds populate the database with **known test data** for local development.
 The seed runner lives in `db/seeds/index.ts` and uses the Mongoose repository layer (not raw Mongo), so pre-save hooks (e.g. password hashing) run normally.
 
-The dataset itself is split by ROLE, and the split matters:
+The dataset is split by ROLE, and the split matters:
 
-| File                          | Holds                                                                                                                                                                                                                                                                                                            |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db/seeds/seed-identities.ts` | The **facts** — ids, emails, admin flags, titles, prices, active/deleted state, who has what in their cart and their orders. Dependency-free plain data. Assembled by `npm run contracts:bundle` from `src/modules/<name>/seed-identities.fragment.ts`, so each domain owns its own records; do not hand-edit it |
-| `src/modules/<name>/seeds.ts` | The **mapper** into mongoose shape, one per module — `Types.ObjectId`s, real `Date`s, a cart per user in the `carts` collection, and the denormalised product snapshot each order item carries. Declared as `seeds` in the module manifest; `db/seeds/index.ts` walks the registry and names no domain           |
+| File                            | Holds                                                                                                                                                                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/<name>/factory.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a factory is for |
+| `src/modules/<name>/seeds.ts`   | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory and owned by the module that owns the collection. Declared as `seeds` in the manifest; `db/seeds/index.ts` walks the registry and names no domain        |
+| `src/kernel/seed-accounts.ts`   | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                         |
+| `db/seeds/dataset.json`         | The **output** — every row as the API actually serves it. Written by `npm run seed:export`, never by hand                                                                                                                                               |
 
-`seed-identities.ts` is **byte-identical** to a copy in the paired frontend (`tests/support/mocks/seed-identities.ts`). This repo authors it and the frontend holds the result, so a fix goes in the fragment here and the rebuilt file is copied over — editing the copy there is reverted by the next bundle. `npm run check:spec-identity` answers "have the seeds drifted?" — it covers this file as a path _pair_, since the two repos keep it in different places, and the `spec-identity` CI job fails the build on the commit that forks it.
+### The dataset is published, not shared
+
+`npm run seed:export` seeds a throwaway `mongodb-memory-server` with the real seeders, reads every
+row back through the real serializers, and writes `db/seeds/dataset.json`. That file is
+**byte-identical** to a copy in the paired frontend (`tests/support/mocks/dataset.json`), which its
+MSW mocks load directly.
 
 ```bash
-diff boilerplate-node-api-mongodb-mongoose/db/seeds/seed-identities.ts \
-     boilerplate-vue-frontend/tests/support/mocks/seed-identities.ts
+npm run seed:export          # write it
+npm run check:seed-export    # fail if the committed copy is stale
+npm run check:spec-identity  # fail if the frontend's copy has forked
 ```
 
-It holds identities rather than whole fixtures because the two sides genuinely need different shapes from the same facts — mongoose documents here, API response entities there — so each repo keeps its own mapper. It must stay dependency-free (no mongoose import, however tempting): the frontend loads it under Vite/vitest ESM, and a single Node-only import would make it unloadable there. The parity it protects is not hypothetical — the frontend's mock once served all 5 products to everyone while this API served 3 to non-admins, and the spec asserted the mock's number and passed.
+Publishing the OUTPUT rather than the input is the whole design, and it corrects an earlier one. The
+two repos used to share a file of plain FACTS — `db/seeds/seed-identities.ts`, assembled from a
+fragment in every module — and each side wrote its own mapper from those facts into the shape it
+needed. Identical facts could not keep the two mappers honest: the frontend's mock hand-wrote
+`active: true` and `verified: true` from a reading of this repo's schema defaults, and carried no
+`locale` at all, because nobody remembered the column existed. Both suites passed, each consistent
+with its own copy. There is one mapper now, and it is the API's.
+
+The parity this protects is not hypothetical — the frontend's mock once served all 5 products to
+everyone while this API served 3 to non-admins, and the spec asserted the mock's number and passed.
+
+Determinism is therefore a hard requirement, and three things buy it: a fixture pins its own
+`createdAt`, read off its ObjectId — whose leading four bytes already encode one — the seed writes
+pass `{ timestamps: false }` so Mongoose cannot overwrite it, and the exporter sorts every key on
+the way out. A value that cannot be pinned does not belong in the dataset.
+
+The export also refuses to publish a **dangling reference**: every `<something>Id` in the file must
+name a record the file also contains. That replaces the one safety property the shared file had for
+free, back when a cart line and the product it pointed at were literally the same constant.
 
 ### Commands
 
-| Script                  | What it does                                                        |
-| ----------------------- | ------------------------------------------------------------------- |
-| `npm run db:seed`       | Insert seed documents (safe to run multiple times if IDs are fixed) |
-| `npm run db:seed:reset` | Drop the database first, then seed                                  |
+| Script                      | What it does                                                        |
+| --------------------------- | ------------------------------------------------------------------- |
+| `npm run db:seed`           | Insert seed documents (safe to run multiple times if IDs are fixed) |
+| `npm run db:seed:reset`     | Drop the database first, then seed                                  |
+| `npm run seed:export`       | Publish `db/seeds/dataset.json` from a throwaway database           |
+| `npm run check:seed-export` | Fail if that file is stale; write nothing                           |
 
 ### What gets seeded
 
@@ -134,9 +162,11 @@ The default seed creates:
 - **2 users** — `root@root.it` (admin) and `gino@pino.it` (regular user)
 - **1 cart** — the admin's, in the `carts` collection; `gino@pino.it` gets none, because an empty cart and no cart are the same state
 - **5 products** — mix of active, inactive, and soft-deleted items
-- **2 orders** — linked to the root user
+- **2 wishlists** — one per user
+- **3 orders** — two the admin's, one the ordinary user's and soft-deleted, so "the owner cannot see their own deleted order" has a fixture behind it
 
-Fixed `ObjectId` values are used so the data is repeatable and predictable across resets.
+Fixed `ObjectId` values are used so the data is repeatable and predictable across resets — and so
+each record can date itself, since an ObjectId's leading bytes are a timestamp.
 
 ---
 

@@ -65,7 +65,7 @@ export const getById = (id?: string) => {
 /**
  * Create a new user document, with no email confirmation step.
  *
- * The self-service path is `authService.signup`, which sends a verification email and leaves
+ * The self-service path is `accountService.signup`, which sends a verification email and leaves
  * `verified` at the schema's `false`. This one exists for the admin write endpoints, where an
  * operator vouches for the address — which is why `verified` defaults to `true` here, spread
  * first so a caller that explicitly passes one still wins.

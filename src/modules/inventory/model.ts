@@ -1,5 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
+import { StockMovementReason } from '@types';
+import type { StockMovement } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
@@ -12,20 +14,28 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * the next movement, the way accountants do it.
  */
 
-export const MOVEMENT_REASONS = ['order', 'order-cancelled', 'adjustment', 'restock'] as const;
+/**
+ * Every reason the contract declares, in the array shape Mongoose's `enum:` wants.
+ *
+ * Read off the generated enum rather than retyped. The four literals used to be written out here,
+ * which meant `openapi.yaml` and this schema each had an opinion about what a reason is and nothing
+ * compared them — a fifth reason added to the contract would have been rejected at write time by a
+ * validator nobody thought to update.
+ */
+export const MOVEMENT_REASONS = Object.values(StockMovementReason);
 
-export type MovementReason = (typeof MOVEMENT_REASONS)[number];
+export type MovementReason = StockMovementReason;
 
 /**
  * Stock Movement Document interface.
+ *
+ * The field list comes from the contract's `StockMovement`, the same way `ProductDocument` takes
+ * its own from `Product`. Only what storage genuinely disagrees with the wire about is restated:
+ * `productId` is a real `ObjectId` here, and the timestamps are `Date`s rather than ISO strings.
  */
-export interface StockMovementDocument extends Document {
+export interface StockMovementDocument
+    extends Omit<StockMovement, 'id' | 'productId' | 'createdAt' | 'updatedAt'>, Document {
     productId: Types.ObjectId;
-    /** Signed: a sale is negative, a return or restock positive. */
-    delta: number;
-    reason: MovementReason;
-    /** What caused it, when something did — the order, typically. */
-    reference?: string;
     createdAt?: Date;
     updatedAt?: Date;
 }

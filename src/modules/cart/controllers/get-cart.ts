@@ -2,11 +2,8 @@ import type { Request, Response } from 'express';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import {
-    emitAnalyticsEvent,
-    analyticsEvents,
-    buildAnalyticsBase
-} from '@infrastructure/observability/analytics';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 
 /**
  * GET /cart
@@ -23,7 +20,7 @@ export const getCart = (request: Request, response: Response) => {
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
-                event: analyticsEvents.CART_VIEWED
+                event: cartAnalyticsEvents.CART_VIEWED
             });
             successResponse(response, cart);
         })

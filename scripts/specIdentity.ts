@@ -40,6 +40,18 @@ export type RepoRole = 'backend' | 'frontend';
 export interface SharedFile {
     backend: string;
     frontend: string;
+    /**
+     * Which side decides what this file says.
+     *
+     * `backend` means the frontend's copy is an OUTPUT: it is produced here from per-module sources
+     * and copied over, so a fork has one correct resolution and `npm run sync:frontend` can apply it
+     * without asking. `mirror` means both sides maintain it by hand, so a fork is a question — which
+     * copy is right — that no script may answer on its own.
+     *
+     * Recorded here rather than inferred from the path because it is the difference between a
+     * one-command fix and a decision, and getting it wrong overwrites work in the wrong direction.
+     */
+    owner: 'backend' | 'mirror';
 }
 
 /** Which side this checkout is. The one value that differs from the frontend's copy. */
@@ -66,34 +78,53 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * by requirement — either repo may legitimately change its own icon or formatting width, and a
  * gate that fails on that trains people to ignore it.
  *
- * FOUR OF THESE ARE AUTHORED IN THE BACKEND and copied here — the two specs, the seed identities
- * and the analytics names. Every one of them lists every domain, so
- * every one is assembled there from per-module fragments (`npm run contracts:bundle`). For those,
- * "decide which side is right" has one answer: the backend's, because the frontend's copy is an
- * output. Editing the copy is the failure this list is worst at describing and best at catching —
- * the next re-bundle reverts it, and the diff looks like the backend broke something.
+ * FOUR OF THESE ARE PRODUCED IN THE BACKEND and copied here — the two specs, the demo dataset and
+ * the analytics names. Every one of them covers every domain, so every one is produced there from
+ * per-module sources: the specs and the analytics names by assembling fragments
+ * (`npm run contracts:bundle`), the dataset by seeding a database and reading it back
+ * (`npm run seed:export`). For those, "decide which side is right" has one answer: the backend's,
+ * because the frontend's copy is an output. Editing the copy is the failure this list is worst at
+ * describing and best at catching — the next regeneration reverts it, and the diff looks like the
+ * backend broke something.
  */
 export const SHARED_FILES: readonly SharedFile[] = [
     /* The contract itself, and the ruleset both sides lint it under. */
-    { backend: 'openapi.yaml', frontend: 'openapi.yaml' },
-    { backend: 'asyncapi.yaml', frontend: 'asyncapi.yaml' },
-    { backend: 'spectral.yaml', frontend: 'spectral.yaml' },
+    { backend: 'openapi.yaml', frontend: 'openapi.yaml', owner: 'backend' },
+    { backend: 'asyncapi.yaml', frontend: 'asyncapi.yaml', owner: 'backend' },
+    { backend: 'spectral.yaml', frontend: 'spectral.yaml', owner: 'mirror' },
 
     /*
      * The realtime types, generated from `asyncapi.yaml` by the shared generator below. Identity
      * here is what proves both sides regenerated after the last spec change: the spec matching
      * while its output does not means one repo is shipping types for a contract it no longer has.
      */
-    { backend: 'src/types/asyncapi.ts', frontend: 'src/types/realtime.generated.ts' },
+    {
+        backend: 'src/types/asyncapi.generated.ts',
+        frontend: 'src/types/realtime.generated.ts',
+        owner: 'backend'
+    },
 
     /*
-     * The seed identities — fixed ids, emails and relationships that the backend seeds into Mongo
-     * and the frontend's MSW mocks reproduce. A fork here is the worst kind: both suites stay
-     * green, because each is consistent with its own copy, and the disagreement surfaces only
-     * when the real app meets the real API. Different paths on each side (production seed data
-     * vs test scaffolding), which is why a same-path check could never have covered it.
+     * The demo dataset, as the API actually serves it. `npm run seed:export` seeds a throwaway
+     * database with the real seeders and records every row through the real serializers; the
+     * frontend's MSW mocks load the result instead of rebuilding it.
+     *
+     * A fork here is the worst kind: both suites stay green, because each is consistent with its
+     * own copy, and the disagreement surfaces only when the real app meets the real API. Different
+     * paths on each side (published seed data vs test scaffolding), which is why a same-path check
+     * could never have covered it.
+     *
+     * This used to compare `db/seeds/seed-identities.ts` — a shared file of plain FACTS that each
+     * repo then mapped into its own shape. Identical facts could not stop the two MAPPERS from
+     * disagreeing, and they did: the frontend's mock hand-wrote `active: true` and `verified: true`
+     * to mirror backend schema defaults, and carried no `locale` at all. Comparing the output
+     * closes that gap, because there is now only one mapper and it is the API's.
      */
-    { backend: 'db/seeds/seed-identities.ts', frontend: 'tests/support/mocks/seed-identities.ts' },
+    {
+        backend: 'db/seeds/dataset.json',
+        frontend: 'tests/support/mocks/dataset.json',
+        owner: 'backend'
+    },
 
     /*
      * The three API client collections (`contract.<tool>.*` at the backend's root) are deliberately NOT here.
@@ -115,7 +146,8 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     {
         backend: 'src/infrastructure/observability/analytics-events.ts',
-        frontend: 'src/infrastructure/analyticsEvents.ts'
+        frontend: 'src/infrastructure/analyticsEvents.ts',
+        owner: 'backend'
     },
 
     /*
@@ -129,9 +161,14 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     {
         backend: 'scripts/check-mutation-baseline.ts',
-        frontend: 'scripts/check-mutation-baseline.ts'
+        frontend: 'scripts/check-mutation-baseline.ts',
+        owner: 'mirror'
     },
-    { backend: 'scripts/gen-asyncapi-types.ts', frontend: 'scripts/gen-asyncapi-types.ts' }
+    {
+        backend: 'scripts/gen-asyncapi-types.ts',
+        frontend: 'scripts/gen-asyncapi-types.ts',
+        owner: 'mirror'
+    }
 ] as const;
 
 export type SpecComparisonStatus = 'match' | 'drift' | 'missing-here' | 'missing-there';
@@ -239,8 +276,10 @@ export const formatSharedFileProblems = (
     return (
         `Shared contract mismatch against ${siblingRoot}:\n${lines.join('\n')}\n\n` +
         `  Both repos must carry byte-identical copies of ${SHARED_FILES.length} files.\n` +
-        `  Four of them are AUTHORED IN THE BACKEND, assembled from per-module fragments:\n` +
-        `    cd <backend> && npm run contracts:bundle   # then copy each result to the frontend\n` +
+        `  Four of them are PRODUCED IN THE BACKEND from per-module sources:\n` +
+        `    cd <backend> && npm run contracts:bundle   # the two specs and the analytics names\n` +
+        `    cd <backend> && npm run seed:export        # the demo dataset\n` +
+        `  then copy each result to the frontend.\n` +
         `  The rest are hand-maintained on both sides: decide which copy is right and copy it\n` +
         `  over the other. Either way, regenerate in BOTH repos afterwards:\n` +
         `    npm run gen:api && npm run gen:asyncapi`

@@ -1,44 +1,28 @@
 /**
- * Product factory
+ * Product fixtures that touch the test database.
  *
- * Provides:
+ * The BUILDER lives one level up, in `src/modules/products/factory.ts` — the same file the demo
+ * catalogue is built from — and this file only persists what it returns. See
+ * `../../users/tests/factory` for why there is exactly one `makeProduct`.
  *
- *   makeProduct(overrides?)   – plain-object payload, no DB write.
- *   createProduct(overrides?) – persists a product and returns the document.
- *
- * Usage example
- * -------------
- *   import { createProduct } from '@modules/products/tests/factory';
+ *   makeProduct(overrides?)   – a plain payload, no database write.
+ *   createProduct(overrides?) – inserts and returns the Mongoose document.
  *
  *   const product = await createProduct({ title: 'Gadget', price: 49.99 });
+ *
+ * Only `title` and `price` have factory defaults, because only those two are required by the
+ * schema. `description`, `imageUrl`, `stock`, `categories`, `tags` and `active` are left unset so a
+ * fixture exercises the model's real defaults rather than a restatement of them — which is what
+ * lets the exported dataset record what the schema actually does.
  */
 
 import type { ProductDocument } from '@modules/products';
 import { productRepository } from '@modules/products';
+import { makeProduct } from '../factory';
+import type { ProductOverrides } from '../factory';
 
-/**
- * Build a valid product payload.
- *
- * The defaults satisfy every required field so that a test can call
- * `createProduct()` with no arguments and get a usable document.
- *
- * @param overrides - Fields to override the factory defaults.
- */
-export const makeProduct = (
-    overrides: Partial<ProductDocument> = {}
-): Partial<ProductDocument> => ({
-    title: 'Test Product',
-    price: 9.99,
-    description: 'A description for the test product.',
-    imageUrl: 'https://example.com/product.jpg',
-    active: true,
-    ...overrides
-});
+export { makeProduct, type ProductOverrides } from '../factory';
 
-/**
- * Insert a product into the test database and return the Mongoose document.
- *
- * @param overrides - Fields to override the factory defaults.
- */
-export const createProduct = (overrides: Partial<ProductDocument> = {}): Promise<ProductDocument> =>
+/** Insert a product into the test database and return the Mongoose document. */
+export const createProduct = (overrides: ProductOverrides = {}): Promise<ProductDocument> =>
     productRepository.create(makeProduct(overrides));
