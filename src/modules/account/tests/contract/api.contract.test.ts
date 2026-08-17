@@ -459,6 +459,22 @@ describe('the address book: /account/addresses', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('answers the same 404 when REMOVING an entry the caller does not hold', async () => {
+        /*
+         * The same ownership path as the edit above, and it was the one method never asserted
+         * against the contract. Worth its own case rather than trusting the symmetry: delete is
+         * the method where "not found" and "not yours" are most tempting to answer differently,
+         * and a distinguishable answer would confirm the id belongs to somebody.
+         */
+        const { bearer } = await authenticateAs('user');
+        const response = await api()
+            .delete(`/account/addresses/${MISSING_ID}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('matches the error contract when unauthenticated', async () => {
         const response = await api().get('/account/addresses');
 
