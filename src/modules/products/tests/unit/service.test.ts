@@ -10,6 +10,7 @@ import type { ProductDocument } from '@modules/products';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import productsModule from '@modules/products/module';
+import inventoryModule from '@modules/inventory/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
 import accountModule from '@modules/account/module';
@@ -440,6 +441,7 @@ describe('productService.removeById', () => {
             deliveryModule,
             productsModule,
             usersModule,
+            inventoryModule,
             ordersModule,
             cartModule
         ]);

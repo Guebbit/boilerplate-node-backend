@@ -20,11 +20,13 @@
  */
 import type { Id } from './id';
 
-export interface RestockRequest {
+export interface ReceiptRequest {
   productId: Id;
   /**
-     * How many units arrived. Corrections downward are the admin product form's absolute stock write.
+     * How many units arrived. Strictly positive — a delivery that removes units is an adjustment.
      * @minimum 1
      */
   quantity: number;
+  /** Optional — the supplier, the delivery note number, whatever the operator wants on the row. */
+  note?: string;
 }

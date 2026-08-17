@@ -1,25 +1,48 @@
 /**
  * Domain gauges this module owns. See `modules/account/metrics.ts` for why they live in the
- * module rather than in `infrastructure`, and how the overview endpoint reads them without importing here.
+ * module rather than in `infrastructure`, and how the overview endpoint reads them without
+ * importing here.
  */
 
 import { Gauge } from 'prom-client';
 import { metricsRegistry } from '@infrastructure/observability/metrics-http';
 import { productRepository } from '@modules/products';
-
-/** Shelf counts at or under this ask for a restock. Lazily read — tests vary it per case. */
-const lowStockThreshold = (): number => Number(process.env.NODE_LOW_STOCK_THRESHOLD ?? 5);
+import { lowStockThreshold } from './config';
 
 /**
- * How many products are running out, computed AT SCRAPE TIME via `collect` — a gauge that
- * counted events would drift from the shelf it describes, and the shelf is one cheap indexed
- * count away. The observability overview reads it by name, like every domain metric.
+ * How many products a customer would find unbuyable-ish, computed AT SCRAPE TIME via `collect`.
+ *
+ * A gauge that counted events would drift from the shelf it describes, and the shelf is one
+ * indexed count away.
+ *
+ * It counts AVAILABILITY, not units on hand, and that is the whole point of the metric now that
+ * the two can differ. A product with forty units all reserved is out of stock to every customer
+ * looking at it; the old gauge read `stock` and would have reported forty, cheerfully, while the
+ * storefront showed a sold-out badge. `countLowAvailability` does the subtraction inside mongod.
  */
 export const productsLowStockTotal = new Gauge({
     name: 'products_low_stock_total',
-    help: 'Products at or under the low-stock threshold.',
+    help: 'Products whose available units are at or under the low-stock threshold.',
     registers: [metricsRegistry],
     async collect() {
-        this.set(await productRepository.count({ stock: { $lte: lowStockThreshold() } }));
+        this.set(await productRepository.countLowAvailability(lowStockThreshold()));
+    }
+});
+
+/**
+ * Units currently promised to orders that have not been paid for.
+ *
+ * The number that says whether the reservation window is doing its job. A steadily climbing
+ * `reserved` total with a flat sales rate means holds are being opened and never resolved —
+ * abandoned checkouts the sweep is not reaching, or a payment integration that has stopped
+ * confirming. Neither is visible in a stock count alone, which is exactly why the previous
+ * single-counter model could not have had this metric at all.
+ */
+export const inventoryReservedUnitsTotal = new Gauge({
+    name: 'inventory_reserved_units_total',
+    help: 'Units held by open reservations across the catalogue.',
+    registers: [metricsRegistry],
+    async collect() {
+        this.set(await productRepository.sumReserved());
     }
 });

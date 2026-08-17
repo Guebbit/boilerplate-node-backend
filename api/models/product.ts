@@ -26,8 +26,21 @@ export interface Product {
   title: string;
   /** @minimum 0 */
   price: number;
-  /** @minimum 0 */
-  stock?: number;
+  /**
+     * Units physically present, whether or not they are spoken for.
+     * @minimum 0
+     */
+  readonly onHand?: number;
+  /**
+     * Units held by an open order — present, but not for sale.
+     * @minimum 0
+     */
+  readonly reserved?: number;
+  /**
+     * What a customer may actually buy. Derived from the two counters above.
+     * @minimum 0
+     */
+  readonly available?: number;
   description?: string;
   active?: boolean;
   imageUrl?: ImageUrl;

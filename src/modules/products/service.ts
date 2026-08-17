@@ -9,7 +9,7 @@ import {
 } from '@infrastructure/http/response';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { emitDomainEvent } from '@kernel/events';
-import { PRODUCT_DELETED, STOCK_MOVED } from './events';
+import { PRODUCT_DELETED } from './events';
 import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
 import { productRepository, type FacetCount } from './repository';
@@ -105,10 +105,18 @@ export const update = (
     // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
     if (data.price !== undefined) product.price = data.price;
-    // The admin form is the one legitimate ABSOLUTE stock write — restocking sets a count.
-    // Relative changes (sales, cancellations) go through the repository's adjust helpers.
-    const stockBefore = product.stock;
-    if (data.stock !== undefined) product.stock = data.stock;
+    /*
+     * No stock write here, and the contract no longer offers one: `UpdateProductRequest` and its
+     * three siblings carry no counter field.
+     *
+     * This used to be the "one legitimate ABSOLUTE stock write", and being absolute is what made
+     * it wrong. Setting a count to 40 says nothing about what happened — it is a keystroke, not
+     * an event — so the ledger had to guess by subtracting the old value, and two admins editing
+     * the same product concurrently would each overwrite the other with a number read before the
+     * other's sale. Counters now move only by signed, conditional transitions through
+     * `@modules/inventory`: `POST /inventory/receipts` for a delivery, `POST /inventory/adjustments`
+     * for a stocktake correction. Both say what happened, and neither can lose a concurrent sale.
+     */
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
@@ -120,16 +128,7 @@ export const update = (
     if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
 
     // Persist the updated document
-    return productRepository.save(product).then(async (updatedProduct) => {
-        // The absolute write, announced as the RELATIVE movement it amounts to — a ledger
-        // records what changed, and "the admin set 40 over 25" is a +15 with reason attached.
-        if (data.stock !== undefined && data.stock !== stockBefore)
-            await emitDomainEvent(STOCK_MOVED, {
-                productId: String(updatedProduct._id),
-                delta: data.stock - (stockBefore ?? 0),
-                reason: 'adjustment'
-            });
-
+    return productRepository.save(product).then((updatedProduct) => {
         // After saving the new image path, delete the old image file
         return (
             newImageUrl && oldImageUrl !== newImageUrl

@@ -23,6 +23,6 @@
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Total: {{total}}"
         },
-        "insufficient-stock": "Uno o más productos de este pedido superan el stock disponible."
+        "insufficient-stock": "Algunos artículos de este pedido ya no están disponibles en la cantidad solicitada — consulta `details.lines`."
     }
 }

@@ -22,10 +22,12 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService, orderRepository } from '@modules/orders';
+import { productRepository } from '@modules/products';
 import { createIntent, confirmPayment, getForOrder } from '@modules/payments/service';
 import { paymentRepository } from '@modules/payments/repository';
 import { FAKE_DECLINE_CARD } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
+import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
@@ -195,6 +197,7 @@ describe('refund on cancel', () => {
             deliveryModule,
             productsModule,
             usersModule,
+            inventoryModule,
             ordersModule,
             cartModule,
             paymentsModule
@@ -228,5 +231,84 @@ describe('refund on cancel', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         // The intent survives untouched — no money moved, so there is nothing to move back.
         expect(payment!.status).toBe('requires_confirmation');
+    });
+});
+
+/**
+ * Committing the order's held stock — the other thing a confirm does.
+ *
+ * These live here rather than in `cart/tests/unit/stock.test.ts` for the ordinary boundary
+ * reason: committing is this service's work, and reaching `@modules/payments/service` from the
+ * cart's suite is what `tests/cross-cutting/module-test-boundaries.test.ts` forbids. The rest of
+ * the lifecycle — checkout holds, cancel releases, the sweep expires — is asserted over there.
+ *
+ * The orders are placed through `orderService.create` rather than written as fixtures, because a
+ * fixture order has no hold behind it and there would be nothing for a commit to claim. That is
+ * the whole point being checked: units leave the shop if and only if they were paid for.
+ */
+/** Counters straight from the catalogue row, which is where the truth lives. */
+const countersOf = async (productId: unknown) => {
+    const stored = await productRepository.findByIdRaw(String(productId));
+    return { onHand: stored?.onHand, reserved: stored?.reserved };
+};
+
+/** A real placed order: units held, nothing sold yet. */
+const placedOrder = async (onHand = 10, quantity = 3) => {
+    const user = await createUser();
+    const product = await createProduct({ onHand });
+    const created = await orderService.create(user.id, user.email, [
+        { productId: String(product._id), quantity }
+    ]);
+    return { user, product, order: created.data! };
+};
+
+const payFor = async (orderId: string, user: { id: string }) => {
+    const intent = await createIntent(orderId, auth(user));
+    return confirmPayment(
+        String(intent.success && intent.data?._id),
+        { cardNumber: GOOD_CARD },
+        auth(user)
+    );
+};
+
+describe('the confirm commits the order’s held units', () => {
+    it('drops both counters together when the money lands', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3 });
+
+        const paid = await payFor(String(order._id), user);
+
+        expect(paid.success).toBe(true);
+        // Availability is unchanged by the sale — those units stopped being sellable at checkout.
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+    });
+
+    it('leaves the hold alone when the card is declined', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        const intent = await createIntent(String(order._id), auth(user));
+
+        const declined = await confirmPayment(
+            String(intent.success && intent.data?._id),
+            { cardNumber: FAKE_DECLINE_CARD },
+            auth(user)
+        );
+
+        expect(declined.success).toBe(false);
+        // Still held, not sold and not released: a decline is retryable state, and dropping the
+        // hold here would let someone else take the units mid-retry.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3 });
+    });
+
+    it('commits once even if the confirm is replayed', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        const intent = await createIntent(String(order._id), auth(user));
+        const paymentId = String(intent.success && intent.data?._id);
+
+        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+
+        // Seven, not four. Two guards refuse the replay independently — the order's conditional
+        // `pending → paid` and the reservation's own `held → committed` claim.
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
     });
 });

@@ -177,6 +177,8 @@ export const getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin
 
 export const getObservabilityMetricsOverviewResponseDataBusinessLowStockProductsMin = 0;
 
+export const getObservabilityMetricsOverviewResponseDataBusinessReservedUnitsMin = 0;
+
 export const getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin = 0;
 
 export const getObservabilityMetricsOverviewResponseDataDatabaseErrorsTotalMin = 0;
@@ -210,7 +212,8 @@ export const GetObservabilityMetricsOverviewResponse = zod.object({
   "business": zod.object({
   "checkoutSuccess": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessCheckoutSuccessMin).optional(),
   "ordersCreated": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessOrdersCreatedMin).optional(),
-  "lowStockProducts": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessLowStockProductsMin).optional()
+  "lowStockProducts": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessLowStockProductsMin).optional(),
+  "reservedUnits": zod.number().min(getObservabilityMetricsOverviewResponseDataBusinessReservedUnitsMin).optional()
 }),
   "database": zod.object({
   "queriesTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataDatabaseQueriesTotalMin).optional(),
@@ -1252,7 +1255,11 @@ export const ListProductsQueryParams = zod.object({
 
 export const listProductsResponseDataItemsItemPriceMin = 0;
 
-export const listProductsResponseDataItemsItemStockMin = 0;
+export const listProductsResponseDataItemsItemOnHandMin = 0;
+
+export const listProductsResponseDataItemsItemReservedMin = 0;
+
+export const listProductsResponseDataItemsItemAvailableMin = 0;
 
 export const listProductsResponseDataMetaPageDefault = 1;
 
@@ -1274,7 +1281,9 @@ export const ListProductsResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(listProductsResponseDataItemsItemPriceMin),
-  "stock": zod.number().min(listProductsResponseDataItemsItemStockMin).optional(),
+  "onHand": zod.number().min(listProductsResponseDataItemsItemOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(listProductsResponseDataItemsItemReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(listProductsResponseDataItemsItemAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1300,15 +1309,15 @@ export const ListProductsResponse = zod.object({
  */
 export const createProductBodyPriceMin = 0;
 
-export const createProductBodyStockDefault = 100;
-export const createProductBodyStockMin = 0;
+export const createProductBodyOnHandDefault = 100;
+export const createProductBodyOnHandMin = 0;
 
 export const createProductBodyActiveDefault = true;
 
 export const CreateProductBody = zod.object({
   "title": zod.string(),
   "price": zod.number().min(createProductBodyPriceMin),
-  "stock": zod.number().min(createProductBodyStockMin).default(createProductBodyStockDefault),
+  "onHand": zod.number().min(createProductBodyOnHandMin).default(createProductBodyOnHandDefault),
   "description": zod.string().optional(),
   "active": zod.boolean().default(createProductBodyActiveDefault),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1318,7 +1327,11 @@ export const CreateProductBody = zod.object({
 
 export const createProductResponseDataPriceMin = 0;
 
-export const createProductResponseDataStockMin = 0;
+export const createProductResponseDataOnHandMin = 0;
+
+export const createProductResponseDataReservedMin = 0;
+
+export const createProductResponseDataAvailableMin = 0;
 
 
 
@@ -1330,7 +1343,9 @@ export const CreateProductResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(createProductResponseDataPriceMin),
-  "stock": zod.number().min(createProductResponseDataStockMin).optional(),
+  "onHand": zod.number().min(createProductResponseDataOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(createProductResponseDataReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(createProductResponseDataAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1349,8 +1364,6 @@ export const CreateProductResponse = zod.object({
  */
 export const updateProductBodyPriceMin = 0;
 
-export const updateProductBodyStockMin = 0;
-
 
 
 export const UpdateProductBody = zod.object({
@@ -1358,7 +1371,6 @@ export const UpdateProductBody = zod.object({
   "title": zod.string(),
   "description": zod.string().optional(),
   "price": zod.number().min(updateProductBodyPriceMin),
-  "stock": zod.number().min(updateProductBodyStockMin).optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
@@ -1367,7 +1379,11 @@ export const UpdateProductBody = zod.object({
 
 export const updateProductResponseDataPriceMin = 0;
 
-export const updateProductResponseDataStockMin = 0;
+export const updateProductResponseDataOnHandMin = 0;
+
+export const updateProductResponseDataReservedMin = 0;
+
+export const updateProductResponseDataAvailableMin = 0;
 
 
 
@@ -1379,7 +1395,9 @@ export const UpdateProductResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateProductResponseDataPriceMin),
-  "stock": zod.number().min(updateProductResponseDataStockMin).optional(),
+  "onHand": zod.number().min(updateProductResponseDataOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(updateProductResponseDataReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(updateProductResponseDataAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1445,7 +1463,11 @@ export const GetProductByIdParams = zod.object({
 
 export const getProductByIdResponseDataPriceMin = 0;
 
-export const getProductByIdResponseDataStockMin = 0;
+export const getProductByIdResponseDataOnHandMin = 0;
+
+export const getProductByIdResponseDataReservedMin = 0;
+
+export const getProductByIdResponseDataAvailableMin = 0;
 
 
 
@@ -1457,7 +1479,9 @@ export const GetProductByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(getProductByIdResponseDataPriceMin),
-  "stock": zod.number().min(getProductByIdResponseDataStockMin).optional(),
+  "onHand": zod.number().min(getProductByIdResponseDataOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(getProductByIdResponseDataReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(getProductByIdResponseDataAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1480,15 +1504,12 @@ export const UpdateProductByIdParams = zod.object({
 
 export const updateProductByIdBodyPriceMin = 0;
 
-export const updateProductByIdBodyStockMin = 0;
-
 
 
 export const UpdateProductByIdBody = zod.object({
   "title": zod.string(),
   "description": zod.string().optional(),
   "price": zod.number().min(updateProductByIdBodyPriceMin),
-  "stock": zod.number().min(updateProductByIdBodyStockMin).optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
   "categories": zod.array(zod.string()).optional(),
@@ -1497,7 +1518,11 @@ export const UpdateProductByIdBody = zod.object({
 
 export const updateProductByIdResponseDataPriceMin = 0;
 
-export const updateProductByIdResponseDataStockMin = 0;
+export const updateProductByIdResponseDataOnHandMin = 0;
+
+export const updateProductByIdResponseDataReservedMin = 0;
+
+export const updateProductByIdResponseDataAvailableMin = 0;
 
 
 
@@ -1509,7 +1534,9 @@ export const UpdateProductByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateProductByIdResponseDataPriceMin),
-  "stock": zod.number().min(updateProductByIdResponseDataStockMin).optional(),
+  "onHand": zod.number().min(updateProductByIdResponseDataOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(updateProductByIdResponseDataReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(updateProductByIdResponseDataAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1591,7 +1618,11 @@ export const SearchProductsBody = zod.object({
 
 export const searchProductsResponseDataItemsItemPriceMin = 0;
 
-export const searchProductsResponseDataItemsItemStockMin = 0;
+export const searchProductsResponseDataItemsItemOnHandMin = 0;
+
+export const searchProductsResponseDataItemsItemReservedMin = 0;
+
+export const searchProductsResponseDataItemsItemAvailableMin = 0;
 
 export const searchProductsResponseDataMetaPageDefault = 1;
 
@@ -1613,7 +1644,9 @@ export const SearchProductsResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(searchProductsResponseDataItemsItemPriceMin),
-  "stock": zod.number().min(searchProductsResponseDataItemsItemStockMin).optional(),
+  "onHand": zod.number().min(searchProductsResponseDataItemsItemOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(searchProductsResponseDataItemsItemReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(searchProductsResponseDataItemsItemAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -1859,7 +1892,11 @@ export const CheckoutBody = zod.object({
 
 export const checkoutResponseDataOrderItemsItemProductPriceMin = 0;
 
-export const checkoutResponseDataOrderItemsItemProductStockMin = 0;
+export const checkoutResponseDataOrderItemsItemProductOnHandMin = 0;
+
+export const checkoutResponseDataOrderItemsItemProductReservedMin = 0;
+
+export const checkoutResponseDataOrderItemsItemProductAvailableMin = 0;
 
 
 export const checkoutResponseDataOrderTotalItemsMin = 0;
@@ -1886,7 +1923,9 @@ export const CheckoutResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(checkoutResponseDataOrderItemsItemProductPriceMin),
-  "stock": zod.number().min(checkoutResponseDataOrderItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(checkoutResponseDataOrderItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(checkoutResponseDataOrderItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(checkoutResponseDataOrderItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2057,7 +2096,11 @@ export const ListOrdersQueryParams = zod.object({
 
 export const listOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;
 
-export const listOrdersResponseDataItemsItemItemsItemProductStockMin = 0;
+export const listOrdersResponseDataItemsItemItemsItemProductOnHandMin = 0;
+
+export const listOrdersResponseDataItemsItemItemsItemProductReservedMin = 0;
+
+export const listOrdersResponseDataItemsItemItemsItemProductAvailableMin = 0;
 
 
 export const listOrdersResponseDataItemsItemTotalItemsMin = 0;
@@ -2093,7 +2136,9 @@ export const ListOrdersResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductPriceMin),
-  "stock": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(listOrdersResponseDataItemsItemItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2153,7 +2198,11 @@ export const CreateOrderBody = zod.object({
 
 export const createOrderResponseDataItemsItemProductPriceMin = 0;
 
-export const createOrderResponseDataItemsItemProductStockMin = 0;
+export const createOrderResponseDataItemsItemProductOnHandMin = 0;
+
+export const createOrderResponseDataItemsItemProductReservedMin = 0;
+
+export const createOrderResponseDataItemsItemProductAvailableMin = 0;
 
 
 export const createOrderResponseDataTotalItemsMin = 0;
@@ -2179,7 +2228,9 @@ export const CreateOrderResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(createOrderResponseDataItemsItemProductPriceMin),
-  "stock": zod.number().min(createOrderResponseDataItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(createOrderResponseDataItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(createOrderResponseDataItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(createOrderResponseDataItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2234,7 +2285,11 @@ export const UpdateOrderBody = zod.object({
 
 export const updateOrderResponseDataItemsItemProductPriceMin = 0;
 
-export const updateOrderResponseDataItemsItemProductStockMin = 0;
+export const updateOrderResponseDataItemsItemProductOnHandMin = 0;
+
+export const updateOrderResponseDataItemsItemProductReservedMin = 0;
+
+export const updateOrderResponseDataItemsItemProductAvailableMin = 0;
 
 
 export const updateOrderResponseDataTotalItemsMin = 0;
@@ -2260,7 +2315,9 @@ export const UpdateOrderResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateOrderResponseDataItemsItemProductPriceMin),
-  "stock": zod.number().min(updateOrderResponseDataItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(updateOrderResponseDataItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(updateOrderResponseDataItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(updateOrderResponseDataItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2335,7 +2392,11 @@ export const SearchOrdersBody = zod.object({
 
 export const searchOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;
 
-export const searchOrdersResponseDataItemsItemItemsItemProductStockMin = 0;
+export const searchOrdersResponseDataItemsItemItemsItemProductOnHandMin = 0;
+
+export const searchOrdersResponseDataItemsItemItemsItemProductReservedMin = 0;
+
+export const searchOrdersResponseDataItemsItemItemsItemProductAvailableMin = 0;
 
 
 export const searchOrdersResponseDataItemsItemTotalItemsMin = 0;
@@ -2371,7 +2432,9 @@ export const SearchOrdersResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductPriceMin),
-  "stock": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(searchOrdersResponseDataItemsItemItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2422,7 +2485,11 @@ export const GetOrderByIdParams = zod.object({
 
 export const getOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
-export const getOrderByIdResponseDataItemsItemProductStockMin = 0;
+export const getOrderByIdResponseDataItemsItemProductOnHandMin = 0;
+
+export const getOrderByIdResponseDataItemsItemProductReservedMin = 0;
+
+export const getOrderByIdResponseDataItemsItemProductAvailableMin = 0;
 
 
 export const getOrderByIdResponseDataTotalItemsMin = 0;
@@ -2448,7 +2515,9 @@ export const GetOrderByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(getOrderByIdResponseDataItemsItemProductPriceMin),
-  "stock": zod.number().min(getOrderByIdResponseDataItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(getOrderByIdResponseDataItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(getOrderByIdResponseDataItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(getOrderByIdResponseDataItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2506,7 +2575,11 @@ export const UpdateOrderByIdBody = zod.object({
 
 export const updateOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
-export const updateOrderByIdResponseDataItemsItemProductStockMin = 0;
+export const updateOrderByIdResponseDataItemsItemProductOnHandMin = 0;
+
+export const updateOrderByIdResponseDataItemsItemProductReservedMin = 0;
+
+export const updateOrderByIdResponseDataItemsItemProductAvailableMin = 0;
 
 
 export const updateOrderByIdResponseDataTotalItemsMin = 0;
@@ -2532,7 +2605,9 @@ export const UpdateOrderByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(updateOrderByIdResponseDataItemsItemProductPriceMin),
-  "stock": zod.number().min(updateOrderByIdResponseDataItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(updateOrderByIdResponseDataItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(updateOrderByIdResponseDataItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(updateOrderByIdResponseDataItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2616,7 +2691,11 @@ export const CancelOrderByIdParams = zod.object({
 
 export const cancelOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
-export const cancelOrderByIdResponseDataItemsItemProductStockMin = 0;
+export const cancelOrderByIdResponseDataItemsItemProductOnHandMin = 0;
+
+export const cancelOrderByIdResponseDataItemsItemProductReservedMin = 0;
+
+export const cancelOrderByIdResponseDataItemsItemProductAvailableMin = 0;
 
 
 export const cancelOrderByIdResponseDataTotalItemsMin = 0;
@@ -2642,7 +2721,9 @@ export const CancelOrderByIdResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "title": zod.string(),
   "price": zod.number().min(cancelOrderByIdResponseDataItemsItemProductPriceMin),
-  "stock": zod.number().min(cancelOrderByIdResponseDataItemsItemProductStockMin).optional(),
+  "onHand": zod.number().min(cancelOrderByIdResponseDataItemsItemProductOnHandMin).optional().describe('Units physically present, whether or not they are spoken for.'),
+  "reserved": zod.number().min(cancelOrderByIdResponseDataItemsItemProductReservedMin).optional().describe('Units held by an open order — present, but not for sale.'),
+  "available": zod.number().min(cancelOrderByIdResponseDataItemsItemProductAvailableMin).optional().describe('What a customer may actually buy. Derived from the two counters above.'),
   "description": zod.string().optional(),
   "active": zod.boolean().optional(),
   "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
@@ -2858,12 +2939,89 @@ export const AdvanceCourierResponse = zod.object({
 
 
 /**
- * The ledger, newest first — every signed change to a shelf count with the why attached (order, cancel, adjustment, restock). Optionally one product's story via `productId`. Admin — customers see stock as a number on the product page.
+ * The stock board — every product with its two counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
+ * @summary Stock levels
+ */
+export const listInventoryLevelsQueryPageDefault = 1;
+
+export const listInventoryLevelsQueryPageSizeDefault = 10;
+export const listInventoryLevelsQueryPageSizeMax = 100;
+
+export const listInventoryLevelsQueryLowOnlyDefault = false;
+
+export const ListInventoryLevelsQueryParams = zod.object({
+  "page": zod.number().min(1).default(listInventoryLevelsQueryPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listInventoryLevelsQueryPageSizeMax).default(listInventoryLevelsQueryPageSizeDefault),
+  "lowOnly": zod.boolean().default(listInventoryLevelsQueryLowOnlyDefault).describe('Only products at or under the low-availability threshold (`NODE_LOW_STOCK_THRESHOLD`).')
+})
+
+export const listInventoryLevelsResponseDataItemsItemOnHandMin = 0;
+
+export const listInventoryLevelsResponseDataItemsItemReservedMin = 0;
+
+export const listInventoryLevelsResponseDataItemsItemAvailableMin = 0;
+
+export const listInventoryLevelsResponseDataMetaPageDefault = 1;
+
+export const listInventoryLevelsResponseDataMetaPageSizeDefault = 10;
+export const listInventoryLevelsResponseDataMetaPageSizeMax = 100;
+
+export const listInventoryLevelsResponseDataMetaTotalItemsMin = 0;
+
+export const listInventoryLevelsResponseDataMetaTotalPagesMin = 0;
+
+
+
+export const ListInventoryLevelsResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "items": zod.array(zod.object({
+  "productId": zod.string().describe('Resource identifier'),
+  "title": zod.string().describe('Carried so the board reads as a list of products rather than of ids.'),
+  "onHand": zod.number().min(listInventoryLevelsResponseDataItemsItemOnHandMin),
+  "reserved": zod.number().min(listInventoryLevelsResponseDataItemsItemReservedMin),
+  "available": zod.number().min(listInventoryLevelsResponseDataItemsItemAvailableMin)
+})),
+  "meta": zod.object({
+  "page": zod.number().min(1).default(listInventoryLevelsResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listInventoryLevelsResponseDataMetaPageSizeMax).default(listInventoryLevelsResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(listInventoryLevelsResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(listInventoryLevelsResponseDataMetaTotalPagesMin)
+})
+})
+})
+
+
+/**
+ * A page of the ledger, newest first — one row per counter change, with both deltas and the reason attached. Every row was written by the same call that moved the counter, so the ledger cannot have gaps. Paged rather than capped, and `meta.totalItems` counts everything matching the filters — this is the record an audit works through, and a read that returned only the newest rows would misreport history as complete.
  * @summary List stock movements
  */
+export const listStockMovementsQueryPageDefault = 1;
+
+export const listStockMovementsQueryPageSizeDefault = 10;
+export const listStockMovementsQueryPageSizeMax = 100;
+
+
+
 export const ListStockMovementsQueryParams = zod.object({
-  "productId": zod.string().optional().describe('Narrow to one product\'s movements')
+  "page": zod.number().min(1).default(listStockMovementsQueryPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listStockMovementsQueryPageSizeMax).default(listStockMovementsQueryPageSizeDefault),
+  "productId": zod.string().optional().describe('Narrow to one product\'s movements'),
+  "reason": zod.enum(['reserve', 'commit', 'release', 'expire', 'receive', 'adjust']).optional().describe('Narrow to one kind of transition')
 })
+
+export const listStockMovementsResponseDataMetaPageDefault = 1;
+
+export const listStockMovementsResponseDataMetaPageSizeDefault = 10;
+export const listStockMovementsResponseDataMetaPageSizeMax = 100;
+
+export const listStockMovementsResponseDataMetaTotalItemsMin = 0;
+
+export const listStockMovementsResponseDataMetaTotalPagesMin = 0;
+
+
 
 export const ListStockMovementsResponse = zod.object({
   "success": zod.literal(true),
@@ -2873,38 +3031,106 @@ export const ListStockMovementsResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
   "productId": zod.string().describe('Resource identifier'),
-  "delta": zod.number().describe('Signed — a sale is negative, a return or restock positive.'),
-  "reason": zod.enum(['order', 'order-cancelled', 'adjustment', 'restock']).describe('Why the units moved.'),
-  "reference": zod.string().optional().describe('What caused it, when something did — the order id, typically.'),
+  "reason": zod.enum(['reserve', 'commit', 'release', 'expire', 'receive', 'adjust']).describe('\* `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.\n\* `commit` — the order was paid for and the units left. Both down.\n\* `release` — the hold was given up (the order was cancelled). `reserved` down.\n\* `expire` — the hold timed out unpaid. Same counters as `release`, different story.\n\* `receive` — a supplier delivery. `onHand` up.\n\* `adjust` — a stocktake correction, signed. `onHand` moves either way.\n'),
+  "onHandDelta": zod.number(),
+  "reservedDelta": zod.number(),
+  "reference": zod.string().optional().describe('The order the movement belongs to, when one does.'),
+  "note": zod.string().optional().describe('Why an adjustment was made — the operator\'s own words.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
-}))
+})),
+  "meta": zod.object({
+  "page": zod.number().min(1).default(listStockMovementsResponseDataMetaPageDefault).describe('1-based page index'),
+  "pageSize": zod.number().min(1).max(listStockMovementsResponseDataMetaPageSizeMax).default(listStockMovementsResponseDataMetaPageSizeDefault).describe('Optional override; server may clamp to a max'),
+  "totalItems": zod.number().min(listStockMovementsResponseDataMetaTotalItemsMin),
+  "totalPages": zod.number().min(listStockMovementsResponseDataMetaTotalPagesMin)
+})
 })
 })
 
 
 /**
- * Puts units on a shelf through the same conditional increment every other movement uses, and writes the ledger row through the same announcement — so a restock and a sale tell the same kind of story. Answers the shelf count after the units landed.
- * @summary Restock a product
+ * Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again.
+ * @summary Receive stock
  */
 
 
 
-export const RestockProductBody = zod.object({
+export const ReceiveStockBody = zod.object({
   "productId": zod.string().describe('Resource identifier'),
-  "quantity": zod.number().min(1).describe('How many units arrived. Corrections downward are the admin product form\'s absolute stock write.')
+  "quantity": zod.number().min(1).describe('How many units arrived. Strictly positive — a delivery that removes units is an adjustment.'),
+  "note": zod.string().optional().describe('Optional — the supplier, the delivery note number, whatever the operator wants on the row.')
 })
 
-export const restockProductResponseDataStockMin = 0;
+export const receiveStockResponseDataOnHandMin = 0;
+
+export const receiveStockResponseDataReservedMin = 0;
+
+export const receiveStockResponseDataAvailableMin = 0;
 
 
 
-export const RestockProductResponse = zod.object({
+export const ReceiveStockResponse = zod.object({
   "success": zod.literal(true),
   "status": zod.number(),
   "message": zod.string(),
   "data": zod.object({
   "productId": zod.string().describe('Resource identifier'),
-  "stock": zod.number().min(restockProductResponseDataStockMin).describe('The shelf count after the units landed.')
+  "title": zod.string().describe('Carried so the board reads as a list of products rather than of ids.'),
+  "onHand": zod.number().min(receiveStockResponseDataOnHandMin),
+  "reserved": zod.number().min(receiveStockResponseDataReservedMin),
+  "available": zod.number().min(receiveStockResponseDataAvailableMin)
+})
+})
+
+
+/**
+ * A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative.
+ * @summary Adjust stock
+ */
+export const AdjustStockBody = zod.object({
+  "productId": zod.string().describe('Resource identifier'),
+  "delta": zod.number().describe('Signed. Negative is shrinkage or damage; positive is a miscount found in your favour.'),
+  "note": zod.string().optional().describe('Why. An unexplained correction is the thing an audit is looking for.')
+})
+
+export const adjustStockResponseDataOnHandMin = 0;
+
+export const adjustStockResponseDataReservedMin = 0;
+
+export const adjustStockResponseDataAvailableMin = 0;
+
+
+
+export const AdjustStockResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "productId": zod.string().describe('Resource identifier'),
+  "title": zod.string().describe('Carried so the board reads as a list of products rather than of ids.'),
+  "onHand": zod.number().min(adjustStockResponseDataOnHandMin),
+  "reserved": zod.number().min(adjustStockResponseDataReservedMin),
+  "available": zod.number().min(adjustStockResponseDataAvailableMin)
+})
+})
+
+
+/**
+ * Releases every hold whose window has closed and announces each one, so the orders behind them get cancelled.
+ *
+ * A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator — the same arrangement as `POST /delivery/advance`. Idempotent; running it twice releases nothing the first run already released.
+ * @summary Expire stale reservations
+ */
+export const sweepReservationsResponseDataExpiredMin = 0;
+
+
+
+export const SweepReservationsResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "expired": zod.number().min(sweepReservationsResponseDataExpiredMin).describe('How many holds this run released.')
 })
 })

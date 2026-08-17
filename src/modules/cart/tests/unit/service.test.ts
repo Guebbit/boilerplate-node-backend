@@ -50,6 +50,7 @@ import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import cartModule from '@modules/cart/module';
+import inventoryModule from '@modules/inventory/module';
 import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
@@ -580,7 +581,7 @@ describe('orderConfirm', () => {
 
     it('refuses an unknown shipping method before anything is written', async () => {
         const user = await createUser();
-        const product = await createProduct({ stock: 5 });
+        const product = await createProduct({ onHand: 5 });
         await cartItemSetById(user.id, String(product._id), 2);
 
         const result = await orderConfirm(user.id, undefined, 'teleport');
@@ -590,7 +591,8 @@ describe('orderConfirm', () => {
         // Nothing moved: no order, full shelf, full cart.
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
         const stored = await productRepository.findByIdRaw(String(product._id));
-        expect(stored!.stock).toBe(5);
+        expect(stored!.onHand).toBe(5);
+        expect(stored!.reserved).toBe(0);
     });
 
     it('an omitted method leaves the order without shipping — buying does not require it', async () => {
@@ -705,6 +707,7 @@ describe('cartDeleteByUserId', () => {
             deliveryModule,
             productsModule,
             usersModule,
+            inventoryModule,
             ordersModule,
             cartModule
         ]);

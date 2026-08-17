@@ -469,7 +469,7 @@ describe('the address book: /account/addresses', () => {
     it('checkout carries the snapshot the contract declares', async () => {
         const { bearer } = await authenticateAs('user');
         await api().post('/account/addresses').set('Authorization', bearer).send(HOME);
-        const product = await createProduct({ stock: 5 });
+        const product = await createProduct({ onHand: 5 });
         await api()
             .post('/cart')
             .set('Authorization', bearer)

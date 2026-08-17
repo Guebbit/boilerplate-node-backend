@@ -473,7 +473,7 @@
         "responses": [
           {
             "uuid": "92fb9299-14b8-431c-828e-c2c73f42004c",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Metrics overview\",\n  \"data\": {\n    \"http\": {\n      \"totalRequests\": 0,\n      \"totalErrors\": 0,\n      \"errorRate\": 0,\n      \"inFlight\": 0,\n      \"latencyMs\": {\n        \"p50\": 1,\n        \"p95\": 1\n      }\n    },\n    \"auth\": {\n      \"loginSuccess\": 0,\n      \"loginFailure\": 0,\n      \"signupSuccess\": 0\n    },\n    \"business\": {\n      \"checkoutSuccess\": 0,\n      \"ordersCreated\": 0,\n      \"lowStockProducts\": 0\n    },\n    \"database\": {\n      \"queriesTotal\": 0,\n      \"errorsTotal\": 0\n    },\n    \"process\": {\n      \"uptimeSeconds\": 0,\n      \"heapUsedMb\": 0\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Metrics overview\",\n  \"data\": {\n    \"http\": {\n      \"totalRequests\": 0,\n      \"totalErrors\": 0,\n      \"errorRate\": 0,\n      \"inFlight\": 0,\n      \"latencyMs\": {\n        \"p50\": 1,\n        \"p95\": 1\n      }\n    },\n    \"auth\": {\n      \"loginSuccess\": 0,\n      \"loginFailure\": 0,\n      \"signupSuccess\": 0\n    },\n    \"business\": {\n      \"checkoutSuccess\": 0,\n      \"ordersCreated\": 0,\n      \"lowStockProducts\": 0,\n      \"reservedUnits\": 0\n    },\n    \"database\": {\n      \"queriesTotal\": 0,\n      \"errorsTotal\": 0\n    },\n    \"process\": {\n      \"uptimeSeconds\": 0,\n      \"heapUsedMb\": 0\n    },\n    \"timestamp\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Metrics overview",
@@ -4421,7 +4421,7 @@
         "responses": [
           {
             "uuid": "edd3c4d8-8548-4395-8b6d-3c249b0ae5e7",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Products page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"title\": \"Sallyno Panino\",\n        \"price\": 100,\n        \"stock\": 0,\n        \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n        \"active\": true,\n        \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n        \"categories\": [\n          \"string\"\n        ],\n        \"tags\": [\n          \"string\"\n        ],\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Products page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"title\": \"Sallyno Panino\",\n        \"price\": 100,\n        \"onHand\": 0,\n        \"reserved\": 0,\n        \"available\": 0,\n        \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n        \"active\": true,\n        \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n        \"categories\": [\n          \"string\"\n        ],\n        \"tags\": [\n          \"string\"\n        ],\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Products page",
@@ -4505,7 +4505,7 @@
         "responses": [
           {
             "uuid": "ef0806f1-d1d6-4b37-82c2-5f03f1d5f56b",
-            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"stock\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"onHand\": 0,\n    \"reserved\": 0,\n    \"available\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 201,
             "label": "Created product",
@@ -4637,7 +4637,7 @@
         "responses": [
           {
             "uuid": "f705983c-ec3e-49d6-8022-179dfa378beb",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"stock\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"onHand\": 0,\n    \"reserved\": 0,\n    \"available\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated product",
@@ -5009,7 +5009,7 @@
         "responses": [
           {
             "uuid": "af69ad93-d331-44af-85d1-312bc365d287",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"stock\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"onHand\": 0,\n    \"reserved\": 0,\n    \"available\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Product",
@@ -5093,7 +5093,7 @@
         "responses": [
           {
             "uuid": "04367047-d830-4c29-863c-8f3d9a5a55c6",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"stock\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated product\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"price\": 100,\n    \"onHand\": 0,\n    \"reserved\": 0,\n    \"available\": 0,\n    \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n    \"active\": true,\n    \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n    \"categories\": [\n      \"string\"\n    ],\n    \"tags\": [\n      \"string\"\n    ],\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated product",
@@ -5489,7 +5489,7 @@
         "responses": [
           {
             "uuid": "74472e1f-061c-4c7b-8e48-f0f884af986c",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Products search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"title\": \"Sallyno Panino\",\n        \"price\": 100,\n        \"stock\": 0,\n        \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n        \"active\": true,\n        \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n        \"categories\": [\n          \"string\"\n        ],\n        \"tags\": [\n          \"string\"\n        ],\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Products search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"title\": \"Sallyno Panino\",\n        \"price\": 100,\n        \"onHand\": 0,\n        \"reserved\": 0,\n        \"available\": 0,\n        \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n        \"active\": true,\n        \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n        \"categories\": [\n          \"string\"\n        ],\n        \"tags\": [\n          \"string\"\n        ],\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Products search results",
@@ -6197,7 +6197,7 @@
         "responses": [
           {
             "uuid": "ce7bfe44-8bee-4bf6-8052-288dfc34fbb4",
-            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Order created\",\n  \"data\": {\n    \"order\": {\n      \"id\": \"65de73a69ca05739be2b5e85\",\n      \"userId\": \"65dd2bdb923652b7800fe180\",\n      \"email\": \"oldpsw@root.it\",\n      \"items\": [\n        {\n          \"product\": {\n            \"id\": \"65dc8a99604c307b702b5ccc\",\n            \"title\": \"Sallyno Panino\",\n            \"price\": 100,\n            \"stock\": 0,\n            \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n            \"active\": true,\n            \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n            \"categories\": [\n              \"string\"\n            ],\n            \"tags\": [\n              \"string\"\n            ],\n            \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n            \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n            \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n          },\n          \"quantity\": 1\n        }\n      ],\n      \"totalItems\": 2,\n      \"totalQuantity\": 5,\n      \"totalPrice\": 149.97,\n      \"notes\": \"string\",\n      \"shippingMethod\": \"string\",\n      \"shippingCost\": 0,\n      \"shippingAddress\": {\n        \"fullName\": \"string\",\n        \"street\": \"string\",\n        \"city\": \"string\",\n        \"zip\": \"string\",\n        \"country\": \"string\",\n        \"phone\": \"string\"\n      },\n      \"status\": \"pending\",\n      \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n      \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n    },\n    \"message\": \"string\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Order created\",\n  \"data\": {\n    \"order\": {\n      \"id\": \"65de73a69ca05739be2b5e85\",\n      \"userId\": \"65dd2bdb923652b7800fe180\",\n      \"email\": \"oldpsw@root.it\",\n      \"items\": [\n        {\n          \"product\": {\n            \"id\": \"65dc8a99604c307b702b5ccc\",\n            \"title\": \"Sallyno Panino\",\n            \"price\": 100,\n            \"onHand\": 0,\n            \"reserved\": 0,\n            \"available\": 0,\n            \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n            \"active\": true,\n            \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n            \"categories\": [\n              \"string\"\n            ],\n            \"tags\": [\n              \"string\"\n            ],\n            \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n            \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n            \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n          },\n          \"quantity\": 1\n        }\n      ],\n      \"totalItems\": 2,\n      \"totalQuantity\": 5,\n      \"totalPrice\": 149.97,\n      \"notes\": \"string\",\n      \"shippingMethod\": \"string\",\n      \"shippingCost\": 0,\n      \"shippingAddress\": {\n        \"fullName\": \"string\",\n        \"street\": \"string\",\n        \"city\": \"string\",\n        \"zip\": \"string\",\n        \"country\": \"string\",\n        \"phone\": \"string\"\n      },\n      \"status\": \"pending\",\n      \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n      \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n      \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n    },\n    \"message\": \"string\"\n  }\n}",
             "latency": 0,
             "statusCode": 201,
             "label": "Order created",
@@ -6989,7 +6989,7 @@
         "responses": [
           {
             "uuid": "1598f077-3d08-4822-8940-b086e8f14efc",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"stock\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingMethod\": \"string\",\n        \"shippingCost\": 0,\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders page\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"onHand\": 0,\n              \"reserved\": 0,\n              \"available\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingMethod\": \"string\",\n        \"shippingCost\": 0,\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Orders page",
@@ -7097,7 +7097,7 @@
         "responses": [
           {
             "uuid": "1d05c7e0-ade5-4ce7-8070-2d1ddfe65525",
-            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"Created order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"onHand\": 0,\n          \"reserved\": 0,\n          \"available\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 201,
             "label": "Created order",
@@ -7253,7 +7253,7 @@
         "responses": [
           {
             "uuid": "e0ae4413-e750-42f0-8717-6608119aa39e",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"onHand\": 0,\n          \"reserved\": 0,\n          \"available\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated order",
@@ -7565,7 +7565,7 @@
         "responses": [
           {
             "uuid": "4e6758f5-7896-4717-887a-e2eb05c1bbde",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"stock\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingMethod\": \"string\",\n        \"shippingCost\": 0,\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Orders search results\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65de73a69ca05739be2b5e85\",\n        \"userId\": \"65dd2bdb923652b7800fe180\",\n        \"email\": \"oldpsw@root.it\",\n        \"items\": [\n          {\n            \"product\": {\n              \"id\": \"65dc8a99604c307b702b5ccc\",\n              \"title\": \"Sallyno Panino\",\n              \"price\": 100,\n              \"onHand\": 0,\n              \"reserved\": 0,\n              \"available\": 0,\n              \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n              \"active\": true,\n              \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n              \"categories\": [\n                \"string\"\n              ],\n              \"tags\": [\n                \"string\"\n              ],\n              \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n              \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n              \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n            },\n            \"quantity\": 1\n          }\n        ],\n        \"totalItems\": 2,\n        \"totalQuantity\": 5,\n        \"totalPrice\": 149.97,\n        \"notes\": \"string\",\n        \"shippingMethod\": \"string\",\n        \"shippingCost\": 0,\n        \"shippingAddress\": {\n          \"fullName\": \"string\",\n          \"street\": \"string\",\n          \"city\": \"string\",\n          \"zip\": \"string\",\n          \"country\": \"string\",\n          \"phone\": \"string\"\n        },\n        \"status\": \"pending\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n        \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Orders search results",
@@ -7697,7 +7697,7 @@
         "responses": [
           {
             "uuid": "8a822388-94c4-4e61-88e8-53576011e14c",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"onHand\": 0,\n          \"reserved\": 0,\n          \"available\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Order",
@@ -7829,7 +7829,7 @@
         "responses": [
           {
             "uuid": "39612fe3-f6cf-402a-8e16-dfc15e4c290f",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Updated order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"onHand\": 0,\n          \"reserved\": 0,\n          \"available\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "Updated order",
@@ -8297,7 +8297,7 @@
         "responses": [
           {
             "uuid": "cea471e8-9eeb-46f0-87d5-fd654c16a059",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The cancelled order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"stock\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The cancelled order\",\n  \"data\": {\n    \"id\": \"65de73a69ca05739be2b5e85\",\n    \"userId\": \"65dd2bdb923652b7800fe180\",\n    \"email\": \"oldpsw@root.it\",\n    \"items\": [\n      {\n        \"product\": {\n          \"id\": \"65dc8a99604c307b702b5ccc\",\n          \"title\": \"Sallyno Panino\",\n          \"price\": 100,\n          \"onHand\": 0,\n          \"reserved\": 0,\n          \"available\": 0,\n          \"description\": \"Piccolo Sallyno panino. Da mangiare di coccole\",\n          \"active\": true,\n          \"imageUrl\": \"/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg\",\n          \"categories\": [\n            \"string\"\n          ],\n          \"tags\": [\n            \"string\"\n          ],\n          \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n          \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n          \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n        },\n        \"quantity\": 1\n      }\n    ],\n    \"totalItems\": 2,\n    \"totalQuantity\": 5,\n    \"totalPrice\": 149.97,\n    \"notes\": \"string\",\n    \"shippingMethod\": \"string\",\n    \"shippingCost\": 0,\n    \"shippingAddress\": {\n      \"fullName\": \"string\",\n      \"street\": \"string\",\n      \"city\": \"string\",\n      \"zip\": \"string\",\n      \"country\": \"string\",\n      \"phone\": \"string\"\n    },\n    \"status\": \"pending\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\",\n    \"deletedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "The cancelled order",
@@ -9297,6 +9297,114 @@
         "streamingInterval": 0
       },
       {
+        "uuid": "464d7e2e-0a14-4d12-8252-27e80c073802",
+        "type": "http",
+        "documentation": "Stock levels",
+        "method": "get",
+        "endpoint": "inventory/levels",
+        "responses": [
+          {
+            "uuid": "f6c43dcd-6487-4bf0-87d2-0d04b2d880af",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"A page of levels, most scarce first\",\n  \"data\": {\n    \"items\": [\n      {\n        \"productId\": \"65dc8a99604c307b702b5ccc\",\n        \"title\": \"Sallyno Panino\",\n        \"onHand\": 0,\n        \"reserved\": 0,\n        \"available\": 0\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "A page of levels, most scarce first",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "8bd94922-a704-4a90-8cc8-e8b8fc7290d5",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "e3bf6d4a-f09c-42a0-8148-d7fa6ec702d2",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "6dd5468a-a02d-4c95-827b-a6047819e61d",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
         "uuid": "ae596e76-e929-432c-80e4-697846dfd22a",
         "type": "http",
         "documentation": "List stock movements",
@@ -9305,7 +9413,7 @@
         "responses": [
           {
             "uuid": "ff07aa0f-8546-4874-8152-cbf51f98d438",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The latest movements\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"productId\": \"65dc8a99604c307b702b5ccc\",\n        \"delta\": 1,\n        \"reason\": \"order\",\n        \"reference\": \"string\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ]\n  }\n}",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The latest movements\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"productId\": \"65dc8a99604c307b702b5ccc\",\n        \"reason\": \"reserve\",\n        \"onHandDelta\": 1,\n        \"reservedDelta\": 1,\n        \"reference\": \"string\",\n        \"note\": \"string\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}",
             "latency": 0,
             "statusCode": 200,
             "label": "The latest movements",
@@ -9429,18 +9537,18 @@
         "streamingInterval": 0
       },
       {
-        "uuid": "3ce91236-18fe-4629-8eb7-f56334ea1f86",
+        "uuid": "22bc9014-c22e-4747-8b7c-8d450361e1dc",
         "type": "http",
-        "documentation": "Restock a product",
+        "documentation": "Receive stock",
         "method": "post",
-        "endpoint": "inventory/restock",
+        "endpoint": "inventory/receipts",
         "responses": [
           {
-            "uuid": "0d5b9cb8-1010-4b08-83be-0a70e7d096fa",
-            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The shelf after the delivery\",\n  \"data\": {\n    \"productId\": \"65dc8a99604c307b702b5ccc\",\n    \"stock\": 0\n  }\n}",
+            "uuid": "969eacc9-5ddd-4274-835e-a21bf79d709b",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The counters after the delivery landed\",\n  \"data\": {\n    \"productId\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"onHand\": 0,\n    \"reserved\": 0,\n    \"available\": 0\n  }\n}",
             "latency": 0,
             "statusCode": 200,
-            "label": "The shelf after the delivery",
+            "label": "The counters after the delivery landed",
             "headers": [
               {
                 "key": "Content-Type",
@@ -9460,7 +9568,7 @@
             "callbacks": []
           },
           {
-            "uuid": "168c9795-8de7-4462-8a1f-c5462b856382",
+            "uuid": "9db05a42-abba-46ca-8f41-ff34ae7c27f7",
             "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
             "latency": 0,
             "statusCode": 401,
@@ -9484,7 +9592,7 @@
             "callbacks": []
           },
           {
-            "uuid": "212ab9a2-224f-4da1-85a9-6cdbdd225766",
+            "uuid": "268efa4f-0348-4662-87bf-d4c47b3f32bd",
             "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
             "latency": 0,
             "statusCode": 403,
@@ -9508,7 +9616,7 @@
             "callbacks": []
           },
           {
-            "uuid": "811a0b10-ffa1-421c-8fbc-6f5944dc29cd",
+            "uuid": "f6cf25b5-d020-4e51-8629-14c06c01da58",
             "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
             "latency": 0,
             "statusCode": 404,
@@ -9532,7 +9640,7 @@
             "callbacks": []
           },
           {
-            "uuid": "afb5df82-206e-4c6d-84cd-9ff4a5d34e60",
+            "uuid": "ceb0de87-95d1-4986-8e4b-427b89ae95ea",
             "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
             "latency": 0,
             "statusCode": 422,
@@ -9556,7 +9664,295 @@
             "callbacks": []
           },
           {
-            "uuid": "07c67b69-d58f-40a6-81e9-c3367fa6e4a2",
+            "uuid": "c33e6ede-ca04-4799-8fd5-e60a5bfefef5",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "ffc2b3e6-d4d7-4964-8d10-b83d4ab246df",
+        "type": "http",
+        "documentation": "Adjust stock",
+        "method": "post",
+        "endpoint": "inventory/adjustments",
+        "responses": [
+          {
+            "uuid": "b4635307-26c1-43ed-88b4-8adaacaff1c0",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The counters after the correction\",\n  \"data\": {\n    \"productId\": \"65dc8a99604c307b702b5ccc\",\n    \"title\": \"Sallyno Panino\",\n    \"onHand\": 0,\n    \"reserved\": 0,\n    \"available\": 0\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "The counters after the correction",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "90680521-45ff-406e-858c-b937bf7d71b4",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "aec39413-65db-4d72-805f-e70eff8821bd",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "315683bf-a323-4782-8362-6736b980c226",
+            "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 404,
+            "label": "Resource not found",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "e030b2df-6dae-48d7-8875-01ded043f856",
+            "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The correction would leave fewer units than are already reserved\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 409,
+            "label": "The correction would leave fewer units than are already reserved",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "8488be7d-1c16-4447-8a02-6a505ab8b4cd",
+            "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 422,
+            "label": "Validation failed",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "77dd17cc-29ea-4b7e-8eb3-cd98b6ccfbe3",
+            "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 500,
+            "label": "Internal server error",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          }
+        ],
+        "responseMode": null,
+        "streamingMode": null,
+        "streamingInterval": 0
+      },
+      {
+        "uuid": "80c02ae4-4329-4c7d-8605-ffc51a8b56d6",
+        "type": "http",
+        "documentation": "Expire stale reservations",
+        "method": "post",
+        "endpoint": "inventory/reservations/sweep",
+        "responses": [
+          {
+            "uuid": "349819e2-33b8-4d18-8151-26216cfdd555",
+            "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"How many holds were expired\",\n  \"data\": {\n    \"expired\": 0\n  }\n}",
+            "latency": 0,
+            "statusCode": 200,
+            "label": "How many holds were expired",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": true,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "59b0137b-8fb0-4982-8364-c30788c0aef2",
+            "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 401,
+            "label": "Unauthorized",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "8720ef93-7a79-4297-8e2a-fb92deff9560",
+            "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
+            "latency": 0,
+            "statusCode": 403,
+            "label": "Forbidden",
+            "headers": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "bodyType": "INLINE",
+            "filePath": "",
+            "databucketID": "",
+            "sendFileAsBody": false,
+            "rules": [],
+            "rulesOperator": "OR",
+            "disableTemplating": false,
+            "fallbackTo404": false,
+            "default": false,
+            "crudKey": "id",
+            "callbacks": []
+          },
+          {
+            "uuid": "06602c7c-ba10-44d8-8000-e53e084899a1",
             "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}",
             "latency": 0,
             "statusCode": 500,
@@ -9908,11 +10304,23 @@
       },
       {
         "type": "route",
+        "uuid": "464d7e2e-0a14-4d12-8252-27e80c073802"
+      },
+      {
+        "type": "route",
         "uuid": "ae596e76-e929-432c-80e4-697846dfd22a"
       },
       {
         "type": "route",
-        "uuid": "3ce91236-18fe-4629-8eb7-f56334ea1f86"
+        "uuid": "22bc9014-c22e-4747-8b7c-8d450361e1dc"
+      },
+      {
+        "type": "route",
+        "uuid": "ffc2b3e6-d4d7-4964-8d10-b83d4ab246df"
+      },
+      {
+        "type": "route",
+        "uuid": "80c02ae4-4329-4c7d-8605-ffc51a8b56d6"
       }
   ],
   "proxyMode": false,

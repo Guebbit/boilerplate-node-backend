@@ -53,7 +53,12 @@ const { credentials, collections } = dataset;
  */
 const productSchema = GetProductByIdResponse.shape.data
     .required({
-        stock: true,
+        // All three stock fields, including the derived one: `available` is required on the wire
+        // and computed at serialization, so a seeded row missing it would mean the transform did
+        // not run — exactly the kind of silent gap this mask exists to catch.
+        onHand: true,
+        reserved: true,
+        available: true,
         description: true,
         active: true,
         imageUrl: true,

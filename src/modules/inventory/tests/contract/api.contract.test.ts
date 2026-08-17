@@ -1,9 +1,9 @@
 /**
  * Contract tests for /inventory.
  *
- * Both routes are staff's; what these pin is each contract branch reached over HTTP — the
- * ledger read (empty and populated), the restock's 200/404/422, and the 403 for a customer.
- * The ledger's sourcing rules live in the unit suite.
+ * Every route is staff's; what these pin is each contract branch reached over HTTP — the two
+ * reads, the two write transitions with their 200/404/409/422, the sweep, and the 401/403 that
+ * keep the counters off a customer's screen. The transitions' rules live in the unit suite.
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -12,8 +12,71 @@ import { createProduct } from '@modules/products/tests/factory';
 
 setupTestDb();
 
-/** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
-const MISSING_ID = '65dc8a99604c307b702b5ccc';
+/**
+ * A syntactically valid ObjectId no fixture or seed can hold — the 404 branch, not the 422 one.
+ *
+ * All-`f` rather than a plausible-looking hex string. The value here used to be
+ * `65dc8a99604c307b702b5ccc`, which is `SEED_PRODUCT_IDS.panino`: the constant claimed to be
+ * guaranteed absent while naming a seeded product, and only passed because the contract suite
+ * does not seed. A sentinel should be unable to collide, not merely observed not to.
+ */
+const MISSING_ID = 'f'.repeat(24);
+
+describe('GET /inventory/levels', () => {
+    it('matches the contract and reports all three numbers', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createProduct({ onHand: 7 });
+
+        const response = await api().get('/inventory/levels').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items[0]).toMatchObject({
+            onHand: 7,
+            reserved: 0,
+            available: 7
+        });
+        expect(response.body.data.meta).toMatchObject({ totalItems: 1, totalPages: 1 });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the contract when narrowed to what needs ordering', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createProduct({ title: 'Plenty', onHand: 5000 });
+
+        const response = await api()
+            .get('/inventory/levels?lowOnly=true')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.data.meta.totalItems).toBe(0);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('pages the board rather than reading the whole catalogue', async () => {
+        const { bearer } = await authenticateAs('admin');
+        for (let index = 0; index < 5; index += 1)
+            await createProduct({ title: `P${index}`, onHand: index });
+
+        const response = await api()
+            .get('/inventory/levels?page=2&pageSize=2')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(2);
+        expect(response.body.data.meta).toMatchObject({ totalItems: 5, totalPages: 3 });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a non-admin', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().get('/inventory/levels').set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+});
 
 describe('GET /inventory/movements', () => {
     it('matches the contract for an empty ledger', async () => {
@@ -23,6 +86,55 @@ describe('GET /inventory/movements', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
+        expect(response.body.data.meta).toMatchObject({ totalItems: 0, totalPages: 0 });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('pages the ledger rather than truncating it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 0 });
+        for (let index = 0; index < 5; index += 1)
+            await api()
+                .post('/inventory/receipts')
+                .set('Authorization', bearer)
+                .send({ productId: String(product._id), quantity: 1 });
+
+        const response = await api()
+            .get(`/inventory/movements?productId=${String(product._id)}&page=2&pageSize=2`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(2);
+        // `totalItems` counts everything matching the filters, not the page — which is what lets
+        // an audit see that there is more history than it is currently looking at.
+        expect(response.body.data.meta).toMatchObject({
+            page: 2,
+            pageSize: 2,
+            totalItems: 5,
+            totalPages: 3
+        });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('narrows the ledger to one kind of transition', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 10 });
+        await api()
+            .post('/inventory/receipts')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 5 });
+        await api()
+            .post('/inventory/adjustments')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), delta: -2 });
+
+        const response = await api()
+            .get(`/inventory/movements?productId=${String(product._id)}&reason=adjust`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.items[0].reason).toBe('adjust');
         expect(response).toSatisfyApiSpec();
     });
 
@@ -30,7 +142,7 @@ describe('GET /inventory/movements', () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
         await api()
-            .post('/inventory/restock')
+            .post('/inventory/receipts')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 5 });
 
@@ -40,7 +152,12 @@ describe('GET /inventory/movements', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].reason).toBe('restock');
+        // Both deltas on the row, which is what makes the ledger replayable.
+        expect(response.body.data.items[0]).toMatchObject({
+            reason: 'receive',
+            onHandDelta: 5,
+            reservedDelta: 0
+        });
         expect(response).toSatisfyApiSpec();
     });
 
@@ -54,18 +171,18 @@ describe('GET /inventory/movements', () => {
     });
 });
 
-describe('POST /inventory/restock', () => {
-    it('matches the contract and answers the shelf after the delivery', async () => {
+describe('POST /inventory/receipts', () => {
+    it('matches the contract and answers the counters after the delivery', async () => {
         const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ stock: 3 });
+        const product = await createProduct({ onHand: 3 });
 
         const response = await api()
-            .post('/inventory/restock')
+            .post('/inventory/receipts')
             .set('Authorization', bearer)
             .send({ productId: String(product._id), quantity: 7 });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.stock).toBe(10);
+        expect(response.body.data).toMatchObject({ onHand: 10, reserved: 0, available: 10 });
         expect(response).toSatisfyApiSpec();
     });
 
@@ -73,7 +190,7 @@ describe('POST /inventory/restock', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post('/inventory/restock')
+            .post('/inventory/receipts')
             .set('Authorization', bearer)
             .send({ productId: MISSING_ID, quantity: 7 });
 
@@ -85,7 +202,7 @@ describe('POST /inventory/restock', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post('/inventory/restock')
+            .post('/inventory/receipts')
             .set('Authorization', bearer)
             .send({ quantity: 0 });
 
@@ -95,10 +212,90 @@ describe('POST /inventory/restock', () => {
 
     it('matches the error contract when unauthenticated', async () => {
         const response = await api()
-            .post('/inventory/restock')
+            .post('/inventory/receipts')
             .send({ productId: MISSING_ID, quantity: 1 });
 
         expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /inventory/adjustments', () => {
+    it('matches the contract for a correction in either direction', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 10 });
+
+        const response = await api()
+            .post('/inventory/adjustments')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), delta: -4, note: 'damaged in transit' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ onHand: 6, available: 6 });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract when the correction goes below what is reserved', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 10, reserved: 8 });
+
+        const response = await api()
+            .post('/inventory/adjustments')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), delta: -5 });
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('INVENTORY_BELOW_RESERVED');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a zero correction', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 10 });
+
+        const response = await api()
+            .post('/inventory/adjustments')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), delta: 0 });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a non-admin', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .post('/inventory/adjustments')
+            .set('Authorization', bearer)
+            .send({ productId: MISSING_ID, delta: 1 });
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /inventory/reservations/sweep', () => {
+    it('matches the contract with nothing to expire', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post('/inventory/reservations/sweep')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({ expired: 0 });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a non-admin', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .post('/inventory/reservations/sweep')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });

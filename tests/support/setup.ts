@@ -31,8 +31,17 @@ import {
  * Raised rather than disabled, so a runaway loop still terminates — and written as a literal
  * rather than imported from `security.ts`, because importing that module here would evaluate
  * `rateLimit()` before this line had a chance to set the variable it reads.
+ *
+ * The number tracks the FUZZ suite, which is what actually sets the floor: it fires
+ * `RUNS_PER_OPERATION` requests at every non-multipart operation in the contract, from one
+ * address, inside one window. At 12 runs an operation that is roughly 12 × (operations + auth
+ * setup), so the budget has to stay comfortably ahead of the endpoint count. It was raised from
+ * 1000 to 2000 when `inventory` grew from two endpoints to five and the last operation in the
+ * run started answering 429 — a status no endpoint declares, so the contract assertion failed
+ * and pointed here rather than at anything real. If a future module tips it again, raise it
+ * again; a rate limit is not what the fuzz suite is testing.
  */
-process.env.NODE_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_RATE_LIMIT_MAX ??= '2000';
 
 /**
  * Same reasoning for the credential-endpoint budget (`authRateLimiter`), which is deliberately

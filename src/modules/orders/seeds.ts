@@ -114,6 +114,25 @@ export const orderFixtures = [
     })
 ];
 
+/*
+ * ── Why no seeded reservation ────────────────────────────────────────────────────────────────
+ *
+ * A `pending` order placed through the shop holds its units, so it is tempting to open a matching
+ * hold here. Two things say not to.
+ *
+ * The seeder runs every module CONCURRENTLY, and the invariant that makes that safe is stated in
+ * `db/seeds/index.ts`: no fixture is derived from another fixture's write. Reserving would break
+ * it — `reserveForOrder` conditionally writes the PRODUCT document that `products/seeds.ts` is
+ * writing at the same moment, so whether the hold succeeded would depend on who won. It won
+ * every time it was measured, which is the worst version of that bug rather than a defence.
+ *
+ * And it would be inventing a state the application cannot reach by this path. These fixtures are
+ * written straight to the collection; none of them went through a checkout, so none of them ever
+ * held anything. Every seeded product's `reserved` is 0 because that is the truth about a database
+ * nobody has shopped in yet. A hold appears the moment someone checks out, which is also the only
+ * way one is ever created in production.
+ */
+
 /** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
 export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(orderFixtures.map((order) => upsertById(orderRepository, order)));

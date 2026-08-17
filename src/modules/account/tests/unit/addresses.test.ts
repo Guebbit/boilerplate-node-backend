@@ -98,7 +98,7 @@ describe('the one-default invariant', () => {
 
 /** One in-stock product straight into the user's cart — the checkout cases' shared setup. */
 const cartWith = async (userId: string) => {
-    const product = await createProduct({ stock: 10 });
+    const product = await createProduct({ onHand: 10 });
     await cartService.cartItemAddById(userId, String(product._id), 1);
     return product;
 };
@@ -164,9 +164,10 @@ describe('checkout and the address', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
-        // Nothing moved — the address check runs before any stock does.
+        // Nothing moved — the address check runs before anything is held.
         const stored = await productRepository.findById(String(product._id));
-        expect(stored?.stock).toBe(10);
+        expect(stored?.onHand).toBe(10);
+        expect(stored?.reserved).toBe(0);
         const cart = await cartService.cartGetWithSummary(user.id);
         expect(cart.items).toHaveLength(1);
     });

@@ -22,6 +22,7 @@ import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/de
 import { shipOrder, runCourierAdvance, getForOrder } from '@modules/delivery/service';
 import { shipmentRepository } from '@modules/delivery/repository';
 import deliveryModule from '@modules/delivery/module';
+import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
@@ -150,7 +151,13 @@ describe('getForOrder', () => {
  */
 describe('shipment rides the status change', () => {
     beforeEach(() => {
-        registerModules([productsModule, usersModule, ordersModule, deliveryModule]);
+        registerModules([
+            productsModule,
+            usersModule,
+            inventoryModule,
+            ordersModule,
+            deliveryModule
+        ]);
     });
 
     afterEach(() => {

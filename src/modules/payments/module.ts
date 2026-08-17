@@ -11,8 +11,13 @@ import { refundForOrder } from './service';
  * Depends on orders because a payment is ABOUT an order — the intent freezes its total, the
  * confirm moves its status to `paid`. The arrow never comes back: orders announces what happens
  * to it (`ORDER_CANCELLED`) and this module answers with the refund. Deleting this module leaves
- * a shop where cancelling a paid order restores stock but returns no money — which is exactly
- * the sentence `CANCELLABLE_ORDER_STATUSES` documents.
+ * a shop where cancelling an order releases its held stock but returns no money — which is
+ * exactly the sentence `CANCELLABLE_ORDER_STATUSES` documents.
+ *
+ * It also depends on inventory, and that edge is what makes the money and the goods agree: the
+ * confirm is the single moment an order's held units become a sale, so it commits them itself
+ * rather than announcing and hoping. Without this module nothing would ever commit a hold, and
+ * every order would sit reserved until its window expired.
  *
  * It depends on users for the payer, and that is groundwork rather than a current feature. The
  * order already carries a `userId`; resolving it against the account record is what makes the id
@@ -44,6 +49,12 @@ export default {
             as: 'customer-supplier',
             because:
                 'A payment is about an order: the intent freezes its total, the confirm moves its status, and `order.cancelled` is what asks for the refund.'
+        },
+        {
+            module: 'inventory',
+            as: 'customer-supplier',
+            because:
+                'A confirmed payment is what turns an order’s held units into a sale, so this module asks for the commit at the moment the order moves to `paid`.'
         },
         {
             module: 'users',

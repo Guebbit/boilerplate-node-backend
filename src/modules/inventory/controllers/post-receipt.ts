@@ -3,17 +3,17 @@ import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { RestockProductBody } from '@api/schemas.zod';
+import { ReceiveStockBody } from '@api/schemas.zod';
 import { inventoryAuditActions } from '../audit';
 import { inventoryService } from '../service';
 
 /**
- * POST /inventory/restock
- * Units arrive on a shelf. Audited: stock corrections are the classic place shrinkage hides,
- * and the row says which admin put how many units where.
+ * POST /inventory/receipts
+ * Units arrive from a supplier. Audited: a receipt is one of only two ways units can enter the
+ * shop, and the row says which admin added how many.
  */
-export const postRestock = (request: Request, response: Response) => {
-    const parseResult = RestockProductBody.safeParse(request.body ?? {});
+export const postReceipt = (request: Request, response: Response) => {
+    const parseResult = ReceiveStockBody.safeParse(request.body ?? {});
     if (!parseResult.success) {
         rejectResponse(
             response,
@@ -23,9 +23,9 @@ export const postRestock = (request: Request, response: Response) => {
         return Promise.resolve();
     }
 
-    const { productId, quantity } = parseResult.data;
+    const { productId, quantity, note } = parseResult.data;
     return inventoryService
-        .restock(productId, quantity)
+        .receive(productId, quantity, note)
         .then((result) => {
             if (!result.success) {
                 rejectResponse(response, result.status, result.errors);
@@ -33,16 +33,16 @@ export const postRestock = (request: Request, response: Response) => {
             }
             emitAuditEvent(
                 buildAuditEvent(request, {
-                    action: inventoryAuditActions.ADMIN_STOCK_RESTOCKED,
+                    action: inventoryAuditActions.ADMIN_STOCK_RECEIVED,
                     outcome: 'success',
                     target_type: 'product',
                     target_id: productId,
-                    metadata: { quantity }
+                    metadata: { quantity, onHand: result.data?.onHand }
                 })
             );
             successResponse(response, result.data, 200, result.message);
         })
         .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postRestock', error);
+            rejectDatabaseError(response, 'postReceipt', error);
         });
 };

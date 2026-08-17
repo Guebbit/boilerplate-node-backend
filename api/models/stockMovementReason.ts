@@ -20,14 +20,21 @@
  */
 
 /**
- * Why the units moved.
+ * * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
+ * * `commit` — the order was paid for and the units left. Both down.
+ * * `release` — the hold was given up (the order was cancelled). `reserved` down.
+ * * `expire` — the hold timed out unpaid. Same counters as `release`, different story.
+ * * `receive` — a supplier delivery. `onHand` up.
+ * * `adjust` — a stocktake correction, signed. `onHand` moves either way.
  */
 export type StockMovementReason = typeof StockMovementReason[keyof typeof StockMovementReason];
 
 
 export const StockMovementReason = {
-  order: 'order',
-  'order-cancelled': 'order-cancelled',
-  adjustment: 'adjustment',
-  restock: 'restock',
+  reserve: 'reserve',
+  commit: 'commit',
+  release: 'release',
+  expire: 'expire',
+  receive: 'receive',
+  adjust: 'adjust',
 } as const;

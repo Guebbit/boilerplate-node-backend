@@ -21,11 +21,16 @@ export default {
     subdomain: 'core',
     language: {
         Product: 'A sellable item in the catalogue. Identified by id; the name is not unique.',
-        Stock: 'Units on the shelf. Authoritative here — every other module reads it, none computes it.',
+        'On hand':
+            'Units physically present. Stored here because this module owns the collection, but never written here — see `Counter`.',
+        Reserved:
+            'Units already claimed by an open order. Present on the shelf, not for sale. Stored here, written by `inventory`.',
+        Available:
+            'On hand minus reserved — what a customer may actually buy. Derived at serialization, never stored, so it cannot go stale.',
+        Counter:
+            'Either of the two stored numbers. This module declares them and reads them; every write goes through `inventory`, which owns the transitions and the ledger row that records each one.',
         'Soft delete':
-            'Withdrawal from sale, reversible. The row survives so orders that embedded it stay readable.',
-        'Stock movement':
-            'An announcement that units moved, and by how much. The reason is `inventory`’s to record, not this module’s.'
+            'Withdrawal from sale, reversible. The row survives so orders that embedded it stay readable.'
     },
     basePath: '/products',
     routes: router,

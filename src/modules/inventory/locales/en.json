@@ -1,6 +1,10 @@
 {
     "inventory": {
-        "product-not-found": "The product to restock was not found",
-        "restock-success": "Stock updated — the shelf has the new units."
+        "product-not-found": "That product was not found",
+        "receive-success": "Stock received — the units are on the shelf and available.",
+        "adjust-success": "Stock corrected.",
+        "adjust-zero": "An adjustment has to change something — use a positive or negative number",
+        "below-reserved": "That correction would leave fewer units than are already promised to open orders. Cancel some orders first, or adjust by less.",
+        "sweep-success": "Expired holds released."
     }
 }

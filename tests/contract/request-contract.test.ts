@@ -67,10 +67,10 @@ const withRealOrderReferences = async (
     skipField?: string
 ): Promise<Record<string, unknown>> => {
     // A shelf no generated quantity can exhaust, for the same reason the ids are patched in:
-    // `quantity ≤ stock` is a business rule the schema cannot express, and this file only asks
-    // whether the API honours its own CONTRACT — the stock refusal has its own scenario tests.
+    // `quantity ≤ available` is a business rule the schema cannot express, and this file only
+    // asks whether the API honours its own CONTRACT — the refusal has its own scenario tests.
     const [product, { user }] = await Promise.all([
-        createProduct({ stock: 1_000_000_000 }),
+        createProduct({ onHand: 1_000_000_000 }),
         authenticateAs('user')
     ]);
     const result: Record<string, unknown> = { ...payload };

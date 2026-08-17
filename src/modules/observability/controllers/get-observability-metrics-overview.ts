@@ -51,9 +51,10 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
         readCounter('auth_signup_total'),
         readCounter('cart_checkout_total'),
         readCounter('order_created_total'),
-        // A gauge, but read identically: `collect` recounts the shelf at scrape time, and an
-        // absent metric (inventory module deleted) reads as zero like every other row here.
-        readCounter('products_low_stock_total')
+        // Gauges, but read identically: `collect` recounts at scrape time, and an absent metric
+        // (inventory module deleted) reads as zero like every other row here.
+        readCounter('products_low_stock_total'),
+        readCounter('inventory_reserved_units_total')
     ])
         .then(
             ([
@@ -64,7 +65,8 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 signupValues,
                 checkoutValues,
                 orderValues,
-                lowStockValues
+                lowStockValues,
+                reservedValues
             ]) => {
                 const mem = process.memoryUsage();
                 const inFlight = inflightMetric.values.reduce((s, v) => s + v.value, 0);
@@ -85,7 +87,8 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                     business: {
                         checkoutSuccess: sumByLabel(checkoutValues, 'status', 'success'),
                         ordersCreated: orderValues.reduce((s, v) => s + v.value, 0),
-                        lowStockProducts: lowStockValues.reduce((s, v) => s + v.value, 0)
+                        lowStockProducts: lowStockValues.reduce((s, v) => s + v.value, 0),
+                        reservedUnits: reservedValues.reduce((s, v) => s + v.value, 0)
                     },
                     database: {
                         queriesTotal: 0,

@@ -30,7 +30,9 @@ export default {
         Cart: 'One open basket per user. Priced against the live catalogue, so its total is a quote and not a promise.',
         'Cart line': 'A product reference and a quantity. Holds no price — the catalogue does.',
         Checkout:
-            'The act of turning a cart into an order. Succeeds or leaves the cart untouched; there is no half-checked-out state.',
+            'The act of turning a cart into an order and holding its units. Succeeds or leaves both the cart and the shelf untouched; there is no half-checked-out state.',
+        Availability:
+            'What a line may be checked out against — the catalogue’s units less those already held. Checked here only as a pre-flight; `inventory` re-checks it inside the write.',
         Version:
             'The count of writes a cart has seen. Guards checkout against a concurrent edit — hand-rolled aggregate versioning, in all but name.'
     },
@@ -55,9 +57,16 @@ export default {
             because: 'A checkout is the one place an order is created outside the admin routes.'
         },
         {
+            module: 'inventory',
+            as: 'customer-supplier',
+            because:
+                'A checkout asks for the basket to be held (`reserveForOrder`) and gives the hold back when it loses the cart race. It never touches a counter itself — what a hold costs is inventory’s to know.'
+        },
+        {
             module: 'products',
             as: 'conformist',
-            because: 'Reads catalogue documents as they are to price lines and check stock.'
+            because:
+                'Reads catalogue documents as they are to price lines and to pre-flight availability.'
         },
         {
             module: 'users',

@@ -1,164 +1,417 @@
 /**
- * Inventory — the ledger hears every mover, and only movers that stood.
+ * Inventory service — `src/modules/inventory/service.ts`.
  *
- * These tests register the full module closure on purpose: the rows come from OTHER modules'
- * announcements (checkout, cancel, the admin product form), and a suite that called
- * `recordMovement` by hand would assert the ledger works while every emitter stays silent.
- * The shelf count itself is asserted alongside each row — the ledger explains, products stay
- * authoritative, and the two must agree at every step here.
+ * The lifecycle across modules is covered by `cart/tests/unit/stock.test.ts`, and the replay
+ * invariant by `ledger.property.test.ts`. What is left for this file is the module's own edges:
+ * the exactly-once claims, the two admin transitions and their refusals, and the sweep.
+ *
+ * Real Mongo (`setupTestDb`) throughout, because every guarantee here is a conditional write.
  */
-
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
-import { registerModules } from '@kernel/registry';
-import { resetDomainEvents } from '@kernel/events';
-import { cartService } from '@modules/cart';
-import { orderService } from '@modules/orders';
-import { productService, productRepository } from '@modules/products';
-import { restock, listMovements } from '@modules/inventory/service';
-import { stockMovementRepository } from '@modules/inventory/repository';
-import inventoryModule from '@modules/inventory/module';
-import accountModule from '@modules/account/module';
-import cartModule from '@modules/cart/module';
-import deliveryModule from '@modules/delivery/module';
-import ordersModule from '@modules/orders/module';
-import paymentsModule from '@modules/payments/module';
-import productsModule from '@modules/products/module';
-import usersModule from '@modules/users/module';
-import type { ResponseReject } from '@infrastructure/http/response';
-
-// The confirmation email rides checkout; this suite is about the ledger, not the copy.
-jest.mock('@infrastructure/adapters/mailer', () => ({
-    __esModule: true,
-    enqueueEmail: jest.fn()
-}));
+import { productRepository } from '@modules/products';
+import { StockMovementReason } from '@types';
+import {
+    reserveForOrder,
+    commitForOrder,
+    releaseForOrder,
+    runReservationSweep,
+    receive,
+    adjust,
+    listLevels,
+    listMovements
+} from '../../service';
+import { reservationRepository } from '../../repository';
+import { reservationModel } from '../../model';
 
 setupTestDb();
 
-const asReject = (result: unknown) => result as ResponseReject;
+/** A syntactically valid order id, distinct per call — holds are keyed by one. */
+let orderCounter = 0;
+const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'b');
 
-beforeEach(() => {
-    registerModules([
-        accountModule,
-        productsModule,
-        usersModule,
-        ordersModule,
-        paymentsModule,
-        deliveryModule,
-        cartModule,
-        inventoryModule
-    ]);
-});
+const countersOf = async (productId: string) => {
+    const stored = await productRepository.findByIdRaw(productId);
+    return { onHand: stored?.onHand, reserved: stored?.reserved };
+};
 
-afterEach(() => {
-    resetDomainEvents();
-});
+/**
+ * Run `body` with the reservation window closed, so every hold it opens is already stale.
+ *
+ * At module scope rather than inside the describe because the TTL is read lazily on each reserve
+ * — precisely so a test can vary it — and leaving it at zero would expire the holds every other
+ * case in this file depends on. The restore is in a `finally` for the same reason.
+ */
+const withoutWindow = async (body: () => Promise<void>) => {
+    const previous = process.env.NODE_RESERVATION_TTL_MINUTES;
+    process.env.NODE_RESERVATION_TTL_MINUTES = '0';
+    try {
+        await body();
+    } finally {
+        if (previous === undefined) delete process.env.NODE_RESERVATION_TTL_MINUTES;
+        else process.env.NODE_RESERVATION_TTL_MINUTES = previous;
+    }
+};
 
-describe('the ledger hears a checkout', () => {
-    it('one negative row per bought line, referenced to the order, shelf agreeing', async () => {
-        const user = await createUser();
-        const product = await createProduct({ stock: 10 });
-        await cartService.cartItemSetById(user.id, String(product._id), 3);
+describe('reserveForOrder', () => {
+    it('holds every line or none of them', async () => {
+        const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
+        const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
 
-        const result = await cartService.orderConfirm(user.id);
+        const outcome = await reserveForOrder(anOrderId(), [
+            { productId: String(plenty._id), quantity: 2 },
+            { productId: String(scarce._id), quantity: 5 }
+        ]);
 
-        expect(result.success).toBe(true);
-        const rows = await stockMovementRepository.findLatest(String(product._id));
-        expect(rows).toHaveLength(1);
-        expect(rows[0]!.delta).toBe(-3);
-        expect(rows[0]!.reason).toBe('order');
-        expect(rows[0]!.reference).toBe(String(result.data!._id));
-        const stored = await productRepository.findByIdRaw(String(product._id));
-        expect(stored!.stock).toBe(7);
+        expect(outcome).toEqual({
+            held: false,
+            shortfalls: [
+                {
+                    productId: String(scarce._id),
+                    title: 'Scarce',
+                    requested: 5,
+                    available: 1
+                }
+            ]
+        });
+        expect(await countersOf(String(plenty._id))).toEqual({ onHand: 50, reserved: 0 });
+        expect(await countersOf(String(scarce._id))).toEqual({ onHand: 1, reserved: 0 });
     });
 
-    it('a refused checkout writes nothing — a movement fully undone is not a fact', async () => {
-        const user = await createUser();
-        const product = await createProduct({ stock: 2 });
-        await cartService.cartItemSetById(user.id, String(product._id), 5);
+    it('records the rollback rather than netting it to nothing', async () => {
+        const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
+        const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
 
-        const result = await cartService.orderConfirm(user.id);
+        await reserveForOrder(anOrderId(), [
+            { productId: String(plenty._id), quantity: 2 },
+            { productId: String(scarce._id), quantity: 5 }
+        ]);
+
+        /*
+         * A reserve and its undo, both on the row. A ledger that hid its own reversals would be
+         * one nobody could reconcile — "nothing happened" and "two things happened that cancelled
+         * out" are different facts, and only the second one explains a gap in a stock take.
+         */
+        const rows = await listMovements({ productId: String(plenty._id) });
+        expect(rows.data?.items.map((row) => row.reason)).toEqual([
+            StockMovementReason.release,
+            StockMovementReason.reserve
+        ]);
+    });
+
+    it('is idempotent on the order id — a retried checkout holds once', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        const lines = [{ productId: String(product._id), quantity: 3 }];
+
+        expect(await reserveForOrder(orderId, lines)).toEqual({ held: true });
+        expect(await reserveForOrder(orderId, lines)).toEqual({ held: true });
+
+        // Three, not six: the unique `orderId` is what makes the second call a no-op.
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
+    });
+
+    /*
+     * Surfaced by mutation testing: replacing the duplicate-key check in `insertHold` with `true`
+     * survived every test. That mutant is not cosmetic — swallowing any error into `null` makes
+     * `reserveForOrder` read it as "already held" and answer `true`, so a database failure would
+     * report the basket as held while holding nothing, and the checkout above it would write an
+     * order with no stock behind it. Only 11000 may become `null`; everything else must propagate.
+     */
+    it('propagates a non-duplicate database error instead of reporting a hold', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const failure = Object.assign(new Error('connection reset'), { code: 121 });
+        const spy = jest.spyOn(reservationModel, 'create').mockRejectedValue(failure);
+
+        await expect(
+            reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 3 }])
+        ).rejects.toThrow('connection reset');
+
+        // And nothing was held on the way out.
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+        spy.mockRestore();
+    });
+
+    it('refuses when the units exist but are all held', async () => {
+        const product = await createProduct({ onHand: 4 });
+        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 4 }]);
+
+        const outcome = await reserveForOrder(anOrderId(), [
+            { productId: String(product._id), quantity: 1 }
+        ]);
+
+        // Four units exist and none is for sale — the shortfall reports availability, not onHand.
+        expect(outcome).toEqual({
+            held: false,
+            shortfalls: [
+                {
+                    productId: String(product._id),
+                    title: expect.any(String),
+                    requested: 1,
+                    available: 0
+                }
+            ]
+        });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 4, reserved: 4 });
+    });
+});
+
+describe('commitForOrder', () => {
+    it('drops both counters together', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+
+        expect(await commitForOrder(orderId)).toBe(true);
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0 });
+    });
+
+    it('is at most once — a second confirm commits nothing', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+
+        await commitForOrder(orderId);
+        expect(await commitForOrder(orderId)).toBe(false);
+
+        // Seven, not four: the reservation's status claim is what refuses the replay.
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0 });
+    });
+
+    it('cannot commit a hold that was already released', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await releaseForOrder(orderId);
+
+        expect(await commitForOrder(orderId)).toBe(false);
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+    });
+
+    it('does nothing for an order that never held anything', async () => {
+        expect(await commitForOrder(anOrderId())).toBe(false);
+    });
+});
+
+describe('releaseForOrder', () => {
+    it('gives the units back and is at most once', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 4 }]);
+
+        expect(await releaseForOrder(orderId)).toBe(true);
+        expect(await releaseForOrder(orderId)).toBe(false);
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+    });
+
+    it('records which story it was', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const cancelled = anOrderId();
+        const abandoned = anOrderId();
+        await reserveForOrder(cancelled, [{ productId: String(product._id), quantity: 1 }]);
+        await releaseForOrder(cancelled);
+        await reserveForOrder(abandoned, [{ productId: String(product._id), quantity: 1 }]);
+        await releaseForOrder(abandoned, StockMovementReason.expire);
+
+        // Same arithmetic, different reasons — "changed their mind" and "never came back" are
+        // different facts about the shop, and only one of them is a conversion problem.
+        const ledger = await listMovements({ productId: String(product._id) });
+        const reasons = ledger.data?.items.map((row) => row.reason);
+        expect(reasons).toContain(StockMovementReason.release);
+        expect(reasons).toContain(StockMovementReason.expire);
+    });
+});
+
+describe('receive', () => {
+    it('raises what exists and makes it available immediately', async () => {
+        const product = await createProduct({ onHand: 0 });
+
+        const result = await receive(String(product._id), 12, 'pallet 42');
+
+        expect(result.success).toBe(true);
+        expect(result.data).toMatchObject({ onHand: 12, reserved: 0, available: 12 });
+    });
+
+    it('does not disturb an existing hold', async () => {
+        const product = await createProduct({ onHand: 5 });
+        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 5 }]);
+
+        const result = await receive(String(product._id), 10);
+
+        // The hold is untouched; the delivery is what becomes sellable.
+        expect(result.data).toMatchObject({ onHand: 15, reserved: 5, available: 10 });
+    });
+
+    it('404s for a product that does not exist', async () => {
+        const result = await receive('c'.repeat(24), 5);
 
         expect(result.success).toBe(false);
-        await expect(stockMovementRepository.count({})).resolves.toBe(0);
+        expect(result.status).toBe(404);
     });
 });
 
-describe('the ledger hears a cancel', () => {
-    it('the units come back as a positive row against the same order', async () => {
-        const user = await createUser();
-        const product = await createProduct({ stock: 10 });
-        await cartService.cartItemSetById(user.id, String(product._id), 2);
-        const order = await cartService.orderConfirm(user.id);
-        const orderId = String(order.data!._id);
+describe('adjust', () => {
+    it('applies a correction in either direction', async () => {
+        const product = await createProduct({ onHand: 10 });
 
-        await orderService.cancelById(orderId, { id: user.id, admin: false });
+        const down = await adjust(String(product._id), -3, 'damaged');
+        expect(down.data).toMatchObject({ onHand: 7 });
 
-        const rows = await stockMovementRepository.findLatest(String(product._id));
-        expect(rows.map(({ delta, reason }) => ({ delta, reason }))).toEqual([
-            { delta: 2, reason: 'order-cancelled' },
-            { delta: -2, reason: 'order' }
-        ]);
-        const stored = await productRepository.findByIdRaw(String(product._id));
-        expect(stored!.stock).toBe(10);
-    });
-});
-
-describe('the ledger hears the admin form', () => {
-    it('an absolute stock write lands as the relative movement it amounts to', async () => {
-        const product = await createProduct({ stock: 25 });
-
-        await productService.update(product, { stock: 40 });
-
-        const rows = await stockMovementRepository.findLatest(String(product._id));
-        expect(rows).toHaveLength(1);
-        expect(rows[0]!.delta).toBe(15);
-        expect(rows[0]!.reason).toBe('adjustment');
+        const up = await adjust(String(product._id), 2, 'miscount');
+        expect(up.data).toMatchObject({ onHand: 9 });
     });
 
-    it('an update that does not touch stock stays off the ledger', async () => {
-        const product = await createProduct({ stock: 25 });
+    it('refuses a correction that would go below what is already promised', async () => {
+        const product = await createProduct({ onHand: 10 });
+        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 8 }]);
 
-        await productService.update(product, { title: 'Renamed' });
+        const result = await adjust(String(product._id), -5, 'stocktake');
 
-        await expect(stockMovementRepository.count({})).resolves.toBe(0);
+        /*
+         * Eight units are promised to an order that exists. Letting this through would make
+         * availability negative and oversell everyone behind it; the fix is to cancel orders,
+         * which releases holds and makes room for the correction.
+         */
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        expect(result.success === false && result.errors[0]).toMatchObject({
+            code: 'INVENTORY_BELOW_RESERVED'
+        });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 8 });
     });
-});
 
-describe('restock', () => {
-    it('puts the units on the shelf and the row in the book', async () => {
-        const product = await createProduct({ stock: 4 });
+    it('allows a correction down to exactly what is promised', async () => {
+        const product = await createProduct({ onHand: 10 });
+        await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 8 }]);
 
-        const result = await restock(String(product._id), 20);
+        const result = await adjust(String(product._id), -2, 'stocktake');
 
+        // The boundary is inclusive: onHand may equal reserved, it may not fall below it.
         expect(result.success).toBe(true);
-        expect(result.success && result.data!.stock).toBe(24);
-        const rows = await stockMovementRepository.findLatest(String(product._id));
-        expect(rows[0]!.delta).toBe(20);
-        expect(rows[0]!.reason).toBe('restock');
+        expect(result.data).toMatchObject({ onHand: 8, reserved: 8, available: 0 });
     });
 
-    it('refuses an unknown product and writes nothing', async () => {
-        const result = await restock('507f1f77bcf86cd799439011', 5);
+    it('404s for a product that does not exist', async () => {
+        const result = await adjust('c'.repeat(24), -1);
 
-        expect(asReject(result).status).toBe(404);
-        await expect(stockMovementRepository.count({})).resolves.toBe(0);
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+    });
+
+    it('404s rather than 409s for a product deleted mid-request', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const productId = String(product._id);
+
+        /*
+         * The write's guard covers both "the product exists" and "the correction fits", so a
+         * vanished product and a blocked correction look identical to it. Deleting between the
+         * pre-check and the write is the only way to reach that ambiguity, and the wrong answer
+         * here — a stock conflict for a product that is simply gone — is what an operator would
+         * waste time on.
+         */
+        const blocked = productRepository.adjustUnits;
+        const spy = jest
+            .spyOn(productRepository, 'adjustUnits')
+            .mockImplementation(async (id, delta) => {
+                // Through the barrel, like any cross-module reach — `module-test-boundaries`
+                // fails a spec that touches a sibling's model directly, and it is right to.
+                const doomed = await productRepository.findById(id);
+                if (doomed) await productRepository.deleteOne(doomed);
+                return blocked(id, delta);
+            });
+
+        const result = await adjust(productId, -1, 'stocktake');
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+        spy.mockRestore();
     });
 });
 
-describe('listMovements', () => {
-    it('answers newest first and narrows to one product', async () => {
-        const first = await createProduct({ stock: 5 });
-        const second = await createProduct({ stock: 5 });
-        await restock(String(first._id), 1);
-        await restock(String(second._id), 2);
-        await restock(String(first._id), 3);
+describe('runReservationSweep', () => {
+    it('releases stale holds and leaves fresh ones alone', async () => {
+        const product = await createProduct({ onHand: 20 });
+        const fresh = anOrderId();
+        await reserveForOrder(fresh, [{ productId: String(product._id), quantity: 5 }]);
 
-        const all = await listMovements();
-        const onlyFirst = await listMovements(String(first._id));
+        let stale = '';
+        await withoutWindow(async () => {
+            stale = anOrderId();
+            await reserveForOrder(stale, [{ productId: String(product._id), quantity: 5 }]);
+        });
 
-        expect(all.data!.items).toHaveLength(3);
-        expect(onlyFirst.data!.items.map(({ delta }) => delta)).toEqual([3, 1]);
+        const expired = await runReservationSweep();
+
+        expect(expired).toBe(1);
+        // The fresh hold survives — a sweep is a deadline, not a purge.
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 20, reserved: 5 });
+        const freshHold = await reservationRepository.findByOrderId(fresh);
+        const staleHold = await reservationRepository.findByOrderId(stale);
+        expect(freshHold?.status).toBe('held');
+        expect(staleHold?.status).toBe('released');
+    });
+
+    it('is idempotent', async () =>
+        withoutWindow(async () => {
+            const product = await createProduct({ onHand: 20 });
+            await reserveForOrder(anOrderId(), [{ productId: String(product._id), quantity: 5 }]);
+
+            expect(await runReservationSweep()).toBe(1);
+            expect(await runReservationSweep()).toBe(0);
+            expect(await countersOf(String(product._id))).toEqual({ onHand: 20, reserved: 0 });
+        }));
+});
+
+describe('listLevels', () => {
+    it('reports both counters and the availability they imply, scarcest first', async () => {
+        await createProduct({ title: 'Empty', onHand: 0 });
+        await createProduct({ title: 'Plenty', onHand: 100 });
+        const allHeld = await createProduct({ title: 'All held', onHand: 30 });
+        await reserveForOrder(anOrderId(), [{ productId: String(allHeld._id), quantity: 30 }]);
+
+        const result = await listLevels();
+
+        // The two zero-availability rows sort ahead of the plentiful one, and they are
+        // distinguishable — which is the whole reason the board shows three numbers.
+        expect(result.data?.items.map((level) => level.title)).toEqual([
+            'All held',
+            'Empty',
+            'Plenty'
+        ]);
+        expect(result.data?.items).toEqual([
+            expect.objectContaining({ onHand: 30, reserved: 30, available: 0 }),
+            expect.objectContaining({ onHand: 0, reserved: 0, available: 0 }),
+            expect.objectContaining({ onHand: 100, reserved: 0, available: 100 })
+        ]);
+        expect(result.data?.meta).toMatchObject({ totalItems: 3, totalPages: 1 });
+    });
+
+    it('narrows to what needs ordering when asked', async () => {
+        process.env.NODE_LOW_STOCK_THRESHOLD = '5';
+        await createProduct({ title: 'Low', onHand: 2 });
+        await createProduct({ title: 'Fine', onHand: 500 });
+
+        const result = await listLevels({ lowOnly: true });
+
+        expect(result.data?.items.map((level) => level.title)).toEqual(['Low']);
+        // The total follows the filter, not the collection — otherwise the board would report
+        // two pages of scarce products and render one row.
+        expect(result.data?.meta.totalItems).toBe(1);
+        delete process.env.NODE_LOW_STOCK_THRESHOLD;
+    });
+
+    it('pages rather than reading the whole catalogue', async () => {
+        for (let index = 0; index < 5; index += 1)
+            await createProduct({ title: `P${index}`, onHand: index });
+
+        const result = await listLevels({ page: 2, pageSize: 2 });
+
+        expect(result.data?.items.map((level) => level.available)).toEqual([2, 3]);
+        expect(result.data?.meta).toMatchObject({
+            page: 2,
+            pageSize: 2,
+            totalItems: 5,
+            totalPages: 3
+        });
     });
 });

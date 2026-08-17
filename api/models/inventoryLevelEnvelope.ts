@@ -21,11 +21,11 @@
 import type { EnvelopeMessage } from './envelopeMessage';
 import type { EnvelopeStatus } from './envelopeStatus';
 import type { EnvelopeSuccess } from './envelopeSuccess';
-import type { RestockResponse } from './restockResponse';
+import type { InventoryLevel } from './inventoryLevel';
 
-export interface RestockResponseEnvelope {
+export interface InventoryLevelEnvelope {
   success: EnvelopeSuccess;
   status: EnvelopeStatus;
   message: EnvelopeMessage;
-  data: RestockResponse;
+  data: InventoryLevel;
 }

@@ -24,7 +24,7 @@ export interface CreateProductRequestMultipart {
   /** @minimum 0 */
   price: number;
   /** @minimum 0 */
-  stock?: number;
+  onHand?: number;
   description?: string;
   active?: boolean;
   /** Optional product image */

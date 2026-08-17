@@ -1467,7 +1467,7 @@ collection:
             {
               "title": "Sallyno Panino",
               "price": 100,
-              "stock": 100,
+              "onHand": 100,
               "description": "Piccolo Sallyno panino. Da mangiare di coccole",
               "active": true,
               "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -1512,7 +1512,6 @@ collection:
               "title": "Sallyno Panino",
               "description": "Piccolo Sallyno panino. Da mangiare di coccole",
               "price": 100,
-              "stock": 0,
               "active": true,
               "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
               "categories": [
@@ -1638,7 +1637,6 @@ collection:
               "title": "Sallyno Panino",
               "description": "Piccolo Sallyno panino. Da mangiare di coccole",
               "price": 100,
-              "stock": 0,
               "active": true,
               "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
               "categories": [
@@ -2929,14 +2927,14 @@ collection:
       sortKey: 12000
       description: ""
     children:
-      - url: "{{ _.baseURL }}/inventory/movements"
-        name: List stock movements
+      - url: "{{ _.baseURL }}/inventory/levels"
+        name: Stock levels
         meta:
-          id: req_ae596e76e929a32c20e4697846dfd22a
+          id: req_464d7e2e0a148d12425227e80c073802
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: The ledger, newest first — every signed change to a shelf count with the why attached (order, cancel, adjustment, restock). Optionally one product's story via `productId`. Admin — customers see stock as a number on the product page.
+          description: The stock board — every product with its two counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
           sortKey: 12001
         method: GET
         headers:
@@ -2953,26 +2951,112 @@ collection:
             send: true
             store: true
           rebuildPath: true
-      - url: "{{ _.baseURL }}/inventory/restock"
-        name: Restock a product
+      - url: "{{ _.baseURL }}/inventory/movements"
+        name: List stock movements
         meta:
-          id: req_3ce9123618fe8629eeb7f56334ea1f86
+          id: req_ae596e76e929a32c20e4697846dfd22a
           created: 1767225600000
           modified: 1767225600000
           isPrivate: false
-          description: Puts units on a shelf through the same conditional increment every other movement uses, and writes the ledger row through the same announcement — so a restock and a sale tell the same kind of story. Answers the shelf count after the units landed.
+          description: A page of the ledger, newest first — one row per counter change, with both deltas and the reason attached. Every row was written by the same call that moved the counter, so the ledger cannot have gaps. Paged rather than capped, and `meta.totalItems` counts everything matching the filters — this is the record an audit works through, and a read that returned only the newest rows would misreport history as complete.
           sortKey: 12002
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/inventory/receipts"
+        name: Receive stock
+        meta:
+          id: req_22bc9014c22ec747bb7c8d450361e1dc
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again.
+          sortKey: 12003
         method: POST
         body:
           mimeType: application/json
           text: |-
             {
               "productId": "65dc8a99604c307b702b5ccc",
-              "quantity": 2
+              "quantity": 2,
+              "note": "string"
             }
         headers:
           - name: Content-Type
             value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/inventory/adjustments"
+        name: Adjust stock
+        meta:
+          id: req_ffc2b3e6d4d729643d10b83d4ab246df
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative.
+          sortKey: 12004
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "productId": "65dc8a99604c307b702b5ccc",
+              "delta": 1,
+              "note": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/inventory/reservations/sweep"
+        name: Expire stale reservations
+        meta:
+          id: req_80c02ae443295c7d4605ffc51a8b56d6
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            Releases every hold whose window has closed and announces each one, so the orders behind them get cancelled.
+
+            A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator — the same arrangement as `POST /delivery/advance`. Idempotent; running it twice releases nothing the first run already released.
+          sortKey: 12005
+        method: POST
+        headers:
           - name: Accept
             value: application/json
         authentication:

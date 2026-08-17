@@ -11,7 +11,7 @@
             "unavailable": "None of the products on this order are still available.",
             "order-not-found": "The requested order was not found"
         },
-        "insufficient-stock": "One or more products in your cart exceed the available stock.",
+        "insufficient-stock": "Some items are no longer available in the quantity you asked for — see `details.lines`.",
         "address-not-found": "The selected shipping address was not found.",
         "shipping-method-not-found": "The chosen shipping method does not exist."
     }

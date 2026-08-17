@@ -413,13 +413,36 @@ components:
                     type: number
                     format: double
                     minimum: 0
-                # Units the shop can still sell. Checkout and the admin order create decrement
-                # it (atomically, so two buyers cannot share the last unit); a customer cancel
-                # restores it. `0` renders as out of stock — the catalogue still lists the
-                # product, checkout is what refuses it (`CART_INSUFFICIENT_STOCK`).
-                stock:
+                # ── The two counters and the number derived from them ──────────────────────
+                #
+                # `onHand` is how many units exist; `reserved` is how many of those an open
+                # order has already claimed. A storefront should read NEITHER — what a customer
+                # may buy is `available`, and the two stored numbers are published mainly so an
+                # admin screen can explain a low availability ("forty here, thirty-eight
+                # spoken for") rather than merely assert it.
+                #
+                # All three are read-only. No request body anywhere in this contract accepts a
+                # counter except `CreateProductRequest.onHand`, which is a new product's opening
+                # count. Everything after that moves through the `/inventory` transitions, which
+                # are signed, conditional, and leave a ledger row.
+                onHand:
                     type: integer
                     minimum: 0
+                    readOnly: true
+                    description: Units physically present, whether or not they are spoken for.
+                reserved:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: Units held by an open order — present, but not for sale.
+                # Derived (`onHand - reserved`), never stored, so it cannot disagree with the
+                # pair it comes from. `0` renders as out of stock: the catalogue still lists the
+                # product, checkout is what refuses it (`CART_INSUFFICIENT_STOCK`).
+                available:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: What a customer may actually buy. Derived from the two counters above.
                 description:
                     type: string
                 active:
@@ -740,7 +763,13 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1advance'
 
     # ---------- inventory ----------
+    /inventory/levels:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels'
     /inventory/movements:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1movements'
-    /inventory/restock:
-        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1restock'
+    /inventory/receipts:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1receipts'
+    /inventory/adjustments:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1adjustments'
+    /inventory/reservations/sweep:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1reservations~1sweep'

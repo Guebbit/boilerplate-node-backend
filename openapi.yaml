@@ -2217,22 +2217,62 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
+  /inventory/levels:
+    get:
+      tags:
+        - Inventory
+      summary: Stock levels
+      description: The stock board — every product with its two counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
+      operationId: listInventoryLevels
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: lowOnly
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Only products at or under the low-availability threshold (`NODE_LOW_STOCK_THRESHOLD`).
+      responses:
+        '200':
+          description: A page of levels, most scarce first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryLevelsResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /inventory/movements:
     get:
       tags:
         - Inventory
       summary: List stock movements
-      description: The ledger, newest first — every signed change to a shelf count with the why attached (order, cancel, adjustment, restock). Optionally one product's story via `productId`. Admin — customers see stock as a number on the product page.
+      description: A page of the ledger, newest first — one row per counter change, with both deltas and the reason attached. Every row was written by the same call that moved the counter, so the ledger cannot have gaps. Paged rather than capped, and `meta.totalItems` counts everything matching the filters — this is the record an audit works through, and a read that returned only the newest rows would misreport history as complete.
       operationId: listStockMovements
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
         - name: productId
           in: query
           required: false
           schema:
             $ref: '#/components/schemas/Id'
           description: Narrow to one product's movements
+        - name: reason
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/StockMovementReason'
+          description: Narrow to one kind of transition
       responses:
         '200':
           description: The latest movements
@@ -2248,13 +2288,13 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
-  /inventory/restock:
+  /inventory/receipts:
     post:
       tags:
         - Inventory
-      summary: Restock a product
-      description: Puts units on a shelf through the same conditional increment every other movement uses, and writes the ledger row through the same announcement — so a restock and a sale tell the same kind of story. Answers the shelf count after the units landed.
-      operationId: restockProduct
+      summary: Receive stock
+      description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again.
+      operationId: receiveStock
       security:
         - bearerAuth: []
       requestBody:
@@ -2262,14 +2302,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RestockRequest'
+              $ref: '#/components/schemas/ReceiptRequest'
       responses:
         '200':
-          description: The shelf after the delivery
+          description: The counters after the delivery landed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RestockResponseEnvelope'
+                $ref: '#/components/schemas/InventoryLevelEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2278,6 +2318,69 @@ paths:
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /inventory/adjustments:
+    post:
+      tags:
+        - Inventory
+      summary: Adjust stock
+      description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative.
+      operationId: adjustStock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustmentRequest'
+      responses:
+        '200':
+          description: The counters after the correction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryLevelEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The correction would leave fewer units than are already reserved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /inventory/reservations/sweep:
+    post:
+      tags:
+        - Inventory
+      summary: Expire stale reservations
+      description: |
+        Releases every hold whose window has closed and announces each one, so the orders behind them get cancelled.
+
+        A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator — the same arrangement as `POST /delivery/advance`. Idempotent; running it twice releases nothing the first run already released.
+      operationId: sweepReservations
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: How many holds were expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationSweepEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
 components:
@@ -2590,9 +2693,21 @@ components:
           type: number
           format: double
           minimum: 0
-        stock:
+        onHand:
           type: integer
           minimum: 0
+          readOnly: true
+          description: Units physically present, whether or not they are spoken for.
+        reserved:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Units held by an open order — present, but not for sale.
+        available:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: What a customer may actually buy. Derived from the two counters above.
         description:
           type: string
         active:
@@ -3019,6 +3134,9 @@ components:
               type: integer
               minimum: 0
             lowStockProducts:
+              type: integer
+              minimum: 0
+            reservedUnits:
               type: integer
               minimum: 0
         database:
@@ -3868,9 +3986,6 @@ components:
           type: number
           format: double
           minimum: 0
-        stock:
-          type: integer
-          minimum: 0
         active:
           type: boolean
         imageUrl:
@@ -3900,9 +4015,6 @@ components:
         price:
           type: number
           format: double
-          minimum: 0
-        stock:
-          type: integer
           minimum: 0
         active:
           type: boolean
@@ -3948,7 +4060,7 @@ components:
           type: number
           format: double
           minimum: 0
-        stock:
+        onHand:
           type: integer
           minimum: 0
           default: 100
@@ -3980,7 +4092,7 @@ components:
           type: number
           format: double
           minimum: 0
-        stock:
+        onHand:
           type: integer
           minimum: 0
           default: 100
@@ -4071,9 +4183,6 @@ components:
           type: number
           format: double
           minimum: 0
-        stock:
-          type: integer
-          minimum: 0
         active:
           type: boolean
         imageUrl:
@@ -4100,9 +4209,6 @@ components:
         price:
           type: number
           format: double
-          minimum: 0
-        stock:
-          type: integer
           minimum: 0
         active:
           type: boolean
@@ -4675,33 +4781,102 @@ components:
           $ref: '#/components/schemas/EnvelopeMessage'
         data:
           $ref: '#/components/schemas/CourierAdvanceResponse'
+    InventoryLevel:
+      type: object
+      additionalProperties: false
+      required:
+        - productId
+        - title
+        - onHand
+        - reserved
+        - available
+      properties:
+        productId:
+          $ref: '#/components/schemas/Id'
+        title:
+          type: string
+          description: Carried so the board reads as a list of products rather than of ids.
+        onHand:
+          type: integer
+          minimum: 0
+        reserved:
+          type: integer
+          minimum: 0
+        available:
+          type: integer
+          minimum: 0
+    InventoryLevelsResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryLevel'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    InventoryLevelsResponseEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - status
+        - message
+        - data
+      properties:
+        success:
+          $ref: '#/components/schemas/EnvelopeSuccess'
+        status:
+          $ref: '#/components/schemas/EnvelopeStatus'
+        message:
+          $ref: '#/components/schemas/EnvelopeMessage'
+        data:
+          $ref: '#/components/schemas/InventoryLevelsResponse'
+    StockMovementReason:
+      type: string
+      enum:
+        - reserve
+        - commit
+        - release
+        - expire
+        - receive
+        - adjust
+      description: |
+        * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
+        * `commit` — the order was paid for and the units left. Both down.
+        * `release` — the hold was given up (the order was cancelled). `reserved` down.
+        * `expire` — the hold timed out unpaid. Same counters as `release`, different story.
+        * `receive` — a supplier delivery. `onHand` up.
+        * `adjust` — a stocktake correction, signed. `onHand` moves either way.
     StockMovement:
       type: object
       additionalProperties: false
       required:
         - id
         - productId
-        - delta
         - reason
+        - onHandDelta
+        - reservedDelta
       properties:
         id:
           $ref: '#/components/schemas/Id'
         productId:
           $ref: '#/components/schemas/Id'
-        delta:
-          type: number
-          description: Signed — a sale is negative, a return or restock positive.
         reason:
-          type: string
-          enum:
-            - order
-            - order-cancelled
-            - adjustment
-            - restock
-          description: Why the units moved.
+          $ref: '#/components/schemas/StockMovementReason'
+        onHandDelta:
+          type: integer
+        reservedDelta:
+          type: integer
         reference:
           type: string
-          description: What caused it, when something did — the order id, typically.
+          description: The order the movement belongs to, when one does.
+        note:
+          type: string
+          description: Why an adjustment was made — the operator's own words.
         createdAt:
           type: string
           format: date-time
@@ -4713,11 +4888,14 @@ components:
       additionalProperties: false
       required:
         - items
+        - meta
       properties:
         items:
           type: array
           items:
             $ref: '#/components/schemas/StockMovement'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
     StockMovementsResponseEnvelope:
       type: object
       additionalProperties: false
@@ -4735,7 +4913,7 @@ components:
           $ref: '#/components/schemas/EnvelopeMessage'
         data:
           $ref: '#/components/schemas/StockMovementsResponse'
-    RestockRequest:
+    ReceiptRequest:
       type: object
       additionalProperties: false
       required:
@@ -4747,21 +4925,11 @@ components:
         quantity:
           type: integer
           minimum: 1
-          description: How many units arrived. Corrections downward are the admin product form's absolute stock write.
-    RestockResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - productId
-        - stock
-      properties:
-        productId:
-          $ref: '#/components/schemas/Id'
-        stock:
-          type: integer
-          minimum: 0
-          description: The shelf count after the units landed.
-    RestockResponseEnvelope:
+          description: How many units arrived. Strictly positive — a delivery that removes units is an adjustment.
+        note:
+          type: string
+          description: Optional — the supplier, the delivery note number, whatever the operator wants on the row.
+    InventoryLevelEnvelope:
       type: object
       additionalProperties: false
       required:
@@ -4777,4 +4945,46 @@ components:
         message:
           $ref: '#/components/schemas/EnvelopeMessage'
         data:
-          $ref: '#/components/schemas/RestockResponse'
+          $ref: '#/components/schemas/InventoryLevel'
+    AdjustmentRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - productId
+        - delta
+      properties:
+        productId:
+          $ref: '#/components/schemas/Id'
+        delta:
+          type: integer
+          description: Signed. Negative is shrinkage or damage; positive is a miscount found in your favour.
+        note:
+          type: string
+          description: Why. An unexplained correction is the thing an audit is looking for.
+    ReservationSweepResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - expired
+      properties:
+        expired:
+          type: integer
+          minimum: 0
+          description: How many holds this run released.
+    ReservationSweepEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - status
+        - message
+        - data
+      properties:
+        success:
+          $ref: '#/components/schemas/EnvelopeSuccess'
+        status:
+          $ref: '#/components/schemas/EnvelopeStatus'
+        message:
+          $ref: '#/components/schemas/EnvelopeMessage'
+        data:
+          $ref: '#/components/schemas/ReservationSweepResponse'

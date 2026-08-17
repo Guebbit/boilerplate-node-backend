@@ -76,13 +76,15 @@
                     {
                         "product": {
                             "active": true,
+                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                             "id": "65dc8a99604c307b702b5ccc",
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+                            "onHand": 100,
                             "price": 100,
-                            "stock": 100,
+                            "reserved": 0,
                             "tags": [],
                             "title": "Sallyno Panino",
                             "updatedAt": "2024-02-26T12:56:57.000Z"
@@ -92,13 +94,15 @@
                     {
                         "product": {
                             "active": true,
+                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T14:10:49.000Z",
                             "description": "Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire",
                             "id": "65dc9be92f2794d1c16741e1",
                             "imageUrl": "/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg",
+                            "onHand": 100,
                             "price": 1,
-                            "stock": 100,
+                            "reserved": 0,
                             "tags": [],
                             "title": "Miciona inutile",
                             "updatedAt": "2024-02-26T14:10:49.000Z"
@@ -121,13 +125,15 @@
                     {
                         "product": {
                             "active": true,
+                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T18:56:02.000Z",
                             "description": "Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.",
                             "id": "65dcdec2b18ad5e4bd597f0f",
                             "imageUrl": "/images/seed/f12ba2e44fe347010397f1dcba399808.jpg",
+                            "onHand": 100,
                             "price": 77,
-                            "stock": 100,
+                            "reserved": 0,
                             "tags": [],
                             "title": "Micino pufettino",
                             "updatedAt": "2024-02-26T18:56:02.000Z"
@@ -161,13 +167,15 @@
                     {
                         "product": {
                             "active": true,
+                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                             "id": "65dc8a99604c307b702b5ccc",
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+                            "onHand": 100,
                             "price": 100,
-                            "stock": 100,
+                            "reserved": 0,
                             "tags": [],
                             "title": "Sallyno Panino",
                             "updatedAt": "2024-02-26T12:56:57.000Z"
@@ -186,6 +194,7 @@
         "products": [
             {
                 "active": true,
+                "available": 25,
                 "categories": [
                     "food"
                 ],
@@ -193,8 +202,9 @@
                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 "id": "65dc8a99604c307b702b5ccc",
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
+                "onHand": 25,
                 "price": 100,
-                "stock": 25,
+                "reserved": 0,
                 "tags": [
                     "sallyno",
                     "cute"
@@ -204,6 +214,7 @@
             },
             {
                 "active": true,
+                "available": 10,
                 "categories": [
                     "pets"
                 ],
@@ -212,8 +223,9 @@
                 "description": "Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.",
                 "id": "65dc8ad8604c307b702b5cd4",
                 "imageUrl": "/images/seed/96346b77daf138a279677cb75c400ee9.jpg",
+                "onHand": 10,
                 "price": 50,
-                "stock": 10,
+                "reserved": 0,
                 "tags": [
                     "sallyno",
                     "illegal"
@@ -223,6 +235,7 @@
             },
             {
                 "active": true,
+                "available": 0,
                 "categories": [
                     "pets"
                 ],
@@ -230,8 +243,9 @@
                 "description": "Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire",
                 "id": "65dc9be92f2794d1c16741e1",
                 "imageUrl": "/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg",
+                "onHand": 0,
                 "price": 1,
-                "stock": 0,
+                "reserved": 0,
                 "tags": [
                     "micini",
                     "useless"
@@ -241,6 +255,7 @@
             },
             {
                 "active": true,
+                "available": 40,
                 "categories": [
                     "pets"
                 ],
@@ -248,8 +263,9 @@
                 "description": "Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.",
                 "id": "65dcdec2b18ad5e4bd597f0f",
                 "imageUrl": "/images/seed/f12ba2e44fe347010397f1dcba399808.jpg",
+                "onHand": 40,
                 "price": 77,
-                "stock": 40,
+                "reserved": 0,
                 "tags": [
                     "micini",
                     "cute",
@@ -260,6 +276,7 @@
             },
             {
                 "active": false,
+                "available": 15,
                 "categories": [
                     "pets",
                     "bundles"
@@ -268,8 +285,9 @@
                 "description": "Produttori di rumori molesti a tutte le ore. Inactive product.",
                 "id": "6622c88a5123b1e286f440f8",
                 "imageUrl": "/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg",
+                "onHand": 15,
                 "price": 40,
-                "stock": 15,
+                "reserved": 0,
                 "tags": [
                     "micini",
                     "noisy"

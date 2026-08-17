@@ -57,6 +57,8 @@ JWT-based authentication. Login returns an `accessToken` (short-lived) and a `re
 
 Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints (create, update, delete) are admin-only and invalidate the cache on change. Both single-item and bulk operations are supported.
 
+Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, but the only body that accepts a counter is `POST /products` — a new product's opening `onHand`. The update bodies carry none: an absolute stock write on an edit form overwrites whatever sold while the form was open, so changing an existing product's stock is `POST /inventory/receipts` or `POST /inventory/adjustments`, both signed and both audited.
+
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/products` | none | List products (cached) |
@@ -136,12 +138,32 @@ Shipping rates as pure domain rules (flat rates, free-above thresholds), priced 
 
 ## Inventory
 
-An append-only stock-movements ledger: every mover (checkout, cancel, the admin product form, the restock) announces through the `STOCK_MOVED` event and this module writes the row — the product's `stock` stays authoritative, the ledger explains. The low-stock gauge (`NODE_LOW_STOCK_THRESHOLD`) feeds the admin metrics overview.
+The only writer of stock in the application. A product carries two counters — `onHand` (units that exist) and `reserved` (units an open order has claimed) — and what a customer may buy is the difference, published as the derived `available`. Both counters live on the product document so a catalogue read needs no join; neither is written anywhere but here.
+
+Six transitions move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps:
+
+| Transition | When | `onHand` | `reserved` |
+| --- | --- | --- | --- |
+| `reserve` | checkout, admin order create | — | `+q` |
+| `commit` | payment confirmed | `−q` | `−q` |
+| `release` | order cancelled | — | `−q` |
+| `expire` | hold timed out (the sweep) | — | `−q` |
+| `receive` | supplier delivery | `+q` | — |
+| `adjust` | stocktake correction | `±q` | — |
+
+A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `available`, so a basket is fixed in one pass rather than one refusal per line. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.
+
+Units therefore leave the shop only when they are paid for; an unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 30) and nothing more. The application ships no scheduler, so the sweep is driven from outside — a cron entry, the platform's scheduled job, or an operator — exactly as with the courier's `POST /delivery/advance`. Run it at least as often as the window, or holds outlive their deadline by the gap.
+
+Both reads page and report `meta.totalItems`, and neither is bounded in the service. The ledger is the record an audit works through, so a read answering only the newest rows would misreport history as complete; the board sorts on availability, which is derived, so mongod projects it in an aggregation rather than the service loading every product to sort in memory. The low-stock threshold (`NODE_LOW_STOCK_THRESHOLD`) is shared by the board's `lowOnly` filter and the `products_low_stock_total` gauge, but the two count different populations on purpose: the board spans the whole catalogue, because an admin restocking needs to see an inactive product's units, while the gauge counts only publicly visible products, because an alert about stock nobody can buy is noise. Both measure AVAILABILITY rather than units on hand.
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
-| GET | `/inventory/movements` | admin | The ledger, newest first (`?productId=` narrows) |
-| POST | `/inventory/restock` | admin | Put units on a shelf, through the same announcement |
+| GET | `/inventory/levels` | admin | The stock board — both counters and availability, scarcest first; paged (`?lowOnly=true` narrows) |
+| GET | `/inventory/movements` | admin | The ledger, newest first — paged, with `meta.totalItems` (`?productId=`, `?reason=` narrow) |
+| POST | `/inventory/receipts` | admin | A supplier delivery lands |
+| POST | `/inventory/adjustments` | admin | A stocktake correction, signed; refuses to go below what is reserved |
+| POST | `/inventory/reservations/sweep` | admin | Release timed-out holds and cancel the orders behind them |
 
 ## Users (admin)
 

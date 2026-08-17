@@ -45,11 +45,11 @@ export const writeProducts = (
     // `price` is declared for the same reason `active` is: the image-carrying variants of these
     // routes send a multipart body, which has no types, so both arrive as strings and
     // `zodProductSchema` rejects them.
-    const { id, active, price, stock, categories, tags } = readInput(request, {
+    const { id, active, price, onHand, categories, tags } = readInput(request, {
         surface: 'write',
         ids: ['id'],
         booleans: ['active'],
-        numbers: ['price', 'stock'],
+        numbers: ['price', 'onHand'],
         stringArrays: ['categories', 'tags']
     });
 
@@ -71,7 +71,7 @@ export const writeProducts = (
         imageUrl,
         active,
         price,
-        stock,
+        onHand,
         categories,
         tags
     });
@@ -89,10 +89,24 @@ export const writeProducts = (
 
     // Past the guard above, these have been checked against zodProductSchema — the assertion
     // records what the validator just established rather than assuming it.
-    const validated = { imageUrl, active, price, stock, categories, tags } as Pick<
+    const validated = { imageUrl, active, price, categories, tags } as Pick<
         Product,
-        'imageUrl' | 'active' | 'price' | 'stock' | 'categories' | 'tags'
+        'imageUrl' | 'active' | 'price' | 'categories' | 'tags'
     >;
+
+    /*
+     * The opening count, and it is create-only — deliberately absent from `validated`, which both
+     * paths spread.
+     *
+     * A new product's `onHand` is the one place an absolute count is honest: there is no prior
+     * value to race with and no history to contradict, so "this product starts with 40" is a
+     * complete statement. On an EDIT the same number would be a blind overwrite of whatever
+     * sales and receipts have done since the form was opened, which is why the update contracts
+     * carry no counter field at all. Changing an existing product's stock is
+     * `POST /inventory/receipts` or `POST /inventory/adjustments` — both signed, both conditional,
+     * both leaving a ledger row saying what happened.
+     */
+    const openingCount = onHand as Product['onHand'];
 
     /**
      * NO ID = new product
@@ -107,7 +121,8 @@ export const writeProducts = (
         return productService
             .create({
                 ...request.body,
-                ...validated
+                ...validated,
+                ...(openingCount === undefined ? {} : { onHand: openingCount })
             })
             .then((product) => {
                 emitAuditEvent(

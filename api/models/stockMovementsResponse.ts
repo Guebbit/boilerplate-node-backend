@@ -18,8 +18,10 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { PaginationMeta } from './paginationMeta';
 import type { StockMovement } from './stockMovement';
 
 export interface StockMovementsResponse {
   items: StockMovement[];
+  meta: PaginationMeta;
 }

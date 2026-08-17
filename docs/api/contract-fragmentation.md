@@ -131,7 +131,7 @@ The rule is the one the module registry already uses: **a module owns the paths 
 | `wishlist`      | `/wishlist`      | `Wishlist`            | 4   |
 | `payments`      | `/payments`      | `Payments`            | 3   |
 | `delivery`      | `/delivery`      | `Delivery`            | 3   |
-| `inventory`     | `/inventory`     | `Inventory`           | 2   |
+| `inventory`     | `/inventory`     | `Inventory`           | 5   |
 | `observability` | `/observability` | `Observability`       | 5   |
 | `feedback`      | `/feedback`      | `Feedback`            | 3   |
 | `locales`       | `/locales`       | `System` (2 of 3)     | 2   |
@@ -276,7 +276,7 @@ The split was computed as a transitive closure over `$ref` rather than guessed f
 | The shell's own | `HealthPing`, `HealthPingEnvelope` | `GET /` belongs to no module, so neither does its answer |
 
 The per-module counts are the same measurement from the other side: `account` 22, `products` 14,
-`observability` 11, `cart` 10, `users` 10, `orders` 8, `delivery` 7, `feedback` 7, `inventory` 6,
+`observability` 11, `inventory` 12, `cart` 10, `users` 10, `orders` 8, `delivery` 7, `feedback` 7,
 `locales` 4, `payments` 4, `wishlist` 4.
 
 **Duplicating one of these into two module fragments is the failure to watch for** — the bundle

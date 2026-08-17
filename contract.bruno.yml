@@ -586,7 +586,8 @@ items:
                       "business": {
                         "checkoutSuccess": 0,
                         "ordersCreated": 0,
-                        "lowStockProducts": 0
+                        "lowStockProducts": 0,
+                        "reservedUnits": 0
                       },
                       "database": {
                         "queriesTotal": 0,
@@ -6123,7 +6124,9 @@ items:
                           "id": "65dc8a99604c307b702b5ccc",
                           "title": "Sallyno Panino",
                           "price": 100,
-                          "stock": 0,
+                          "onHand": 0,
+                          "reserved": 0,
+                          "available": 0,
                           "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                           "active": true,
                           "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6213,7 +6216,7 @@ items:
               {
                 "title": "Sallyno Panino",
                 "price": 100,
-                "stock": 100,
+                "onHand": 100,
                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 "active": true,
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6244,7 +6247,7 @@ items:
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
-                    "stock": 100,
+                    "onHand": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6272,7 +6275,9 @@ items:
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
-                      "stock": 0,
+                      "onHand": 0,
+                      "reserved": 0,
+                      "available": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6298,7 +6303,7 @@ items:
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
-                    "stock": 100,
+                    "onHand": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6341,7 +6346,7 @@ items:
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
-                    "stock": 100,
+                    "onHand": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6384,7 +6389,7 @@ items:
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
-                    "stock": 100,
+                    "onHand": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6427,7 +6432,7 @@ items:
                   {
                     "title": "Sallyno Panino",
                     "price": 100,
-                    "stock": 100,
+                    "onHand": 100,
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6476,7 +6481,6 @@ items:
                 "title": "Sallyno Panino",
                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 "price": 100,
-                "stock": 0,
                 "active": true,
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                 "categories": [
@@ -6508,7 +6512,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -6535,7 +6538,9 @@ items:
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
-                      "stock": 0,
+                      "onHand": 0,
+                      "reserved": 0,
+                      "available": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -6563,7 +6568,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -6607,7 +6611,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -6651,7 +6654,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -6695,7 +6697,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -6739,7 +6740,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -7097,7 +7097,9 @@ items:
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
-                      "stock": 0,
+                      "onHand": 0,
+                      "reserved": 0,
+                      "available": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -7180,7 +7182,6 @@ items:
                 "title": "Sallyno Panino",
                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                 "price": 100,
-                "stock": 0,
                 "active": true,
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                 "categories": [
@@ -7211,7 +7212,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -7238,7 +7238,9 @@ items:
                       "id": "65dc8a99604c307b702b5ccc",
                       "title": "Sallyno Panino",
                       "price": 100,
-                      "stock": 0,
+                      "onHand": 0,
+                      "reserved": 0,
+                      "available": 0,
                       "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                       "active": true,
                       "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -7265,7 +7267,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -7308,7 +7309,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -7351,7 +7351,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -7394,7 +7393,6 @@ items:
                     "title": "Sallyno Panino",
                     "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                     "price": 100,
-                    "stock": 0,
                     "active": true,
                     "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                     "categories": [
@@ -7808,7 +7806,9 @@ items:
                           "id": "65dc8a99604c307b702b5ccc",
                           "title": "Sallyno Panino",
                           "price": 100,
-                          "stock": 0,
+                          "onHand": 0,
+                          "reserved": 0,
+                          "available": 0,
                           "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                           "active": true,
                           "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -8927,7 +8927,9 @@ items:
                               "id": "65dc8a99604c307b702b5ccc",
                               "title": "Sallyno Panino",
                               "price": 100,
-                              "stock": 0,
+                              "onHand": 0,
+                              "reserved": 0,
+                              "available": 0,
                               "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                               "active": true,
                               "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -10060,7 +10062,9 @@ items:
                                 "id": "65dc8a99604c307b702b5ccc",
                                 "title": "Sallyno Panino",
                                 "price": 100,
-                                "stock": 0,
+                                "onHand": 0,
+                                "reserved": 0,
+                                "available": 0,
                                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                                 "active": true,
                                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -10255,7 +10259,9 @@ items:
                             "id": "65dc8a99604c307b702b5ccc",
                             "title": "Sallyno Panino",
                             "price": 100,
-                            "stock": 0,
+                            "onHand": 0,
+                            "reserved": 0,
+                            "available": 0,
                             "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                             "active": true,
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -10563,7 +10569,9 @@ items:
                             "id": "65dc8a99604c307b702b5ccc",
                             "title": "Sallyno Panino",
                             "price": 100,
-                            "stock": 0,
+                            "onHand": 0,
+                            "reserved": 0,
+                            "available": 0,
                             "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                             "active": true,
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -11091,7 +11099,9 @@ items:
                                 "id": "65dc8a99604c307b702b5ccc",
                                 "title": "Sallyno Panino",
                                 "price": 100,
-                                "stock": 0,
+                                "onHand": 0,
+                                "reserved": 0,
+                                "available": 0,
                                 "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                                 "active": true,
                                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -11330,7 +11340,9 @@ items:
                             "id": "65dc8a99604c307b702b5ccc",
                             "title": "Sallyno Panino",
                             "price": 100,
-                            "stock": 0,
+                            "onHand": 0,
+                            "reserved": 0,
+                            "available": 0,
                             "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                             "active": true,
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -11545,7 +11557,9 @@ items:
                             "id": "65dc8a99604c307b702b5ccc",
                             "title": "Sallyno Panino",
                             "price": 100,
-                            "stock": 0,
+                            "onHand": 0,
+                            "reserved": 0,
+                            "available": 0,
                             "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                             "active": true,
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -12204,7 +12218,9 @@ items:
                             "id": "65dc8a99604c307b702b5ccc",
                             "title": "Sallyno Panino",
                             "price": 100,
-                            "stock": 0,
+                            "onHand": 0,
+                            "reserved": 0,
+                            "available": 0,
                             "description": "Piccolo Sallyno panino. Da mangiare di coccole",
                             "active": true,
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
@@ -13466,9 +13482,141 @@ items:
       auth: inherit
     items:
       - info:
-          name: List stock movements
+          name: Stock levels
           type: http
           seq: 1
+          tags:
+            - Inventory
+        http:
+          method: GET
+          url: "{{baseUrl}}/inventory/levels"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: A page of levels, most scarce first
+            request:
+              url: "{{baseUrl}}/inventory/levels"
+              method: GET
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "A page of levels, most scarce first",
+                    "data": {
+                      "items": [
+                        {
+                          "productId": "65dc8a99604c307b702b5ccc",
+                          "title": "Sallyno Panino",
+                          "onHand": 0,
+                          "reserved": 0,
+                          "available": 0
+                        }
+                      ],
+                      "meta": {
+                        "page": 1,
+                        "pageSize": 10,
+                        "totalItems": 0,
+                        "totalPages": 0
+                      }
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/inventory/levels"
+              method: GET
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/inventory/levels"
+              method: GET
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/inventory/levels"
+              method: GET
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: List stock movements
+          type: http
+          seq: 2
           tags:
             - Inventory
         http:
@@ -13506,13 +13654,21 @@ items:
                         {
                           "id": "65dc8a99604c307b702b5ccc",
                           "productId": "65dc8a99604c307b702b5ccc",
-                          "delta": 1,
-                          "reason": "order",
+                          "reason": "reserve",
+                          "onHandDelta": 1,
+                          "reservedDelta": 1,
                           "reference": "string",
+                          "note": "string",
                           "createdAt": "2026-01-01T00:00:00.000Z",
                           "updatedAt": "2026-01-01T00:00:00.000Z"
                         }
-                      ]
+                      ],
+                      "meta": {
+                        "page": 1,
+                        "pageSize": 10,
+                        "totalItems": 0,
+                        "totalPages": 0
+                      }
                     }
                   }
           - name: 401 Response
@@ -13620,20 +13776,21 @@ items:
                     ]
                   }
       - info:
-          name: Restock a product
+          name: Receive stock
           type: http
-          seq: 2
+          seq: 3
           tags:
             - Inventory
         http:
           method: POST
-          url: "{{baseUrl}}/inventory/restock"
+          url: "{{baseUrl}}/inventory/receipts"
           body:
             type: json
             data: |-
               {
                 "productId": "65dc8a99604c307b702b5ccc",
-                "quantity": 2
+                "quantity": 2,
+                "note": "string"
               }
           auth:
             type: bearer
@@ -13645,16 +13802,17 @@ items:
           maxRedirects: 5
         examples:
           - name: 200 Response
-            description: The shelf after the delivery
+            description: The counters after the delivery landed
             request:
-              url: "{{baseUrl}}/inventory/restock"
+              url: "{{baseUrl}}/inventory/receipts"
               method: POST
               body:
                 type: json
                 data: |-
                   {
                     "productId": "65dc8a99604c307b702b5ccc",
-                    "quantity": 2
+                    "quantity": 2,
+                    "note": "string"
                   }
             response:
               status: 200
@@ -13668,23 +13826,27 @@ items:
                   {
                     "success": true,
                     "status": 200,
-                    "message": "The shelf after the delivery",
+                    "message": "The counters after the delivery landed",
                     "data": {
                       "productId": "65dc8a99604c307b702b5ccc",
-                      "stock": 0
+                      "title": "Sallyno Panino",
+                      "onHand": 0,
+                      "reserved": 0,
+                      "available": 0
                     }
                   }
           - name: 401 Response
             description: Unauthorized
             request:
-              url: "{{baseUrl}}/inventory/restock"
+              url: "{{baseUrl}}/inventory/receipts"
               method: POST
               body:
                 type: json
                 data: |-
                   {
                     "productId": "65dc8a99604c307b702b5ccc",
-                    "quantity": 2
+                    "quantity": 2,
+                    "note": "string"
                   }
             response:
               status: 401
@@ -13710,14 +13872,15 @@ items:
           - name: 403 Response
             description: Forbidden
             request:
-              url: "{{baseUrl}}/inventory/restock"
+              url: "{{baseUrl}}/inventory/receipts"
               method: POST
               body:
                 type: json
                 data: |-
                   {
                     "productId": "65dc8a99604c307b702b5ccc",
-                    "quantity": 2
+                    "quantity": 2,
+                    "note": "string"
                   }
             response:
               status: 403
@@ -13743,14 +13906,15 @@ items:
           - name: 404 Response
             description: Resource not found
             request:
-              url: "{{baseUrl}}/inventory/restock"
+              url: "{{baseUrl}}/inventory/receipts"
               method: POST
               body:
                 type: json
                 data: |-
                   {
                     "productId": "65dc8a99604c307b702b5ccc",
-                    "quantity": 2
+                    "quantity": 2,
+                    "note": "string"
                   }
             response:
               status: 404
@@ -13776,14 +13940,15 @@ items:
           - name: 422 Response
             description: Validation failed
             request:
-              url: "{{baseUrl}}/inventory/restock"
+              url: "{{baseUrl}}/inventory/receipts"
               method: POST
               body:
                 type: json
                 data: |-
                   {
                     "productId": "65dc8a99604c307b702b5ccc",
-                    "quantity": 2
+                    "quantity": 2,
+                    "note": "string"
                   }
             response:
               status: 422
@@ -13809,15 +13974,398 @@ items:
           - name: 500 Response
             description: Internal server error
             request:
-              url: "{{baseUrl}}/inventory/restock"
+              url: "{{baseUrl}}/inventory/receipts"
               method: POST
               body:
                 type: json
                 data: |-
                   {
                     "productId": "65dc8a99604c307b702b5ccc",
-                    "quantity": 2
+                    "quantity": 2,
+                    "note": "string"
                   }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Adjust stock
+          type: http
+          seq: 4
+          tags:
+            - Inventory
+        http:
+          method: POST
+          url: "{{baseUrl}}/inventory/adjustments"
+          body:
+            type: json
+            data: |-
+              {
+                "productId": "65dc8a99604c307b702b5ccc",
+                "delta": 1,
+                "note": "string"
+              }
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: The counters after the correction
+            request:
+              url: "{{baseUrl}}/inventory/adjustments"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "productId": "65dc8a99604c307b702b5ccc",
+                    "delta": 1,
+                    "note": "string"
+                  }
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "The counters after the correction",
+                    "data": {
+                      "productId": "65dc8a99604c307b702b5ccc",
+                      "title": "Sallyno Panino",
+                      "onHand": 0,
+                      "reserved": 0,
+                      "available": 0
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/inventory/adjustments"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "productId": "65dc8a99604c307b702b5ccc",
+                    "delta": 1,
+                    "note": "string"
+                  }
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/inventory/adjustments"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "productId": "65dc8a99604c307b702b5ccc",
+                    "delta": 1,
+                    "note": "string"
+                  }
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 404 Response
+            description: Resource not found
+            request:
+              url: "{{baseUrl}}/inventory/adjustments"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "productId": "65dc8a99604c307b702b5ccc",
+                    "delta": 1,
+                    "note": "string"
+                  }
+            response:
+              status: 404
+              statusText: Not Found
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 404,
+                    "message": "Resource not found",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 409 Response
+            description: The correction would leave fewer units than are already reserved
+            request:
+              url: "{{baseUrl}}/inventory/adjustments"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "productId": "65dc8a99604c307b702b5ccc",
+                    "delta": 1,
+                    "note": "string"
+                  }
+            response:
+              status: 409
+              statusText: Conflict
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 409,
+                    "message": "The correction would leave fewer units than are already reserved",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 422 Response
+            description: Validation failed
+            request:
+              url: "{{baseUrl}}/inventory/adjustments"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "productId": "65dc8a99604c307b702b5ccc",
+                    "delta": 1,
+                    "note": "string"
+                  }
+            response:
+              status: 422
+              statusText: Unprocessable Entity
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 422,
+                    "message": "Validation failed",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/inventory/adjustments"
+              method: POST
+              body:
+                type: json
+                data: |-
+                  {
+                    "productId": "65dc8a99604c307b702b5ccc",
+                    "delta": 1,
+                    "note": "string"
+                  }
+            response:
+              status: 500
+              statusText: Internal Server Error
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 500,
+                    "message": "Internal server error",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+      - info:
+          name: Expire stale reservations
+          type: http
+          seq: 5
+          tags:
+            - Inventory
+        http:
+          method: POST
+          url: "{{baseUrl}}/inventory/reservations/sweep"
+          auth:
+            type: bearer
+            token: "{{token}}"
+        settings:
+          encodeUrl: true
+          timeout: 0
+          followRedirects: true
+          maxRedirects: 5
+        examples:
+          - name: 200 Response
+            description: How many holds were expired
+            request:
+              url: "{{baseUrl}}/inventory/reservations/sweep"
+              method: POST
+            response:
+              status: 200
+              statusText: OK
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": true,
+                    "status": 200,
+                    "message": "How many holds were expired",
+                    "data": {
+                      "expired": 0
+                    }
+                  }
+          - name: 401 Response
+            description: Unauthorized
+            request:
+              url: "{{baseUrl}}/inventory/reservations/sweep"
+              method: POST
+            response:
+              status: 401
+              statusText: Unauthorized
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 401,
+                    "message": "Unauthorized",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 403 Response
+            description: Forbidden
+            request:
+              url: "{{baseUrl}}/inventory/reservations/sweep"
+              method: POST
+            response:
+              status: 403
+              statusText: Forbidden
+              headers:
+                - name: Content-Type
+                  value: application/json
+              body:
+                type: json
+                data: |-
+                  {
+                    "success": false,
+                    "status": 403,
+                    "message": "Forbidden",
+                    "errors": [
+                      {
+                        "code": "VALIDATION_ERROR",
+                        "message": "Field \"email\" is required",
+                        "details": "string"
+                      }
+                    ]
+                  }
+          - name: 500 Response
+            description: Internal server error
+            request:
+              url: "{{baseUrl}}/inventory/reservations/sweep"
+              method: POST
             response:
               status: 500
               statusText: Internal Server Error

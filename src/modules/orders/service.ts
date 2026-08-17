@@ -7,7 +7,8 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { productRepository, STOCK_MOVED } from '@modules/products';
+import { productRepository } from '@modules/products';
+import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
 import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 import { orderRepository } from './repository';
@@ -87,33 +88,21 @@ export const create = (
                 ? generateReject(422, [t('generic.error-missing-data')])
                 : generateReject(404, [t('products.not-found')]);
 
-        /*
-         * Take the stock before writing the order, conditionally per line, exactly as checkout
-         * does — the admin path sells the same shelf the storefront does, and skipping the
-         * decrement here is how a manual order oversells what checkout was carefully guarding.
-         * A failed line puts back what was taken and refuses the whole order.
-         */
-        const taken: { productId: string; quantity: number }[] = [];
-        for (const { item } of resolvedItems) {
-            const ok = await productRepository.decrementStock(item.productId, item.quantity);
-            if (!ok) {
-                for (const line of taken)
-                    await productRepository.incrementStock(line.productId, line.quantity);
-                return generateReject(409, [
-                    {
-                        code: 'ORDER_INSUFFICIENT_STOCK',
-                        message: t('orders.insufficient-stock')
-                    }
-                ]);
-            }
-            taken.push({ productId: item.productId, quantity: item.quantity });
-        }
-
         const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
             product: product!,
             quantity: item.quantity
         }));
 
+        /*
+         * Write the order, then hold its units — the same order of operations the storefront
+         * checkout uses, and forced by the same thing: a hold is keyed by the order it belongs
+         * to, so the order has to exist first.
+         *
+         * The admin path sells the same shelf the storefront does. Skipping the hold here is how
+         * a manually entered order oversells everything the checkout was carefully guarding, so
+         * this goes through exactly the same `reserveForOrder` — one conditional write per line,
+         * all-or-nothing, rolled back by `inventory` if any line cannot be covered.
+         */
         return orderRepository
             .create({
                 userId: toObjectId(userId),
@@ -121,14 +110,26 @@ export const create = (
                 items: orderItems
             })
             .then(async (order) => {
-                // The shelf already moved; the ledger hears why, now that the order has an id.
-                for (const line of taken)
-                    await emitDomainEvent(STOCK_MOVED, {
-                        productId: line.productId,
-                        delta: -line.quantity,
-                        reason: 'order',
-                        reference: String(order._id)
-                    });
+                const outcome = await inventoryService.reserveForOrder(
+                    String(order._id),
+                    resolvedItems.map(({ item }) => ({
+                        productId: item.productId,
+                        quantity: item.quantity
+                    }))
+                );
+                if (!outcome.held) {
+                    // Nothing is held, so the only thing to retract is the order.
+                    await orderRepository.deleteOne(order);
+                    return generateReject(409, [
+                        {
+                            code: 'ORDER_INSUFFICIENT_STOCK',
+                            message: t('orders.insufficient-stock'),
+                            // Which line blocked it, and what is actually on the shelf.
+                            details: { lines: outcome.shortfalls }
+                        }
+                    ]);
+                }
+
                 return generateSuccess(order, 201, t('orders.creation-success'));
             });
     });
@@ -316,19 +317,21 @@ export const cancelById = (
         .then(async (order) => {
             if (order) {
                 /*
-                 * The shelf gets its units back. After the status write, deliberately: the
-                 * conditional move is what guarantees this runs at most once per order — a
-                 * second cancel loses the `$in: ['pending']` match and never reaches here.
+                 * The hold is given back. After the status write, deliberately: the conditional
+                 * move is what guarantees this runs at most once per order — a second cancel
+                 * loses the `$in: ['pending']` match and never reaches here.
+                 *
+                 * That is now belt AND braces, because `releaseForOrder` claims the
+                 * reservation's own status conditionally too. Either guard alone would be
+                 * enough; both exist because the two callers are different — this one is a
+                 * customer cancelling, the sweep is a deadline passing, and they can happen at
+                 * the same moment. Exactly one of them moves the counters.
+                 *
+                 * Whether it released is not checked. An order cancelled after its hold already
+                 * expired is a perfectly ordinary sequence, and there is nothing left to do
+                 * about it: the units are already back.
                  */
-                for (const item of order.items) {
-                    await productRepository.incrementStock(String(item.product._id), item.quantity);
-                    await emitDomainEvent(STOCK_MOVED, {
-                        productId: String(item.product._id),
-                        delta: item.quantity,
-                        reason: 'order-cancelled',
-                        reference: String(order._id)
-                    });
-                }
+                await inventoryService.releaseForOrder(String(order._id));
 
                 // Whoever has to compensate — a refund, above all — hears it from here.
                 await emitDomainEvent(ORDER_CANCELLED, { orderId: String(order._id) });

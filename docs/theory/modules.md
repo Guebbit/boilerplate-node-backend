@@ -387,13 +387,16 @@ flowchart TD
     wishlist --> users
     cart --> account
     cart --> delivery
+    cart --> inventory
     cart --> orders
     cart --> products
     cart --> users
+    payments --> inventory
     payments --> orders
     payments --> users
     delivery --> orders
     delivery --> users
+    orders --> inventory
     orders --> products
     inventory --> products
     account --> users
@@ -409,25 +412,40 @@ flowchart TD
 
 Every arrow is a `dependsOn` — declared, and validated as a **DAG at boot**. Four modules declare
 nothing and are depended on instead (`products`, `users`, `audit-logs`) or by nobody at all
-(`feedback`, `locales`). `cart` is the busiest node with five edges, which is not a smell to
+(`feedback`, `locales`). `cart` is the busiest node with six edges, which is not a smell to
 refactor away: a checkout is the one operation that genuinely needs the catalogue, the customer, the
-order it becomes, the address it ships to and the price of getting it there.
+order it becomes, the units held against it, the address it ships to and the price of getting it
+there.
+
+`inventory` is worth reading as a shape rather than a node. It sits one level above `products` and
+three modules depend on it, because it owns the only writes to the two stock counters: `cart` and
+`orders` ask it to hold units, `payments` asks it to turn a hold into a sale. It used to sit at the
+bottom as a passive listener while four modules each moved stock themselves — the module named
+`inventory` did not own inventory — and inverting that is what the arrows now record.
 
 The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
 exactly the edge that would have made the import graph a cycle:
 
-| Event                  | Emitted by | Handled by                    |
-| ---------------------- | ---------- | ----------------------------- |
-| `product.deleted`      | `products` | `cart`, `wishlist`            |
-| `product.stock_moved`  | `products` | `inventory`                   |
-| `user.deleted`         | `users`    | `cart`, `wishlist`, `account` |
-| `order.status_changed` | `orders`   | `delivery` (on `shipped`)     |
-| `order.cancelled`      | `orders`   | `payments` (refunds)          |
+| Event                           | Emitted by  | Handled by                    |
+| ------------------------------- | ----------- | ----------------------------- |
+| `product.deleted`               | `products`  | `cart`, `wishlist`            |
+| `user.deleted`                  | `users`     | `cart`, `wishlist`, `account` |
+| `order.status_changed`          | `orders`    | `delivery` (on `shipped`)     |
+| `order.cancelled`               | `orders`    | `payments` (refunds)          |
+| `inventory.reservation_expired` | `inventory` | `orders` (cancels the order)  |
 
-Note who emits: every one comes from a module that declares **no** `dependsOn` edge of its own, or
-from `orders`, which declares only `products`. That is the pattern rather than a coincidence — a
-module low in the graph cannot import its dependants, so an event is the only way for it to tell
-them anything.
+Note who emits: every one comes from a module low in the import graph telling a module above it
+something, because a module cannot import its own dependants. `inventory.reservation_expired` is the
+clearest case — the sweep releases the units itself and needs nobody's help for that, but cancelling
+the order behind the hold belongs to `orders`, which already imports `inventory`. An import back
+would be the cycle the registry refuses to boot, so it is announced instead.
+
+There is deliberately **no** stock event, and there used to be. `product.stock_moved` was emitted by
+whoever had just changed a count, with `inventory` listening and writing a ledger row — which made
+the row a REACTION to the write rather than half of it, so every mover had to remember to announce
+on every path, and on the rollback paths they did not. A counter change nobody recorded is not a
+smaller feature, it is a corrupt audit trail. The row is now written by the same function call that
+moves the counter and cannot be forgotten, because there is nothing left to forget.
 
 Every solid arrow also carries a **kind**: `conformist`, `customer-supplier`, `published-language`
 or `shared-kernel`. That label is what makes the map answer "what does changing `products` cost?"

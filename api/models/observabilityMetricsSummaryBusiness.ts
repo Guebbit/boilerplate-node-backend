@@ -26,4 +26,6 @@ export type ObservabilityMetricsSummaryBusiness = {
   ordersCreated?: number;
   /** @minimum 0 */
   lowStockProducts?: number;
+  /** @minimum 0 */
+  reservedUnits?: number;
 };

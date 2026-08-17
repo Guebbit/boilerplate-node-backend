@@ -299,9 +299,16 @@ components:
                     properties:
                         checkoutSuccess: { type: integer, minimum: 0 }
                         ordersCreated: { type: integer, minimum: 0 }
-                        # Products at or under NODE_LOW_STOCK_THRESHOLD, recounted at read time.
-                        # Zero in builds without the inventory module.
+                        # Products whose AVAILABLE units are at or under NODE_LOW_STOCK_THRESHOLD,
+                        # recounted at read time. Availability rather than units on hand: a
+                        # product with forty units all reserved is out of stock to every customer
+                        # looking at it. Zero in builds without the inventory module.
                         lowStockProducts: { type: integer, minimum: 0 }
+                        # Units held by open reservations across the catalogue. A steadily
+                        # climbing figure against flat sales means holds are being opened and
+                        # never resolved — abandoned checkouts the sweep is not reaching, or a
+                        # payment integration that has stopped confirming.
+                        reservedUnits: { type: integer, minimum: 0 }
                 database:
                     type: object
                     additionalProperties: false

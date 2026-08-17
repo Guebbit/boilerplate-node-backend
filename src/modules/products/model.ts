@@ -13,6 +13,11 @@ import type { Product } from '@types';
  * swapped from ISO strings to real `Date`s, which is the one thing storage genuinely disagrees with
  * the wire about.
  *
+ * `available` is omitted rather than inherited, for the reason `orders` omits its three totals: it
+ * is required on the wire but never persisted — `applyProductTransform` derives it from `onHand`
+ * and `reserved` at serialization time — so declaring it here would claim a stored column that
+ * does not exist, and every producer of a snapshot would have to invent a value for it.
+ *
  * It exists separately from `ProductDocument` because a product is stored in two places, and only
  * one of them is a document. `orders` EMBEDS a copy of this on every line item, and an embedded
  * subdocument has none of `Document`'s 54 methods. Typing that copy as `ProductDocument` was an
@@ -22,7 +27,7 @@ import type { Product } from '@types';
  */
 export interface ProductSnapshot extends Omit<
     Product,
-    'id' | 'createdAt' | 'updatedAt' | 'deletedAt'
+    'id' | 'available' | 'createdAt' | 'updatedAt' | 'deletedAt'
 > {
     /** Spelled exactly as Mongoose spells it on a document, so `ProductDocument` can extend this. */
     _id: Types.ObjectId;
@@ -90,17 +95,27 @@ export const productSchema = new Schema<ProductDocument, ProductModel, ProductMe
             required: true
         },
         /*
-         * Units the shop can still sell. Written ONLY through the repository's conditional
-         * `adjustStock` helpers outside the admin product form — checkout decrements, a customer
-         * cancel restores — so no read-modify-write ever races two buyers over the last unit.
-         * `default: 100`, declared in `openapi.yaml` on both create bodies: a demo's new product
-         * exists to be bought, and an undeclared default is one the paired frontend's mock has
-         * to guess at. Existing rows are backfilled by
-         * `db/migrations/20260813091000-product-stock-column.js`.
+         * The two counters. `onHand` is how many units exist; `reserved` is how many of them an
+         * open order has claimed. What a customer may buy is neither — it is the difference,
+         * derived at serialization below rather than stored, so it cannot drift from its inputs.
+         *
+         * A single `stock` column could not tell those apart: it had to be decremented the instant
+         * an order was placed, so an unpaid order removed units from the world rather than merely
+         * spoken for them.
+         *
+         * NEITHER IS WRITTEN HERE, or by this module. Every change goes through
+         * `@modules/inventory`, which owns the transitions, writes them conditionally, and records
+         * each in its ledger. This module declares the columns because it owns the collection; it
+         * does not decide what they may become.
          */
-        stock: {
+        onHand: {
             type: Number,
             default: 100,
+            min: 0
+        },
+        reserved: {
+            type: Number,
+            default: 0,
             min: 0
         },
         description: {
@@ -158,11 +173,36 @@ productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
 
 /**
- * Normalizes a serialized product: `_id` → `id`, drops `__v`.
+ * Derives `available` — what a customer may actually buy — from the two stored counters.
+ *
+ * Done at the single serialization point every product response passes through, exactly as
+ * `orders` derives its three totals, so the listing, the detail read, both write paths and the
+ * embedded snapshots on an order all agree. That agreement is what lets `openapi.yaml` declare
+ * the field at all.
+ *
+ * Derived rather than stored on purpose. A third column would have to be kept correct by every
+ * writer of the other two, which is precisely the class of drift this rework exists to remove:
+ * a number that is computed cannot be stale, and `available` is only ever one subtraction away.
+ *
+ * Clamped at zero. `reserved > onHand` should be unreachable — every transition in
+ * `@modules/inventory` is conditional on it staying false — but "should be unreachable" is not
+ * a reason to serve a negative count to a storefront that will render it.
+ */
+const applyProductAvailability = (serialized: Record<string, unknown>) => {
+    const onHand = typeof serialized.onHand === 'number' ? serialized.onHand : 0;
+    const reserved = typeof serialized.reserved === 'number' ? serialized.reserved : 0;
+    serialized.available = Math.max(0, onHand - reserved);
+};
+
+/**
+ * Normalizes a serialized product: the shared `_id` → `id` and `__v` removal, plus this
+ * collection's own job — deriving `available` from `onHand` and `reserved`.
  * Exported so lean/aggregate results (which bypass `toJSON`) can be mapped
  * through the same logic — see `./service` `search()`.
  */
-export const applyProductTransform = applySerialization(productSchema);
+export const applyProductTransform = applySerialization(productSchema, {
+    after: applyProductAvailability
+});
 
 /**
  * Mongoose model for product CRUD operations.

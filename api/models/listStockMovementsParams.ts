@@ -19,10 +19,30 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Id } from './id';
+import type { Page } from './page';
+import type { PageParamParameter } from './pageParamParameter';
+import type { PageSize } from './pageSize';
+import type { PageSizeParamParameter } from './pageSizeParamParameter';
+import type { StockMovementReason } from './stockMovementReason';
 
 export type ListStockMovementsParams = {
+/**
+ * 1-based page index
+ * @minimum 1
+ */
+page?: PageParamParameter;
+/**
+ * Optional override; server may clamp to a max
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: PageSizeParamParameter;
 /**
  * Narrow to one product's movements
  */
 productId?: Id;
+/**
+ * Narrow to one kind of transition
+ */
+reason?: StockMovementReason;
 };

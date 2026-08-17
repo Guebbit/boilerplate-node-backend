@@ -18,13 +18,14 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Id } from './id';
+import type { EnvelopeMessage } from './envelopeMessage';
+import type { EnvelopeStatus } from './envelopeStatus';
+import type { EnvelopeSuccess } from './envelopeSuccess';
+import type { ReservationSweepResponse } from './reservationSweepResponse';
 
-export interface RestockResponse {
-  productId: Id;
-  /**
-     * The shelf count after the units landed.
-     * @minimum 0
-     */
-  stock: number;
+export interface ReservationSweepEnvelope {
+  success: EnvelopeSuccess;
+  status: EnvelopeStatus;
+  message: EnvelopeMessage;
+  data: ReservationSweepResponse;
 }

@@ -48,7 +48,7 @@ export const productFixtures = [
         title: 'Sallyno Panino',
         description: 'Piccolo Sallyno panino. Da mangiare di coccole',
         price: 100,
-        stock: 25,
+        onHand: 25,
         categories: ['food'],
         tags: ['sallyno', 'cute'],
         imageUrl: '/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg'
@@ -64,22 +64,26 @@ export const productFixtures = [
         title: 'Sallyno Carino',
         description: 'Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.',
         price: 50,
-        stock: 10,
+        onHand: 10,
         categories: ['pets'],
         tags: ['sallyno', 'illegal'],
         imageUrl: '/images/seed/96346b77daf138a279677cb75c400ee9.jpg',
         deletedAt: '2024-02-26T23:34:44.832Z'
     }),
     /*
-     * `stock: 0` on purpose. The storefront needs an out-of-stock badge to render and checkout
+     * `onHand: 0` on purpose. The storefront needs an out-of-stock badge to render and checkout
      * needs a refusal to demonstrate; a dataset where nothing is ever scarce can exercise neither.
+     * Note that it is the ONHAND that is zero, not merely the availability — this row is out of
+     * stock because there is nothing there. The other way to be unbuyable, units present but all
+     * spoken for, is deliberately NOT seeded: it only exists once someone has checked out, and
+     * `orders/seeds.ts` explains why inventing it here would be both racy and untrue.
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.micionaOutOfStock,
         title: 'Miciona inutile',
         description: 'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire',
         price: 1,
-        stock: 0,
+        onHand: 0,
         categories: ['pets'],
         tags: ['micini', 'useless'],
         imageUrl: '/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg'
@@ -89,7 +93,7 @@ export const productFixtures = [
         title: 'Micino pufettino',
         description: 'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.',
         price: 77,
-        stock: 40,
+        onHand: 40,
         categories: ['pets'],
         tags: ['micini', 'cute', 'illegal'],
         imageUrl: '/images/seed/f12ba2e44fe347010397f1dcba399808.jpg'
@@ -101,7 +105,7 @@ export const productFixtures = [
         title: 'Bundle micini',
         description: 'Produttori di rumori molesti a tutte le ore. Inactive product.',
         price: 40,
-        stock: 15,
+        onHand: 15,
         categories: ['pets', 'bundles'],
         tags: ['micini', 'noisy'],
         active: false,

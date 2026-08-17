@@ -15,26 +15,23 @@ declare module '@kernel/events' {
          * the product was soft-deleted, and re-adding them is the user's call, not the catalogue's.
          */
         'product.deleted': { productId: string };
-
-        /**
-         * Units moved on a shelf, with the WHY attached — the fact an inventory ledger exists
-         * to record. Emitted by whoever knows the reason (the checkout, a cancel, an admin
-         * form, a restock), always AFTER the write: a movement is a fact, and the conditional
-         * stock writes already decided which requests moved anything. `delta` is signed;
-         * `reference` is the order (or nothing, for corrections).
-         */
-        'product.stock_moved': {
-            productId: string;
-            delta: number;
-            reason: 'order' | 'order-cancelled' | 'adjustment' | 'restock';
-            reference?: string;
-        };
     }
 }
+
+/*
+ * There is deliberately no stock event, and there used to be.
+ *
+ * `product.stock_moved` made the ledger row a REACTION to a counter change rather than half of
+ * it, so every mover had to remember to announce on every path — and on the rollback paths they
+ * did not. A counter change nobody recorded is a corrupt audit trail, not a smaller feature. The
+ * row is now written by the same call that moves the counter, in `@modules/inventory`.
+ *
+ * `product.deleted` stays an event because a listener genuinely is optional: a shop whose carts
+ * never dropped their references still works, just worse.
+ */
 
 /**
  * The event names, exported through the barrel so an emitter and its listeners share one
  * spelling rather than two string literals that typo independently.
  */
 export const PRODUCT_DELETED = 'product.deleted';
-export const STOCK_MOVED = 'product.stock_moved';

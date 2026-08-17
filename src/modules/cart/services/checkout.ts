@@ -21,8 +21,7 @@ import {
     type OrderDocument
 } from '@modules/orders';
 import { userRepository } from '@modules/users';
-import { productRepository, STOCK_MOVED } from '@modules/products';
-import { emitDomainEvent } from '@kernel/events';
+import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/account';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
 import { cartRepository } from '../repository';
@@ -30,28 +29,14 @@ import { evaluateCheckout } from '../domain';
 import { isJoined, readCartLines, type JoinedCartLine } from './view';
 
 /**
- * Decrement every line's stock, or none of it.
+ * The basket as `inventory` wants it — product ids and quantities, nothing else. Mapping here
+ * rather than handing over the cart lines is what keeps `inventory` from learning what a cart is.
  *
- * Sequential and conditional per line: mongod holds each product while checking
- * `stock >= quantity`, so two checkouts racing the last unit resolve there. A line that fails
- * puts back everything taken so far — no transaction, same reasoning as the checkout's own
- * conditional cart clear: the write shape carries the guarantee.
- *
- * @returns whether every line was taken
+ * @param lines - the checkout's resolved lines
+ * @returns the same lines as stock claims
  */
-const takeStock = async (lines: readonly JoinedCartLine[]): Promise<boolean> => {
-    const taken: JoinedCartLine[] = [];
-
-    for (const line of lines) {
-        const ok = await productRepository.decrementStock(String(line.productId), line.quantity);
-        if (!ok) {
-            await restoreStock(taken);
-            return false;
-        }
-        taken.push(line);
-    }
-    return true;
-};
+const toStockLines = (lines: readonly JoinedCartLine[]) =>
+    lines.map((line) => ({ productId: String(line.productId), quantity: line.quantity }));
 
 /**
  * The snapshot an order embeds, from a book entry: the shipment's fields, none of the book's.
@@ -65,12 +50,6 @@ const toShippingAddress = (address: AddressItem) => ({
     country: address.country,
     ...(address.phone === undefined ? {} : { phone: address.phone })
 });
-
-/** Put every line's units back — the failure paths' half of `takeStock`'s invariant. */
-const restoreStock = async (lines: readonly JoinedCartLine[]): Promise<void> => {
-    for (const line of lines)
-        await productRepository.incrementStock(String(line.productId), line.quantity);
-};
 
 /**
  * Create order from current user cart and empty the cart.
@@ -164,7 +143,10 @@ export const orderConfirm = (
                             return generateReject(409, [
                                 {
                                     code: 'CART_INSUFFICIENT_STOCK',
-                                    message: t('cart.insufficient-stock')
+                                    message: t('cart.insufficient-stock'),
+                                    // Every short line, so the customer fixes the basket in one
+                                    // pass instead of one refusal per line.
+                                    details: { lines: verdict.shortfalls }
                                 }
                             ]);
                         return generateReject(404, [
@@ -177,101 +159,105 @@ export const orderConfirm = (
 
                     const joined = lines.filter((line) => isJoined(line));
 
+                    const orderItems = joined.map(({ product, quantity }) => ({
+                        product,
+                        quantity
+                    }));
+
                     /*
-                     * Take the stock BEFORE writing the order, under the same discipline as the
-                     * cart-clearing guard: the conditional decrement is what holds when two
-                     * checkouts race the last unit (the verdict above was only the pre-flight).
-                     * On a failed line the units already taken go back, so a refused checkout
-                     * leaves the shelf exactly as it found it. Every later failure path below
-                     * restores too — the invariant is "stock moved if and only if the order
-                     * stands".
+                     * The order is written first, and the units are held against it. Forced
+                     * rather than chosen: a hold is keyed by the order's id, and that key is what
+                     * makes reserving exactly once. It is also the safer half — an order that
+                     * briefly exists and is retracted is recoverable, units taken with nothing
+                     * recording who took them are not.
                      */
-                    return takeStock(joined).then((stocked) => {
-                        if (!stocked)
-                            return generateReject(409, [
-                                {
-                                    code: 'CART_INSUFFICIENT_STOCK',
-                                    message: t('cart.insufficient-stock')
-                                }
-                            ]);
-
-                        const orderItems = joined.map(({ product, quantity }) => ({
-                            product,
-                            quantity
-                        }));
-
-                        return orderRepository
-                            .create({
-                                userId: new Types.ObjectId(user.id),
-                                email: user.email,
-                                items: orderItems,
-                                ...(address ? { shippingAddress: toShippingAddress(address) } : {}),
-                                // The cost frozen against THESE lines' total — the free-above
-                                // rule prices the basket being bought, not a later edit of it.
-                                ...(shippingMethod
-                                    ? {
-                                          shippingMethod: shippingMethod.id,
-                                          shippingCost: priceShipping(
-                                              shippingMethod,
-                                              sumLineItems(orderItems).price
-                                          )
-                                      }
-                                    : {})
-                            } as Partial<OrderDocument>)
-                            .then((order) =>
-                                cartRepository
-                                    .clearLinesIfUnchanged(userId, version)
-                                    .then(async (clearedCart) => {
-                                        if (clearedCart) {
-                                            /*
-                                             * The ledger hears the sale only now: the failure
-                                             * paths below put every unit back, and a movement
-                                             * that was fully undone is not a fact worth a row.
-                                             */
-                                            for (const line of joined)
-                                                await emitDomainEvent(STOCK_MOVED, {
-                                                    productId: String(line.productId),
-                                                    delta: -line.quantity,
-                                                    reason: 'order',
-                                                    reference: String(order._id)
-                                                });
-                                            /*
-                                             * The confirmation, from the service unlike every
-                                             * other email: only this point knows the order stood,
-                                             * and only here is the recipient's record in scope —
-                                             * the email goes out in the customer's own language,
-                                             * not the request's.
-                                             */
-                                            const mail = orderConfirmEmail(
-                                                user.locale ?? getDefaultLocale(),
-                                                user.username,
-                                                order
-                                            );
-                                            void enqueueEmail(
-                                                { to: user.email, subject: mail.subject },
-                                                mail.template,
-                                                mail.data
-                                            );
-                                            return generateSuccess<OrderDocument>(order);
-                                        }
-
-                                        // Lost the race: retract the order this request wrote
-                                        // and put its units back, so the cart's contents end up
-                                        // on exactly one of them and the shelf agrees.
-                                        return orderRepository
-                                            .deleteOne(order)
-                                            .then(() => restoreStock(joined))
-                                            .then(() =>
-                                                generateReject(409, [
-                                                    {
-                                                        code: 'CART_CHANGED',
-                                                        message: t('cart.changed')
-                                                    }
-                                                ])
-                                            );
-                                    })
+                    return orderRepository
+                        .create({
+                            userId: new Types.ObjectId(user.id),
+                            email: user.email,
+                            items: orderItems,
+                            ...(address ? { shippingAddress: toShippingAddress(address) } : {}),
+                            // The cost frozen against THESE lines' total — the free-above
+                            // rule prices the basket being bought, not a later edit of it.
+                            ...(shippingMethod
+                                ? {
+                                      shippingMethod: shippingMethod.id,
+                                      shippingCost: priceShipping(
+                                          shippingMethod,
+                                          sumLineItems(orderItems).price
+                                      )
+                                  }
+                                : {})
+                        } as Partial<OrderDocument>)
+                        .then(async (order) => {
+                            /*
+                             * Hold the units. The verdict above was only the pre-flight; this is
+                             * the half that holds under concurrency, and a loser gets `false`
+                             * with nothing half-held — the reserve rolls its own lines back.
+                             *
+                             * The units are not SOLD here. They stay on the shelf until the
+                             * payment lands or the hold ends, so an unpaid order no longer
+                             * removes stock from the world.
+                             */
+                            const outcome = await inventoryService.reserveForOrder(
+                                String(order._id),
+                                toStockLines(joined)
                             );
-                    });
+                            if (!outcome.held) {
+                                // Nothing is held, so the only thing to retract is the order.
+                                await orderRepository.deleteOne(order);
+                                return generateReject(409, [
+                                    {
+                                        code: 'CART_INSUFFICIENT_STOCK',
+                                        message: t('cart.insufficient-stock'),
+                                        // What actually blocked it, read at the moment it
+                                        // refused. Without this the customer is editing a cart
+                                        // by trial and error.
+                                        details: { lines: outcome.shortfalls }
+                                    }
+                                ]);
+                            }
+
+                            return cartRepository
+                                .clearLinesIfUnchanged(userId, version)
+                                .then(async (clearedCart) => {
+                                    if (clearedCart) {
+                                        /*
+                                         * The confirmation, from the service unlike every
+                                         * other email: only this point knows the order stood,
+                                         * and only here is the recipient's record in scope —
+                                         * the email goes out in the customer's own language,
+                                         * not the request's.
+                                         */
+                                        const mail = orderConfirmEmail(
+                                            user.locale ?? getDefaultLocale(),
+                                            user.username,
+                                            order
+                                        );
+                                        void enqueueEmail(
+                                            { to: user.email, subject: mail.subject },
+                                            mail.template,
+                                            mail.data
+                                        );
+                                        return generateSuccess<OrderDocument>(order);
+                                    }
+
+                                    // Lost the race: give the hold back and retract the order
+                                    // this request wrote, so the cart's contents end up on
+                                    // exactly one of them and the shelf agrees.
+                                    return inventoryService
+                                        .releaseForOrder(String(order._id))
+                                        .then(() => orderRepository.deleteOne(order))
+                                        .then(() =>
+                                            generateReject(409, [
+                                                {
+                                                    code: 'CART_CHANGED',
+                                                    message: t('cart.changed')
+                                                }
+                                            ])
+                                        );
+                                });
+                        });
                 });
             });
         })

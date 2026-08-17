@@ -186,8 +186,8 @@ Both halves are live:
 
 ### The folder is optional
 
-Three modules have one — `orders`, `cart` and `delivery` — out of thirteen. Creating an empty
-`domain/` to match a shape is how ceremony starts.
+A few modules have one — `orders`, `cart`, `delivery` and `inventory` — out of thirteen. Creating
+an empty `domain/` to match a shape is how ceremony starts.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
 two pure functions, `findShippingMethod` and `priceShipping`, and they are the module's _entire_
@@ -196,6 +196,14 @@ barrel: a sibling prices a shipping method without learning that shipments, cour
 ever quoting different numbers — there is one function and both call it — and it is a published
 language rather than a handle on this module's storage, which is the distinction
 [Strategic DDD](./strategic-ddd.md) draws between kinds of dependency edge.
+
+**`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
+itself.** It is one table mapping each of the six stock transitions to the pair of counter deltas
+it implies, plus the subtraction that defines availability. Nothing about it needs a database, and
+everything that does — the conditional writes, the ledger row, the reservation lifecycle — reads
+the table rather than restating it. The service's `writerFor` is deliberately a second short table
+beside it, so "which write performs a transition" and "what that transition costs" can be read
+against each other; `tests/unit/transitions.test.ts` asserts they agree for every reason.
 
 ---
 

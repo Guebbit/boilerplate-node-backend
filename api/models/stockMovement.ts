@@ -24,12 +24,13 @@ import type { StockMovementReason } from './stockMovementReason';
 export interface StockMovement {
   id: Id;
   productId: Id;
-  /** Signed — a sale is negative, a return or restock positive. */
-  delta: number;
-  /** Why the units moved. */
   reason: StockMovementReason;
-  /** What caused it, when something did — the order id, typically. */
+  onHandDelta: number;
+  reservedDelta: number;
+  /** The order the movement belongs to, when one does. */
   reference?: string;
+  /** Why an adjustment was made — the operator's own words. */
+  note?: string;
   createdAt?: string;
   updatedAt?: string;
 }

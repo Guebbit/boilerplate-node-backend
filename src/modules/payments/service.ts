@@ -8,6 +8,10 @@
  *    how PSPs work — the money is taken before your database hears about it), and if the order
  *    slipped away in between (cancelled, already paid by a racing tab) the charge is refunded
  *    on the spot. Money moved if and only if the order says `paid`.
+ *
+ *    That same gate is what commits the order's held stock. Units are held from checkout and
+ *    only actually leave when the money lands, so an unpaid order costs the shop availability
+ *    for the length of its reservation window and nothing more.
  * 3. A refund answers a fact, never a plan: `ORDER_CANCELLED` arrives after the cancel is on
  *    disk, and the conditional `succeeded → refunded` move makes the refund at-most-once.
  */
@@ -22,6 +26,7 @@ import {
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { orderService, orderRepository, sumLineItems, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { inventoryService } from '@modules/inventory';
 import { userRepository } from '@modules/users';
 import { resolvePaymentProvider, type CardDetails } from './providers';
 import { paymentRepository } from './repository';
@@ -170,6 +175,17 @@ export const confirmPayment = (
             'succeeded',
             { cardLast4 }
         );
+
+        /*
+         * The units finally leave. Until now they were HELD — unavailable since checkout, still
+         * on the shelf, still recoverable if the customer never paid.
+         *
+         * After the order move, for the same reason rule 2 gives for the charge: the conditional
+         * `pending → paid` is what makes this at most once. The answer is not checked — `false`
+         * means an expiry sweep beat the payment to the hold, which this module cannot fix and
+         * `inventory` logs; the customer has a paid order either way.
+         */
+        await inventoryService.commitForOrder(String(payment.orderId));
 
         await emitDomainEvent(ORDER_STATUS_CHANGED, {
             orderId: String(payment.orderId),

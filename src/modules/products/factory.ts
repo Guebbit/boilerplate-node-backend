@@ -4,9 +4,9 @@
  *
  * ## What a factory deliberately does NOT do
  *
- * It does not restate the schema's defaults. `stock`, `active`, `description`, `imageUrl`,
- * `categories` and `tags` all have a `default:` in `./model`, so a caller who says nothing about
- * them gets no key at all and Mongoose fills it in.
+ * It does not restate the schema's defaults. `onHand`, `reserved`, `active`, `description`,
+ * `imageUrl`, `categories` and `tags` all have a `default:` in `./model`, so a caller who says
+ * nothing about them gets no key at all and Mongoose fills it in.
  *
  * That omission is the point. `scripts/export-seed.ts` reads the seeded rows back out through the
  * real serializer, so `dataset.json` records what the schema actually does — and the paired
@@ -31,9 +31,14 @@ import type { ProductDocument, ProductSnapshot } from './model';
 /**
  * What a caller may pin. Everything absent is left to the schema.
  *
- * Derived from the generated `Product`, not restated: `openapi.yaml` is what says a product has a
- * `stock` and a `tags`, and a hand-written copy of that list here would be a second declaration no
+ * Derived from the generated `Product`, not restated: `openapi.yaml` is what says a product has an
+ * `onHand` and a `tags`, and a hand-written copy of that list here would be a second declaration no
  * contract change can reach. `deletedAt` widens to accept a `Date` — see `OverridesFor`.
+ *
+ * `available` comes along from `Product` and pinning it in a fixture does nothing: it is not a
+ * schema path, so Mongoose's strict mode drops it on the way in, and the serializer recomputes it
+ * from the counters on the way out. A test that wants a specific availability sets `onHand` and
+ * `reserved`, which is the pair that actually decides it.
  */
 export type ProductOverrides = OverridesFor<Product>;
 
