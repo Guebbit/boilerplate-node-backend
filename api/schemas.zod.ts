@@ -104,6 +104,14 @@ export const GetObservabilityEventsResponse = zod.unknown()
  */
 export const getObservabilityHealthResponseDataUptimeSecondsMin = 0;
 
+export const getObservabilityHealthResponseDataMemoryRssMin = 0;
+
+export const getObservabilityHealthResponseDataMemoryHeapUsedMin = 0;
+
+export const getObservabilityHealthResponseDataMemoryHeapTotalMin = 0;
+
+export const getObservabilityHealthResponseDataMemoryExternalMin = 0;
+
 
 
 export const GetObservabilityHealthResponse = zod.object({
@@ -127,10 +135,11 @@ export const GetObservabilityHealthResponse = zod.object({
   "faro": zod.boolean().optional()
 }).optional(),
   "memory": zod.object({
-  "heapUsedMb": zod.number(),
-  "heapTotalMb": zod.number(),
-  "rssMb": zod.number()
-}).optional(),
+  "rss": zod.number().min(getObservabilityHealthResponseDataMemoryRssMin),
+  "heapUsed": zod.number().min(getObservabilityHealthResponseDataMemoryHeapUsedMin),
+  "heapTotal": zod.number().min(getObservabilityHealthResponseDataMemoryHeapTotalMin),
+  "external": zod.number().min(getObservabilityHealthResponseDataMemoryExternalMin)
+}).optional().describe('Process memory in BYTES, exactly as `process.memoryUsage()` reports it, published identically by every payload that describes this process.\nBytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module\'s `asyncapi.yaml`. The two documents cannot `$ref` each other, so `tests\/cross-cutting\/process-snapshot.test.ts` asserts they stay identical.'),
   "system": zod.object({
   "platform": zod.string(),
   "cpuCount": zod.number(),
@@ -185,7 +194,13 @@ export const getObservabilityMetricsOverviewResponseDataDatabaseErrorsTotalMin =
 
 export const getObservabilityMetricsOverviewResponseDataProcessUptimeSecondsMin = 0;
 
-export const getObservabilityMetricsOverviewResponseDataProcessHeapUsedMbMin = 0;
+export const getObservabilityMetricsOverviewResponseDataProcessMemoryRssMin = 0;
+
+export const getObservabilityMetricsOverviewResponseDataProcessMemoryHeapUsedMin = 0;
+
+export const getObservabilityMetricsOverviewResponseDataProcessMemoryHeapTotalMin = 0;
+
+export const getObservabilityMetricsOverviewResponseDataProcessMemoryExternalMin = 0;
 
 
 
@@ -221,7 +236,12 @@ export const GetObservabilityMetricsOverviewResponse = zod.object({
 }),
   "process": zod.object({
   "uptimeSeconds": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessUptimeSecondsMin).optional(),
-  "heapUsedMb": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessHeapUsedMbMin).optional()
+  "memory": zod.object({
+  "rss": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessMemoryRssMin),
+  "heapUsed": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessMemoryHeapUsedMin),
+  "heapTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessMemoryHeapTotalMin),
+  "external": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessMemoryExternalMin)
+}).optional().describe('Process memory in BYTES, exactly as `process.memoryUsage()` reports it, published identically by every payload that describes this process.\nBytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module\'s `asyncapi.yaml`. The two documents cannot `$ref` each other, so `tests\/cross-cutting\/process-snapshot.test.ts` asserts they stay identical.')
 }),
   "timestamp": zod.iso.datetime({"offset":true})
 })

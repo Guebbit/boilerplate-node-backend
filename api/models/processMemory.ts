@@ -19,8 +19,17 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export interface ObservabilityHealthMemory {
-  heapUsedMb: number;
-  heapTotalMb: number;
-  rssMb: number;
+/**
+ * Process memory in BYTES, exactly as `process.memoryUsage()` reports it, published identically by every payload that describes this process.
+ * Bytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module's `asyncapi.yaml`. The two documents cannot `$ref` each other, so `tests/cross-cutting/process-snapshot.test.ts` asserts they stay identical.
+ */
+export interface ProcessMemory {
+  /** @minimum 0 */
+  rss: number;
+  /** @minimum 0 */
+  heapUsed: number;
+  /** @minimum 0 */
+  heapTotal: number;
+  /** @minimum 0 */
+  external: number;
 }

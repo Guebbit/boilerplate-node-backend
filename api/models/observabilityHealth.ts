@@ -20,9 +20,9 @@
  */
 import type { ObservabilityHealthDatabase } from './observabilityHealthDatabase';
 import type { ObservabilityHealthIntegrations } from './observabilityHealthIntegrations';
-import type { ObservabilityHealthMemory } from './observabilityHealthMemory';
 import type { ObservabilityHealthStatus } from './observabilityHealthStatus';
 import type { ObservabilityHealthSystem } from './observabilityHealthSystem';
+import type { ProcessMemory } from './processMemory';
 
 export interface ObservabilityHealth {
   status: ObservabilityHealthStatus;
@@ -33,7 +33,7 @@ export interface ObservabilityHealth {
   uptimeSeconds: number;
   database: ObservabilityHealthDatabase;
   integrations?: ObservabilityHealthIntegrations;
-  memory?: ObservabilityHealthMemory;
+  memory?: ProcessMemory;
   system?: ObservabilityHealthSystem;
   timestamp: string;
 }

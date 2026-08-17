@@ -149,10 +149,16 @@ describe('the SSE metrics stream', () => {
             expect(timestamp).toBe(new Date(timestamp).toISOString());
         });
 
-        it('rounds uptime to whole seconds', async () => {
+        it('floors uptime to whole seconds, like every other payload that publishes it', async () => {
+            /*
+             * Floor rather than round, and that is the whole point of the shared reader in
+             * `infrastructure/observability/process-snapshot.ts`. A dashboard shows this frame
+             * beside `GET /observability/health`; while this one rounded and that one floored, the
+             * two reported uptimes a second apart with nothing wrong in either.
+             */
             jest.spyOn(process, 'uptime').mockReturnValue(12.7);
 
-            await expect(buildObservabilityPayload()).resolves.toMatchObject({ uptimeSeconds: 13 });
+            await expect(buildObservabilityPayload()).resolves.toMatchObject({ uptimeSeconds: 12 });
         });
     });
 

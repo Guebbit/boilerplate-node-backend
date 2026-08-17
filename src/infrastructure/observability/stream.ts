@@ -17,6 +17,7 @@ import {
     type ObservabilityChannel
 } from '@types';
 import { getHttpRequestCounters } from '@infrastructure/observability/metrics-http';
+import { processSnapshot } from '@infrastructure/observability/process-snapshot';
 
 /**
  * In-memory set of active SSE response objects — one entry per connected client.
@@ -66,25 +67,16 @@ export const getActiveSseClients = (): number => sseClients.size;
  * Merges Node.js memory stats with HTTP counters and realtime connection counts.
  */
 export const buildObservabilityPayload = (): Promise<ObservabilityMetricsPayload> => {
-    // Synchronous snapshot of V8/process memory, taken before the async counter read so all
-    // numbers in one frame describe roughly the same instant.
-    const memoryUsage = process.memoryUsage();
+    // Read synchronously before the async counter read, so all numbers in one frame describe
+    // roughly the same instant. What each memory field means is documented where it is read.
+    const snapshot = processSnapshot();
     return getHttpRequestCounters().then((counters) => ({
         // ISO-8601 so the client can compute its own clock skew and staleness.
         timestamp: new Date().toISOString(),
-        // Seconds since process start; rounded because sub-second precision is noise here.
-        uptimeSeconds: Math.round(process.uptime()),
-        memory: {
-            // Resident Set Size — total physical memory held by the process, the number that
-            // matters against a container memory limit.
-            rss: memoryUsage.rss,
-            // Live JS objects. Steady growth across restarts-free uptime = likely leak.
-            heapUsed: memoryUsage.heapUsed,
-            // Heap currently allocated from the OS (`heapUsed` <= `heapTotal`).
-            heapTotal: memoryUsage.heapTotal,
-            // Off-heap memory bound to JS objects — Buffers, and native addon allocations.
-            external: memoryUsage.external
-        },
+        uptimeSeconds: snapshot.uptimeSeconds,
+        // Bytes, the same four fields the two REST endpoints publish. The client differences
+        // consecutive frames, which is why nothing here is rounded to megabytes.
+        memory: snapshot.memory,
         http: {
             // Cumulative since boot (see `getHttpRequestCounters`), so the *client* derives
             // rates by differencing consecutive frames.

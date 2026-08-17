@@ -358,9 +358,10 @@ items:
                         "faro": true
                       },
                       "memory": {
-                        "heapUsedMb": 1,
-                        "heapTotalMb": 1,
-                        "rssMb": 1
+                        "rss": 0,
+                        "heapUsed": 0,
+                        "heapTotal": 0,
+                        "external": 0
                       },
                       "system": {
                         "platform": "string",
@@ -595,7 +596,12 @@ items:
                       },
                       "process": {
                         "uptimeSeconds": 0,
-                        "heapUsedMb": 0
+                        "memory": {
+                          "rss": 0,
+                          "heapUsed": 0,
+                          "heapTotal": 0,
+                          "external": 0
+                        }
                       },
                       "timestamp": "2026-01-01T00:00:00.000Z"
                     }
