@@ -21,8 +21,8 @@ import { productRepository } from './repository';
  * The catalogue ids, named by what makes each row worth having.
  *
  * `cart`, `wishlist` and `orders` all seed rows pointing at products, and all three declare a
- * `conformist` edge on this module, so they read these through `@modules/products` rather than
- * repeating a hex string. Naming them is the part that pays: `wishlist` saying it stores
+ * `conformist` edge on this module, so they read these through `@modules/products/seeds` rather
+ * than repeating a hex string. Naming them is the part that pays: `wishlist` saying it stores
  * `panino` and `pufettino` makes "only publicly visible products are saved" checkable by eye,
  * where `65dc8a99…` and `65dcdec2…` made it a claim in a comment.
  */
@@ -112,6 +112,25 @@ export const productFixtures = [
         imageUrl: '/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg'
     })
 ];
+
+/**
+ * One demo product, by id, or a thrown error naming the id that is missing.
+ *
+ * The question `orders` actually asks — it seeds order lines that embed a product SNAPSHOT, so it
+ * needs the record rather than a reference to it. Published as a lookup rather than as the array
+ * because the throw belongs next to the data it validates: an order pointing at a product nobody
+ * wrote is a corrupt fixture, and it should stop the seeder rather than write an order whose line
+ * renders as a blank row. A second consumer inherits that instead of reimplementing it.
+ *
+ * The caller reshapes. `orders` embeds its own `OrderSnapshotInput`, and returning that type from
+ * here would make the catalogue depend on the order book to describe its own rows.
+ */
+export const seedProductById = (productId: string): (typeof productFixtures)[number] => {
+    const product = productFixtures.find((candidate) => candidate._id.toString() === productId);
+    if (!product) throw new Error(`seed fixtures: no product ${productId} in the demo catalogue`);
+
+    return product;
+};
 
 /** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
 export const seedProductsCollection = (): Promise<SeedOutcome[]> =>

@@ -1,7 +1,15 @@
 /**
- * The address book's four handlers, in one file: they share every line of shape — auth from the
- * guard, one service call, the whole-book view in the answer — and differ only in which service
- * function they name. Four files of twelve lines each would be layout, not structure.
+ * Adding an entry to the address book, and editing one — the two shipping addresses a caller
+ * writes.
+ *
+ * One file for both, on the same grounds as `products/controllers/write-products.ts`: they are not
+ * merely similar in length, they run the same three steps in the same order — parse a body against
+ * its generated schema and answer 422 on a miss, call the one service function, then branch on
+ * `result.success` and answer with the whole book either way. Split apart, an edit to that shape
+ * has two places to land and no reason to reach both.
+ *
+ * The read lives in `./get-addresses.ts` and the removal in `./delete-address.ts`, because neither
+ * parses a body and so neither shares the shape this file is named for.
  */
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
@@ -12,24 +20,10 @@ import type { AddressInput, UpdateAddressRequest } from '@types';
 import { accountService } from '../services';
 
 /**
- * GET /account/addresses
- */
-export const getAddresses = (request: Request, response: Response) => {
-    /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
-
-    return accountService
-        .addressesGet(id)
-        .then((view) => {
-            successResponse(response, view);
-        })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'getAddresses', error);
-        });
-};
-
-/**
- * POST /account/addresses
+ * POST /account/addresses — add an entry.
+ *
+ * The first entry becomes the default whether or not it asked; a later one claims the slot only by
+ * saying so, and demotes the holder in the same write. Both invariants live in the service.
  */
 export const postAddress = (
     request: Request<unknown, unknown, AddressInput>,
@@ -61,7 +55,10 @@ export const postAddress = (
 };
 
 /**
- * PUT /account/addresses/:addressId
+ * PUT /account/addresses/:addressId — edit an entry.
+ *
+ * An entry the caller does not hold answers the same 404 as one that never existed: ownership is
+ * checked in the service, and a distinguishable answer would confirm the id belongs to somebody.
  */
 export const putAddress = (
     request: Request<{ addressId: string }, unknown, UpdateAddressRequest>,
@@ -90,27 +87,5 @@ export const putAddress = (
         })
         .catch((error: CastError | Error) => {
             rejectDatabaseError(response, 'putAddress', error);
-        });
-};
-
-/**
- * DELETE /account/addresses/:addressId
- */
-export const deleteAddress = (request: Request<{ addressId: string }>, response: Response) => {
-    /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
-    const { addressId } = request.params;
-
-    return accountService
-        .addressRemove(id, addressId)
-        .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
-            successResponse(response, result.data, 200, result.message);
-        })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'deleteAddress', error);
         });
 };

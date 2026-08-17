@@ -18,10 +18,10 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { ProcessMemory } from './processMemory';
 
 export type ObservabilityMetricsSummaryProcess = {
   /** @minimum 0 */
   uptimeSeconds?: number;
-  /** @minimum 0 */
-  heapUsedMb?: number;
+  memory?: ProcessMemory;
 };

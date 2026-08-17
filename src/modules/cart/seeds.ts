@@ -13,7 +13,7 @@
  */
 
 import { SEED_ADMIN_ID } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS } from '@modules/products';
+import { SEED_PRODUCT_IDS } from '@modules/products/seeds';
 import { makeCart } from './factory';
 import { cartModel } from './model';
 import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';

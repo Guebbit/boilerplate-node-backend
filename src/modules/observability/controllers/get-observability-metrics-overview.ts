@@ -6,6 +6,7 @@ import {
     getLatencyPercentiles,
     metricsRegistry
 } from '@infrastructure/observability/metrics-http';
+import { processSnapshot } from '@infrastructure/observability/process-snapshot';
 
 /** One sample of a prom-client counter. */
 interface MetricSample {
@@ -68,7 +69,7 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 lowStockValues,
                 reservedValues
             ]) => {
-                const mem = process.memoryUsage();
+                const snapshot = processSnapshot();
                 const inFlight = inflightMetric.values.reduce((s, v) => s + v.value, 0);
 
                 const data = {
@@ -95,8 +96,8 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                         errorsTotal: 0
                     },
                     process: {
-                        uptimeSeconds: Math.floor(process.uptime()),
-                        heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024)
+                        uptimeSeconds: snapshot.uptimeSeconds,
+                        memory: snapshot.memory
                     },
                     timestamp: new Date().toISOString()
                 };

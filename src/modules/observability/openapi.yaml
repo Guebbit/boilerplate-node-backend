@@ -213,14 +213,25 @@ components:
                 umami: { type: boolean }
                 faro: { type: boolean }
 
-        ObservabilityHealthMemory:
+        ProcessMemory:
             type: object
             additionalProperties: false
-            required: [heapUsedMb, heapTotalMb, rssMb]
+            required: [rss, heapUsed, heapTotal, external]
+            description: >-
+                Process memory in BYTES, exactly as `process.memoryUsage()` reports it, published
+                identically by every payload that describes this process.
+
+                Bytes rather than megabytes because the conversion is a presentation decision and a
+                lossy one: a rounded megabyte cannot express the 400 KB move between two polls that
+                a leak hunter is looking for. The same four fields, in the same units and the same
+                order, are on the SSE payload in this module's `asyncapi.yaml`. The two documents
+                cannot `$ref` each other, so
+                `tests/cross-cutting/process-snapshot.test.ts` asserts they stay identical.
             properties:
-                heapUsedMb: { type: integer }
-                heapTotalMb: { type: integer }
-                rssMb: { type: integer }
+                rss: { type: integer, minimum: 0 }
+                heapUsed: { type: integer, minimum: 0 }
+                heapTotal: { type: integer, minimum: 0 }
+                external: { type: integer, minimum: 0 }
 
         ObservabilityHealthSystem:
             type: object
@@ -255,7 +266,7 @@ components:
                             type: string
                             enum: [connected, connecting, disconnected]
                 integrations: { $ref: '#/components/schemas/ObservabilityHealthIntegrations' }
-                memory: { $ref: '#/components/schemas/ObservabilityHealthMemory' }
+                memory: { $ref: '#/components/schemas/ProcessMemory' }
                 system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
                 timestamp: { type: string, format: date-time }
 
@@ -320,7 +331,7 @@ components:
                     additionalProperties: false
                     properties:
                         uptimeSeconds: { type: integer, minimum: 0 }
-                        heapUsedMb: { type: integer, minimum: 0 }
+                        memory: { $ref: '#/components/schemas/ProcessMemory' }
                 timestamp: { type: string, format: date-time }
 
         AuditLogsPage:

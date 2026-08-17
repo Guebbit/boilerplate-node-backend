@@ -3,6 +3,7 @@ import os from 'node:os';
 import { connection } from '@infrastructure/runtime/database';
 import { successResponse } from '@infrastructure/http/response';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
+import { processSnapshot } from '@infrastructure/observability/process-snapshot';
 
 /*
  * Map mongoose readyState integer to the spec enum values.
@@ -21,7 +22,7 @@ const databaseStatusMap: Record<number, 'connected' | 'connecting' | 'disconnect
  * Full JSON health snapshot for dashboard use.
  */
 export const getObservabilityHealth = (_request: Request, response: Response) => {
-    const mem = process.memoryUsage();
+    const snapshot = processSnapshot();
     const databaseReadyState = connection.readyState;
     const databaseStatus = databaseStatusMap[databaseReadyState] ?? 'disconnected';
     const overallStatus = databaseStatus === 'connected' ? 'ok' : 'degraded';
@@ -31,7 +32,7 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
         environment: process.env.NODE_ENV ?? 'development',
         service: process.env.NODE_SERVICE_NAME ?? 'boilerplate-node-backend',
         nodeVersion: process.version,
-        uptimeSeconds: Math.floor(process.uptime()),
+        uptimeSeconds: snapshot.uptimeSeconds,
         database: { status: databaseStatus },
         integrations: {
             loki: Boolean(process.env.NODE_LOKI_HOST),
@@ -47,11 +48,12 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
             umami: Boolean(process.env.NODE_UMAMI_HOST),
             faro: Boolean(process.env.NODE_FARO_COLLECTOR_URL)
         },
-        memory: {
-            heapUsedMb: Math.round(mem.heapUsed / 1_048_576),
-            heapTotalMb: Math.round(mem.heapTotal / 1_048_576),
-            rssMb: Math.round(mem.rss / 1_048_576)
-        },
+        /*
+         * Bytes, not megabytes, and the same four fields the SSE stream publishes — so a dashboard
+         * showing this card beside the live feed is comparing numbers rather than doing unit
+         * arithmetic to find out whether they agree.
+         */
+        memory: snapshot.memory,
         system: {
             platform: os.platform(),
             cpuCount: os.cpus().length,

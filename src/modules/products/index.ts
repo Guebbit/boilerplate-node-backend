@@ -28,17 +28,14 @@ export { productSchema, applyProductTransform } from './model';
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
 export { PRODUCT_DELETED } from './events';
 
-/**
- * The demo catalogue, for the three modules that seed rows pointing at it.
+/*
+ * The demo catalogue is NOT re-exported here. It lives behind this module's second public path,
+ * `@modules/products/seeds`, which `cart`, `wishlist` and `orders` take for their own seeders.
  *
- * `SEED_PRODUCT_IDS` is what `cart` and `wishlist` need — a handle, named by what the row is for.
- * `productFixtures` is what `orders` needs, because an order item embeds a product SNAPSHOT and a
- * snapshot is the record, not a reference to it.
- *
- * This widens the barrel on purpose, and the older arrangement is why. The seed data used to sit in
- * a file no module owned precisely so that no module would have to import a sibling's fixtures —
- * but all three of these already declare a `conformist` edge here and already import this module's
- * code at runtime, so the coupling was never avoided, only relocated somewhere it could not be
- * seen. Deleting this module breaks their seeds exactly as it breaks their services.
+ * It used to come through this barrel, and the cost was that "what may a sibling import" and "what
+ * is the production API" stopped being the same question — a domain's public surface included
+ * test-and-demo data, and the deletability figures could not tell a runtime edge from a demo one.
+ * Two named doors separate them without hiding either: the coupling is as declared as it ever was,
+ * and `tests/cross-cutting/module-test-boundaries.test.ts` now asserts that only a seeder walks
+ * through the second one.
  */
-export { SEED_PRODUCT_IDS, productFixtures } from './seeds';
