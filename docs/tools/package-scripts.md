@@ -2,14 +2,17 @@
 
 This page groups the `package.json` scripts by job instead of by raw list order.
 
-**The four you actually type every day**, in case you never read further:
+**The three you actually type every day**, in case you never read further:
 
-| Script                     | When                                                                                        |
-| -------------------------- | ------------------------------------------------------------------------------------------- |
-| `npm run compose:restart`  | bring the stack up — [Getting Started](../getting-started.md)                               |
-| `npm run contracts:bundle` | after editing any contract fragment — [Regenerating After a Change](../api/regenerating.md) |
-| `npm run gen:api`          | after the contract changed, to refresh `api/`                                               |
-| `npm run complete`         | before committing — the same gate pre-commit runs                                           |
+| Script                    | When                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------- |
+| `npm run compose:restart` | bring the stack up — [Getting Started](../getting-started.md)                                     |
+| `npm run regenerate`      | after changing anything a generator reads — [Regenerating After a Change](../api/regenerating.md) |
+| `npm run complete`        | before committing — the same gate pre-commit runs                                                 |
+
+`regenerate` writes; `complete` only verifies. A gate failure saying **STALE** means the first one
+was not run. In the paired frontend the mirror command is `npm run regenerate` too — run it after
+every pull, or the app ships a client for the previous contract.
 
 ## Two prefixes that replace a family each
 
@@ -77,21 +80,22 @@ Two stages, and they run in this order: **bundle** the committed documents from 
 fragments, then **generate** code from the bundles. Full cheat sheet in [Regenerating After a
 Change](../api/regenerating.md).
 
-| Script                   | Stage    | Job                                                                                                               | Read more                                                  |
-| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `contracts:bundle`       | bundle   | rebuild all seven committed bundles from their fragments (to narrow, call `scripts/bundle-contracts.ts` directly) | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `check:contracts-bundle` | verify   | fail if a bundle is stale or a collection is out of date — the CI/`--check` twin                                  | [Regenerating](../api/regenerating.md)                     |
-| `check:spec-identity`    | verify   | fail if the paired frontend holds different bytes of a shared document                                            | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval                                 | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `check:asyncapi-types`   | verify   | the same generation, compared instead of written — the freshness gate                                             | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                     | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `spectral.modules.yaml`                            | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `lint:asyncapi`          | verify   | validate the bundled `asyncapi.yaml`                                                                              | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:asyncapi:modules`  | verify   | the same for each section document, against `spectral.asyncapi.modules.yaml`                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `seed:export`            | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/seeds/dataset.json`       | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `check:seed-export`      | verify   | fail if `dataset.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`      | [Regenerating](../api/regenerating.md)                     |
-| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| Script                   | Stage    | Job                                                                                                                 | Read more                                                  |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `contracts:bundle`       | bundle   | rebuild all seven committed bundles from their fragments (to narrow, call `scripts/bundle-contracts.ts` directly)   | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `check:contracts-bundle` | verify   | fail if a bundle is stale or a collection is out of date — the CI/`--check` twin                                    | [Regenerating](../api/regenerating.md)                     |
+| `check:spec-identity`    | verify   | fail if the paired frontend holds different bytes of a shared document                                              | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval                                   | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                   | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `check:asyncapi-types`   | verify   | the same generation, compared instead of written — the freshness gate                                               | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                       | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `spectral.modules.yaml`                              | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `lint:asyncapi`          | verify   | validate the bundled `asyncapi.yaml`                                                                                | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:asyncapi:modules`  | verify   | the same for each section document, against `spectral.asyncapi.modules.yaml`                                        | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `seed:export`            | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/seeds/dataset.json`         | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `check:seed-export`      | verify   | fail if `dataset.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`        | [Regenerating](../api/regenerating.md)                     |
+| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `regenerate`             | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input | [Regenerating After a Change](../api/regenerating.md)      |
 
 The `:modules` pair is the property the whole-document layout bought. Each module's contract is a
 valid document on its own, so it can be linted where it is written rather than only after bundling —

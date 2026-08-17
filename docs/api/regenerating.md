@@ -5,13 +5,12 @@ The cheat sheet for "I edited a fragment — now what?".
 [Contract Ownership & Fragmentation](./contract-fragmentation.md) explains **why** the pipeline has
 this shape. This page is the short version you keep open while working.
 
-## The two commands
+## The one command
 
-For 90% of edits — a path, a schema, an event name, a seed record:
+Whatever you edited — a path, a schema, an event name, a seed record, a probe:
 
 ```bash
-npm run contracts:bundle    # fragments  ->  the 7 committed bundles
-npm run gen:api              # openapi.yaml -> api/ (types + Zod)
+npm run regenerate    # every generator, in dependency order, then the sync to the frontend
 ```
 
 Then the gate that would have caught you anyway:
@@ -20,7 +19,15 @@ Then the gate that would have caught you anyway:
 npm run complete      # build + test + lint + format — the same thing pre-commit runs
 ```
 
-Nothing else is needed unless you touched `asyncapi` fragments (add `npm run gen:asyncapi`).
+`regenerate` **writes**; `complete` only **verifies**. A gate failure saying `STALE` means the
+first one was not run.
+
+Over in the paired frontend the mirror command is `npm run regenerate` as well — run it after every
+pull, or the app ships a client for the previous contract.
+
+The steps are still individually runnable (`contracts:bundle`, `gen:api`, `gen:asyncapi`,
+`seed:export`, `sync:frontend`) and worth reaching for when you know exactly what changed. The
+umbrella exists because the order is not guessable — see below.
 
 ## Why two steps and not one
 
@@ -56,9 +63,22 @@ flowchart LR
 ```
 
 The four client collections are **generated from `openapi.yaml`**, so the contract has to be
-assembled before they can be produced. `scripts/bundle-contracts.ts` owns that ordering — the
-authored documents first, then everything — so a single `npm run contracts:bundle` is all there is
-to remember.
+assembled before they can be produced. `scripts/bundle-contracts.ts` owns that ordering internally —
+the authored documents first, then everything — so one `npm run contracts:bundle` covers it.
+
+What that ordering does **not** cover is the dataset. The collections also read
+`db/seeds/dataset.json` (`scripts/contracts/generateCollections.ts` imports it) for their example
+request bodies, and that file is produced by `seed:export`, which runs the real application and so
+needs `api/` — which is itself generated from the contract:
+
+```
+openapi.yaml  ──►  api/  ──►  dataset.json  ──►  the four client collections
+```
+
+So bundling once, at the start, builds the collections against the PREVIOUS dataset. Editing a seed
+fixture and running only `contracts:bundle` + `seed:export` leaves all four collections stale, and
+the next `npm run complete` says so. `npm run regenerate` bundles a second time after the export for
+exactly this reason — a no-op when the dataset did not change.
 
 The ordering deliberately does not live in `package.json` as commands joined by `&&`: npm appends
 `--` arguments to the LAST command of a chain only, so a narrowing flag would silently apply to one
@@ -72,7 +92,7 @@ phase and not the others.
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml`, then `src/types/asyncapi.generated.ts`     |
 | `src/modules/*/analytics.ts`                          | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.ts` |
-| `src/modules/*/seeds.ts`                             | `seed:export` → `db:seed:reset`                     | rebuilds `db/seeds/dataset.json`; the collections embed its values, and the database holds the old records |
+| `src/modules/*/seeds.ts`                             | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/seeds/dataset.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | A route, controller or service (no contract change)   | nothing                                             | no bundle reads source code                       |
 | `openapi.yaml` / `asyncapi.yaml` **directly**         | stop — edit the fragment instead                    | the next bundle overwrites you, and `contracts:bundle --check` fails first |
