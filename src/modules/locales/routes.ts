@@ -1,26 +1,74 @@
 import { Router } from 'express';
+import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
+import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
-import { setCache } from '@infrastructure/http/middlewares/cache';
+import { getLocaleMessages } from './controllers/get-locale-messages';
+import { createLocale, updateLocale } from './controllers/write-locales';
+import { deleteLocale } from './controllers/delete-locale';
+import { getLocaleEntries } from './controllers/get-locale-entries';
+import {
+    createLocaleEntry,
+    updateLocaleEntry,
+    replaceLocaleEntries,
+    mergeLocaleEntries
+} from './controllers/write-locale-entries';
+import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 
 /**
- * Express router for locale discovery.
+ * Express router for locale discovery and translation administration.
  *
- * Public and unauthenticated: this is static copy the API already sends to anyone who makes a
- * request, so there is nothing here to protect. Long-lived cache for the same reason — the
- * dictionaries change only on deploy.
+ * ── The reads are public, and that is not an oversight ───────────────────────────────────────
+ * No `getAuth` on any of the three GETs above the `router.use` below. An unauthenticated client
+ * that has just failed to reach the API is exactly who needs a dictionary, and requiring a token
+ * would make the copy unavailable in the one case it exists for. There is nothing to protect: it
+ * is text written to be published.
  *
- * No `getAuth`, deliberately: an unauthenticated client that has just failed to reach the API
- * is exactly who needs the dictionary, and requiring a token would make it unavailable in the
- * one case it exists for.
+ * ── The writes are admin-only, and cache-invalidating ────────────────────────────────────────
+ * Everything below the `router.use` changes what every visitor reads, so each write wraps in
+ * `invalidateCache(['locales'])`. That call reaches shared Redis, where both the cached responses
+ * and the tag sets live, so one call covers every app instance — there is no process-local tier
+ * for a broadcast to invalidate. Clustered invalidation is already solved and needs no machinery
+ * here.
+ *
+ * ── Route order ──────────────────────────────────────────────────────────────────────────────
+ * `/:locale/messages` is declared before `/:locale` for readability only: a single-segment pattern
+ * cannot match a two-segment path, so neither shadows the other whichever way round they go.
  */
 export const router = Router();
 
-// GET /locales — which languages this deployment supports
+// GET /locales — which languages this deployment offers, and what each of them can do
 router.get('/', setCache(3600, { tags: ['locales'], keyParameters: [] }), getLocales);
 
-// GET /locales/:locale — that locale's dictionary, the API's own keys only
+// GET /locales/:locale/messages — the client's dictionary, out of the database
+router.get(
+    '/:locale/messages',
+    setCache(3600, { tags: ['locales'], keyParameters: [] }),
+    getLocaleMessages
+);
+
+// GET /locales/:locale — the API's own dictionary, off the filesystem
 router.get(
     '/:locale',
     setCache(3600, { tags: ['locales'], keyParameters: [] }),
     getLocaleDictionary
 );
+
+/*
+ * Everything past here is an admin write on the dynamic tier — or, in one case, the read that
+ * feeds the screen those writes are made from.
+ */
+router.use(getAuth, isAuth, isAdmin);
+
+router.post('/', invalidateCache(['locales']), createLocale);
+router.put('/:locale', invalidateCache(['locales']), updateLocale);
+router.delete('/:locale', invalidateCache(['locales']), deleteLocale);
+
+// Uncached on purpose — see the controller for why the editing screen is the one read that is not.
+router.get('/:locale/entries', getLocaleEntries);
+router.post('/:locale/entries', invalidateCache(['locales']), createLocaleEntry);
+// PUT replaces, PATCH merges. See `controllers/write-locale-entries.ts`.
+router.put('/:locale/entries', invalidateCache(['locales']), replaceLocaleEntries);
+router.patch('/:locale/entries', invalidateCache(['locales']), mergeLocaleEntries);
+
+router.put('/:locale/entries/:entryId', invalidateCache(['locales']), updateLocaleEntry);
+router.delete('/:locale/entries/:entryId', invalidateCache(['locales']), deleteLocaleEntry);

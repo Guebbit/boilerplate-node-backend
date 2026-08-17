@@ -62,11 +62,17 @@ paths:
         - System
       summary: Supported languages
       description: |
-        Which languages this deployment can answer in, plus its default and fallback.
+        Every language this deployment offers, from both tiers, each stating what it can
+        actually do.
 
-        Public, unauthenticated and cacheable: it is static copy that changes only on
-        deploy, and a client that has just failed to reach the API is exactly who needs
-        it.
+        `scopes` is the field doing the real work. `api` means the API can answer requests
+        in that language — its dictionary is deployed and i18next holds it. `app` means a
+        client dictionary is downloadable from `GET /locales/{locale}/messages`. A language
+        can have either, or both, and the two are not the same capability: a language added
+        through the admin routes below is `app` only until a file is deployed for it.
+
+        Public, unauthenticated and cacheable. A client that has just failed to reach the
+        API is exactly who needs it.
       operationId: getLocales
       responses:
         '200':
@@ -77,17 +83,55 @@ paths:
                 $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - System
+      summary: Add a language
+      description: |
+        Registers a language in the dynamic tier so entries can be translated into it.
+
+        This does NOT teach the API to answer in the new language — that needs a dictionary
+        file and a deploy. A language created here is `app`-scoped until one exists.
+      operationId: createLocale
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocaleRequest'
+      responses:
+        '201':
+          description: The created language
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanguageEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /locales/{locale}:
     get:
       tags:
         - System
       summary: API message dictionary
       description: |
-        This API's own dictionary for one language.
+        This API's own dictionary for one language — tier 1, the deployed files.
 
-        Normally unnecessary — the API resolves its keys itself and puts finished text on
+        Normally unnecessary: the API resolves its keys itself and puts finished text on
         the wire. It earns its place when no response arrives at all (a network failure, a
         bare 502) and the client must produce the copy itself, in the active language.
+
+        Not to be confused with `GET /locales/{locale}/messages`, which serves the client's
+        own copy out of the database.
       operationId: getLocaleDictionary
       parameters:
         - name: locale
@@ -103,6 +147,322 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LocaleDictionaryEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags:
+        - System
+      summary: Edit a language
+      description: |
+        Updates a language's display names, writing direction or visibility. The tag itself
+        is immutable — it is what every entry references, so changing it would be a rename
+        of the whole dictionary rather than an edit of this record.
+      operationId: updateLocale
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocaleRequest'
+      responses:
+        '200':
+          description: The updated language
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LanguageEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - System
+      summary: Remove a language
+      description: |
+        Removes the language AND every entry translated into it.
+
+        Refuses with 409 while the language is still active. That two-step is deliberate:
+        this destroys a day's translation work, and a mis-click should cost a toggle rather
+        than the work. Deactivate first, then delete.
+      operationId: deleteLocale
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /locales/{locale}/messages:
+    get:
+      tags:
+        - System
+      summary: Client message dictionary
+      description: |
+        The dynamic dictionary for one language, built from its stored entries into the
+        same nested shape `GET /locales/{locale}` serves — so a client has ONE merge path
+        for both tiers rather than two.
+
+        This is what a client fetches for a language it does not bundle. Its resolution
+        order is: its own bundle first, this endpoint when the language was added after the
+        client was deployed, its bundled fallback when neither answers.
+
+        404 for a language that does not exist in the dynamic tier, and equally for one
+        that exists but is inactive — an inactive language is invisible to every public
+        route, which is the whole point of the flag.
+
+        Public and cacheable, like every other locale read.
+      operationId: getLocaleMessages
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+      responses:
+        '200':
+          description: The built dictionary for the requested language
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocaleMessagesEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /locales/{locale}/entries:
+    get:
+      tags:
+        - System
+      summary: List translation entries
+      description: |
+        The rows behind one language's dictionary, paginated and searchable — what a
+        translation screen lists. Flat, because a row is what gets edited; the nested tree
+        is `GET /locales/{locale}/messages`.
+
+        `text` searches keys and values together.
+      operationId: listLocaleEntries
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/TextParam'
+      responses:
+        '200':
+          description: A page of entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocaleEntriesResponseEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - System
+      summary: Add one translation entry
+      description: |
+        409 if the key already exists in this language, and equally if it COLLIDES with one
+        — see `LocaleEntryInput.key` for what a collision is and why it is refused here
+        rather than discovered when the tree is built.
+      operationId: createLocaleEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLocaleEntryRequest'
+      responses:
+        '201':
+          description: The created entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocaleEntryEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags:
+        - System
+      summary: Replace every entry
+      description: |
+        Bulk import, REPLACING semantics: what is not sent is DELETED. The whole set of
+        entries for this language becomes exactly what the body carries.
+
+        Paired with `PATCH` on this same collection, which merges instead. "Does an import
+        delete missing keys" is the question every translation tool gets wrong, so the two
+        behaviours are spelled in the METHOD rather than in a flag — a client cannot pick
+        one and get the other.
+
+        Nobody adds five hundred keys through a form; without this the admin surface is a
+        demo.
+      operationId: replaceLocaleEntries
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceLocaleEntriesRequest'
+      responses:
+        '200':
+          description: What the import did
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocaleImportResultEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags:
+        - System
+      summary: Merge entries
+      description: |
+        Bulk import, MERGING semantics: what is sent is upserted, everything else is left
+        alone. Nothing is ever deleted by this operation.
+
+        See `PUT` on this collection for the replacing counterpart, and for why the choice
+        lives in the method.
+      operationId: mergeLocaleEntries
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeLocaleEntriesRequest'
+      responses:
+        '200':
+          description: What the import did
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocaleImportResultEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /locales/{locale}/entries/{entryId}:
+    put:
+      tags:
+        - System
+      summary: Edit one translation entry
+      description: |
+        Updates the value of one entry. The key is not editable — a key is the identity a
+        client looks the string up by, so changing it is a delete plus an add, and the two
+        collision checks that go with them.
+      operationId: updateLocaleEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+        - $ref: '#/components/parameters/EntryIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocaleEntryRequest'
+      responses:
+        '200':
+          description: The updated entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocaleEntryEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - System
+      summary: Remove one translation entry
+      description: Removes a single key from one language. The other languages keep theirs.
+      operationId: deleteLocaleEntry
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/LocalePathParam'
+        - $ref: '#/components/parameters/EntryIdPathParam'
+      responses:
+        '200':
+          $ref: '#/components/responses/Success'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '500':
@@ -2441,6 +2801,20 @@ components:
       schema:
         $ref: '#/components/schemas/Id'
       description: Product identifier
+    LocalePathParam:
+      name: locale
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Locale'
+      description: A language tag from `GET /locales`.
+    EntryIdPathParam:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+      description: Identifier of one translation entry.
   responses:
     Success:
       description: Success
@@ -2882,6 +3256,66 @@ components:
           $ref: '#/components/schemas/EnvelopeMessage'
         data:
           $ref: '#/components/schemas/HealthPing'
+    LocaleDirection:
+      type: string
+      enum:
+        - ltr
+        - rtl
+      description: Writing direction, which a client needs before it can lay the language out. Trivial today because every deployed language is left-to-right; a column rather than a derivation because the day it is not, the alternative is a migration.
+      example: ltr
+    LocaleScope:
+      type: string
+      enum:
+        - api
+        - app
+      description: 'What a language can do here. `api` — the API can answer requests in it, because its dictionary is deployed. `app` — a client dictionary is downloadable for it. These are independent: neither implies the other.'
+      example: app
+    LocaleSource:
+      type: string
+      enum:
+        - static
+        - dynamic
+        - both
+      description: Which tier a language came from — deployed files, the database, or both.
+      example: both
+    LocaleCapability:
+      type: object
+      additionalProperties: false
+      required:
+        - tag
+        - name
+        - nativeName
+        - direction
+        - scopes
+        - source
+        - entryCount
+        - revision
+      description: 'One language as the manifest describes it: a merge of whatever the two tiers each know about it. A tag present in both appears once, with both scopes.'
+      properties:
+        tag:
+          $ref: '#/components/schemas/Locale'
+        name:
+          type: string
+          example: Spanish
+        nativeName:
+          type: string
+          example: Español
+        direction:
+          $ref: '#/components/schemas/LocaleDirection'
+        scopes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LocaleScope'
+          description: 'What this language can do. Without it a client seeing `es` in the list cannot tell whether it may send `Accept-Language: es` and get Spanish error messages, or whether it may download a Spanish UI dictionary. Those are different questions.'
+        source:
+          $ref: '#/components/schemas/LocaleSource'
+        entryCount:
+          type: integer
+          minimum: 0
+        revision:
+          type: integer
+          minimum: 0
     LocaleCapabilities:
       type: object
       additionalProperties: false
@@ -2889,13 +3323,13 @@ components:
         - locales
         - default
         - fallback
-      description: 'Which languages a deployment can answer in. Runtime state, not contract state: it is derived from the dictionaries actually deployed, so it cannot be an enum here.'
+      description: 'Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.'
       properties:
         locales:
           type: array
           items:
-            $ref: '#/components/schemas/Locale'
-          description: Every supported language tag.
+            $ref: '#/components/schemas/LocaleCapability'
+          description: Every language, ordered by tag so the response is stable.
         default:
           $ref: '#/components/schemas/Locale'
         fallback:
@@ -2917,6 +3351,82 @@ components:
           $ref: '#/components/schemas/EnvelopeMessage'
         data:
           $ref: '#/components/schemas/LocaleCapabilities'
+    CreateLocaleRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - tag
+        - name
+        - nativeName
+      properties:
+        tag:
+          $ref: '#/components/schemas/Locale'
+        name:
+          type: string
+          minLength: 1
+        nativeName:
+          type: string
+          minLength: 1
+        direction:
+          $ref: '#/components/schemas/LocaleDirection'
+        active:
+          type: boolean
+          default: true
+    Language:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - tag
+        - name
+        - nativeName
+        - direction
+        - active
+        - revision
+      description: A language registered in the DYNAMIC tier. Its existence means entries can be translated into it and a client can download the result — never that the API can answer a request in it, which is decided by a deployed file and nothing else.
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        tag:
+          $ref: '#/components/schemas/Locale'
+        name:
+          type: string
+          description: English name, for an admin list.
+          example: Spanish
+        nativeName:
+          type: string
+          description: The language's own name, for a client's language picker.
+          example: Español
+        direction:
+          $ref: '#/components/schemas/LocaleDirection'
+        active:
+          type: boolean
+        revision:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LanguageEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - status
+        - message
+        - data
+      properties:
+        success:
+          $ref: '#/components/schemas/EnvelopeSuccess'
+        status:
+          $ref: '#/components/schemas/EnvelopeStatus'
+        message:
+          $ref: '#/components/schemas/EnvelopeMessage'
+        data:
+          $ref: '#/components/schemas/Language'
     LocaleDictionary:
       type: object
       additionalProperties: false
@@ -2948,6 +3458,231 @@ components:
           $ref: '#/components/schemas/EnvelopeMessage'
         data:
           $ref: '#/components/schemas/LocaleDictionary'
+    UpdateLocaleRequest:
+      type: object
+      additionalProperties: false
+      description: 'Every field optional: an omitted one means "leave it alone", never "clear it". The tag is absent by design — see the operation description.'
+      properties:
+        name:
+          type: string
+          minLength: 1
+        nativeName:
+          type: string
+          minLength: 1
+        direction:
+          $ref: '#/components/schemas/LocaleDirection'
+        active:
+          type: boolean
+    LocaleMessages:
+      type: object
+      additionalProperties: false
+      required:
+        - locale
+        - revision
+        - messages
+      description: The CLIENT's dictionary for one language, built from the stored entries. Same nested shape as `LocaleDictionary` on purpose — a client merges both with one code path rather than two — and a completely separate keyspace, because the two are authored by different people for different surfaces.
+      properties:
+        locale:
+          $ref: '#/components/schemas/Locale'
+        revision:
+          type: integer
+          minimum: 0
+        messages:
+          type: object
+          additionalProperties: true
+          description: 'Flat dotted keys expanded into a tree: `products.list.title` becomes `products.list.title`, nested. Empty for a language with no entries yet, which is a legitimate state and not a 404.'
+    LocaleMessagesEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - status
+        - message
+        - data
+      properties:
+        success:
+          $ref: '#/components/schemas/EnvelopeSuccess'
+        status:
+          $ref: '#/components/schemas/EnvelopeStatus'
+        message:
+          $ref: '#/components/schemas/EnvelopeMessage'
+        data:
+          $ref: '#/components/schemas/LocaleMessages'
+    LocaleEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - locale
+        - key
+        - value
+      description: 'One translated string: one row per (language, key). That shape makes every operation this feature needs a single indexed query — add is an insert, edit is an update, a whole dictionary is one find — and adding a language touches nothing that already exists.'
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        locale:
+          $ref: '#/components/schemas/Locale'
+        key:
+          type: string
+          description: 'Flat and dotted. Stored AS A STRING and never as a Mongo path — a document per language with `$set: { "messages.products.list.title": v }` would have Mongo read three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting.'
+          example: products.list.title
+        value:
+          type: string
+          example: Catálogo
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LocaleEntriesResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocaleEntry'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    LocaleEntriesResponseEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - status
+        - message
+        - data
+      properties:
+        success:
+          $ref: '#/components/schemas/EnvelopeSuccess'
+        status:
+          $ref: '#/components/schemas/EnvelopeStatus'
+        message:
+          $ref: '#/components/schemas/EnvelopeMessage'
+        data:
+          $ref: '#/components/schemas/LocaleEntriesResponse'
+    LocaleEntryInput:
+      type: object
+      additionalProperties: false
+      required:
+        - key
+        - value
+      description: |-
+        One key and its translation, as an import or a create sends it.
+        A key is refused when it is a strict prefix of an existing key in the same language, or has one as a prefix — `products.list` alongside `products.list.title`. No tree can hold both: one is a string, the other needs to be an object at the same path. A naive builder silently drops one of them, and which one depends on insertion order, so this is caught at WRITE time with a 409 naming both keys rather than discovered at read time by whoever is missing a string.
+      properties:
+        key:
+          type: string
+          minLength: 1
+          example: products.list.title
+        value:
+          type: string
+          example: Catálogo
+    ReplaceLocaleEntriesRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - entries
+      description: The COMPLETE set of entries for this language. Anything already stored and not named here is deleted.
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocaleEntryInput'
+    LocaleImportResult:
+      type: object
+      additionalProperties: false
+      required:
+        - created
+        - updated
+        - removed
+        - revision
+      description: What an import actually did, counted rather than implied. `removed` is always 0 for a merge, which is the assertion a client can make to prove it called the operation it meant to.
+      properties:
+        created:
+          type: integer
+          minimum: 0
+        updated:
+          type: integer
+          minimum: 0
+        removed:
+          type: integer
+          minimum: 0
+        revision:
+          type: integer
+          minimum: 0
+    LocaleImportResultEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - status
+        - message
+        - data
+      properties:
+        success:
+          $ref: '#/components/schemas/EnvelopeSuccess'
+        status:
+          $ref: '#/components/schemas/EnvelopeStatus'
+        message:
+          $ref: '#/components/schemas/EnvelopeMessage'
+        data:
+          $ref: '#/components/schemas/LocaleImportResult'
+    CreateLocaleEntryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: string
+          minLength: 1
+          example: products.list.title
+        value:
+          type: string
+          example: Catálogo
+    LocaleEntryEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - success
+        - status
+        - message
+        - data
+      properties:
+        success:
+          $ref: '#/components/schemas/EnvelopeSuccess'
+        status:
+          $ref: '#/components/schemas/EnvelopeStatus'
+        message:
+          $ref: '#/components/schemas/EnvelopeMessage'
+        data:
+          $ref: '#/components/schemas/LocaleEntry'
+    MergeLocaleEntriesRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - entries
+      description: Entries to upsert. Anything already stored and not named here is left exactly as it was.
+      properties:
+        entries:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/LocaleEntryInput'
+    UpdateLocaleEntryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - value
+      properties:
+        value:
+          type: string
     ObservabilityHealthIntegrations:
       type: object
       additionalProperties: false

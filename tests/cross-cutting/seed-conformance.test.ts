@@ -33,6 +33,8 @@
  */
 
 import {
+    CreateLocaleEntryResponse,
+    CreateLocaleResponse,
     CreateUserBody,
     GetAddressesResponse,
     GetCartResponse,
@@ -88,6 +90,23 @@ const cartItemSchema = GetCartResponse.shape.data.shape.items.element.strict();
 const addressSchema = GetAddressesResponse.shape.data.shape.addresses.element.strict();
 
 const wishlistProductIdSchema = GetWishlistResponse.shape.data.shape.items.element.shape.productId;
+
+/**
+ * The two dynamic-locale collections.
+ *
+ * Taken from the CREATE responses rather than from a read: a stored row and the row a write
+ * answers with are the same object here, and those are the only operations whose `data` is a
+ * single language or a single entry. `.required()` masks the fields every seeded row promises —
+ * `active` and `direction` are schema defaults, so a row missing one would mean the default
+ * stopped applying, which is exactly the kind of drift an exported dataset exists to catch.
+ */
+const languageSchema = CreateLocaleResponse.shape.data
+    .required({ createdAt: true, updatedAt: true })
+    .strict();
+
+const localeEntrySchema = CreateLocaleEntryResponse.shape.data
+    .required({ createdAt: true, updatedAt: true })
+    .strict();
 
 const idSchema = GetUserByIdResponse.shape.data.shape.id;
 
@@ -224,6 +243,72 @@ describe('the exported dataset conforms to the generated contract', () => {
             for (const item of items) {
                 expect(() => cartItemSchema.parse(item)).not.toThrow();
             }
+        });
+    });
+
+    describe('languages', () => {
+        it('parse against the generated language schema', () => {
+            expect(collections.locales.length).toBeGreaterThan(0);
+            for (const language of collections.locales) {
+                expect(() => languageSchema.parse(language)).not.toThrow();
+            }
+        });
+
+        it('carry one published language and one draft', () => {
+            /* Both branches of the visibility rule need a fixture behind them: an inactive
+             * language must be absent from `GET /locales` and 404 on its dictionary, and neither
+             * is checkable against a dataset where every language is active. */
+            expect(collections.locales.filter((language) => language.active)).toHaveLength(1);
+            expect(collections.locales.filter((language) => !language.active)).toHaveLength(1);
+        });
+
+        it('include a language the API also has a deployed file for', () => {
+            /* `es` is the row that makes the manifest's merge real — one entry carrying both
+             * scopes and `source: 'both'`. A dataset of languages the API cannot answer in would
+             * exercise only half of it. */
+            expect(collections.locales.map((language) => language.tag)).toContain('es');
+        });
+    });
+
+    describe('locale entries', () => {
+        it('parse against the generated entry schema', () => {
+            expect(collections.localeMessages.length).toBeGreaterThan(0);
+            for (const entry of collections.localeMessages) {
+                expect(() => localeEntrySchema.parse(entry)).not.toThrow();
+            }
+        });
+
+        it('name only languages the dataset also publishes', () => {
+            /* The referential integrity a tag string buys instead of an ObjectId reference. An
+             * entry pointing at a language nobody registered would render as a dictionary the
+             * manifest never lists — and `scripts/export-seed.ts`'s dangling-reference sweep
+             * cannot see it, because it matches keys ending in `Id`. */
+            const tags = new Set(collections.locales.map((language) => language.tag));
+            for (const entry of collections.localeMessages) {
+                expect(tags).toContain(entry.locale);
+            }
+        });
+
+        it('carry a key nested at least three levels deep', () => {
+            /* A flat fixture set would let a tree builder that only ever nests once pass its own
+             * tests and the contract suite alike. */
+            expect(
+                collections.localeMessages.some((entry) => entry.key.split('.').length >= 3)
+            ).toBe(true);
+        });
+
+        it('never carry a key that collides with another in the same language', () => {
+            /* `products.list` alongside `products.list.title` cannot be expressed as one tree, so
+             * a dataset containing the pair would make `GET /locales/:locale/messages` throw for
+             * the seeded language — and would do it in the paired frontend's mocks too. */
+            const byLanguage = new Map<string, string[]>();
+            for (const entry of collections.localeMessages)
+                byLanguage.set(entry.locale, [...(byLanguage.get(entry.locale) ?? []), entry.key]);
+
+            for (const [, keys] of byLanguage)
+                for (const key of keys)
+                    for (const other of keys)
+                        if (other !== key) expect(other.startsWith(`${key}.`)).toBe(false);
         });
     });
 

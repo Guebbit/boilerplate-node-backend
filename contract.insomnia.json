@@ -56,11 +56,17 @@ collection:
           modified: 1767225600000
           isPrivate: false
           description: |
-            Which languages this deployment can answer in, plus its default and fallback.
+            Every language this deployment offers, from both tiers, each stating what it can
+            actually do.
 
-            Public, unauthenticated and cacheable: it is static copy that changes only on
-            deploy, and a client that has just failed to reach the API is exactly who needs
-            it.
+            `scopes` is the field doing the real work. `api` means the API can answer requests
+            in that language — its dictionary is deployed and i18next holds it. `app` means a
+            client dictionary is downloadable from `GET /locales/{locale}/messages`. A language
+            can have either, or both, and the two are not the same capability: a language added
+            through the admin routes below is `app` only until a file is deployed for it.
+
+            Public, unauthenticated and cacheable. A client that has just failed to reach the
+            API is exactly who needs it.
           sortKey: 1001
         method: GET
         headers:
@@ -78,6 +84,46 @@ collection:
             send: true
             store: true
           rebuildPath: true
+      - url: "{{ _.baseURL }}/locales"
+        name: Add a language
+        meta:
+          id: req_64ef33b9ddb10b796ccaf011b59977e1
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            Registers a language in the dynamic tier so entries can be translated into it.
+
+            This does NOT teach the API to answer in the new language — that needs a dictionary
+            file and a deploy. A language created here is `app`-scoped until one exists.
+          sortKey: 1002
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "tag": "it",
+              "name": "string",
+              "nativeName": "string",
+              "direction": "ltr",
+              "active": true
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
       - url: "{{ _.baseURL }}/locales/en"
         name: API message dictionary
         meta:
@@ -86,12 +132,15 @@ collection:
           modified: 1767225600000
           isPrivate: false
           description: |
-            This API's own dictionary for one language.
+            This API's own dictionary for one language — tier 1, the deployed files.
 
-            Normally unnecessary — the API resolves its keys itself and puts finished text on
+            Normally unnecessary: the API resolves its keys itself and puts finished text on
             the wire. It earns its place when no response arrives at all (a network failure, a
             bare 502) and the client must produce the copy itself, in the active language.
-          sortKey: 1002
+
+            Not to be confused with `GET /locales/{locale}/messages`, which serves the client's
+            own copy out of the database.
+          sortKey: 1003
         method: GET
         headers:
           - name: Accept
@@ -100,6 +149,324 @@ collection:
           type: bearer
           disabled: true
           token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en"
+        name: Edit a language
+        meta:
+          id: req_47ca4bf055a4c2707ef7e9db39adb3a2
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            Updates a language's display names, writing direction or visibility. The tag itself
+            is immutable — it is what every entry references, so changing it would be a rename
+            of the whole dictionary rather than an edit of this record.
+          sortKey: 1004
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "name": "string",
+              "nativeName": "string",
+              "direction": "ltr",
+              "active": true
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en"
+        name: Remove a language
+        meta:
+          id: req_90221d033967324fa8f43fd6e9255aa0
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            Removes the language AND every entry translated into it.
+
+            Refuses with 409 while the language is still active. That two-step is deliberate:
+            this destroys a day's translation work, and a mis-click should cost a toggle rather
+            than the work. Deactivate first, then delete.
+          sortKey: 1005
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en/messages"
+        name: Client message dictionary
+        meta:
+          id: req_77aff69c64801f65a4eda0e314d9e0c9
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            The dynamic dictionary for one language, built from its stored entries into the
+            same nested shape `GET /locales/{locale}` serves — so a client has ONE merge path
+            for both tiers rather than two.
+
+            This is what a client fetches for a language it does not bundle. Its resolution
+            order is: its own bundle first, this endpoint when the language was added after the
+            client was deployed, its bundled fallback when neither answers.
+
+            404 for a language that does not exist in the dynamic tier, and equally for one
+            that exists but is inactive — an inactive language is invisible to every public
+            route, which is the whole point of the flag.
+
+            Public and cacheable, like every other locale read.
+          sortKey: 1006
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          disabled: true
+          token: ""
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en/entries"
+        name: List translation entries
+        meta:
+          id: req_5ce9c20e8f75cd91a430874cb059513d
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            The rows behind one language's dictionary, paginated and searchable — what a
+            translation screen lists. Flat, because a row is what gets edited; the nested tree
+            is `GET /locales/{locale}/messages`.
+
+            `text` searches keys and values together.
+          sortKey: 1007
+        method: GET
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en/entries"
+        name: Add one translation entry
+        meta:
+          id: req_7435724451315f48816f0239e33485a1
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            409 if the key already exists in this language, and equally if it COLLIDES with one
+            — see `LocaleEntryInput.key` for what a collision is and why it is refused here
+            rather than discovered when the tree is built.
+          sortKey: 1008
+        method: POST
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "key": "products.list.title",
+              "value": "Catálogo"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en/entries"
+        name: Replace every entry
+        meta:
+          id: req_1c16fdcd34d4bf3d732cf9a9be393eff
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            Bulk import, REPLACING semantics: what is not sent is DELETED. The whole set of
+            entries for this language becomes exactly what the body carries.
+
+            Paired with `PATCH` on this same collection, which merges instead. "Does an import
+            delete missing keys" is the question every translation tool gets wrong, so the two
+            behaviours are spelled in the METHOD rather than in a flag — a client cannot pick
+            one and get the other.
+
+            Nobody adds five hundred keys through a form; without this the admin surface is a
+            demo.
+          sortKey: 1009
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "entries": [
+                {
+                  "key": "products.list.title",
+                  "value": "Catálogo"
+                }
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en/entries"
+        name: Merge entries
+        meta:
+          id: req_6bf097c7cf9077620141448ce069e92f
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            Bulk import, MERGING semantics: what is sent is upserted, everything else is left
+            alone. Nothing is ever deleted by this operation.
+
+            See `PUT` on this collection for the replacing counterpart, and for why the choice
+            lives in the method.
+          sortKey: 1010
+        method: PATCH
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "entries": [
+                {
+                  "key": "products.list.title",
+                  "value": "Catálogo"
+                }
+              ]
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en/entries/example"
+        name: Edit one translation entry
+        meta:
+          id: req_66fbc5982796c528a8773bc953845f6f
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: |
+            Updates the value of one entry. The key is not editable — a key is the identity a
+            client looks the string up by, so changing it is a delete plus an add, and the two
+            collision checks that go with them.
+          sortKey: 1011
+        method: PUT
+        body:
+          mimeType: application/json
+          text: |-
+            {
+              "value": "string"
+            }
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
+        settings:
+          renderRequestBody: true
+          encodeUrl: true
+          followRedirects: global
+          cookies:
+            send: true
+            store: true
+          rebuildPath: true
+      - url: "{{ _.baseURL }}/locales/en/entries/example"
+        name: Remove one translation entry
+        meta:
+          id: req_87a174d933ea685f5ced6ba36d97a40a
+          created: 1767225600000
+          modified: 1767225600000
+          isPrivate: false
+          description: Removes a single key from one language. The other languages keep theirs.
+          sortKey: 1012
+        method: DELETE
+        headers:
+          - name: Accept
+            value: application/json
+        authentication:
+          type: bearer
+          token: "{{ _.token }}"
         settings:
           renderRequestBody: true
           encodeUrl: true

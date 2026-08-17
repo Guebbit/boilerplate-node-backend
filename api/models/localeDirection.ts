@@ -18,15 +18,14 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * Writing direction, which a client needs before it can lay the language out. Trivial today because every deployed language is left-to-right; a column rather than a derivation because the day it is not, the alternative is a migration.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
-}
+export type LocaleDirection = typeof LocaleDirection[keyof typeof LocaleDirection];
+
+
+export const LocaleDirection = {
+  ltr: 'ltr',
+  rtl: 'rtl',
+} as const;

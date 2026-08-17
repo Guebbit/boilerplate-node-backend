@@ -18,15 +18,28 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
+import type { Page } from './page';
+import type { PageParamParameter } from './pageParamParameter';
+import type { PageSize } from './pageSize';
+import type { PageSizeParamParameter } from './pageSizeParamParameter';
+import type { Text } from './text';
+import type { TextParamParameter } from './textParamParameter';
 
+export type ListLocaleEntriesParams = {
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * 1-based page index
+ * @minimum 1
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
-}
+page?: PageParamParameter;
+/**
+ * Optional override; server may clamp to a max
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: PageSizeParamParameter;
+/**
+ * Free-text search string
+ * @minLength 1
+ */
+text?: TextParamParameter;
+};

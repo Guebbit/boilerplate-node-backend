@@ -19,14 +19,15 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
+import type { LocaleMessagesMessages } from './localeMessagesMessages';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * The CLIENT's dictionary for one language, built from the stored entries. Same nested shape as `LocaleDictionary` on purpose — a client merges both with one code path rather than two — and a completely separate keyspace, because the two are authored by different people for different surfaces.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface LocaleMessages {
+  locale: Locale;
+  /** @minimum 0 */
+  revision: number;
+  /** Flat dotted keys expanded into a tree: `products.list.title` becomes `products.list.title`, nested. Empty for a language with no entries yet, which is a legitimate state and not a 404. */
+  messages: LocaleMessagesMessages;
 }

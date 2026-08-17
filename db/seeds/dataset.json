@@ -67,6 +67,128 @@
                 "userId": "65dd2bdb923652b7800fe180"
             }
         ],
+        "localeMessages": [
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f100a",
+                "key": "account.menu.orders",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Mis pedidos"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1007",
+                "key": "cart.empty",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Tu carrito está vacío"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1006",
+                "key": "cart.title",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Tu carrito"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1009",
+                "key": "checkout.actions.confirm",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Confirmar pedido"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1008",
+                "key": "checkout.title",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Finalizar compra"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1005",
+                "key": "products.detail.add-to-cart",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Añadir al carrito"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1002",
+                "key": "products.list.empty",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Sin resultados"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1004",
+                "key": "products.list.filters.reset",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Quitar filtros"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1003",
+                "key": "products.list.filters.title",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Filtros"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f1001",
+                "key": "products.list.title",
+                "locale": "es",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Catálogo"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f2002",
+                "key": "cart.title",
+                "locale": "fr",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Votre panier"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f2001",
+                "key": "products.list.title",
+                "locale": "fr",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Catalogue"
+            }
+        ],
+        "locales": [
+            {
+                "active": true,
+                "createdAt": "2024-02-29T06:07:56.000Z",
+                "direction": "ltr",
+                "id": "65e01f3c9a7d4b2e1c0f0001",
+                "name": "Spanish",
+                "nativeName": "Español",
+                "revision": 1,
+                "tag": "es",
+                "updatedAt": "2024-02-29T06:07:56.000Z"
+            },
+            {
+                "active": false,
+                "createdAt": "2024-02-29T06:07:56.000Z",
+                "direction": "ltr",
+                "id": "65e01f3c9a7d4b2e1c0f0002",
+                "name": "French",
+                "nativeName": "Français",
+                "revision": 1,
+                "tag": "fr",
+                "updatedAt": "2024-02-29T06:07:56.000Z"
+            }
+        ],
         "orders": [
             {
                 "createdAt": "2024-02-27T23:43:34.000Z",
