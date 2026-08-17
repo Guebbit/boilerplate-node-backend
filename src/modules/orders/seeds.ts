@@ -2,14 +2,16 @@
  * The order book's slice of the demo dataset.
  *
  * Every snapshot here is currently an exact copy of the live catalogue row, so they are built by
- * LOOKUP rather than restated — `productFixtures` comes through the products barrel, which this
- * module's `conformist` edge already entitles it to. If a fixture ever needs an order whose
- * snapshot deliberately differs from today's product, to exercise the "price changed since" case,
- * it has to state that snapshot explicitly: deriving it would silently erase the difference.
+ * LOOKUP rather than restated — `seedProductById` comes through `@modules/products/seeds`, the
+ * demo path this module's `conformist` edge already entitles it to. If a fixture ever needs an
+ * order whose snapshot deliberately differs from today's product, to exercise the "price changed
+ * since" case, it has to state that snapshot explicitly: deriving it would silently erase the
+ * difference.
  *
  * The lookup throws rather than skipping. An order referencing a product that is not in the
  * catalogue is a corrupt fixture, and a seeder that quietly wrote an order with a missing product
- * would be worse than one that refuses to start.
+ * would be worse than one that refuses to start. That check lives in `products` now, next to the
+ * catalogue it validates, rather than being restated by every module that reads a fixture.
  *
  * The email is a SNAPSHOT too, which is why this module reads the demo addresses from
  * `@kernel/seed-accounts` and not from a user record: an order remembers where it was sent, and
@@ -22,7 +24,7 @@ import {
     SEED_USER_EMAIL,
     SEED_USER_ID
 } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS, productFixtures } from '@modules/products';
+import { SEED_PRODUCT_IDS, seedProductById } from '@modules/products/seeds';
 import { makeOrder, type OrderSnapshotInput } from './factory';
 import { orderModel } from './model';
 import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
@@ -30,11 +32,10 @@ import { orderRepository } from './repository';
 
 /** The catalogue row as it stands, reshaped into the snapshot an order item stores. */
 const snapshotOf = (productId: string): OrderSnapshotInput => {
-    const product = productFixtures.find((candidate) => candidate._id.toString() === productId);
-    if (!product)
-        throw new Error(
-            `seed fixtures: order references product ${productId}, which is not in productFixtures`
-        );
+    /* Throws on a product that is not in the demo catalogue — `products` owns that check, because
+     * it owns the catalogue. What this module owns is the RESHAPING below: `OrderSnapshotInput` is
+     * an order's idea of a product, and only the order book gets to say what it holds. */
+    const product = seedProductById(productId);
 
     return {
         id: productId,

@@ -611,13 +611,26 @@ export default tseslint.config(
     /**
      * Module boundaries.
      *
-     * A module owns everything about its domain and exposes one surface: `index.ts`. A sibling may
-     * import `@modules/<name>`; reaching `@modules/<name>/service` or any other internal is what
-     * this rule exists to stop, because the moment one happens the module stops being deletable.
+     * A module owns everything about its domain and exposes TWO surfaces, and no others:
      *
-     * The pattern matches two segments or more, so the barrel itself (`@modules/products`) stays
-     * legal while everything below it does not. A module reaches its own files relatively —
-     * `./service`, `./controllers/get-products` — which no pattern here touches.
+     *   `@modules/<name>`        the barrel — the runtime API a sibling may call
+     *   `@modules/<name>/seeds`  the demo fixtures a sibling's seeder may point at
+     *
+     * Reaching `@modules/<name>/service` or any other internal is what this rule exists to stop,
+     * because the moment one happens the module stops being deletable.
+     *
+     * The second door is not a hole in the rule, it is the rest of it. Six modules have a
+     * `seeds.ts` and a seeded cart line has to name a seeded product, so the coupling is real and
+     * has to go somewhere. With one entry point it went through the barrel — `products/index.ts`
+     * published `SEED_PRODUCT_IDS` and `productFixtures` beside `productService`, which made "what
+     * may a sibling import" and "what is the production API" stop being the same question. Naming
+     * the demo path separately answers both at the call site, and lets the two edges be counted
+     * apart: `tests/cross-cutting/module-test-boundaries.test.ts` asserts that nothing outside a
+     * `seeds.ts` ever takes one, so demo data cannot reach the runtime import graph.
+     *
+     * The pattern matches two segments or more, so both doors stay legal while everything below
+     * them does not. A module reaches its own files relatively — `./service`,
+     * `./controllers/get-products` — which no pattern here touches.
      *
      * `src/modules.ts` sits outside `src/modules/` and so is not covered: the registry is the one
      * caller allowed to import `@modules/<name>/module`, which is the manifest's whole purpose.
@@ -637,9 +650,12 @@ export default tseslint.config(
                 {
                     patterns: [
                         {
-                            group: ['@modules/*/*'],
+                            // The negation keeps `@modules/<name>/seeds` legal while every other
+                            // second segment stays banned. Two allowed shapes, no per-module list,
+                            // so adding a domain needs no edit here.
+                            group: ['@modules/*/*', '!@modules/*/seeds'],
                             message:
-                                'Import a sibling module through its public barrel (@modules/<name>), never its internals.'
+                                'Import a sibling module through one of its two public paths: @modules/<name> for its runtime API, @modules/<name>/seeds for its demo fixtures. Never its internals.'
                         },
                         {
                             group: ['@app/*'],

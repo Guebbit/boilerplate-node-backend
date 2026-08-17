@@ -8,7 +8,7 @@
  */
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS } from '@modules/products';
+import { SEED_PRODUCT_IDS } from '@modules/products/seeds';
 import { makeWishlist } from './factory';
 import { wishlistModel } from './model';
 import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';
