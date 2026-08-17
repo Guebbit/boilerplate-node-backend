@@ -18,15 +18,14 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
+import type { EnvelopeMessage } from './envelopeMessage';
+import type { EnvelopeStatus } from './envelopeStatus';
+import type { EnvelopeSuccess } from './envelopeSuccess';
+import type { LocaleEntriesResponse } from './localeEntriesResponse';
 
-/**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
- */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface LocaleEntriesResponseEnvelope {
+  success: EnvelopeSuccess;
+  status: EnvelopeStatus;
+  message: EnvelopeMessage;
+  data: LocaleEntriesResponse;
 }

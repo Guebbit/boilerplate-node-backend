@@ -18,15 +18,24 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { Id } from './id';
 import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
+import type { LocaleDirection } from './localeDirection';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * A language registered in the DYNAMIC tier. Its existence means entries can be translated into it and a client can download the result — never that the API can answer a request in it, which is decided by a deployed file and nothing else.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface Language {
+  id: Id;
+  tag: Locale;
+  /** English name, for an admin list. */
+  name: string;
+  /** The language's own name, for a client's language picker. */
+  nativeName: string;
+  direction: LocaleDirection;
+  active: boolean;
+  /** @minimum 0 */
+  revision: number;
+  createdAt?: string;
+  updatedAt?: string;
 }

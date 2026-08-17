@@ -23,7 +23,7 @@
         "contracts:bundle": "tsx scripts/bundle-contracts.ts",
         "check:contracts-bundle": "tsx scripts/bundle-contracts.ts --check",
         "check:spec-identity": "tsx scripts/check-spec-identity.ts",
-        "sync:frontend": "tsx scripts/sync-frontend.ts",
+        "sync:frontend": "tsx scripts/sync-frontend.ts --regen",
         "regenerate": "tsx scripts/regenerate.ts",
         "gen:api": "rm -rf ./api && orval --config orval.config.ts",
         "gen:asyncapi": "tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.generated.ts",

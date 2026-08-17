@@ -633,6 +633,12 @@ paths:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales'
     /locales/{locale}:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}'
+    /locales/{locale}/messages:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1messages'
+    /locales/{locale}/entries:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries'
+    /locales/{locale}/entries/{entryId}:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries~1{entryId}'
 
     # ---------- observability ----------
     /observability/events:

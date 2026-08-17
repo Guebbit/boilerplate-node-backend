@@ -26,9 +26,25 @@
  * script happens to run in is how work gets silently reverted. They are listed as differing and left
  * alone.
  *
+ * ## Why the copy is not the whole job
+ *
+ * A copy alone leaves the frontend holding a current contract and a client generated from the
+ * PREVIOUS one. That state type-checks over there, so nothing announces it — the frontend simply
+ * ships against a contract the backend no longer serves. `--regen` closes it by running the
+ * frontend's own `npm run regenerate` after a successful copy, and `package.json` passes the flag,
+ * so the command anyone actually runs does the whole job.
+ *
+ * It stays a FLAG rather than being unconditional in this file, because it runs another repo's npm
+ * scripts: a frontend whose `node_modules` is stale, or whose orval differs, fails a command in THIS
+ * repo and reads like the sync broke when it did not. Keeping it a flag means the behaviour is
+ * visible in `package.json` rather than buried here, a direct `tsx scripts/sync-frontend.ts` stays
+ * inert over there, and the failure path below can say whose build failed. The printed instructions
+ * are what the flagless run gives instead, and they remain the honest description of what is left.
+ *
  * Usage:
- *   npm run sync:frontend            # copy what changed, report what needs a decision
- *   npm run sync:frontend -- --dry   # say what would be copied, write nothing
+ *   npm run sync:frontend             # copy, then regenerate over there (package.json adds --regen)
+ *   npm run sync:frontend -- --dry    # say what would be copied, write nothing, run nothing
+ *   tsx scripts/sync-frontend.ts      # copy only, and print what to run in the frontend
  */
 
 import { execFileSync } from 'node:child_process';
@@ -38,6 +54,8 @@ import { SHARED_FILES, hashFile, THIS_REPO } from './specIdentity';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './frontendPath';
 
 const dryRun = process.argv.includes('--dry');
+/* Ignored under `--dry`, which promises to write nothing — over there least of all. */
+const regenerate = process.argv.includes('--regen') && !dryRun;
 
 const fail = (message: string): never => {
     console.error(message);
@@ -141,25 +159,59 @@ if (decisions.length > 0)
     );
 
 /*
- * The one thing this cannot do for you. Both repos generate typed clients FROM the files just
- * copied, and those outputs live only in their own repo — so the frontend is not in sync until it
- * has regenerated. Naming the commands beats leaving it to memory.
+ * Both repos generate typed clients FROM the files just copied, and those outputs live only in
+ * their own repo — so the frontend is not in sync until it has regenerated. Left undone, it ships a
+ * client for the previous contract, which type-checks over there and announces nothing.
+ *
+ * `--regen` does it; without the flag the commands are named, because leaving it to memory is how
+ * the gap opens in the first place.
  */
-if (moved.length > 0 && !dryRun)
+if (moved.length > 0 && regenerate) {
+    console.info(`\n[sync] Regenerating in ${frontendRoot} — npm run regenerate`);
+    try {
+        /*
+         * Inherited stdio, deliberately: this is another repo's build talking, and summarising it
+         * would hide the one thing a reader needs — which of ITS steps failed. `cwd` is the only
+         * thing that makes this the frontend's npm rather than this repo's.
+         */
+        execFileSync('npm', ['run', 'regenerate'], { cwd: frontendRoot, stdio: 'inherit' });
+    } catch {
+        fail(
+            `\n[sync] The files were copied, but ${frontendRoot} failed to regenerate.\n` +
+                `  That repo's build, not this one's — check its dependencies are installed.\n` +
+                `  The copy stands; finish by hand over there:\n` +
+                `    cd ${frontendRoot}\n` +
+                `    npm run regenerate\n` +
+                `    npm run check:spec-identity`
+        );
+    }
+} else if (moved.length > 0 && !dryRun)
     console.info(
         `\n[sync] Now regenerate over there, or the frontend ships a client for the old contract:\n` +
             `    cd ${frontendRoot}\n` +
-            `    npm run gen:api          # orval, from openapi.yaml\n` +
-            `    npm run check:spec-identity`
+            `    npm run regenerate       # orval + asyncapi types, from the files just copied\n` +
+            `    npm run check:spec-identity\n` +
+            `  Or re-run this with --regen to have it done for you.`
     );
 
-/* A copied file that still hashes differently means something rewrote it mid-run. */
+/*
+ * A copied file that still hashes differently means something rewrote it mid-run.
+ *
+ * Placed AFTER the regeneration step on purpose, so it covers that too: the frontend's `regenerate`
+ * ends in `prettier:fix`, and a shared document reformatted by it would fork the two repos while
+ * every check on this side still passed. Its `.prettierignore` excludes the REST contract for
+ * exactly that reason — this is what would notice if that ever stopped being true.
+ */
 if (!dryRun)
     for (const shared of SHARED_FILES.filter((item) => item.owner === 'backend')) {
         const from = path.resolve(process.cwd(), shared[THIS_REPO]);
         const to = path.join(frontendRoot, shared.frontend);
         if (readFileSync(from).equals(readFileSync(to))) continue;
         fail(
-            `[sync] ${shared.frontend} still differs after copying. Nothing else should write it.`
+            `[sync] ${shared.frontend} still differs after copying.\n` +
+                (regenerate
+                    ? `  Nothing but the regeneration ran in between — check that repo's` +
+                      ` .prettierignore still excludes it.`
+                    : `  Nothing else should write it.`)
         );
     }

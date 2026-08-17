@@ -18,15 +18,18 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { Id } from './id';
 import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * One translated string: one row per (language, key). That shape makes every operation this feature needs a single indexed query — add is an insert, edit is an update, a whole dictionary is one find — and adding a language touches nothing that already exists.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface LocaleEntry {
+  id: Id;
+  locale: Locale;
+  /** Flat and dotted. Stored AS A STRING and never as a Mongo path — a document per language with `$set: { "messages.products.list.title": v }` would have Mongo read three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting. */
+  key: string;
+  value: string;
+  createdAt?: string;
+  updatedAt?: string;
 }

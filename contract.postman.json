@@ -84,7 +84,7 @@
                   "locales"
                 ]
               },
-              "description": "Which languages this deployment can answer in, plus its default and fallback.\n\nPublic, unauthenticated and cacheable: it is static copy that changes only on\ndeploy, and a client that has just failed to reach the API is exactly who needs\nit.\n"
+              "description": "Every language this deployment offers, from both tiers, each stating what it can\nactually do.\n\n`scopes` is the field doing the real work. `api` means the API can answer requests\nin that language — its dictionary is deployed and i18next holds it. `app` means a\nclient dictionary is downloadable from `GET /locales/{locale}/messages`. A language\ncan have either, or both, and the two are not the same capability: a language added\nthrough the admin routes below is `app` only until a file is deployed for it.\n\nPublic, unauthenticated and cacheable. A client that has just failed to reach the\nAPI is exactly who needs it.\n"
             },
             "response": [
               {
@@ -113,7 +113,7 @@
                   }
                 ],
                 "cookie": [],
-                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Locale capabilities\",\n  \"data\": {\n    \"locales\": [\n      \"it\"\n    ],\n    \"default\": \"it\",\n    \"fallback\": \"it\"\n  }\n}"
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Locale capabilities\",\n  \"data\": {\n    \"locales\": [\n      {\n        \"tag\": \"it\",\n        \"name\": \"Spanish\",\n        \"nativeName\": \"Español\",\n        \"direction\": \"ltr\",\n        \"scopes\": [\n          \"app\"\n        ],\n        \"source\": \"both\",\n        \"entryCount\": 0,\n        \"revision\": 0\n      }\n    ],\n    \"default\": \"it\",\n    \"fallback\": \"it\"\n  }\n}"
               },
               {
                 "id": "5dd4eafa-6efa-421c-8709-247a94fd945d",
@@ -121,6 +121,276 @@
                 "originalRequest": {
                   "method": "GET",
                   "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Add a language",
+            "id": "30d5b200-1b09-4e72-8f8f-d5b33e4a123c",
+            "request": {
+              "method": "POST",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"tag\": \"it\",\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/locales",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales"
+                ]
+              },
+              "description": "Registers a language in the dynamic tier so entries can be translated into it.\n\nThis does NOT teach the API to answer in the new language — that needs a dictionary\nfile and a deploy. A language created here is `app`-scoped until one exists.\n"
+            },
+            "response": [
+              {
+                "id": "4dc6918f-0e26-4065-80a7-5871ddd1c6de",
+                "name": "201 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"tag\": \"it\",\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales"
+                    ]
+                  }
+                },
+                "status": "Created",
+                "code": 201,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"The created language\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"tag\": \"it\",\n    \"name\": \"Spanish\",\n    \"nativeName\": \"Español\",\n    \"direction\": \"ltr\",\n    \"active\": true,\n    \"revision\": 0,\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}"
+              },
+              {
+                "id": "5b15f14a-5202-46e0-8aee-e1abd02dc7cd",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"tag\": \"it\",\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "63e01732-d327-4764-8415-e92ae3fffa83",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"tag\": \"it\",\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "506bde76-418c-44c0-8f5b-e7a241b607b0",
+                "name": "409 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"tag\": \"it\",\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales"
+                    ]
+                  }
+                },
+                "status": "Conflict",
+                "code": 409,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "68681941-b32d-4ee7-8d1f-340192ceb6be",
+                "name": "422 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"tag\": \"it\",\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales"
+                    ]
+                  }
+                },
+                "status": "Unprocessable Entity",
+                "code": 422,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "7e232058-ae53-44a0-86b2-750353afbf62",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"tag\": \"it\",\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
                   "url": {
                     "raw": "{{baseUrl}}/locales",
                     "host": [
@@ -166,7 +436,7 @@
                   "en"
                 ]
               },
-              "description": "This API's own dictionary for one language.\n\nNormally unnecessary — the API resolves its keys itself and puts finished text on\nthe wire. It earns its place when no response arrives at all (a network failure, a\nbare 502) and the client must produce the copy itself, in the active language.\n"
+              "description": "This API's own dictionary for one language — tier 1, the deployed files.\n\nNormally unnecessary: the API resolves its keys itself and puts finished text on\nthe wire. It earns its place when no response arrives at all (a network failure, a\nbare 502) and the client must produce the copy itself, in the active language.\n\nNot to be confused with `GET /locales/{locale}/messages`, which serves the client's\nown copy out of the database.\n"
             },
             "response": [
               {
@@ -241,6 +511,2280 @@
                     "path": [
                       "locales",
                       "en"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Edit a language",
+            "id": "3ff065aa-8a88-49a5-8a1c-caaca718a93a",
+            "request": {
+              "method": "PUT",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/locales/en",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en"
+                ]
+              },
+              "description": "Updates a language's display names, writing direction or visibility. The tag itself\nis immutable — it is what every entry references, so changing it would be a rename\nof the whole dictionary rather than an edit of this record.\n"
+            },
+            "response": [
+              {
+                "id": "adfd9767-9ffe-4798-83fa-7faa29fb5011",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The updated language\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"tag\": \"it\",\n    \"name\": \"Spanish\",\n    \"nativeName\": \"Español\",\n    \"direction\": \"ltr\",\n    \"active\": true,\n    \"revision\": 0,\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}"
+              },
+              {
+                "id": "24e74aaf-0fb4-4131-8277-4e25cdf0b910",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "d0a8cc40-766f-46c9-803a-9d988a988789",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "e3f7ac0e-742d-4353-8f6d-4034482d01dc",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "918a6514-4d27-4e9d-8659-6a0cf9fdf9a8",
+                "name": "422 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Unprocessable Entity",
+                "code": 422,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "e95b4295-e733-49fb-8851-d4243fa3bd5b",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"name\": \"string\",\n  \"nativeName\": \"string\",\n  \"direction\": \"ltr\",\n  \"active\": true\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Remove a language",
+            "id": "7717b1b5-f5e6-44e5-8798-03e33918598f",
+            "request": {
+              "method": "DELETE",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/locales/en",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en"
+                ]
+              },
+              "description": "Removes the language AND every entry translated into it.\n\nRefuses with 409 while the language is still active. That two-step is deliberate:\nthis destroys a day's translation work, and a mis-click should cost a toggle rather\nthan the work. Deactivate first, then delete.\n"
+            },
+            "response": [
+              {
+                "id": "65eb5908-5108-4d7d-8c7a-6cb89ce978cc",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Success\"\n}"
+              },
+              {
+                "id": "b87f9cea-ac42-46bb-8747-f939d39b6915",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "0216abd2-4710-471d-8ba1-abcaa6d43d9d",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "19ae9af8-fa8d-45e8-81e2-7c22cd23fa63",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "23ecb23e-3781-4770-8b6b-9add1b1cce0a",
+                "name": "409 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Conflict",
+                "code": 409,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "73e2501b-1ff8-43e9-8a33-8220364640b9",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Client message dictionary",
+            "id": "3cef1239-3f3a-46b6-8150-26739e96c04e",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/locales/en/messages",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en",
+                  "messages"
+                ]
+              },
+              "description": "The dynamic dictionary for one language, built from its stored entries into the\nsame nested shape `GET /locales/{locale}` serves — so a client has ONE merge path\nfor both tiers rather than two.\n\nThis is what a client fetches for a language it does not bundle. Its resolution\norder is: its own bundle first, this endpoint when the language was added after the\nclient was deployed, its bundled fallback when neither answers.\n\n404 for a language that does not exist in the dynamic tier, and equally for one\nthat exists but is inactive — an inactive language is invisible to every public\nroute, which is the whole point of the flag.\n\nPublic and cacheable, like every other locale read.\n"
+            },
+            "response": [
+              {
+                "id": "9ffb5c36-ad97-4b71-8134-cbfecad9f728",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/messages",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "messages"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The built dictionary for the requested language\",\n  \"data\": {\n    \"locale\": \"it\",\n    \"revision\": 0,\n    \"messages\": \"string\"\n  }\n}"
+              },
+              {
+                "id": "f99295df-57a4-40bc-8ee1-77299cc243c4",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/messages",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "messages"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "8892588b-d85b-4e4e-8cf7-59fdd340036a",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/messages",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "messages"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "List translation entries",
+            "id": "78518aa7-6912-413f-88dd-520fea97e40d",
+            "request": {
+              "method": "GET",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/locales/en/entries",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en",
+                  "entries"
+                ]
+              },
+              "description": "The rows behind one language's dictionary, paginated and searchable — what a\ntranslation screen lists. Flat, because a row is what gets edited; the nested tree\nis `GET /locales/{locale}/messages`.\n\n`text` searches keys and values together.\n"
+            },
+            "response": [
+              {
+                "id": "bd706c3c-4da1-49b5-874c-e7b34ac6258d",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"A page of entries\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"65dc8a99604c307b702b5ccc\",\n        \"locale\": \"it\",\n        \"key\": \"products.list.title\",\n        \"value\": \"Catálogo\",\n        \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n        \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n      }\n    ],\n    \"meta\": {\n      \"page\": 1,\n      \"pageSize\": 10,\n      \"totalItems\": 0,\n      \"totalPages\": 0\n    }\n  }\n}"
+              },
+              {
+                "id": "b45bfab0-58fb-4057-80b5-c98702af2539",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "ce573590-1212-4e36-8585-f5e302ffb5e6",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "fec12ec2-fa39-4866-8a28-f29ebd0470c2",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "b757b432-30fd-4a56-8aec-08207fbb911d",
+                "name": "422 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unprocessable Entity",
+                "code": 422,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "42267a79-3156-4f9d-8832-88e54519af19",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Add one translation entry",
+            "id": "35b866bc-805f-483e-8087-f5cc862f96b6",
+            "request": {
+              "method": "POST",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/locales/en/entries",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en",
+                  "entries"
+                ]
+              },
+              "description": "409 if the key already exists in this language, and equally if it COLLIDES with one\n— see `LocaleEntryInput.key` for what a collision is and why it is refused here\nrather than discovered when the tree is built.\n"
+            },
+            "response": [
+              {
+                "id": "9f657044-7b02-46f8-84d7-3cb8b679b376",
+                "name": "201 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Created",
+                "code": 201,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 201,\n  \"message\": \"The created entry\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"locale\": \"it\",\n    \"key\": \"products.list.title\",\n    \"value\": \"Catálogo\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}"
+              },
+              {
+                "id": "99bbc70e-1d4c-46e7-8acf-86edaba134fa",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "2e04b673-1686-40ef-8829-ae1aa61f9234",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "1911380b-029c-413a-887c-60257831a654",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "0946978e-5299-4b5b-8300-75f807d4f4ef",
+                "name": "409 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Conflict",
+                "code": 409,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "83571e81-c1f9-4da6-80a5-f250eb1162f6",
+                "name": "422 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unprocessable Entity",
+                "code": 422,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "f29f4e6a-38e7-4aa0-84f5-6bd5fe1a958d",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "POST",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"key\": \"products.list.title\",\n  \"value\": \"Catálogo\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Replace every entry",
+            "id": "b0efb1d7-e7c7-4f88-837e-ff4cdc1d6ade",
+            "request": {
+              "method": "PUT",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/locales/en/entries",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en",
+                  "entries"
+                ]
+              },
+              "description": "Bulk import, REPLACING semantics: what is not sent is DELETED. The whole set of\nentries for this language becomes exactly what the body carries.\n\nPaired with `PATCH` on this same collection, which merges instead. \"Does an import\ndelete missing keys\" is the question every translation tool gets wrong, so the two\nbehaviours are spelled in the METHOD rather than in a flag — a client cannot pick\none and get the other.\n\nNobody adds five hundred keys through a form; without this the admin surface is a\ndemo.\n"
+            },
+            "response": [
+              {
+                "id": "cf48220c-ed1c-4d7e-8d4e-efecf19d5220",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"What the import did\",\n  \"data\": {\n    \"created\": 0,\n    \"updated\": 0,\n    \"removed\": 0,\n    \"revision\": 0\n  }\n}"
+              },
+              {
+                "id": "69867cd6-2a90-412a-8ac5-c41e47b65ed0",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "d24c30f2-3a7f-4409-8f1e-553b6f4ec1a7",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "53e6a291-7580-4edb-8262-82407d2a40cd",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "0c3ce237-a0a5-48c9-8727-bd008cbfe66f",
+                "name": "409 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Conflict",
+                "code": 409,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "57f0ed1a-0822-4446-84dc-5e095eb45cdc",
+                "name": "422 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unprocessable Entity",
+                "code": 422,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "29cbcfdb-f193-4ea0-8bff-7e93c9a30f11",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Merge entries",
+            "id": "85978100-8b47-4071-861a-ef0715b55ab7",
+            "request": {
+              "method": "PATCH",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/locales/en/entries",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en",
+                  "entries"
+                ]
+              },
+              "description": "Bulk import, MERGING semantics: what is sent is upserted, everything else is left\nalone. Nothing is ever deleted by this operation.\n\nSee `PUT` on this collection for the replacing counterpart, and for why the choice\nlives in the method.\n"
+            },
+            "response": [
+              {
+                "id": "88f17b90-1606-4754-895e-d91dd1140691",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "PATCH",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"What the import did\",\n  \"data\": {\n    \"created\": 0,\n    \"updated\": 0,\n    \"removed\": 0,\n    \"revision\": 0\n  }\n}"
+              },
+              {
+                "id": "d87e1156-c91f-4674-8348-8e8f867d461a",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "PATCH",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "34a165a5-c05a-49a9-88e0-724321dec62c",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "PATCH",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "4ee49d0e-21e5-4757-8669-c04a616fab68",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "PATCH",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "d120adf7-2d7f-4220-85ac-40e31d1e6d25",
+                "name": "409 Response",
+                "originalRequest": {
+                  "method": "PATCH",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Conflict",
+                "code": 409,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 409,\n  \"message\": \"The request conflicts with the current state of the resource\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "e50679ee-5346-4889-8390-f9c816a373de",
+                "name": "422 Response",
+                "originalRequest": {
+                  "method": "PATCH",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Unprocessable Entity",
+                "code": 422,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "494178e1-66f9-46f8-830c-1e9340a2aaf1",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "PATCH",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"entries\": [\n    {\n      \"key\": \"products.list.title\",\n      \"value\": \"Catálogo\"\n    }\n  ]\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Edit one translation entry",
+            "id": "c014cc7d-41dc-4248-87b1-8e72ee0639dd",
+            "request": {
+              "method": "PUT",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n  \"value\": \"string\"\n}",
+                "options": {
+                  "raw": {
+                    "language": "json"
+                  }
+                }
+              },
+              "url": {
+                "raw": "{{baseUrl}}/locales/en/entries/example",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en",
+                  "entries",
+                  "example"
+                ]
+              },
+              "description": "Updates the value of one entry. The key is not editable — a key is the identity a\nclient looks the string up by, so changing it is a delete plus an add, and the two\ncollision checks that go with them.\n"
+            },
+            "response": [
+              {
+                "id": "431b43f4-0755-4ed0-8fbf-8507fe37cfc8",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"value\": \"string\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"The updated entry\",\n  \"data\": {\n    \"id\": \"65dc8a99604c307b702b5ccc\",\n    \"locale\": \"it\",\n    \"key\": \"products.list.title\",\n    \"value\": \"Catálogo\",\n    \"createdAt\": \"2026-01-01T00:00:00.000Z\",\n    \"updatedAt\": \"2026-01-01T00:00:00.000Z\"\n  }\n}"
+              },
+              {
+                "id": "8cd9900b-f634-4a6e-82dc-95a3c4412812",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"value\": \"string\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "3be48779-77ed-47f0-83b8-34b4ea927f41",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"value\": \"string\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "9643dbac-68e7-4839-85c8-0d534d2c7986",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"value\": \"string\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "9de77ea2-e5a3-4681-87d1-783fd1575ce7",
+                "name": "422 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"value\": \"string\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Unprocessable Entity",
+                "code": 422,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 422,\n  \"message\": \"Validation failed\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "3f9a3c8d-0ec7-4c3a-8b94-b8244f291a25",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "PUT",
+                  "header": [],
+                  "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"value\": \"string\"\n}",
+                    "options": {
+                      "raw": {
+                        "language": "json"
+                      }
+                    }
+                  },
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Internal Server Error",
+                "code": 500,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 500,\n  \"message\": \"Internal server error\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              }
+            ]
+          },
+          {
+            "name": "Remove one translation entry",
+            "id": "f6675bd8-66af-481a-8c3b-8888a34714fe",
+            "request": {
+              "method": "DELETE",
+              "auth": {
+                "type": "bearer",
+                "bearer": [
+                  {
+                    "key": "token",
+                    "value": "{{token}}",
+                    "type": "string"
+                  }
+                ]
+              },
+              "header": [
+                {
+                  "key": "Accept",
+                  "value": "application/json"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/locales/en/entries/example",
+                "host": [
+                  "{{baseUrl}}"
+                ],
+                "path": [
+                  "locales",
+                  "en",
+                  "entries",
+                  "example"
+                ]
+              },
+              "description": "Removes a single key from one language. The other languages keep theirs."
+            },
+            "response": [
+              {
+                "id": "50300292-b8b7-4c0f-877c-0c501fc10cf3",
+                "name": "200 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": true,\n  \"status\": 200,\n  \"message\": \"Success\"\n}"
+              },
+              {
+                "id": "6a13be66-9125-4a49-8f63-b943d57b2919",
+                "name": "401 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Unauthorized",
+                "code": 401,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 401,\n  \"message\": \"Unauthorized\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "c57eaec3-894b-444e-8f48-d0b57be53f24",
+                "name": "403 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Forbidden",
+                "code": 403,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 403,\n  \"message\": \"Forbidden\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "2bf6ad66-d8cc-47e5-89ea-59ad22adae5a",
+                "name": "404 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
+                    ]
+                  }
+                },
+                "status": "Not Found",
+                "code": 404,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "cookie": [],
+                "body": "{\n  \"success\": false,\n  \"status\": 404,\n  \"message\": \"Resource not found\",\n  \"errors\": [\n    {\n      \"code\": \"VALIDATION_ERROR\",\n      \"message\": \"Field \\\"email\\\" is required\",\n      \"details\": \"string\"\n    }\n  ]\n}"
+              },
+              {
+                "id": "91d2e73a-095b-4542-83bd-6a0da0d1060f",
+                "name": "500 Response",
+                "originalRequest": {
+                  "method": "DELETE",
+                  "header": [],
+                  "url": {
+                    "raw": "{{baseUrl}}/locales/en/entries/example",
+                    "host": [
+                      "{{baseUrl}}"
+                    ],
+                    "path": [
+                      "locales",
+                      "en",
+                      "entries",
+                      "example"
                     ]
                   }
                 },

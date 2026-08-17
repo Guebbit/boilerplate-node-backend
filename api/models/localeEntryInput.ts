@@ -18,15 +18,13 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * One key and its translation, as an import or a create sends it.
+ * A key is refused when it is a strict prefix of an existing key in the same language, or has one as a prefix — `products.list` alongside `products.list.title`. No tree can hold both: one is a string, the other needs to be an object at the same path. A naive builder silently drops one of them, and which one depends on insertion order, so this is caught at WRITE time with a 409 naming both keys rather than discovered at read time by whoever is missing a string.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface LocaleEntryInput {
+  /** @minLength 1 */
+  key: string;
+  value: string;
 }

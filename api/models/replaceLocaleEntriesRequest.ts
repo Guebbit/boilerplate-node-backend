@@ -18,15 +18,11 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
+import type { LocaleEntryInput } from './localeEntryInput';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * The COMPLETE set of entries for this language. Anything already stored and not named here is deleted.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface ReplaceLocaleEntriesRequest {
+  entries: LocaleEntryInput[];
 }

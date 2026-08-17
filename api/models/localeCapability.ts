@@ -19,14 +19,26 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
+import type { LocaleDirection } from './localeDirection';
+import type { LocaleScope } from './localeScope';
+import type { LocaleSource } from './localeSource';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * One language as the manifest describes it: a merge of whatever the two tiers each know about it. A tag present in both appears once, with both scopes.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface LocaleCapability {
+  tag: Locale;
+  name: string;
+  nativeName: string;
+  direction: LocaleDirection;
+  /**
+     * What this language can do. Without it a client seeing `es` in the list cannot tell whether it may send `Accept-Language: es` and get Spanish error messages, or whether it may download a Spanish UI dictionary. Those are different questions.
+     * @minItems 1
+     */
+  scopes: LocaleScope[];
+  source: LocaleSource;
+  /** @minimum 0 */
+  entryCount: number;
+  /** @minimum 0 */
+  revision: number;
 }

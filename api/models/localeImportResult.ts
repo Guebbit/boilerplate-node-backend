@@ -18,15 +18,17 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Locale } from './locale';
-import type { LocaleCapability } from './localeCapability';
 
 /**
- * Which languages a deployment offers, and what each of them can do. Runtime state, not contract state: it is derived from the dictionaries actually deployed and the rows actually stored, so it cannot be an enum here.
+ * What an import actually did, counted rather than implied. `removed` is always 0 for a merge, which is the assertion a client can make to prove it called the operation it meant to.
  */
-export interface LocaleCapabilities {
-  /** Every language, ordered by tag so the response is stable. */
-  locales: LocaleCapability[];
-  default: Locale;
-  fallback: Locale;
+export interface LocaleImportResult {
+  /** @minimum 0 */
+  created: number;
+  /** @minimum 0 */
+  updated: number;
+  /** @minimum 0 */
+  removed: number;
+  /** @minimum 0 */
+  revision: number;
 }
