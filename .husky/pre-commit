@@ -14,4 +14,22 @@
 # which binds a real port), `bench` / `bench:search` (need a running server, and report numbers
 # rather than a verdict), and `test:fuzz` — which is nightly until the 500 it found is fixed, see
 # docs/theory/known-gaps.md §9.
+# Write the generated artefacts first, then verify them. Regenerating here rather than leaving it
+# to whoever remembers is what stops a commit failing the gate with "STALE" for a file no human
+# authors. Costs about five seconds: contracts:bundle 1s, gen:api 1s, gen:asyncapi 2s,
+# seed:export 1s.
+#
+# `--no-sync` is not optional. A full `regenerate` ends with `sync:frontend`, which writes into the
+# PAIRED REPO's working tree — a commit here would silently dirty a checkout you are not looking
+# at, and possibly one with its own work in progress. Hand the files over deliberately, with
+# `npm run regenerate` by itself, when you mean to.
+#
+# `git add` is required: a file rewritten after staging is not in the commit, so the gate below
+# would pass against content that is not what gets committed. Note this widens a partial
+# `git add -p` to include the whole regenerated output — which is what you want for a generated
+# file, and a surprise exactly once.
+npm run regenerate -- --no-sync
+git add openapi.yaml asyncapi.yaml api src/types/asyncapi.generated.ts \
+        db/demo/demo-data.json src/infrastructure/observability/analytics-events.ts
+
 npm run complete
