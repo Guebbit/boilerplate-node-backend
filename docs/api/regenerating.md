@@ -88,7 +88,7 @@ phase and not the others.
 | `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml` and `asyncapi.public.yaml`, then `src/types/asyncapi.generated.ts` |
-| `src/modules/*/analytics.ts`                          | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.ts` |
+| `src/modules/*/analytics.ts`                          | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.frontend.ts` |
 | `src/modules/*/demo.ts`                             | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | A route, controller or service (no contract change)   | nothing                                             | no bundle reads source code                       |
@@ -143,7 +143,7 @@ npm run test:contract             # do real responses match the contract?
 | `[contracts] STALE — these do not match the fragments`             | a fragment was edited without re-bundling, or a bundle was hand-edited                    | `npm run contracts:bundle`                              |
 | `contract-bundles.test.ts` fails                                    | the same thing, caught by the test suite instead                                          | `npm run contracts:bundle`                              |
 | `check:spec-identity` fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
-| `prettier:check` fails on `analytics-events.ts`                       | a module's `analytics.ts` ends its `as const` with a trailing comma — the join adds the separator, not the module | drop the trailing comma from the module's last entry    |
+| `prettier:check` fails on `analytics-events.frontend.ts`              | a section's `as const` ends with a trailing comma — the join adds the separator, not the source | drop the trailing comma from that section's last entry    |
 | `check:seed-export` says the dataset is STALE                         | a fixture changed and the dataset was not re-exported                                       | `npm run seed:export`, then copy the result to the frontend |
 | `gen:api` produces a diff in CI                                      | `api/` was not regenerated after a contract change                                         | `npm run gen:api` and commit the result                   |
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
@@ -163,7 +163,7 @@ Not one of these is a build artefact you can delete and forget:
 | `asyncapi.public.yaml`                                 | the AsyncAPI CLI · the frontend's whole realtime pipeline      |
 | `api/models/` · `api/schemas.zod.ts`                   | `@types` and the services that validate input                 |
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                   |
-| `src/infrastructure/observability/analytics-events.ts` | the analytics tracker                                         |
+| `src/infrastructure/observability/analytics-events.frontend.ts` | the analytics tracker                                         |
 | `db/demo/demo-data.json`                                | the generated collections and the paired frontend's mocks     |
 | `contract.{bruno,insomnia,mockoon,postman}.*`          | you, and whoever explores the API without running it          |
 
@@ -174,14 +174,31 @@ is fully derived, and the only thing to check is that the diff is limited to wha
 ## Handing the contract to the frontend
 
 The frontend holds **byte-identical copies** of the three bundles it consumes — `openapi.yaml`,
-`asyncapi.public.yaml` and `analytics-events.ts` — and never bundles or authors them. The four client
-collections stay here, and are not committed at all: they are derived from `openapi.yaml`, so a copy
-there could not disagree without the spec disagreeing first, and nothing in either repo reads them. After a contract change
-lands here:
+`asyncapi.public.yaml` and `analytics-events.frontend.ts` — and never bundles or authors them. The
+four client collections stay here, and are not committed at all: they are derived from
+`openapi.yaml`, so a copy there could not disagree without the spec disagreeing first, and nothing
+in either repo reads them.
 
-1. `npm run contracts:bundle` here, and commit the result.
-2. Copy the changed bundle(s) to `boilerplate-vue-frontend` verbatim.
-3. `npm run check:spec-identity` — it compares against the sibling checkout and fails on a fork.
+You do not move them by hand. `npm run regenerate` ends with `npm run sync:frontend`, which copies
+every backend-owned file into the sibling checkout — under its own name on that side, since three of
+the shared files are called something else there — and then runs the frontend's own `regenerate`, so
+its client is rebuilt from the contract it was just handed:
+
+```bash
+npm run regenerate                  # rebuild here, copy over there, regenerate over there
+npm run sync:frontend -- --dry      # say what would move, write nothing
+npm run sync:frontend -- --forced   # rewrite even the files that already match
+npm run check:spec-identity         # the gate: hashes both sides, fails on a fork
+```
+
+`sync:frontend` refuses to run on stale sources — `check:contracts-bundle` and `check:seed-export`
+go first, because copying a stale bundle makes both repos agree on a document neither one's sources
+produce. It also never writes the four hand-maintained files: it reports them as differing and
+leaves the decision to you.
+
+The sibling is found beside this repo, or wherever `FRONTEND_PATH` in `.env` points. The pre-commit
+hook runs `regenerate -- --no-sync`, because a commit here must not write into a checkout you are
+not looking at.
 
 Do **not** run the bundler in both repos and assume the bytes agree. They are compared, not parsed,
 and that check is the thing standing between you and a silent contract fork — see

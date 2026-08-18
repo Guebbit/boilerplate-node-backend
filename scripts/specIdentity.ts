@@ -13,9 +13,9 @@
  * asked for. Reordering both copies together is a two-line change; letting them drift is not.
  *
  * It treats the symptom, and should say so: the cure is one source of truth — a package both
- * repos consume, or a third repo — which is a bigger decision than a CI job (see
- * BETTER_TESTS_PLAN.md §11.5). Until that is made, this fails the build on the commit that forks
- * a shared file rather than on the release that ships the mismatch.
+ * repos consume, or a third repo — which is a bigger decision than a CI job. Until that is made,
+ * this fails the build on the commit that forks a shared file rather than on the release that
+ * ships the mismatch.
  *
  * The frontend mirrors this file. The two are separate copies on purpose: a shared package would
  * itself be a cross-repo dependency, which is the problem rather than the fix. Only `THIS_REPO`
@@ -144,7 +144,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
     },
 
     /*
-     * The three API client collections (`contract.<tool>.*` at the backend's root) are deliberately NOT here.
+     * The four API client collections (`contract.<tool>.*` at the backend's root) are deliberately NOT here.
      * They earned a place in this list when they were written by hand — a hand-maintained
      * restatement of the contract forks the moment an endpoint lands on one side only. They are
      * generated from `openapi.yaml` now, pinned to a fresh generation by the backend's

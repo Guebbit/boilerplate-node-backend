@@ -46,7 +46,7 @@ They are the price of one document assembled from per-module pieces, not a leak.
 is a hard error naming the missing file:
 
 ```
-Error: [analytics-events] src/infrastructure/observability/analytics-events.ts
+Error: [analytics-events] src/infrastructure/observability/analytics-events.frontend.ts
   names a fragment that does not exist:
   src/modules/products/analytics.ts
   Deleting a domain means deleting its entry from the bundle's section list too —
