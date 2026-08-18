@@ -33,5 +33,7 @@ export default {
     routes: router,
     seeds: seedUsersCollection,
     seedExport: exportSeededUsers,
+    /* `GET /users/:id` answers the serialized document as it stands. */
+    demoShapes: { users: 'response' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

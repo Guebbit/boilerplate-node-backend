@@ -45,7 +45,7 @@ import {
 } from '@api/schemas.zod';
 import dataset from '../../db/demo/demo-data.json';
 
-const { credentials, collections } = dataset;
+const { _meta, credentials, collections } = dataset;
 
 /*
  * The `.required()` masks are where "a seeded record is a complete specimen" stops being a comment.
@@ -336,6 +336,47 @@ describe('the exported dataset conforms to the generated contract', () => {
                     expect(visible).toContain(item.productId);
                 }
             }
+        });
+    });
+
+    /**
+     * `_meta.shapes` — what the consumer is allowed to do with each collection.
+     *
+     * The map is the artefact's answer to the only question a mock author asks of it: can I return
+     * this row as it stands? `scripts/export-seed.ts` refuses to publish an unclassified
+     * collection, so these cases are the second net — they hold the COMMITTED file to the rule, in
+     * both repos, which is what covers the frontend's copy between exports.
+     */
+    describe('the shapes map', () => {
+        it('names every published collection, and only those', () => {
+            expect(Object.keys(_meta.shapes).toSorted()).toStrictEqual(
+                Object.keys(collections).toSorted()
+            );
+        });
+
+        it('classifies each one as either servable or not', () => {
+            /* A JSON import widens the values to `string`, so the union the manifest declares is
+             * not checked on the way back in. A third value would be a consumer reading a label it
+             * has no branch for. */
+            for (const shape of Object.values(_meta.shapes)) {
+                expect(['response', 'stored']).toContain(shape);
+            }
+        });
+
+        it('calls a collection servable exactly when this file parses it as a whole response', () => {
+            /* The tripwire on a mislabel, which is the failure the map introduces: a wrong label is
+             * worse than none, because the reader stops checking. Every collection above parses
+             * against SOMETHING, but only these three parse against a whole `Get<X>ByIdResponse`
+             * payload — the rest are checked through an element or a nested field, which is itself
+             * the evidence that no endpoint serves the row. Relabel a collection and this list has
+             * to move with it, deliberately. */
+            const parsedAsWholeResponses = ['orders', 'products', 'users'];
+
+            const servable = Object.entries(_meta.shapes)
+                .filter(([, shape]) => shape === 'response')
+                .map(([name]) => name);
+
+            expect(servable.toSorted()).toStrictEqual(parsedAsWholeResponses);
         });
     });
 });

@@ -1,4 +1,16 @@
 {
+    "_meta": {
+        "shapes": {
+            "addressBooks": "stored",
+            "carts": "stored",
+            "localeMessages": "stored",
+            "locales": "stored",
+            "orders": "response",
+            "products": "response",
+            "users": "response",
+            "wishlists": "stored"
+        }
+    },
     "collections": {
         "addressBooks": [
             {

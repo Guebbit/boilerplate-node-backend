@@ -93,5 +93,8 @@ export default {
     },
     seeds: seedAddressBooksCollection,
     seedExport: exportSeededAddressBooks,
+    /* A book is never served raw: `GET /account/addresses` answers `{ addresses: [...] }`,
+     * which carries the book's `items` and nothing else it holds. */
+    demoShapes: { addressBooks: 'stored' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -62,5 +62,8 @@ export default {
      */
     locales: path.join(__dirname, 'locales'),
     seeds: seedLocalesCollection,
-    seedExport: exportSeededLocales
+    seedExport: exportSeededLocales,
+    /* Neither row is served raw. `GET /locales` answers a composed capabilities envelope and
+     * `GET /locales/:locale/messages` answers a nested tree built from the flat entries. */
+    demoShapes: { locales: 'stored', localeMessages: 'stored' }
 } satisfies AppModule;

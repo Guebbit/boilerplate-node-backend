@@ -59,5 +59,7 @@ export default {
     },
     seeds: seedWishlistsCollection,
     seedExport: exportSeededWishlists,
+    /* `GET /wishlist` answers the caller's own list, resolved against the catalogue. */
+    demoShapes: { wishlists: 'stored' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

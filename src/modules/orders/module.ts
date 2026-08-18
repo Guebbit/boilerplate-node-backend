@@ -70,5 +70,7 @@ export default {
     },
     seeds: seedOrdersCollection,
     seedExport: exportSeededOrders,
+    /* `GET /orders/:id` answers the serialized document as it stands, totals included. */
+    demoShapes: { orders: 'response' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -143,22 +143,65 @@ interface AppModuleCommon {
      * calls whatever it finds. A module with no demo data simply omits it.
      */
     seeds?: () => Promise<SeedOutcome[]>;
-
-    /**
-     * Read this module's seeded rows back in the shape the API serves them, keyed by collection.
-     *
-     * The other half of `seeds`, and declared for the same reason: `scripts/export-seed.ts` walks
-     * `enabledModules` and publishes whatever it finds as `db/demo/demo-data.json`, so it names no
-     * domain and deleting a module takes its section of the dataset with it.
-     *
-     * It must read back through the model's `toJSON` — the real serializer — rather than returning
-     * the fixtures it wrote. That is the entire point of the export: the published dataset records
-     * what the API actually produces, schema defaults and derived fields included, so the paired
-     * frontend's mocks stop guessing at them. A module that returned its own fixtures here would
-     * publish the guess and label it as truth.
-     */
-    seedExport?: () => Promise<Record<string, unknown[]>>;
 }
+
+/**
+ * What a published collection is to the consumer reading it.
+ *
+ * `response` — a GET answers with this row as it stands, so a mock may hand it straight back.
+ * `stored` — no endpoint serves the row raw. The response is composed around it, or the row backs
+ * an endpoint that answers with something else entirely, and a consumer that returns it verbatim
+ * is describing an API that does not exist.
+ *
+ * Two values rather than three, because two is the whole of the question anyone asks of the
+ * dataset. `addressBooks` are wrapped (`GET /account/addresses` answers `{ addresses: [...] }`) and
+ * `locales` are never served at all (`GET /locales` answers a composed capabilities envelope), and
+ * those differ only in HOW the response is built — which the consumer is writing anyway.
+ */
+export type DemoShape = 'response' | 'stored';
+
+/**
+ * The demo export, and the classification of what it publishes.
+ *
+ * A union rather than two optional fields, so declaring one without the other is a type error at
+ * the manifest — the same reason `basePath` and `routes` arrive together. An unclassified
+ * collection is the failure this exists to prevent, and it cannot be caught later: the artefact is
+ * consumed by a sibling repo, where "is this row servable?" has no local answer.
+ */
+type DemoExport =
+    | {
+          /**
+           * Read this module's seeded rows back in the shape the API serves them, keyed by
+           * collection.
+           *
+           * The other half of `seeds`, and declared for the same reason: `scripts/export-seed.ts`
+           * walks `enabledModules` and publishes whatever it finds as `db/demo/demo-data.json`, so
+           * it names no domain and deleting a module takes its section of the dataset with it.
+           *
+           * It must read back through the model's `toJSON` — the real serializer — rather than
+           * returning the fixtures it wrote. That is the entire point of the export: the published
+           * dataset records what the API actually produces, schema defaults and derived fields
+           * included, so the paired frontend's mocks stop guessing at them. A module that returned
+           * its own fixtures here would publish the guess and label it as truth.
+           */
+          seedExport: () => Promise<Record<string, unknown[]>>;
+
+          /**
+           * One entry per collection `seedExport` returns, published as `_meta.shapes`.
+           *
+           * The knowledge lives beside the rows because the reader who needs it is in the other
+           * repo, writing a mock handler against the artefact and nothing else. Stated here rather
+           * than derived from the schemas: a matcher would label the `locales` rows `response`,
+           * since a stored language happens to parse against the CREATE response, and a confidently
+           * wrong label is worse than none.
+           *
+           * `scripts/export-seed.ts` refuses to publish a collection this omits, and
+           * `tests/cross-cutting/seed-conformance.test.ts` holds the committed artefact to the same
+           * rule in both repos.
+           */
+          demoShapes: Readonly<Record<string, DemoShape>>;
+      }
+    | { seedExport?: never; demoShapes?: never };
 
 /** A module that serves HTTP. `basePath` and `routes` are meaningless apart, so they arrive together. */
 interface RoutedModule extends AppModuleCommon {
@@ -196,7 +239,7 @@ interface HeadlessModule extends AppModuleCommon {
  * from the first. Both are asserted by `tests/cross-cutting/`, so they are checked declarations
  * rather than comments.
  */
-export type AppModule = RoutedModule | HeadlessModule;
+export type AppModule = (RoutedModule | HeadlessModule) & DemoExport;
 
 /**
  * Reject duplicate names, unknown dependencies and dependency cycles.
