@@ -1,31 +1,29 @@
 #!/usr/bin/env tsx
 /**
- * Rebuild the committed documents from their fragments — `npm run contracts:bundle`.
+ * Rebuild the documents this repo publishes from their fragments — `npm run contracts:bundle`.
  *
- * Every bundle stays COMMITTED: it is what spectral, orval, Prism, `jest-openapi`, the seed runner,
- * the API clients and `check-spec-identity` read, and what gets copied to the paired frontend.
- * Fragments are the source of truth; this writes the published artefacts.
+ * The AUTHORED bundles stay COMMITTED: they are what spectral, orval, Prism, `jest-openapi`, the
+ * seed runner, the API clients and `check-spec-identity` read, and what gets copied to the paired
+ * frontend. Fragments are the source of truth; this writes the published artefacts.
  *
- * Run with `--check` in CI to assert the committed bundles are not stale instead of rewriting them
+ * Run with `--check` in CI to assert those are not stale instead of rewriting them
  * (`npm run check:contracts-bundle`). Name one or more bundles to narrow the run:
  *
  *   npm run contracts:bundle -- openapi asyncapi
  *
- * ## Why a full run is two phases
+ * ## The client collections are opt-in
  *
- * The four client collections are GENERATED from `openapi.yaml`, so they cannot be produced until
- * the contract itself has been bundled:
+ * `contract.{bruno,insomnia,mockoon,postman}.*` are GENERATED from `openapi.yaml` and `.gitignore`d, so a
+ * full run does NOT produce them and `--check` has nothing to say about them. Ask by name:
  *
- *   1. assemble the authored documents   fragments      -> openapi.yaml, asyncapi.yaml, …
- *   2. generate the collections          openapi.yaml   -> contract.<tool>.<ext>
+ *   npm run contracts:bundle -- bruno insomnia mockoon postman
  *
- * That ordering lives here rather than in package.json, where it would be three commands joined by
- * `&&` — wrong in a way nothing catches, because npm appends `--` arguments to the LAST command of
- * a chain only. Owning the ordering here makes the narrowing flag mean what it says.
+ * That regenerates from the COMMITTED contract, which is the right question while iterating: is the
+ * state on disk self-consistent? Bundle `openapi` first if the contract's fragments have moved.
  *
- * A narrowed run does exactly what it is asked and nothing else. `-- bruno` regenerates that one
- * collection from the COMMITTED contract, which is the right question while iterating: is the state
- * on disk self-consistent? A stale contract shows up on the next full run regardless.
+ * Keeping the selection here rather than in package.json matters because npm appends `--` arguments
+ * to the LAST command of a chain only — a `&&`-joined ordering would be wrong in a way nothing
+ * catches, and the narrowing flag would stop meaning what it says.
  */
 
 import { writeFileSync } from 'node:fs';
@@ -73,6 +71,25 @@ if (named.length > 0) {
     // Narrowed: exactly the bundles asked for, from what is committed. A collection named here is
     // regenerated from the COMMITTED contract rather than from one this run just assembled.
     const selected = named.map((name) => findBundle(name) as ContractBundle);
+
+    /*
+     * `--check` asks "is the committed file current". The collections are not committed, so the
+     * honest answer is that the question does not apply — and the naive one is "stale", every time,
+     * for a file that is absent by design. Refusing is what stops that from reaching CI as a
+     * permanently red gate somebody then works around.
+     */
+    const generated = selected.filter((item) => isGenerated(item));
+    if (checkOnly && generated.length > 0) {
+        fail(
+            `[contracts] --check does not apply to the client collections: ${generated
+                .map(({ name }) => name)
+                .join(', ')}.\n` +
+                `  They are generated on demand and .gitignore'd, so there is no committed copy to` +
+                ` be stale.\n` +
+                `  Generate one with: npm run contracts:bundle -- ${generated.map(({ name }) => name).join(' ')}`
+        );
+    }
+
     const stale = bundle(selected);
 
     if (checkOnly && stale.length > 0) {
@@ -92,47 +109,31 @@ if (named.length > 0) {
     process.exit(0);
 }
 
-// Full run — phase 1, so the collections generate from a current contract rather than a stale one.
-const authored = CONTRACT_BUNDLES.filter((item) => !isGenerated(item));
-const rebuiltFirst = bundle(authored);
-
 /*
- * Phase 2 — everything, the collections included.
- *
- * The two phases have to be UNIONED rather than the second one reported on its own: phase 1 has
- * already written whatever it found stale, so phase 2 re-reads those same files and correctly finds
- * them current. Reporting only phase 2 made a run that rewrote the contract announce "nothing
- * written", which is the one thing the message exists to tell you.
+ * Full run — the authored bundles and nothing else. The client collections are generated and
+ * uncommitted, so producing them here would write four files nobody asked for and that no check
+ * ever reads; `-- bruno` is how you get one.
  */
-const rebuiltSecond = bundle(CONTRACT_BUNDLES);
-const stale = [...rebuiltFirst, ...rebuiltSecond.filter((item) => !rebuiltFirst.includes(item))];
+const authored = CONTRACT_BUNDLES.filter((item) => !isGenerated(item));
+const stale = bundle(authored);
 
 if (checkOnly) {
     if (stale.length > 0) {
-        const collections = stale.filter((item) => isGenerated(item));
-
         fail(
             `[contracts] STALE — these do not match what they are built from:\n` +
                 stale.map(({ label }) => `  ${label}`).join('\n') +
                 `\n  A fragment was edited without re-bundling, or a bundle was hand-edited.\n` +
                 `  Fix with: npm run contracts:bundle\n` +
-                (collections.length > 0
-                    ? `  The collections are generated — never edit them by hand. A request the` +
-                      ` contract cannot describe (an invalid body, a bogus token, a soft-deleted` +
-                      ` record) belongs in that module's probes.ts, which the generator reads.\n`
-                    : '') +
                 `  Every authored bundle is byte-identical with the paired repo — copy the result` +
                 ` over there too.`
         );
     }
-    console.info(
-        `[contracts] ${CONTRACT_BUNDLES.length} bundles are up to date with their fragments.`
-    );
+    console.info(`[contracts] ${authored.length} bundles are up to date with their fragments.`);
     process.exit(0);
 }
 
 console.info(
     stale.length === 0
-        ? `[contracts] ${CONTRACT_BUNDLES.length} bundles already matched their fragments; nothing written.`
+        ? `[contracts] ${authored.length} bundles already matched their fragments; nothing written.`
         : `[contracts] rebuilt ${stale.map(({ output }) => relative(output)).join(', ')}.`
 );

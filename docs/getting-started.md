@@ -53,12 +53,18 @@ owns `8080–8099`, which is what lets both stacks be up at once.
 
 ## Explore the API without writing a client
 
-The repo root holds four generated collections — `contract.bruno.yml`, `contract.insomnia.json`,
-`contract.mockoon.json` and `contract.postman.json` — with one request per
-operation the contract declares, pre-filled with **values the seeded database actually holds**. Import
-one and start clicking; `POST /account/login` already carries credentials that work.
+Ask for a collection and one lands at the repo root:
 
-They are generated, never hand-written, which is why they cannot rot. See
+```bash
+npm run contracts:bundle -- bruno insomnia mockoon postman
+```
+
+`contract.bruno.yml`, `contract.insomnia.json`, `contract.mockoon.json` and `contract.postman.json`
+each carry one request per operation the contract declares, pre-filled with **values the seeded database actually holds**.
+Import one and start clicking; `POST /account/login` already carries credentials that work.
+
+They are generated rather than hand-written, which is why they cannot rot, and `.gitignore`d rather
+than committed, because their only reader is whoever just asked for one. See
 [Regenerating After a Change](./api/regenerating.md).
 
 ## Running on the host instead

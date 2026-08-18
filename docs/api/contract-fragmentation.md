@@ -17,15 +17,15 @@ because the frontend's toolchain reads them. The four client collections stay in
 only — they are derived from `openapi.yaml`, so a frontend copy could never disagree without
 the spec disagreeing first, and nothing there reads them:
 
-| Bundle            | Committed at                                | Built from                                                     |
+| Bundle            | Written to                                  | Built from                                                     |
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
 | `openapi`         | `openapi.yaml`                              | `src/modules/<name>/openapi.yaml` — **compiled by `redocly bundle`** |
 | `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi.yaml` + `shared/contracts/asyncapi.{root,workers}.yaml` — **merged** |
 | `analytics-events`| `src/infrastructure/observability/analytics-events.ts`| `src/modules/<name>/analytics.ts` — **sliced from real modules** |
-| `bruno`           | `contract.bruno.yml`                        | `openapi.yaml` + the seed dataset — **generated whole**         |
-| `insomnia`        | `contract.insomnia.json`                    | `openapi.yaml` + the seed dataset — **generated whole**         |
-| `mockoon`         | `contract.mockoon.json`                     | `openapi.yaml` + the seed dataset — **generated whole**         |
-| `postman`         | `contract.postman.json`                     | `openapi.yaml` + the seed dataset — **generated whole**         |
+| `bruno`           | `contract.bruno.yml` *(untracked)*          | `openapi.yaml` + the demo dataset — **generated whole**         |
+| `insomnia`        | `contract.insomnia.json` *(untracked)*      | `openapi.yaml` + the demo dataset — **generated whole**         |
+| `mockoon`         | `contract.mockoon.json` *(untracked)*       | `openapi.yaml` + the demo dataset — **generated whole**         |
+| `postman`         | `contract.postman.json` *(untracked)*       | `openapi.yaml` + the demo dataset — **generated whole**         |
 
 Whatever more than one domain reads stays in `shared/contracts/`, and each bundle's section order,
 layout and shared parts are declared in one file under `scripts/contracts/`.
@@ -37,15 +37,15 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents                  |
 | `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi.ts` copies three maps; `$ref`s stay untouched |
 | `analytics-events.ts`    | **assembled** | each module's `as const` body sliced verbatim and joined by a comma      |
-| the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between |
+| the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
 
 A hand-written restatement of the contract is a copy and copies rot, which is why the last row
 exists at all. See [The client collections](#the-client-collections-generated).
 
 ```bash
-npm run contracts:bundle              # build the specs, then regenerate the collections from them
-npm run contracts:bundle -- bruno     # just one, from the committed contract
-npm run check:contracts-bundle        # fail if any of the seven is stale
+npm run contracts:bundle              # build the committed specs
+npm run contracts:bundle -- bruno     # one collection, from the committed contract
+npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
 
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
@@ -84,7 +84,7 @@ flowchart TD
 ```
 
 The picture is drawn for `openapi.yaml`; the other six bundles differ only in what reads the output
-(the realtime type generator, the analytics tracker, four API clients). Three properties fall out of
+(the realtime type generator, the analytics tracker, three API clients). Three properties fall out of
 it, and each is load-bearing:
 
 1. **Fragments are authored here, and only here.** A module owns its slice of every shared document
@@ -176,7 +176,7 @@ src/modules/products/
 ├── repository.ts    persistence
 ├── model.ts         the mongoose schema
 ├── events.ts        what it publishes and subscribes to
-├── seeds.ts         its own seed data
+├── demo.ts         its own seed data
 ├── locales/         its own copy
 └── tests/           its own specs
 ```
@@ -373,8 +373,8 @@ that lists every domain.
 
 It is gone, and the machinery went with it. The dataset is now **published rather than assembled**:
 `npm run seed:export` seeds a throwaway database with the real seeders and writes what the API
-answers to `db/seeds/dataset.json`. Each module states its records in an ordinary
-`src/modules/<name>/seeds.ts` that its own code imports — no fragment, no text concatenation, no
+answers to `db/demo/demo-data.json`. Each module states its records in an ordinary
+`src/modules/<name>/demo.ts` that its own code imports — no fragment, no text concatenation, no
 staleness check on this CLI. `npm run check:seed-export` is its equivalent.
 
 The reason is worth keeping, because it is the one case on this page where fragmenting the SOURCE
@@ -413,7 +413,7 @@ property of that configuration rather than of the package.
 
 - **shapes come from `openapi.yaml`** — every operation, its auth, its request body, one example per
   declared response;
-- **values come from `db/seeds/dataset.json`** — `GET /products/{id}` asks for a product the database
+- **values come from `db/demo/demo-data.json`** — `GET /products/{id}` asks for a product the database
   actually holds, and `POST /account/login` sends credentials that work. That is the difference
   between a collection you can click and one you have to fix first. It is also why the examples carry
   real derived values: an order's `totalPrice` is the number the serializer computed, not arithmetic
@@ -422,7 +422,7 @@ property of that configuration rather than of the package.
   is the orders module's, so the mapping is recorded once and a path that moves between modules
   moves in all four collections with it;
 - **identifiers are hashed from method and path**, not generated fresh, so regenerating rewrites
-  only what actually changed rather than re-forking all four files.
+  only what actually changed rather than re-forking all three files.
 
 Two assertions hold it in place: each committed collection must equal a fresh run, and every
 collection must carry one request per operation the contract declares — which is precisely the
@@ -451,7 +451,7 @@ There are 14 today, and each one is a question a contract cannot ask:
 | `orders` | the owner asking for their own soft-deleted order · another user's order |
 
 A probe refers to seed records as `{{seedSoftDeletedProductId}}` rather than pasting an id — the
-tokens are derived from `dataset.json` (the soft-deleted product is *found*, not named), so a
+tokens are derived from `demo-data.json` (the soft-deleted product is *found*, not named), so a
 fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
 tests nothing. An unknown token fails the generator with the list of known ones.
 

@@ -32,8 +32,8 @@ than waiting for a bundle to come out quietly short.
 
 There used to be a `SEED_SECTION_ORDER` here too. It is gone: the demo dataset stopped being
 assembled from per-module text and is now **published** — `npm run seed:export` seeds a throwaway
-database with the real seeders and writes what the API answers to `db/seeds/dataset.json`. A module
-states its records in an ordinary `seeds.ts` that its own code imports, so there is nothing to list.
+database with the real seeders and writes what the API answers to `db/demo/demo-data.json`. A module
+states its records in an ordinary `demo.ts` that its own code imports, so there is nothing to list.
 Its staleness check is `npm run check:seed-export`.
 
 Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the audit vocabulary and
@@ -90,7 +90,7 @@ src/modules/<name>/
     asyncapi.yaml                  the same, if it owns a channel
     probes.ts                      the requests a spec cannot describe
     analytics.ts                   the event names it emits
-    factory.ts · seeds.ts          how its records are built, and the demo ones
+    factory.ts · demo.ts          how its records are built, and the demo ones
     tests/unit/ · tests/contract/  co-located, deleted with the module
 ```
 
@@ -110,7 +110,7 @@ The manifest is the whole contract between the domain and the application:
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
-import { seedWishlistCollection } from './seeds';
+import { seedWishlistCollection } from './demo';
 
 export default {
     name: 'wishlist',
@@ -179,7 +179,7 @@ already — nothing below applies.
 
 Write `openapi.yaml`, add the domain to `MODULE_SECTIONS`, and add its paths to the root's index. Do
 the same for `ANALYTICS_SECTIONS` if you wrote an `analytics.ts`, and for `ASYNC_SECTION_ORDER` if
-you wrote an `asyncapi.yaml`. A `seeds.ts` needs no entry anywhere — the dataset is published from a
+you wrote an `asyncapi.yaml`. A `demo.ts` needs no entry anywhere — the dataset is published from a
 real seeding run, not assembled from a list.
 
 A section entry with no fragment on disk is the hard error shown above. A fragment on disk with no
@@ -192,12 +192,16 @@ npm run contracts:bundle          # assembles openapi.yaml, asyncapi.yaml, analy
 npm run lint:openapi              # spectral
 ```
 
-`contracts:bundle` bundles the contract documents **first**, then generates the four client
-collections from the fresh `openapi.yaml` and the seed dataset. That order matters and is already
-correct in the script — you do not need the two-step workaround that older notes describe.
+`contracts:bundle` bundles the contract documents and stops there. The client collections are
+generated and `.gitignore`d, so they are opt-in:
 
-`contract.{bruno,insomnia,mockoon,postman}.*` at the repo root are rewritten on their own. They are
-generated, committed, and never hand-edited.
+```bash
+npm run contracts:bundle -- bruno insomnia mockoon postman
+```
+
+`contract.{bruno,insomnia,mockoon,postman}.*` land at the repo root, untracked, built from the committed
+`openapi.yaml` and the demo dataset. They are generated and never hand-edited — a request the
+contract cannot describe belongs in that module's `probes.ts`.
 
 ### 5 · The paired repo
 
@@ -221,12 +225,12 @@ npm run complete
 
 `wishlist`, measured:
 
-|                                                  |                                                                |
-| ------------------------------------------------ | -------------------------------------------------------------- |
-| files added                                      | one folder                                                     |
-| lines changed elsewhere                          | 1 in `src/modules.ts` + its section-order entries              |
-| existing files needing an edit to accommodate it | **0**                                                          |
-| generated unasked                                | the bundles, and the four client collections rebuilt from them |
+|                                                  |                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| files added                                      | one folder                                                 |
+| lines changed elsewhere                          | 1 in `src/modules.ts` + its section-order entries          |
+| existing files needing an edit to accommodate it | **0**                                                      |
+| generated unasked                                | the bundles; the client collections when asked for by name |
 
 ---
 
@@ -410,7 +414,7 @@ ones a sweep cannot express:
   the _reason_ for the import, and that is a judgement call.
 - **A named export from a generated file.** ~~`generateCollections.ts` imports `seedProducts` and
   `seedOrders` by name~~ — fixed when the dataset stopped being a bundle. It reads
-  `db/seeds/dataset.json` now and indexes into `collections.products` / `collections.orders`, which
+  `db/demo/demo-data.json` now and indexes into `collections.products` / `collections.orders`, which
   is _whatever the seeders produced_ rather than two domain-shaped identifiers. Kept here as the
   worked example: the fix was not a lint rule, it was removing the reason the import existed.
 

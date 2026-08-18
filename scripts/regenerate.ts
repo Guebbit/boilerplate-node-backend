@@ -3,21 +3,30 @@
  * Rebuild every generated artifact this repo commits — `npm run regenerate`.
  *
  * Run it after changing anything a generator reads: a module's `openapi.yaml` or `asyncapi.yaml`,
- * a `seeds.ts` fixture, a `probes.ts`, an `analytics.ts`. Then commit; the pre-commit gate
- * (`npm run complete`) only VERIFIES these are current, it never writes them, so a gate failure
- * saying "STALE" means this was not run.
+ * a `demo.ts` fixture, a `probes.ts`, an `analytics.ts`.
+ *
+ * You usually will not have to remember. `.husky/pre-commit` runs this — as
+ * `npm run regenerate -- --no-sync` — before `npm run complete`, and stages what it produced, so
+ * the artefacts a commit carries are always a fresh run of their generators. `complete` itself
+ * still only VERIFIES; a "STALE" failure from it now means a generator is non-deterministic or a
+ * source moved underneath it, not that somebody forgot a step.
+ *
+ * Run it by hand when you want the paired repo updated too: the hook passes `--no-sync`, because a
+ * commit here must not write into a checkout you are not looking at.
  *
  * ── WHY THIS IS A SCRIPT AND NOT A CHAIN OF `&&` ────────────────────────────────────────────────
- * The order is not obvious and one step appears twice. Both facts need somewhere to live:
+ * The order is not obvious, and it needs somewhere to live:
  *
- *   openapi.yaml ──► api/ ──► dataset.json ──► the four client collections
+ *   openapi.yaml ──► api/ ──► demo-data.json
  *
- * `api/` is generated from the contract; the seed export runs the real application to produce
- * `dataset.json`, and the models import `@api/schemas.zod`, so it needs `api/` to exist first; and
- * `scripts/contracts/generateCollections.ts` imports `dataset.json` to fill in example request
- * bodies. Bundling once at the start therefore builds the collections against the PREVIOUS
- * dataset. Hence the second bundle at step 5 — a no-op when the dataset did not change, and the
- * difference between a clean gate and a confusing one when it did.
+ * `api/` is generated from the contract, and the seed export runs the real application to produce
+ * `demo-data.json` — the models import `@api/schemas.zod`, so it needs `api/` to exist first.
+ *
+ * The four client collections read `demo-data.json` too, but they are not committed and nothing
+ * generates them unasked, so they are not a step here. Ask for one after this finishes and it is
+ * current by construction:
+ *
+ *   npm run contracts:bundle -- bruno insomnia mockoon postman
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -55,12 +64,7 @@ const STEPS: readonly Step[] = [
     {
         script: 'seed:export',
         because:
-            'db/seeds/dataset.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
-    },
-    {
-        script: 'contracts:bundle',
-        because:
-            'the client collections again, now that dataset.json is current — a no-op if it did not change'
+            'db/demo/demo-data.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
     }
 ];
 
@@ -101,6 +105,9 @@ if (skipSync) {
 }
 
 console.info(
-    '\n[regenerate] Done. `npm run complete` verifies the result; over in the frontend, ' +
-        '`npm run regenerate` rebuilds its client from the specs this just handed over.'
+    skipSync
+        ? '\n[regenerate] Done. `npm run complete` verifies the result. Nothing was handed to the ' +
+              'paired frontend — run `npm run regenerate` without --no-sync when you mean to.'
+        : '\n[regenerate] Done. `npm run complete` verifies the result; over in the frontend, ' +
+              '`npm run regenerate` rebuilds its client from the specs this just handed over.'
 );

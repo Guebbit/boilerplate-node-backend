@@ -1,15 +1,21 @@
 /**
- * Every committed document this repo produces from sources it owns.
+ * Every document this repo produces from sources it owns.
  *
- * These are exactly the shared, domain-shaped files of `scripts/specIdentity.ts`: the ones that
- * exist twice — once here, once in the paired frontend — AND list every domain the app has. This
- * repo authors them; the frontend holds byte-identical copies and never edits them.
+ * Two kinds, and the difference decides what is guarded. The AUTHORED ones — `openapi`, `asyncapi`,
+ * the analytics event names — are committed, and are exactly the shared, domain-shaped files of
+ * `scripts/specIdentity.ts`: the ones that exist twice, once here and once in the paired frontend,
+ * AND list every domain the app has. This repo authors them; the frontend holds byte-identical
+ * copies and never edits them.
+ *
+ * The GENERATED ones — the client collections — are `.gitignore`d and produced on demand from
+ * `openapi.yaml`. They are listed here so `npm run contracts:bundle -- bruno` can find them, not
+ * because anything checks them: an uncommitted file cannot be stale.
  *
  * The files in `specIdentity.ts` that are NOT here are the ones with nothing to fragment:
  * `spectral.yaml` is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are
  * tooling, and none of them names a domain. `src/types/asyncapi.generated.ts` is absent for the
  * opposite reason — it is generated from `asyncapi.yaml` by `npm run gen:asyncapi`, so it follows a bundle
- * rather than being one. `db/seeds/dataset.json` is absent for a third reason: it is not assembled
+ * rather than being one. `db/demo/demo-data.json` is absent for a third reason: it is not assembled
  * from text at all — `npm run seed:export` seeds a throwaway database and publishes what the API
  * serves, so its staleness check is `check:seed-export` rather than this CLI.
  *

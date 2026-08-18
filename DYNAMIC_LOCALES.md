@@ -320,7 +320,7 @@ src/modules/locales/
 │   ├── write-locale-entries.ts    # POST + PUT on one entry, and the two bulk routes
 │   └── delete-locale-entry.ts
 ├── routes.ts
-├── seeds.ts          # new
+├── demo.ts          # new
 ├── audit.ts          # new — admin.locale.* actions
 ├── openapi.yaml      # substantially extended
 ├── locales/          # ← its own copy, for its own error messages. It finally has one.
@@ -364,7 +364,7 @@ Delivers the actual ask: a client downloads a language the backend has and it do
 2. `db/migrations/<ts>-locale-collections.js` — three indexes (§3).
 3. `model.ts`, `repository.ts`, `service.ts` — tree builder, collision detection, manifest merge.
 4. `get-locale-messages.ts`, the rewritten manifest in `get-locales.ts`, routes with `setCache`.
-5. `seeds.ts` + `seedExport`, wired into `module.ts` (§11).
+5. `demo.ts` + `seedExport`, wired into `module.ts` (§11).
 6. Tests (§12), then `sync:frontend` and `npm run complete`.
 
 ### Phase B — the write path
@@ -413,14 +413,14 @@ Same philosophy as the existing seeders — _a branch with no fixture is a branc
 | one inactive language (`fr`, 2 rows) | the visibility branch — an inactive language must be absent from the manifest and 404 on read |
 | `en`                                 | **not seeded.** It is static-only, and the manifest merge needs a static-only row to merge    |
 
-`seedExport` publishes both collections into `db/seeds/dataset.json`, so the paired frontend's mocks
+`seedExport` publishes both collections into `db/demo/demo-data.json`, so the paired frontend's mocks
 can answer the new endpoints. Both are **stored rows**, not responses: the manifest is a merge of
 two sources and the dictionary is built from the rows, so neither collection is what any endpoint
 returns. That distinction is the subject of `ODDITIES.md` entry 3, currently parked — these two
 collections make the case for un-parking it, since they are the first ones whose stored-vs-served
 gap is not obvious from the name.
 
-`dataset.json` is `owner: 'backend'` in `scripts/specIdentity.ts`, so it propagates with
+`demo-data.json` is `owner: 'backend'` in `scripts/specIdentity.ts`, so it propagates with
 `npm run sync:frontend`.
 
 ---
@@ -472,16 +472,16 @@ naming two tags. Ten lines, and it should land before Phase A.
 
 ## 13 · Risks, and what each one costs
 
-| Risk                                                 | Mitigation                                                                              |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| A dynamic language read as "the API speaks this"     | `scopes` in the manifest (§5), and tier 2 never touching i18next (§2)                   |
-| Prefix collisions silently dropping a key            | 409 at write time in every path; the builder throws; a unit test asserts the throw (§7) |
-| Bulk import deleting keys nobody meant to delete     | `PUT` replaces / `PATCH` merges, asserted as a paired contract test (§4, §12)           |
-| Deleting a language wiping a day of translation      | delete refuses unless already inactive (§4)                                             |
-| Mongo down taking the whole API's copy with it       | cannot happen — tier 1 is filesystem and boot-loaded (§2)                               |
-| Manifest cost growing with the number of rows        | `revision` counter, not a per-request content hash (§6)                                 |
-| `dataset.json` growing and forking from the frontend | `seedExport` + `sync:frontend`; `check:spec-identity` fails on a fork (§11)             |
-| A large new contract surface drifting from the code  | contract-first ordering is forced by `@types` ← orval (§9)                              |
+| Risk                                                   | Mitigation                                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| A dynamic language read as "the API speaks this"       | `scopes` in the manifest (§5), and tier 2 never touching i18next (§2)                   |
+| Prefix collisions silently dropping a key              | 409 at write time in every path; the builder throws; a unit test asserts the throw (§7) |
+| Bulk import deleting keys nobody meant to delete       | `PUT` replaces / `PATCH` merges, asserted as a paired contract test (§4, §12)           |
+| Deleting a language wiping a day of translation        | delete refuses unless already inactive (§4)                                             |
+| Mongo down taking the whole API's copy with it         | cannot happen — tier 1 is filesystem and boot-loaded (§2)                               |
+| Manifest cost growing with the number of rows          | `revision` counter, not a per-request content hash (§6)                                 |
+| `demo-data.json` growing and forking from the frontend | `seedExport` + `sync:frontend`; `check:spec-identity` fails on a fork (§11)             |
+| A large new contract surface drifting from the code    | contract-first ordering is forced by `@types` ← orval (§9)                              |
 
 ---
 
@@ -525,7 +525,7 @@ shortcut.
 
 4. **`LocaleEntry` carries `locale`, `createdAt` and `updatedAt`.** §4 described the editor row as
    `{ id, key, value }`. Publishing the stored shape instead makes stored-and-served the same
-   object for this collection, which is what lets `seed-conformance` parse `dataset.json` against
+   object for this collection, which is what lets `seed-conformance` parse `demo-data.json` against
    the generated schema with `.strict()` rather than against a hand-written subset.
 5. **`GET /locales/:tag/messages` also returns `revision`.** A client that has just downloaded a
    dictionary knows which revision it holds without a second request to the manifest, and the two

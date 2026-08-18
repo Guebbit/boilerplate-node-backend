@@ -1,7 +1,7 @@
 /**
- * Every committed document is exactly what it says it is built from.
+ * Every document is exactly what it says it is built from.
  *
- * The documents come in three kinds, and all of them are pinned here.
+ * The documents come in three kinds, and what each kind can be asked differs.
  *
  * COMPILED — `openapi.yaml`. Its sources are standalone OpenAPI documents, one per module plus the
  * root, joined by `redocly bundle` resolving `$ref` the way the rest of the ecosystem does.
@@ -9,13 +9,17 @@
  * ASSEMBLED — `asyncapi.yaml` and the analytics event names, still concatenated from verbatim line
  * slices. These carry comments the bundle itself has to keep, and no parser preserves those.
  *
- * GENERATED — the four API client collections, produced whole from `openapi.yaml` and the seed
- * dataset. They have no fragments: nothing on disk stands between the contract and the document, so
- * there is no intermediate for anyone to hand-edit.
+ * Both are COMMITTED, so both can be asked the strongest question: does the file on disk equal a
+ * fresh assembly. Two sources for one document is a fork waiting to happen, and that is the
+ * assertion that stops it — edit a source without re-bundling, or hand-edit a bundle, and it fails.
  *
- * Two sources for one document is a fork waiting to happen, and this is the assertion that stops
- * it: edit a source without re-bundling, hand-edit a bundle, or change what the generator does
- * without regenerating, and this fails.
+ * GENERATED — the four API client collections, produced whole from `openapi.yaml` and the demo
+ * dataset. They have no fragments: nothing on disk stands between the contract and the document.
+ * They are also `.gitignore`d, so there is no committed copy to compare against and the
+ * byte-for-byte question does not apply. What is asserted instead is the GENERATOR: every case
+ * below builds a collection in memory and checks the document it produced. That is the property
+ * that mattered anyway — a stale committed copy was only ever a proxy for a generator that had
+ * stopped covering the contract.
  *
  * WHERE THE COMMENTS LIVE differs between the first two kinds, and that is the interesting part. A
  * parse drops them, so an assembled bundle cannot use one. The REST contract stopped needing that
@@ -53,15 +57,18 @@ const bundleByName = (name: string): ContractBundle => {
     return bundle;
 };
 
+/** The bundles with a committed file on disk — everything but the client collections. */
+const AUTHORED_BUNDLES = CONTRACT_BUNDLES.filter((bundle) => !isGenerated(bundle));
+
 describe('every contract bundle', () => {
-    it.each(CONTRACT_BUNDLES.map((bundle) => [bundle.name, bundle] as const))(
+    it.each(AUTHORED_BUNDLES.map((bundle) => [bundle.name, bundle] as const))(
         '%s reproduces its committed file byte for byte',
         (_name, bundle) => {
             expect(assembleBundle(bundle)).toBe(readCommittedBundle(bundle));
         }
     );
 
-    it.each(CONTRACT_BUNDLES.map((bundle) => [bundle.name, bundle] as const))(
+    it.each(AUTHORED_BUNDLES.map((bundle) => [bundle.name, bundle] as const))(
         '%s is built from fragments that all carry content',
         (_name, bundle) => {
             // A canary: a fragment silently resolving to an empty file would still bundle, just
@@ -222,16 +229,35 @@ describe('the analytics event bundle', () => {
 });
 
 describe('the API client collections', () => {
+    /*
+     * Built here rather than read off disk: they are `.gitignore`d, so on a clean checkout there is
+     * nothing to read. Generated once for the whole block — the generator walks every module
+     * contract and synthesises an example per operation, which is not work worth repeating per
+     * case.
+     */
+    const generated = new Map(
+        CONTRACT_BUNDLES.filter((bundle) => isGenerated(bundle)).map((bundle) => [
+            bundle.name,
+            assembleBundle(bundle)
+        ])
+    );
+
+    const collection = (name: string): string => {
+        const document = generated.get(name);
+        if (document === undefined) throw new Error(`no generated bundle named ${name}`);
+        return document;
+    };
+
     it('all parse, so a mis-sliced fragment cannot reach a developer as a broken import', () => {
-        for (const name of ['bruno', 'insomnia', 'mockoon'])
-            expect(() => parseYaml(readCommittedBundle(bundleByName(name)))).not.toThrow();
+        for (const name of ['bruno', 'insomnia', 'mockoon', 'postman'])
+            expect(() => parseYaml(collection(name))).not.toThrow();
     });
 
     it('leaves Mockoon with one tree entry per route, in the same order', () => {
         // Mockoon lists every route twice — once in `routes`, once as a `rootChildren` reference
         // that fixes the order its UI shows them in — and a module owns both slices. Slicing one
         // and forgetting the other produces a collection Mockoon loads with routes it never shows.
-        const mockoon = JSON.parse(readCommittedBundle(bundleByName('mockoon'))) as {
+        const mockoon = JSON.parse(collection('mockoon')) as {
             routes: { uuid: string }[];
             rootChildren: { type: string; uuid: string }[];
         };
@@ -247,8 +273,7 @@ describe('the API client collections', () => {
         // generator throws on a token it does not know — but a token that never reached the
         // generator (a typo in a key it does not scan, a probe field added later) would ship as a
         // literal. Mockoon is excluded: it has no probes, and `{{...}}` is its own templating.
-        for (const name of ['bruno', 'insomnia'])
-            expect(readCommittedBundle(bundleByName(name))).not.toContain('{{seed');
+        for (const name of ['bruno', 'insomnia']) expect(collection(name)).not.toContain('{{seed');
     });
 
     it('gives every probe a reason, and no two the same name', () => {
@@ -262,13 +287,10 @@ describe('the API client collections', () => {
 
     it('are generated whole, with nothing on disk in between', () => {
         /*
-         * "Is the committed output a fresh run" is already answered for these by the byte-for-byte
-         * case above, which now covers generated bundles as well as assembled ones.
-         *
-         * What this adds is the property that makes that answer trustworthy: there is no
-         * intermediate. A per-module slice of a collection would be a second place the output
-         * lives, editable by hand, and a generator whose output nobody verifies is a second source
-         * of truth that agrees with the first only by habit.
+         * The property that makes every other case here trustworthy: there is no intermediate. A
+         * per-module slice of a collection would be a second place the output lives, editable by
+         * hand, and a generator whose output nobody verifies is a second source of truth that
+         * agrees with the first only by habit.
          */
         const collections = CONTRACT_BUNDLES.filter((item) => isGenerated(item));
 
@@ -276,7 +298,7 @@ describe('the API client collections', () => {
         for (const bundle of collections) expect(bundleFragments(bundle)).toEqual([]);
     });
 
-    it('carry one request per operation the contract declares, in all three', () => {
+    it('carry one request per operation the contract declares, in all four', () => {
         // This is the assertion that would have caught the rot they were generated to end: before
         // it, Bruno and Mockoon covered 37 of 56 operations and named no feedback, locales or
         // observability endpoint, while 30 of Insomnia's 39 requests pointed at URLs the app had
@@ -291,23 +313,30 @@ describe('the API client collections', () => {
                 .map((method) => `${method} ${template}`)
         );
 
-        const bruno = parseYaml(readCommittedBundle(bundleByName('bruno'))) as {
+        const bruno = parseYaml(collection('bruno')) as {
             items: { items?: unknown[] }[];
         };
-        const insomnia = parseYaml(readCommittedBundle(bundleByName('insomnia'))) as {
+        const insomnia = parseYaml(collection('insomnia')) as {
             collection: { children?: unknown[] }[];
         };
-        const mockoon = JSON.parse(readCommittedBundle(bundleByName('mockoon'))) as {
+        const postman = JSON.parse(collection('postman')) as {
+            item: { item?: unknown[] }[];
+        };
+        const mockoon = JSON.parse(collection('mockoon')) as {
             routes: { method: string; endpoint: string }[];
         };
 
-        // Bruno and Insomnia also carry the probes — the requests the contract cannot describe, so
-        // that they are the only difference between what those two hold and what the API declares.
+        // The three request collections also carry the probes — the requests the contract cannot
+        // describe, so that they are the only difference between what one holds and what the API
+        // declares. Mockoon has none: a mock server answers requests, it does not send them.
         const probes = allProbes().length;
         expect(probes).toBeGreaterThan(0);
 
         expect(counted(bruno.items)).toBe(operations.length + probes);
         expect(counted(insomnia.collection)).toBe(operations.length + probes);
+        expect(counted(postman.item.map((group) => ({ items: group.item })))).toBe(
+            operations.length + probes
+        );
 
         // Mockoon keeps the contract's parameter NAMES (`:productId`), so its routes can be
         // compared as a set rather than only counted.

@@ -131,7 +131,7 @@ both call it.
 
 A module may also carry the things that used to live in shared registries, each named for what it
 is: `audit.ts` (the actions it emits), `metrics.ts` (its Prometheus counters), `events.ts` (its
-domain events), `seeds.ts` (its slice of the demo dataset) and `locales/` (its copy, in every
+domain events), `demo.ts` (its slice of the demo dataset) and `locales/` (its copy, in every
 language it ships). None of these is enumerated anywhere central — `audit.ts`, `metrics.ts` and
 `events.ts` register or augment themselves, while `seeds` and `locales` are declared in the
 manifest so the seeder and the i18n boot can walk the registry without naming a domain.

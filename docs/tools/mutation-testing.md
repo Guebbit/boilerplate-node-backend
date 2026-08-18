@@ -851,7 +851,7 @@ Both have since moved again, and neither move restored the floor: `src/modules/a
 — which _is_ floored, so that half is closed by the merge rather than by a config change.
 `jest.config.js` floors `model.ts`,
 `repository.ts` and `service.ts` per module, and the newer per-module files (`audit.ts`,
-`metrics.ts`, `seeds.ts`, `events.ts`, `routes.ts`) have never had floors and may not need them.
+`metrics.ts`, `demo.ts`, `events.ts`, `routes.ts`) have never had floors and may not need them.
 Left alone on purpose: the floors are being redone from the ground up once this sequence completes,
 and a floor moved twice is worse than a floor moved once.
 

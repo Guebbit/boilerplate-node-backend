@@ -21,7 +21,7 @@ been taken — **the plan**.
 > | ---------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------- |
 > | process snapshot ×3, in two units        | `infrastructure/observability/process-snapshot.ts`, bytes everywhere    | `tests/cross-cutting/process-snapshot.test.ts`  |
 > | four handlers under a verb-less filename | `account/controllers/{get-addresses,write-addresses,delete-address}.ts` | `tests/cross-cutting/controller-naming.test.ts` |
-> | products barrel publishing demo data     | `@modules/<name>/seeds`, a second public path                           | `tests/cross-cutting/seeds-boundary.test.ts`    |
+> | products barrel publishing demo data     | `@modules/<name>/demo`, a second public path                            | `tests/cross-cutting/demo-boundary.test.ts`     |
 >
 > The `locales` module's dynamic-dictionary work was moved out of this file entirely and is tracked
 > separately — it turned out to be a feature, not a quirk.
@@ -58,7 +58,7 @@ anything), **adding a convention with no guard** (folklore a reviewer must remem
 
 **No action scheduled.** Recorded because it still costs a reader half an hour.
 
-`db/seeds/dataset.json` holds six collections and they are not the same kind of thing:
+`db/demo/demo-data.json` holds six collections and they are not the same kind of thing:
 `products` (5), `users` (2) and `orders` (3) are **responses** — they parse against
 `GetProductByIdResponse.data`, `GetUserByIdResponse.data` and `GetOrderByIdResponse.data` as
 generated. `addressBooks` (2), `carts` (1) and `wishlists` (2) are **stored rows** — no endpoint
@@ -78,8 +78,8 @@ one of the two repos, and the person who needs it is writing a mock in the other
 
 |     | Approach                                        | Trade                                                                                                                                                                                                                   |
 | --- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A   | A `_meta.shapes` map inside `dataset.json`      | Puts the answer where the question is asked. Propagates with one `sync:frontend` — the file is `owner: 'backend'` in `scripts/specIdentity.ts` — and determinism is free, since the export already sorts every key.     |
-| B   | A ten-line `db/seeds/README.md`                 | Cheapest. Does not travel with the artefact, which is the whole complaint.                                                                                                                                              |
+| A   | A `_meta.shapes` map inside `demo-data.json`    | Puts the answer where the question is asked. Propagates with one `sync:frontend` — the file is `owner: 'backend'` in `scripts/specIdentity.ts` — and determinism is free, since the export already sorts every key.     |
+| B   | A ten-line `db/demo/README.md`                  | Cheapest. Does not travel with the artefact, which is the whole complaint.                                                                                                                                              |
 | C   | Derive the classification instead of listing it | The interesting version: mark a collection `"response"` only when its rows round-trip through the module's serializer unchanged. Risks resurrecting the mapper, which is the one thing this artefact exists to prevent. |
 | D   | Publish both stored rows and composed responses | Doubles the artefact and re-creates the mapper. No.                                                                                                                                                                     |
 

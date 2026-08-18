@@ -63,22 +63,19 @@ flowchart LR
 ```
 
 The four client collections are **generated from `openapi.yaml`**, so the contract has to be
-assembled before they can be produced. `scripts/bundle-contracts.ts` owns that ordering internally —
-the authored documents first, then everything — so one `npm run contracts:bundle` covers it.
-
-What that ordering does **not** cover is the dataset. The collections also read
-`db/seeds/dataset.json` (`scripts/contracts/generateCollections.ts` imports it) for their example
-request bodies, and that file is produced by `seed:export`, which runs the real application and so
-needs `api/` — which is itself generated from the contract:
+assembled before they can be produced — and they also read `db/demo/demo-data.json`
+(`scripts/contracts/generateCollections.ts` imports it) for their example request bodies. That file
+is produced by `seed:export`, which runs the real application and so needs `api/`, which is itself
+generated from the contract:
 
 ```
-openapi.yaml  ──►  api/  ──►  dataset.json  ──►  the four client collections
+openapi.yaml  ──►  api/  ──►  demo-data.json  ──►  the four client collections
 ```
 
-So bundling once, at the start, builds the collections against the PREVIOUS dataset. Editing a seed
-fixture and running only `contracts:bundle` + `seed:export` leaves all four collections stale, and
-the next `npm run complete` says so. `npm run regenerate` bundles a second time after the export for
-exactly this reason — a no-op when the dataset did not change.
+Nothing has to sequence that for you, because nothing generates a collection unless you ask. Ask
+last — after `regenerate` has settled the contract and the dataset — and what you get is current by
+construction. There is no committed copy to go stale in the meantime, which is why neither
+`npm run complete` nor `check:contracts-bundle` has anything to say about them.
 
 The ordering deliberately does not live in `package.json` as commands joined by `&&`: npm appends
 `--` arguments to the LAST command of a chain only, so a narrowing flag would silently apply to one
@@ -92,7 +89,7 @@ phase and not the others.
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml`, then `src/types/asyncapi.generated.ts`     |
 | `src/modules/*/analytics.ts`                          | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.ts` |
-| `src/modules/*/seeds.ts`                             | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/seeds/dataset.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
+| `src/modules/*/demo.ts`                             | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | A route, controller or service (no contract change)   | nothing                                             | no bundle reads source code                       |
 | `openapi.yaml` / `asyncapi.yaml` **directly**         | stop — edit the fragment instead                    | the next bundle overwrites you, and `contracts:bundle --check` fails first |
@@ -112,8 +109,12 @@ npm run contracts:bundle -- asyncapi    # just asyncapi.yaml
 npm run contracts:bundle -- bruno       # just contract.bruno.yml
 ```
 
-Known names: `openapi`, `asyncapi`, `analytics-events`, `bruno`, `insomnia`,
-`mockoon`, `postman`. An unknown name exits with the list rather than doing nothing.
+Known names: `openapi`, `asyncapi`, `analytics-events`, `bruno`, `insomnia`, `mockoon`, `postman`.
+An unknown name exits with the list rather than doing nothing.
+
+The four collections are **only** produced by naming them: a full `contracts:bundle` assembles the
+authored documents and stops, because the collections are `.gitignore`d and nothing else reads them.
+For the same reason `--check` refuses them outright — an uncommitted file cannot be stale.
 
 ::: tip A narrowed run really does narrow
 It did not always. `contracts:bundle` used to be several commands joined by `&&` in `package.json`,
@@ -162,7 +163,7 @@ Not one of these is a build artefact you can delete and forget:
 | `api/models/` · `api/schemas.zod.ts`                   | `@types` and the services that validate input                 |
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                   |
 | `src/infrastructure/observability/analytics-events.ts` | the analytics tracker                                         |
-| `db/seeds/dataset.json`                                | the generated collections and the paired frontend's mocks     |
+| `db/demo/demo-data.json`                                | the generated collections and the paired frontend's mocks     |
 | `contract.{bruno,insomnia,mockoon,postman}.*`          | you, and whoever explores the API without running it          |
 
 `api/` is the one exception to "review the diff": `npm run gen:api` starts with `rm -rf ./api`, so it
@@ -173,8 +174,8 @@ is fully derived, and the only thing to check is that the diff is limited to wha
 
 The frontend holds **byte-identical copies** of the three bundles it consumes — `openapi.yaml`,
 `asyncapi.yaml` and `analytics-events.ts` — and never bundles or authors them. The four client
-collections stay here: they are derived from `openapi.yaml`, so a copy there could not disagree
-without the spec disagreeing first, and nothing in that repo reads them. After a contract change
+collections stay here, and are not committed at all: they are derived from `openapi.yaml`, so a copy
+there could not disagree without the spec disagreeing first, and nothing in either repo reads them. After a contract change
 lands here:
 
 1. `npm run contracts:bundle` here, and commit the result.
@@ -194,7 +195,7 @@ bundle's section list under `scripts/contracts/`:
 src/modules/<name>/openapi.yaml      its operations, and the types only it uses
 src/modules/<name>/asyncapi.yaml     its channels, messages and schemas — one whole document
 src/modules/<name>/analytics.ts      the events it emits
-src/modules/<name>/seeds.ts          the demo records it owns
+src/modules/<name>/demo.ts          the demo records it owns
 src/modules/<name>/factory.ts        how those records are built
 src/modules/<name>/probes.ts         the requests a spec cannot describe
 ```
