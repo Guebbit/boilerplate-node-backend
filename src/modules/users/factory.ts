@@ -1,9 +1,9 @@
 /**
- * How a user fixture is built — for the demo accounts in `./seeds` and for any test needing a
+ * How a user fixture is built — for the demo accounts in `./demo` and for any test needing a
  * person.
  *
  * Like every factory here it states no schema default: `imageUrl`, `locale`, `admin`, `active`,
- * `verified` and `tokens` are all filled by `./model`, so `dataset.json` ends up recording what the
+ * `verified` and `tokens` are all filled by `./model`, so `demo-data.json` ends up recording what the
  * schema really does. `locale` is the case that proves the point — the paired frontend's mock never
  * carried it at all, because nobody hand-restating a User remembered it existed.
  *

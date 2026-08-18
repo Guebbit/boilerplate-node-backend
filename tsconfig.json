@@ -36,7 +36,7 @@
         "src/**/*.json",
         "tests/**/*.ts",
         "db/**/*.ts",
-        "db/seeds/dataset.json",
+        "db/demo/demo-data.json",
         "scripts/**/*.ts"
     ]
 }

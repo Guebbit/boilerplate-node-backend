@@ -4,7 +4,7 @@ import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
-import { seedWishlistsCollection, exportSeededWishlists } from './seeds';
+import { seedWishlistsCollection, exportSeededWishlists } from './demo';
 import { wishlistDeleteByUserId, productRemoveFromWishlistsById } from './service';
 
 /**

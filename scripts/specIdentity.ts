@@ -127,8 +127,8 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * closes that gap, because there is now only one mapper and it is the API's.
      */
     {
-        backend: 'db/seeds/dataset.json',
-        frontend: 'tests/support/mocks/dataset.json',
+        backend: 'db/demo/demo-data.json',
+        frontend: 'tests/support/mocks/demo-data.json',
         owner: 'backend'
     },
 
@@ -168,6 +168,17 @@ export const SHARED_FILES: readonly SharedFile[] = [
     {
         backend: 'scripts/check-mutation-baseline.ts',
         frontend: 'scripts/check-mutation-baseline.ts',
+        owner: 'mirror'
+    },
+    /*
+     * The per-module test report. Shared for a reason the others are not: it parses a runner's
+     * JSON, and Vitest's `json` reporter emits the same shape Jest's `--json` does — so one reader
+     * genuinely serves both, and two copies drifting would mean the two repos disagreeing about
+     * what their own test suites cost.
+     */
+    {
+        backend: 'scripts/testReport.ts',
+        frontend: 'scripts/testReport.ts',
         owner: 'mirror'
     },
     {

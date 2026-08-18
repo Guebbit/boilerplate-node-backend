@@ -53,7 +53,7 @@ export default {
     ],
     /*
      * No `seeds`: a hold only exists once someone has checked out, so a seeded one would be a
-     * state the application cannot reach by seeding — see the note in `orders/seeds.ts`. No
+     * state the application cannot reach by seeding — see the note in `orders/demo.ts`. No
      * `seedExport` either, since a reservation is never serialized to a client (see `./model`).
      */
     locales: path.join(__dirname, 'locales')

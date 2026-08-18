@@ -2,7 +2,7 @@
  * The order book's slice of the demo dataset.
  *
  * Every snapshot here is currently an exact copy of the live catalogue row, so they are built by
- * LOOKUP rather than restated — `seedProductById` comes through `@modules/products/seeds`, the
+ * LOOKUP rather than restated — `seedProductById` comes through `@modules/products/demo`, the
  * demo path this module's `conformist` edge already entitles it to. If a fixture ever needs an
  * order whose snapshot deliberately differs from today's product, to exercise the "price changed
  * since" case, it has to state that snapshot explicitly: deriving it would silently erase the
@@ -24,7 +24,7 @@ import {
     SEED_USER_EMAIL,
     SEED_USER_ID
 } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS, seedProductById } from '@modules/products/seeds';
+import { SEED_PRODUCT_IDS, seedProductById } from '@modules/products/demo';
 import { makeOrder, type OrderSnapshotInput } from './factory';
 import { orderModel } from './model';
 import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
@@ -76,7 +76,7 @@ export const orderFixtures = [
      * `priceShipping` decided at checkout, and an order keeps the price it was charged rather than
      * the method's rate card, which can change.
      *
-     * The address restates `account/seeds.ts`'s default entry rather than importing it: this module
+     * The address restates `account/demo.ts`'s default entry rather than importing it: this module
      * declares no edge on `account`, and a snapshot that COULD NOT differ from the live book would
      * be demonstrating the opposite of the thing it is here to demonstrate.
      */
@@ -122,8 +122,8 @@ export const orderFixtures = [
  * hold here. Two things say not to.
  *
  * The seeder runs every module CONCURRENTLY, and the invariant that makes that safe is stated in
- * `db/seeds/index.ts`: no fixture is derived from another fixture's write. Reserving would break
- * it — `reserveForOrder` conditionally writes the PRODUCT document that `products/seeds.ts` is
+ * `db/demo/index.ts`: no fixture is derived from another fixture's write. Reserving would break
+ * it — `reserveForOrder` conditionally writes the PRODUCT document that `products/demo.ts` is
  * writing at the same moment, so whether the hold succeeded would depend on who won. It won
  * every time it was measured, which is the worst version of that bug rather than a defence.
  *
@@ -134,12 +134,12 @@ export const orderFixtures = [
  * way one is ever created in production.
  */
 
-/** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
+/** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
 export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(orderFixtures.map((order) => upsertById(orderRepository, order)));
 
 /**
- * Read the seeded orders back as the API serves them — see `../products/seeds`.
+ * Read the seeded orders back as the API serves them — see `../products/demo`.
  *
  * `totalItems`, `totalQuantity` and `totalPrice` appear here without being stored anywhere:
  * `applyOrderTransform` derives them during serialization. Publishing the serialized row is what

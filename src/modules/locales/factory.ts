@@ -8,7 +8,7 @@
  * that is a determinism requirement and not a convenience.
  *
  * Every field a fixture does not state is left to `./model`'s `default:`, which is what keeps
- * `db/seeds/dataset.json` a record of what the SCHEMA does rather than of what a fixture guessed
+ * `db/demo/demo-data.json` a record of what the SCHEMA does rather than of what a fixture guessed
  * it does.
  */
 

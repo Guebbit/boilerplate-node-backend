@@ -2,10 +2,10 @@
  * Demo data seeder.
  *
  * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA. Each module owns its own slice of the demo
- * dataset in `src/modules/<name>/seeds.ts`; this file is the RUNNER — connection, production gate
+ * dataset in `src/modules/<name>/demo.ts`; this file is the RUNNER — connection, production gate
  * and the walk over `enabledModules`, nothing else. The upsert policy lives in
  * `@infrastructure/persistence/seed`. What the API then serves is published by
- * `npm run seed:export` as `./dataset.json`, which is byte-identical with the paired frontend's
+ * `npm run seed:export` as `./demo-data.json`, which is byte-identical with the paired frontend's
  * copy — that file is an OUTPUT of this seeder, never an input to it.
  *
  * It runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so

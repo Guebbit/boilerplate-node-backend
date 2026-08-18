@@ -30,7 +30,7 @@ export { PRODUCT_DELETED } from './events';
 
 /*
  * The demo catalogue is NOT re-exported here. It lives behind this module's second public path,
- * `@modules/products/seeds`, which `cart`, `wishlist` and `orders` take for their own seeders.
+ * `@modules/products/demo`, which `cart`, `wishlist` and `orders` take for their own seeders.
  *
  * It used to come through this barrel, and the cost was that "what may a sibling import" and "what
  * is the production API" stopped being the same question — a domain's public surface included

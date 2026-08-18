@@ -219,6 +219,13 @@ export default tseslint.config(
      * Excluded files
      */
     globalIgnores([
+        /*
+         * The k6 load scenarios. They are JavaScript, but not this project's JavaScript: they run
+         * inside the k6 Go runtime and import from `k6/http`, a module specifier that resolves
+         * only there. Linting them means resolving imports that cannot resolve and enforcing
+         * rules written for the app on a file the app never loads.
+         */
+        'k6/**',
         '**/dist/**',
         '**/dist-ssr/**',
         '**/coverage/**',
@@ -614,19 +621,19 @@ export default tseslint.config(
      * A module owns everything about its domain and exposes TWO surfaces, and no others:
      *
      *   `@modules/<name>`        the barrel — the runtime API a sibling may call
-     *   `@modules/<name>/seeds`  the demo fixtures a sibling's seeder may point at
+     *   `@modules/<name>/demo`  the demo fixtures a sibling's seeder may point at
      *
      * Reaching `@modules/<name>/service` or any other internal is what this rule exists to stop,
      * because the moment one happens the module stops being deletable.
      *
      * The second door is not a hole in the rule, it is the rest of it. Six modules have a
-     * `seeds.ts` and a seeded cart line has to name a seeded product, so the coupling is real and
+     * `demo.ts` and a seeded cart line has to name a seeded product, so the coupling is real and
      * has to go somewhere. With one entry point it went through the barrel — `products/index.ts`
      * published `SEED_PRODUCT_IDS` and `productFixtures` beside `productService`, which made "what
      * may a sibling import" and "what is the production API" stop being the same question. Naming
      * the demo path separately answers both at the call site, and lets the two edges be counted
      * apart: `tests/cross-cutting/module-test-boundaries.test.ts` asserts that nothing outside a
-     * `seeds.ts` ever takes one, so demo data cannot reach the runtime import graph.
+     * `demo.ts` ever takes one, so demo data cannot reach the runtime import graph.
      *
      * The pattern matches two segments or more, so both doors stay legal while everything below
      * them does not. A module reaches its own files relatively — `./service`,
@@ -650,12 +657,12 @@ export default tseslint.config(
                 {
                     patterns: [
                         {
-                            // The negation keeps `@modules/<name>/seeds` legal while every other
+                            // The negation keeps `@modules/<name>/demo` legal while every other
                             // second segment stays banned. Two allowed shapes, no per-module list,
                             // so adding a domain needs no edit here.
-                            group: ['@modules/*/*', '!@modules/*/seeds'],
+                            group: ['@modules/*/*', '!@modules/*/demo'],
                             message:
-                                'Import a sibling module through one of its two public paths: @modules/<name> for its runtime API, @modules/<name>/seeds for its demo fixtures. Never its internals.'
+                                'Import a sibling module through one of its two public paths: @modules/<name> for its runtime API, @modules/<name>/demo for its demo fixtures. Never its internals.'
                         },
                         {
                             group: ['@app/*'],

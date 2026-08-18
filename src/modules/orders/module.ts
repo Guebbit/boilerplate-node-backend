@@ -3,7 +3,7 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
-import { seedOrdersCollection, exportSeededOrders } from './seeds';
+import { seedOrdersCollection, exportSeededOrders } from './demo';
 import { cancelById } from './service';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import './events';

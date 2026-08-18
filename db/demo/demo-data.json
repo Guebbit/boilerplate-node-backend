@@ -416,6 +416,21 @@
                 ],
                 "title": "Bundle micini",
                 "updatedAt": "2024-04-19T19:39:54.000Z"
+            },
+            {
+                "active": true,
+                "available": 100,
+                "categories": [],
+                "createdAt": "2025-04-05T03:21:38.000Z",
+                "description": "",
+                "id": "67f0a1c2d3e4b5a6c7d8e9f0",
+                "imageUrl": "https://placekitten.com/400/400",
+                "onHand": 100,
+                "price": 5,
+                "reserved": 0,
+                "tags": [],
+                "title": "Scatolone",
+                "updatedAt": "2025-04-05T03:21:38.000Z"
             }
         ],
         "users": [

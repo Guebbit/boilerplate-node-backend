@@ -6,11 +6,11 @@
  * `carts.userId` is `unique`, every query here reaches a cart through it, and no cart id ever
  * reaches the wire — so for a long time these fixtures pinned nothing and let mongod assign one.
  * `scripts/export-seed.ts` is what changed the calculus: a generated id is a different 24 characters
- * on every run, which lands in `dataset.json`, which is committed and hash-compared against the
+ * on every run, which lands in `demo-data.json`, which is committed and hash-compared against the
  * paired frontend. One unpinnable value is enough to make the whole artefact permanently stale.
  *
  * Pinning it grants nothing it did not already have. There is still no endpoint that takes a cart
- * id, and `./seeds` still upserts by owner rather than by this. It is a fixture being deterministic,
+ * id, and `./demo` still upserts by owner rather than by this. It is a fixture being deterministic,
  * not a handle being published.
  *
  * Ids arrive as strings and leave as `ObjectId`s. A cart line stores a real reference (`ref:
@@ -37,7 +37,7 @@ export interface CartOverrides extends FactoryIdentity {
  * A cart ready for `cartRepository.create`.
  *
  * `userId` is required, because the factory cannot build one without it — a cart is addressed by
- * its owner. Leaving it optional under `Partial` forced `./seeds` to assert `fixture.userId!` past
+ * its owner. Leaving it optional under `Partial` forced `./demo` to assert `fixture.userId!` past
  * a type that was never actually unsure.
  */
 export type CartFixture = Partial<CartDocument> & Pick<CartDocument, 'userId'>;

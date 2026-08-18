@@ -11,7 +11,7 @@
  *
  * The cart lines are NOT here. They used to be — the old shared fixture file hung a `cart` array
  * off each user and the cart module read it back out, which put one module's records inside
- * another's. `src/modules/cart/seeds.ts` owns them now.
+ * another's. `src/modules/cart/demo.ts` owns them now.
  */
 
 import {
@@ -52,12 +52,12 @@ export const userFixtures = [
     })
 ];
 
-/** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
+/** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
 export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => upsertById(userRepository, user)));
 
 /**
- * Read the seeded accounts back as the API serves them — see `../products/seeds`.
+ * Read the seeded accounts back as the API serves them — see `../products/demo`.
  *
  * No password comes out, and that is `applyUserTransform` doing its job rather than an omission
  * here: credentials never reach a response, so `scripts/export-seed.ts` publishes them separately

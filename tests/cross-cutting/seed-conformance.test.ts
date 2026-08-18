@@ -2,7 +2,7 @@
  * Does the demo dataset still match the contract it is supposed to be a specimen of?
  *
  * MIRROR of `tests/cross-cutting/seedConformance.spec.ts` in the paired frontend. Same assertions,
- * different import paths — `db/seeds/dataset.json` is byte-identical to the copy over there, so a
+ * different import paths — `db/demo/demo-data.json` is byte-identical to the copy over there, so a
  * check living in only one repo would let the other's copy rot until the next
  * `check:spec-identity`. That job compares the two copies to each other; nothing compared either of
  * them to `openapi.yaml`.
@@ -20,7 +20,7 @@
  * order schema was `.pick()`ed down to four fields because a fixture had no business stating a
  * total or a status.
  *
- * `dataset.json` holds what the API actually answered, so the schemas are used AS GENERATED. The
+ * `demo-data.json` holds what the API actually answered, so the schemas are used AS GENERATED. The
  * totals and the status are in there now — derived by `applyOrderTransform`, and therefore worth
  * checking, where a seeded guess at them would only have tested the guess.
  *
@@ -43,7 +43,7 @@ import {
     GetUserByIdResponse,
     GetWishlistResponse
 } from '@api/schemas.zod';
-import dataset from '../../db/seeds/dataset.json';
+import dataset from '../../db/demo/demo-data.json';
 
 const { credentials, collections } = dataset;
 

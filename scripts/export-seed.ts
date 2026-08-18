@@ -17,7 +17,7 @@
  *
  * So this publishes the OUTPUT instead of the input. It seeds a throwaway database with the real
  * seeders, reads every row back through the real serializers, and writes the result to
- * `db/seeds/dataset.json`. Schema defaults, derived totals and serializer omissions are all in
+ * `db/demo/demo-data.json`. Schema defaults, derived totals and serializer omissions are all in
  * there because the API produced them, not because a fixture claimed them.
  *
  * ## Why a real database rather than calling the serializers directly
@@ -37,7 +37,7 @@
  * value ever enters the dataset that cannot be pinned, it does not belong in the export.
  *
  * Usage:
- *   npm run seed:export            # write db/seeds/dataset.json
+ *   npm run seed:export            # write db/demo/demo-data.json
  *   npm run check:seed-export      # fail if the committed file is stale, write nothing
  */
 
@@ -52,7 +52,7 @@ import { enabledModules } from '../src/modules';
 /* `__dirname`, not `import.meta.dirname` — tsx loads this as CommonJS, where the latter is
  * undefined. `scripts/contracts/fragments.ts` resolves its own root the same way. */
 const REPO_ROOT = path.resolve(__dirname, '..');
-const OUTPUT = path.join(REPO_ROOT, 'db', 'seeds', 'dataset.json');
+const OUTPUT = path.join(REPO_ROOT, 'db', 'demo', 'demo-data.json');
 const checkOnly = process.argv.includes('--check');
 
 /* Same pre-installed binary the test suite uses (`npm run setup:mongod`), same fallback: absent,
@@ -128,7 +128,7 @@ const collectIds = (value: unknown, found: Set<string>): Set<string> => {
  * which renders as a mysteriously empty page rather than an error.
  *
  * Deliberately structural rather than domain-aware: this script names no module, exactly as
- * `db/seeds/index.ts` names none, so a new collection is covered the day it is added.
+ * `db/demo/index.ts` names none, so a new collection is covered the day it is added.
  */
 const findDanglingReferences = (
     value: unknown,
@@ -194,13 +194,13 @@ const run = async (): Promise<number> => {
         const committed = existsSync(OUTPUT) ? readFileSync(OUTPUT, 'utf8') : '';
 
         if (assembled === committed) {
-            console.info('[seed-export] db/seeds/dataset.json is up to date.');
+            console.info('[seed-export] db/demo/demo-data.json is up to date.');
             return 0;
         }
 
         if (checkOnly) {
             console.error(
-                `[seed-export] STALE — db/seeds/dataset.json does not match what the seeders produce.\n` +
+                `[seed-export] STALE — db/demo/demo-data.json does not match what the seeders produce.\n` +
                     `  A fixture changed without the dataset being re-exported, or the file was hand-edited.\n` +
                     `  Fix with: npm run seed:export\n` +
                     `  Then copy the result to the paired frontend — check:spec-identity compares them.`
@@ -209,7 +209,7 @@ const run = async (): Promise<number> => {
         }
 
         writeFileSync(OUTPUT, assembled);
-        console.info('[seed-export] wrote db/seeds/dataset.json.');
+        console.info('[seed-export] wrote db/demo/demo-data.json.');
         return 0;
     } finally {
         /* Both are no-ops if the step above never got that far, which covers an early throw. */

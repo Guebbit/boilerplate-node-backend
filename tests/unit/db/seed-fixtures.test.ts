@@ -1,5 +1,5 @@
 /**
- * Seed fixture integrity — every module's `seeds.ts`.
+ * Seed fixture integrity — every module's `demo.ts`.
  *
  * Every `imageUrl` in the demo dataset must be a URL path that resolves to a file this repository
  * actually ships, because `express.static` (`src/app.ts`) serves them and a browser gets a plain
@@ -11,7 +11,7 @@
  *
  * Reading the fixtures rather than the source text is the point, and it is why each module exports
  * its fixture arrays separately from the `seed*Collection` function that writes them: importing the
- * data must not connect to a database. `db/seeds/index.ts` seeds on import, so nothing can go
+ * data must not connect to a database. `db/demo/index.ts` seeds on import, so nothing can go
  * through the runner to get at these values.
  */
 
@@ -27,7 +27,7 @@ const PUBLIC_ROOT = path.join(__dirname, '../../../public');
  * Every `imageUrl` the dataset contains, labelled so a failure names the fixture at fault rather
  * than just an index.
  *
- * Collected by WALKING each module's `seeds.ts`, not by importing three of them by name. Two
+ * Collected by WALKING each module's `demo.ts`, not by importing three of them by name. Two
  * reasons, and the second is the one that matters: a new domain with images falls under this guard
  * by existing, and deleting a domain takes its fixtures out of the sweep instead of breaking it.
  *
@@ -52,7 +52,7 @@ const collectImageUrls = (): [label: string, url: string][] => {
     };
 
     for (const name of readdirSync(MODULES_ROOT)) {
-        const seeds = path.join(MODULES_ROOT, name, 'seeds.ts');
+        const seeds = path.join(MODULES_ROOT, name, 'demo.ts');
         if (!existsSync(seeds)) continue;
 
         // Synchronous on purpose: `it.each` needs the list while the file is being collected, and

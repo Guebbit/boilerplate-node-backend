@@ -13,7 +13,7 @@
  */
 
 import { SEED_ADMIN_ID } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS } from '@modules/products/seeds';
+import { SEED_PRODUCT_IDS } from '@modules/products/demo';
 import { makeCart } from './factory';
 import { cartModel } from './model';
 import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';
@@ -44,12 +44,12 @@ const upsertByOwner = async (fixture: (typeof cartFixtures)[number]): Promise<Se
     return 'created';
 };
 
-/** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
+/** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
 export const seedCartsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(cartFixtures.map((cart) => upsertByOwner(cart)));
 
 /**
- * Read the seeded carts back as stored — see `../products/seeds`.
+ * Read the seeded carts back as stored — see `../products/demo`.
  *
  * Sorted by owner, because a cart has no pinned `_id` to sort by. The shape published here is the
  * STORED one, not a `CartResponse`: no endpoint serves a raw cart, `./service` builds the response

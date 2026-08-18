@@ -136,7 +136,7 @@ interface AppModuleCommon {
     locales?: string;
 
     /**
-     * Write this module's slice of the demo dataset. Called only by `db/seeds/index.ts`, never at
+     * Write this module's slice of the demo dataset. Called only by `db/demo/index.ts`, never at
      * boot — seeding is a script, not part of starting the application.
      *
      * Declared here so the seeder can run without naming a domain: it walks `enabledModules` and
@@ -148,7 +148,7 @@ interface AppModuleCommon {
      * Read this module's seeded rows back in the shape the API serves them, keyed by collection.
      *
      * The other half of `seeds`, and declared for the same reason: `scripts/export-seed.ts` walks
-     * `enabledModules` and publishes whatever it finds as `db/seeds/dataset.json`, so it names no
+     * `enabledModules` and publishes whatever it finds as `db/demo/demo-data.json`, so it names no
      * domain and deleting a module takes its section of the dataset with it.
      *
      * It must read back through the model's `toJSON` — the real serializer — rather than returning

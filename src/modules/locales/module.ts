@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
-import { seedLocalesCollection, exportSeededLocales } from './seeds';
+import { seedLocalesCollection, exportSeededLocales } from './demo';
 
 /**
  * Languages: which ones this deployment speaks, and the dictionaries a client downloads.

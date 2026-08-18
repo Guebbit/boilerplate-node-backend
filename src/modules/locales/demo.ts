@@ -138,7 +138,7 @@ export const localeEntryFixtures = [
 ];
 
 /**
- * Seed both collections. Declared in `module.ts`; called by `db/seeds/index.ts`.
+ * Seed both collections. Declared in `module.ts`; called by `db/demo/index.ts`.
  *
  * Languages first, and sequentially against the entries: an entry names a language by tag, and a
  * dataset whose entries could land before their language would publish a dictionary for a language

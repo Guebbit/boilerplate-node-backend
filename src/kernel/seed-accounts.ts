@@ -28,7 +28,7 @@
  * hash written here would drift from that hook and lose its plaintext — which is exactly what once
  * happened to the `gino@pino.it` fixture. It never reaches an API response: `password` is
  * `select: false` and `applyUserTransform` omits it, which is why `scripts/export-seed.ts` carries
- * these into `dataset.json` separately instead of reading them back off a serialized user.
+ * these into `demo-data.json` separately instead of reading them back off a serialized user.
  */
 
 /** 24-char hex, and a real ObjectId: its leading bytes date the account to February 2024. */
@@ -40,7 +40,7 @@ export const SEED_ADMIN_PASSWORD = 'rootroot';
 export const SEED_USER_EMAIL = 'gino@pino.it';
 export const SEED_USER_PASSWORD = 'password';
 
-/** What `dataset.json` publishes so the frontend can log in as either demo account. */
+/** What `demo-data.json` publishes so the frontend can log in as either demo account. */
 export const seedCredentials = {
     admin: { email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
     user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD }

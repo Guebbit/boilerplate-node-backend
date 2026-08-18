@@ -34,7 +34,7 @@ export const addressBookFixtures = [
         userId: SEED_ADMIN_ID,
         items: [
             /*
-             * `orders/seeds.ts` freezes a matching copy of this entry as one order's
+             * `orders/demo.ts` freezes a matching copy of this entry as one order's
              * `shippingAddress`. It RESTATES it rather than importing it, and that is the correct
              * shape: `orders` declares no edge on this module, an order's address is a snapshot
              * that must be free to differ from the live book, and sharing the literal would make
@@ -88,7 +88,7 @@ export const addressBookFixtures = [
 ];
 
 /**
- * Upsert one book by its OWNER rather than by id — see `../cart/seeds`.
+ * Upsert one book by its OWNER rather than by id — see `../cart/demo`.
  *
  * `userId` is the unique column and the one every query here uses, so the skip-if-present policy
  * is stated against it even though these fixtures do pin an `_id`.
@@ -102,12 +102,12 @@ const upsertByOwner = async (
     return 'created';
 };
 
-/** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
+/** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
 export const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(addressBookFixtures.map((book) => upsertByOwner(book)));
 
 /**
- * Read the seeded books back as stored, sorted by owner — see `../cart/seeds`.
+ * Read the seeded books back as stored, sorted by owner — see `../cart/demo`.
  *
  * No endpoint serves a raw book: `GET /account/addresses` answers `{ addresses: [...] }`, which
  * `./services/addresses` builds from `items`. What is published here is therefore the stored row,

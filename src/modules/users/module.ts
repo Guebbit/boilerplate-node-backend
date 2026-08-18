@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
-import { seedUsersCollection, exportSeededUsers } from './seeds';
+import { seedUsersCollection, exportSeededUsers } from './demo';
 import './events';
 
 /**

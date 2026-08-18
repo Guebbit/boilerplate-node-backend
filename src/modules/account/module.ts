@@ -5,7 +5,7 @@ import { onDomainEvent } from '@kernel/events';
 import { userRepository, USER_DELETED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken } from './session/jwt';
 import { addressesDeleteByUserId } from './services/addresses';
-import { exportSeededAddressBooks, seedAddressBooksCollection } from './seeds';
+import { exportSeededAddressBooks, seedAddressBooksCollection } from './demo';
 import { router } from './routes';
 
 /**

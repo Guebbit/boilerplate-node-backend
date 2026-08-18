@@ -1,5 +1,5 @@
 /**
- * How a product fixture is built — for the demo dataset in `./seeds` and for any test that needs a
+ * How a product fixture is built — for the demo dataset in `./demo` and for any test that needs a
  * catalogue row.
  *
  * ## What a factory deliberately does NOT do
@@ -9,8 +9,8 @@
  * nothing about them gets no key at all and Mongoose fills it in.
  *
  * That omission is the point. `scripts/export-seed.ts` reads the seeded rows back out through the
- * real serializer, so `dataset.json` records what the schema actually does — and the paired
- * frontend's mock stops guessing. It used to guess: `mocks/seeds.ts` over there carried a
+ * real serializer, so `demo-data.json` records what the schema actually does — and the paired
+ * frontend's mock stops guessing. It used to guess: `mocks/register.ts` over there carried a
  * hand-written `active: true` with a comment admitting it was mirroring a backend default nobody
  * had checked. A factory that helpfully filled those in here would have preserved the guess and
  * moved it one file to the left.
@@ -46,7 +46,7 @@ export type ProductOverrides = OverridesFor<Product>;
  * A product ready for `productRepository.create`.
  *
  * The three fields the factory ALWAYS sets are required, not optional. That is what lets a caller
- * read `fixture.title` without a `!` — `orders/seeds.ts` builds its snapshots this way — instead of
+ * read `fixture.title` without a `!` — `orders/demo.ts` builds its snapshots this way — instead of
  * asserting past a `Partial` that was never as partial as it claimed.
  */
 export type ProductFixture = Partial<ProductDocument> &

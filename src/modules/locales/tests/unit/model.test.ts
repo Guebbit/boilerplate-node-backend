@@ -7,7 +7,7 @@
  * suite in `tests/contract/` fails on, and the lean path is the one that bypasses `toJSON`
  * entirely.
  *
- * The schema defaults are asserted here too. `db/seeds/dataset.json` is a record of what the
+ * The schema defaults are asserted here too. `db/demo/demo-data.json` is a record of what the
  * schema does rather than of what a fixture claimed, so a default that stopped applying would
  * quietly rewrite the file the paired frontend mocks from.
  */

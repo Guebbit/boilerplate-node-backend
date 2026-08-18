@@ -1,6 +1,6 @@
 # Seed fixture images
 
-The demo images `db/seeds/index.ts` points its products and users at. They are **repository
+The demo images `db/demo/index.ts` points its products and users at. They are **repository
 content**, not runtime data: they are committed, and the seeder's `imageUrl`s reference them by
 name.
 

@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { router } from './routes';
-import { seedCartsCollection, exportSeededCarts } from './seeds';
+import { seedCartsCollection, exportSeededCarts } from './demo';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
 import { cartDeleteByUserId, productRemoveFromCartsById } from './services';

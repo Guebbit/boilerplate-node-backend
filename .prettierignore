@@ -17,7 +17,7 @@ openapi.yaml
 # produces. Prettier reformatting it afterwards makes that check fail on a file nobody edited — two
 # writers, one artefact — and the copy in the paired frontend is hash-compared against this one, so
 # a format-only difference would read as a forked dataset.
-db/seeds/dataset.json
+db/demo/demo-data.json
 
 # Contract fragments are verbatim SLICES of a committed document, not standalone files: each one
 # starts at the indentation it holds inside its parent, and several are not even parseable alone —

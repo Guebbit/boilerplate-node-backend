@@ -10,7 +10,7 @@ docs/.vitepress/cache
 
 # Uploaded images. `public/` is served by express.static (src/app.ts), so anything a user uploads
 # lands in a tracked directory — committing it would publish strangers' files with the repo.
-# `seed/` is negated because those ARE repository content: the demo fixtures db/seeds/index.ts
+# `seed/` is negated because those ARE repository content: the demo fixtures db/demo/index.ts
 # references. Keeping fixtures in their own directory is what lets this stay two stable lines
 # instead of a list of filenames to maintain.
 public/images/*
@@ -32,3 +32,12 @@ coverage
 # go back to full length with nothing reporting an error.
 reports/*
 !reports/stryker-incremental.json
+
+# API client collections. Generated whole from openapi.yaml on demand — `npm run contracts:bundle
+# -- bruno insomnia postman` — and never read by the suite, the app or CI. Committing them put
+# 1.9 MB of derived text in every diff that touched the contract, for an artefact whose only reader
+# is a human about to open it in the tool. Regenerate when you want one.
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
+contract.postman.json

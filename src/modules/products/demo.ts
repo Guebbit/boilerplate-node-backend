@@ -6,7 +6,7 @@
  * that no module could import — a text slice concatenated into one cross-repo file — because the
  * paired frontend needed the same records and the only way to give them to it was to share source.
  * It no longer shares source: `scripts/export-seed.ts` seeds these rows and publishes what the API
- * actually serves as `db/seeds/dataset.json`, so the facts can live in one normal TypeScript file
+ * actually serves as `db/demo/demo-data.json`, so the facts can live in one normal TypeScript file
  * that this module's own code imports like any other.
  *
  * Every field a record does not state is left to `./model`'s `default:` — see `./factory`.
@@ -21,7 +21,7 @@ import { productRepository } from './repository';
  * The catalogue ids, named by what makes each row worth having.
  *
  * `cart`, `wishlist` and `orders` all seed rows pointing at products, and all three declare a
- * `conformist` edge on this module, so they read these through `@modules/products/seeds` rather
+ * `conformist` edge on this module, so they read these through `@modules/products/demo` rather
  * than repeating a hex string. Naming them is the part that pays: `wishlist` saying it stores
  * `panino` and `pufettino` makes "only publicly visible products are saved" checkable by eye,
  * where `65dc8a99…` and `65dcdec2…` made it a claim in a comment.
@@ -31,16 +31,18 @@ export const SEED_PRODUCT_IDS = {
     carinoSoftDeleted: '65dc8ad8604c307b702b5cd4',
     micionaOutOfStock: '65dc9be92f2794d1c16741e1',
     pufettino: '65dcdec2b18ad5e4bd597f0f',
-    bundleInactive: '6622c88a5123b1e286f440f8'
+    bundleInactive: '6622c88a5123b1e286f440f8',
+    barebones: '67f0a1c2d3e4b5a6c7d8e9f0'
 } as const;
 
 /*
- * Five products, chosen to cover the branches the storefront and the repositories actually have
+ * Six products, chosen to cover the branches the storefront and the repositories actually have
  * rather than to look like a shop.
  *
- * `categories` is non-empty on every PUBLIC record: `GET /products/categories` and the storefront's
+ * `categories` is non-empty on every RICH record: `GET /products/categories` and the storefront's
  * filter chips need something to show out of the box, and a facet endpoint that returns `[]` on a
- * fresh install reads as broken rather than as empty.
+ * fresh install reads as broken rather than as empty. `barebones` is the deliberate exception —
+ * see its note below.
  */
 export const productFixtures = [
     makeProduct({
@@ -76,7 +78,7 @@ export const productFixtures = [
      * Note that it is the ONHAND that is zero, not merely the availability — this row is out of
      * stock because there is nothing there. The other way to be unbuyable, units present but all
      * spoken for, is deliberately NOT seeded: it only exists once someone has checked out, and
-     * `orders/seeds.ts` explains why inventing it here would be both racy and untrue.
+     * `orders/demo.ts` explains why inventing it here would be both racy and untrue.
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.micionaOutOfStock,
@@ -110,6 +112,23 @@ export const productFixtures = [
         tags: ['micini', 'noisy'],
         active: false,
         imageUrl: '/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg'
+    }),
+    /*
+     * The minimal one — `title` and `price` and nothing else, so every optional field lands on
+     * `./model`'s `default:`: an empty `description`, empty `categories`, empty `tags`, the
+     * placeholder `imageUrl`, `onHand` at 100.
+     *
+     * The four above are all richly populated, which makes them unable to catch the failure this
+     * one exists for: a storefront card that assumes a description to truncate, or a filter chip
+     * row that assumes at least one category, renders blank or throws on a record the API can
+     * legitimately answer with — a product created through `POST /products` with only the required
+     * fields is exactly this shape. It is PUBLIC on purpose; hiding it behind `active: false`
+     * would keep it out of every list the storefront actually renders.
+     */
+    makeProduct({
+        id: SEED_PRODUCT_IDS.barebones,
+        title: 'Scatolone',
+        price: 5
     })
 ];
 
@@ -132,7 +151,7 @@ export const seedProductById = (productId: string): (typeof productFixtures)[num
     return product;
 };
 
-/** Seed this module's collection. Declared in `module.ts`; called by `db/seeds/index.ts`. */
+/** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
 export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(productFixtures.map((product) => upsertById(productRepository, product)));
 
