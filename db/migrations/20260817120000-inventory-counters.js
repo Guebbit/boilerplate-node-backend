@@ -15,16 +15,35 @@
  * in the direction that matters.
  *
  * `$rename` rather than a read-and-write loop: mongod does it in place, and a rename cannot half
- * apply the way a per-document update can. Both statements are filtered on the field's presence
+ * apply the way a per-document update can. Every statement is filtered on field presence
  * (`$exists`), which is what makes re-running them a no-op rather than a way to overwrite counts
  * an operator has since set — `migrate-mongo status` records that a migration ran, it does not
  * make the migration safe to run twice.
+ *
+ * A row can arrive here holding BOTH columns: `20260813091000-product-stock-column.js` backfills
+ * `stock: 100` on anything without it, so a database restored from a dump of already-seeded rows
+ * gets the legacy column added back beside the counts it already has. `$rename` OVERWRITES its
+ * destination, so renaming unconditionally would replace a real `onHand` with that backfill. The
+ * rename is therefore filtered on the destination being free, and the superseded column is
+ * dropped separately — `onHand` is the authoritative count wherever both exist.
  */
 module.exports = {
     async up(db) {
         await db
             .collection('products')
-            .updateMany({ stock: { $exists: true } }, { $rename: { stock: 'onHand' } });
+            .updateMany(
+                { stock: { $exists: true }, onHand: { $exists: false } },
+                { $rename: { stock: 'onHand' } }
+            );
+
+        // Whatever still carries `stock` also carries an `onHand` the rename above declined to
+        // clobber, so the legacy column is dropped rather than promoted.
+        await db.collection('products').updateMany(
+            { stock: { $exists: true } },
+            {
+                $unset: { stock: '' }
+            }
+        );
 
         // Products created after the rename already carry the schema default; this catches the
         // rows that existed before it and any that never had a count at all.
