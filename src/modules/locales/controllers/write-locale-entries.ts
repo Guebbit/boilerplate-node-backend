@@ -6,11 +6,14 @@ import {
     UpdateLocaleEntryBody
 } from '@api/schemas.zod';
 import type {
+    CreateLocaleEntryRequest,
     LocaleEntryInput,
+    LocaleScope,
     MergeLocaleEntriesRequest,
     ReplaceLocaleEntriesRequest,
     UpdateLocaleEntryRequest
 } from '@types';
+import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -34,6 +37,20 @@ import { localeAuditActions } from '../audit';
  * likely to be implemented backwards.
  */
 
+/**
+ * Re-read the API's own overrides after a write that may have changed them.
+ *
+ * Fire-and-forget, and not awaited before answering: the caller edited a row, and whether THIS
+ * worker's copy overlay has caught up is not something their 200 should wait on. It makes the edit
+ * visible immediately on the worker that served the write; the others pick it up on their next
+ * scheduled refresh.
+ *
+ * Called after `app`-scoped writes too. Those cannot affect the overlay, and checking would mean
+ * threading the scope through the two delete controllers to save a query that runs once per admin
+ * keystroke at most.
+ */
+const refreshOverrides = () => void refreshLocaleOverrides();
+
 /** 422 from a Zod result, in the one shape every controller here uses. */
 const rejectInvalid = (response: Response, issues: { message: string }[]) =>
     Promise.resolve(
@@ -49,7 +66,7 @@ const rejectInvalid = (response: Response, issues: { message: string }[]) =>
  * Add one key.
  */
 export const createLocaleEntry = (
-    request: Request<{ locale: string }, unknown, LocaleEntryInput>,
+    request: Request<{ locale: string }, unknown, CreateLocaleEntryRequest>,
     response: Response
 ) => {
     const parseResult = CreateLocaleEntryBody.safeParse(request.body);
@@ -66,9 +83,15 @@ export const createLocaleEntry = (
                     outcome: 'success',
                     target_type: 'locale_entry',
                     target_id: String(result.data?._id),
-                    metadata: { locale: request.params.locale, key: parseResult.data.key }
+                    metadata: {
+                        locale: request.params.locale,
+                        scope: parseResult.data.scope,
+                        key: parseResult.data.key
+                    }
                 })
             );
+
+            refreshOverrides();
 
             return successResponse(response, result.data, 201);
         })
@@ -107,6 +130,8 @@ export const updateLocaleEntry = (
                 })
             );
 
+            refreshOverrides();
+
             return successResponse(response, result.data);
         })
         .catch((error: Error) => rejectDatabaseError(response, 'updateLocaleEntry', error));
@@ -117,10 +142,11 @@ const importEntries = (
     request: Request<{ locale: string }, unknown, { entries?: LocaleEntryInput[] }>,
     response: Response,
     mode: 'replace' | 'merge',
+    scope: LocaleScope,
     entries: LocaleEntryInput[]
 ) =>
     localeService
-        .importEntries(request.params.locale, entries, mode)
+        .importEntries(request.params.locale, scope, entries, mode)
         .then((result) => {
             if (!result.success) return rejectResponse(response, result.status, result.errors);
 
@@ -132,10 +158,13 @@ const importEntries = (
                     target_id: request.params.locale,
                     // `mode` is the field that makes this record worth keeping: a replace that
                     // removed three hundred keys and a merge that added two are the same action
-                    // name and very different events.
-                    metadata: { mode, ...result.data }
+                    // name and very different events. `scope` says which of the two dictionaries
+                    // it happened to, which the counts alone cannot.
+                    metadata: { mode, scope, ...result.data }
                 })
             );
+
+            refreshOverrides();
 
             return successResponse(response, result.data);
         })
@@ -152,7 +181,13 @@ export const replaceLocaleEntries = (
     const parseResult = ReplaceLocaleEntriesBody.safeParse(request.body);
     if (!parseResult.success) return rejectInvalid(response, parseResult.error.issues);
 
-    return importEntries(request, response, 'replace', parseResult.data.entries);
+    return importEntries(
+        request,
+        response,
+        'replace',
+        parseResult.data.scope,
+        parseResult.data.entries
+    );
 };
 
 /**
@@ -166,5 +201,11 @@ export const mergeLocaleEntries = (
     const parseResult = MergeLocaleEntriesBody.safeParse(request.body);
     if (!parseResult.success) return rejectInvalid(response, parseResult.error.issues);
 
-    return importEntries(request, response, 'merge', parseResult.data.entries);
+    return importEntries(
+        request,
+        response,
+        'merge',
+        parseResult.data.scope,
+        parseResult.data.entries
+    );
 };

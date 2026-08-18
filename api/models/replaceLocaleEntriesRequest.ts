@@ -19,10 +19,13 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { LocaleEntryInput } from './localeEntryInput';
+import type { LocaleScope } from './localeScope';
 
 /**
- * The COMPLETE set of entries for this language. Anything already stored and not named here is deleted.
+ * The COMPLETE set of entries for this language IN ONE SCOPE. Anything already stored under that scope and not named here is deleted; the other scope is untouched.
+ * Scope is named once for the batch rather than per row, so a replace cannot half- apply across the two dictionaries — the operation that deletes what it was not sent has to know exactly what it is allowed to delete.
  */
 export interface ReplaceLocaleEntriesRequest {
+  scope: LocaleScope;
   entries: LocaleEntryInput[];
 }

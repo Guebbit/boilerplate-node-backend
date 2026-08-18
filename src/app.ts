@@ -20,7 +20,10 @@ import {
     getFallbackLocale,
     listSupportedLocales,
     loadLocaleResources,
-    registerLocaleDirectories
+    refreshLocaleOverrides,
+    registerLocaleDirectories,
+    registerLocaleOverrideProvider,
+    startLocaleOverrideRefresh
 } from '@infrastructure/i18n';
 
 import { registerModules } from '@kernel/registry';
@@ -55,44 +58,63 @@ const getPort = () => {
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
-    return Promise.resolve()
-        .then(() => validateRequiredEnvironment())
-        .then(() => start())
-        .then(() => startCache())
-        .then(() => startQueue())
-        .then(() => registerWorkers())
-        .then(() => {
-            // Modules carry their own copy, so deleting one deletes its strings. `infrastructure` sits
-            // below every module and cannot go looking for them, so the paths are handed in —
-            // and they must be handed in BEFORE `init`, which reads the merged result.
-            registerLocaleDirectories(
-                enabledModules
-                    .map((appModule) => appModule.locales)
-                    .filter((directory) => directory !== undefined)
-            );
-        })
-        .then(() =>
-            // Every dictionary in src/locales is registered, so dropping in a file is the only
-            // step needed to add a language — the middleware negotiates against the same list.
-            i18next.init({
-                lng: getDefaultLocale(),
-                fallbackLng: getFallbackLocale(),
-                supportedLngs: listSupportedLocales(),
-                resources: loadLocaleResources()
+    return (
+        Promise.resolve()
+            .then(() => validateRequiredEnvironment())
+            .then(() => start())
+            .then(() => startCache())
+            .then(() => startQueue())
+            .then(() => registerWorkers())
+            .then(() => {
+                // Modules carry their own copy, so deleting one deletes its strings. `infrastructure` sits
+                // below every module and cannot go looking for them, so the paths are handed in —
+                // and they must be handed in BEFORE `init`, which reads the merged result.
+                registerLocaleDirectories(
+                    enabledModules
+                        .map((appModule) => appModule.locales)
+                        .filter((directory) => directory !== undefined)
+                );
+
+                // Where runtime edits to the API's own copy come from. Registered before `init` for
+                // symmetry with the directories, though only the refresh below actually reads it.
+                registerLocaleOverrideProvider(
+                    enabledModules.find((appModule) => appModule.localeOverrides !== undefined)
+                        ?.localeOverrides
+                );
             })
-        )
-        .then(
-            () =>
-                new Promise<Server>((resolve) => {
-                    const port = getPort();
-                    logger.info('------------- SERVER START -------------');
-                    const server = app.listen(port, () => {
-                        logger.info(`Server listening on port ${port}`);
-                        activeServer = server;
-                        resolve(server);
-                    });
+            .then(() =>
+                // Every dictionary in src/locales is registered, so dropping in a file is the only
+                // step needed to add a language — the middleware negotiates against the same list.
+                i18next.init({
+                    lng: getDefaultLocale(),
+                    fallbackLng: getFallbackLocale(),
+                    supportedLngs: listSupportedLocales(),
+                    resources: loadLocaleResources()
                 })
-        );
+            )
+            /*
+             * Layer whatever has been edited on top of the files just loaded, then keep doing it.
+             *
+             * NOT awaited for correctness — `refreshLocaleOverrides` never rejects and an empty overlay
+             * is a working state — but awaited for ordering: a request served between `init` and the
+             * first refresh would answer with un-overridden copy, and boot is the one moment where
+             * waiting a few milliseconds to avoid that costs nothing.
+             */
+            .then(() => refreshLocaleOverrides())
+            .then(() => startLocaleOverrideRefresh())
+            .then(
+                () =>
+                    new Promise<Server>((resolve) => {
+                        const port = getPort();
+                        logger.info('------------- SERVER START -------------');
+                        const server = app.listen(port, () => {
+                            logger.info(`Server listening on port ${port}`);
+                            activeServer = server;
+                            resolve(server);
+                        });
+                    })
+            )
+    );
 };
 
 /*

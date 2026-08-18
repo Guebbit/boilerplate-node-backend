@@ -36,22 +36,33 @@ import { deleteLocaleEntry } from './controllers/delete-locale-entry';
  */
 export const router = Router();
 
+/*
+ * The three public reads, all `browserRevalidate`.
+ *
+ * Redis still holds them for the hour and still drops them on any write below. What the flag
+ * changes is what a BROWSER is told: revalidate rather than answer from your own store. Without
+ * it a translator edits a string, reloads, and sees the old one for up to an hour — the write
+ * cleared Redis, and could not reach the copy already in their browser. That reads as "saving is
+ * broken", and it is the one failure this whole tier cannot afford, because the people it was
+ * built for have no other way to tell.
+ *
+ * The cost is a conditional request per read, answered `304` with no body while nothing has
+ * changed. Cheap, and paid only by clients that already hold a copy.
+ */
+const publicLocaleCache = setCache(3600, {
+    tags: ['locales'],
+    keyParameters: [],
+    browserRevalidate: true
+});
+
 // GET /locales — which languages this deployment offers, and what each of them can do
-router.get('/', setCache(3600, { tags: ['locales'], keyParameters: [] }), getLocales);
+router.get('/', publicLocaleCache, getLocales);
 
 // GET /locales/:locale/messages — the client's dictionary, out of the database
-router.get(
-    '/:locale/messages',
-    setCache(3600, { tags: ['locales'], keyParameters: [] }),
-    getLocaleMessages
-);
+router.get('/:locale/messages', publicLocaleCache, getLocaleMessages);
 
 // GET /locales/:locale — the API's own dictionary, off the filesystem
-router.get(
-    '/:locale',
-    setCache(3600, { tags: ['locales'], keyParameters: [] }),
-    getLocaleDictionary
-);
+router.get('/:locale', publicLocaleCache, getLocaleDictionary);
 
 /*
  * Everything past here is an admin write on the dynamic tier — or, in one case, the read that

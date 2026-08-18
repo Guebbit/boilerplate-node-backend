@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { LocaleScope } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
@@ -24,10 +25,18 @@ export const getLocaleEntries = (
 ) => {
     // Body first, then query — the search surface, same as every other list in this API, so
     // `?text=` and a JSON body reach one controller. See docs/theory/request-input.md.
-    const { page, pageSize, text } = readInput(request, { surface: 'search' }) as Record<
+    const { page, pageSize, text, scope } = readInput(request, { surface: 'search' }) as Record<
         string,
         string | undefined
     >;
+
+    /*
+     * An unrecognised `scope` is dropped rather than refused, which is the same answer `text=` and
+     * every other optional filter gives: a listing narrowed by a value nothing matches would show
+     * an empty screen and blame the data. Dropping it shows both dictionaries, which is what the
+     * parameter defaults to anyway.
+     */
+    const scopeFilter = Object.values(LocaleScope).find((value) => value === scope);
 
     // The shared schema is what makes `?pageSize=500` answer 422 here as it does everywhere else,
     // rather than being silently clamped.
@@ -42,7 +51,7 @@ export const getLocaleEntries = (
         );
 
     return localeService
-        .searchEntries(request.params.locale, { ...parseResult.data, text })
+        .searchEntries(request.params.locale, { ...parseResult.data, text, scope: scopeFilter })
         .then((result) =>
             result.success
                 ? successResponse(response, result.data)

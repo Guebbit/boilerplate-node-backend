@@ -4,9 +4,13 @@
  * Chosen to cover the branches this module actually has, on the principle every other seeder here
  * follows — a branch with no fixture is a branch nothing exercises:
  *
- *   es, active, ten entries   THE POINT OF THE FEATURE. `es` is also a deployed file, so it is the
+ *   es, active, ten app rows  THE POINT OF THE FEATURE. `es` is also a deployed file, so it is the
  *                             fixture that makes the manifest's merge real: one row, both scopes,
  *                             `source: 'both'`.
+ *   es, two api rows          The OTHER dictionary. They override two keys of the API's own
+ *                             deployed `es.json`, which is what proves the two sides are separate
+ *                             keyspaces rather than one collection with a label: `generic.error-*`
+ *                             exists on both, and nothing about these rows reaches a frontend.
  *   keys three levels deep    The tree builder gets a real specimen rather than a flat list, and
  *                             the frontend's mocks get a dictionary shaped like a dictionary.
  *   fr, inactive, two rows    The visibility branch. An inactive language must be absent from the
@@ -20,6 +24,7 @@
  * this dictionary, and `1` is what that would have left behind.
  */
 
+import { LocaleScope } from '@types';
 import { makeLocale, makeLocaleEntry } from './factory';
 import { localeModel, localeMessageModel } from './model';
 import { localeRepository, localeMessageRepository } from './repository';
@@ -122,6 +127,32 @@ export const localeEntryFixtures = [
         value: 'Mis pedidos'
     }),
 
+    /*
+     * The API's own half, for the same language.
+     *
+     * Two keys that exist in the API's deployed `es.json` and are overridden here — which is the
+     * whole mechanism, stated in the smallest form that can be checked: `GET /locales/es/messages`
+     * must NOT contain them (it serves `app` rows), and a 401 answered in Spanish must.
+     *
+     * `generic.error-unauthorized` is also the sharpest available proof that the two dictionaries
+     * are separate keyspaces: the frontend declares a `generic` block of its own, and if scope
+     * were a label rather than part of the row's identity these would collide with it.
+     */
+    makeLocaleEntry({
+        id: '65e0200a9a7d4b2e1c0f3001',
+        locale: SEED_LOCALE_TAGS.downloadable,
+        scope: LocaleScope.api,
+        key: 'generic.error-unauthorized',
+        value: 'Sesión caducada. Vuelve a entrar.'
+    }),
+    makeLocaleEntry({
+        id: '65e0200a9a7d4b2e1c0f3002',
+        locale: SEED_LOCALE_TAGS.downloadable,
+        scope: LocaleScope.api,
+        key: 'generic.error-internal',
+        value: 'Algo ha fallado por nuestra parte. Inténtalo de nuevo.'
+    }),
+
     /* The draft language: two rows, enough to prove `active: false` hides something real. */
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f2001',
@@ -175,7 +206,7 @@ export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> 
         .then((documents) => documents.map((document_) => document_.toJSON())),
     localeMessages: await localeMessageModel
         .find()
-        .sort({ locale: 1, key: 1 })
+        .sort({ locale: 1, scope: 1, key: 1 })
         .exec()
         .then((documents) => documents.map((document_) => document_.toJSON()))
 });

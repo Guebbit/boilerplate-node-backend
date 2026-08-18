@@ -28,6 +28,12 @@ import type { LocaleDirection } from './localeDirection';
 export interface Language {
   id: Id;
   tag: Locale;
+  /**
+     * The ISO 639-1 code at the front of `tag` — the BCP 47 PRIMARY SUBTAG, with any region or script dropped. `pt-BR` and `pt-PT` are two languages here and both answer `pt`.
+     * Derived from `tag` and never sent by a client: two fields that can disagree about the same fact are a bug waiting for the first person who edits one of them. Stored rather than computed on read because it is what groups the variants of a language, and a stored column can be queried and indexed while a split cannot.
+     * @pattern ^[a-z]{2}$
+     */
+  baseLanguage: string;
   /** English name, for an admin list. */
   name: string;
   /** The language's own name, for a client's language picker. */

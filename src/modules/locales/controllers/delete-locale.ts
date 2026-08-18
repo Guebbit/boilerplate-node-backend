@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeService } from '../service';
 import { localeAuditActions } from '../audit';
@@ -33,6 +34,11 @@ export const deleteLocale = (request: Request<{ locale: string }>, response: Res
                     metadata: { removedEntries: result.data?.removedEntries }
                 })
             );
+
+            // A deleted override must stop answering on this worker at once; the others
+            // pick it up on their next scheduled refresh. Not awaited — see
+            // `refreshOverrides` in ./write-locale-entries.ts.
+            void refreshLocaleOverrides();
 
             return successResponse(response, undefined);
         })

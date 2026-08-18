@@ -18,14 +18,6 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { LocaleEntryInput } from './localeEntryInput';
 import type { LocaleScope } from './localeScope';
 
-/**
- * Entries to upsert into ONE scope. Anything already stored is left exactly as it was.
- */
-export interface MergeLocaleEntriesRequest {
-  scope: LocaleScope;
-  /** @minItems 1 */
-  entries: LocaleEntryInput[];
-}
+export type EntryScopeQueryParamParameter = LocaleScope;

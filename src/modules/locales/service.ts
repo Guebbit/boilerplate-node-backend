@@ -2,6 +2,7 @@ import {
     LocaleDirection,
     LocaleScope,
     LocaleSource,
+    type CreateLocaleEntryRequest,
     type CreateLocaleRequest,
     type LocaleCapabilities,
     type LocaleCapability,
@@ -20,16 +21,19 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';
 import { localeMessageRepository, localeRepository, type EntryInput } from './repository';
 
 /**
- * What the dynamic locale tier can be asked, and the two rules that make it safe to ask.
+ * What the override tier can be asked, and the rules that make it safe to ask.
  *
- * Everything here reads or writes the database and NOTHING here is reachable from `t()`,
+ * Everything here reads or writes the database, and nothing here is ever AWAITED by `t()`,
  * `negotiateLocale` or the locale middleware. That is the property the whole module is arranged
- * around: the API's ability to answer in its own language is decided by deployed files, at boot,
- * and cannot be affected by anything below.
+ * around, and it survives {@link readApiOverrides}: which languages the API can answer in is still
+ * decided by deployed files at boot and cannot be affected by a row, and the overrides those rows
+ * carry reach `t()` only through an overlay rebuilt off the request path. A database that cannot be
+ * read costs the overrides and nothing else.
  */
 
 /**
@@ -73,7 +77,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 
 /** Whether a tag runs right to left, judged on its base language (`ar-EG` → `ar`). */
 export const isRightToLeft = (tag: string): boolean =>
-    RIGHT_TO_LEFT_BASE_LANGUAGES.has(tag.split('-')[0] ?? '');
+    RIGHT_TO_LEFT_BASE_LANGUAGES.has(deriveBaseLanguage(tag));
 
 /**
  * A language's name in some language — `('es', 'en')` is `Spanish`, `('es', 'es')` is `Español`.
@@ -292,7 +296,12 @@ const languageNotFound = (): ResponseReject =>
     generateReject(404, [t('locales.error-language-not-found')]);
 
 /**
- * The dictionary a client downloads for one language.
+ * The OVERRIDES a client downloads for one language — `app` rows, never `api` ones.
+ *
+ * Not a dictionary: a client merges this over what it bundles, key by key, so a key nobody has
+ * edited keeps its bundled text and a language nobody has finished falls back per key. Handing a
+ * frontend the API's half instead would give it the backend's keyspace, which it did not author
+ * and cannot render.
  *
  * An INACTIVE language answers exactly as an unknown one does. Inactive means invisible to the
  * public, and a 403 or an empty 200 would both leak that the language exists — which is the one
@@ -304,7 +313,7 @@ export const readMessages = async (
     const language = await localeRepository.findByTag(tag);
     if (!language || !language.active) return languageNotFound();
 
-    const entries = await localeMessageRepository.listEntries(language.tag);
+    const entries = await localeMessageRepository.listEntries(language.tag, LocaleScope.app);
 
     return generateSuccess({
         locale: language.tag,
@@ -380,7 +389,12 @@ export const deleteLanguage = async (
 /** One page of a language's rows, for the editing screen. */
 export const searchEntries = async (
     tag: string,
-    filters: { page?: string | number; pageSize?: string | number; text?: string } = {}
+    filters: {
+        page?: string | number;
+        pageSize?: string | number;
+        text?: string;
+        scope?: LocaleScope;
+    } = {}
 ): Promise<
     ResponseSuccess<{ items: LocaleMessageDocument[]; meta: PaginatedMeta }> | ResponseReject
 > => {
@@ -402,6 +416,25 @@ export const searchEntries = async (
  *
  * `others` is what the key will have to live alongside once written — for a create that is
  * everything already stored, for a bulk replace it is only the rest of the batch.
+ *
+ * ## What is NOT checked, and cannot be
+ *
+ * That the key is one anything actually renders. A row may name a key no dictionary defines, and
+ * that is deliberate on both counts:
+ *
+ *   By DESIGN, because entries add keys as well as override them — a page's copy can be written
+ *   entirely in the database, which is the point of letting someone maintain a site without
+ *   touching a JSON file.
+ *
+ *   By NECESSITY for `app` rows, because their keyspace belongs to the frontend and lives in
+ *   another repository. This API has never seen `navigation.label-home` and has no way to learn
+ *   it. Only a client holding its own dictionaries can say whether a key is one it uses, so if
+ *   that warning is ever wanted it belongs in the admin screen, not here.
+ *
+ * The cost is small and worth naming: a typo — `prodcuts.list.titel` — saves cleanly and then
+ * renders nowhere. Nothing is broken and nothing is overwritten; a key simply does nothing, and
+ * whoever typed it has to notice. The checks below are the ones where the alternative IS damage:
+ * a key no tree can hold, and a key that would collide with one already stored.
  */
 const rejectUnusableKey = (key: string, others: Iterable<string>): ResponseReject | undefined => {
     const unsafe = findUnsafeKeySegment(key);
@@ -419,13 +452,19 @@ const rejectUnusableKey = (key: string, others: Iterable<string>): ResponseRejec
 /** Add one key to one language. */
 export const createEntry = async (
     tag: string,
-    payload: LocaleEntryInput
+    payload: CreateLocaleEntryRequest
 ): Promise<ResponseSuccess<LocaleMessageDocument> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 
     const key = payload.key.trim();
-    const existingKeys = await localeMessageRepository.listKeys(language.tag);
+    /*
+     * Both checks below are scoped to the dictionary being written. The same key legitimately
+     * exists on both sides — `generic.error-internal` is one string in each — so checking against
+     * every row would refuse the second half of a perfectly correct pair, and a collision between
+     * `products.list` and `products.list.title` only matters inside the tree they share.
+     */
+    const existingKeys = await localeMessageRepository.listKeys(language.tag, payload.scope);
 
     if (existingKeys.includes(key))
         return generateReject(409, [t('locales.error-key-exists', { key })]);
@@ -433,7 +472,7 @@ export const createEntry = async (
     const unusable = rejectUnusableKey(key, existingKeys);
     if (unusable) return unusable;
 
-    const { entry } = await localeMessageRepository.createEntry(language.tag, {
+    const { entry } = await localeMessageRepository.createEntry(language.tag, payload.scope, {
         key,
         value: payload.value
     });
@@ -491,6 +530,7 @@ export const deleteEntry = async (
  */
 export const importEntries = async (
     tag: string,
+    scope: LocaleScope,
     entries: readonly LocaleEntryInput[],
     mode: 'replace' | 'merge'
 ): Promise<ResponseSuccess<LocaleImportResult> | ResponseReject> => {
@@ -524,7 +564,7 @@ export const importEntries = async (
      * would refuse imports that are perfectly consistent with themselves.
      */
     const incoming = new Set(keys);
-    const stored = await localeMessageRepository.listKeys(language.tag);
+    const stored = await localeMessageRepository.listKeys(language.tag, scope);
     const survivors = mode === 'replace' ? [] : stored.filter((key) => !incoming.has(key));
 
     for (const key of keys) {
@@ -532,11 +572,52 @@ export const importEntries = async (
         if (unusable) return unusable;
     }
 
-    const { counts, revision } = await localeMessageRepository.importEntries(language.tag, inputs, {
-        replace: mode === 'replace'
-    });
+    const { counts, revision } = await localeMessageRepository.importEntries(
+        language.tag,
+        scope,
+        inputs,
+        { replace: mode === 'replace' }
+    );
 
     return generateSuccess({ ...counts, revision });
+};
+
+/**
+ * Every `api` override, grouped by language and expanded into trees.
+ *
+ * The provider `@infrastructure/i18n` calls to rebuild its overlay — see the "Database overrides"
+ * block there for what the overlay guarantees. Nested here rather than there because expanding a
+ * dotted key is this module's job: {@link buildMessageTree} is the one place that refuses
+ * `__proto__` and reports a key that is both a string and a group.
+ *
+ * INACTIVE languages are included, and deliberately so. `active` governs what the PUBLIC can see —
+ * the manifest and the downloadable dictionary — and an override is neither. Excluding them would
+ * mean a language deactivated mid-translation silently reverted the backend copy already approved
+ * for it, which is a different decision than "hide this from visitors".
+ *
+ * A key both a string and a group throws in the builder. That would take the whole refresh down,
+ * so it is caught per language: one malformed dictionary costs its own overrides and leaves every
+ * other language's applied.
+ */
+export const readApiOverrides = async (): Promise<Record<string, Record<string, unknown>>> => {
+    const rows = await localeMessageRepository.listEntriesByScope(LocaleScope.api);
+
+    const byLocale = new Map<string, { key: string; value: string }[]>();
+    for (const { locale, key, value } of rows)
+        byLocale.set(locale, [...(byLocale.get(locale) ?? []), { key, value }]);
+
+    const overrides: Record<string, Record<string, unknown>> = {};
+    for (const [locale, entries] of byLocale) {
+        try {
+            overrides[locale] = buildMessageTree(entries);
+        } catch (error) {
+            logger.warn('readApiOverrides - skipping a language whose keys cannot form a tree', {
+                detail: `${locale}: ${error instanceof Error ? error.message : String(error)}`
+            });
+        }
+    }
+
+    return overrides;
 };
 
 export const localeService = {
@@ -553,6 +634,7 @@ export const localeService = {
     findBatchCollision,
     findDuplicateKey,
     readMessages,
+    readApiOverrides,
     createLanguage,
     updateLanguage,
     deleteLanguage,

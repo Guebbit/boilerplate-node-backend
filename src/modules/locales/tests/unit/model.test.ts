@@ -17,6 +17,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { LocaleDirection } from '@types';
 import { localeRepository, localeMessageRepository } from '@modules/locales/repository';
 import { localeService } from '@modules/locales/service';
+import { makeLocale } from '@modules/locales/factory';
 
 setupTestDb();
 
@@ -80,5 +81,44 @@ describe('entry serialization', () => {
         const entry = await localeMessageRepository.create({ locale: 'es', key: 'cart.title' });
 
         expect(entry.value).toBe('');
+    });
+});
+
+/**
+ * `baseLanguage` — the ISO 639-1 code at the front of the tag.
+ *
+ * Derived by a schema hook rather than by the one service that creates languages, because
+ * "derived" has to hold for every write path: the seeds and the migration write documents
+ * directly, and neither knows it owes the column a value. These pin that it is the SCHEMA doing
+ * it, which is the only version of the guarantee that survives a new caller.
+ */
+describe('baseLanguage', () => {
+    it.each([
+        ['a bare language', 'es', 'es'],
+        ['a regional variant', 'pt-BR', 'pt'],
+        ['a script subtag', 'zh-Hant', 'zh'],
+        ['both', 'zh-Hant-HK', 'zh']
+    ])('derives %s: %s → %s', async (_label, tag, expected) => {
+        const language = await localeRepository.create(
+            makeLocale({ tag, name: tag, nativeName: tag })
+        );
+
+        expect(language.baseLanguage).toBe(expected);
+    });
+
+    /**
+     * A caller cannot pin it to something the tag contradicts. The field is in no request schema,
+     * so the only way to attempt this is in code — and the hook overwrites it anyway, which is
+     * what keeps the column and the tag from ever disagreeing.
+     */
+    it('overrides whatever a caller supplied', async () => {
+        const language = await localeRepository.create({
+            tag: 'pt-BR',
+            baseLanguage: 'es',
+            name: 'Portuguese',
+            nativeName: 'Português'
+        } as Parameters<typeof localeRepository.create>[0]);
+
+        expect(language.baseLanguage).toBe('pt');
     });
 });

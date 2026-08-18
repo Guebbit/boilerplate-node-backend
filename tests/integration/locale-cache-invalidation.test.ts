@@ -70,7 +70,9 @@ const givenPublishedLanguage = async (bearer: string) => {
     await api()
         .post('/locales/pt/entries')
         .set('Authorization', bearer)
-        .send({ key: 'cart.title', value: 'Carrinho' });
+        // `app`: the client's dictionary, which is the half `GET /locales/:locale/messages`
+        // serves and therefore the half whose cached copy this test is about.
+        .send({ scope: 'app', key: 'cart.title', value: 'Carrinho' });
 };
 
 describe('an admin write invalidates the cached public dictionary', () => {

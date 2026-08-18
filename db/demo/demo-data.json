@@ -82,9 +82,28 @@
         "localeMessages": [
             {
                 "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f3002",
+                "key": "generic.error-internal",
+                "locale": "es",
+                "scope": "api",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Algo ha fallado por nuestra parte. Inténtalo de nuevo."
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f3001",
+                "key": "generic.error-unauthorized",
+                "locale": "es",
+                "scope": "api",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Sesión caducada. Vuelve a entrar."
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
                 "id": "65e0200a9a7d4b2e1c0f100a",
                 "key": "account.menu.orders",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Mis pedidos"
             },
@@ -93,6 +112,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1007",
                 "key": "cart.empty",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Tu carrito está vacío"
             },
@@ -101,6 +121,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1006",
                 "key": "cart.title",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Tu carrito"
             },
@@ -109,6 +130,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1009",
                 "key": "checkout.actions.confirm",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Confirmar pedido"
             },
@@ -117,6 +139,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1008",
                 "key": "checkout.title",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Finalizar compra"
             },
@@ -125,6 +148,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1005",
                 "key": "products.detail.add-to-cart",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Añadir al carrito"
             },
@@ -133,6 +157,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1002",
                 "key": "products.list.empty",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Sin resultados"
             },
@@ -141,6 +166,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1004",
                 "key": "products.list.filters.reset",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Quitar filtros"
             },
@@ -149,6 +175,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1003",
                 "key": "products.list.filters.title",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Filtros"
             },
@@ -157,6 +184,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1001",
                 "key": "products.list.title",
                 "locale": "es",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Catálogo"
             },
@@ -165,6 +193,7 @@
                 "id": "65e0200a9a7d4b2e1c0f2002",
                 "key": "cart.title",
                 "locale": "fr",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Votre panier"
             },
@@ -173,6 +202,7 @@
                 "id": "65e0200a9a7d4b2e1c0f2001",
                 "key": "products.list.title",
                 "locale": "fr",
+                "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Catalogue"
             }
@@ -180,6 +210,7 @@
         "locales": [
             {
                 "active": true,
+                "baseLanguage": "es",
                 "createdAt": "2024-02-29T06:07:56.000Z",
                 "direction": "ltr",
                 "id": "65e01f3c9a7d4b2e1c0f0001",
@@ -191,6 +222,7 @@
             },
             {
                 "active": false,
+                "baseLanguage": "fr",
                 "createdAt": "2024-02-29T06:07:56.000Z",
                 "direction": "ltr",
                 "id": "65e01f3c9a7d4b2e1c0f0002",

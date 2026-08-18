@@ -66,6 +66,7 @@ export * from './deleteProductRequest';
 export * from './deleteUserByIdParams';
 export * from './deleteUserRequest';
 export * from './email';
+export * from './entryScopeQueryParamParameter';
 export * from './envelopeMessage';
 export * from './envelopeStatus';
 export * from './envelopeSuccess';

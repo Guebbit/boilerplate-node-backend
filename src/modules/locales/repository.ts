@@ -9,6 +9,7 @@ import {
     createBaseRepository,
     type BaseRepository
 } from '@infrastructure/persistence/base-repository';
+import { LocaleScope } from '@types';
 
 /**
  * The two collections' queries, and the one invariant that could not be left to a caller.
@@ -69,7 +70,9 @@ const entryBase = createBaseRepository<LocaleMessageDocument>(localeMessageModel
          * developer looking for `products.list` are the same search box, and splitting them into
          * `key=` and `value=` would only make the caller guess which one they are doing.
          */
-        text: ['key', 'value']
+        text: ['key', 'value'],
+        // Which dictionary to list. Absent means both, which is what an admin screen opens on.
+        exact: { scope: 'scope' }
     }
 });
 
@@ -90,23 +93,57 @@ const listActive = (): Promise<LocaleDocument[]> =>
         LocaleDocument[]
     >;
 
-/** How many entries each language has, in one query rather than one per language. */
+/**
+ * How many DOWNLOADABLE entries each language has, in one query rather than one per language.
+ *
+ * `app` rows only, because this number is the manifest's `entryCount` and the manifest is read by
+ * clients deciding whether a language is worth switching to. Counting the API's own overrides in
+ * it would inflate a language that has nothing a client could download — a Spanish with fifty
+ * backend overrides and no client strings would advertise as a fifty-key dictionary and arrive
+ * empty.
+ */
 const countEntriesByLocale = async (): Promise<Map<string, number>> => {
     const rows = await localeMessageModel
         .aggregate<{
             _id: string;
             count: number;
-        }>([{ $group: { _id: '$locale', count: { $sum: 1 } } }])
+        }>([
+            { $match: { scope: LocaleScope.app } },
+            { $group: { _id: '$locale', count: { $sum: 1 } } }
+        ])
         .exec();
 
     return new Map(rows.map(({ _id, count }) => [_id, count]));
 };
 
-/** Every row for one language, sorted by key so a built dictionary is byte-stable. */
-const listEntries = (locale: string): Promise<LocaleMessageDocument[]> =>
-    localeMessageModel.find({ locale }).sort({ key: 1 }).lean().exec() as unknown as Promise<
+/**
+ * Every row for one language and one dictionary, sorted by key so a build is byte-stable.
+ *
+ * Scoped rather than filtered by the caller: the two dictionaries share key names, so a build that
+ * received both would nest the API's `generic` over the client's and hand a frontend strings it
+ * never authored. `(locale, scope)` is a prefix of the unique index, so this stays one lookup.
+ */
+const listEntries = (locale: string, scope: LocaleScope): Promise<LocaleMessageDocument[]> =>
+    localeMessageModel.find({ locale, scope }).sort({ key: 1 }).lean().exec() as unknown as Promise<
         LocaleMessageDocument[]
     >;
+
+/**
+ * Every row of one dictionary, across every language, for the override overlay.
+ *
+ * One query rather than one per language: the overlay is rebuilt whole on every refresh, and the
+ * `api` half of this collection is a handful of rows by construction — it holds only the keys
+ * somebody has chosen to override, never a dictionary.
+ *
+ * Sorted by `(locale, key)` so a rebuilt overlay is byte-identical to the last one when nothing
+ * changed, which is what makes a diff of two refreshes readable.
+ */
+const listEntriesByScope = (scope: LocaleScope): Promise<LocaleMessageDocument[]> =>
+    localeMessageModel
+        .find({ scope })
+        .sort({ locale: 1, key: 1 })
+        .lean()
+        .exec() as unknown as Promise<LocaleMessageDocument[]>;
 
 /**
  * Just the keys of one language.
@@ -114,8 +151,12 @@ const listEntries = (locale: string): Promise<LocaleMessageDocument[]> =>
  * Its own query rather than a `listEntries().map()`: the collision check runs on every single
  * write, and it has no use for the values — which are the whole weight of the collection.
  */
-const listKeys = async (locale: string): Promise<string[]> => {
-    const rows = await localeMessageModel.find({ locale }).select({ key: 1, _id: 0 }).lean().exec();
+const listKeys = async (locale: string, scope: LocaleScope): Promise<string[]> => {
+    const rows = await localeMessageModel
+        .find({ locale, scope })
+        .select({ key: 1, _id: 0 })
+        .lean()
+        .exec();
 
     return (rows as unknown as { key: string }[]).map(({ key }) => key);
 };
@@ -138,9 +179,14 @@ const bumpRevision = async (tag: string): Promise<number> => {
 /** Insert one entry, and bump. */
 const createEntry = async (
     locale: string,
+    scope: LocaleScope,
     input: EntryInput
 ): Promise<{ entry: LocaleMessageDocument; revision: number }> => {
-    const entry = await entryBase.create({ locale, ...input } as Partial<LocaleMessageDocument>);
+    const entry = await entryBase.create({
+        locale,
+        scope,
+        ...input
+    } as Partial<LocaleMessageDocument>);
     return { entry, revision: await bumpRevision(locale) };
 };
 
@@ -173,10 +219,11 @@ const removeEntry = async (entry: LocaleMessageDocument): Promise<number> => {
  */
 const importEntries = async (
     locale: string,
+    scope: LocaleScope,
     inputs: EntryInput[],
     { replace }: { replace: boolean }
 ): Promise<{ counts: ImportCounts; revision: number }> => {
-    const existing = new Set(await listKeys(locale));
+    const existing = new Set(await listKeys(locale, scope));
     const incoming = new Map(inputs.map(({ key, value }) => [key, value]));
 
     const removedKeys = replace ? [...existing].filter((key) => !incoming.has(key)) : [];
@@ -185,15 +232,15 @@ const importEntries = async (
         await localeMessageModel.bulkWrite(
             [...incoming].map(([key, value]) => ({
                 updateOne: {
-                    filter: { locale, key },
-                    update: { $set: { value }, $setOnInsert: { locale, key } },
+                    filter: { locale, scope, key },
+                    update: { $set: { value }, $setOnInsert: { locale, scope, key } },
                     upsert: true
                 }
             }))
         );
 
     if (removedKeys.length > 0)
-        await localeMessageModel.deleteMany({ locale, key: { $in: removedKeys } }).exec();
+        await localeMessageModel.deleteMany({ locale, scope, key: { $in: removedKeys } }).exec();
 
     const created = [...incoming.keys()].filter((key) => !existing.has(key)).length;
 
@@ -248,10 +295,12 @@ export const localeRepository: BaseRepository<LocaleDocument> & {
 /** The words. */
 export const localeMessageRepository: BaseRepository<LocaleMessageDocument> & {
     countEntriesByLocale: () => Promise<Map<string, number>>;
-    listEntries: (locale: string) => Promise<LocaleMessageDocument[]>;
-    listKeys: (locale: string) => Promise<string[]>;
+    listEntries: (locale: string, scope: LocaleScope) => Promise<LocaleMessageDocument[]>;
+    listEntriesByScope: (scope: LocaleScope) => Promise<LocaleMessageDocument[]>;
+    listKeys: (locale: string, scope: LocaleScope) => Promise<string[]>;
     createEntry: (
         locale: string,
+        scope: LocaleScope,
         input: EntryInput
     ) => Promise<{ entry: LocaleMessageDocument; revision: number }>;
     saveEntryValue: (
@@ -261,6 +310,7 @@ export const localeMessageRepository: BaseRepository<LocaleMessageDocument> & {
     removeEntry: (entry: LocaleMessageDocument) => Promise<number>;
     importEntries: (
         locale: string,
+        scope: LocaleScope,
         inputs: EntryInput[],
         options: { replace: boolean }
     ) => Promise<{ counts: ImportCounts; revision: number }>;
@@ -268,6 +318,7 @@ export const localeMessageRepository: BaseRepository<LocaleMessageDocument> & {
     ...entryBase,
     countEntriesByLocale,
     listEntries,
+    listEntriesByScope,
     listKeys,
     createEntry,
     saveEntryValue,

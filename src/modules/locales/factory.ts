@@ -15,6 +15,7 @@
 import type { Types } from 'mongoose';
 import { identityOf, compact, type OverridesFor } from '@infrastructure/persistence/factory';
 import type { Language, LocaleEntry } from '@types';
+import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';
 
 export type LocaleOverrides = OverridesFor<Language> & {
@@ -43,6 +44,9 @@ export const makeLocale = ({
     ...identityOf({ id, createdAt, updatedAt }),
     name: fields.tag,
     nativeName: fields.tag,
+    // Derived, exactly as `createLanguage` derives it: a fixture that stated its own could
+    // publish a dataset the API can never produce.
+    baseLanguage: deriveBaseLanguage(fields.tag),
     ...compact({ ...fields })
 });
 

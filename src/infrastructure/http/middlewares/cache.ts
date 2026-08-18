@@ -21,6 +21,22 @@ type CacheOptions = {
      * against, so the list cannot drift from what the controller reads.
      */
     keyParameters: readonly string[];
+
+    /**
+     * Let the SERVER hold the answer for the full TTL, but make the browser check first.
+     *
+     * The default aligns the two caches: `max-age=<ttl>` tells a browser it may answer from its
+     * own store without asking, which is right for data that changes on its own schedule. It is
+     * wrong for data a PERSON edits and then goes looking at. `invalidateCache` clears Redis on
+     * every write, but it cannot reach a copy already sitting in someone's browser — so a
+     * translator saves a string, reloads, sees the old one, and reports that saving is broken.
+     *
+     * With this set the response is still stored and still served from Redis; the browser is
+     * simply told to revalidate, which Express answers with a `304 Not Modified` and no body
+     * whenever the ETag still matches. The round trip is the cost, and it buys an edit that
+     * appears at once.
+     */
+    browserRevalidate?: boolean;
 };
 
 /**
@@ -91,10 +107,12 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         // lifetime the server will actually honour.
         const ttl = resolveCacheTtl(seconds);
 
-        // Keep browser/proxy cache headers aligned with the server-side Redis cache policy.
+        // Keep browser/proxy cache headers aligned with the server-side Redis cache policy —
+        // unless the route asked for revalidation, which decouples the two on purpose.
+        const scope = request.authContext ? 'private' : 'public';
         response.set(
             'Cache-Control',
-            `${request.authContext ? 'private' : 'public'}, max-age=${ttl}`
+            options.browserRevalidate ? `${scope}, no-cache` : `${scope}, max-age=${ttl}`
         );
 
         // The Redis key is scoped by user (see getCacheScope), but a cache in front of the API

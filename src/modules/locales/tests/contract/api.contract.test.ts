@@ -39,12 +39,18 @@ const createLanguage = async (bearer: string, body: Record<string, unknown> = PO
     return response.body.data.tag as string;
 };
 
-/** Adds one key through the real route and returns its id. */
-const createEntry = async (bearer: string, tag: string, key: string, value: string) => {
+/** Adds one key through the real route and returns its id. Client-side unless told otherwise. */
+const createEntry = async (
+    bearer: string,
+    tag: string,
+    key: string,
+    value: string,
+    scope: 'api' | 'app' = 'app'
+) => {
     const response = await api()
         .post(`/locales/${tag}/entries`)
         .set('Authorization', bearer)
-        .send({ key, value });
+        .send({ scope, key, value });
 
     if (response.status !== 201)
         throw new Error(
@@ -520,7 +526,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ key: 'cart.title', value: 'Carrinho' });
+            .send({ scope: 'app', key: 'cart.title', value: 'Carrinho' });
 
         expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
@@ -534,7 +540,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ key: 'cart.title', value: 'Outro' });
+            .send({ scope: 'app', key: 'cart.title', value: 'Outro' });
 
         expect(response.status).toBe(409);
         expect(response).toSatisfyApiSpec();
@@ -552,7 +558,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ key: 'products.list', value: 'Lista' });
+            .send({ scope: 'app', key: 'products.list', value: 'Lista' });
 
         expect(response.status).toBe(409);
         expect(response).toSatisfyApiSpec();
@@ -566,7 +572,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ key: 'products.list.title', value: 'Catálogo' });
+            .send({ scope: 'app', key: 'products.list.title', value: 'Catálogo' });
 
         expect(response.status).toBe(409);
     });
@@ -578,7 +584,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ key: '', value: 'x' });
+            .send({ scope: 'app', key: '', value: 'x' });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
@@ -590,7 +596,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/zz/entries')
             .set('Authorization', bearer)
-            .send({ key: 'cart.title', value: 'x' });
+            .send({ scope: 'app', key: 'cart.title', value: 'x' });
 
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
@@ -688,7 +694,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .put('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
+            .send({ scope: 'app', entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 1 });
@@ -705,7 +711,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .patch('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
+            .send({ scope: 'app', entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 0 });
@@ -724,7 +730,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .patch('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title', value: 'Carrinho' }] });
+            .send({ scope: 'app', entries: [{ key: 'cart.title', value: 'Carrinho' }] });
 
         expect(response.body.data.revision).toBe(1);
     });
@@ -737,6 +743,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
             .patch('/locales/pt/entries')
             .set('Authorization', bearer)
             .send({
+                scope: 'app',
                 entries: [
                     { key: 'products.list', value: 'Lista' },
                     { key: 'products.list.title', value: 'Catálogo' }
@@ -754,14 +761,14 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .put('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ entries: [{ key: 'cart.title' }] });
+            .send({ scope: 'app', entries: [{ key: 'cart.title' }] });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 
     it('401s unauthenticated', async () => {
-        const response = await api().put('/locales/pt/entries').send({ entries: [] });
+        const response = await api().put('/locales/pt/entries').send({ scope: 'app', entries: [] });
 
         expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();

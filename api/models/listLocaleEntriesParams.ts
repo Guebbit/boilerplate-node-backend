@@ -18,6 +18,8 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { EntryScopeQueryParamParameter } from './entryScopeQueryParamParameter';
+import type { LocaleScope } from './localeScope';
 import type { Page } from './page';
 import type { PageParamParameter } from './pageParamParameter';
 import type { PageSize } from './pageSize';
@@ -42,4 +44,19 @@ pageSize?: PageSizeParamParameter;
  * @minLength 1
  */
 text?: TextParamParameter;
+/**
+ * Which of the two dictionaries something belongs to. `api` is the API's own — the
+ * backend's words. `app` is the client's — the frontend's words. They are separate
+ * keyspaces, authored by different people, and a key present in both means two
+ * unrelated strings.
+ *
+ * On a LANGUAGE it reports capability, and the two are independent: `api` — the API
+ * can answer requests in it, because a dictionary file is deployed; `app` — a client
+ * dictionary is downloadable for it.
+ *
+ * On an ENTRY it says which dictionary that row OVERRIDES. `app` rows are what
+ * `GET /locales/{locale}/messages` serves to a frontend; `api` rows are layered over
+ * the API's own deployed files at resolution time.
+ */
+scope?: EntryScopeQueryParamParameter;
 };

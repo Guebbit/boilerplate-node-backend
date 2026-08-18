@@ -1,17 +1,29 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, QueryFilter } from 'mongoose';
-import { LocaleDirection } from '@types';
+import { LocaleDirection, LocaleScope } from '@types';
 import type { Language, LocaleEntry } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
- * The two collections behind the DYNAMIC locale tier — the client's copy, edited at runtime.
+ * The two collections behind the OVERRIDE tier — both dictionaries' runtime edits.
  *
- * Neither is read by `t()`, by `negotiateLocale`, or by anything else on the request path. That is
- * the whole design: `@infrastructure/i18n` loads the API's own copy from deployed files at boot and
- * never revisits it, so Mongo being down, a language half-translated or a malformed key can cost at
- * most the two endpoints that read these rows. See `openapi.yaml` for the tier split in full.
+ * Nothing here is AWAITED on the request path, which is the property to preserve when changing any
+ * of it. `negotiateLocale` never reads a row, and `t()` never waits for one: the `api`-scoped rows
+ * reach it through an overlay that `@infrastructure/i18n` rebuilds at boot, on a timer and after a
+ * write, and that overlay is layered onto dictionaries already loaded from deployed files. Mongo
+ * down, a language half-translated, a malformed key — the worst outcome is the two endpoints that
+ * read these rows failing and the overlay going stale, never a request that cannot resolve its own
+ * copy. See `openapi.yaml` for the tier split in full.
  */
+
+/**
+ * The ISO 639-1 primary subtag of a BCP 47 tag: `pt-BR` → `pt`, `es` → `es`.
+ *
+ * Lowercased here as well as by the schema, because the seeds and the migration call it directly
+ * and neither goes through a Mongoose setter.
+ */
+export const deriveBaseLanguage = (tag: string): string =>
+    (tag.split('-')[0] ?? tag).trim().toLowerCase();
 
 /** Mongoose document type for a registered language. Overrides the generated `Language`'s dates. */
 export interface LocaleDocument extends Omit<Language, 'id' | 'createdAt' | 'updatedAt'>, Document {
@@ -41,6 +53,23 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
          * that a database guarantee rather than a hope, and it can only compare bytes.
          */
         tag: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true
+        },
+        /*
+         * The ISO 639-1 code at the front of `tag`, kept as its own column.
+         *
+         * Derived, never supplied: `deriveBaseLanguage` is the one place that computes it, and
+         * every write path goes through it. A client that could send this could send a `pt-BR`
+         * whose base says `es`.
+         *
+         * Worth a column rather than a `split('-')` at each call site because it is the field
+         * that groups a language's variants — "everything Portuguese" is a query on this, and a
+         * query cannot be written against a string operation.
+         */
+        baseLanguage: {
             type: String,
             required: true,
             lowercase: true,
@@ -90,6 +119,22 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
 );
 
 /*
+ * Derived on every save, so the column cannot drift from the tag it comes from.
+ *
+ * A hook rather than an assignment in `createLanguage`, because "derived" has to hold for every
+ * write path and there is more than one: the service creates, tests and migrations write
+ * documents directly, and a future caller will not know it owes this field a value. Setting it
+ * here means the only way to get it wrong is to change `tag` and `baseLanguage` in the same
+ * breath, which nothing can do — the field is not in any request schema.
+ *
+ * `pre('validate')` and not `pre('save')`: `required: true` is checked during validation, so a
+ * `save` hook would run after the error it exists to prevent.
+ */
+localeSchema.pre('validate', function derivesBaseLanguage() {
+    if (this.tag) this.baseLanguage = deriveBaseLanguage(this.tag);
+});
+
+/*
  * Names given rather than derived, for the reason `users/model.ts` states at length: Mongo
  * identifies an index by name as well as by key, and `db/migrations/20260817140000-locale-
  * collections.js` creates these same two under these same names. A derived name on one side would
@@ -100,7 +145,7 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
  */
 localeSchema.index({ tag: 1 }, { name: 'locales_tag', unique: true });
 
-/** The words. One row per (language, key). */
+/** The words. One row per (language, scope, key). */
 export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessageModel>(
     {
         /*
@@ -117,6 +162,24 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
             required: true,
             lowercase: true,
             trim: true
+        },
+        /*
+         * Which dictionary this row overrides: `app` the client's, `api` the API's own.
+         *
+         * Part of the row's IDENTITY, not a label on it — see the unique index below. The two
+         * dictionaries are independently authored and both happen to declare a top-level
+         * `generic`, so `generic.error-internal` is one string in the API's copy and a different
+         * one in the client's. A key alone cannot tell them apart.
+         *
+         * Defaulted to `app` because that is the tier this collection was built for and every row
+         * that existed before the column did belongs to it; `db/migrations/20260818120000-locale-
+         * entry-scope.js` backfills the same value for exactly that reason.
+         */
+        scope: {
+            type: String,
+            enum: Object.values(LocaleScope),
+            default: LocaleScope.app,
+            required: true
         },
         /*
          * Flat and dotted (`products.list.title`), and stored AS A STRING.
@@ -152,14 +215,18 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
  * hope: every write path here is a check-then-insert, and two concurrent imports of the same key
  * would otherwise both read "absent".
  *
- * There is deliberately no separate `{ locale: 1 }` index for the whole-dictionary read. A
- * compound index serves queries on any PREFIX of its keys, so this one already answers
- * `find({ locale })` — a second index on the same prefix would be write cost buying nothing, which
- * is exactly what `db/migrations/20260808180000-prune-unused-indexes.js` exists to have removed.
+ * `scope` sits in the middle rather than at the end, and that ordering is the read this collection
+ * exists for. A compound index serves queries on any PREFIX of its keys, so this one answers both
+ * `find({ locale, scope })` — the whole-dictionary read, once per download — and `find({ locale })`
+ * for the admin listing that shows both sides at once. Ending on `scope` would answer neither
+ * without a scan.
+ *
+ * There is deliberately no second index on `locale` alone for that reason, which is exactly what
+ * `db/migrations/20260808180000-prune-unused-indexes.js` exists to have removed.
  */
 localeMessageSchema.index(
-    { locale: 1, key: 1 },
-    { name: 'localeMessages_locale_key', unique: true }
+    { locale: 1, scope: 1, key: 1 },
+    { name: 'localeMessages_locale_scope_key', unique: true }
 );
 
 /** Normalizes a serialized language: `_id` → `id`, drops `__v`. */

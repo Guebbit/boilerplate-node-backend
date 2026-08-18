@@ -5,6 +5,7 @@ import { shutdownTracing } from '@infrastructure/runtime/otel-sdk';
 import { stopDatabase } from '@infrastructure/runtime/database';
 import { stopCache } from '@infrastructure/adapters/cache';
 import { stopQueue } from '@infrastructure/adapters/queue';
+import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
 
 /**
  * Server Lifecycle
@@ -71,6 +72,7 @@ export const shutdownInfra = (server?: Server) =>
             if (!s?.listening) return;
             return closeServer(s);
         })
+        .then(() => stopLocaleOverrideRefresh())
         .then(() => stopCache())
         .then(() => stopQueue())
         .then(() => stopDatabase())
