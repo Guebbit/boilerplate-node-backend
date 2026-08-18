@@ -54,6 +54,7 @@ import { SHARED_FILES, hashFile, THIS_REPO } from './specIdentity';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './frontendPath';
 
 const dryRun = process.argv.includes('--dry');
+const forcedRun = process.argv.includes('--forced');
 /* Ignored under `--dry`, which promises to write nothing — over there least of all. */
 const regenerate = process.argv.includes('--regen') && !dryRun;
 
@@ -114,8 +115,8 @@ const outcomes: Outcome[] = SHARED_FILES.map((shared) => {
     if (!existsSync(from))
         return { from: shared.backend, to: shared.frontend, state: 'missing-here' };
 
-    const identical = existsSync(to) && hashFile(from) === hashFile(to);
-    if (identical) return { from: shared.backend, to: shared.frontend, state: 'already-identical' };
+    if (!forcedRun && existsSync(to) && hashFile(from) === hashFile(to))
+        return { from: shared.backend, to: shared.frontend, state: 'already-identical' };
 
     // A hand-maintained mirror that differs is a question, not a chore. Say so; write nothing.
     if (shared.owner === 'mirror')
