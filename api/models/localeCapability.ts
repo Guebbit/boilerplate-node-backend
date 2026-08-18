@@ -31,6 +31,7 @@ export interface LocaleCapability {
   name: string;
   nativeName: string;
   direction: LocaleDirection;
+  active: boolean;
   /**
      * What this language can do. Without it a client seeing `es` in the list cannot tell whether it may send `Accept-Language: es` and get Spanish error messages, or whether it may download a Spanish UI dictionary. Those are different questions.
      * @minItems 1

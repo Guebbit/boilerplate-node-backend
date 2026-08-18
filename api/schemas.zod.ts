@@ -46,6 +46,10 @@ export const GetHealthResponse = zod.object({
  *
  * Public, unauthenticated and cacheable. A client that has just failed to reach the
  * API is exactly who needs it.
+ *
+ * An ADMIN gets the same manifest plus the rows a visitor is not offered: inactive
+ * languages, each carrying `active: false`. The flag gates selection by visitors and
+ * nothing else — the same rule products and users follow.
  * @summary Supported languages
  */
 export const getLocalesResponseDataLocalesItemTagRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
@@ -68,6 +72,7 @@ export const GetLocalesResponse = zod.object({
   "name": zod.string(),
   "nativeName": zod.string(),
   "direction": zod.enum(['ltr', 'rtl']).describe('Writing direction, which a client needs before it can lay the language out. Trivial today because every deployed language is left-to-right; a column rather than a derivation because the day it is not, the alternative is a migration.'),
+  "active": zod.boolean(),
   "scopes": zod.array(zod.enum(['api', 'app']).describe('Which of the two dictionaries something belongs to. `api` is the API\'s own — the\nbackend\'s words. `app` is the client\'s — the frontend\'s words. They are separate\nkeyspaces, authored by different people, and a key present in both means two\nunrelated strings.\n\nOn a LANGUAGE it reports capability, and the two are independent: `api` — the API\ncan answer requests in it, because a dictionary file is deployed; `app` — a client\ndictionary is downloadable for it.\n\nOn an ENTRY it says which dictionary that row OVERRIDES. `app` rows are what\n`GET \/locales\/{locale}\/messages` serves to a frontend; `api` rows are layered over\nthe API\'s own deployed files at resolution time.\n')).min(1).describe('What this language can do. Without it a client seeing `es` in the list cannot tell whether it may send `Accept-Language: es` and get Spanish error messages, or whether it may download a Spanish UI dictionary. Those are different questions.'),
   "source": zod.enum(['static', 'dynamic', 'both']).describe('Which tier a language came from — deployed files, the database, or both.'),
   "entryCount": zod.number().min(getLocalesResponseDataLocalesItemEntryCountMin),

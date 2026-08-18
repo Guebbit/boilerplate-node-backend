@@ -73,6 +73,10 @@ paths:
 
         Public, unauthenticated and cacheable. A client that has just failed to reach the
         API is exactly who needs it.
+
+        An ADMIN gets the same manifest plus the rows a visitor is not offered: inactive
+        languages, each carrying `active: false`. The flag gates selection by visitors and
+        nothing else — the same rule products and users follow.
       operationId: getLocales
       responses:
         '200':
@@ -3313,6 +3317,7 @@ components:
         - name
         - nativeName
         - direction
+        - active
         - scopes
         - source
         - entryCount
@@ -3329,6 +3334,8 @@ components:
           example: Español
         direction:
           $ref: '#/components/schemas/LocaleDirection'
+        active:
+          type: boolean
         scopes:
           type: array
           minItems: 1

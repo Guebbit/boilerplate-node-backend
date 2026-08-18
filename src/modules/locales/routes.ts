@@ -18,10 +18,11 @@ import { deleteLocaleEntry } from './controllers/delete-locale-entry';
  * Express router for locale discovery and translation administration.
  *
  * ── The reads are public, and that is not an oversight ───────────────────────────────────────
- * No `getAuth` on any of the three GETs above the `router.use` below. An unauthenticated client
- * that has just failed to reach the API is exactly who needs a dictionary, and requiring a token
+ * None of the three GETs above the `router.use` below REQUIRE a token. An unauthenticated client
+ * that has just failed to reach the API is exactly who needs a dictionary, and requiring one
  * would make the copy unavailable in the one case it exists for. There is nothing to protect: it
- * is text written to be published.
+ * is text written to be published. The manifest alone takes `getAuth` — reading the role without
+ * demanding it — because an admin's copy also lists inactive languages.
  *
  * ── The writes are admin-only, and cache-invalidating ────────────────────────────────────────
  * Everything below the `router.use` changes what every visitor reads, so each write wraps in
@@ -55,8 +56,10 @@ const publicLocaleCache = setCache(3600, {
     browserRevalidate: true
 });
 
-// GET /locales — which languages this deployment offers, and what each of them can do
-router.get('/', publicLocaleCache, getLocales);
+// GET /locales — which languages this deployment offers, and what each of them can do.
+// `getAuth` (and only that: no token still answers) so an admin's manifest can include the
+// inactive rows a visitor is not offered. Before the cache, which scopes its key by caller.
+router.get('/', getAuth, publicLocaleCache, getLocales);
 
 // GET /locales/:locale/messages — the client's dictionary, out of the database
 router.get('/:locale/messages', publicLocaleCache, getLocaleMessages);

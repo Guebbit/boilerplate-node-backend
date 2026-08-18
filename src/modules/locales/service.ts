@@ -101,6 +101,8 @@ export const staticCapability = (tag: string): LocaleCapability => ({
     name: describeLanguage(tag, 'en'),
     nativeName: describeLanguage(tag, tag),
     direction: isRightToLeft(tag) ? LocaleDirection.rtl : LocaleDirection.ltr,
+    // A deployed file has no off switch: a static language is always selectable.
+    active: true,
     // `api` and only `api`: the API can answer in it, and there is no dictionary to download.
     scopes: [LocaleScope.api],
     source: LocaleSource.static,
@@ -110,13 +112,17 @@ export const staticCapability = (tag: string): LocaleCapability => ({
 
 /** How the manifest describes a language that exists as rows. */
 export const dynamicCapability = (
-    language: Pick<LocaleDocument, 'tag' | 'name' | 'nativeName' | 'direction' | 'revision'>,
+    language: Pick<
+        LocaleDocument,
+        'tag' | 'name' | 'nativeName' | 'direction' | 'active' | 'revision'
+    >,
     entryCount: number
 ): LocaleCapability => ({
     tag: language.tag,
     name: language.name,
     nativeName: language.nativeName,
     direction: language.direction,
+    active: language.active,
     scopes: [LocaleScope.app],
     source: LocaleSource.dynamic,
     entryCount,
@@ -171,13 +177,17 @@ export const mergeCapabilities = (
  * Logged at warn rather than silently: a manifest quietly missing its dynamic languages looks
  * exactly like a deployment that has none.
  */
-export const readDynamicTier = async (): Promise<{
+export const readDynamicTier = async (
+    admin = false
+): Promise<{
     languages: LocaleDocument[];
     entryCounts: Map<string, number>;
 }> => {
     try {
         const [languages, entryCounts] = await Promise.all([
-            localeRepository.listActive(),
+            // `active` gates what a VISITOR may select and nothing else — the admin, who is the
+            // one toggling the flag, reads every row. Same rule as products and users.
+            admin ? localeRepository.listAll() : localeRepository.listActive(),
             localeMessageRepository.countEntriesByLocale()
         ]);
         return { languages, entryCounts };
@@ -189,9 +199,13 @@ export const readDynamicTier = async (): Promise<{
     }
 };
 
-/** Every language this deployment offers, and what each of them can do. */
-export const listCapabilities = async (): Promise<LocaleCapabilities> => {
-    const { languages, entryCounts } = await readDynamicTier();
+/**
+ * Every language this deployment offers, and what each of them can do.
+ *
+ * @param admin - Include inactive languages, which only the admin surface may see.
+ */
+export const listCapabilities = async (admin = false): Promise<LocaleCapabilities> => {
+    const { languages, entryCounts } = await readDynamicTier(admin);
 
     return {
         locales: mergeCapabilities(listSupportedLocales(), languages, entryCounts),

@@ -94,6 +94,14 @@ const listActive = (): Promise<LocaleDocument[]> =>
     >;
 
 /**
+ * Every language, inactive included — the ADMIN's read. Same unpaginated reasoning as
+ * {@link listActive}; the pair mirrors the products repository, where `publicScope` narrows and
+ * admin callers pass nothing.
+ */
+const listAll = (): Promise<LocaleDocument[]> =>
+    localeModel.find({}).sort({ tag: 1 }).lean().exec() as unknown as Promise<LocaleDocument[]>;
+
+/**
  * How many DOWNLOADABLE entries each language has, in one query rather than one per language.
  *
  * `app` rows only, because this number is the manifest's `entryCount` and the manifest is read by
@@ -282,12 +290,14 @@ const deleteLocaleCascade = async (locale: LocaleDocument): Promise<number> => {
 export const localeRepository: BaseRepository<LocaleDocument> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
     listActive: () => Promise<LocaleDocument[]>;
+    listAll: () => Promise<LocaleDocument[]>;
     bumpRevision: (tag: string) => Promise<number>;
     deleteLocaleCascade: (locale: LocaleDocument) => Promise<number>;
 } = {
     ...localeBase,
     findByTag,
     listActive,
+    listAll,
     bumpRevision,
     deleteLocaleCascade
 };

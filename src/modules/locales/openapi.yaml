@@ -51,6 +51,10 @@ paths:
 
                 Public, unauthenticated and cacheable. A client that has just failed to reach the
                 API is exactly who needs it.
+
+                An ADMIN gets the same manifest plus the rows a visitor is not offered: inactive
+                languages, each carrying `active: false`. The flag gates selection by visitors and
+                nothing else — the same rule products and users follow.
             operationId: getLocales
             responses:
                 '200':
@@ -537,7 +541,7 @@ components:
         LocaleCapability:
             type: object
             additionalProperties: false
-            required: [tag, name, nativeName, direction, scopes, source, entryCount, revision]
+            required: [tag, name, nativeName, direction, active, scopes, source, entryCount, revision]
             description: >-
                 One language as the manifest describes it: a merge of whatever the two tiers each
                 know about it. A tag present in both appears once, with both scopes.
@@ -552,6 +556,13 @@ components:
                     example: Español
                 direction:
                     $ref: '#/components/schemas/LocaleDirection'
+                # Whether a VISITOR may select the language — the flag's only job, the same rule
+                # products and users follow. Non-admin manifests simply omit inactive rows, so for
+                # them this is always true; an admin's manifest includes every row and reads the
+                # flag to tell them apart. Static-only languages are always true: a deployed file
+                # has no off switch.
+                active:
+                    type: boolean
                 scopes:
                     type: array
                     minItems: 1

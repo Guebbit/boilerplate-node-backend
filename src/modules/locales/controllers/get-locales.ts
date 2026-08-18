@@ -21,9 +21,11 @@ import { localeService } from '../service';
  * the languages that are downloadable, never the ones the API can answer in, because a client
  * asking this question has usually just failed to reach something else.
  */
-export const getLocales = (_request: Request, response: Response) =>
+export const getLocales = (request: Request, response: Response) =>
     localeService
-        .listCapabilities()
+        // Admin sees every row, inactive included — `getAuth` on the route is what makes the
+        // role readable here, exactly as the products list does it.
+        .listCapabilities(request.authContext?.admin === true)
         .then((capabilities) => successResponse(response, capabilities))
         .catch((error: Error) => rejectDatabaseError(response, 'getLocales', error));
 

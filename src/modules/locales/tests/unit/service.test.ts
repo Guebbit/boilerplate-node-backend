@@ -186,12 +186,28 @@ describe('mergeCapabilities', () => {
                 name: 'Portuguese',
                 nativeName: 'Português',
                 direction: LocaleDirection.ltr,
+                active: true,
                 scopes: [LocaleScope.app],
                 source: LocaleSource.dynamic,
                 entryCount: 12,
                 revision: 3
             }
         ]);
+    });
+
+    /*
+     * The flag rides the row into the manifest so the ADMIN — the only caller whose manifest
+     * includes inactive languages — can tell them apart. For everyone else the repository never
+     * hands an inactive row to this merge, so their manifests only ever say `true`.
+     */
+    it('carries the active flag through, so an admin manifest can name the hidden rows', () => {
+        const rows = localeService.mergeCapabilities(
+            [],
+            [language({ tag: 'fr', name: 'French', nativeName: 'Français', active: false })],
+            new Map()
+        );
+
+        expect(rows[0]).toMatchObject({ tag: 'fr', active: false });
     });
 
     /*
