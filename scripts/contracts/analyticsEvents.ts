@@ -1,27 +1,47 @@
 /**
- * `src/infrastructure/observability/analytics-events.ts` — the event names both repos emit.
+ * `src/infrastructure/observability/analytics-events.frontend.ts` — the event names the paired
+ * FRONTEND emits.
  *
- * WHAT THIS IS. An ARTEFACT, not a source. Each module declares its own names in
- * `src/modules/<name>/analytics.ts` as ordinary TypeScript — imported by its controllers, typechecked,
- * linted, and augmenting the analytics port's `AnalyticsEventMap` so the union grows with the enabled
- * modules. Nothing in this repo imports the file produced here. It exists because the paired frontend
- * emits the same funnel from the other end and holds a byte-identical copy, which
- * `check:spec-identity` enforces.
+ * ## Two scopes, one namespace
  *
- * WHY IT IS SLICED RATHER THAN SERIALISED. The declarations carry comments that say why a name sits
- * where it does — why `CHECKOUT_*` belongs to `cart` and not to `orders`, what
- * `WISHLIST_MOVED_TO_CART` ties together — and the frontend reads its copy by hand. Rebuilding the
- * object from the imported values would drop every one of them, so the body of each module's
- * `as const` is taken VERBATIM out of its source.
+ * Both repos write into one Umami website, so every event name lives in ONE namespace — but each
+ * name has exactly one emitter. `backend` sections are the modules' own `analytics.ts` files:
+ * their controllers import them, and nothing is published. The `frontend` section is
+ * `shared/contracts/analytics.frontend.ts`: names for moments this service never observes, and the
+ * only ones that leave this repo.
+ *
+ * The split is the analytics twin of the one in `./asyncapi.ts`, and it answers the same question
+ * differently. There, both halves are published, because the full contract is what this repo
+ * generates its own types from. Here only one half is, because a module's names are already
+ * ordinary TypeScript its controllers import — a published copy of them would be a file with no
+ * reader on either side of the boundary.
+ *
+ * That is also what fixed the bug this arrangement replaced. A single catalogue said which names
+ * EXIST and never which side EMITS them, both repos held it, and both fired most of it: one
+ * add-to-cart wrote two indistinguishable rows into Umami, and every count built on those names
+ * read twice reality. Publishing only the frontend's half makes the double emission impossible to
+ * express — the constant simply does not exist in the repo that must not fire it.
+ *
+ * ## What is checked
+ *
+ * `contract-bundles.test.ts` walks `ANALYTICS_SECTIONS`, which holds BOTH scopes, and rejects a
+ * name or a value declared twice anywhere in it. That is the check that makes one namespace with
+ * two owners safe: a module cannot quietly claim `user_logged_out`, and the client cannot claim
+ * `checkout_failed`.
+ *
+ * ## Why it is sliced rather than serialised
+ *
+ * The declarations carry comments that say why a name sits where it does — why
+ * `CHECKOUT_REQUEST_FAILED` is not the twin of `checkout_failed`, what `APP_READY` marks — and the
+ * frontend reads its copy by hand. Rebuilding the object from the imported values would drop every
+ * one of them, so the body of each section's `as const` is taken VERBATIM out of its source.
  *
  * That slice is verified rather than trusted: `assertSliceMatches` compares the names it extracted
- * against the ones actually exported, so a slice that lost an entry, picked up a stray line, or read
- * a renamed constant fails the bundle instead of publishing a short catalogue. This is the guarantee
- * the old arrangement could not offer at all — its fragments were text nothing could import, so
- * there was nothing to check them against.
+ * against the ones actually exported, so a slice that lost an entry, picked up a stray line, or
+ * read a renamed constant fails the bundle instead of publishing a short catalogue.
  *
  * THE COMMA IS THE JOIN, not part of any slice. The entries are an object literal, so exactly one
- * comma belongs between two module slices and none after the last. Prettier's
+ * comma belongs between two section slices and none after the last. Prettier's
  * `trailingComma: 'none'` makes that load-bearing: a dangling comma before `}` fails
  * `prettier:check`.
  */
@@ -36,31 +56,99 @@ import { cartAnalyticsEvents } from '../../src/modules/cart/analytics';
 import { wishlistAnalyticsEvents } from '../../src/modules/wishlist/analytics';
 import { ordersAnalyticsEvents } from '../../src/modules/orders/analytics';
 import { paymentsAnalyticsEvents } from '../../src/modules/payments/analytics';
+import { frontendAnalyticsEvents } from '../../shared/contracts/analytics.frontend';
 
 /**
- * The order the groups appear in — auth first, then the path a user walks through the shop.
+ * Which side emits a section's names — the field the old single catalogue was missing.
  *
- * Each entry names the module, its exported constant, and the constant's value. The value is what
- * makes the slice checkable; listing it here is also what makes deleting a module a compile error
- * rather than a silently shorter catalogue.
+ * `backend` names stay here and are imported by the controllers that fire them. `frontend` names
+ * are published, and this repo cannot emit them: they are absent from `AnalyticsEventMap`, so
+ * `emitAnalyticsEvent` rejects them at compile time.
+ */
+export type AnalyticsScope = 'backend' | 'frontend';
+
+/**
+ * The order the groups appear in — auth first, then the path a user walks through the shop, and
+ * the client's own moments last.
+ *
+ * Each entry names the section, its exported constant, the constant's value and its emitter. The
+ * value is what makes the slice checkable; listing it here is also what makes deleting a module a
+ * compile error rather than a silently shorter catalogue.
  */
 const SECTIONS = [
-    { module: 'account', constant: 'accountAnalyticsEvents', events: accountAnalyticsEvents },
-    { module: 'products', constant: 'productsAnalyticsEvents', events: productsAnalyticsEvents },
-    { module: 'cart', constant: 'cartAnalyticsEvents', events: cartAnalyticsEvents },
-    { module: 'wishlist', constant: 'wishlistAnalyticsEvents', events: wishlistAnalyticsEvents },
-    { module: 'orders', constant: 'ordersAnalyticsEvents', events: ordersAnalyticsEvents },
-    { module: 'payments', constant: 'paymentsAnalyticsEvents', events: paymentsAnalyticsEvents }
-] as const;
+    {
+        module: 'account',
+        constant: 'accountAnalyticsEvents',
+        events: accountAnalyticsEvents,
+        scope: 'backend'
+    },
+    {
+        module: 'products',
+        constant: 'productsAnalyticsEvents',
+        events: productsAnalyticsEvents,
+        scope: 'backend'
+    },
+    {
+        module: 'cart',
+        constant: 'cartAnalyticsEvents',
+        events: cartAnalyticsEvents,
+        scope: 'backend'
+    },
+    {
+        module: 'wishlist',
+        constant: 'wishlistAnalyticsEvents',
+        events: wishlistAnalyticsEvents,
+        scope: 'backend'
+    },
+    {
+        module: 'orders',
+        constant: 'ordersAnalyticsEvents',
+        events: ordersAnalyticsEvents,
+        scope: 'backend'
+    },
+    {
+        module: 'payments',
+        constant: 'paymentsAnalyticsEvents',
+        events: paymentsAnalyticsEvents,
+        scope: 'backend'
+    },
+    {
+        module: 'frontend',
+        constant: 'frontendAnalyticsEvents',
+        events: frontendAnalyticsEvents,
+        scope: 'frontend'
+    }
+] as const satisfies readonly {
+    module: string;
+    constant: string;
+    events: Record<string, string>;
+    scope: AnalyticsScope;
+}[];
 
-/** The sections, for anything that needs to check the published file against its sources. */
+/**
+ * Every section, both scopes — what the cross-cutting test checks the one namespace against.
+ *
+ * Deliberately not filtered: the collision worth catching is a module and the client claiming the
+ * same name, and a list holding only one scope could never see it.
+ */
 export const ANALYTICS_SECTIONS = SECTIONS;
 
 export const ANALYTICS_SECTION_ORDER = SECTIONS.map(({ module }) => module);
 
-/** Where a module's names are declared. */
+/** The sections one scope owns, in publication order. */
+const sectionsInScope = (scope: AnalyticsScope): readonly (typeof SECTIONS)[number][] =>
+    SECTIONS.filter((section) => section.scope === scope);
+
+/**
+ * Where a section's names are declared — a module's own file, or the shared one for the client.
+ *
+ * The client's names sit under `shared/contracts/` for the same reason the queue channels do: they
+ * belong to no domain, so no module folder is the honest place to put them.
+ */
 export const analyticsSource = (module: string): string =>
-    path.join(REPO_ROOT, 'src', 'modules', module, 'analytics.ts');
+    module === 'frontend'
+        ? path.join(REPO_ROOT, 'shared', 'contracts', 'analytics.frontend.ts')
+        : path.join(REPO_ROOT, 'src', 'modules', module, 'analytics.ts');
 
 /** Comma, blank line: what goes BETWEEN two groups of entries and after none of them. */
 const SECTION_SEPARATOR = ',\n\n';
@@ -68,40 +156,42 @@ const SECTION_SEPARATOR = ',\n\n';
 /** The prose the published file opens with, and the opening of the object literal. */
 const HEADER = `// Code generated by \`npm run contracts:bundle\`. DO NOT EDIT.
 /**
- * The analytics event names BOTH repos emit.
+ * The analytics event names THIS APP emits.
  *
- * ─── Generated, and byte-identical in the paired repository — do not hand-edit ───────────────
- * Backend:  src/infrastructure/observability/analytics-events.ts
- * Frontend: src/infrastructure/analyticsEvents.ts
- * Each domain owns its names in \`src/modules/<name>/analytics.ts\`; the backend runs
- * \`npm run contracts:bundle\` and the frontend receives a copy. \`npm run check:spec-identity\`
- * fails the build on the commit that forks them. Two filenames because the lint configs disagree
- * on case; the CONTENT must match exactly.
- *
- * NOTHING IN THE BACKEND IMPORTS THIS FILE. A module's controllers import their own
- * \`analytics.ts\`; this is the published copy the other repo reads.
+ * ─── Generated in the paired backend, byte-identical here — do not hand-edit ─────────────────
+ * Backend:  src/infrastructure/observability/analytics-events.frontend.ts
+ * Frontend: src/infrastructure/observability/analyticsEvents.ts
+ * Authored as \`shared/contracts/analytics.frontend.ts\` in the backend, published by
+ * \`npm run contracts:bundle\` and copied by \`npm run sync:frontend\`.
+ * \`npm run check:spec-identity\` fails the build on the commit that forks the two copies.
+ * Two filenames because the lint configs disagree on case; the CONTENT must match exactly.
  * ────────────────────────────────────────────────────────────────────────────────────────────
  *
- * One funnel is built across both trackers, so a name spelled differently on each side errors
- * nowhere and silently produces two half-events no dashboard adds up. Hence a closed set, and
- * snake_case \`noun_pastTenseVerb\`, which PostHog's UI sorts well.
+ * WHY THIS LIST IS SHORT. Both repos write into one Umami website, and each name has exactly one
+ * emitter: the server reports what the server knows, the client reports only what the client
+ * alone knows. Everything with an API call behind it — signups, logins, cart changes, checkout
+ * outcomes, orders, payments — is emitted by the backend, where it cannot be blocked by an
+ * extension, lost with the tab, or forged from a console. What is left is what no request can
+ * carry: the app's own lifecycle, a token discarded in the browser, and a checkout that never
+ * reached the API.
+ *
+ * The names live in the backend because the two repos share ONE event namespace; declaring them
+ * there is what lets a single test prove no client name collides with a server one.
  *
  * A \`const\` object rather than an \`enum\`: the frontend's lint requires \`E\`-prefixed enums and the
  * backend's does not, so no single \`enum\` satisfies both.
- *
- * Events only ONE side emits do not belong here.
  */
 export const analyticsEvents = {
 `;
 
 const FOOTER = `} as const;
 
-/** Any name declared above. */
-export type SharedAnalyticsEventName = (typeof analyticsEvents)[keyof typeof analyticsEvents];
+/** Any name this app can emit. */
+export type AnalyticsEventName = (typeof analyticsEvents)[keyof typeof analyticsEvents];
 `;
 
 /**
- * The body of a module's `as const`, exactly as written.
+ * The body of a section's `as const`, exactly as written.
  *
  * Bounded by the declaration line and the closing `} as const;` at column zero, so the comments,
  * blank lines and indentation between them survive into the published file.
@@ -112,7 +202,7 @@ const sliceOf = ({ module, constant }: (typeof SECTIONS)[number]): string => {
     const start = source.indexOf(opening);
     if (start === -1)
         throw new Error(
-            `[analytics-events] ${module}/analytics.ts does not declare \`${constant}\`.\n` +
+            `[analytics-events] ${module} does not declare \`${constant}\`.\n` +
                 `  The published catalogue is sliced out of that declaration, so the name must match.`
         );
 
@@ -120,7 +210,7 @@ const sliceOf = ({ module, constant }: (typeof SECTIONS)[number]): string => {
     const end = source.indexOf('\n} as const;', from);
     if (end === -1)
         throw new Error(
-            `[analytics-events] ${module}/analytics.ts: \`${constant}\` has no closing \`} as const;\`.`
+            `[analytics-events] ${module}: \`${constant}\` has no closing \`} as const;\`.`
         );
 
     return source.slice(from, end);
@@ -140,7 +230,7 @@ const assertSliceMatches = (section: (typeof SECTIONS)[number], slice: string): 
 
     if (sliced.join() !== exported.join())
         throw new Error(
-            `[analytics-events] the slice taken from ${section.module}/analytics.ts does not match ` +
+            `[analytics-events] the slice taken from ${section.module} does not match ` +
                 `what it exports.\n` +
                 `  sliced:   ${sliced.join(', ') || '(none)'}\n` +
                 `  exported: ${exported.join(', ')}\n` +
@@ -148,8 +238,36 @@ const assertSliceMatches = (section: (typeof SECTIONS)[number], slice: string): 
         );
 };
 
+/**
+ * Fail on a name or a value claimed by two sections, whatever their scope.
+ *
+ * The one namespace is the point: two repos writing `cart_item_added` into one Umami website
+ * produce two rows nothing can tell apart, which is the bug the scope field exists to prevent.
+ * Checked here rather than only in the test suite so `contracts:bundle` refuses to publish a
+ * catalogue that would reintroduce it.
+ */
+const assertNamespaceIsUnique = (): void => {
+    const seen = new Map<string, string>();
+
+    for (const { module, events } of SECTIONS)
+        for (const [key, value] of Object.entries(events))
+            for (const claim of [`name ${key}`, `value ${value}`]) {
+                const owner = seen.get(claim);
+                if (owner !== undefined)
+                    throw new Error(
+                        `[analytics-events] ${claim} is declared by both \`${owner}\` and ` +
+                            `\`${module}\`.\n` +
+                            `  Both repos write into one Umami website, so an event name has ` +
+                            `exactly one emitter. Two rows carrying it cannot be told apart.`
+                    );
+                seen.set(claim, module);
+            }
+};
+
 const content = (): string => {
-    const slices = SECTIONS.map((section) => {
+    assertNamespaceIsUnique();
+
+    const slices = sectionsInScope('frontend').map((section) => {
         const slice = sliceOf(section);
         assertSliceMatches(section, slice);
         return slice.trimEnd();
@@ -158,11 +276,27 @@ const content = (): string => {
     return HEADER + slices.join(SECTION_SEPARATOR) + '\n' + FOOTER;
 };
 
+/**
+ * The frontend's catalogue, and the only analytics file that crosses the repo boundary.
+ *
+ * Committed rather than produced on demand for the reason every shared document is: it is
+ * hash-compared across the repos by `check:spec-identity`, and a check cannot compare a file that
+ * only exists after someone remembers to build it.
+ *
+ * There is no backend counterpart on purpose. A module's names are ordinary TypeScript its own
+ * controllers import, so a published copy of them would have no reader here and no reader there.
+ */
 export const analyticsEventsBundle: CompiledBundle = {
     name: 'analytics-events',
-    label: 'src/infrastructure/observability/analytics-events.ts',
-    output: path.join(REPO_ROOT, 'src', 'infrastructure', 'observability', 'analytics-events.ts'),
+    label: 'src/infrastructure/observability/analytics-events.frontend.ts',
+    output: path.join(
+        REPO_ROOT,
+        'src',
+        'infrastructure',
+        'observability',
+        'analytics-events.frontend.ts'
+    ),
     compiled: true,
     content,
-    sources: () => SECTIONS.map(({ module }) => analyticsSource(module))
+    sources: () => sectionsInScope('frontend').map(({ module }) => analyticsSource(module))
 };

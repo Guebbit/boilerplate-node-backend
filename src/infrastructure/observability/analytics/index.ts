@@ -48,12 +48,12 @@ export interface AnalyticsEventMap {}
 /**
  * Every name this build can emit — whatever the enabled modules declare.
  *
- * The paired frontend emits the same funnel from the other end, so the names are also published as
- * `analytics-events.ts` and guarded by `check:spec-identity`. That file is an ARTEFACT of these
- * declarations rather than their source: `npm run contracts:bundle` writes it, and nothing in
- * this repo imports it.
+ * The union is exactly the SERVER's half of one namespace shared with the paired frontend. The
+ * client's half is declared in `shared/contracts/analytics.frontend.ts` and deliberately augments
+ * nothing here, so `emitAnalyticsEvent` rejects a client name: this service cannot report a moment
+ * it never observed, and no event can be written into Umami twice.
  */
-export type SharedAnalyticsEventName = AnalyticsEventMap[keyof AnalyticsEventMap];
+export type AnalyticsEventName = AnalyticsEventMap[keyof AnalyticsEventMap];
 
 // ─── Payload schema ───────────────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ export interface AnalyticsEvent {
     /** Authenticated user ID, or `anonymous`. PostHog's `distinct_id`; a property under Umami. */
     distinctId: string;
     /** Event name, from the declaring module's own catalogue. */
-    event: SharedAnalyticsEventName;
+    event: AnalyticsEventName;
     /** ISO-8601 timestamp; defaults to now if omitted. */
     timestamp?: Date;
     /** OTel trace ID for cross-signal correlation. */

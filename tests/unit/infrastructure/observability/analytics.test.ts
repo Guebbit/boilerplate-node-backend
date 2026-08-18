@@ -479,5 +479,5 @@ describe('buildAnalyticsBase', () => {
 
 // The CATALOGUE itself is not asserted here. Each module owns its names in
 // `src/modules/<name>/analytics.ts`, and `tests/cross-cutting/contract-bundles.test.ts` checks
-// that the published `analytics-events.ts` lists exactly what those modules declare. This file
+// that the published frontend catalogue lists none of what those modules declare. This file
 // owns the transport.

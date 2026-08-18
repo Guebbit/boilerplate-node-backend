@@ -8,9 +8,10 @@
  * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
  * their names, and `infrastructure` keeps knowing no domain at all.
  *
- * `npm run contracts:bundle` publishes every module's names as
- * `src/infrastructure/observability/analytics-events.ts`, which is byte-identical with the
- * paired frontend's copy. That file is an ARTEFACT — nothing here imports it.
+ * These names stay HERE. Nothing publishes them: the controllers that fire them import this file
+ * directly, so a copy would have no reader on either side of the repo boundary. Only
+ * `shared/contracts/analytics.frontend.ts` — the moments this service never observes — is
+ * published to the paired frontend, which is what keeps one event from being counted twice.
  */
 
 export const paymentsAnalyticsEvents = {

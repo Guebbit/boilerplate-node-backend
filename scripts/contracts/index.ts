@@ -2,15 +2,18 @@
  * Every document this repo produces from sources it owns.
  *
  * Two kinds, and the difference decides what is guarded. The AUTHORED ones — `openapi`, the two
- * asyncapi bundles, the analytics event names — are committed, and cover the shared, domain-shaped
+ * asyncapi bundles, the frontend's analytics event names — are committed and cover the shared
  * files of `scripts/specIdentity.ts`: the ones that exist twice, once here and once in the paired
- * frontend, AND list every domain the app has. This repo authors them; the frontend holds
- * byte-identical copies and never edits them.
+ * frontend. This repo authors them; the frontend holds byte-identical copies and never edits them.
  *
- * `asyncapi` is the exception to the "exists twice" half: the frontend's copy is
- * `asyncapi.public.yaml`, the SHARED subset, while `asyncapi.yaml` — queues included — stays here
- * and is what this repo's own types are generated from. Both are built from one set of section
- * documents, so the two can never describe a shared channel differently.
+ * Two of them publish a SUBSET rather than everything they are built from, and for opposite
+ * reasons. `asyncapi.yaml` holds every channel this service has and stays here, because it is what
+ * this repo's own types are generated from; the frontend receives `asyncapi.public.yaml`, the
+ * sections whose channels an API client can reach. `analytics-events.frontend.ts` publishes only
+ * the names the CLIENT emits — the backend's own names are ordinary TypeScript its controllers
+ * import, so a published copy would have no reader on either side. Both splits are one `scope`
+ * field over one set of sources, which is what stops the two sides from describing the same thing
+ * differently — or, for analytics, from both emitting it.
  *
  * The GENERATED ones — the client collections — are `.gitignore`d and produced on demand from
  * `openapi.yaml`. They are listed here so `npm run contracts:bundle -- bruno` can find them, not

@@ -23,8 +23,8 @@ not that they happen to match:
   and the mismatch surfaces the first time the real app calls the real API.
 - A forked `dataset.json` means the frontend's mocks and the backend's seeds describe different
   users. Both sides stay green, because each is consistent with its own copy.
-- A forked analytics name produces two half-events that no dashboard adds up. Nothing errors
-  anywhere, ever.
+- A forked analytics name means the frontend writes into Umami a name the backend never declared,
+  so it sits outside the one namespace both repos share. Nothing errors anywhere, ever.
 
 `npm run check:spec-identity` is the detector. It hashes all eight on both sides and fails the build
 on the commit that forks one — not on the release that ships the mismatch.
@@ -38,13 +38,13 @@ on the commit that forks one — not on the release that ships the mismatch.
 `npm run sync:frontend` copies these. Never edit the frontend's copy: the next regeneration reverts
 it, and the diff looks like the backend broke something.
 
-| Produced here                                          | Lands there as                          | Built by           |
-| ------------------------------------------------------ | --------------------------------------- | ------------------ |
-| `openapi.yaml`                                         | `openapi.yaml`                          | `contracts:bundle` |
-| `asyncapi.yaml`                                        | `asyncapi.yaml`                         | `contracts:bundle` |
-| `src/infrastructure/observability/analytics-events.ts` | `src/infrastructure/analyticsEvents.ts` | `contracts:bundle` |
-| `db/seeds/dataset.json`                                | `tests/support/mocks/dataset.json`      | `seed:export`      |
-| `src/types/asyncapi.generated.ts`                      | `src/types/realtime.generated.ts`       | `gen:asyncapi`     |
+| Produced here                                                   | Lands there as                                        | Built by           |
+| --------------------------------------------------------------- | ----------------------------------------------------- | ------------------ |
+| `openapi.yaml`                                                  | `openapi.yaml`                                        | `contracts:bundle` |
+| `asyncapi.yaml`                                                 | `asyncapi.yaml`                                       | `contracts:bundle` |
+| `src/infrastructure/observability/analytics-events.frontend.ts` | `src/infrastructure/observability/analyticsEvents.ts` | `contracts:bundle` |
+| `db/seeds/dataset.json`                                         | `tests/support/mocks/dataset.json`                    | `seed:export`      |
+| `src/types/asyncapi.generated.ts`                               | `src/types/realtime.generated.ts`                     | `gen:asyncapi`     |
 
 Three of the five are named differently on the other side, which is the single biggest reason manual
 copying went wrong. The paths are declared once, in `SHARED_FILES`, and `sync:frontend` finds the
@@ -70,15 +70,17 @@ per-module documents under `src/modules/*/`, which exist only here.
 
 No two of them the same way, which is the thing to know before proposing to unify them:
 
-| Document              | Sources                                                                      | Mechanism                                                                                                                                |
-| --------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `openapi.yaml`        | `shared/contracts/openapi.root.yaml` + `src/modules/*/openapi.yaml`          | `redocly bundle` — a real `$ref` resolve; comments live in the module files and are dropped from the bundle                              |
-| `asyncapi.yaml`       | `asyncapi.root.yaml`, `asyncapi.workers.yaml`, `src/modules/*/asyncapi.yaml` | a ~30-line merge over the YAML AST (`scripts/contracts/asyncapi.ts`) — `asyncapi bundle` dereferences, which breaks `gen-asyncapi-types` |
-| `analytics-events.ts` | `src/modules/*/analytics.ts`                                                 | a verbatim TEXT SLICE of each `as const` body, checked against the module's real exported keys                                           |
+| Document                       | Sources                                                                      | Mechanism                                                                                                                                |
+| ------------------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `openapi.yaml`                 | `shared/contracts/openapi.root.yaml` + `src/modules/*/openapi.yaml`          | `redocly bundle` — a real `$ref` resolve; comments live in the module files and are dropped from the bundle                              |
+| `asyncapi.yaml`                | `asyncapi.root.yaml`, `asyncapi.workers.yaml`, `src/modules/*/asyncapi.yaml` | a ~30-line merge over the YAML AST (`scripts/contracts/asyncapi.ts`) — `asyncapi bundle` dereferences, which breaks `gen-asyncapi-types` |
+| `analytics-events.frontend.ts` | `shared/contracts/analytics.frontend.ts`                                     | a verbatim TEXT SLICE of the `as const` body, checked against the file's real exported keys                                              |
 
 The first two are documents parsed as documents. The third is still string surgery — the last of
 the old fragment approach — kept because the frontend reads its copy by hand and the per-name
-comments are the reason it is readable. `assertSliceMatches` is what keeps that honest: the sliced
+comments are the reason it is readable. It publishes only the names the FRONTEND emits: a module's
+own names stay in `src/modules/*/analytics.ts`, imported by the controllers that fire them, so
+there is nothing there to copy. `assertSliceMatches` is what keeps that honest: the sliced
 names must equal `Object.keys()` of the imported constant, so a reformatted declaration fails the
 bundle instead of publishing a short catalogue.
 
@@ -90,7 +92,8 @@ bundle instead of publishing a short catalogue.
 # 1. change a module's share of a contract — each of these is a whole document, valid on its own
 #    src/modules/<name>/openapi.yaml       (+ shared/contracts/openapi.root.yaml)
 #    src/modules/<name>/asyncapi.yaml      (+ shared/contracts/asyncapi.{root,workers}.yaml)
-#    src/modules/<name>/analytics.ts
+#    src/modules/<name>/analytics.ts       (backend names — nothing to publish)
+#    shared/contracts/analytics.frontend.ts (the client's names — the published half)
 #    src/modules/<name>/seeds.ts
 
 npm run contracts:bundle     # rebuild the specs + the analytics names + the 4 client collections
