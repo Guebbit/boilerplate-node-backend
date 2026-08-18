@@ -55,14 +55,33 @@ Each layer answers a question no other layer answers — a layer that duplicates
 - **Contract — Request Data** is the mirror gap: does the validator actually enforce what the spec promises, and does it accept everything the spec allows? Different mechanism (generation from the schema, not comparison against it), different bug class (validator drift, not over-serialization).
 - **Mutation** doesn't test the app at all — it tests the _tests_, and only for the unit layer.
 
+## Reading a run
+
+The five layers answer "did it break". None answers **which module owns the break**, or **where the ninety seconds went** — the suites are organised by layer and the codebase by module, and a raw log cannot bridge the two.
+
+`npm run test:report` does, reading the JSON `npm run test:unit:report` writes:
+
+```
+[test-report] 1754 tests in 124 suites — 1754 passed, 0 failed (100.1s of suite time)
+
+  module           suites  tests  failed     time
+  account              13    147       0    20.9s
+  orders               12    121       0    18.3s
+  (cross-cutting)      20    177       0     4.1s
+```
+
+Plus slowest suites, slowest tests, per-module line coverage when `coverage/lcov.info` exists, and every failure named by the module that owns it.
+
+`scripts/testReport.ts` is **byte-identical in the paired frontend** — Vitest's `json` reporter emits the shape Jest's `--json` does, so one reader genuinely serves both, and `check:spec-identity` stops the two drifting.
+
 ## Where test data comes from
 
 Seven things across the two repos can hand you an entity, and it is reasonable to wonder whether that is six too many. It is not: each answers a question the others cannot, and the one dataset both repos genuinely share — the demo data — lives in a single file copied byte-identically between them, and `check:spec-identity` answers whether they have drifted.
 
 | Source                                     | Repo                  | What it is for                                                                                                                                                                                                                                                                                                                                                                 |
 | ------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db/seeds/dataset.json`                    | both (byte-identical) | **The demo dataset, as the API answers it.** Every seeded row, serialized — schema defaults, derived order totals and all. The one dataset a human sees when they open either app. Written by `npm run seed:export` here and copied to the frontend, which loads it directly. `npm run check:spec-identity` compares the two copies and the `spec-identity` CI job gates on it |
-| `src/modules/<name>/seeds.ts`              | BE                    | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, declared as `seeds` in the manifest and consumed by `db:seed`; the export reads them back out through `seedExport`                                                                                                                                                          |
+| `db/demo/demo-data.json`                   | both (byte-identical) | **The demo dataset, as the API answers it.** Every seeded row, serialized — schema defaults, derived order totals and all. The one dataset a human sees when they open either app. Written by `npm run seed:export` here and copied to the frontend, which loads it directly. `npm run check:spec-identity` compares the two copies and the `spec-identity` CI job gates on it |
+| `src/modules/<name>/demo.ts`               | BE                    | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, declared as `seeds` in the manifest and consumed by `db:seed`; the export reads them back out through `seedExport`                                                                                                                                                          |
 | `tests/support/mocks/mockDataset.ts`       | FE                    | **Loads the published dataset**, applying the only two divergences that repo needs: `imageUrl` dropped (it ships no image files) and timestamps restamped to now. No mapper — that is the point                                                                                                                                                                                |
 | `src/modules/<name>/factory.ts`            | BE                    | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factory.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift           |
 | `tests/support/contract-data.ts`           | BE                    | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a fixture                                                                                                            |
@@ -76,8 +95,8 @@ Reading it as a shape: **one** hand-maintained dataset, **one** mapper over it �
 flowchart TB
     subgraph one["One dataset, one shape"]
         direction TB
-        Seed["src/modules/*/seeds.ts<br/>the records, per module"]
-        Seed --> Export["seed:export<br/>→ dataset.json<br/>byte-identical in both repos"]
+        Seed["src/modules/*/demo.ts<br/>the records, per module"]
+        Seed --> Export["seed:export<br/>→ demo-data.json<br/>byte-identical in both repos"]
         Export --> FEMap["FE mockDataset.ts<br/>loads it as-is"]
     end
 
@@ -101,7 +120,7 @@ flowchart TB
 
 ### The four questions, and why none absorbs another
 
-- **"Give me _the_ demo data."** → `dataset.json`, edited through the `seeds.ts` of the module that owns the records and republished with `npm run seed:export`. Fixed, shared, and the one a human sees on screen. `cy.loginAs('user')` types its credentials into a real form, so it cannot be randomised or generated.
+- **"Give me _the_ demo data."** → `demo-data.json`, edited through the `demo.ts` of the module that owns the records and republished with `npm run seed:export`. Fixed, shared, and the one a human sees on screen. `cy.loginAs('user')` types its credentials into a real form, so it cannot be randomised or generated.
 - **"Give me _a_ product, I do not care which."** → the module's `factory.ts`. The opposite need: fresh, isolated, overridable per test, and never the demo data — 25 test files would interfere with each other if they shared rows. It is the same builder the demo records go through, so "a product" and "the demo product" cannot disagree about what a product is.
 - **"Give me one the API must _reject_."** → `contract-data.ts`. Derived from the zod schemas so each payload violates exactly one declared constraint. Nothing else here can produce something deliberately illegal, which is the difference between a contract test and a fixture.
 - **"Give me a whole world I have never seen."** → `mockProfilesRandom.ts` (frontend). Seeded and reproducible, for "does the app survive _any_ contract-valid data" rather than "is this value right".
@@ -125,9 +144,9 @@ Merging any two would mean one of those questions stops being asked. The merge t
 
 ## Being the target of the frontend's live E2E profile
 
-`npm run host -- db:seed:reset` (see [Package Scripts](./package-scripts.md)) isn't only a local convenience — it's also what the paired `boilerplate-vue-frontend` repo's `npm run test:e2e:live` shells out to between specs, via `cy.resetState()`. That profile runs the frontend's Cypress suite against this backend instead of its MSW mocks, and layers three things this repo's own contract tests can't provide on their own: a preflight that fails fast when this API isn't up or isn't seeded, response validation on every request the frontend makes, and a parity spec that fails when this repo's `db/seeds/index.ts` drifts from the frontend's hand-mirrored mock seed.
+`npm run host -- db:seed:reset` (see [Package Scripts](./package-scripts.md)) isn't only a local convenience — it's also what the paired `boilerplate-vue-frontend` repo's `npm run test:e2e:live` shells out to between specs, via `cy.resetState()`. That profile runs the frontend's Cypress suite against this backend instead of its MSW mocks, and layers three things this repo's own contract tests can't provide on their own: a preflight that fails fast when this API isn't up or isn't seeded, response validation on every request the frontend makes, and a parity spec that fails when this repo's `db/demo/index.ts` drifts from the frontend's hand-mirrored mock seed.
 
-It is run by hand, not from this repo's CI — the two repos are independently versioned and there is no single pipeline that owns both. Boot sequence and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/live-e2e.md`. The practical implication for changes here: editing `db/seeds/index.ts` or `openapi.yaml` without telling the frontend team is exactly the drift that profile exists to catch, but only the next time someone runs it.
+It is run by hand, not from this repo's CI — the two repos are independently versioned and there is no single pipeline that owns both. Boot sequence and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/live-e2e.md`. The practical implication for changes here: editing `db/demo/index.ts` or `openapi.yaml` without telling the frontend team is exactly the drift that profile exists to catch, but only the next time someone runs it.
 
 ## Test timings
 

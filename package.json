@@ -46,10 +46,10 @@
         "db:migrate:up": "migrate-mongo up",
         "db:migrate:down": "migrate-mongo down",
         "db:migrate:status": "migrate-mongo status",
-        "db:seed": "tsx db/seeds/index.ts",
+        "db:seed": "tsx db/demo/index.ts",
         "seed:export": "tsx scripts/export-seed.ts",
         "check:seed-export": "tsx scripts/export-seed.ts --check",
-        "db:seed:reset": "tsx db/seeds/index.ts --reset",
+        "db:seed:reset": "tsx db/demo/index.ts --reset",
         "db:cache:clear": "tsx db/cache-clear.ts",
         "db:bootstrap": "npm run db:migrate:up && npm run db:seed",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
@@ -64,7 +64,14 @@
         "complete": "npm run build && npm run lint && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:check && npm run check:contracts-bundle && npm run check:asyncapi-types && npm run check:seed-export && npm run check:spec-identity && npm run test",
         "complete:fix": "npm run build && npm run lint:fix && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:fix && npm run check:contracts-bundle && npm run check:asyncapi-types && npm run check:seed-export && npm run check:spec-identity && npm run test",
         "complete:manual": "npm run test:prism",
-        "prepare": "husky"
+        "prepare": "husky",
+        "test:unit:report": "jest tests/unit tests/cross-cutting \"src/modules/.*/tests/unit\" --json --outputFile=reports/test-report.json",
+        "test:report": "tsx scripts/testReport.ts",
+        "test:module": "jest --runInBand",
+        "bench:orders": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/orders",
+        "bench:inventory": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/inventory/levels",
+        "bench:k6": "k6 run k6/browse.js",
+        "bench:k6:checkout": "k6 run k6/checkout.js"
     },
     "devDependencies": {
         "@asyncapi/cli": "^6.0.2",

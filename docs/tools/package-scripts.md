@@ -41,38 +41,45 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 
 ## Validation scripts
 
-| Script                            | Job                                                                                                             | Read more                                        |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `ts-check`                        | TypeScript no-emit type check                                                                                   | [Testing & Docs](./testing-and-docs.md)          |
-| `lint` / `lint:fix`               | ESLint check or autofix                                                                                         | [Testing & Docs](./testing-and-docs.md)          |
-| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                       | [Testing & Docs](./testing-and-docs.md)          |
-| `build`                           | `ts-check` + `lint` composite gate                                                                              | [Testing & Docs](./testing-and-docs.md)          |
-| `check:asyncapi-types`            | fail if `src/types/asyncapi.generated.ts` is not what `asyncapi.yaml` generates; writes nothing                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
-| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI     | [Testing & Docs](./testing-and-docs.md)          |
-| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                        | [Testing & Docs](./testing-and-docs.md)          |
-| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                              | [Testing & Docs](./testing-and-docs.md)          |
-| `complete:manual`                 | what the gate cannot run for you: `test:prism`, which binds a real port                                         | [Testing & Docs](./testing-and-docs.md)          |
-| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:` | [Load Testing](./load-testing.md)                |
+| Script                            | Job                                                                                                             | Read more                                                                                    |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `ts-check`                        | TypeScript no-emit type check                                                                                   | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `lint` / `lint:fix`               | ESLint check or autofix                                                                                         | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                       | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `build`                           | `ts-check` + `lint` composite gate                                                                              | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `check:asyncapi-types`            | fail if `src/types/asyncapi.generated.ts` is not what `asyncapi.yaml` generates; writes nothing                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                             |
+| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI     | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                        | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                              | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `complete:manual`                 | what the gate cannot run for you: `test:prism`, which binds a real port                                         | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:` | [Load Testing](./load-testing.md)                                                            |
+| `bench:orders`                    | measure                                                                                                         | the same, against `/orders` — the endpoint that embeds snapshots and derives totals          | [Quick Start](./testing-quickstart.md) |
+| `bench:inventory`                 | measure                                                                                                         | the same, against `/inventory/levels`                                                        | [Quick Start](./testing-quickstart.md) |
+| `bench:k6`                        | measure                                                                                                         | ramping load over several endpoints, with thresholds — passes or fails rather than reporting | [Quick Start](./testing-quickstart.md) |
+| `bench:k6:checkout`               | measure                                                                                                         | the write path under contention: login, cart, checkout. **Writes** — throwaway database only | [Quick Start](./testing-quickstart.md) |
 
 ## Test scripts
 
-| Script                   | Job                                                                                                                                 | Read more                                      |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `test`                   | run unit, cross-cutting, integration, then contract                                                                                 | [Testing & Docs](./testing-and-docs.md)        |
-| `test:unit`              | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                                                 | [Testing & Docs](./testing-and-docs.md)        |
-| `test:cross-cutting`     | repo-wide invariants: bundle freshness, locale parity, no hardcoded user text, every controller catches                             | [Regenerating](../api/regenerating.md)         |
-| `test:unit:coverage`     | unit + cross-cutting again, in-band, against the per-file coverage floors                                                           | [Testing & Docs](./testing-and-docs.md)        |
-| `test:integration`       | HTTP integration suite in-band                                                                                                      | [Testing & Docs](./testing-and-docs.md)        |
-| `test:contract`          | validate real responses against `openapi.yaml`                                                                                      | [Contract Testing](./contract-testing.md)      |
-| `test:fuzz`              | property/fuzz suite — nightly workflow, not the pre-commit gate                                                                     | [Fuzz Testing](./fuzz-testing.md)              |
-| `test:all`               | every suite in one Jest run — the escape hatch, not the routine                                                                     | [Testing & Docs](./testing-and-docs.md)        |
-| `test:mutation`          | Stryker: break the source on purpose and report what the tests failed to notice. Slow — nightly or before a refactor, never in a PR | [Mutation Testing](./mutation-testing.md)      |
-| `test:mutation:check`    | compare a Stryker run against the committed per-file baseline                                                                       | [Mutation Testing](./mutation-testing.md)      |
-| `test:mutation:baseline` | accept the current scores as the new baseline                                                                                       | [Mutation Testing](./mutation-testing.md)      |
-| `test:prism`             | run a quick Prism mock smoke test from `openapi.yaml`                                                                               | [OpenAPI Workflow](../api/openapi-workflow.md) |
-| `setup:mongod`           | copy a `mongod` binary from a Docker image for restricted test environments                                                         | [Testing & Docs](./testing-and-docs.md)        |
-| `bench`                  | autocannon against `GET /products` — the cached read path                                                                           | [Load Testing](./load-testing.md)              |
-| `bench:search`           | autocannon against `POST /products/search` — the uncached, database-backed path                                                     | [Load Testing](./load-testing.md)              |
+| Script                   | Job                                                                                                                                 | Read more                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `test`                   | run unit, cross-cutting, integration, then contract                                                                                 | [Testing & Docs](./testing-and-docs.md)                                                                                          |
+| `test:module`            | verify                                                                                                                              | one module's suites, every layer it owns — `-- src/modules/<name>`; serialised because contract and integration share a database | [Quick Start](./testing-quickstart.md) |
+| `test:unit:report`       | verify                                                                                                                              | the unit run again, writing `reports/test-report.json` for the reader below                                                      | [Quick Start](./testing-quickstart.md) |
+| `test:report`            | inspect                                                                                                                             | per-module rollup, slowest suites, failures named by module, and per-module coverage when `coverage/lcov.info` exists            | [Quick Start](./testing-quickstart.md) |
+| `test:unit`              | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                                                 | [Testing & Docs](./testing-and-docs.md)                                                                                          |
+| `test:cross-cutting`     | repo-wide invariants: bundle freshness, locale parity, no hardcoded user text, every controller catches                             | [Regenerating](../api/regenerating.md)                                                                                           |
+| `test:unit:coverage`     | unit + cross-cutting again, in-band, against the per-file coverage floors                                                           | [Testing & Docs](./testing-and-docs.md)                                                                                          |
+| `test:integration`       | HTTP integration suite in-band                                                                                                      | [Testing & Docs](./testing-and-docs.md)                                                                                          |
+| `test:contract`          | validate real responses against `openapi.yaml`                                                                                      | [Contract Testing](./contract-testing.md)                                                                                        |
+| `test:fuzz`              | property/fuzz suite — nightly workflow, not the pre-commit gate                                                                     | [Fuzz Testing](./fuzz-testing.md)                                                                                                |
+| `test:all`               | every suite in one Jest run — the escape hatch, not the routine                                                                     | [Testing & Docs](./testing-and-docs.md)                                                                                          |
+| `test:mutation`          | Stryker: break the source on purpose and report what the tests failed to notice. Slow — nightly or before a refactor, never in a PR | [Mutation Testing](./mutation-testing.md)                                                                                        |
+| `test:mutation:check`    | compare a Stryker run against the committed per-file baseline                                                                       | [Mutation Testing](./mutation-testing.md)                                                                                        |
+| `test:mutation:baseline` | accept the current scores as the new baseline                                                                                       | [Mutation Testing](./mutation-testing.md)                                                                                        |
+| `test:prism`             | run a quick Prism mock smoke test from `openapi.yaml`                                                                               | [OpenAPI Workflow](../api/openapi-workflow.md)                                                                                   |
+| `setup:mongod`           | copy a `mongod` binary from a Docker image for restricted test environments                                                         | [Testing & Docs](./testing-and-docs.md)                                                                                          |
+| `bench`                  | autocannon against `GET /products` — the cached read path                                                                           | [Load Testing](./load-testing.md)                                                                                                |
+| `bench:search`           | autocannon against `POST /products/search` — the uncached, database-backed path                                                     | [Load Testing](./load-testing.md)                                                                                                |
 
 ## Contract scripts
 
@@ -92,8 +99,8 @@ Change](../api/regenerating.md).
 | `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `spectral.modules.yaml`                              | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `lint:asyncapi`          | verify   | validate the bundled `asyncapi.yaml`                                                                                | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
 | `lint:asyncapi:modules`  | verify   | the same for each section document, against `spectral.asyncapi.modules.yaml`                                        | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `seed:export`            | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/seeds/dataset.json`         | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `check:seed-export`      | verify   | fail if `dataset.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`        | [Regenerating](../api/regenerating.md)                     |
+| `seed:export`            | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/demo/demo-data.json`        | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `check:seed-export`      | verify   | fail if `demo-data.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`      | [Regenerating](../api/regenerating.md)                     |
 | `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `regenerate`             | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input | [Regenerating After a Change](../api/regenerating.md)      |
 
@@ -103,9 +110,10 @@ which the old fragment layout could never do, because a fragment parsed as nothi
 concatenated.
 
 `contracts:bundle` is safe to run at any time: it compares before it writes and touches only the
-bundles that actually drifted. It runs in two stages on purpose — the client collections are
-generated _from_ `openapi.yaml`, so the contract must be rebuilt before they are. That ordering
-lives in `scripts/bundle-contracts.ts`, which is why `-- <name>` narrows the run properly.
+bundles that actually drifted. A full run covers the **committed** documents only. The client
+collections are generated from `openapi.yaml` and `.gitignore`d, so they are produced by name —
+`npm run contracts:bundle -- bruno insomnia mockoon postman` — and `--check` refuses them, because an
+uncommitted file cannot be stale.
 
 ## Docs scripts
 
