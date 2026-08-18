@@ -723,6 +723,42 @@ export default tseslint.config(
     },
 
     /**
+     * The analytics event catalogue — the one namespace both repos write into.
+     *
+     * Every name here becomes a row in Umami, and a name is the only part of an event that a
+     * dashboard groups by. `Cart_Item_Added` and `cart_item_added` are two different funnels in
+     * that table, and nothing downstream can merge them back — so the convention is not a style
+     * preference, it is the difference between one funnel and two.
+     *
+     * `snake_case` values, `SCREAMING_SNAKE` keys, and `noun_pastTenseVerb` for the shape of the
+     * name itself. Only the first two are machine-checkable; the third is still prose, because no
+     * selector knows a noun from a verb.
+     *
+     * Scoped to where names are AUTHORED: a module's own file, and the client's half in
+     * `shared/contracts/analytics.frontend.ts`. The published catalogue is generated from these
+     * and carries `DO NOT EDIT`, so linting it would only ever report a bug in the bundler.
+     */
+    {
+        files: ['src/modules/*/analytics.ts', 'shared/contracts/analytics.frontend.ts'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector:
+                        'Property > Literal[value]:not([value=/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/])',
+                    message:
+                        'An analytics event name is lower snake_case — `cart_item_added`. It is written verbatim into Umami, where a differently-spelled name is a separate funnel nothing can merge back.'
+                },
+                {
+                    selector: 'Property > Identifier.key:not([name=/^[A-Z][A-Z0-9_]*$/])',
+                    message:
+                        'An analytics event constant is SCREAMING_SNAKE — `CART_ITEM_ADDED`. The published catalogue is sliced out of this declaration by matching that shape, so a differently-cased key is dropped from the frontend copy without failing anything.'
+                }
+            ]
+        }
+    },
+
+    /**
      * "Special" files names are better to be left untouched
      */
     {
