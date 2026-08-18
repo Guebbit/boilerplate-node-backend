@@ -3,19 +3,25 @@
  * Generates the TypeScript realtime contract types from asyncapi.yaml.
  *
  * SHARED SCRIPT — this file is byte-identical in `boilerplate-node-api-mongodb-mongoose` and
- * `boilerplate-vue-frontend`. Only the output path differs, and that
- * comes from `--out` in each repo's `gen:asyncapi` script, so the two copies can be compared
- * with a plain `diff`. Change it in one repo and copy it to the other, or the outputs drift.
+ * `boilerplate-vue-frontend`, and both write `src/types/asyncapi.generated.ts`. Nothing about it
+ * differs per repo, so the two copies can be compared with a plain `diff`. Change it in one repo
+ * and copy it to the other, or the outputs drift.
  *
- * It emits a SUPERSET of what either repo needs, so neither has to rename anything:
+ * WHAT DIFFERS IS THE INPUT, not this script. Each repo generates from the `asyncapi.yaml` at its
+ * own root, and those are deliberately not the same document: the backend's is the whole contract,
+ * the frontend's is `asyncapi.public.yaml` — the subset holding the channels a client can reach.
+ * So the two outputs differ, and are meant to: only the backend's carries the queue payloads.
  *
- *   - the modelina-generated payload interfaces          (both)
- *   - `<MessageName>` aliases for components.messages    (both)
- *   - `<NAMESPACE>_CHANNELS` constant objects            (backend: OBSERVABILITY_CHANNELS, …)
- *   - `<Namespace>Channel` unions                        (backend: ObservabilityChannel, …)
- *   - `REALTIME_SSE_EVENT_NAMES` + `SseEventPayloadMap` (frontend: per-event payload typing)
+ * From whichever document it is given, it emits everything that document implies:
  *
- * Unused exports are harmless — tree-shaken in the frontend bundle, type-only in the backend.
+ *   - the modelina-generated payload interfaces
+ *   - `<MessageName>` aliases for components.messages
+ *   - `<NAMESPACE>_CHANNELS` constant objects            (OBSERVABILITY_CHANNELS, WORKER_CHANNELS, …)
+ *   - `<Namespace>Channel` unions                        (ObservabilityChannel, WorkerChannel, …)
+ *   - `REALTIME_SSE_EVENT_NAMES` + `SseEventPayloadMap`  (per-event payload typing for SSE)
+ *
+ * An export a repo happens not to use is harmless — tree-shaken in the frontend bundle, type-only
+ * in the backend.
  *
  * ── `--check` ────────────────────────────────────────────────────────────────────────────────────
  * With `--check` nothing is written: the content this run would generate is compared against the
@@ -24,9 +30,10 @@
  * every edit to `asyncapi.yaml`, and this is the gate that says so.
  *
  * Each repo runs it over its OWN output, which is why the two outputs need no comparison with each
- * other: the same spec through this deterministic generator produces the same types on both sides,
- * so a frontend copy could not disagree without `asyncapi.yaml` disagreeing first — and that
- * document IS compared across the repos, by `scripts/specIdentity.ts`.
+ * other — and could not have one, since they are generated from different documents. What IS
+ * compared across the repos, by `scripts/specIdentity.ts`, is this script and the shared half of
+ * the spec: identical inputs through a deterministic generator cannot produce types that disagree
+ * about a channel both sides have.
  *
  * Usage: tsx scripts/gen-asyncapi-types.ts --out <path>
  *        tsx scripts/gen-asyncapi-types.ts --out <path> --check

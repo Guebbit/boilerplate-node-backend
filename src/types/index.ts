@@ -1,8 +1,8 @@
 export * from '@api/models';
 
-// Re-export generated AsyncAPI types so consumers use a single import path. The `.generated`
-// suffix names what the file is — `npm run gen:asyncapi` writes it from `asyncapi.yaml` — and
-// matches what the paired frontend already calls its own copy (`realtime.generated.ts`).
+// Re-export generated AsyncAPI types so consumers use a single import path. The file is named
+// after the spec it comes from — `npm run gen:asyncapi` writes it from `asyncapi.yaml` — and the
+// paired frontend names its own the same way, from its own copy of the shared half.
 export * from './asyncapi.generated';
 
 // Auth context DTO (DIP: transport-safe user representation)

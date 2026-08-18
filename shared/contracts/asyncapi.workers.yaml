@@ -8,11 +8,20 @@
 #
 # Unlike the root, this IS a standalone AsyncAPI document — `info` exists only to make it one, so
 # `npm run lint:asyncapi:modules` can validate it exactly like a module’s.
+#
+# It declares `rabbitmqLocal` because it is the only section whose channels bind to it. That is
+# what keeps the broker out of `asyncapi.public.yaml`: the bundle an API client shares merges the
+# shared sections only, so a server no shared channel can reach never appears in it.
 asyncapi: 2.6.0
 info:
     title: Worker job queues
     version: 1.0.0
     description: The `worker.*` queues, owned by the application rather than by any domain.
+servers:
+    rabbitmqLocal:
+        url: localhost:5672
+        protocol: amqp
+        description: Local RabbitMQ broker for async job queues.
 channels:
     worker.email.send:
         description: Email job queue — producers enqueue email requests, the email worker consumes them.

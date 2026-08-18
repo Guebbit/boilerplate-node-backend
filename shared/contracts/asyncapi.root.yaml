@@ -1,14 +1,23 @@
-# The async contract's preamble — everything that describes the DEPLOYMENT rather than a domain.
+# The async contract's preamble — everything that describes the SERVICE rather than a domain.
 #
 # The twin of `openapi.root.yaml`, and it earns the name the same way: version, id, the `info`
-# prose, the tag list and the servers are facts about this service, declared once, rather than
-# something every module restates. What it deliberately does NOT hold is a channel — those belong
-# to whoever owns the events, which is a module (`src/modules/<name>/asyncapi.yaml`) or, for the
-# queues no domain owns, `asyncapi.workers.yaml` beside this file.
+# prose and the tag list are facts about this service, declared once, rather than something every
+# module restates. What it deliberately does NOT hold is a channel — those belong to whoever owns
+# the events, which is a module (`src/modules/<name>/asyncapi.yaml`) or, for the queues no domain
+# owns, `asyncapi.workers.yaml` beside this file.
+#
+# Nor does it hold a SERVER, which is the one preamble fact a section does own. A server is only
+# reachable through the channels bound to it, so it travels with them: `sseLocal` is declared in
+# the observability module, `rabbitmqLocal` in `asyncapi.workers.yaml`. That is what lets the
+# bundler produce `asyncapi.public.yaml` — the sections an API client shares — without advertising
+# a broker no client of it can open.
 #
 # It is not a standalone AsyncAPI document: a valid one needs `channels`, and this has none until
 # the bundler merges the sections in. That is the one asymmetry with the module documents, which
 # ARE valid on their own and are linted that way.
+#
+# `id` is the APPLICATION identifier, so both bundles carry it: they describe one backend, one of
+# them partially.
 asyncapi: 2.6.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
@@ -23,19 +32,9 @@ info:
     description: |
         AsyncAPI contract for real-time/event-driven flows in this boilerplate.
 
-        Implemented:
-        - SSE observability events over `/observability/events`
-        - RabbitMQ worker job queues (`worker.*`)
+        The channels below are the whole of it — every one is implemented in the backend
+        runtime, and each says what it carries and when.
 defaultContentType: application/json
 tags:
     - name: implemented
       description: Contracts already implemented in the backend runtime.
-servers:
-    sseLocal:
-        url: localhost:3000
-        protocol: http
-        description: Local HTTP server for SSE (`/observability/events`).
-    rabbitmqLocal:
-        url: localhost:5672
-        protocol: amqp
-        description: Local RabbitMQ broker for async job queues.

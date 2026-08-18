@@ -5,8 +5,8 @@
  * ## What this replaces
  *
  * Four files are produced here and held byte-identical over there. Moving them was a manual
- * copy-paste of four paths, two of which are named differently on the other side — which is exactly
- * the kind of chore that gets done four times out of five. `npm run check:spec-identity` then fails
+ * copy-paste of four paths, three of which are named differently on the other side — which is
+ * exactly the kind of chore that gets done four times out of five. `npm run check:spec-identity` then fails
  * on the fifth, usually a day later, and reads like the contract broke.
  *
  * This does not make the copies safer to skip; it makes them impossible to get wrong. The list, the

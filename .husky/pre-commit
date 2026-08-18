@@ -29,7 +29,7 @@
 # `git add -p` to include the whole regenerated output — which is what you want for a generated
 # file, and a surprise exactly once.
 npm run regenerate -- --no-sync
-git add openapi.yaml asyncapi.yaml api src/types/asyncapi.generated.ts \
+git add openapi.yaml asyncapi.yaml asyncapi.public.yaml api src/types/asyncapi.generated.ts \
         db/demo/demo-data.json src/infrastructure/observability/analytics-events.ts
 
 npm run complete

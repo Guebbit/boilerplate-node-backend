@@ -1,11 +1,16 @@
 /**
  * Every document this repo produces from sources it owns.
  *
- * Two kinds, and the difference decides what is guarded. The AUTHORED ones — `openapi`, `asyncapi`,
- * the analytics event names — are committed, and are exactly the shared, domain-shaped files of
- * `scripts/specIdentity.ts`: the ones that exist twice, once here and once in the paired frontend,
- * AND list every domain the app has. This repo authors them; the frontend holds byte-identical
- * copies and never edits them.
+ * Two kinds, and the difference decides what is guarded. The AUTHORED ones — `openapi`, the two
+ * asyncapi bundles, the analytics event names — are committed, and cover the shared, domain-shaped
+ * files of `scripts/specIdentity.ts`: the ones that exist twice, once here and once in the paired
+ * frontend, AND list every domain the app has. This repo authors them; the frontend holds
+ * byte-identical copies and never edits them.
+ *
+ * `asyncapi` is the exception to the "exists twice" half: the frontend's copy is
+ * `asyncapi.public.yaml`, the SHARED subset, while `asyncapi.yaml` — queues included — stays here
+ * and is what this repo's own types are generated from. Both are built from one set of section
+ * documents, so the two can never describe a shared channel differently.
  *
  * The GENERATED ones — the client collections — are `.gitignore`d and produced on demand from
  * `openapi.yaml`. They are listed here so `npm run contracts:bundle -- bruno` can find them, not
@@ -30,13 +35,14 @@
 
 import type { ContractBundle } from './fragments';
 import { openapiBundle } from './openapi';
-import { asyncapiBundle } from './asyncapi';
+import { asyncapiBundle, asyncapiPublicBundle } from './asyncapi';
 import { analyticsEventsBundle } from './analyticsEvents';
 import { brunoBundle, insomniaBundle, mockoonBundle, postmanBundle } from './generateCollections';
 
 export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,
     asyncapiBundle,
+    asyncapiPublicBundle,
     analyticsEventsBundle,
     brunoBundle,
     insomniaBundle,

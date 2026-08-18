@@ -16,6 +16,7 @@
 //    including the delivery tag that `ack`/`nack` reference.
 import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
 import { logger } from '@infrastructure/adapters/logger';
+import { WORKER_CHANNELS } from '@types';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -161,20 +162,24 @@ export const stopQueue = (): Promise<void> => {
 // ─── Queue names ──────────────────────────────────────────────────────────────
 
 /**
- * The queues this application uses.
+ * The queues this application uses, named by the contract that declares them.
  *
- * They live here, with the adapter, because a queue name is the one thing a producer and its
- * consumer must agree on exactly — a typo on either side is not an error anywhere, it is a message
- * published to a queue nobody drains. Holding both spellings in one place makes that agreement
- * structural.
+ * A queue name is the one thing a producer and its consumer must agree on exactly — a typo on
+ * either side is not an error anywhere, it is a message published to a queue nobody drains. So the
+ * spelling comes from `WORKER_CHANNELS`, generated out of `asyncapi.yaml`: the agreement is with
+ * the contract rather than with another literal somebody has to keep in step.
+ *
+ * The aliases stay because a call site reads better naming the queue than indexing a channel map,
+ * and because they are what `workers.ts` and `mailer.ts` already import. They resolve to the
+ * channel names, so there is still exactly one place the strings are written.
  *
  * Declaring them in the worker and importing them *up* into `infrastructure/adapters/mailer.ts`
  * would invert the tier rule: `infrastructure` is the bottom of the graph and must not reach into
  * application code. Nothing would catch it either, since such an import is a relative path with no
  * alias for the lint rule to match on.
  */
-export const EMAIL_QUEUE = 'emails';
-export const PDF_QUEUE = 'pdfs';
+export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
+export const PDF_QUEUE = WORKER_CHANNELS.PDF_GENERATE;
 
 // ─── Publish ──────────────────────────────────────────────────────────────────
 

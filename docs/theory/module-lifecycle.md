@@ -24,6 +24,7 @@ apply to your domain is most of both procedures:
 | `MODULE_SECTIONS`     | `scripts/contracts/openapi.ts`         | the domain serves HTTP             |
 | `ANALYTICS_SECTIONS`  | `scripts/contracts/analyticsEvents.ts` | the domain has an `analytics.ts`   |
 | `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`        | the domain owns an `asyncapi.yaml` |
+| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi.ts`        | …and an API client can reach it    |
 
 A fifth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
 imported by name in `scripts/contracts/generateCollections.ts`. It is not in the table because it
@@ -182,13 +183,20 @@ the same for `ANALYTICS_SECTIONS` if you wrote an `analytics.ts`, and for `ASYNC
 you wrote an `asyncapi.yaml`. A `demo.ts` needs no entry anywhere — the dataset is published from a
 real seeding run, not assembled from a list.
 
+An `asyncapi.yaml` costs one decision the others do not: whether the domain also belongs in
+`SHARED_SECTIONS`. It does if a browser can reach the channels — an SSE stream, a websocket — and it
+does not if they cross a broker the frontend cannot open. Shared sections land in
+`asyncapi.public.yaml` and are copied to the paired frontend; the rest stay in `asyncapi.yaml` here.
+Leaving a browser-facing section out is the quiet failure: the frontend generates types that do not
+mention the channel, and nothing says why.
+
 A section entry with no fragment on disk is the hard error shown above. A fragment on disk with no
 section entry is worse — it is silently ignored, and the endpoint ships undocumented.
 
 ### 4 · Bundle
 
 ```bash
-npm run contracts:bundle          # assembles openapi.yaml, asyncapi.yaml, analytics, seed identities
+npm run contracts:bundle          # assembles openapi.yaml, both asyncapi bundles, analytics, seed identities
 npm run lint:openapi              # spectral
 ```
 

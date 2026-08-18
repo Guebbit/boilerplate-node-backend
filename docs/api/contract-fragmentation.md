@@ -21,6 +21,7 @@ the spec disagreeing first, and nothing there reads them:
 | ----------------- | ------------------------------------------- | -------------------------------------------------------------- |
 | `openapi`         | `openapi.yaml`                              | `src/modules/<name>/openapi.yaml` — **compiled by `redocly bundle`** |
 | `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi.yaml` + `shared/contracts/asyncapi.{root,workers}.yaml` — **merged** |
+| `asyncapi-public` | `asyncapi.public.yaml`                      | the same sources minus the backend-only ones — the half the frontend receives |
 | `analytics-events`| `src/infrastructure/observability/analytics-events.ts`| `src/modules/<name>/analytics.ts` — **sliced from real modules** |
 | `bruno`           | `contract.bruno.yml` *(untracked)*          | `openapi.yaml` + the demo dataset — **generated whole**         |
 | `insomnia`        | `contract.insomnia.json` *(untracked)*      | `openapi.yaml` + the demo dataset — **generated whole**         |
@@ -35,7 +36,8 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | Bundle                   | Verb          | What does it                                                             |
 | ------------------------ | ------------- | ------------------------------------------------------------------------ |
 | `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents                  |
-| `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi.ts` copies three maps; `$ref`s stay untouched |
+| `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi.ts` copies four maps; `$ref`s stay untouched |
+| `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | `analytics-events.ts`    | **assembled** | each module's `as const` body sliced verbatim and joined by a comma      |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
 
@@ -54,7 +56,9 @@ every run, so a fragment edited without re-bundling fails the build rather than 
 The three shared files that are **not** bundled are the three that name no domain: `spectral.yaml`
 is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are tooling.
 `src/types/asyncapi.generated.ts` is absent for the opposite reason — it is generated from a bundle by
-`npm run gen:asyncapi`, so it follows one rather than being one.
+`npm run gen:asyncapi`, so it follows one rather than being one. `asyncapi.yaml` is absent for a third:
+it is a bundle, but not a SHARED one — the frontend receives `asyncapi.public.yaml` instead, so the
+full contract is compared against nothing and is marked `shared: false` to say so.
 
 ## The flow
 
@@ -312,7 +316,10 @@ A domain appears three times in this document (`channels:`, `components.messages
 That is gone. **A section is now one complete AsyncAPI document**: `src/modules/<name>/asyncapi.yaml`
 for a domain, exactly as it carries one `openapi.yaml`, and
 `shared/contracts/asyncapi.workers.yaml` for the `worker.*` queues that belong to no domain — the
-async twin of filing `GET /` under `system`. `shared/contracts/asyncapi.root.yaml` holds what
+async twin of filing `GET /` under `system`. Each section also declares the SERVER its channels bind
+to, so a bundle that leaves a section out leaves its transport out with it — which is what produces
+`asyncapi.public.yaml` without a second list of servers to keep in step.
+`shared/contracts/asyncapi.root.yaml` holds what
 describes the deployment rather than a domain, and no channels.
 
 `observability` owns the SSE channels because the module serving `/observability/events` decides
@@ -332,7 +339,7 @@ document grows from 239 lines to 819, each payload is repeated once per channel 
 kept under `components` — and `scripts/gen-asyncapi-types.ts`, which walks
 `channels[*].{publish,subscribe}.message.$ref` to decide what to name a generated model, is left
 with nothing to follow. So the merge happens in about thirty lines in
-`scripts/contracts/asyncapi.ts`, deliberately dumber than a bundler: it copies three maps and
+`scripts/contracts/asyncapi.ts`, deliberately dumber than a bundler: it copies four maps and
 refuses on a collision, carrying `$ref` strings across untouched because every section already
 resolves its own refs internally. That file's header is the full argument, and it is the file to
 read before anyone tries the symmetry again.

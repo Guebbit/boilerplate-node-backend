@@ -55,6 +55,20 @@ interface BundleIdentity {
     label: string;
     /** Absolute path of the committed document this produces. */
     output: string;
+    /**
+     * Whether the paired frontend holds a copy of this document, and so whether it belongs in
+     * `scripts/specIdentity.ts`.
+     *
+     * Absent means yes, because that is what a document assembled from every domain's fragments is
+     * for. `asyncapi.yaml` is the one `false`: the frontend receives `asyncapi.public.yaml`, the
+     * subset holding the channels it can actually reach, so the full contract — queues included —
+     * stays here and is compared against nothing.
+     *
+     * Declared rather than inferred from the path so `contract-bundles.test.ts` can hold both
+     * halves of the rule: shared bundles must be in the cross-repo list, and a bundle marked
+     * backend-only must not be.
+     */
+    shared?: false;
 }
 
 /** A document assembled from authored fragments on disk. */

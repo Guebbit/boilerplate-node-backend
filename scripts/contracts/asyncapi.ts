@@ -1,5 +1,21 @@
 /**
- * `asyncapi.yaml` — the realtime/event contract, merged from one document per section.
+ * The realtime/event contracts, merged from one document per section.
+ *
+ * ## Two bundles, one set of sources
+ *
+ * `asyncapi.yaml` is the whole contract — every channel this service has. `asyncapi.public.yaml`
+ * is the SHARED half: the sections whose channels an API client can reach, and nothing else. The
+ * paired frontend holds a byte-identical copy of the second under its own `asyncapi.yaml`, and
+ * generates its types from that, so it never sees a queue it could not open a connection to if it
+ * tried.
+ *
+ * The split is one field per section (`scope`) rather than a second set of fragments. A section is
+ * shared or it is not, and nothing else about it changes — the same document produces both
+ * bundles, which is what stops the two from describing the same channel differently.
+ *
+ * A server travels with the section that binds to it (`sseLocal` in the observability module,
+ * `rabbitmqLocal` in `asyncapi.workers.yaml`), so dropping a section drops its server too. That is
+ * why `servers` is merged here like `channels` instead of sitting in the root document.
  *
  * ## Why this is not `asyncapi bundle`
  *
@@ -11,7 +27,7 @@
  * decide what to name a generated model — is left with nothing to follow.
  *
  * So the merge happens here, in about thirty lines, and it is deliberately dumber than a bundler:
- * it copies three maps and refuses on a collision. `$ref` strings are carried across untouched
+ * it copies four maps and refuses on a collision. `$ref` strings are carried across untouched
  * because every section resolves its own refs internally — a module's messages and schemas travel
  * with its channels.
  *
@@ -24,7 +40,7 @@
  * never be: `channels.yaml`, `messages.yaml` and `schemas.yaml` were half-objects that parsed as
  * nothing until concatenated in the right order at the right indentation.
  *
- * The root document holds what describes the deployment rather than a domain, and no channels.
+ * The root document holds what describes the service rather than a domain, and no channels.
  *
  * ## Formatting
  *
@@ -38,10 +54,29 @@ import path from 'node:path';
 import { isMap, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { REPO_ROOT, type ContractBundle } from './fragments';
 
+/**
+ * Who a section's channels are for.
+ *
+ * `shared` means an API client can reach them — they go into both bundles, and the paired frontend
+ * receives them. `backend` means the channel never leaves this service: the queues are the case,
+ * and a frontend that held their payload types would carry a contract it can neither publish to nor
+ * consume from.
+ */
+export type AsyncScope = 'shared' | 'backend';
+
 /** The order sections are merged in, and therefore the order they appear in the output. */
 export const ASYNC_SECTION_ORDER = ['observability', 'workers'] as const;
 
 export type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
+
+/** Which sections an API client shares. Everything absent from here is backend-only. */
+const SHARED_SECTIONS: readonly AsyncSectionName[] = ['observability'];
+
+/** The sections one bundle is built from, in merge order. */
+const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
+    scope === 'backend'
+        ? ASYNC_SECTION_ORDER
+        : ASYNC_SECTION_ORDER.filter((section) => SHARED_SECTIONS.includes(section));
 
 /** Where a section's document lives — a module's own file, or the shared one for the queues. */
 export const asyncSectionDocument = (section: AsyncSectionName): string =>
@@ -49,7 +84,7 @@ export const asyncSectionDocument = (section: AsyncSectionName): string =>
         ? path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml')
         : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
 
-/** Preamble: version, id, info, content type, tags, servers. Holds no channel. */
+/** Preamble: version, id, info, content type, tags. Holds no channel and no server. */
 export const ASYNC_ROOT_DOCUMENT = path.join(
     REPO_ROOT,
     'shared',
@@ -57,14 +92,27 @@ export const ASYNC_ROOT_DOCUMENT = path.join(
     'asyncapi.root.yaml'
 );
 
-/** The three places a section contributes to, in the order the document declares them. */
-const MERGED_PATHS = [['channels'], ['components', 'messages'], ['components', 'schemas']] as const;
+/**
+ * The four places a section contributes to, in the order the document declares them.
+ *
+ * The order is the output's key order, because the root holds none of these: every one is created
+ * by the first section that has it, at the end of the document. `servers` first so a reader meets
+ * the transports before the channels bound to them.
+ */
+const MERGED_PATHS = [
+    ['servers'],
+    ['channels'],
+    ['components', 'messages'],
+    ['components', 'schemas']
+] as const;
 
-/** What the committed contract opens with, so the file says what it is. */
-const MARKER =
+/** What a committed contract opens with, so the file says what it is and what produced it. */
+const marker = (sections: readonly AsyncSectionName[]): string =>
     '# Code generated by `npm run contracts:bundle`. DO NOT EDIT.\n' +
-    '# Sources: shared/contracts/asyncapi.root.yaml, shared/contracts/asyncapi.workers.yaml\n' +
-    '#          and src/modules/*/asyncapi.yaml\n';
+    '# Sources: shared/contracts/asyncapi.root.yaml\n' +
+    sections
+        .map((section) => `#          ${path.relative(REPO_ROOT, asyncSectionDocument(section))}\n`)
+        .join('');
 
 const read = (file: string): Document =>
     parseDocument(readFileSync(file, 'utf8'), { keepSourceTokens: true });
@@ -72,10 +120,11 @@ const read = (file: string): Document =>
 /**
  * Merge one section's map into the target, refusing to overwrite.
  *
- * The collision is the guard worth having: two sections claiming `observability.heartbeat`, or two
- * modules declaring a `MetricsPayload` schema, would otherwise resolve to whichever was merged last
- * — and the loser's channel would silently vanish from a contract the paired frontend generates its
- * client from. Named `audit-actions.test.ts`-style, with both owners in the message.
+ * The collision is the guard worth having: two sections claiming `observability.heartbeat`, two
+ * modules declaring a `MetricsPayload` schema, or two declaring `sseLocal` with different urls,
+ * would otherwise resolve to whichever was merged last — and the loser's channel would silently
+ * vanish from a contract the paired frontend generates its client from. Named
+ * `audit-actions.test.ts`-style, with both owners in the message.
  */
 const mergeInto = (
     target: Document,
@@ -96,26 +145,29 @@ const mergeInto = (
         if (existing.has(key))
             throw new Error(
                 `[asyncapi] two sections declare ${keyPath.join('.')}.${key} — the second is ` +
-                    `\`${section}\`. A channel, message or schema belongs to exactly one section, ` +
-                    `and a merge that overwrote one would drop it from the contract silently.`
+                    `\`${section}\`. A server, channel, message or schema belongs to exactly one ` +
+                    `section, and a merge that overwrote one would drop it from the contract ` +
+                    `silently.`
             );
         existing.items.push(item);
     }
 };
 
-let compiled: string | undefined;
+/** One compiled document per scope, so a full run does not re-merge the sections it shares. */
+const compiled = new Map<AsyncScope, string>();
 
-const compile = (): string => {
-    if (compiled !== undefined) return compiled;
+const compile = (scope: AsyncScope): string => {
+    const cached = compiled.get(scope);
+    if (cached !== undefined) return cached;
 
     const document_ = read(ASYNC_ROOT_DOCUMENT);
 
     /*
-     * The root file's own header explains where channels come from — advice for whoever edits it,
-     * and noise in a generated artefact that opens with `DO NOT EDIT`. Dropped here rather than
-     * left unwritten in the source, because the explanation is worth more at the place it applies.
-     * Section documents lose theirs for free: only their channel/message/schema NODES are copied,
-     * and a file-level comment belongs to the document.
+     * The root file's own header explains where channels and servers come from — advice for whoever
+     * edits it, and noise in a generated artefact that opens with `DO NOT EDIT`. Dropped here rather
+     * than left unwritten in the source, because the explanation is worth more at the place it
+     * applies. Section documents lose theirs for free: only their server/channel/message/schema
+     * NODES are copied, and a file-level comment belongs to the document.
      *
      * Cleared off the first KEY, not off the document: `yaml` attaches a leading comment block to
      * whatever node follows it, and `doc.commentBefore` is only set when a document has no content
@@ -126,7 +178,8 @@ const compile = (): string => {
     if (firstKey && typeof firstKey === 'object')
         (firstKey as { commentBefore?: unknown }).commentBefore = undefined;
 
-    for (const section of ASYNC_SECTION_ORDER) {
+    const sections = sectionsInScope(scope);
+    for (const section of sections) {
         const source = read(asyncSectionDocument(section));
         for (const keyPath of MERGED_PATHS)
             mergeInto(document_, keyPath, section, source.getIn(keyPath, true));
@@ -135,18 +188,40 @@ const compile = (): string => {
     /* `lineWidth: 0` because a contract line that wraps at a column is a diff nobody asked for:
      * re-flowing prose on an unrelated edit is exactly the noise `check:contracts-bundle` would
      * then report as staleness. */
-    compiled = MARKER + document_.toString({ indent: 4, lineWidth: 0 });
-    return compiled;
+    const output = marker(sections) + document_.toString({ indent: 4, lineWidth: 0 });
+    compiled.set(scope, output);
+    return output;
 };
 
+/** The whole contract, every channel this service has. Read by `gen:asyncapi` and the linter. */
 export const asyncapiBundle: ContractBundle = {
     name: 'asyncapi',
     label: 'asyncapi.yaml',
     output: path.join(REPO_ROOT, 'asyncapi.yaml'),
-    content: compile,
+    shared: false,
+    content: () => compile('backend'),
     sources: () => [
         ASYNC_ROOT_DOCUMENT,
-        ...ASYNC_SECTION_ORDER.map((section) => asyncSectionDocument(section))
+        ...sectionsInScope('backend').map((section) => asyncSectionDocument(section))
+    ],
+    compiled: true
+};
+
+/**
+ * The shared half, and the file the paired frontend holds as its `asyncapi.yaml`.
+ *
+ * Committed rather than produced on demand for the reason every shared document is: it is
+ * hash-compared across the repos by `check:spec-identity`, and a check cannot compare a file that
+ * only exists after someone remembers to build it.
+ */
+export const asyncapiPublicBundle: ContractBundle = {
+    name: 'asyncapi-public',
+    label: 'asyncapi.public.yaml',
+    output: path.join(REPO_ROOT, 'asyncapi.public.yaml'),
+    content: () => compile('shared'),
+    sources: () => [
+        ASYNC_ROOT_DOCUMENT,
+        ...sectionsInScope('shared').map((section) => asyncSectionDocument(section))
     ],
     compiled: true
 };

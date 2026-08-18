@@ -48,7 +48,7 @@ flowchart LR
 
 All controllers that send emails use `enqueueEmail()` from `src/infrastructure/adapters/mailer.ts`:
 
-- **Queue enabled** → the email job is published to the `emails` queue. The `email.worker.ts` consumer picks it up and calls `nodemailer()` in the background.
+- **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `nodemailer()` in the background.
 - **Queue disabled** → falls back to calling `nodemailer()` directly (same behavior as before).
 
 Controllers using it:
@@ -68,7 +68,7 @@ The `pdf.worker.ts` consumer handles async PDF generation jobs (e.g. batch invoi
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart LR
     Producer[Controller or service] --> Publish[enqueueEmail / publishToQueue]
-    Publish --> Queue[(emails or pdf jobs)]
+    Publish --> Queue[(worker.email.send or worker.pdf.generate)]
     Queue --> Consume[email.worker / pdf.worker]
     Consume --> Ack[Ack on success]
     Consume --> Retry[Requeue on transient failure]
@@ -109,22 +109,27 @@ The `docker-compose.yml` includes a `rabbitmq` service with the management plugi
 ### Publishing a message
 
 ```ts
-import { publishToQueue } from '@infrastructure/adapters/queue';
+import { publishToQueue, EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 
 // Inside a controller or service:
 await publishToQueue({
-    queue: 'emails',
+    queue: EMAIL_QUEUE,
     payload: { to: 'user@example.com', template: 'welcome', data: { name: 'Alice' } }
 });
 ```
 
+Never a string literal. `EMAIL_QUEUE` and `PDF_QUEUE` are aliases of `WORKER_CHANNELS.EMAIL_SEND`
+and `WORKER_CHANNELS.PDF_GENERATE`, generated out of `asyncapi.yaml` — so the name a producer
+publishes to, the name the consumer drains and the name the contract declares are one string. A
+typo in a literal is not an error anywhere; it is a message on a queue nobody reads.
+
 ### Consuming messages
 
 ```ts
-import { consumeFromQueue } from '@infrastructure/adapters/queue';
+import { consumeFromQueue, EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 
 consumeFromQueue({
-    queue: 'emails',
+    queue: EMAIL_QUEUE,
     prefetch: 5,
     handler: async (message) => {
         // Process the message; return true to ack, false to nack.

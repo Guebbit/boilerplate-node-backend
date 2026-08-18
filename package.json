@@ -16,7 +16,7 @@
         "lint:fix": "eslint --fix",
         "lint:openapi": "spectral lint openapi.yaml",
         "lint:openapi:modules": "spectral lint --ruleset spectral.modules.yaml src/modules/*/openapi.yaml",
-        "lint:asyncapi": "asyncapi validate asyncapi.yaml",
+        "lint:asyncapi": "asyncapi validate asyncapi.yaml && asyncapi validate asyncapi.public.yaml",
         "lint:asyncapi:modules": "spectral lint --ruleset spectral.asyncapi.modules.yaml src/modules/*/asyncapi.yaml shared/contracts/asyncapi.workers.yaml",
         "prettier:check": "prettier . --check",
         "prettier:fix": "prettier . --write",

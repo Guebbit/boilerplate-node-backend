@@ -91,6 +91,7 @@ Contract-first workflow: OpenAPI + AsyncAPI, codegen, mocks, and implementation 
 flowchart LR
     OpenSpec[openapi.yaml] --> Routes[Routes + middlewares]
     AsyncSpec[asyncapi.yaml] --> Realtime[SSE + event + queue contracts]
+    AsyncSpec --> Public[asyncapi.public.yaml — the half the frontend receives]
     Routes --> Controllers[Controllers]
     Controllers --> Services[Services]
     Services --> Repositories[Repositories]
