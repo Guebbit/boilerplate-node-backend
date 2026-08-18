@@ -91,13 +91,13 @@ emits the shape Jest's `--json` does. `npm run check:spec-identity` keeps the tw
 
 Each answers something the others structurally cannot:
 
-| Layer             | Data source                                  | Catches                                                        |
-| ----------------- | -------------------------------------------- | -------------------------------------------------------------- |
-| **unit**          | `factory.ts`, mocked repositories            | logic errors in one function                                   |
-| **cross-cutting** | the module registry itself                   | a module breaking an architectural rule                        |
-| **integration**   | real in-memory Mongo via `tests/factory.ts`  | anything the ORM or an index does differently than you assumed |
-| **contract**      | a Zod-walked request fuzzer + `jest-openapi` | the API drifting from `openapi.yaml`, in either direction      |
-| **fuzz**          | fast-check                                   | a rule that holds for your examples and not in general         |
+| Layer             | Data source                                               | Catches                                                        |
+| ----------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
+| **unit**          | `factory.ts`, mocked repositories                         | logic errors in one function                                   |
+| **cross-cutting** | the module registry itself                                | a module breaking an architectural rule                        |
+| **integration**   | real in-memory Mongo via `tests/support/setup-test-db.ts` | anything the ORM or an index does differently than you assumed |
+| **contract**      | a Zod-walked request fuzzer + `jest-openapi`              | the API drifting from `openapi.yaml`, in either direction      |
+| **fuzz**          | fast-check                                                | a rule that holds for your examples and not in general         |
 
 ## Performance
 

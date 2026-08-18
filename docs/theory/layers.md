@@ -152,12 +152,12 @@ There is also no top-level `middlewares/`, `jobs/`, `routes/` or `workers/`. Eac
 named after a MECHANISM rather than a tier, and three of them held a single file:
 
 | Was                           | Is now                                          | Why                                            |
-| ----------------------------- | ----------------------------------------------- | ---------------------------------------------- |
+| ----------------------------- | ----------------------------------------------- | ---------------------------------------------- | ------------------------- |
 | `src/middlewares/*`           | `src/infrastructure/http/middlewares/*`         | domain-free pipeline; survives with no modules |
-| `src/middlewares/auth-jwt.ts` | `src/kernel/middlewares/` + a port              | needed a user; see [Modules](./modules.md)     |
-| `src/jobs/token-cleanup.ts`   | `src/modules/account/services/token-cleanup.ts` | it is account's token lifecycle                |
+| `src/middlewares/auth-jwt.ts` | `src/kernel/middlewares/` + a port              | needed a user; see [Modules](./modules.md)     | <!-- doc-paths:ignore --> |
+| `src/jobs/token-cleanup.ts`   | `src/modules/account/services/token-cleanup.ts` | it is account's token lifecycle                | <!-- doc-paths:ignore --> |
 | `src/workers/*`               | `src/infrastructure/adapters/*.worker.ts`       | the consumer half of an adapter                |
-| `src/routes/index.ts`         | `src/app/system-routes.ts`                      | the ping belongs to no domain                  |
+| `src/routes/index.ts`         | `src/app/system-routes.ts`                      | the ping belongs to no domain                  | <!-- doc-paths:ignore --> |
 | `src/bootstrap/*`             | `src/app/*`                                     | assembling this application                    |
 | `src/core/*`                  | `src/infrastructure/*`                          | the name meant the opposite half elsewhere     |
 | `src/platform/*`              | `src/kernel/*`                                  | it is a microkernel, not a base layer          |

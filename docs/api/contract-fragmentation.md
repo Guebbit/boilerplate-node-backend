@@ -255,7 +255,7 @@ What this bought, beyond deleting a custom bundler:
 
 **The anchors had to go, and that is what made it possible at all.** The old fragments shared the
 success-envelope preamble through YAML anchors (`*envelopeSuccess`, 84 uses across 13 files) whose
-definitions lived in `shared/contracts/schemas.yaml`. A YAML anchor cannot cross a file, which is
+definitions lived in `shared/contracts/schemas.yaml`. A YAML anchor cannot cross a file, which is <!-- doc-paths:ignore -->
 precisely why nothing could ever parse a fragment. They are named schemas now — `EnvelopeSuccess`,
 `EnvelopeStatus`, `EnvelopeMessage` — which is the same sharing expressed in a way a `$ref` can
 reach. `additionalProperties: false` is unaffected: it constrains property *names*, so a `$ref` at a
@@ -398,7 +398,7 @@ would leave a dangling one before `}` and fail `prettier:check`.
 
 ### The demo dataset — not a bundle at all, any more
 
-It used to be one. `db/seeds/seed-identities.ts` was assembled from a
+It used to be one. `db/seeds/seed-identities.ts` was assembled from a <!-- doc-paths:ignore -->
 `seed-identities.fragment.ts` in every module, for the same reason as everything else on this page:
 the frontend needed the same records, one file had to hold them, and no module should own a file
 that lists every domain.

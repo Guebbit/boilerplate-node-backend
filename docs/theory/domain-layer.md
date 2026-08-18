@@ -203,7 +203,7 @@ it implies, plus the subtraction that defines availability. Nothing about it nee
 everything that does — the conditional writes, the ledger row, the reservation lifecycle — reads
 the table rather than restating it. The service's `writerFor` is deliberately a second short table
 beside it, so "which write performs a transition" and "what that transition costs" can be read
-against each other; `tests/unit/transitions.test.ts` asserts they agree for every reason.
+against each other; `src/modules/inventory/tests/unit/transitions.test.ts` asserts they agree for every reason.
 
 ---
 

@@ -99,7 +99,7 @@ Both are seeded once per process — not reseeded per call — from `RANDOM_DATA
 
 ### Why `RANDOM_DATA_SEED` and not a name of its own
 
-The paired frontend reads a variable of **exactly this name** to seed its own random-data generator (`tests/mocks/shared/mockProfilesRandom.ts` there, driving `npm run test:e2e:random`). One name across both repos buys something concrete: a seed printed by a failing nightly run on one side is a number the other side can reproduce.
+The name is deliberately generic rather than backend-specific: seeded generation is a thing either repo may want, and a seed printed by a failing nightly run is only reproducible if both sides read the same variable to set it.
 
 The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — and given one seed the two produce entirely unrelated values. That is intended, not a defect to fix later. The two generators produce **opposite halves of the same contract** (requests here, responses there) from different schema surfaces (zod `_zod.def` here, orval factories there); making the streams agree would buy nothing and would couple two implementations that are independently correct. What the shared name buys is a shared vocabulary, not shared output.
 
@@ -154,4 +154,3 @@ Excluded from [Mutation Testing](./mutation-testing.md) the same way the rest of
 - [Contract Testing](./contract-testing.md) — the response-shape mirror of this page
 - [Testing](./testing-and-docs.md) — suite overview
 - [Unit Testing](./unit-testing.md) — the `tsconfig.jest.json` note this page's ESM finding builds on
-- The paired frontend repo's `docs/tools/e2e-random-profile.md` (`boilerplate-vue-frontend`) — same idea (generate from the contract, not a fixed scenario), applied to responses instead of requests

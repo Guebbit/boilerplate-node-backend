@@ -133,7 +133,7 @@ the whole directory and any service left on the default would simply be missing 
 Whichever path you give is mounted at `/var/log/host-containers`, so the two promtail configs
 differ only in the glob under it and the parser stage — CRI for podman, JSON envelope for docker.
 
-There is no override file and no `-f` list. There used to be both, plus a `scripts/compose.ts`
+There is no override file and no `-f` list. There used to be both, plus a `scripts/compose.ts` <!-- doc-paths:ignore -->
 that chose between them; the whole apparatus existed to move one volume mount, and it went wrong
 in the way that machinery does — it selected the docker override on a podman-only machine and
 Promtail silently tailed nothing.

@@ -845,9 +845,9 @@ at all).
 3. **Then** move `break`, once a run has actually sustained the new floor.
 
 Two files also lost their coverage floor in the modular migration and have not had it restored.
-Both have since moved again, and neither move restored the floor: `src/modules/account/tokens.ts`
+Both have since moved again, and neither move restored the floor: `src/modules/account/tokens.ts` <!-- doc-paths:ignore -->
 (was floored by `src/services/**`) is now `src/modules/account/session/config.ts`, and
-`src/modules/users/validation.ts` (was `src/models/**`) was merged into `src/modules/users/model.ts`
+`src/modules/users/validation.ts` (was `src/models/**`) was merged into `src/modules/users/model.ts` <!-- doc-paths:ignore -->
 — which _is_ floored, so that half is closed by the merge rather than by a config change.
 `jest.config.js` floors `model.ts`,
 `repository.ts` and `service.ts` per module, and the newer per-module files (`audit.ts`,

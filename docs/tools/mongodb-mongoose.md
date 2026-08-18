@@ -127,7 +127,7 @@ npm run check:spec-identity  # fail if the frontend's copy has forked
 ```
 
 Publishing the OUTPUT rather than the input is the whole design, and it corrects an earlier one. The
-two repos used to share a file of plain FACTS — `db/seeds/seed-identities.ts`, assembled from a
+two repos used to share a file of plain FACTS — `db/seeds/seed-identities.ts`, assembled from a <!-- doc-paths:ignore -->
 fragment in every module — and each side wrote its own mapper from those facts into the shape it
 needed. Identical facts could not keep the two mappers honest: the frontend's mock hand-wrote
 `active: true` and `verified: true` from a reading of this repo's schema defaults, and carried no
