@@ -9,7 +9,7 @@ pair.
 
 ::: tip A roadmap that lists finished work stops being read
 Anything here that ships should be **deleted** from this page rather than annotated as done. The
-CHANGELOG is where history lives.
+git history is where history lives.
 :::
 
 ---

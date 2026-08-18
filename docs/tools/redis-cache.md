@@ -203,7 +203,7 @@ Worker 2 is correct **before any message could have been sent**. A pub/sub broad
 this would tell worker 2 to delete keys worker 1 already deleted — three extra round-trips per
 write per worker, a second Redis connection per process, and a shutdown ordering constraint, all
 to change no state. One was implemented here and has been removed; the AsyncAPI channel
-`cache.tags.invalidated` went with it (see `CHANGELOG.md`).
+`cache.tags.invalidated` went with it.
 
 The one design that would need the broadcast is a **process-local L1 cache** — an in-memory map
 in each worker, in front of Redis, saving the network hop on every hit. Then worker 2 really
