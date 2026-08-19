@@ -6,6 +6,19 @@
 **📚 The documentation is the real reference — this file is only the door.**
 Run `npm run docs:dev` (or open `:3090` once the stack is up), or read `docs/`.
 
+::: danger Uploaded images do not outlive the container
+`imageStore` (`src/infrastructure/adapters/image-store.ts`) writes uploads to the container's own
+filesystem. **Rebuild or remove the container and every uploaded image goes with it** — `docker
+compose down -v`, a redeploy, a moved host. Only `public/images/seed/` survives, because those files
+are committed. Two replicas do not share what they store either: an image uploaded to one is a 404
+on the other.
+
+A bind-mounted volume is the stopgap. It works, and it pins the deployment to one disk. The durable
+answer is a second `ImageStore` implementation over an S3-compatible bucket or a CDN — nothing
+selects a backend yet, on purpose, and `image-store.ts` documents what such an implementation has to
+get right before anyone writes one.
+:::
+
 ---
 
 ## Start here
