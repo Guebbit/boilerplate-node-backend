@@ -5,10 +5,10 @@ context mapping, ubiquitous language and subdomain distillation. All four are in
 per module and asserted by tests.
 
 The other half — entities, aggregates, domain repositories — is **not** here, on purpose.
-`DDD_EXPLORATION.md`, beside this repo in the workspace, works out what adopting it would cost and
-why a boilerplate should not. Two of its cheapest patterns did land, because they fixed live bugs
-rather than imposing a shape — see [Tactical DDD](./tactical-ddd.md). This page is about what _is_
-adopted at the strategic level.
+`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices adopting it — the cost, the order
+of work, and what would have to be true first. The two cheapest patterns did land, because they
+fixed live bugs rather than imposing a shape — see [Tactical DDD](./tactical-ddd.md). This page is
+about what _is_ adopted at the strategic level.
 
 ::: tip The distinction that matters
 A folder per feature is a **packaging** decision. DDD is a **modelling** one. You can have immaculate
@@ -196,4 +196,4 @@ stopped agreeing with itself: `Money` and the order lifecycle table. Neither nee
 neither is a step toward one — [Tactical DDD](./tactical-ddd.md) has both.
 
 See [Domain layer](./domain-layer.md) for the `domain/` folder as it stands, and
-`DDD_EXPLORATION.md` for what going further would cost.
+`TACTICAL_DDD_PLAN.md` for what going further would cost.

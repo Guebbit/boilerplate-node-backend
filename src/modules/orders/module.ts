@@ -28,7 +28,7 @@ export default {
     /*
      * The module with the real invariants: what an order totals, which status transitions are legal,
      * what cancelling restores. Three other modules are downstream of its status changes. If any one
-     * module here ever grows an aggregate, it is this one — see `DDD_EXPLORATION.md` §4.
+     * module here ever grows an aggregate, it is this one — see `TACTICAL_DDD_PLAN.md` §5.
      */
     subdomain: 'core',
     language: {

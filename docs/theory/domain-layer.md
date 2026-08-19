@@ -367,8 +367,8 @@ DDD's own doctrine: spend the modelling effort on the **core domain**, keep supp
 subdomains simple. A boilerplate cannot know which is which, so it ships the cheap option and leaves
 the expensive one one folder away.
 
-`DDD_EXPLORATION.md` (workspace root, beside this repo) prices the expensive option in full — what
-an aggregate slice would take, what it breaks, and the triggers that would make it the right call.
+`TACTICAL_DDD_PLAN.md` (workspace root, beside this repo) prices the expensive option in full — what
+an aggregate slice would take, what it breaks, and the conditions that would make it the right call.
 
 ## Related pages
 

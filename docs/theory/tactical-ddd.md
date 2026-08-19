@@ -8,7 +8,7 @@ data with functions in front of them, and both were taken for the same reason: a
 written down in more than one place, and the copies had stopped agreeing.
 
 Everything else — aggregates, domain repositories, mappers, a read model — is deliberately absent.
-`DDD_EXPLORATION.md`, beside this repo in the workspace, prices that decision.
+`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices that decision.
 
 ## Why these two and not the rest
 
@@ -24,7 +24,7 @@ flowchart TD
     Q2 -->|no| WATCH["one function, one owner<br/>✅ sumLineItems, priceShipping"]
     Q2 -->|yes| Q3{"Does the rule need state<br/>a pure function cannot see?"}
     Q3 -->|no| TABLE["a value type or a table<br/>✅ Money, lifecycle"]
-    Q3 -->|yes| AGG["an aggregate<br/>⚠️ not taken — see DDD_EXPLORATION.md"]
+    Q3 -->|yes| AGG["an aggregate<br/>⚠️ not taken — see TACTICAL_DDD_PLAN.md"]
 
     classDef ask fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef cheap fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -195,7 +195,7 @@ reaching back for a refund would close a cycle the registry rejects at boot.
 
 Cancelling is two calls a client may make together, not one operation with one set of consequences.
 An aggregate would make it the latter, with `Order.cancel()` owning the release, the refund policy
-and the status move as one indivisible thing. That is priced in `DDD_EXPLORATION.md`; what exists
+and the status move as one indivisible thing. That is priced in `TACTICAL_DDD_PLAN.md`; what exists
 today is the honest decomposition rather than the modelled whole.
 
 ---
@@ -357,4 +357,5 @@ duplicated, and no aggregate until something needs state a pure function cannot 
 
 - [Domain layer](./domain-layer.md) — what earns a place in `domain/`, and the lint rule
 - [Strategic DDD](./strategic-ddd.md) — the half adopted wholesale
-- `DDD_EXPLORATION.md` (workspace root) — what an aggregate slice would cost, and the triggers
+- `TACTICAL_DDD_PLAN.md` (workspace root) — what an aggregate slice would cost, and the conditions
+  that would make it the right call
