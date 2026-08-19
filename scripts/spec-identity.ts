@@ -78,12 +78,13 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * by requirement — either repo may legitimately change its own icon or formatting width, and a
  * gate that fails on that trains people to ignore it.
  *
- * FOUR OF THESE ARE PRODUCED IN THIS REPO and copied to the frontend — the two specs, the demo
- * dataset and the analytics names. `asyncapi.public.yaml` is the one whose name differs on arrival:
+ * THREE OF THESE ARE PRODUCED IN THIS REPO and copied to the frontend — the two specs and the
+ * analytics names. (The demo dataset used to be the fourth: the frontend's MSW mocks loaded a
+ * byte-identical copy. The mocks retired in favour of the backend's own demo profile, which
+ * seeds from the same fixtures directly, so there is no second copy left to compare.) `asyncapi.public.yaml` is the one whose name differs on arrival:
  * it lands as the frontend's `asyncapi.yaml`, because the shared subset is the whole of the async
  * contract as far as that repo is concerned. Every one of them covers every domain, so every one is produced
- * from per-module sources: the specs and the analytics names by `npm run contracts:bundle`, the
- * dataset by seeding a database and reading it back (`npm run seed:export`). For those, "decide
+ * from per-module sources by `npm run contracts:bundle`. For those, "decide
  * which side is right" has one answer: this repo's, because the frontend's copy is an output.
  * Editing the copy is the failure this list is worst at describing and best at catching — the next
  * regeneration reverts it, and the diff looks like the backend broke something.
@@ -120,28 +121,6 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * edit", is answered by `npm run check:asyncapi-types` inside each repo, with no sibling
      * checkout to find and no file to carry across.
      */
-
-    /*
-     * The demo dataset, as the API actually serves it. `npm run seed:export` seeds a throwaway
-     * database with the real seeders and records every row through the real serializers; the
-     * frontend's MSW mocks load the result instead of rebuilding it.
-     *
-     * A fork here is the worst kind: both suites stay green, because each is consistent with its
-     * own copy, and the disagreement surfaces only when the real app meets the real API. Different
-     * paths on each side (published seed data vs test scaffolding), which is why a same-path check
-     * could never have covered it.
-     *
-     * This used to compare `db/seeds/seed-identities.ts` — a shared file of plain FACTS that each
-     * repo then mapped into its own shape. Identical facts could not stop the two MAPPERS from
-     * disagreeing, and they did: the frontend's mock hand-wrote `active: true` and `verified: true`
-     * to mirror backend schema defaults, and carried no `locale` at all. Comparing the output
-     * closes that gap, because there is now only one mapper and it is the API's.
-     */
-    {
-        backend: 'db/demo/demo-data.json',
-        frontend: 'tests/support/mocks/demo-data.json',
-        owner: 'backend'
-    },
 
     /*
      * The four API client collections (`contract.<tool>.*` at the backend's root) are deliberately NOT here.

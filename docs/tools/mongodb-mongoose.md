@@ -116,9 +116,10 @@ The dataset is split by ROLE, and the split matters:
 ### The dataset is published, not shared
 
 `npm run seed:export` seeds a throwaway `mongodb-memory-server` with the real seeders, reads every
-row back through the real serializers, and writes `db/demo/demo-data.json`. That file is
-**byte-identical** to a copy in the paired frontend (`tests/support/mocks/demo-data.json`), which its
-MSW mocks load directly.
+row back through the real serializers, and writes `db/demo/demo-data.json`. The file lives only
+here now: the paired frontend used to hold a byte-identical copy for its MSW mocks, and since
+those retired in favour of this repo's demo profile — which seeds from the same fixtures
+directly — the snapshot's one job is pinning serializer drift in this repo.
 
 ```bash
 npm run seed:export          # write it
