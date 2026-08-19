@@ -2443,7 +2443,12 @@ export const CheckoutResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -2656,7 +2661,12 @@ export const ListOrdersResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -2748,7 +2758,12 @@ export const CreateOrderResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -2835,7 +2850,12 @@ export const UpdateOrderResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -2952,7 +2972,12 @@ export const SearchOrdersResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -3035,7 +3060,12 @@ export const GetOrderByIdResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -3125,7 +3155,12 @@ export const UpdateOrderByIdResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -3174,12 +3209,18 @@ export const HardDeleteOrderByIdResponse = zod.object({
 
 
 /**
- * Cancels the order identified by `{id}` — the one order write a customer can make. A `pending` or `paid` order can be cancelled this way; cancelling a paid one refunds its payment. `processing` and later statuses each need their own flow (return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
+ * Cancels the order identified by `{id}` — the one order write a customer can make. Which statuses allow it is the caller's `Order.actions.cancel`; a customer may cancel while `pending` or `paid`, an operator one step further. Cancelling releases the order's held stock in every case. Whether the MONEY goes back is `refund`: a customer is always refunded and cannot waive it, an operator chooses. Later statuses need their own flow (a return), driven through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
  * @summary Cancel order
  */
 export const CancelOrderByIdParams = zod.object({
   "id": zod.string().describe('Resource identifier')
 })
+
+export const cancelOrderByIdBodyRefundDefault = true;
+
+export const CancelOrderByIdBody = zod.object({
+  "refund": zod.boolean().default(cancelOrderByIdBodyRefundDefault).describe('`false` cancels and releases the stock without returning the money — a replacement going out, a correction, or a refund handled separately through `POST \/payments\/order\/{orderId}\/refund`.')
+}).describe('The operator\'s choice of whether the money goes back with the cancellation. Ignored for a customer, who is always refunded. Omit the body entirely for the default.')
 
 export const cancelOrderByIdResponseDataItemsItemProductPriceMin = 0;
 
@@ -3241,7 +3282,12 @@ export const CancelOrderByIdResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "actions": zod.object({
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
+  "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
+}).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional(),
   "deletedAt": zod.iso.datetime({"offset":true}).optional()
@@ -3285,6 +3331,10 @@ export const CreatePaymentIntentResponse = zod.object({
   "status": zod.enum(['requires_confirmation', 'succeeded', 'declined', 'refunded']).describe('The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.'),
   "provider": zod.string().describe('Which provider implementation handled it (`fake` in the demo).'),
   "cardLast4": zod.string().optional().describe('The only card digits a payment system may remember.'),
+  "actions": zod.object({
+  "pay": zod.boolean().describe('Whether `POST \/payments\/{id}\/confirm` would be accepted — the payment is awaiting confirmation or retryable after a decline, AND the order can still reach `paid`.'),
+  "refund": zod.boolean().describe('Whether `POST \/payments\/order\/{orderId}\/refund` would be accepted. False once refunded, which is what greys the control out rather than letting the operator discover it by clicking.')
+}).optional().describe('What the requesting caller may do to this payment. Money is this module\'s to answer for; the order\'s own moves are on `Order.actions`, and a client that needs both composes them rather than deciding either for itself.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
@@ -3316,6 +3366,45 @@ export const GetPaymentByOrderResponse = zod.object({
   "status": zod.enum(['requires_confirmation', 'succeeded', 'declined', 'refunded']).describe('The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.'),
   "provider": zod.string().describe('Which provider implementation handled it (`fake` in the demo).'),
   "cardLast4": zod.string().optional().describe('The only card digits a payment system may remember.'),
+  "actions": zod.object({
+  "pay": zod.boolean().describe('Whether `POST \/payments\/{id}\/confirm` would be accepted — the payment is awaiting confirmation or retryable after a decline, AND the order can still reach `paid`.'),
+  "refund": zod.boolean().describe('Whether `POST \/payments\/order\/{orderId}\/refund` would be accepted. False once refunded, which is what greys the control out rather than letting the operator discover it by clicking.')
+}).optional().describe('What the requesting caller may do to this payment. Money is this module\'s to answer for; the order\'s own moves are on `Order.actions`, and a client that needs both composes them rather than deciding either for itself.'),
+  "createdAt": zod.iso.datetime({"offset":true}).optional(),
+  "updatedAt": zod.iso.datetime({"offset":true}).optional()
+})
+})
+
+
+/**
+ * Returns the money without touching the order's status — the operator action for a goodwill refund, and the second half of "cancel and refund" when a client sends both. Admin only. The write is conditional on the payment still being `succeeded`, so a double submit refunds once and answers 409 the second time.
+ * @summary Refund an order's payment
+ */
+export const RefundPaymentByOrderParams = zod.object({
+  "orderId": zod.string().describe('The order whose payment is being returned')
+})
+
+export const refundPaymentByOrderResponseDataAmountMin = 0;
+
+
+
+export const RefundPaymentByOrderResponse = zod.object({
+  "success": zod.literal(true),
+  "status": zod.number(),
+  "message": zod.string(),
+  "data": zod.object({
+  "id": zod.string().describe('Resource identifier'),
+  "orderId": zod.string().describe('Resource identifier'),
+  "userId": zod.string().describe('Resource identifier'),
+  "amount": zod.number().min(refundPaymentByOrderResponseDataAmountMin).describe('The order\'s total as the intent froze it.'),
+  "currency": zod.string().describe('ISO-4217 currency code (e.g. EUR)'),
+  "status": zod.enum(['requires_confirmation', 'succeeded', 'declined', 'refunded']).describe('The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.'),
+  "provider": zod.string().describe('Which provider implementation handled it (`fake` in the demo).'),
+  "cardLast4": zod.string().optional().describe('The only card digits a payment system may remember.'),
+  "actions": zod.object({
+  "pay": zod.boolean().describe('Whether `POST \/payments\/{id}\/confirm` would be accepted — the payment is awaiting confirmation or retryable after a decline, AND the order can still reach `paid`.'),
+  "refund": zod.boolean().describe('Whether `POST \/payments\/order\/{orderId}\/refund` would be accepted. False once refunded, which is what greys the control out rather than letting the operator discover it by clicking.')
+}).optional().describe('What the requesting caller may do to this payment. Money is this module\'s to answer for; the order\'s own moves are on `Order.actions`, and a client that needs both composes them rather than deciding either for itself.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })
@@ -3358,6 +3447,10 @@ export const ConfirmPaymentResponse = zod.object({
   "status": zod.enum(['requires_confirmation', 'succeeded', 'declined', 'refunded']).describe('The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.'),
   "provider": zod.string().describe('Which provider implementation handled it (`fake` in the demo).'),
   "cardLast4": zod.string().optional().describe('The only card digits a payment system may remember.'),
+  "actions": zod.object({
+  "pay": zod.boolean().describe('Whether `POST \/payments\/{id}\/confirm` would be accepted — the payment is awaiting confirmation or retryable after a decline, AND the order can still reach `paid`.'),
+  "refund": zod.boolean().describe('Whether `POST \/payments\/order\/{orderId}\/refund` would be accepted. False once refunded, which is what greys the control out rather than letting the operator discover it by clicking.')
+}).optional().describe('What the requesting caller may do to this payment. Money is this module\'s to answer for; the order\'s own moves are on `Order.actions`, and a client that needs both composes them rather than deciding either for itself.'),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
 })

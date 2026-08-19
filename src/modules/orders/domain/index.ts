@@ -14,3 +14,13 @@ export type { LineItem, LineItemTotals } from './totals';
 
 export { checkOrderLines } from './rules';
 export type { OrderLineCandidate, OrderLinesVerdict } from './rules';
+
+// `ORDER_LIFECYCLE` is deliberately absent: a caller reading the table directly re-derives an
+// answer that already has a name.
+export {
+    canTransition,
+    statusesReachableFrom,
+    statusesLeadingTo,
+    orderActionsFor
+} from './lifecycle';
+export type { OrderActor } from './lifecycle';

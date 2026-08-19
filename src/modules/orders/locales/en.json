@@ -9,6 +9,9 @@
             "success": "Order cancelled.",
             "not-cancellable": "This order can no longer be cancelled."
         },
+        "transition": {
+            "not-allowed": "This order cannot move to that status from where it is now."
+        },
         "invoice-missing": "No invoice file was found",
         "invoice": {
             "meta-title": "Invoice — order {{order}}",

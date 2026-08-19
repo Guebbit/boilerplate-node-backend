@@ -14,7 +14,8 @@ import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
 import { orderService } from '@modules/orders/service';
-import { orderRepository } from '@modules/orders';
+import { orderRepository, ORDER_CANCELLED } from '@modules/orders';
+import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 
 setupTestDb();
 
@@ -94,5 +95,106 @@ describe('cancelById', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
+    });
+});
+
+describe('cancelById — who gets their money back', () => {
+    /** The cancellation event, captured rather than acted on. */
+    const cancellations: { orderId: string; refund: boolean }[] = [];
+
+    beforeEach(() => {
+        cancellations.length = 0;
+        onDomainEvent(ORDER_CANCELLED, (payload) => {
+            cancellations.push(payload);
+            return undefined;
+        });
+    });
+
+    afterEach(() => {
+        resetDomainEvents();
+    });
+
+    it('refunds a customer whatever they ask for', async () => {
+        // Not the customer's to waive: `paid` is cancellable BECAUSE the money comes back.
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelById(String(order._id), asUser(user), { refund: false });
+
+        expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
+    });
+
+    it('lets an operator cancel without returning the money', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelById(String(order._id), { admin: true }, { refund: false });
+
+        expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
+    });
+
+    it('refunds by default when an operator says nothing', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelById(String(order._id), { admin: true });
+
+        expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
+    });
+
+    it('announces the cancellation either way', async () => {
+        // The event states a FACT. Suppressing it for a no-refund cancel would make the record of
+        // what happened depend on what was compensated.
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelById(String(order._id), { admin: true }, { refund: false });
+
+        expect(cancellations).toHaveLength(1);
+    });
+});
+
+describe('withActions', () => {
+    it('offers a customer the cancel their status allows', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        const body = orderService.withActions(order, asUser(user));
+
+        expect(body.actions).toEqual({ transitions: ['cancelled'], cancel: true, pay: true });
+    });
+
+    it('offers an operator nothing on a terminal order', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+        await orderService.cancelById(String(order._id), { admin: true });
+        const cancelled = await orderRepository.findById(String(order._id));
+
+        const body = orderService.withActions(cancelled!, { admin: true });
+
+        expect(body.actions).toEqual({ transitions: [], cancel: false, pay: false });
+    });
+
+    it('never offers `paid` to anyone, because no request may claim `system`', async () => {
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        for (const caller of [asUser(user), { admin: true }])
+            expect(
+                (orderService.withActions(order, caller).actions as { transitions: string[] })
+                    .transitions
+            ).not.toContain('paid');
+    });
+
+    it('carries the serialized order, not the document', async () => {
+        // `actions` rides on the wire shape; set on a document the schema transform would drop it.
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        const body = orderService.withActions(order, asUser(user));
+
+        expect(body.id).toBe(String(order._id));
+        expect(body).not.toHaveProperty('_id');
+        expect(body.totalPrice).toEqual(expect.any(Number));
     });
 });

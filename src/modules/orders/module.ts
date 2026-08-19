@@ -28,18 +28,18 @@ export default {
     /*
      * The module with the real invariants: what an order totals, which status transitions are legal,
      * what cancelling restores. Three other modules are downstream of its status changes. If any one
-     * module here ever grows an aggregate, it is this one — see `DDD_EXPLORATION.md` §5.
+     * module here ever grows an aggregate, it is this one — see `DDD_EXPLORATION.md` §4.
      */
     subdomain: 'core',
     language: {
         Order: 'What a customer bought, frozen. Immutable in substance: only its status moves.',
         'Order item':
             'A line holding an embedded copy of the product as it stood at purchase time, not a reference to it.',
-        Status: 'Where an order is in its lifecycle. A closed set today enforced at the edge, not a modelled transition table.',
+        Status: 'Where an order is in its lifecycle. A closed set from the contract, moving along the edges `domain/lifecycle.ts` declares — every guard in this module and in `payments` reads that one table.',
         Cancellation:
-            'A status change that releases the order’s held units and triggers a refund. Legal only from the statuses in `CANCELLABLE_ORDER_STATUSES`.',
+            'A status change that releases the order’s held units and triggers a refund. Legal from the statuses the lifecycle table gives a customer — `pending` and `paid`.',
         Expiry: 'A cancellation the shop initiates because the order’s hold on its units ran out before payment did. Arrives as `inventory.reservation_expired`.',
-        Total: 'Line price × quantity, summed and rounded to cents. Computed, never stored as truth.'
+        Total: 'Line price × quantity, summed in minor units and returned as a decimal. Computed, never stored as truth.'
     },
     basePath: '/orders',
     routes: router,

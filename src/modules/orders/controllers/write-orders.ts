@@ -98,7 +98,11 @@ export const writeOrders = (
                     event: ordersAnalyticsEvents.ORDER_CREATED,
                     properties: { order_id: orderId }
                 });
-                successResponse(response, result.data, 201);
+                successResponse(
+                    response,
+                    orderService.withActions(result.data, request.authContext),
+                    201
+                );
             })
             .catch((error: Error) => rejectDatabaseError(response, 'createOrder', error));
     }
@@ -135,7 +139,7 @@ export const writeOrders = (
                 })
             );
 
-            successResponse(response, result.data);
+            successResponse(response, orderService.withActions(result.data, request.authContext));
         })
         .catch((error: Error) => {
             rejectDatabaseError(response, 'writeOrder', error);

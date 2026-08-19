@@ -20,16 +20,9 @@
  */
 
 /**
- * Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server's `domain/lifecycle.ts`, answered per caller by `OrderActions`.
+ * The operator's choice of whether the money goes back with the cancellation. Ignored for a customer, who is always refunded. Omit the body entirely for the default.
  */
-export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
-
-
-export const OrderStatus = {
-  pending: 'pending',
-  paid: 'paid',
-  processing: 'processing',
-  shipped: 'shipped',
-  delivered: 'delivered',
-  cancelled: 'cancelled',
-} as const;
+export interface CancelOrderRequest {
+  /** `false` cancels and releases the stock without returning the money — a replacement going out, a correction, or a refund handled separately through `POST /payments/order/{orderId}/refund`. */
+  refund?: boolean;
+}

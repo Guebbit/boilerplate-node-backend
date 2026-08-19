@@ -25,12 +25,34 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
-import { orderService, orderRepository, sumLineItems, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { OrderStatus } from '@types';
+import type { PaymentStatus } from '@types';
+import {
+    orderService,
+    orderRepository,
+    sumLineItems,
+    canTransition,
+    statusesLeadingTo,
+    ORDER_STATUS_CHANGED
+} from '@modules/orders';
+import type { OrderDocument } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { userRepository } from '@modules/users';
 import { resolvePaymentProvider, type CardDetails } from './providers';
 import { paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
+
+/**
+ * The payment statuses the confirm endpoint accepts. `declined` is here because a decline is
+ * retryable with another card, which is the one place this lifecycle goes backwards.
+ */
+const CONFIRMABLE_PAYMENT_STATUSES: ReadonlySet<PaymentStatus> = new Set([
+    'requires_confirmation',
+    'declined'
+]);
+
+/** The only status money can come back from: it has to have arrived first. */
+const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
 
 /** The demo's money is one currency, set per deployment. Carried onto every payment document. */
 const defaultCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
@@ -87,7 +109,9 @@ export const createIntent = (
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
-        if (order.status !== 'pending')
+        // Payable means "can still reach `paid`" — asked of the order lifecycle rather than
+        // compared against a literal here, so this module cannot drift from the owner of the rule.
+        if (!canTransition(order.status, OrderStatus.paid, 'system'))
             return generateReject(409, [
                 { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
             ]);
@@ -156,8 +180,9 @@ export const confirmPayment = (
 
         const paidOrder = await orderRepository.updateStatusIfIn(
             String(payment.orderId),
-            ['pending'],
-            'paid',
+            // Same row as the precondition above, read the other way round.
+            statusesLeadingTo(OrderStatus.paid, 'system'),
+            OrderStatus.paid,
             {}
         );
         if (!paidOrder) {
@@ -205,11 +230,98 @@ export const confirmPayment = (
 export const getForOrder = (
     orderId: string,
     authContext?: { id?: string; admin?: boolean }
-): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+): Promise<ResponseSuccess<Record<string, unknown>> | ResponseReject> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (!payment || !isOwnedBy(payment, authContext))
             return generateReject(404, [t('payments.not-found')]);
-        return generateSuccess(payment);
+
+        // The order is read for `pay` alone: payability is half a payment's status and half the
+        // order's, and answering it here is what stops a client deciding it from two fields.
+        return orderService
+            .getById(orderId, orderService.callerScope(authContext))
+            .then((order) => generateSuccess(withActions(payment, order, authContext)));
+    });
+
+/**
+ * What this caller may do to a payment, as the contract's `PaymentActions`.
+ *
+ * @param payment - the payment record
+ * @param order - the order it belongs to, when it is still readable by this caller
+ * @param authContext - the caller
+ * @returns the serialized payment carrying its `actions`
+ */
+const withActions = (
+    payment: PaymentDocument,
+    order: OrderDocument | undefined,
+    authContext?: { admin?: boolean }
+): Record<string, unknown> => ({
+    ...(payment.toJSON() as Record<string, unknown>),
+    actions: {
+        // Confirmable, and the order can still get to `paid`. Both halves, because a retryable
+        // decline on an order that has since been cancelled is not a payment anyone may complete.
+        pay:
+            CONFIRMABLE_PAYMENT_STATUSES.has(payment.status) &&
+            Boolean(order) &&
+            canTransition(order!.status, OrderStatus.paid, 'system'),
+        // Only an operator returns money, and only money that actually arrived.
+        refund: Boolean(authContext?.admin) && payment.status === REFUNDABLE_PAYMENT_STATUS
+    }
+});
+
+/**
+ * Refund an order's payment — the operator action, and the listener's compensation.
+ *
+ * The conditional `succeeded → refunded` move IS the idempotence: a second call finds nothing in
+ * `succeeded` and answers `null`, which the two callers read differently. Nothing else in this
+ * module may move money, so both paths come through here.
+ *
+ * @param orderId - the order whose payment is being returned
+ * @returns the refunded payment, or `null` when there was nothing to return
+ */
+const performRefund = (orderId: string): Promise<PaymentDocument | null> =>
+    paymentRepository
+        .updateStatusIfIn(orderId, [REFUNDABLE_PAYMENT_STATUS], 'refunded')
+        .then((payment) => {
+            if (!payment) return null;
+            return resolvePaymentProvider()
+                .refund({ amount: payment.amount, currency: payment.currency })
+                .then(() => {
+                    logger.info(
+                        `Payment for order ${orderId} refunded (${payment.amount} ${payment.currency})`
+                    );
+                    return payment;
+                });
+        });
+
+/**
+ * `POST /payments/order/:orderId/refund` — the operator returning money on its own.
+ *
+ * Separate from cancelling: a goodwill refund leaves the order where it is, and "cancel and
+ * refund" is a client sending both calls. Admin-only at the route.
+ *
+ * @param orderId - the order whose payment is being returned
+ * @param authContext - the caller, for the read that distinguishes 404 from 409
+ * @returns the refunded payment, or a refusal naming which case it was
+ */
+export const refundByOrder = (
+    orderId: string,
+    authContext?: { id?: string; admin?: boolean }
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+    performRefund(orderId).then((refunded) => {
+        if (refunded) return generateSuccess(refunded, 200, t('payments.refund-success'));
+
+        // Nothing moved. Which refusal it was is a second read, exactly as the order cancel does:
+        // the decision is already made, and this only chooses the sentence.
+        return paymentRepository.findByOrderId(orderId).then((payment) =>
+            payment && isOwnedBy(payment, authContext)
+                ? generateReject(409, [
+                      {
+                          code: 'PAYMENT_NOT_REFUNDABLE',
+                          message: t('payments.not-refundable')
+                      }
+                  ])
+                : generateReject(404, [t('payments.not-found')])
+        );
     });
 
 /**
@@ -223,21 +335,13 @@ export const getForOrder = (
  * @param orderId - the order that was cancelled
  */
 export const refundForOrder = (orderId: string): Promise<void> =>
-    paymentRepository.updateStatusIfIn(orderId, ['succeeded'], 'refunded').then(async (payment) => {
-        if (!payment) return;
-        await resolvePaymentProvider().refund({
-            amount: payment.amount,
-            currency: payment.currency
-        });
-        logger.info(
-            `Payment for order ${orderId} refunded (${payment.amount} ${payment.currency})`
-        );
-    });
+    performRefund(orderId).then(() => undefined);
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
     createIntent,
     confirmPayment,
     getForOrder,
-    refundForOrder
+    refundForOrder,
+    refundByOrder
 };

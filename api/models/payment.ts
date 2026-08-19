@@ -19,6 +19,7 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Id } from './id';
+import type { PaymentActions } from './paymentActions';
 import type { PaymentStatus } from './paymentStatus';
 
 export interface Payment {
@@ -38,6 +39,7 @@ export interface Payment {
   provider: string;
   /** The only card digits a payment system may remember. */
   cardLast4?: string;
+  actions?: PaymentActions;
   createdAt?: string;
   updatedAt?: string;
 }

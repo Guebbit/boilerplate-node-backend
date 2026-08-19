@@ -20,16 +20,11 @@
  */
 
 /**
- * Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server's `domain/lifecycle.ts`, answered per caller by `OrderActions`.
+ * What the requesting caller may do to this payment. Money is this module's to answer for; the order's own moves are on `Order.actions`, and a client that needs both composes them rather than deciding either for itself.
  */
-export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
-
-
-export const OrderStatus = {
-  pending: 'pending',
-  paid: 'paid',
-  processing: 'processing',
-  shipped: 'shipped',
-  delivered: 'delivered',
-  cancelled: 'cancelled',
-} as const;
+export interface PaymentActions {
+  /** Whether `POST /payments/{id}/confirm` would be accepted — the payment is awaiting confirmation or retryable after a decline, AND the order can still reach `paid`. */
+  pay: boolean;
+  /** Whether `POST /payments/order/{orderId}/refund` would be accepted. False once refunded, which is what greys the control out rather than letting the operator discover it by clicking. */
+  refund: boolean;
+}

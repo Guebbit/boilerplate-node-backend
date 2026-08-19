@@ -4,9 +4,11 @@
 context mapping, ubiquitous language and subdomain distillation. All four are in the code, declared
 per module and asserted by tests.
 
-The other half — entities, value objects, aggregates, domain repositories — is **not** here, on
-purpose. [`DDD_EXPLORATION.md`](https://github.com/) works out what adopting it would cost and why a
-boilerplate should not. This page is about what _is_ adopted.
+The other half — entities, aggregates, domain repositories — is **not** here, on purpose.
+`DDD_EXPLORATION.md`, beside this repo in the workspace, works out what adopting it would cost and
+why a boilerplate should not. Two of its cheapest patterns did land, because they fixed live bugs
+rather than imposing a shape — see [Tactical DDD](./tactical-ddd.md). This page is about what _is_
+adopted at the strategic level.
 
 ::: tip The distinction that matters
 A folder per feature is a **packaging** decision. DDD is a **modelling** one. You can have immaculate
@@ -186,9 +188,12 @@ wide for a reason that is now visible on the map rather than only in that file's
 ## What this does not give you
 
 Everything above is about **boundaries and vocabulary**. None of it makes an invalid `Order`
-unconstructable, makes `Money` a type, or turns `status: string` into a closed set with legal
-transitions. Those are tactical patterns, they are genuinely absent, and the two cheapest of them —
-`Money` and `OrderStatus` — are the ones worth taking on their own if a project ever wants them.
+unconstructable, and none of it gives a repository a domain object to return. Those are tactical
+patterns and they are genuinely absent.
 
-See [Domain layer](./domain-layer.md) for the thin `domain/` folder that exists today, and
+Two exceptions, both taken because the rule was already written down in several places and had
+stopped agreeing with itself: `Money` and the order lifecycle table. Neither needs an aggregate, and
+neither is a step toward one — [Tactical DDD](./tactical-ddd.md) has both.
+
+See [Domain layer](./domain-layer.md) for the `domain/` folder as it stands, and
 `DDD_EXPLORATION.md` for what going further would cost.

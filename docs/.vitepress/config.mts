@@ -32,6 +32,7 @@ export default withMermaid(
                             { text: 'Layers', link: '/theory/layers' },
                             { text: 'Domain Layer', link: '/theory/domain-layer' },
                             { text: 'Strategic DDD', link: '/theory/strategic-ddd' },
+                            { text: 'Tactical DDD', link: '/theory/tactical-ddd' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' }
@@ -56,6 +57,7 @@ export default withMermaid(
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
                             { text: 'Pairing & Ports', link: '/tools/pairing-and-ports' },
                             { text: 'Runtime', link: '/tools/runtime' },
+                            { text: 'Demo profile', link: '/tools/demo-profile' },
                             { text: 'Security', link: '/tools/security' }
                         ]
                     },

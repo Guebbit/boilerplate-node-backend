@@ -4,6 +4,7 @@ import { productSchema, applyProductTransform } from '@modules/products';
 import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { sumLineItems, type LineItem } from './domain/totals';
+import { addMoney, toDecimalAmount, toMinorUnits } from './domain/money';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 
@@ -213,13 +214,12 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
 
     serialized.totalItems = count;
     serialized.totalQuantity = quantity;
-    // What the customer owes: the lines plus the shipping frozen at checkout. Same rounding as
-    // the lines themselves — both numbers came through `toCents` territory.
-    serialized.totalPrice =
-        Math.round(
-            (price + (typeof serialized.shippingCost === 'number' ? serialized.shippingCost : 0)) *
-                100
-        ) / 100;
+    // What the customer owes: the lines plus the shipping frozen at checkout, added in minor units
+    // so this site holds no rounding rule of its own. `toMinorUnits` also absorbs an absent
+    // `shippingCost` — orders predating delivery, and checkouts that chose no method.
+    serialized.totalPrice = toDecimalAmount(
+        addMoney(toMinorUnits(price), toMinorUnits(serialized.shippingCost))
+    );
 };
 
 /**

@@ -510,6 +510,44 @@ components:
                     type: integer
                     minimum: 1
 
+        OrderStatus:
+            type: string
+            enum: [pending, paid, processing, shipped, delivered, cancelled]
+            description: >-
+                Where an order is in its lifecycle. The set is closed here; which value may FOLLOW
+                which is the server's `domain/lifecycle.ts`, answered per caller by `OrderActions`.
+
+        OrderActions:
+            type: object
+            additionalProperties: false
+            required: [transitions, cancel, pay]
+            description: >-
+                What the requesting caller may do to this order, decided by the server. A client
+                renders its controls from this rather than re-implementing the lifecycle: the rules
+                depend on the caller's role, and a second copy in a separately deployed client is
+                how the two come to disagree.
+            properties:
+                transitions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderStatus'
+                    description: >-
+                        The statuses this caller may move the order to. Empty on a terminal order,
+                        and never contains the order's current status.
+                    example: [processing, cancelled]
+                cancel:
+                    type: boolean
+                    description: >-
+                        Whether `POST /orders/{id}/cancel` would be accepted for this caller. A
+                        customer may cancel while unpaid or paid; an operator one step further.
+                pay:
+                    type: boolean
+                    description: >-
+                        Whether this order is still awaiting payment — it can reach `paid`, which
+                        only a confirmed charge writes. Not in `transitions`, because no request may
+                        make that move: a client starts the flow with `POST /payments/intent` and
+                        the provider's yes does the rest.
+
         Order:
             type: object
             additionalProperties: false
@@ -561,8 +599,15 @@ components:
                 shippingAddress:
                     $ref: '#/components/schemas/OrderAddress'
                 status:
-                    type: string
-                    enum: [pending, paid, processing, shipped, delivered, cancelled]
+                    $ref: '#/components/schemas/OrderStatus'
+                # Computed per CALLER, not stored: what this requester may do to this order right
+                # now. Present on every response carrying ONE order — the read, the writes and the
+                # cancel — so a client that replaces its cached record from a write does not lose
+                # the block and collapse its own controls. Absent from the list, where it would be
+                # answered per row for a question only the detail view asks.
+                # See docs/theory/tactical-ddd.md.
+                actions:
+                    $ref: '#/components/schemas/OrderActions'
                 createdAt:
                     type: string
                     format: date-time
@@ -757,6 +802,8 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1intent'
     /payments/order/{orderId}:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}'
+    /payments/order/{orderId}/refund:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
     /payments/{id}/confirm:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
 

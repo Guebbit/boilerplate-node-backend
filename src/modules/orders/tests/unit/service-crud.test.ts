@@ -227,13 +227,71 @@ describe('getById', () => {
 });
 
 describe('update', () => {
-    it('changes the status', async () => {
+    it('changes the status along a move the lifecycle allows', async () => {
         const { order } = await seedOrder();
 
-        const result = await update(order, { status: 'shipped' });
+        // A fresh order is `pending`; cancelling is the operator's move from there.
+        const result = await update(order, { status: 'cancelled' });
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.status).toBe('shipped');
+        expect(asSuccess(result).data!.status).toBe('cancelled');
+    });
+
+    it('refuses a move the lifecycle does not allow, naming what was open instead', async () => {
+        const { order } = await seedOrder();
+
+        const result = await update(order, { status: 'delivered' });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_TRANSITION_NOT_ALLOWED');
+        expect(asReject(result).errors[0].details).toEqual({
+            from: 'pending',
+            to: 'delivered',
+            allowed: ['cancelled']
+        });
+    });
+
+    it('leaves the order untouched when the move is refused', async () => {
+        // The guard runs before any assignment, so the email in the same request must not land.
+        const { order } = await seedOrder();
+
+        await update(order, { status: 'delivered', email: 'moved@example.com' });
+
+        const reloaded = await orderRepository.findById(String(order._id));
+        expect(reloaded!.status).toBe('pending');
+        expect(reloaded!.email).toBe('buyer@example.com');
+    });
+
+    it('refuses to mark an order paid by hand', async () => {
+        // `paid` belongs to `system` alone — see docs/theory/tactical-ddd.md §1.
+        const { order } = await seedOrder();
+
+        const result = await update(order, { status: 'paid' });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+    });
+
+    it('refuses to reopen a cancelled order', async () => {
+        // The path that made this worth fixing: a reopened order is cancellable again, and the
+        // refund listener sees a payment that is still `succeeded`.
+        const { order } = await seedOrder();
+        await update(order, { status: 'cancelled' });
+
+        const result = await update(order, { status: 'pending' });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+    });
+
+    it('accepts a write that repeats the status it already has', async () => {
+        const { order } = await seedOrder();
+
+        const result = await update(order, { status: 'pending', email: 'same@example.com' });
+
+        expect(result.success).toBe(true);
+        expect(asSuccess(result).data!.email).toBe('same@example.com');
     });
 
     it('changes the email', async () => {
@@ -315,14 +373,14 @@ describe('updateById', () => {
     it('updates an existing order', async () => {
         const { order } = await seedOrder();
 
-        const result = await updateById(String(order._id), { status: 'paid' });
+        const result = await updateById(String(order._id), { status: 'cancelled' });
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.status).toBe('paid');
+        expect(asSuccess(result).data!.status).toBe('cancelled');
     });
 
     it('rejects with 404 for an id that does not exist', async () => {
-        const result = await updateById(MISSING_ID, { status: 'paid' });
+        const result = await updateById(MISSING_ID, { status: 'cancelled' });
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);

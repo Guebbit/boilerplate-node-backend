@@ -1,5 +1,6 @@
 import { t } from '@infrastructure/i18n';
-import type { SearchOrdersRequest, CartItem, OrderStatus } from '@types';
+import { OrderStatus } from '@types';
+import type { SearchOrdersRequest, CartItem } from '@types';
 import type { OrderDocument, OrderDocumentItem } from './model';
 import {
     generateReject,
@@ -12,7 +13,14 @@ import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
 import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 import { orderRepository } from './repository';
-import { checkOrderLines } from './domain';
+import {
+    canTransition,
+    checkOrderLines,
+    orderActionsFor,
+    statusesLeadingTo,
+    statusesReachableFrom
+} from './domain';
+import type { OrderActor } from './domain';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/base-repository';
@@ -152,7 +160,29 @@ export const update = (
     }
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const previousStatus = order.status;
-    if (data.status !== undefined) order.status = data.status as OrderStatus;
+
+    /*
+     * Asked before anything is assigned, so a refusal is never a partial write. The controller's
+     * Zod schema already validated the VALUE against the generated enum; what is decided here is
+     * whether the MOVE exists. See `docs/theory/tactical-ddd.md` §1.
+     */
+    const nextStatus = data.status as OrderStatus | undefined;
+    if (nextStatus !== undefined && !canTransition(previousStatus, nextStatus, 'admin'))
+        return Promise.resolve(
+            generateReject(409, [
+                {
+                    code: 'ORDER_TRANSITION_NOT_ALLOWED',
+                    message: t('orders.transition.not-allowed'),
+                    details: {
+                        from: previousStatus,
+                        to: nextStatus,
+                        allowed: statusesReachableFrom(previousStatus, 'admin')
+                    }
+                }
+            ])
+        );
+
+    if (nextStatus !== undefined) order.status = nextStatus;
     if (data.email !== undefined) order.email = data.email;
     if (data.userId !== undefined) order.userId = toObjectId(data.userId);
 
@@ -282,15 +312,62 @@ export const callerScope = (authContext?: {
     authContext?.admin ? undefined : orderRepository.visibleScope(authContext?.id ?? '');
 
 /**
- * The statuses a CUSTOMER's cancel may move from.
+ * Which column of the lifecycle table a caller reads.
  *
- * `pending` costs nothing to undo. `paid` is cancellable because the money's way back exists:
- * the cancel emits {@link ORDER_CANCELLED} and the payments module answers it with a refund —
- * this list may only include `paid` while that listener exists. `processing` has left the
- * queue and `shipped` is a return rather than a cancellation: those stay flows of their own,
- * reachable through the admin write.
+ * Two actors reach the HTTP surface. `system` is not one of them: it names the moves that follow a
+ * fact from outside the application, and no request may claim it.
+ *
+ * @param authContext - the caller
+ * @returns the actor whose permissions apply
  */
-const CANCELLABLE_ORDER_STATUSES: readonly string[] = ['pending', 'paid'];
+const actorOf = (authContext?: { admin?: boolean }): OrderActor =>
+    authContext?.admin ? 'admin' : 'customer';
+
+/**
+ * The single-order response body: the order as it serializes, plus what this caller may do to it.
+ *
+ * The serialization is explicit because the two read branches return different things — the admin
+ * branch a Mongoose document, the scoped branch an already-normalized plain object. `actions` has
+ * to ride on the wire shape; set on a document it would be dropped by the schema's transform.
+ *
+ * @param order - the order, from either read branch
+ * @param authContext - the caller whose options are being described
+ * @returns the serialized order carrying its `actions`
+ */
+export function withActions(
+    order: OrderDocument,
+    authContext?: { id?: string; admin?: boolean }
+): Record<string, unknown>;
+export function withActions(
+    order: OrderDocument | undefined,
+    authContext?: { id?: string; admin?: boolean }
+): Record<string, unknown> | undefined;
+export function withActions(
+    order: OrderDocument | undefined,
+    authContext?: { id?: string; admin?: boolean }
+): Record<string, unknown> | undefined {
+    // A success envelope types its payload as optional. No order, no actions — the caller's
+    // `undefined` passes straight through rather than becoming an empty capability block.
+    if (!order) return undefined;
+    // `unknown` first, then one assertion: the scoped branch already hands back a normalized plain
+    // object typed as a document, so neither shape can be spread without saying so once.
+    const serialized: unknown = typeof order.toJSON === 'function' ? order.toJSON() : order;
+
+    return {
+        ...(serialized as Record<string, unknown>),
+        actions: orderActionsFor(order.status, actorOf(authContext))
+    };
+}
+
+/**
+ * The statuses a CUSTOMER's cancel may move from — read off the lifecycle table, not declared.
+ * Resolves to `pending` and `paid`.
+ *
+ * Asked as `customer` whoever is calling: an admin reaching this route is running the customer's
+ * cancellation on their behalf and should get identical behaviour. The operator's own moves are a
+ * different row of the table.
+ */
+const CANCELLABLE_ORDER_STATUSES = statusesLeadingTo(OrderStatus.cancelled, 'customer');
 
 /**
  * Cancel an order — the one write a customer may make to one.
@@ -306,13 +383,21 @@ const CANCELLABLE_ORDER_STATUSES: readonly string[] = ['pending', 'paid'];
  */
 export const cancelById = (
     id: string,
-    authContext?: { id?: string; admin?: boolean }
-): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    orderRepository
+    authContext?: { id?: string; admin?: boolean },
+    options: { refund?: boolean } = {}
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
+    /*
+     * A customer is always refunded — that is the promise `paid` is cancellable on, and it is not
+     * theirs to waive. Only an operator chooses, because only an operator has a reason to cancel
+     * without returning the money: a replacement going out, a correction, a refund handled apart.
+     */
+    const refund = authContext?.admin ? (options.refund ?? true) : true;
+
+    return orderRepository
         .updateStatusIfIn(
             id,
             CANCELLABLE_ORDER_STATUSES,
-            'cancelled' satisfies OrderStatus,
+            OrderStatus.cancelled,
             callerScope(authContext)
         )
         .then(async (order) => {
@@ -334,8 +419,9 @@ export const cancelById = (
                  */
                 await inventoryService.releaseForOrder(String(order._id));
 
-                // Whoever has to compensate — a refund, above all — hears it from here.
-                await emitDomainEvent(ORDER_CANCELLED, { orderId: String(order._id) });
+                // Whoever has to compensate hears it from here; `refund` says whether the money
+                // is part of that. The fact is announced either way.
+                await emitDomainEvent(ORDER_CANCELLED, { orderId: String(order._id), refund });
 
                 return generateSuccess(order, 200, t('orders.cancel.success'));
             }
@@ -353,6 +439,7 @@ export const cancelById = (
                     : generateReject(404, [t('orders.not-found')])
             );
         });
+};
 
 export const orderService = {
     search,
@@ -363,5 +450,6 @@ export const orderService = {
     updateById,
     remove,
     removeById,
-    cancelById
+    cancelById,
+    withActions
 };

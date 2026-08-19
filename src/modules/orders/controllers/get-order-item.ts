@@ -37,7 +37,9 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
                 rejectResponse(response, 404, [t('orders.not-found')]);
                 return;
             }
-            successResponse(response, order);
+            // The body carries what THIS caller may do to the order, so the client renders its
+            // controls from the server's answer rather than from a copy of the lifecycle.
+            successResponse(response, orderService.withActions(order, request.authContext));
         })
         .catch((error: Error) => {
             rejectDatabaseError(response, 'getOrderItem', error);

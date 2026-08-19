@@ -19,7 +19,7 @@
  *
  * In a boilerplate these values are a worked example rather than a finding — a starter kit has no
  * core domain, and the first thing a real project does is re-decide them. The mechanism is the
- * deliverable, not the answers. See `DDD_EXPLORATION.md` §7.
+ * deliverable, not the answers. See `DDD_EXPLORATION.md` §6.
  */
 
 import { existsSync } from 'node:fs';

@@ -36,7 +36,7 @@ export default {
     language: {
         Intent: 'A frozen amount for an order, before any money moves. Freezing is the point — the order may still be edited, the amount may not.',
         Confirm:
-            'The provider’s yes. Moves the order to `paid`; nothing else in the app may set that status.',
+            'The provider’s yes. Moves the order to `paid`; nothing else in the app may set that status — the order lifecycle gives that edge to `system` alone, so an operator cannot write it by hand.',
         Refund: 'Money returned because an order was cancelled. Answered to `order.cancelled`, never requested directly.',
         Provider:
             'The outside system that actually moves money, reached only through `./providers`.'
@@ -64,7 +64,9 @@ export default {
         }
     ],
     subscribe: () => {
-        onDomainEvent(ORDER_CANCELLED, ({ orderId }) => refundForOrder(orderId));
+        onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
+            refund ? refundForOrder(orderId) : undefined
+        );
     },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

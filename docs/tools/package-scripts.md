@@ -33,7 +33,7 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 | Script               | Job                                                                                                                              | Read more                                 |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | `dev`                | watch-mode local runtime from `src/cluster.ts` — expects the compose hostnames from `.env`                                       | [Runtime](./runtime.md)                   |
-| `demo`               | the real API, self-contained: in-memory Mongo, seeded, cache/queue disabled — what the paired frontend's dev and e2e run against | [Runtime](./runtime.md)                   |
+| `demo`               | the real API, self-contained: in-memory Mongo, seeded, cache/queue disabled — what the paired frontend's dev and e2e run against | [Demo profile](./demo-profile.md)         |
 | `host`               | prefix wrapper: `npm run host -- dev` runs any script against `127.0.0.1` datastores                                             | [Runtime](./runtime.md)                   |
 | `start`              | start the clustered runtime without watch mode                                                                                   | [Runtime](./runtime.md)                   |
 | `debug`              | start with Node inspector break-on-start                                                                                         | [Runtime](./runtime.md)                   |

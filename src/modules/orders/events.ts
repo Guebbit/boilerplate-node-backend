@@ -14,11 +14,16 @@ import type { OrderStatus } from '@types';
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * A customer's cancel went through — the conditional status move matched, the stock is
-         * back on the shelf. Emitted AFTER the write: a cancellation is a fact by the time
-         * anyone compensates for it, and the `$in` guard already guarantees at-most-once.
+         * A cancel went through — the conditional status move matched, the stock is back on the
+         * shelf. Emitted AFTER the write: a cancellation is a fact by the time anyone compensates
+         * for it, and the `$in` guard already guarantees at-most-once.
+         *
+         * `refund` carries the POLICY with the fact rather than deciding it in the listener. A
+         * customer cancelling is owed their money; an operator cancelling may be issuing a
+         * replacement, correcting an entry, or refunding separately. Suppressing the event for the
+         * second case would make it lie about what happened.
          */
-        'order.cancelled': { orderId: string };
+        'order.cancelled': { orderId: string; refund: boolean };
 
         /**
          * An order's status moved, whoever moved it — the admin write, a payment landing, the

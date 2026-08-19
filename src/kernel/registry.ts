@@ -80,7 +80,7 @@ export interface ContextEdge {
  *   folder inside a generic module.
  *
  * In a boilerplate these values are a worked example, not a finding: a starter kit has no core
- * domain, and the first real thing a project does is re-decide them. See `DDD_EXPLORATION.md` §7.
+ * domain, and the first real thing a project does is re-decide them. See `DDD_EXPLORATION.md` §6.
  */
 export type Subdomain = 'core' | 'supporting' | 'generic';
 

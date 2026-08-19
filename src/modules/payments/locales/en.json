@@ -5,6 +5,8 @@
         "not-found": "No payment was found",
         "not-confirmable": "This payment is not awaiting confirmation.",
         "declined": "The payment was declined by the card issuer.",
-        "confirm-success": "Payment received — the order is paid."
+        "confirm-success": "Payment received — the order is paid.",
+        "not-refundable": "This payment cannot be refunded — no money arrived, or it has already been returned.",
+        "refund-success": "Payment refunded."
     }
 }

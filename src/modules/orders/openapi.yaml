@@ -82,6 +82,11 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # A status change the order's lifecycle does not allow — `delivered` on a
+                # `pending` order, or `paid` on anything, which only a confirmed payment writes.
+                # `errors[].code` is `ORDER_TRANSITION_NOT_ALLOWED`, and `errors[].details` carries
+                # `{ from, to, allowed }` so a client can offer the moves that ARE open.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
@@ -181,6 +186,11 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # A status change the order's lifecycle does not allow — `delivered` on a
+                # `pending` order, or `paid` on anything, which only a confirmed payment writes.
+                # `errors[].code` is `ORDER_TRANSITION_NOT_ALLOWED`, and `errors[].details` carries
+                # `{ from, to, allowed }` so a client can offer the moves that ARE open.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         # Same as DELETE /orders
@@ -235,12 +245,27 @@ paths:
         post:
             tags: [Orders]
             summary: Cancel order
-            description: Cancels the order identified by `{id}` — the one order write a customer can make. A `pending` or `paid` order can be cancelled this way; cancelling a paid one refunds its payment. `processing` and later statuses each need their own flow (return), which an admin drives through `PUT /orders/{id}`. A non-admin can cancel only their own orders; an admin can cancel anyone's. The check and the write are one atomic statement, so a cancel racing a status change resolves to exactly one winner.
+            description: >-
+                Cancels the order identified by `{id}` — the one order write a customer can make.
+                Which statuses allow it is the caller's `Order.actions.cancel`; a customer may
+                cancel while `pending` or `paid`, an operator one step further. Cancelling releases
+                the order's held stock in every case. Whether the MONEY goes back is `refund`:
+                a customer is always refunded and cannot waive it, an operator chooses. Later
+                statuses need their own flow (a return), driven through `PUT /orders/{id}`. A
+                non-admin can cancel only their own orders; an admin can cancel anyone's. The check
+                and the write are one atomic statement, so a cancel racing a status change resolves
+                to exactly one winner.
             operationId: cancelOrderById
             security:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CancelOrderRequest'
             responses:
                 '200':
                     description: The cancelled order
@@ -308,6 +333,21 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/OrdersResponse'
+
+        CancelOrderRequest:
+            type: object
+            additionalProperties: false
+            description: >-
+                The operator's choice of whether the money goes back with the cancellation. Ignored
+                for a customer, who is always refunded. Omit the body entirely for the default.
+            properties:
+                refund:
+                    type: boolean
+                    default: true
+                    description: >-
+                        `false` cancels and releases the stock without returning the money — a
+                        replacement going out, a correction, or a refund handled separately through
+                        `POST /payments/order/{orderId}/refund`.
 
         SearchOrdersRequest:
             type: object

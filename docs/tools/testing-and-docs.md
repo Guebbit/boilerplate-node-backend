@@ -76,16 +76,16 @@ Plus slowest suites, slowest tests, per-module line coverage when `coverage/lcov
 
 ## Where test data comes from
 
-Seven things across the two repos can hand you an entity, and it is reasonable to wonder whether that is six too many. It is not: each answers a question the others cannot, and the one dataset both repos genuinely share — the demo data — lives in a single file copied byte-identically between them, and `check:spec-identity` answers whether they have drifted.
+Several things can hand you an entity, and it is reasonable to wonder whether that is too many. It is not: each answers a question the others cannot. The demo data itself has ONE home — this repo's module seeds — and the paired frontend consumes it by running this very backend (the [demo profile](./demo-profile.md)), so there is no second copy left to drift.
 
-| Source                           | Repo                  | What it is for                                                                                                                                                                                                                                                                                                                                                                 |
-| -------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db/demo/demo-data.json`         | both (byte-identical) | **The demo dataset, as the API answers it.** Every seeded row, serialized — schema defaults, derived order totals and all. The one dataset a human sees when they open either app. Written by `npm run seed:export` here and copied to the frontend, which loads it directly. `npm run check:spec-identity` compares the two copies and the `spec-identity` CI job gates on it |
-| `src/modules/<name>/demo.ts`     | BE                    | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, declared as `seeds` in the manifest and consumed by `db:seed`; the export reads them back out through `seedExport`                                                                                                                                                          |
-| `src/modules/<name>/factory.ts`  | BE                    | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factory.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift           |
-| `tests/support/contract-data.ts` | BE                    | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a fixture                                                                                                            |
+| Source                           | Repo | What it is for                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db/demo/demo-data.json`         | BE   | **The demo dataset, as the API answers it.** Every seeded row, serialized — schema defaults, derived order totals and all. The one dataset a human sees when they open either app. Written by `npm run seed:export`; `npm run check:seed-export` fails the gate when the committed snapshot is stale, which is what pins serializer drift                            |
+| `src/modules/<name>/demo.ts`     | BE   | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, declared as `seeds` in the manifest and consumed by `db:seed`; the export reads them back out through `seedExport`                                                                                                                                                |
+| `src/modules/<name>/factory.ts`  | BE   | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factory.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift |
+| `tests/support/contract-data.ts` | BE   | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a fixture                                                                                                  |
 
-Reading it as a shape: **one** hand-maintained dataset, **one** mapper over it — the API's own serializers, run once by `seed:export` — and **four** generators that exist because "the demo data" and "some data" and "deliberately illegal data" are three different questions. There used to be two mappers, one per runtime, over a shared file of facts. That is the drift this layout removed.
+Reading it as a shape: **one** hand-maintained dataset, **one** mapper over it — the API's own serializers, run once by `seed:export` — and **three** generators that exist because "the demo data" and "some data" and "deliberately illegal data" are three different questions. There used to be two mappers, one per runtime, over a shared file of facts. That is the drift this layout removed.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
@@ -97,7 +97,7 @@ flowchart TB
         Export --> FEMap["FE mockDataset.ts<br/>loads it as-is"]
     end
 
-    subgraph four["Four generators, four questions"]
+    subgraph three["Three generators, three questions"]
         direction TB
         Factories["tests/support/factories/*<br/><i>give me A product</i>"]
         ContractData["tests/support/contract-data.ts<br/><i>give me an ILLEGAL one</i>"]
@@ -115,35 +115,36 @@ flowchart TB
     class Factories,ContractData,Random,Generated gen;
 ```
 
-### The four questions, and why none absorbs another
+### The three questions, and why none absorbs another
 
-- **"Give me _the_ demo data."** → `demo-data.json`, edited through the `demo.ts` of the module that owns the records and republished with `npm run seed:export`. Fixed, shared, and the one a human sees on screen. `cy.loginAs('user')` types its credentials into a real form, so it cannot be randomised or generated.
+- **"Give me _the_ demo data."** → `demo-data.json`, edited through the `demo.ts` of the module that owns the records and republished with `npm run seed:export`. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
 - **"Give me _a_ product, I do not care which."** → the module's `factory.ts`. The opposite need: fresh, isolated, overridable per test, and never the demo data — 25 test files would interfere with each other if they shared rows. It is the same builder the demo records go through, so "a product" and "the demo product" cannot disagree about what a product is.
 - **"Give me one the API must _reject_."** → `contract-data.ts`. Derived from the zod schemas so each payload violates exactly one declared constraint. Nothing else here can produce something deliberately illegal, which is the difference between a contract test and a fixture.
-- **"Give me a whole world I have never seen."** → `mockProfilesRandom.ts` (frontend). Seeded and reproducible, for "does the app survive _any_ contract-valid data" rather than "is this value right".
-
-Merging any two would mean one of those questions stops being asked. The merge that _was_ worth doing — the demo dataset, previously written out by hand on both sides — is the one already done.
+  Merging any two would mean one of those questions stops being asked. The merge that _was_ worth doing — the demo dataset, previously written out by hand on both sides — is the one already done.
 
 ## What each layer can and cannot catch
 
-| Failure                                                                | Caught by                                                   |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Business-logic error in a service/repository/model                     | [Unit Testing](./unit-testing.md)                           |
-| Wrong middleware mounted, or a route unreachable                       | [Integration Testing](./integration-testing.md)             |
-| A response leaks an undeclared field, or omits a declared one          | [Contract Testing](./contract-testing.md)                   |
-| A validator rejects a payload its own contract declares legal          | [Contract-Derived Request Data](./contract-request-data.md) |
-| A validator accepts a payload its own contract declares illegal        | [Contract-Derived Request Data](./contract-request-data.md) |
-| A rule that holds for the tested inputs but not for all of them        | [Property Testing](./property-testing.md)                   |
-| A race: two requests interleaving into a state neither would produce   | [Concurrency Testing](./concurrency-testing.md)             |
-| A 5xx or undocumented response on an endpoint nobody wrote a test for  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
-| A test that asserts nothing                                            | [Mutation Testing](./mutation-testing.md)                   |
-| This API's contract silently drifting from the paired frontend's mocks | the frontend's live E2E profile, run by hand — see below    |
+| Failure                                                               | Caught by                                                   |
+| --------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Business-logic error in a service/repository/model                    | [Unit Testing](./unit-testing.md)                           |
+| Wrong middleware mounted, or a route unreachable                      | [Integration Testing](./integration-testing.md)             |
+| A response leaks an undeclared field, or omits a declared one         | [Contract Testing](./contract-testing.md)                   |
+| A validator rejects a payload its own contract declares legal         | [Contract-Derived Request Data](./contract-request-data.md) |
+| A validator accepts a payload its own contract declares illegal       | [Contract-Derived Request Data](./contract-request-data.md) |
+| A rule that holds for the tested inputs but not for all of them       | [Property Testing](./property-testing.md)                   |
+| A race: two requests interleaving into a state neither would produce  | [Concurrency Testing](./concurrency-testing.md)             |
+| A 5xx or undocumented response on an endpoint nobody wrote a test for | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
+| A test that asserts nothing                                           | [Mutation Testing](./mutation-testing.md)                   |
+| A change here that breaks the real frontend                           | the frontend's e2e suites — see below                       |
 
-## Being the target of the frontend's live E2E profile
+## Being the target of the frontend's e2e suites
 
-`npm run host -- db:seed:reset` (see [Package Scripts](./package-scripts.md)) isn't only a local convenience — it's also what the paired `boilerplate-vue-frontend` repo's `npm run test:e2e:live` shells out to between specs, via `cy.resetState()`. That profile runs the frontend's Cypress suite against this backend instead of its MSW mocks, and layers three things this repo's own contract tests can't provide on their own: a preflight that fails fast when this API isn't up or isn't seeded, response validation on every request the frontend makes, and a parity spec that fails when this repo's `db/demo/index.ts` drifts from the frontend's hand-mirrored mock seed.
+The paired `boilerplate-vue-frontend` repo carries no mock of this API. Its Cypress suite runs against this backend in two profiles, and every change here answers to both:
 
-It is run by hand, not from this repo's CI — the two repos are independently versioned and there is no single pipeline that owns both. Boot sequence and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/live-e2e.md`. The practical implication for changes here: editing `db/demo/index.ts` or `openapi.yaml` without telling the frontend team is exactly the drift that profile exists to catch, but only the next time someone runs it.
+- **The demo profile — every frontend e2e run.** The frontend's shard runner boots this repo's `npm run demo` once per shard (see [Demo profile](./demo-profile.md)): the real routes, validators and serializers against an in-memory database seeded from `src/modules/<name>/demo.ts`, reset between specs through `POST /__demo/reset`. Response validation on the frontend side parses every answer through the OpenAPI-derived schemas, so a contract violation here is a hard failure there.
+- **The live profile — the frontend's PR gate and nightly.** `npm run test:e2e:live` runs the same specs against the fully-composed stack (`compose:restart` + `host -- db:bootstrap`), with `host -- db:seed:reset` between specs. This is the one that also exercises what the demo profile deliberately disables: the real cache, the real broker, a session cookie over a real network. The frontend's CI requires it on every PR, and its nightly answers whether `main` here still agrees with `main` there.
+
+The practical implication for changes in this repo: an edit to a module's `demo.ts`, a controller or `openapi.yaml` is exercised by the frontend's suites on their very next run — there is no mock in between to keep an old answer alive. Boot sequences and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/mocking.md` (demo) and `boilerplate-vue-frontend/docs/tools/live-e2e.md` (live).
 
 ## Test timings
 

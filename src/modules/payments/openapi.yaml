@@ -60,6 +60,41 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /payments/order/{orderId}/refund:
+        post:
+            tags: [Payments]
+            summary: Refund an order's payment
+            description: >-
+                Returns the money without touching the order's status — the operator action for a
+                goodwill refund, and the second half of "cancel and refund" when a client sends both.
+                Admin only. The write is conditional on the payment still being `succeeded`, so a
+                double submit refunds once and answers 409 the second time.
+            operationId: refundPaymentByOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The order whose payment is being returned
+            responses:
+                '200':
+                    description: The payment, `refunded`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Nothing to return: the payment never succeeded, or it is already refunded.
+                # `errors[].code` is `PAYMENT_NOT_REFUNDABLE`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /payments/{id}/confirm:
         post:
             tags: [Payments]
@@ -127,12 +162,38 @@ components:
                 cardLast4:
                     type: string
                     description: The only card digits a payment system may remember.
+                # Computed per CALLER, not stored — the same idea as `Order.actions`, for the half
+                # of the question this module owns.
+                actions:
+                    $ref: '#/components/schemas/PaymentActions'
                 createdAt:
                     type: string
                     format: date-time
                 updatedAt:
                     type: string
                     format: date-time
+
+        PaymentActions:
+            type: object
+            additionalProperties: false
+            required: [pay, refund]
+            description: >-
+                What the requesting caller may do to this payment. Money is this module's to answer
+                for; the order's own moves are on `Order.actions`, and a client that needs both
+                composes them rather than deciding either for itself.
+            properties:
+                pay:
+                    type: boolean
+                    description: >-
+                        Whether `POST /payments/{id}/confirm` would be accepted — the payment is
+                        awaiting confirmation or retryable after a decline, AND the order can still
+                        reach `paid`.
+                refund:
+                    type: boolean
+                    description: >-
+                        Whether `POST /payments/order/{orderId}/refund` would be accepted. False
+                        once refunded, which is what greys the control out rather than letting the
+                        operator discover it by clicking.
 
         PaymentEnvelope:
             type: object

@@ -14,6 +14,10 @@
  *
  * `sumLineItems` is the one export that is a rule rather than a handle. Line-item money is orders'
  * arithmetic; a cart totalling itself independently would show one number and bill another.
+ *
+ * `canTransition` and `statusesLeadingTo` are published for the same reason: `payments` moves an
+ * order to `paid`, and deciding for itself which status means payable would be a second opinion on
+ * a rule with one owner. `Money` and `ORDER_LIFECYCLE` stay inside — no sibling needs either.
  */
 
 export { orderService } from './service';
@@ -29,4 +33,4 @@ export { orderConfirmEmail } from './emails';
  * the line from a product document instead, so nothing outside this module names the type any more.
  */
 export type { OrderDocument } from './model';
-export { sumLineItems } from './domain';
+export { sumLineItems, canTransition, statusesLeadingTo } from './domain';

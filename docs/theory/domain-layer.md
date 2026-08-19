@@ -197,6 +197,22 @@ ever quoting different numbers — there is one function and both call it — an
 language rather than a handle on this module's storage, which is the distinction
 [Strategic DDD](./strategic-ddd.md) draws between kinds of dependency edge.
 
+**`orders/domain/lifecycle.ts` is the case where the folder holds a rule that had no home.** It is
+one table saying which status may follow which, and who may make each move. The _set_ of statuses is
+not its business — `OrderStatus` is generated from `openapi.yaml`, so the values stay contract-first
+— but the edges between them were previously spelled out three times: a `CANCELLABLE_ORDER_STATUSES`
+literal in `orders/service.ts`, a bare `status !== 'pending'` in `payments/service.ts`, and, on the
+admin write, nothing at all. All three now read the table, which is the whole point of a domain
+folder: the rule exists once and the callers ask it.
+
+**`orders/domain/money.ts` is the case for a value type in a codebase that is not otherwise doing
+tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
+whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` still
+types these `number`/`double` and no response shape moves; what moves is that no site outside this
+file holds a rounding rule of its own. It stays inside `orders` because `orders` is the only module
+that does money arithmetic — and because the lint rule below forbids a domain folder from importing
+a shared kernel, which is where a jointly-owned money type would otherwise live.
+
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
 itself.** It is one table mapping each of the six stock transitions to the pair of counter deltas
 it implies, plus the subtraction that defines availability. Nothing about it needs a database, and
@@ -306,21 +322,25 @@ enforces and what it refuses.
 | Ubiquitous language    | `language` in each `module.ts` — per context, so one word may mean two things                    |
 | Subdomain distillation | `subdomain` in each `module.ts` — and a generic module may not carry a `domain/` folder          |
 | Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                         |
-| Domain service         | `orders/domain/totals.ts`                                                                        |
+| Domain service         | `orders/domain/totals.ts`, `orders/domain/lifecycle.ts`                                          |
 
 **Tactical DDD — absent, deliberately:**
 
-| Concept                             | Today                                   |
-| ----------------------------------- | --------------------------------------- |
-| Entity                              | none — a Mongoose document is the model |
-| Value object                        | none — money is `number`                |
-| Aggregate root                      | implicit only                           |
-| Repository returning domain objects | no — returns `OrderDocument`            |
-| Invariants at construction          | no — Mongoose schema validators         |
+| Concept                             | Today                                                                   |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| Entity                              | none — a Mongoose document is the model                                 |
+| Value object                        | `Money` only — `orders/domain/money.ts`, internal to the arithmetic     |
+| Aggregate root                      | implicit only                                                           |
+| Repository returning domain objects | no — returns `OrderDocument`                                            |
+| Invariants at construction          | no — Mongoose schema validators, plus the lifecycle table on the writes |
 
 One tell: the `__v` conditional write in `cart/services/checkout.ts` is **aggregate versioning**,
 hand-rolled because there is no aggregate to hang it on. The need is real; only the vocabulary is
 missing.
+
+`Money` and the lifecycle table are the two tactical patterns that pay for themselves without an
+aggregate — plain data with functions in front of it, in a folder that already existed. See
+[Tactical DDD](./tactical-ddd.md) for why those two and nothing else.
 
 ---
 
@@ -347,8 +367,8 @@ DDD's own doctrine: spend the modelling effort on the **core domain**, keep supp
 subdomains simple. A boilerplate cannot know which is which, so it ships the cheap option and leaves
 the expensive one one folder away.
 
-`DDD_EXPLORATION.md` (repo root) prices the expensive option in full — the four options open, what
-breaks, what it costs, and the two value types worth taking on their own.
+`DDD_EXPLORATION.md` (workspace root, beside this repo) prices the expensive option in full — what
+an aggregate slice would take, what it breaks, and the triggers that would make it the right call.
 
 ## Related pages
 

@@ -18,18 +18,16 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { OrderStatus } from './orderStatus';
 
 /**
- * Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server's `domain/lifecycle.ts`, answered per caller by `OrderActions`.
+ * What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller's role, and a second copy in a separately deployed client is how the two come to disagree.
  */
-export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
-
-
-export const OrderStatus = {
-  pending: 'pending',
-  paid: 'paid',
-  processing: 'processing',
-  shipped: 'shipped',
-  delivered: 'delivered',
-  cancelled: 'cancelled',
-} as const;
+export interface OrderActions {
+  /** The statuses this caller may move the order to. Empty on a terminal order, and never contains the order's current status. */
+  transitions: OrderStatus[];
+  /** Whether `POST /orders/{id}/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further. */
+  cancel: boolean;
+  /** Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST /payments/intent` and the provider's yes does the rest. */
+  pay: boolean;
+}

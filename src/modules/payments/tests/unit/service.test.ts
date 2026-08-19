@@ -23,7 +23,12 @@ import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService, orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
-import { createIntent, confirmPayment, getForOrder } from '@modules/payments/service';
+import {
+    createIntent,
+    confirmPayment,
+    getForOrder,
+    refundByOrder
+} from '@modules/payments/service';
 import { paymentRepository } from '@modules/payments/repository';
 import { FAKE_DECLINE_CARD } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
@@ -51,6 +56,18 @@ const orderFor = async (price = 25, quantity = 2) => {
 };
 
 const auth = (user: { id: string }) => ({ id: user.id, admin: false });
+
+/** A customer who paid: intent, then a good card. The fixture the money tests start from. */
+const paidOrder = async () => {
+    const { user, order } = await orderFor();
+    const intent = await createIntent(String(order._id), auth(user));
+    await confirmPayment(
+        String((intent as { data?: { _id?: unknown } }).data?._id),
+        { cardNumber: GOOD_CARD },
+        auth(user)
+    );
+    return { user, order };
+};
 
 describe('createIntent', () => {
     it('freezes the order total into the intent', async () => {
@@ -310,5 +327,113 @@ describe('the confirm commits the order’s held units', () => {
         // Seven, not four. Two guards refuse the replay independently — the order's conditional
         // `pending → paid` and the reservation's own `held → committed` claim.
         expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+    });
+});
+
+describe('refundByOrder', () => {
+    it('returns the money and leaves the order where it is', async () => {
+        // The whole point of the standalone action: a goodwill refund is not a cancellation.
+        const { order } = await paidOrder();
+
+        const result = await refundByOrder(String(order._id), { admin: true });
+
+        expect(result.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('refunded');
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored!.status).toBe('paid');
+    });
+
+    it('refuses the second attempt with 409 rather than paying twice', async () => {
+        const { order } = await paidOrder();
+        await refundByOrder(String(order._id), { admin: true });
+
+        const result = await refundByOrder(String(order._id), { admin: true });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_NOT_REFUNDABLE');
+    });
+
+    it('refuses a payment that never succeeded with 409', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+
+        const result = await refundByOrder(String(order._id), { admin: true });
+
+        expect(asReject(result).status).toBe(409);
+    });
+
+    it('answers 404 when the order never had a payment', async () => {
+        const { order } = await orderFor();
+
+        const result = await refundByOrder(String(order._id), { admin: true });
+
+        expect(asReject(result).status).toBe(404);
+    });
+});
+
+describe('getForOrder — what the caller may do', () => {
+    it('offers the operator a refund on money that arrived, once', async () => {
+        const { user, order } = await orderFor();
+        const intent = await createIntent(String(order._id), auth(user));
+        await confirmPayment(
+            String((intent as { data?: { _id?: unknown } }).data?._id),
+            { cardNumber: GOOD_CARD },
+            auth(user)
+        );
+
+        const before = await getForOrder(String(order._id), { admin: true });
+        await refundByOrder(String(order._id), { admin: true });
+        const after = await getForOrder(String(order._id), { admin: true });
+
+        expect((before as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
+            refund: true
+        });
+        // What greys the control out — the client is told, rather than finding out by clicking.
+        expect((after as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
+            refund: false
+        });
+    });
+
+    it('never offers a customer the refund control', async () => {
+        const { user, order } = await orderFor();
+        const intent = await createIntent(String(order._id), auth(user));
+        await confirmPayment(
+            String((intent as { data?: { _id?: unknown } }).data?._id),
+            { cardNumber: GOOD_CARD },
+            auth(user)
+        );
+
+        const result = await getForOrder(String(order._id), auth(user));
+
+        expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
+            refund: false
+        });
+    });
+
+    it('offers `pay` while the intent stands and the order can still reach paid', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+
+        const result = await getForOrder(String(order._id), auth(user));
+
+        expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
+            pay: true
+        });
+    });
+
+    it('withdraws `pay` once the order is cancelled, even with the intent still open', async () => {
+        // Both halves of the question. A retryable intent on an order that can no longer reach
+        // `paid` is not a payment anyone may complete.
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        await orderService.cancelById(String(order._id), auth(user));
+
+        const result = await getForOrder(String(order._id), { admin: true });
+
+        expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
+            pay: false
+        });
     });
 });

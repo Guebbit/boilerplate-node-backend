@@ -18,6 +18,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService, orderRepository } from '@modules/orders';
+import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
 import { shipOrder, runCourierAdvance, getForOrder } from '@modules/delivery/service';
 import { shipmentRepository } from '@modules/delivery/repository';
@@ -168,6 +169,11 @@ describe('shipment rides the status change', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
+
+        // `shipped` follows `processing` and nothing else. Set on the document rather than driven
+        // through the payment flow — how it reached the queue is not what this test is about.
+        order.status = OrderStatus.processing;
+        await orderRepository.save(order);
 
         const result = await orderService.update(order, { status: 'shipped' });
 

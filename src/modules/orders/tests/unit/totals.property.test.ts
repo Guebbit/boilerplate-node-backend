@@ -1,15 +1,13 @@
 /**
- * Property-based tests — `src/modules/orders/totals.ts`.
+ * Property-based tests — `src/modules/orders/domain/totals.ts`.
  *
- * `sumLineItems` is the arithmetic behind every order total and every cart summary, and it is
- * total by construction: `Number(…) || 0` absorbs undefined, null and unparseable values so a
- * line whose product failed to populate contributes nothing instead of turning the whole total
- * into `NaN`. "Instead of NaN" is a claim about EVERY input, which is what makes this a property
- * rather than a table of examples — a `NaN` total reaches the customer as a blank price.
+ * `sumLineItems` is the arithmetic behind every order total and every cart summary. It is total by
+ * construction — a line whose product failed to populate contributes nothing rather than turning
+ * the total into `NaN`, which reaches the customer as a blank price.
  *
- * The invariants below are the ones the plan names: order-independent, non-negative for
- * non-negative input, zero for empty, and additive over concatenation. Each is a statement no
- * single example can make.
+ * Additivity and scaling are asserted EXACTLY, in cents. That is what the minor-unit arithmetic
+ * buys, and a float accumulator satisfies them only up to a tolerance — so an implementation that
+ * went back to summing decimals fails here.
  *
  * Determinism, both halves:
  *   - the run is SEEDED, so a failure is reproducible and a passing run is not luck;
@@ -17,7 +15,7 @@
  *     comment. The property states the rule; the example remembers the bug.
  */
 import fc from 'fast-check';
-import { sumLineItems, toCents, type LineItem } from '../../domain/totals';
+import { sumLineItems, type LineItem } from '../../domain/totals';
 
 /** One seed for the file, and one place to change it. */
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
@@ -120,10 +118,9 @@ describe('sumLineItems — arithmetic invariants', () => {
         );
     });
 
-    it('is additive over concatenation, up to cent rounding', () => {
-        // sum(a ++ b) === sum(a) + sum(b). The rounding tolerance is the point rather than a
-        // fudge: `toCents` rounds ONCE per call, so splitting a cart can legitimately move the
-        // total by half a cent per part — and no further.
+    it('is additive over concatenation, to the cent', () => {
+        // Compared in cents because the only imprecision left is the single division on the way
+        // out: `0.1 + 0.2` is not `0.3`, however exact the cents behind them were.
         fc.assert(
             fc.property(fc.array(lineItem()), fc.array(lineItem()), (left, right) => {
                 const combined = sumLineItems([...left, ...right]);
@@ -132,8 +129,8 @@ describe('sumLineItems — arithmetic invariants', () => {
 
                 expect(combined.count).toBe(separate.count + other.count);
                 expect(combined.quantity).toBe(separate.quantity + other.quantity);
-                expect(Math.abs(combined.price - (separate.price + other.price))).toBeLessThan(
-                    0.02
+                expect(Math.round(combined.price * 100)).toBe(
+                    Math.round(separate.price * 100) + Math.round(other.price * 100)
                 );
             }),
             RUN
@@ -151,7 +148,7 @@ describe('sumLineItems — arithmetic invariants', () => {
                 );
 
                 expect(doubled.quantity).toBe(single.quantity * 2);
-                expect(Math.abs(doubled.price - single.price * 2)).toBeLessThan(0.02);
+                expect(Math.round(doubled.price * 100)).toBe(Math.round(single.price * 100) * 2);
             }),
             RUN
         );
@@ -171,48 +168,6 @@ describe('sumLineItems — arithmetic invariants', () => {
 
                     expect(withFreeLine.price).toBe(without.price);
                     expect(withFreeLine.count).toBe(without.count + 1);
-                }
-            ),
-            RUN
-        );
-    });
-});
-
-describe('toCents', () => {
-    it('never returns more than two decimal places', () => {
-        // The reason it exists: money is a float here (openapi.yaml types these `double`), so
-        // `0.1 + 0.2` style drift would otherwise reach the wire.
-        fc.assert(
-            fc.property(
-                fc.double({ noNaN: true, noDefaultInfinity: true, min: -1e9, max: 1e9 }),
-                (value) => {
-                    const rounded = toCents(value);
-
-                    expect(Math.abs(Math.round(rounded * 100) - rounded * 100)).toBeLessThan(1e-6);
-                }
-            ),
-            RUN
-        );
-    });
-
-    it('is idempotent', () => {
-        fc.assert(
-            fc.property(
-                fc.double({ noNaN: true, noDefaultInfinity: true, min: -1e9, max: 1e9 }),
-                (value) => {
-                    expect(toCents(toCents(value))).toBe(toCents(value));
-                }
-            ),
-            RUN
-        );
-    });
-
-    it('never moves a value by as much as a cent', () => {
-        fc.assert(
-            fc.property(
-                fc.double({ noNaN: true, noDefaultInfinity: true, min: -1e9, max: 1e9 }),
-                (value) => {
-                    expect(Math.abs(toCents(value) - value)).toBeLessThanOrEqual(0.005 + 1e-9);
                 }
             ),
             RUN

@@ -5,6 +5,8 @@
         "not-found": "Nessun pagamento trovato",
         "not-confirmable": "Questo pagamento non è in attesa di conferma.",
         "declined": "Il pagamento è stato rifiutato dall'emittente della carta.",
-        "confirm-success": "Pagamento ricevuto — l'ordine è pagato."
+        "confirm-success": "Pagamento ricevuto — l'ordine è pagato.",
+        "not-refundable": "Questo pagamento non può essere rimborsato — nessun importo è arrivato, oppure è già stato restituito.",
+        "refund-success": "Pagamento rimborsato."
     }
 }

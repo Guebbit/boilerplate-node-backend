@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { postPaymentIntent } from './controllers/post-payment-intent';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
+import { postPaymentRefund } from './controllers/post-payment-refund';
 
 /** Express router for payment operations (intent, confirm, read back). */
 export const router = Router();
@@ -15,6 +16,9 @@ router.post('/intent', postPaymentIntent);
 
 // GET /payments/order/:orderId — the payment behind an order
 router.get('/order/:orderId', getPaymentByOrder);
+
+// POST /payments/order/:orderId/refund — the operator returns the money, order untouched
+router.post('/order/:orderId/refund', isAdmin, postPaymentRefund);
 
 // POST /payments/:id/confirm — the card dialog's submit
 router.post('/:id/confirm', postPaymentConfirm);
