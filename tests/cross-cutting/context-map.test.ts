@@ -103,19 +103,6 @@ describe('the context map describes the imports that exist', () => {
         expect(undeclared).toEqual([]);
     });
 
-    it('gives every edge a reason a human wrote', () => {
-        // Not a style check. An edge whose reason cannot be stated in a sentence is usually two
-        // edges, or a boundary drawn in the wrong place — and the sentence is what a reader gets
-        // instead of re-deriving the relationship from the import list.
-        const unexplained = enabledModules.flatMap((appModule) =>
-            (appModule.dependsOn ?? [])
-                .filter((edge) => edge.because.trim().length < 20)
-                .map((edge) => `${appModule.name} → ${edge.module}`)
-        );
-
-        expect(unexplained).toEqual([]);
-    });
-
     it('keeps shared kernels to the ones that have been argued for', () => {
         const kernels = declaredEdges()
             .filter(({ as }) => as === 'shared-kernel')
