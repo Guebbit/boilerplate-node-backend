@@ -44,6 +44,10 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  * of tags, so "may I send `Accept-Language: es`" and "may I download a Spanish dictionary" stay
  * two questions.
  *
+ * Spanish is that example on purpose and not by accident — the demo dataset registers `es` with no
+ * `src/locales/es.json` behind it, so the answers really are `no` and `yes`. See `./demo.ts`, which
+ * lays out which language covers which square of that grid.
+ *
  * ## No `index.ts`
  *
  * Nothing imports this module and nothing should. Everything the rest of the app needs from i18n

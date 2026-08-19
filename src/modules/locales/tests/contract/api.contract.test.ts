@@ -16,7 +16,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
 import { readLocaleDictionary } from '@infrastructure/i18n';
-import esTranslation from '../../../../locales/es.json';
+import itTranslation from '../../../../locales/it.json';
 
 setupTestDb();
 
@@ -102,16 +102,16 @@ describe('GET /locales', () => {
 
     it('merges a language present in both tiers into one row with both scopes', async () => {
         const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer, { tag: 'es', name: 'Spanish', nativeName: 'Español' });
+        await createLanguage(bearer, { tag: 'it', name: 'Italian', nativeName: 'Italiano' });
 
         const response = await api().get('/locales');
-        const spanish = response.body.data.locales.filter(
-            ({ tag }: { tag: string }) => tag === 'es'
+        const italian = response.body.data.locales.filter(
+            ({ tag }: { tag: string }) => tag === 'it'
         );
 
-        expect(spanish).toHaveLength(1);
-        expect(spanish[0].scopes).toEqual(['api', 'app']);
-        expect(spanish[0].source).toBe('both');
+        expect(italian).toHaveLength(1);
+        expect(italian[0].scopes).toEqual(['api', 'app']);
+        expect(italian[0].source).toBe('both');
     });
 
     it('counts a language’s entries, so a half-translated one is visible at a glance', async () => {
@@ -156,17 +156,17 @@ describe('GET /locales/:locale', () => {
     });
 
     it('serves the API’s own dictionary, shared keys and module keys together', async () => {
-        const response = await api().get('/locales/es');
+        const response = await api().get('/locales/it');
 
-        expect(response.body.data.locale).toBe('es');
+        expect(response.body.data.locale).toBe('it');
         // The shared half — `generic.*` in particular, which the paired frontend reads by name.
-        expect(response.body.data.messages).toMatchObject(esTranslation);
+        expect(response.body.data.messages).toMatchObject(itTranslation);
         // And the module half. A client rendering API copy itself needs the domain messages too,
         // so the merge has to reach the wire and not just `i18next`'s in-memory resources.
         //
         // Asserted as "namespaces the shared file does not have" rather than by naming a domain:
         // this module knows that modules contribute copy, not which modules exist.
-        const shared = new Set(Object.keys(esTranslation));
+        const shared = new Set(Object.keys(itTranslation));
         const contributed = Object.keys(
             response.body.data.messages as Record<string, unknown>
         ).filter((namespace) => !shared.has(namespace));
@@ -788,13 +788,17 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
 });
 
 /**
- * The independence rule, asserted from the API's side: Spanish works end to end with no client
- * involvement whatsoever. `es.json` was dropped into `src/locales/` and nothing else was
- * configured — no route change, no list to update.
+ * The independence rule, asserted from the API's side: a language works end to end with no client
+ * involvement whatsoever. `it.json` sits in `src/locales/` and nothing else was configured — no
+ * route change, no list to update, no row in any collection.
+ *
+ * Asserted with Italian rather than Spanish deliberately. Spanish used to be the fixture here and
+ * is now the OPPOSITE fixture: it exists only as database rows (see `../../demo.ts`), so it is the
+ * language the case below proves the API will not start answering in.
  */
 describe('a locale only the API has', () => {
-    it('answers validation errors in Spanish for Accept-Language: es', async () => {
-        const response = await api().post('/account/signup').set('Accept-Language', 'es').send({
+    it('answers validation errors in Italian for Accept-Language: it', async () => {
+        const response = await api().post('/account/signup').set('Accept-Language', 'it').send({
             email: 'not-an-email',
             username: 'ab',
             password: 'x',
@@ -802,14 +806,14 @@ describe('a locale only the API has', () => {
         });
 
         expect(response.status).toBe(422);
-        expect(response.headers['content-language']).toBe('es');
+        expect(response.headers['content-language']).toBe('it');
         // The expected copy is read from the MERGED dictionary rather than imported from the
         // module that ships it: this spec is about locale negotiation, and it should not be the
         // thing that breaks when a domain it merely borrows an endpoint from is deleted.
-        const spanish = readLocaleDictionary('es') as { users: Record<string, string> };
+        const italian = readLocaleDictionary('it') as { users: Record<string, string> };
 
         expect(response.body.errors.map(({ message }: { message: string }) => message)).toContain(
-            spanish.users['field-email-invalid']
+            italian.users['field-email-invalid']
         );
     });
 

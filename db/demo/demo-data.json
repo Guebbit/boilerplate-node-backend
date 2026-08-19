@@ -205,6 +205,24 @@
                 "scope": "app",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Catalogue"
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f3102",
+                "key": "generic.error-internal",
+                "locale": "it",
+                "scope": "api",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Qualcosa è andato storto dalla nostra parte. Riprova."
+            },
+            {
+                "createdAt": "2024-02-29T06:11:22.000Z",
+                "id": "65e0200a9a7d4b2e1c0f3101",
+                "key": "generic.error-unauthorized",
+                "locale": "it",
+                "scope": "api",
+                "updatedAt": "2024-02-29T06:11:22.000Z",
+                "value": "Sessione scaduta. Accedi di nuovo."
             }
         ],
         "locales": [
@@ -230,6 +248,30 @@
                 "nativeName": "Français",
                 "revision": 1,
                 "tag": "fr",
+                "updatedAt": "2024-02-29T06:07:56.000Z"
+            },
+            {
+                "active": true,
+                "baseLanguage": "it",
+                "createdAt": "2024-02-29T06:07:56.000Z",
+                "direction": "ltr",
+                "id": "65e01f3c9a7d4b2e1c0f0003",
+                "name": "Italian",
+                "nativeName": "Italiano",
+                "revision": 1,
+                "tag": "it",
+                "updatedAt": "2024-02-29T06:07:56.000Z"
+            },
+            {
+                "active": false,
+                "baseLanguage": "ja",
+                "createdAt": "2024-02-29T06:07:56.000Z",
+                "direction": "ltr",
+                "id": "65e01f3c9a7d4b2e1c0f0004",
+                "name": "Japanese",
+                "nativeName": "日本語",
+                "revision": 0,
+                "tag": "ja",
                 "updatedAt": "2024-02-29T06:07:56.000Z"
             }
         ],

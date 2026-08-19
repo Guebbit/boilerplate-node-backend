@@ -43,6 +43,7 @@ import {
     GetUserByIdResponse,
     GetWishlistResponse
 } from '@api/schemas.zod';
+import { listSupportedLocales } from '@infrastructure/i18n';
 import dataset from '../../db/demo/demo-data.json';
 
 const { _meta, credentials, collections } = dataset;
@@ -254,19 +255,51 @@ describe('the exported dataset conforms to the generated contract', () => {
             }
         });
 
-        it('carry one published language and one draft', () => {
+        it('carry both a published language and a draft', () => {
             /* Both branches of the visibility rule need a fixture behind them: an inactive
              * language must be absent from `GET /locales` and 404 on its dictionary, and neither
              * is checkable against a dataset where every language is active. */
-            expect(collections.locales.filter((language) => language.active)).toHaveLength(1);
-            expect(collections.locales.filter((language) => !language.active)).toHaveLength(1);
+            expect(
+                collections.locales.filter((language) => language.active).length
+            ).toBeGreaterThan(0);
+            expect(
+                collections.locales.filter((language) => !language.active).length
+            ).toBeGreaterThan(0);
         });
 
         it('include a language the API also has a deployed file for', () => {
-            /* `es` is the row that makes the manifest's merge real — one entry carrying both
-             * scopes and `source: 'both'`. A dataset of languages the API cannot answer in would
-             * exercise only half of it. */
-            expect(collections.locales.map((language) => language.tag)).toContain('es');
+            /* The row that makes the manifest's merge real — one entry carrying both scopes and
+             * `source: 'both'`. A dataset of languages the API cannot answer in would exercise
+             * only half of it, which is exactly what happened while `es` played this part: it has
+             * since become the database-only fixture and carries no deployed file at all. Read
+             * from `listSupportedLocales()` rather than naming a tag, so this keeps asserting the
+             * property and not one repository's current spelling of it. */
+            const deployed = new Set(listSupportedLocales());
+
+            expect(collections.locales.some((language) => deployed.has(language.tag))).toBe(true);
+        });
+
+        it('include a language with no deployed file, which is the tier this module exists for', () => {
+            /* The converse, and the one the split is FOR: a language a client can download a
+             * dictionary for and the API cannot answer a single request in. Without it the whole
+             * dataset would be languages the filesystem already provides, and `scopes` would never
+             * be observed carrying anything but both of them. */
+            const deployed = new Set(listSupportedLocales());
+
+            expect(collections.locales.some((language) => !deployed.has(language.tag))).toBe(true);
+        });
+
+        it('include a language with nothing translated into it yet', () => {
+            /* The state between `POST /locales` and the first entry. Every count that reads this
+             * collection has to survive it — `entryCount` of 0, a `revision` still at its default
+             * — and a dataset where every language has rows checks none of that. */
+            const translated = new Set(collections.localeMessages.map((entry) => entry.locale));
+            const untranslated = collections.locales.filter(
+                (language) => !translated.has(language.tag)
+            );
+
+            expect(untranslated.length).toBeGreaterThan(0);
+            expect(untranslated.every((language) => language.revision === 0)).toBe(true);
         });
     });
 

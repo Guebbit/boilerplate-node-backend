@@ -2,28 +2,51 @@
  * The dynamic locale tier's slice of the demo dataset.
  *
  * Chosen to cover the branches this module actually has, on the principle every other seeder here
- * follows — a branch with no fixture is a branch nothing exercises:
+ * follows — a branch with no fixture is a branch nothing exercises. The four languages are picked
+ * so that between them they occupy every square of the grid this module's design draws: deployed
+ * file or not, rows or not, active or not.
  *
- *   es, active, ten app rows  THE POINT OF THE FEATURE. `es` is also a deployed file, so it is the
- *                             fixture that makes the manifest's merge real: one row, both scopes,
- *                             `source: 'both'`.
- *   es, two api rows          The OTHER dictionary. They override two keys of the API's own
- *                             deployed `es.json`, which is what proves the two sides are separate
- *                             keyspaces rather than one collection with a label: `generic.error-*`
- *                             exists on both, and nothing about these rows reaches a frontend.
+ *   es, active, ten app rows  THE POINT OF THE FEATURE, and DELIBERATELY NOT A DEPLOYED FILE.
+ *                             Spanish exists in this repository only as rows, which is what makes
+ *                             it the honest fixture for a language a client downloads rather than
+ *                             bundles: nothing about it can be answered from the filesystem, so a
+ *                             regression that quietly started serving files would show up here.
+ *   es, two api rows          STORED AND INERT, on purpose. They name the API's own keyspace for a
+ *                             language the API has no dictionary file for, so
+ *                             `applyLocaleOverrides` skips them and logs — the exact warning branch
+ *                             that fires when someone translates the backend half of a language
+ *                             nobody has deployed yet. It is also the sharpest available proof
+ *                             that the two scopes are separate keyspaces rather than one
+ *                             collection with a label: `generic.*` exists on both sides, and only
+ *                             the `app` half reaches a frontend.
+ *   it, active, two api rows  The MERGE, and the overlay that actually applies. Italian is a
+ *                             deployed file, so this row merges with the static tier into one
+ *                             manifest entry carrying both scopes and `source: 'both'`, and its
+ *                             two `api` rows override keys `src/locales/it.json` really defines —
+ *                             so `t('generic.error-unauthorized')` under `Accept-Language: it`
+ *                             answers the row, not the file. No `app` rows, and that is a fact
+ *                             rather than an omission: a client that already bundles Italian has
+ *                             nothing to download, which is why `entryCount` is 0 for a language
+ *                             the manifest nonetheless reports as fully supported.
  *   keys three levels deep    The tree builder gets a real specimen rather than a flat list, and
  *                             the frontend's mocks get a dictionary shaped like a dictionary.
  *   fr, inactive, two rows    The visibility branch. An inactive language must be absent from the
  *                             manifest and 404 on its dictionary, and neither is checkable against
  *                             a dataset where every language is active.
+ *   ja, inactive, no rows     The EMPTY language — registered, nothing translated yet. It is the
+ *                             state every language passes through between `POST /locales` and the
+ *                             first entry, and it is inactive because that is the only responsible
+ *                             thing to be: publishing it would offer a dictionary with no words
+ *                             in it. Its `revision` is left unstated so the exported dataset
+ *                             records the schema's `0` rather than a fixture's guess.
  *   en                        NOT SEEDED, deliberately. The merge needs a static-ONLY row to merge
  *                             nothing into, and `en` is it.
  *
- * `revision` is stated rather than left at the schema's 0. These rows are written straight to
- * Mongo, so they bypass the repository call that bumps — one import's worth of writes produced
- * this dictionary, and `1` is what that would have left behind.
+ * `revision` is stated rather than left at the schema's 0 for every language that has entries.
+ * These rows are written straight to Mongo, so they bypass the repository call that bumps — one
+ * import's worth of writes produced these dictionaries, and `1` is what that would have left
+ * behind.
  */
-
 import { LocaleScope } from '@types';
 import { makeLocale, makeLocaleEntry } from './factory';
 import { localeModel, localeMessageModel } from './model';
@@ -32,10 +55,14 @@ import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
 export const SEED_LOCALE_TAGS = {
-    /** A language the frontend does not bundle, downloadable from the API. */
+    /** A language that exists ONLY as rows — no deployed file — downloadable from the API. */
     downloadable: 'es',
+    /** A language deployed as files AND registered here, so its API copy can be overridden. */
+    answerable: 'it',
     /** A language being translated, not yet published. */
-    draft: 'fr'
+    draft: 'fr',
+    /** A language registered and not yet translated at all. */
+    empty: 'ja'
 } as const;
 
 export const localeFixtures = [
@@ -57,6 +84,30 @@ export const localeFixtures = [
         nativeName: 'Français',
         active: false,
         revision: 1
+    }),
+    /*
+     * The only seeded language the API also has a deployed file for, which is the whole reason it
+     * is here: it is the one row `mergeCapabilities` has anything to merge WITH.
+     */
+    makeLocale({
+        id: '65e01f3c9a7d4b2e1c0f0003',
+        tag: SEED_LOCALE_TAGS.answerable,
+        name: 'Italian',
+        nativeName: 'Italiano',
+        revision: 1
+    }),
+    /*
+     * Registered, empty, and inactive because of it — the state a language is in between the
+     * `POST` that creates it and the first key anyone translates. No entries at all, so it is also
+     * the fixture for every count that has to survive a language with nothing in it: `entryCount`
+     * of 0, a `revision` still at the schema's default, and a cascade delete that removes no rows.
+     */
+    makeLocale({
+        id: '65e01f3c9a7d4b2e1c0f0004',
+        tag: SEED_LOCALE_TAGS.empty,
+        name: 'Japanese',
+        nativeName: '日本語',
+        active: false
     })
 ];
 
@@ -128,15 +179,21 @@ export const localeEntryFixtures = [
     }),
 
     /*
-     * The API's own half, for the same language.
+     * The API's own half, for the same language — STORED, VALID, AND NOT APPLIED.
      *
-     * Two keys that exist in the API's deployed `es.json` and are overridden here — which is the
-     * whole mechanism, stated in the smallest form that can be checked: `GET /locales/es/messages`
-     * must NOT contain them (it serves `app` rows), and a 401 answered in Spanish must.
+     * Spanish has no deployed dictionary in this repository, and `applyLocaleOverrides` refuses to
+     * register a bundle for a language `listSupportedLocales()` does not name: negotiating a
+     * language i18next cannot resolve would answer `Content-Language: es` over English copy, and a
+     * header that lies is worse than the language being unavailable. So these two rows are skipped
+     * and logged, which is the branch they are here to give a fixture — the state a deployment is
+     * in when someone has translated the backend half of a language nobody has shipped files for.
+     * Deploy `src/locales/es.json` and the same two rows start answering, with nothing else
+     * changed.
      *
-     * `generic.error-unauthorized` is also the sharpest available proof that the two dictionaries
-     * are separate keyspaces: the frontend declares a `generic` block of its own, and if scope
-     * were a label rather than part of the row's identity these would collide with it.
+     * They also stay the sharpest available proof that the two scopes are separate keyspaces:
+     * `generic.*` is declared by the frontend as well, and if scope were a label rather than part
+     * of the row's identity these would collide with the `app` rows above. Neither appears in
+     * `GET /locales/es/messages`, which serves `app` rows only.
      */
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f3001',
@@ -151,6 +208,31 @@ export const localeEntryFixtures = [
         scope: LocaleScope.api,
         key: 'generic.error-internal',
         value: 'Algo ha fallado por nuestra parte. Inténtalo de nuevo.'
+    }),
+
+    /*
+     * The overlay that DOES apply, and the counterpart to the two rows above.
+     *
+     * Both keys exist in the deployed `src/locales/it.json`, so these override real strings rather
+     * than introducing new ones — which is the mechanism stated in the smallest form that can be
+     * checked: a 401 under `Accept-Language: it` answers this text, and the file's text is what it
+     * answers with these rows deleted. Same two keys as the Spanish pair on purpose; the only
+     * difference between the two sets is whether a file is deployed, so a reader comparing them
+     * sees exactly what that one fact decides.
+     */
+    makeLocaleEntry({
+        id: '65e0200a9a7d4b2e1c0f3101',
+        locale: SEED_LOCALE_TAGS.answerable,
+        scope: LocaleScope.api,
+        key: 'generic.error-unauthorized',
+        value: 'Sessione scaduta. Accedi di nuovo.'
+    }),
+    makeLocaleEntry({
+        id: '65e0200a9a7d4b2e1c0f3102',
+        locale: SEED_LOCALE_TAGS.answerable,
+        scope: LocaleScope.api,
+        key: 'generic.error-internal',
+        value: 'Qualcosa è andato storto dalla nostra parte. Riprova.'
     }),
 
     /* The draft language: two rows, enough to prove `active: false` hides something real. */

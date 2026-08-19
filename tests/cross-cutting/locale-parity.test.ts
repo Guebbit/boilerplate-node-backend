@@ -17,13 +17,13 @@
  * translation.
  *
  * ── Why the languages are read rather than named ─────────────────────────────────────────────
- * This file used to compare `en` and `it` by name. `es.json` has been in `src/locales/` and in
- * every module's locale directory for as long as those directories have existed, and its
- * completeness was checked by nothing — a Spanish key could go missing and the suite stayed green.
- * That was worst for the one language a client is most likely to download rather than bundle.
+ * This file used to compare `en` and `it` by name, while a third language sat in `src/locales/`
+ * and in every module's locale directory with its completeness checked by nothing — a key could go
+ * missing there and the suite stayed green.
  *
- * Iterating `listSupportedLocales()` means a language added tomorrow is covered by existing, and
- * the answer stays right when `NODE_SUPPORTED_LOCALES` narrows the set for a deployment.
+ * Iterating `listSupportedLocales()` means a language added tomorrow is covered by existing, a
+ * language REMOVED tomorrow stops being asserted about without a test to edit, and the answer
+ * stays right when `NODE_SUPPORTED_LOCALES` narrows the set for a deployment.
  */
 
 import { listSupportedLocales, readLocaleDictionary } from '@infrastructure/i18n';
