@@ -4,11 +4,12 @@
  *
  * ─── Generated in the paired backend, byte-identical here — do not hand-edit ─────────────────
  * Backend:  src/infrastructure/observability/analytics-events.frontend.ts
- * Frontend: src/infrastructure/observability/analyticsEvents.ts
+ * Frontend: src/infrastructure/observability/analytics-events.ts
  * Authored as `shared/contracts/analytics.frontend.ts` in the backend, published by
  * `npm run contracts:bundle` and copied by `npm run sync:frontend`.
  * `npm run check:spec-identity` fails the build on the commit that forks the two copies.
- * Two filenames because the lint configs disagree on case; the CONTENT must match exactly.
+ * Two filenames because the backend publishes it beside its own catalogue; the CONTENT
+ * must match exactly.
  * ────────────────────────────────────────────────────────────────────────────────────────────
  *
  * WHY THIS LIST IS SHORT. Both repos write into one Umami website, and each name has exactly one

@@ -5,17 +5,13 @@
  * `sumLineItems` live there: the numbers a shop quotes must come from exactly one place, and a
  * table this small does not deserve a collection. A project with negotiated carrier rates
  * replaces the table (or the whole module) — the checkout only ever sees `priceShipping`.
+ *
+ * `ShippingMethod` is `delivery`'s own schema in `openapi.yaml`, imported rather than restated:
+ * `GET /delivery/methods` answers this table verbatim, so a second declaration here would be the
+ * same shape written twice with nothing keeping the two in step.
  */
 
-/** A way of getting the parcel to the customer, priced. */
-export interface ShippingMethod {
-    /** Stable id, frozen onto orders — never rename one that shipped. */
-    id: string;
-    /** Flat rate, in the shop's currency. */
-    price: number;
-    /** Items total at which this method becomes free — the classic demo rule. */
-    freeAbove?: number;
-}
+import type { ShippingMethod } from '@types';
 
 /**
  * The methods this shop offers.

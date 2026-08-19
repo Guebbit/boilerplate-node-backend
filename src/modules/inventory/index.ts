@@ -33,6 +33,8 @@ export { availabilityOf } from './domain';
  * promises made to nobody. That test is right and the instinct behind the exports was wrong:
  * `releaseForOrder` defaults its reason, so a caller never names one; the two types describe
  * shapes that only cross the wire, where the generated contract types are what a client reads.
+ * `InventoryLevel` has since become exactly that — `service.ts` imports it from `@types` rather
+ * than restating it — so there is no longer a local declaration here to re-export at all.
  * A barrel line is a commitment that a shape will not move — worth making for a real caller,
  * never on speculation.
  */

@@ -1,5 +1,6 @@
 import { paymentModel, applyPaymentTransform } from './model';
-import type { PaymentDocument, PaymentStatus } from './model';
+import type { PaymentStatus } from '@types';
+import type { PaymentDocument } from './model';
 import {
     createBaseRepository,
     toObjectId,

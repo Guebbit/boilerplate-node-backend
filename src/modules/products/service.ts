@@ -7,12 +7,13 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
+import type { FacetCount } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { emitDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from './events';
 import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
-import { productRepository, type FacetCount } from './repository';
+import { productRepository } from './repository';
 
 /**
  * Product Service

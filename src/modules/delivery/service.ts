@@ -17,6 +17,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
+import type { ShippingMethod } from '@types';
 import { emitDomainEvent } from '@kernel/events';
 import { orderService, orderRepository, ORDER_STATUS_CHANGED } from '@modules/orders';
 import { userRepository } from '@modules/users';
@@ -24,7 +25,6 @@ import { SHIPPING_METHODS } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
-import type { ShippingMethod } from './domain';
 
 /**
  * The tracking code an order's parcel travels under. Deterministic from the order id — the fake

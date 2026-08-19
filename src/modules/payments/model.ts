@@ -1,6 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { PaymentStatus } from '@types';
 
 /**
  * Payment Model
@@ -14,17 +15,10 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * PSP's: `requires_confirmation` (intent created, nobody has paid), `succeeded`, `declined`
  * (retryable — the confirm endpoint accepts it again), `refunded` (terminal). The ORDER's
  * status is the customer-facing one; this document records how the money got there.
+ *
+ * The four words come from `PaymentStatus` in the contract — the schema `Payment.status` declares
+ * — so the collection's `enum` and the wire cannot disagree. Same move as `orders`' `OrderStatus`.
  */
-
-/** The provider-facing lifecycle. See the model docblock for the semantics of each. */
-export const PAYMENT_STATUSES = [
-    'requires_confirmation',
-    'succeeded',
-    'declined',
-    'refunded'
-] as const;
-
-export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 /**
  * Payment Document interface.
@@ -72,8 +66,8 @@ export const paymentSchema = new Schema<PaymentDocument>(
         },
         status: {
             type: String,
-            enum: PAYMENT_STATUSES,
-            default: 'requires_confirmation'
+            enum: Object.values(PaymentStatus),
+            default: PaymentStatus.requires_confirmation
         },
         provider: {
             type: String,

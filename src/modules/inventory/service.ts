@@ -22,7 +22,7 @@ import {
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { productRepository } from '@modules/products';
-import { StockMovementReason } from '@types';
+import { StockMovementReason, type InventoryLevel } from '@types';
 import type { SearchFilters } from '@infrastructure/persistence/base-repository';
 import {
     normalizePagination,
@@ -35,15 +35,6 @@ import { reservationTtlMinutes, lowStockThreshold } from './config';
 import { stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
 import type { StockMovementDocument } from './model';
-
-/** One product's stock, as the board and the two write endpoints answer it. */
-export interface InventoryLevel {
-    productId: string;
-    title: string;
-    onHand: number;
-    reserved: number;
-    available: number;
-}
 
 /** A line being held or given back. Ids as strings — the repository converts. */
 export interface StockLine {

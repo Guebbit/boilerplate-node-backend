@@ -1,6 +1,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { ShipmentStatus } from '@types';
 
 /**
  * Shipment Model
@@ -10,10 +11,6 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * mirror the tail of the ORDER's lifecycle rather than replacing it, because the tracking code
  * and the delivery timestamp are courier facts the order has no field for.
  */
-
-export const SHIPMENT_STATUSES = ['shipped', 'delivered'] as const;
-
-export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 
 /**
  * Shipment Document interface.
@@ -45,8 +42,8 @@ export const shipmentSchema = new Schema<ShipmentDocument>(
         },
         status: {
             type: String,
-            enum: SHIPMENT_STATUSES,
-            default: 'shipped'
+            enum: Object.values(ShipmentStatus),
+            default: ShipmentStatus.shipped
         },
         deliveredAt: {
             type: Date

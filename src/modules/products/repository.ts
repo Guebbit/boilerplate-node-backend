@@ -1,3 +1,4 @@
+import type { FacetCount } from '@types';
 import { productModel, applyProductTransform } from './model';
 import type { ProductDocument } from './model';
 import {
@@ -13,12 +14,6 @@ import {
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
  */
-/** One facet value with its count, as the aggregation returns it. */
-export interface FacetCount {
-    name: string;
-    count: number;
-}
-
 /** One product's counters and the availability derived from them, as the stock board reads it. */
 export interface AvailabilityRow {
     productId: string;

@@ -3,4 +3,3 @@
  */
 
 export { SHIPPING_METHODS, findShippingMethod, priceShipping } from './rates';
-export type { ShippingMethod } from './rates';
