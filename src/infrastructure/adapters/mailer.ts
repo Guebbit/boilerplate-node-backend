@@ -29,6 +29,7 @@ import {
 } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
+import { isDemoMode, recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
 // consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
@@ -143,6 +144,12 @@ export const nodemailer = (
     templateName: string,
     data: Data
 ): Promise<SentMessageInfo> => {
+    // Demo profile: no SMTP exists; record the send where the e2e suite can read it instead.
+    if (isDemoMode()) {
+        recordDemoEmail(request, templateName, data);
+        return Promise.resolve({ messageId: 'demo-outbox' });
+    }
+
     // Wrap the entire email operation in an OTel span to track latency and failures.
     return withSpan('email.send', (span) => {
         // Span attributes = searchable/filterable dimensions on the trace. These let you ask

@@ -8,6 +8,7 @@
         "dev:docker": "nodemon --legacy-watch --watch src --ext ts --exec 'tsx src/app.ts'",
         "dev:docker:cluster": "nodemon --legacy-watch --watch src --ext ts --exec 'tsx src/cluster.ts'",
         "start": "tsx src/cluster.ts",
+        "demo": "tsx scripts/demo.ts",
         "debug": "tsx --inspect-brk src/cluster.ts",
         "host": "cross-env NODE_DB_URI= NODE_MONGODB_HOST=127.0.0.1 NODE_REDIS_URL= NODE_REDIS_HOST=127.0.0.1 npm run",
         "ts-check": "tsc --noEmit",
