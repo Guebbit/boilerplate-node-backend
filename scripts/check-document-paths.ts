@@ -28,7 +28,7 @@
  *
  * The mirror of `scripts/check-document-paths.ts` in the frontend — the same idea pointed the
  * other way. Not a byte-identical copy, and deliberately not in `SHARED_FILES`: each names its
- * own sibling and its own top-level directories, exactly as `specIdentity.ts` does.
+ * own sibling and its own top-level directories, exactly as `spec-identity.ts` does.
  */
 import { existsSync, globSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -77,11 +77,46 @@ if (!hasFrontend) {
 }
 
 /*
- * The root `.md` files are in scope as well as `docs/`. They are where the cross-cutting notes
- * live, they cite more paths per line than anything under `docs/`, and being outside the docs site
- * is exactly why they get missed.
+ * The root `.md` files are in scope as well as `docs/` — being outside the docs site is exactly why
+ * a stale path in one gets missed.
  */
 const files = [...globSync('docs/**/*.md'), ...globSync('*.md')].toSorted();
+
+/*
+ * ── THE ROOT IS NOT A PLACE FOR DOCUMENTS ────────────────────────────────────────────────────────
+ *
+ * `README.md` is the way in, and `CHANGELOG.md` is a record of releases if one is kept. Every other
+ * `.md` at the root has been a working note — a plan, a findings list, a backlog — and every one of
+ * them decayed the same way: it went stale against the code, got cited from source comments and CI
+ * config, and then had to be retired along with every citation, which is how `ODDITIES.md`,
+ * `BETTER_TESTS_PLAN.md` and `known-gaps.md` each left dangling references behind them.
+ *
+ * The rule that replaces the habit: reference documentation belongs in `docs/`, where the site
+ * renders it and this check covers it; a backlog belongs OUTSIDE the repo, where it cannot be cited
+ * from code and cannot rot in place. So a new root `.md` is a failure here — before it is written
+ * against, not after.
+ *
+ * Deliberately a hard error rather than a warning. The whole point is to catch the file on the
+ * commit that adds it; a warning at that moment is indistinguishable from the noise of a passing
+ * build.
+ */
+const ROOT_DOCUMENTS_ALLOWED = new Set(['README.md', 'CHANGELOG.md']);
+
+const strayRootDocuments = globSync('*.md')
+    .filter((file) => !ROOT_DOCUMENTS_ALLOWED.has(file))
+    .toSorted();
+
+if (strayRootDocuments.length > 0) {
+    console.error(
+        `\n[check-document-paths] ${strayRootDocuments.length} document(s) at the repository root:\n\n` +
+            strayRootDocuments.map((file) => `  ${file}`).join('\n') +
+            `\n\n  Only ${[...ROOT_DOCUMENTS_ALLOWED].join(' and ')} belong here.\n` +
+            `  Reference material goes in docs/ — the site renders it and this check covers it.\n` +
+            `  A plan, a findings list or a backlog goes OUTSIDE the repo, where no source comment\n` +
+            `  can cite it and it cannot go stale against code it sits next to.\n`
+    );
+    process.exit(1);
+}
 const broken: { file: string; line: number; target: string }[] = [];
 let checked = 0;
 /** Paths absent here that no sibling was on disk to vouch for — counted, never reported. */

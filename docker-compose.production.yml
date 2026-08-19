@@ -66,9 +66,9 @@ services:
 
         volumes:
             # Uploaded images. WITHOUT this the container's own filesystem holds them and a
-            # redeploy loses every one — see docs/theory/roadmap.md. A named volume is the stopgap; it still
-            # pins the deployment to one host, and two replicas do not share it. The durable
-            # answer is the S3-compatible `IImageStore` backend described in that same section.
+            # redeploy loses every one. A named volume is the stopgap; it still pins the deployment
+            # to one host, and two replicas do not share it. The durable answer is an
+            # S3-compatible `ImageStore` backend — see `infrastructure/adapters/image-store.ts`.
             - uploads:/app/public/images
 
         depends_on:

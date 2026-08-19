@@ -210,6 +210,17 @@ const makeDuplicateKeyError = () =>
         }
     );
 
+/**
+ * A Mongoose ValidationError-shaped object: identified by `name`, carrying no `kind`.
+ *
+ * The real one enumerates the failing paths in `message` and repeats them in `errors`, which is
+ * exactly the content the branch must not echo — so the fixture carries a representative message.
+ */
+const makeValidationError = () =>
+    Object.assign(new Error('Locale validation failed: name: Path `name` is required.'), {
+        name: 'ValidationError'
+    });
+
 /** A BSONError-shaped object: identified by `name`, and carrying no `kind`. */
 const makeBsonError = () =>
     Object.assign(new Error('input must be a 24 character hex string, 12 byte Uint8Array'), {
@@ -270,6 +281,42 @@ describe('BSONError branch', () => {
         const [, message] = databaseErrorInterpreter(makeBsonError());
 
         expect(message).not.toContain('24 character hex');
+    });
+});
+
+describe('ValidationError branch', () => {
+    it('answers 422 rather than falling through to the catch-all 500', () => {
+        /*
+         * A schema validator that refused a write is describing the REQUEST. Without this branch
+         * `POST /locales` answered 500 to a display name of one space: `minLength: 1` in the
+         * contract is satisfied by `' '`, the schema's `trim` reduces it to `''`, and `required`
+         * refuses it — a stray space reported as a server fault, on an admin route.
+         */
+        expect(databaseErrorInterpreter(makeValidationError())).toEqual([422, 'Invalid request']);
+    });
+
+    it('matches on the name, never on instanceof', () => {
+        // Same contract as the BSONError branch above, for the same reason: a second copy of the
+        // package in the tree makes an identity check silently false and the branch dead.
+        const notMongoose = Object.assign(new Error('something else'), { name: 'ValidationError' });
+
+        expect(databaseErrorInterpreter(notMongoose)).toEqual([422, 'Invalid request']);
+    });
+
+    it('does not echo the failing paths, which carry user data and describe the schema', () => {
+        const [, message] = databaseErrorInterpreter(makeValidationError());
+
+        expect(message).not.toContain('name');
+        expect(message).not.toContain('Locale validation failed');
+    });
+
+    it('leaves an unrecognised error on the 500, which is what makes the branches meaningful', () => {
+        // The catch-all still has to be reachable: a genuine server failure must not be reported
+        // as the caller's fault just because the interpreter grew another 4xx.
+        expect(databaseErrorInterpreter(new Error('connection reset'))).toEqual([
+            500,
+            'connection reset'
+        ]);
     });
 });
 

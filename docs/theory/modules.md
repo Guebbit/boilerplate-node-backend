@@ -303,7 +303,7 @@ contain the calls the contract describes, and a contract describes valid calls a
 answers — so the requests that prove the API _rejects_ things have nowhere to come from. A module
 declares those as data (method, path, headers, body, and a `why` that becomes the description) and
 the collection generator emits them after its contract-derived requests. Four modules carry one, and
-a module deleted without removing its entry from `scripts/contracts/generateCollections.ts` stops
+a module deleted without removing its entry from `scripts/contracts/generate-collections.ts` stops
 the build rather than shipping a short collection. See
 [Contract Ownership & Fragmentation](../api/contract-fragmentation.md#the-client-collections-generated).
 
@@ -605,4 +605,3 @@ about spelling rather than about structure — so neither is a violation.
 - [Layers](./layers.md) — the layer stack inside one module
 - [Architecture](./architecture.md) — the runtime shape of the service
 - [Request Flow](./request-flow.md) — what happens to one request
-- [Roadmap](./roadmap.md) — what is planned but not built

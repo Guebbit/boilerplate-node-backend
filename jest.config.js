@@ -12,8 +12,13 @@
  *
  * The two lists are related but not identical: `stryker.config.json`'s `mutate` is the wider of
  * the two, because a file with no coverage is free to mutate (it is reported without running
- * anything) and expensive to floor. The keys below are being re-derived per module — see
- * `docs/theory/known-gaps.md` §4.
+ * anything) and expensive to floor.
+ *
+ * The keys below floor `model.ts`, `repository.ts` and `service.ts` and nothing else. The newer
+ * per-module files — `audit.ts`, `metrics.ts`, `seeds.ts`, `events.ts`, `routes.ts`,
+ * `analytics.ts` — have never had a floor, and that is deliberate rather than an oversight: they
+ * are to be re-derived per module once the architecture settles, and a floor moved twice is worse
+ * than a floor moved once.
  */
 
 const os = require('node:os');

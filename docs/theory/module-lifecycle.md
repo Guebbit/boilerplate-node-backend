@@ -18,16 +18,16 @@ one line.
 A module is named in exactly four places, and three of them are conditional. Knowing which ones
 apply to your domain is most of both procedures:
 
-| Registry              | File                                   | Applies when                       |
-| --------------------- | -------------------------------------- | ---------------------------------- |
-| `enabledModules`      | `src/modules.ts`                       | **always**                         |
-| `MODULE_SECTIONS`     | `scripts/contracts/openapi.ts`         | the domain serves HTTP             |
-| `ANALYTICS_SECTIONS`  | `scripts/contracts/analyticsEvents.ts` | the domain has an `analytics.ts`   |
-| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`        | the domain owns an `asyncapi.yaml` |
-| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi.ts`        | …and an API client can reach it    |
+| Registry              | File                                    | Applies when                       |
+| --------------------- | --------------------------------------- | ---------------------------------- |
+| `enabledModules`      | `src/modules.ts`                        | **always**                         |
+| `MODULE_SECTIONS`     | `scripts/contracts/openapi.ts`          | the domain serves HTTP             |
+| `ANALYTICS_SECTIONS`  | `scripts/contracts/analytics-events.ts` | the domain has an `analytics.ts`   |
+| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`         | the domain owns an `asyncapi.yaml` |
+| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi.ts`         | …and an API client can reach it    |
 
 A fifth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
-imported by name in `scripts/contracts/generateCollections.ts`. It is not in the table because it
+imported by name in `scripts/contracts/generate-collections.ts`. It is not in the table because it
 needs no discipline — it is a real import, so deleting the module stops the build on its own rather
 than waiting for a bundle to come out quietly short.
 
@@ -262,7 +262,7 @@ flowchart LR
 rm -rf src/modules/<name>
 # delete the import and the array entry in src/modules.ts
 # delete its entry from MODULE_SECTIONS / ANALYTICS_SECTIONS / ASYNC_SECTION_ORDER
-# and, if it declared probes, from scripts/contracts/generateCollections.ts
+# and, if it declared probes, from scripts/contracts/generate-collections.ts
 ```
 
 Deleting a module named in another module's `dependsOn` stops the boot with the offending pair
@@ -361,7 +361,7 @@ npx tsc --noEmit                                  # THE assertion: 0 errors in d
                                                   # the dependency in its manifest
 
 # drop them from MODULE_SECTIONS, ANALYTICS_SECTIONS, ASYNC_SECTION_ORDER,
-# and from generateCollections.ts if any of them declared probes
+# and from generate-collections.ts if any of them declared probes
 npm run contracts:bundle
 npx spectral lint openapi.yaml --ruleset spectral.yaml
 npm test                                          # everything else: a report, not a verdict
@@ -385,7 +385,7 @@ dependents too or pick a different set. An earlier run of this check reported "z
 still at zero\*\*, and that is the number this exercise is actually defending.
 
 **Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
-errors are `scripts/contracts/analyticsEvents.ts` and `generateCollections.ts` naming
+errors are `scripts/contracts/analytics-events.ts` and `generate-collections.ts` naming
 `products`/`cart`/`orders`, which is step 3 of the removal procedure announcing itself rather than
 residue. Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
 go with their modules.
@@ -420,7 +420,7 @@ ones a sweep cannot express:
   modules' `emails.ts` to render every template. Every one of those imports is through a legitimate
   public surface, so no import rule can distinguish it from a correct one. What makes it fragile is
   the _reason_ for the import, and that is a judgement call.
-- **A named export from a generated file.** ~~`generateCollections.ts` imports `seedProducts` and
+- **A named export from a generated file.** ~~`generate-collections.ts` imports `seedProducts` and
   `seedOrders` by name~~ — fixed when the dataset stopped being a bundle. It reads
   `db/demo/demo-data.json` now and indexes into `collections.products` / `collections.orders`, which
   is _whatever the seeders produced_ rather than two domain-shaped identifiers. Kept here as the
@@ -447,4 +447,3 @@ the spec and every spec operation mounted. Neither is a substitute for actually 
 - [Modules](./modules.md) — why the shape is what it is
 - [Layers](./layers.md) — the layer stack inside one module
 - [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) — how fragments become bundles
-- [Roadmap](./roadmap.md) — what is planned but not built

@@ -130,8 +130,8 @@ COPY --from=build --chown=node:node /app/tsconfig.json ./
 # Uploads land under public/images at runtime. The directory has to exist and be writable by the
 # user below BEFORE the volume is mounted over it, or the first upload fails on a read-only path.
 #
-# Mount a volume here in production — see `docker-compose.production.yml` and known-gaps §8: what
-# this directory holds does not survive the container without one.
+# Mount a volume here in production — see `docker-compose.production.yml`: what this directory
+# holds does not survive the container without one.
 RUN mkdir -p public/images && chown -R node:node public/images
 
 # Drop root. The `node` user (uid 1000) ships with the base image, so there is no useradd here and

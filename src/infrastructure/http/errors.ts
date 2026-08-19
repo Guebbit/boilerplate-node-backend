@@ -101,6 +101,12 @@ export const isDuplicateKey = (error: unknown): boolean =>
  * when a value fails a schema path's cast, the driver raises `BSONError` when
  * `new ObjectId(...)` itself refuses.
  *
+ * `ValidationError` answers 422 as well, for the same underlying reason: a schema validator that
+ * refused a write is describing the request, not a fault in the server.
+ *
+ * The 500 at the end is for genuinely unrecognised failures only. Every branch above exists because
+ * something that describes the CALLER was reaching it and being reported as a server fault.
+ *
  * @param error - anything Mongoose threw
  */
 export function databaseErrorInterpreter(error: CastError | Error): [number, string] {
@@ -157,6 +163,35 @@ export function databaseErrorInterpreter(error: CastError | Error): [number, str
      * internal detail that tells an attacker how ids are formed.
      */
     if ((error as { name?: string }).name === 'BSONError') return [422, 'Invalid identifier'];
+    /*
+     * A schema validator refused the write: a `required` path left empty, a value outside `min`/
+     * `max`, a string that failed `match`, an entry absent from an `enum`. Every one of those is a
+     * statement about the REQUEST, so 422 — the same answer the two branches above give.
+     *
+     * WHY THIS IS NOT ALREADY IMPOSSIBLE. Request bodies are validated by Zod schemas generated
+     * from `openapi.yaml` before a controller runs, so a validator firing means Mongoose is
+     * enforcing something the contract does not — either because JSON Schema cannot express it, or
+     * because it was expressed only on the model. `POST /locales` was the worked example: a display
+     * name of one space satisfies `minLength: 1`, then the schema's `trim` reduces it to `''` and
+     * `required` refuses it. That answered 500 to a stray space, on an admin route, found by
+     * `tests/fuzz/endpoints.fuzz.test.ts` on its third generated case.
+     *
+     * Closing it AT THE CONTRACT is still the better fix where the constraint can be expressed
+     * there — `write-locales.ts` now extends the generated body with `z.string().trim().min(1)`,
+     * which rejects the request before a database round trip and documents itself in the schema.
+     * This branch is the floor under that: it turns whatever slips through into an honest 4xx
+     * instead of a server fault, across all twelve models at once rather than one endpoint at a
+     * time.
+     *
+     * Detected by `name`, matching the `BSONError` branch above and for the same reason: the
+     * `ValidationError` class is Mongoose's, and an `instanceof` against a second copy of the
+     * package silently returns false.
+     *
+     * The message is deliberately generic. Mongoose's own text enumerates the failing paths and
+     * their values — user-supplied data, and a description of the schema, neither of which belongs
+     * in a response body.
+     */
+    if ((error as { name?: string }).name === 'ValidationError') return [422, 'Invalid request'];
     // Anything else is an unknown server-side failure. The `||` guards against Errors
     // constructed with an empty message.
     return [500, error.message || 'Unknown error'];

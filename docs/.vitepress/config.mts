@@ -34,8 +34,7 @@ export default withMermaid(
                             { text: 'Strategic DDD', link: '/theory/strategic-ddd' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
-                            { text: 'Clustering & Shutdown', link: '/theory/clustering' },
-                            { text: 'Roadmap', link: '/theory/roadmap' }
+                            { text: 'Clustering & Shutdown', link: '/theory/clustering' }
                         ]
                     }
                 ],

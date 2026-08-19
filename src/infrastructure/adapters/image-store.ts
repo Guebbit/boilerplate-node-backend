@@ -129,8 +129,14 @@ export const filesystemImageStore: ImageStore = {
  * The store the application uses.
  *
  * Uploads land on the container's own filesystem, so **rebuilding the container loses every
- * uploaded image** and two replicas do not share what they store. Swapping in an object store
- * means one more {@link ImageStore} implementation and nothing else — the migration, and the
- * traps in it, are written up in `docs/theory/roadmap.md`.
+ * uploaded image** and two replicas do not share what they store. A mounted volume is the stopgap;
+ * the durable answer is one more {@link ImageStore} implementation over an S3-compatible bucket or
+ * a CDN, and nothing else.
+ *
+ * Nothing selects a backend yet, ON PURPOSE: a switch that offers one nobody has written is how a
+ * deployment ends up half-migrated. The one trap worth knowing before starting is that `put` would
+ * begin returning ABSOLUTE urls while every existing row holds `/images/x.png` — both are legal
+ * (`ImageUrl` is a `uri-reference` for exactly this reason) and both have to keep working, which is
+ * what `express.static` and the local `remove` are for.
  */
 export const imageStore: ImageStore = filesystemImageStore;
