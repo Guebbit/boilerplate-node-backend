@@ -63,16 +63,6 @@ export default {
      * rather than a domain to build entities for.
      */
     subdomain: 'generic',
-    language: {
-        Language:
-            'A tag this deployment offers, from either tier. Registering one in the database never teaches the API to answer in it — only a deployed file does that.',
-        Entry: 'One translated string: a language, a dotted key and its text. Stored one row per pair, so a key is editable on its own.',
-        Dictionary:
-            'The nested tree a client consumes, built from entries on read. Never stored in that shape — the rows are flat because flat is what is editable.',
-        Revision:
-            "A counter on a language, bumped by any write to its entries. The client's answer to 'do I need to download this again', and never a content hash.",
-        Scope: 'What a language can do here — answer API requests, offer a downloadable dictionary, or both. The two are independent facts and the manifest reports both.'
-    },
     basePath: '/locales',
     routes: router,
     /*

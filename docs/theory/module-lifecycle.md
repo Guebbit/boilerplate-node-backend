@@ -116,9 +116,6 @@ import { seedWishlistCollection } from './demo';
 export default {
     name: 'wishlist',
     subdomain: 'supporting',
-    language: {
-        Wishlist: 'One saved list per user. Holds product references and nothing else.'
-    },
     basePath: '/wishlist',
     routes: router,
     dependsOn: [
@@ -148,7 +145,6 @@ Three fields on that manifest are strategic rather than operational, and all thr
 | Field            | What it says                                                       | What refuses it                                                                     |
 | ---------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | `subdomain`      | `core`, `supporting` or `generic` — how much modelling is worth it | a `generic` module carrying a `domain/` folder fails `subdomain-discipline.test.ts` |
-| `language`       | the terms this module uses, as it means them                       | an empty or placeholder glossary fails the same suite                               |
 | `as` / `because` | what kind of relationship each edge is, and why                    | an edge nothing imports, or an import no edge declares, fails `context-map.test.ts` |
 
 The temptation is to fill these in later. Do not: the questions are easiest to answer while you

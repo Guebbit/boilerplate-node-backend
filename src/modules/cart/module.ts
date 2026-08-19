@@ -26,16 +26,6 @@ export default {
      * module is a customer of four contexts rather than an orchestration layer above them.
      */
     subdomain: 'core',
-    language: {
-        Cart: 'One open basket per user. Priced against the live catalogue, so its total is a quote and not a promise.',
-        'Cart line': 'A product reference and a quantity. Holds no price — the catalogue does.',
-        Checkout:
-            'The act of turning a cart into an order and holding its units. Succeeds or leaves both the cart and the shelf untouched; there is no half-checked-out state.',
-        Availability:
-            'What a line may be checked out against — the catalogue’s units less those already held. Checked here only as a pre-flight; `inventory` re-checks it inside the write.',
-        Version:
-            'The count of writes a cart has seen. Guards checkout against a concurrent edit — hand-rolled aggregate versioning, in all but name.'
-    },
     basePath: '/cart',
     routes: router,
     dependsOn: [

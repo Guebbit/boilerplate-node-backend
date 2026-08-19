@@ -28,19 +28,6 @@ export default {
      * its own rules in `domain/`; not worth an aggregate.
      */
     subdomain: 'supporting',
-    language: {
-        'On hand': 'Units physically present, whether or not anyone has claimed them.',
-        Reserved: 'Units an open order has claimed. Still on the shelf, no longer for sale.',
-        Available:
-            'On hand minus reserved — what a customer may buy. Derived everywhere, stored nowhere.',
-        Reservation:
-            'One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.',
-        Transition:
-            'One of the six ways a counter may move. Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row.',
-        'Stock movement':
-            'A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing.',
-        Sweep: 'The expiry tick. An operator is the cron, exactly as with the fake courier in `delivery`.'
-    },
     basePath: '/inventory',
     routes: router,
     dependsOn: [

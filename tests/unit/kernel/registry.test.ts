@@ -17,7 +17,6 @@ import type { AppModule } from '@kernel/registry';
 const makeModule = (name: string, dependsOn: string[] = []): AppModule => ({
     name,
     subdomain: 'supporting',
-    language: { [name]: `whatever ${name} means` },
     basePath: `/${name}`,
     routes: Router(),
     dependsOn: dependsOn.map((module) => ({
@@ -69,7 +68,7 @@ describe('validateModules', () => {
         // other modules may still depend on it.
         expect(() =>
             validateModules([
-                { name: 'audit-logs', subdomain: 'generic', language: { Entry: 'one action' } },
+                { name: 'audit-logs', subdomain: 'generic' },
                 makeModule('observability', ['audit-logs'])
             ])
         ).not.toThrow();

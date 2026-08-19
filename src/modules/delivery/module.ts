@@ -23,16 +23,6 @@ export default {
      * aggregate.
      */
     subdomain: 'supporting',
-    language: {
-        'Shipping method':
-            'A named way to ship, with a rate rule. A closed set in `domain/rates.ts`, not a collection.',
-        'Shipping cost':
-            'What a method charges for a given basket. Computed by a pure function so the cart can quote it without a shipment existing.',
-        Shipment:
-            'The parcel record for an order that has actually shipped. Created on the status change, never before.',
-        Courier:
-            'The carrier moving a shipment. Faked here, behind the same seam a real integration would use.'
-    },
     basePath: '/delivery',
     routes: router,
     dependsOn: [

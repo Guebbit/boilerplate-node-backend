@@ -24,12 +24,6 @@ export default {
      * costs the shop a convenience, not a capability — which is the definition of supporting.
      */
     subdomain: 'supporting',
-    language: {
-        Wishlist:
-            'One saved list per user. Holds product references and nothing else — no quantity, no price, no expiry.',
-        'Move to cart':
-            'The list’s only exit: a saved line becomes a cart line and leaves the list.'
-    },
     basePath: '/wishlist',
     routes: router,
     dependsOn: [

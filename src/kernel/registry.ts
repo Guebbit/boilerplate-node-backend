@@ -64,14 +64,6 @@ interface AppModuleCommon {
     subdomain: Subdomain;
 
     /**
-     * This module's ubiquitous language: the terms it uses, defined *as this module means them*.
-     * The same word may legitimately mean something else in a sibling.
-     *
-     * See: docs/theory/strategic-ddd.md#_3-ubiquitous-language-—-per-context-not-per-app
-     */
-    language: Readonly<Record<string, string>>;
-
-    /**
      * Modules this one imports from, each with the shape of the relationship.
      *
      * Must stay a DAG. Two modules that each need the other are one module, or they communicate
@@ -175,8 +167,10 @@ interface HeadlessModule extends AppModuleCommon {
  * Everything a module declares about itself.
  *
  * Keep this small: a field only one module ever fills belongs behind that module's own barrel.
- * `subdomain` and `language` are read by nothing at runtime and still belong here — they are what a
- * module says it *is*, and both are asserted by `tests/cross-cutting/`.
+ * `subdomain` is read by nothing at runtime and still belongs here, because a test acts on it —
+ * a `generic` module may carry no `domain/` folder. A field nothing reads and nothing checks is a
+ * comment with extra syntax; the module's vocabulary was one, and now lives in
+ * `docs/theory/glossary.md`.
  *
  * See: docs/theory/modules.md#the-manifest
  */

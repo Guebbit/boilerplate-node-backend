@@ -332,10 +332,6 @@ at all, and the templates interpolate rather than translate.
 export default {
     name: 'orders',
     subdomain: 'core',
-    language: {
-        Order: 'What a customer bought, frozen. Immutable in substance: only its status moves.'
-        // …
-    },
     basePath: '/orders',
     routes: router,
     dependsOn: [
@@ -351,7 +347,7 @@ export default {
 } satisfies AppModule;
 ```
 
-`subdomain`, `language` and the `as`/`because` on each edge are the module's **strategic**
+`subdomain` and the `as`/`because` on each edge are the module's **strategic**
 declarations — what it is to the business, the words it uses, and what kind of relationship each
 arrow is. Nothing reads them at runtime; `tests/cross-cutting/` reads all three. They are covered in
 [Strategic DDD](./strategic-ddd.md).

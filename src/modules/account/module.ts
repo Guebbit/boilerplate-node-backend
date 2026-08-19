@@ -61,18 +61,6 @@ export default {
      * modelling it harder.
      */
     subdomain: 'generic',
-    language: {
-        Session:
-            'Proof of who is asking, carried in cookies. An access token to spend and a refresh token to renew it.',
-        'Access token':
-            'Short-lived bearer of identity. Never stored — if it is valid it is trusted.',
-        'Refresh token':
-            'Long-lived, revocable, stored on the User record. Losing it is what logging out means.',
-        Address:
-            'An entry in the account’s address book. The one collection this module owns outright.',
-        'Account deletion':
-            'Two steps — a request that issues a token, and a confirm that destroys the record. Never one call.'
-    },
     basePath: '/account',
     routes: router,
     dependsOn: [

@@ -16,11 +16,6 @@ export default {
      * this one is a leaf in both directions — the cheapest possible thing that works is correct.
      */
     subdomain: 'generic',
-    language: {
-        'Contact request':
-            'A message from anyone, account or not. Identified by the email on the form, never by a user reference.',
-        Triage: 'The admin state of a request — read, handled, closed. The only thing about it that changes.'
-    },
     basePath: '/feedback',
     routes: router,
     locales: path.join(__dirname, 'locales')

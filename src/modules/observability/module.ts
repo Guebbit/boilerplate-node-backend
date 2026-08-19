@@ -26,13 +26,6 @@ export default {
      * and measured against the process rather than the business — there is no domain here to model.
      */
     subdomain: 'generic',
-    language: {
-        Health: 'Whether the process can serve. A liveness answer, not a correctness one.',
-        Overview:
-            'The numbers a human reads. Assembled from `infrastructure/observability`, owned by nobody.',
-        Stream: 'The live SSE feed of those numbers. Cookie-authenticated, because an EventSource cannot set a header.',
-        Scrape: 'The Prometheus endpoint. Static credential, because the caller is a machine with no session.'
-    },
     basePath: '/observability',
     routes: router,
     dependsOn: [

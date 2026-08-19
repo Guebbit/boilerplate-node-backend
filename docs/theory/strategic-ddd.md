@@ -25,7 +25,8 @@ is generic, do not over-model it". Those sentences are true when written and unv
 after. Six months later the document says one thing, the imports say another, and the document is
 the one that loses — quietly, because nothing fails.
 
-So each of these claims is a **field on the manifest** with a **test behind it**:
+Two of these claims are **fields on the manifest** with a **test behind them**. The third — the
+language — is the code's own identifiers, with [Glossary](./glossary.md) carrying the meanings:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 45}}}%%
@@ -33,7 +34,6 @@ flowchart LR
     subgraph M["module.ts — what the module claims"]
         direction TB
         S["subdomain"]
-        L["language"]
         D["dependsOn[] · as + because"]
     end
     subgraph T["tests/cross-cutting — what is true"]
@@ -43,13 +43,12 @@ flowchart LR
         PL["published-language"]
     end
     S --> SD
-    L --> SD
     D --> CM
     D --> PL
 
     classDef claim fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef check fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class S,L,D claim;
+    class S,D claim;
     class SD,CM,PL check;
 ```
 
@@ -114,23 +113,24 @@ copy: `delivery` publishes two pure functions and no storage at all.
 
 ## 3. Ubiquitous language — per context, not per app
 
-Each module declares the terms it uses, defined **as it means them**:
+**The language lives in the identifiers.** `Reserved`, `Available`, `softDelete`, `OrderStatus` —
+those are the ubiquitous language, and they are what a change to the model has to move. That is
+Evans' actual requirement: the model and the language co-evolve, and the code is the primary
+expression of both.
 
-```ts
-language: {
-    'Soft delete': 'Withdrawal from sale, reversible. The row survives so orders that embedded it stay readable.';
-}
-```
+What an identifier cannot carry is the meaning behind it, and that lives in
+**[Glossary](./glossary.md)** — one section per module, because the same word legitimately means
+different things in two of them. `Soft delete` is a withdrawal from sale in `products` and a
+destroyed account in `users`. Two different things, correctly. A single flat glossary would have to
+collapse them into one entry that is wrong in both places, and **that divergence is the
+bounded-context pattern**.
 
-That is `products`. In `users`, `Soft delete` is "a destroyed account, kept for the audit trail". Two
-different things, correctly, and a single shared glossary would have to flatten them into one entry
-that is wrong in both places. **That divergence is the bounded-context pattern**, which is why the
-glossary lives per module rather than in a `docs/` page — and why `subdomain-discipline.test.ts`
-asserts that at least one term _does_ mean two things, as a demonstration that the structure permits
-it.
-
-It also keeps the promise the registry makes everywhere else: adding a domain edits no file outside
-its own folder, and `rm -rf` takes the vocabulary with the code.
+::: tip It used to be a manifest field
+Each module declared a `language: {}` map. It was removed: nothing read it, nothing checked it was
+true, and it sat in `module.ts` rather than beside the model field or serializer each entry actually
+described — so the constraint-bearing definitions were furthest from the code they constrained. The
+prose moved to the glossary page; the constraints belong on the symbols.
+:::
 
 ## 4. Subdomain distillation — where to spend effort
 

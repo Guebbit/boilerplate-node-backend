@@ -22,13 +22,6 @@ export default {
      * `generic` means — and why no aggregate belongs here however central the record feels.
      */
     subdomain: 'generic',
-    language: {
-        User: 'The person record. Owns identity and the admin flag; owns no credentials workflow — see `account`.',
-        Admin: 'A flag on the User, not a role table. Two levels of access is the whole model.',
-        Token: 'A single-use secret bound to a user and a purpose (`TokenType`), stored on the record.',
-        'Soft delete':
-            'A destroyed account, kept for the audit trail. Emits `user.deleted`, which is what actually clears the cart and wishlist.'
-    },
     basePath: '/users',
     routes: router,
     seeds: seedUsersCollection,
