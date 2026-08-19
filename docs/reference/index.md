@@ -106,17 +106,28 @@ Anything git does not track is out by definition: `dist/`, `coverage/`, `node_mo
 
 ## Why there are no file counts here
 
-A number in prose goes stale without anyone editing the line, and no test can tell a stale count
-from a current one. So the glossary states **shapes** — "one per module", "one per migration" —
-and leaves counting to the thing that can actually count.
+A number in prose goes stale without anyone editing the line, and nothing distinguishes a stale
+count from a current one. So the glossary states **shapes** — "one per module", "one per
+migration" — and leaves the counting to `git ls-files`, which is always right and always to hand:
 
-That thing is `tests/cross-cutting/file-glossary.test.ts`. It reads `git ls-files`, reads these
-pages, and fails when a tracked file is neither named, matched by a declared pattern, nor matched
-by a declared exclusion. Add a file and forget this section, and the suite names the file and the
-page it belongs on.
+```bash
+git ls-files | awk -F/ '{if (NF==1) print "ROOT"; else print $1}' | sort | uniq -c | sort -rn
+```
 
-It also holds the patterns and exclusions **as code**, so the rules and the prose cannot drift
-into two lists that disagree.
+## Keeping this page true
+
+Nothing enforces it. These pages are prose, and prose about a filesystem goes stale the first time
+somebody adds a file without opening this section.
+
+So the habit is the mechanism: **a commit that adds, moves or deletes a file updates the page that
+names it.** The table in [the map](#the-map) says which page that is. To check a directory by hand,
+compare what the glossary names against what git tracks:
+
+```bash
+git ls-files src/infrastructure | while read -r f; do
+    grep -qF "\`$f\`" docs/reference/*.md || echo "undocumented: $f"
+done
+```
 
 ::: warning If you are writing an entry
 The glossary describes what exists. If writing a row reveals a file that should not exist, raise

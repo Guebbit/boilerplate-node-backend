@@ -85,9 +85,13 @@ Every module also carries its own unit, contract and factory files. They are cat
 
 ## The thirteen modules
 
-**Extras** lists the optional shapes above that each module carries. It is asserted against disk by
-`tests/cross-cutting/file-glossary.test.ts`, so a module that gains a metrics file and does not
-gain the word here fails the suite.
+**Extras** lists the optional shapes above that each module carries. Nothing asserts it, so it is
+the row most likely to go quietly wrong — a module that gains a metrics file and does not gain the
+word here simply reads as not having one. Re-derive it rather than trusting it:
+
+```bash
+ls src/modules/<name>
+```
 
 | Module                                | What it owns                                                                                                                                                                                       | Extras                                                                                      |
 | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
