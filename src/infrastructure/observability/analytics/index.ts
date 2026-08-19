@@ -1,24 +1,13 @@
 /**
  * Product analytics — the port, and the registry of implementations behind it.
  *
- * Distinct from metrics and tracing: this answers *product* questions ("how many users abandon
- * checkout?") rather than operational ones ("is p95 latency acceptable?").
+ * Distinct from metrics and tracing: this answers PRODUCT questions ("how many users abandon
+ * checkout?") rather than operational ones. Callers do not know where an event lands; which
+ * implementation answers is a deployment decision (`NODE_ANALYTICS_PROVIDER`), the same shape
+ * `NODE_PAYMENT_PROVIDER` uses.
  *
- * Twenty-one controllers call `emitAnalyticsEvent` and none of them knows where the event lands.
- * Which implementation answers is a deployment decision (`NODE_ANALYTICS_PROVIDER`), not a code
- * path — the same shape `NODE_PAYMENT_PROVIDER` uses in `@modules/payments/providers`, and for the
- * same reason: the boilerplate should not have to pick an analytics vendor on a project's behalf.
- *
- * The default is `umami`, because it is the one this repo's own compose stack starts. `posthog`
- * is a hosted alternative for projects that need identity-level funnels (see below), and `none`
- * is the honest choice for a deployment that collects nothing.
- *
- * ── Which one to pick ────────────────────────────────────────────────────────────────────────
- * Umami identifies a visitor by hashing IP + user-agent, not by user id, so "this *logged-in
- * user* did X then Y" is not a question it can answer — `distinctId` travels as an ordinary
- * event property (`user_id`) and is filterable, but it is not the join key. PostHog is built
- * around exactly that join and is the better answer when the funnel is identity-shaped; the cost
- * is a cloud dependency in an otherwise fully self-hosted estate.
+ * Default `umami` — the one this repo's compose stack starts. `posthog` when the funnel is
+ * identity-shaped, `none` for a deployment that collects nothing.
  *
  * See: docs/tools/analytics.md
  */

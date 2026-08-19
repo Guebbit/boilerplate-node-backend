@@ -1,49 +1,20 @@
 /**
- * `src/infrastructure/observability/analytics-events.frontend.ts` — the event names the paired
- * FRONTEND emits.
+ * Builds `src/infrastructure/observability/analytics-events.frontend.ts` — the event names the
+ * paired FRONTEND emits.
  *
- * ## Two scopes, one namespace
+ * Both repos write into ONE Umami namespace and every name has exactly one emitter, so only the
+ * frontend's half is published: a module's own names are ordinary TypeScript its controllers
+ * import, and a published copy would have no reader on either side.
  *
- * Both repos write into one Umami website, so every event name lives in ONE namespace — but each
- * name has exactly one emitter. `backend` sections are the modules' own `analytics.ts` files:
- * their controllers import them, and nothing is published. The `frontend` section is
- * `shared/contracts/analytics.frontend.ts`: names for moments this service never observes, and the
- * only ones that leave this repo.
+ * Two constraints on the mechanism:
  *
- * The split is the analytics twin of the one in `./asyncapi.ts`, and it answers the same question
- * differently. There, both halves are published, because the full contract is what this repo
- * generates its own types from. Here only one half is, because a module's names are already
- * ordinary TypeScript its controllers import — a published copy of them would be a file with no
- * reader on either side of the boundary.
+ *   - Each section's body is taken VERBATIM out of its source, because the declarations carry
+ *     comments a rebuild-from-values would drop. `assertSliceMatches` compares the extracted names
+ *     against the exported ones, so a slice that lost an entry fails the bundle.
+ *   - THE COMMA IS THE JOIN. Entries form an object literal and `trailingComma: 'none'` makes a
+ *     dangling comma before `}` a `prettier:check` failure.
  *
- * That is also what fixed the bug this arrangement replaced. A single catalogue said which names
- * EXIST and never which side EMITS them, both repos held it, and both fired most of it: one
- * add-to-cart wrote two indistinguishable rows into Umami, and every count built on those names
- * read twice reality. Publishing only the frontend's half makes the double emission impossible to
- * express — the constant simply does not exist in the repo that must not fire it.
- *
- * ## What is checked
- *
- * `contract-bundles.test.ts` walks `ANALYTICS_SECTIONS`, which holds BOTH scopes, and rejects a
- * name or a value declared twice anywhere in it. That is the check that makes one namespace with
- * two owners safe: a module cannot quietly claim `user_logged_out`, and the client cannot claim
- * `checkout_failed`.
- *
- * ## Why it is sliced rather than serialised
- *
- * The declarations carry comments that say why a name sits where it does — why
- * `CHECKOUT_REQUEST_FAILED` is not the twin of `checkout_failed`, what `APP_READY` marks — and the
- * frontend reads its copy by hand. Rebuilding the object from the imported values would drop every
- * one of them, so the body of each section's `as const` is taken VERBATIM out of its source.
- *
- * That slice is verified rather than trusted: `assertSliceMatches` compares the names it extracted
- * against the ones actually exported, so a slice that lost an entry, picked up a stray line, or
- * read a renamed constant fails the bundle instead of publishing a short catalogue.
- *
- * THE COMMA IS THE JOIN, not part of any slice. The entries are an object literal, so exactly one
- * comma belongs between two section slices and none after the last. Prettier's
- * `trailingComma: 'none'` makes that load-bearing: a dangling comma before `}` fails
- * `prettier:check`.
+ * See: docs/api/contract-fragmentation.md#analytics-events-frontend-ts-—-a-name-lives-with-the-code-that-emits-it
  */
 
 import { readFileSync } from 'node:fs';

@@ -52,23 +52,12 @@ export const handleUncaughtError = (
     if (error instanceof ExtendedError)
         return rejectResponse(response, error.httpCode, error.errors);
     /*
-     * A database error that is really a CLIENT error — a malformed ObjectId, a duplicate key.
+     * A driver failure that is really a CLIENT error — a malformed ObjectId, a duplicate key.
+     * `databaseErrorInterpreter` is the single place deciding which ones describe the request;
+     * anything it leaves at 500 falls through below. A safety net for a controller that forgot its
+     * `.catch()`, not a substitute for one.
      *
-     * `databaseErrorInterpreter` is the single place that decides which driver failures describe
-     * the request rather than the server. Anything it maps to a 4xx is answered as one; anything
-     * it leaves at 500 falls through to the generic branch below, so an unrecognised error still
-     * leaks nothing.
-     *
-     * A safety net, not a substitute for handling. Every controller ends its chain with a
-     * `.catch()` that calls `rejectDatabaseError`, so nothing routinely relies on this branch —
-     * but a controller added later may forget one, and forgetting is silent. `POST /orders` with a
-     * malformed `productId` once answered 500 for exactly that reason, an ordinary bad request
-     * reported as a server fault; found by `tests/fuzz/endpoints.fuzz.test.ts`, which still covers
-     * every spec operation and would catch the next one.
-     *
-     * `errors[]` carries translated copy and the status comes from the interpreter — same rules the
-     * per-controller path follows, so a rejection that lands here is answered identically to one
-     * that was caught properly.
+     * See: docs/theory/request-flow.md#the-database-branch-is-a-safety-net-not-a-substitute
      */
     const [databaseStatus] = databaseErrorInterpreter(error);
     if (databaseStatus < 500)
@@ -79,20 +68,11 @@ export const handleUncaughtError = (
             }
         ]);
     /*
-     * The client is told that something failed, and nothing else.
+     * The client is told that something failed, and nothing else: a CONSTANT, never
+     * `error.message`, which would leak field paths, hosts, filesystem layout or a URL with a key
+     * in it. The detail is logged above with the request and trace ids.
      *
-     * `errors[]` carries a constant, never `error.message`. An unexpected error is precisely the
-     * case where nobody chose the wording: a Mongoose validation error naming internal field
-     * paths, a driver error naming hosts and ports, an ENOENT naming a filesystem layout, a
-     * third-party client quoting a URL with a key in it. Any of those is free reconnaissance for
-     * an unauthenticated caller, and none of it means anything to the person reading it.
-     *
-     * The detail is not lost — it is logged above with the request id and trace id, which is
-     * where an operator can act on it and a stranger cannot. The envelope's `message` is derived
-     * from the status by `resolveErrorMessage` in `infrastructure/http/response.ts` and names no handler.
-     *
-     * Deliberate errors are unaffected: `ExtendedError` carries copy its thrower chose and is
-     * returned verbatim by the branch above.
+     * See: docs/theory/request-flow.md#the-500-branch-says-nothing
      */
     rejectResponse(response, 500, [
         {
@@ -137,10 +117,8 @@ export const installErrorHandling = (app: Express): void => {
                 message: error.message,
                 origin
             });
-            // Deliberate, and the same call `server-lifecycle.ts` makes for a stalled shutdown: the
-            // process state after an uncaught exception is unknown, so the only safe move is to stop
-            // and let the orchestrator start a clean one. Throwing here would be caught by this very
-            // handler.
+            // The process state after an uncaught exception is unknown, so the only safe move is to
+            // stop and let the orchestrator start a clean one. Throwing would re-enter this handler.
             process.exit(1);
         });
 };

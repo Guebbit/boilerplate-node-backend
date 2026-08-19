@@ -1,37 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * Runs Stryker — `npm run test:mutation`.
+ * Runs Stryker — `npm run test:mutation`. A wrapper rather than a bare `stryker run`, for three
+ * jobs a JSON config cannot do. The frontend mirrors it.
  *
- * A wrapper rather than a bare `stryker run`, for three jobs a JSON config cannot do. The frontend
- * mirrors it at `scripts/mutation.ts`; the two differ only in the scratch they clean.
+ *   1. MACHINE SETTINGS COME FROM `.env`. Concurrency and per-worker heap are properties of the
+ *      machine, not the project, and `stryker.config.json` is committed. An explicit CLI flag
+ *      always wins, which keeps the workflow's `--concurrency 3` authoritative on a runner with
+ *      no `.env`.
+ *   2. THE SCRATCH ROOT IS CLEARED BEFORE THE RUN. A killed jest instance never reaches its own
+ *      teardown, and Stryker kills instances as a matter of course, so the next start has to
+ *      clean up. The root is pinned OUTSIDE the sandbox, where the sweep can find it.
+ *   3. THE OOM LOOP FAILS FAST. A thrashing run looks like a slow one and its ETA grows rather
+ *      than shrinks; watching for repeated `ran out of memory` is the difference between losing
+ *      three minutes and losing an afternoon.
  *
- * ── 1. MACHINE SETTINGS COME FROM `.env` ─────────────────────────────────────────────────────────
- * `concurrency` and the per-worker heap are properties of the MACHINE, not of the project, and
- * `stryker.config.json` is committed and shared. Both are read here from `.env` — via Node's own
- * `process.loadEnvFile()`, since npm scripts do not otherwise see it — so a laptop and a 16-core
- * desktop can disagree without either editing a tracked file.
- *
- * An explicit CLI flag always wins over the environment. That is what keeps
- * `.github/workflows/mutation.yml`'s `--concurrency 3` authoritative on a runner that has no `.env`
- * at all.
- *
- * ── 2. THE SCRATCH ROOT IS CLEARED BEFORE THE RUN, NOT ONLY AFTER ────────────────────────────────
- * `tests/support/global-setup.ts` gives each jest instance a data directory and deletes it on the
- * way out. A killed instance never reaches that, and Stryker kills instances as a matter of course.
- * A process cannot clean up after being killed, so the next start has to — which is this, and it is
- * the step `global-setup.ts` has always described.
- *
- * The root is also pinned OUTSIDE the sandbox. Left to `__dirname` it resolves inside
- * `.stryker-tmp/sandbox-XXXX/`, where neither this sweep nor the documented `rm -rf .tmp` recovery
- * would ever look.
- *
- * ── 3. THE OOM LOOP FAILS FAST ───────────────────────────────────────────────────────────────────
- * A run that thrashes does not announce itself: it looks like a slow run, and the ETA it prints
- * grows rather than shrinks. One measured 36 hours remaining after 90 minutes at 3%. Watching for
- * repeated `ran out of memory` and stopping is the difference between losing three minutes and
- * losing an afternoon.
- *
- * See docs/tools/mutation-testing.md#when-a-run-never-finishes--the-oomstrand-loop.
+ * See: docs/tools/mutation-testing.md#when-a-run-never-finishes-—-the-oom-strand-loop
  */
 import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';

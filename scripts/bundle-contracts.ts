@@ -2,28 +2,19 @@
 /**
  * Rebuild the documents this repo publishes from their fragments — `npm run contracts:bundle`.
  *
- * The AUTHORED bundles stay COMMITTED: they are what spectral, orval, Prism, `jest-openapi`, the
- * seed runner, the API clients and `check-spec-identity` read, and what gets copied to the paired
- * frontend. Fragments are the source of truth; this writes the published artefacts.
- *
- * Run with `--check` in CI to assert those are not stale instead of rewriting them
- * (`npm run check:contracts-bundle`). Name one or more bundles to narrow the run:
+ * Fragments are the source of truth; the bundles stay COMMITTED because they are what spectral,
+ * orval, Prism, the seed runner and `check:spec-identity` read. `--check` asserts they are not
+ * stale instead of rewriting them. Name bundles to narrow the run:
  *
  *   npm run contracts:bundle -- openapi asyncapi
  *
- * ## The client collections are opt-in
+ * The client collections are opt-in — ask for them by name, since they are generated from the
+ * COMMITTED contract rather than from the fragments.
  *
- * `contract.{bruno,insomnia,mockoon,postman}.*` are GENERATED from `openapi.yaml` and `.gitignore`d, so a
- * full run does NOT produce them and `--check` has nothing to say about them. Ask by name:
+ * The selection lives here rather than in `package.json` because npm appends `--` arguments to the
+ * LAST command of a chain only, so a `&&`-joined ordering would silently drop the flag.
  *
- *   npm run contracts:bundle -- bruno insomnia mockoon postman
- *
- * That regenerates from the COMMITTED contract, which is the right question while iterating: is the
- * state on disk self-consistent? Bundle `openapi` first if the contract's fragments have moved.
- *
- * Keeping the selection here rather than in package.json matters because npm appends `--` arguments
- * to the LAST command of a chain only — a `&&`-joined ordering would be wrong in a way nothing
- * catches, and the narrowing flag would stop meaning what it says.
+ * See: docs/api/contract-fragmentation.md#the-eight-bundles
  */
 
 import { writeFileSync } from 'node:fs';

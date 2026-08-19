@@ -26,6 +26,33 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `NODE_DEMO` is not read from any `.env` example, compose file or Dockerfile.
 
+## The two seed accounts
+
+Their ids and credentials live in `src/kernel/seed-accounts.ts` — in the kernel rather than in
+`users`, even though `users` owns the record.
+
+Four modules need a piece of them and only one owns it: `users` seeds the accounts, `orders` stores
+the address an order was sent to, and `cart` and `wishlist` each seed a row belonging to a person.
+Reaching into `@modules/users` for that would buy three new registry edges — one of them a
+`shared-kernel` — in exchange for six string literals that are pure data. Repeating the ids in four
+files is worse in the other direction: a drift is a dangling reference nothing catches until a demo
+renders an empty page.
+
+Note what is deliberately **not** shared: the account records. A sibling gets the handle it needs to
+name a person without taking on the shape of a user.
+
+::: warning Two things not to change
+**The credentials must stay fixed.** `cy.loginAs()` in the paired frontend types them into a real
+login form, and both READMEs quote them. Everything else about the dataset can move; these are the
+part a human reads off a page and types.
+
+**The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
+in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
+response — `password` is `select: false` and the user transform omits it — which is why
+`scripts/export-seed.ts` carries these into `demo-data.json` separately rather than reading them
+back off a serialized user.
+:::
+
 ## What it deliberately is not
 
 - **Not the full stack.** Cache and queue run `disabled`, so invalidation behaviour and the queue-backed email/PDF paths are not exercised. That is the live profile's job — the frontend's `test:e2e:live` against `compose:restart`, which its CI requires on every PR.

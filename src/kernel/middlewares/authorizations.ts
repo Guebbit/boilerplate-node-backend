@@ -84,16 +84,10 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  */
 export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
     /*
-     * No credentials at all — 401, not 403.
+     * No credentials at all — 401, not 403. Unreachable through the current routes, which all mount
+     * `isAuth` first; it guards a future mount that forgets.
      *
-     * The distinction is the client's next move: 401 means "authenticate and try again", which the
-     * frontend acts on by redirecting to login and returning the visitor to where they were aiming;
-     * 403 means "you are known and still refused", where logging in again would only loop. Answering
-     * 403 here sent an expired admin session to the error page instead of the login page.
-     *
-     * Unreachable through the current routes, which all mount `isAuth` first — that is why the
-     * wrong status went unnoticed. It stays as a guard for a future mount that forgets, and it now
-     * agrees with `isAuth` above and `isAdminViaCookie` below, both of which already answer 401.
+     * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
      */
     if (!request.authContext) {
         emitAuditEvent(
@@ -127,25 +121,16 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
 };
 
 /**
- * Admin check for endpoints a BROWSER opens without being able to set a header.
+ * Admin check for endpoints a BROWSER opens without being able to set a header — SSE, via
+ * `EventSource`, which cannot send `Authorization`. The refresh cookie is the credential, verified
+ * as `GET /account/refresh` verifies it: signature *and* presence on the user document, so a
+ * revoked token is rejected rather than merely an expired one.
  *
- * `EventSource` — the only way a browser consumes SSE — cannot set request headers. That is a
- * hard limitation of the API, not an oversight, so `isAuth` (which reads `Authorization: Bearer`)
- * can never be satisfied by an SSE connection. What `EventSource` *does* send, given
- * `withCredentials: true`, is cookies; the frontend already opens the stream that way, and this
- * app already issues an `HttpOnly` refresh cookie at login.
+ * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
  *
- * So the refresh cookie is the credential here. It is verified exactly as `GET /account/refresh`
- * verifies it — signature *and* presence on the user document — so a revoked or logged-out token
- * is rejected, not merely an expired one.
- *
- * The alternative, a token in the query string, is why this does not do that: URLs land in
- * access logs, proxy logs, browser history and `Referer` headers, and a refresh token in any of
- * those is a full account takeover.
- *
- * @param request
- * @param response
- * @param next
+ * @param request - the incoming request, whose `jwt` cookie carries the refresh token
+ * @param response - answered 401 without a cookie, 403 for a verified non-admin
+ * @param next - called only once an admin is resolved onto `request.authContext`
  */
 export const isAdminViaCookie = (request: Request, response: Response, next: NextFunction) => {
     const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;

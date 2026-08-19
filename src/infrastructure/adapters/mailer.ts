@@ -36,21 +36,14 @@ import { withSpan } from '@infrastructure/observability/tracer';
 import { isQueueEnabled, publishToQueue, EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 
 /**
- * Absolute path to the EJS email templates.
+ * Absolute path to the EJS email templates, overridable with `NODE_EMAIL_TEMPLATES_DIR`.
  *
- * Defaults to `shared/views/templates-emails` under the process working directory, which is the
- * project root for every entry point (npm scripts, the compose command, tsx). There is no compile
- * step — `build` runs `ts-check` and lint, so the app always executes from source and
- * `shared/views/` never moves. `NODE_EMAIL_TEMPLATES_DIR` overrides the whole path when it does.
+ * Under `shared/` rather than in a module even though most templates belong to one: the template
+ * NAME travels through RabbitMQ to a consumer that may be another process, so a bare filename
+ * resolved against the consumer's own directory stays portable where a path into `src/modules`
+ * would not. The owner lives in the filename prefix instead.
  *
- * `shared/` rather than a module, even though every template but the layouts belongs to one. The
- * name a caller passes travels through RabbitMQ to a consumer that may be another process: a bare
- * filename resolved against the consumer's own directory stays portable, where a path into
- * `src/modules` would bind the payload to one checkout's layout. The owner lives in the filename
- * prefix instead — see {@link EmailContent.template}.
- *
- * `tests/unit/infrastructure/adapters/mailer-templates.test.ts` asserts every template resolves under this
- * directory, so the path cannot silently rot.
+ * See: docs/tools/email-and-rendering.md#templates-interpolate-they-do-not-translate
  */
 export const EMAIL_TEMPLATES_DIR = process.env.NODE_EMAIL_TEMPLATES_DIR
     ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
@@ -69,24 +62,17 @@ export const resetTransporter = (): void => {
 };
 
 /**
- * The SMTP transport, built on first use and reused thereafter.
+ * The SMTP transport, built on first use and reused: nodemailer pools connections, so a per-email
+ * transport would pay the TCP + TLS + AUTH handshake every time.
  *
- * Built once and reused: nodemailer pools SMTP connections internally, so a per-email transport
- * would pay the TCP + TLS + AUTH handshake every time.
+ * LAZY rather than module-scope, so the environment is read when the transport is first needed
+ * rather than frozen at import time — the same behaviour in production, and an ordinary function
+ * call to test.
  *
- * Lazy rather than module-scope. Built at import time, the configuration was frozen by whatever
- * the environment happened to hold when the first file imported this module — which made every
- * test that varies SMTP settings reach for `jest.resetModules()` and a dynamic `import()` just to
- * observe a different config. Reading the environment when the transport is first needed is both
- * the same behaviour in production (nothing sends mail before boot finishes) and an ordinary
- * function call to test.
+ * Under `NODE_ENV=test` it is nodemailer's `jsonTransport`, which opens no socket. Without it the
+ * suite picks up the real credentials from `.env` and delivers actual mail.
  *
- * Under `NODE_ENV=test` it is nodemailer's `jsonTransport` instead: it renders the envelope to
- * JSON and resolves, opening no socket. Without it the suite picks up the real credentials from
- * `.env` and delivers actual mail — the contract suite creates orders with generated addresses,
- * which got the sender a `550 ... blacklisted` from the relay, and because controllers dispatch
- * with `void enqueueEmail(...)` the rejection surfaced as an unhandled rejection attributed to
- * whichever unrelated test happened to be running.
+ * See: docs/tools/email-and-rendering.md#smtp-configuration
  */
 const getTransporter = (): Transporter => {
     if (transport) return transport;

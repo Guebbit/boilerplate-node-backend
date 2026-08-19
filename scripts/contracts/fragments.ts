@@ -1,29 +1,18 @@
 /**
  * The fragment bundler every shared, domain-shaped file in this repo is built with.
  *
- * THE PROBLEM IT SOLVES. A handful of files list every domain the app has — the REST contract, the
- * realtime contract, the demo dataset's identities, the analytics event names, the three API client
- * collections. Each of them is also byte-identical with the paired frontend, so each is a single
- * hand-maintained document that no module owns and that `rm -rf src/modules/products` cannot touch.
+ * A module owns its slice as a fragment on disk; the published document is the concatenation, and
+ * deleting a domain is deleting its folder plus one entry in an ordered list.
  *
- * THE SHAPE OF THE FIX. A module owns its slice as a fragment on disk; the published document is
- * the concatenation of those slices, stays COMMITTED, and is what every tool reads — spectral,
- * orval, Prism, the seed runner, Bruno, Mockoon, and `check:spec-identity`. Deleting a domain is
- * deleting its folder plus its entry in one ordered list.
+ * IT NEVER PARSES. These documents carry comments, key order and quoting that a
+ * parse-and-re-serialise round trip destroys, and the bundle has to stay byte-identical with the
+ * frontend's copy — so a fragment is a VERBATIM SLICE and bundling is string concatenation.
+ * `tests/cross-cutting/contract-bundles.test.ts` asserts round-trip identity on every run.
  *
- * WHY IT NEVER PARSES. These documents carry comments, key order, quoting and indentation that a
- * parse-and-re-serialise round trip destroys: `openapi.yaml` alone holds 149 comment lines, and a
- * `js-yaml` round trip of it returns 3453 lines from 3062 with none of them. A lossy bundler can
- * never reproduce a hand-maintained file, and the bundle has to stay byte-identical with the copy
- * the frontend holds — so a fragment here is a VERBATIM SLICE of the original lines and bundling is
- * string concatenation. Round-trip identity is structural rather than hoped for, and
- * `tests/cross-cutting/contract-bundles.test.ts` asserts it for every bundle on every run.
+ * The one thing concatenation cannot do is separate list items, so a segment is either a file or a
+ * group of files joined by a separator — and a fragment never has to know whether it is last.
  *
- * THE ONE THING CONCATENATION CANNOT DO is separate list items: JSON arrays and TypeScript object
- * literals need a comma BETWEEN slices and none after the last, which is a property of the join
- * rather than of any fragment. So a segment is either a file (pasted verbatim) or a group of files
- * joined by a separator — still no parsing, and a module fragment still never has to know whether
- * it happens to be last.
+ * See: docs/api/contract-fragmentation.md#what-a-fragment-contains
  */
 
 import { existsSync, readFileSync } from 'node:fs';

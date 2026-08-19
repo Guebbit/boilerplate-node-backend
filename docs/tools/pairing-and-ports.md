@@ -93,6 +93,56 @@ because of it.
 - `npm run check:spec-identity` is the guard. It reports the shared bundles as forked when the two
   sides disagree, which is exactly what you want to see before a merge rather than after.
 
+## The shared-file list, and what earns a place on it
+
+`scripts/spec-identity.ts` holds the files that must be **byte-identical** in both checkouts. The
+test for membership is not "are these the same today" — a dozen more files happen to match, from
+favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everything on the list fails
+quietly: both sides keep building, keep passing their own suites, and disagree only in production
+or in a live-API run.
+
+`spectral.yaml` sits there alongside the specs for that reason: if the two repos lint the same
+document under different rules, one of them passes a spec the other would reject.
+
+Deliberately **not** on it: `public/favicon/*`, `.prettierrc`, `.dockerignore`, `.husky/*`,
+`.docker/nginx.docs.conf`, `docs/.vitepress/theme/*`. They are identical by convention, not by
+requirement — either repo may legitimately change its own icon or formatting width, and a gate that
+fails on that trains people to ignore it.
+
+### Owned versus mirrored
+
+Each entry records **which side decides what it says**, because that is the difference between a
+one-command fix and a decision:
+
+- **`backend`** — the frontend's copy is an _output_, produced here from per-module sources and
+  copied over. A fork has one correct resolution, and `npm run sync:frontend` applies it without
+  asking. Editing the copy is the failure this list is worst at describing and best at catching:
+  the next regeneration reverts it, and the diff looks like the backend broke something.
+- **`mirror`** — both sides maintain it by hand, so a fork is a question no script may answer.
+
+`asyncapi.public.yaml` is the one whose name changes on arrival: it lands as the frontend's
+`asyncapi.yaml`, because the shared subset is the whole of the async contract as far as that repo
+is concerned.
+
+### Nothing regenerable belongs on it
+
+A copy that either repo can rebuild from a file already listed carries no fact the list does not
+already compare, and every entry costs a manual step per contract change. Two things are out for
+exactly that reason:
+
+| Excluded                          | Why                                                                                                                                                                                                                       | Guarded instead by                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `src/types/asyncapi.generated.ts` | An output of `gen:asyncapi`, whose every input is compared already. The two outputs are **not** identical and are not meant to be — this repo's is generated from the full contract and carries the queue payloads.       | `npm run check:asyncapi-types`, inside each repo |
+| `contract.<tool>.*`               | Generated from `openapi.yaml`, which is compared above. Identical spec plus deterministic generator means a frontend copy could never disagree without the spec disagreeing first — so the frontend holds no copy at all. | `contract-bundles.test.ts`                       |
+
+### It treats the symptom
+
+Identity, not equivalence — two specs that mean the same thing but differ in key order are still a
+fork in the making, because the next person to regenerate gets a diff nobody asked for. The cure is
+one source of truth: a package both repos consume, or a third repo. That is a bigger decision than
+a CI job, and until it is made this fails the build on the commit that forks a shared file rather
+than on the release that ships the mismatch.
+
 ## Reaching the stack from another device on the Wi-Fi
 
 Publish to all interfaces rather than to loopback, then reach the host by its LAN address:

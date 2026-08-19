@@ -29,12 +29,9 @@ import { logger } from '@infrastructure/adapters/logger';
 import { ExtendedError } from '@infrastructure/http/errors';
 
 /**
- * Get extension of filename
- *
- * Returns the substring after the last dot, *without* the dot. Note the edge case: a filename
- * with no dot returns the whole name (`lastIndexOf` gives -1, so the slice starts at 0).
- * Acceptable here because the value is only appended to a random name, and `fileFilter`
- * already restricts uploads to real images.
+ * The substring after the last dot, without the dot. A name with no dot returns whole
+ * (`lastIndexOf` gives -1), which is acceptable because the value is only appended to a random
+ * name and `fileFilter` already restricts uploads to images.
  *
  * @param filename - original client-supplied name
  */
@@ -43,21 +40,18 @@ export function getExtension(filename: string) {
 }
 
 /**
- * Where an upload is written while the request is still being decided.
+ * Where an upload is written while the request is still being decided — NOT the public directory.
  *
- * NOT the public directory. Two reasons, in order of importance:
+ *   1. A file in `public/` is a file the world can fetch, and between "multer wrote it" and "the
+ *      request was accepted" sit every content check, validation and database write. Nothing is
+ *      reachable until {@link storeUploadedImages} commits it.
+ *   2. A remote store takes a finished file, so staging is what makes "written" and "stored" two
+ *      moments — which is what lets the second one be a bucket.
  *
- *   1. A file multer has written is a file that exists; a file in `public/` is a file the world can
- *      fetch. Between those two facts sits every check this API makes — the content check that
- *      catches a disguised upload, the field validation, the database write. Staging privately
- *      means an upload about to be rejected is not reachable while it is being rejected: nothing
- *      is until {@link storeUploadedImages} commits it.
- *   2. A remote store cannot be written to as bytes stream in; it takes a finished file. Staging
- *      is the step that turns "multer wrote it" and "the store has it" into two separate moments,
- *      which is what lets the second one be a bucket instead of a directory.
+ * Override with `NODE_UPLOAD_STAGING_PATH` when temp is small, a tmpfs below the upload cap, or
+ * not writable by the app user.
  *
- * Defaults under the system temp directory. Override with `NODE_UPLOAD_STAGING_PATH` when temp is
- * small, is a tmpfs sized below `NODE_MAX_UPLOAD_BYTES`, or is not writable by the app user.
+ * See: docs/tools/security.md
  */
 export const uploadStagingPath = () =>
     process.env.NODE_UPLOAD_STAGING_PATH ?? path.join(tmpdir(), 'node-api-uploads');

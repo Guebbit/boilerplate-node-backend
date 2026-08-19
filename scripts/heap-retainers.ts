@@ -3,33 +3,20 @@
  * Answers "who is holding these?" for one kind of heap object — the question `heap-report.ts`
  * cannot, because it aggregates nodes and never reads the edges between them.
  *
- * A `.heapsnapshot` is a graph: `nodes` is a flat integer array of fixed-width records, `edges` is a
- * flat integer array whose records are handed out to nodes in order (node i owns the next
- * `edge_count` of them). Walking that forwards gives "what does X point at". This walks it BACKWARDS
- * — building the reverse index once — to give "what points at X", which is what identifies a leak's
- * owner.
+ * A snapshot is a graph: `edges` records are handed out to nodes in order, so walking forwards
+ * gives "what does X point at". This builds the REVERSE index to give "what points at X".
  *
- * ── WHY IT IS A SEPARATE SCRIPT ──────────────────────────────────────────────────────────────────
- * `heap-report.ts` answers "what is in this heap" from `nodes` alone, streaming and holding almost
- * nothing. Retainers need the whole graph resident — a reverse index over every edge — so the two
- * have opposite memory profiles and are kept apart deliberately. Expect to pass
- * `NODE_OPTIONS=--max-old-space-size=10240` for a multi-gigabyte snapshot.
+ * Separate from `heap-report.ts` because the memory profiles are opposite: retainers need the whole
+ * graph resident. Expect to pass `NODE_OPTIONS=--max-old-space-size=10240` for a large snapshot.
+ * Run `heap-report.ts` first to find the dominant kind, then this to find its owner.
  *
- * Run `heap-report.ts` first to find the dominant kind, then this to find its owner. Skipping
- * straight to a guess about who owns a kind is how this repo spent hours fixing the wrong layer;
- * `docs/tools/mutation-testing.md` has the case study.
- *
- * ── READING THE OUTPUT, AND ITS ONE LIMIT ────────────────────────────────────────────────────────
- * Each row is a chain read nearest-first: the object, then what points at it, and so on. Rows are
- * grouped so a repeated chain surfaces as one line with a count — which is the shape a leak makes.
- *
- * This picks *a* retainer at each step, not the *dominating* one. At shallow depths that is the
- * answer you want; past three or four levels the chains tend to wander into V8's own optimisation
- * metadata (`FeedbackVector`, `LoadHandler`) rather than climbing towards a GC root, so read a deep
- * run as a hint and a shallow one as evidence. Chrome DevTools computes true dominators and is the
- * better tool once you know which objects to look at.
+ * ONE LIMIT: it picks *a* retainer at each step, not the *dominating* one. Past three or four
+ * levels the chains wander into V8's own optimisation metadata, so read a deep run as a hint and a
+ * shallow one as evidence.
  *
  * Usage: tsx scripts/heap-retainers.ts <file.heapsnapshot> [kind] [depth]
+ *
+ * See: docs/tools/mutation-testing.md#finding-the-culprit
  */
 import { createReadStream } from 'node:fs';
 import { open } from 'node:fs/promises';

@@ -4,29 +4,19 @@
  *
  * Run it after changing anything a generator reads: a module's `openapi.yaml` or `asyncapi.yaml`,
  * `shared/contracts/asyncapi.workers.yaml`, a `demo.ts` fixture, a `probes.ts`, an `analytics.ts`.
+ * Usually you will not have to remember — `.husky/pre-commit` runs it with `--no-sync` and stages
+ * what it produced, so `npm run complete` only ever VERIFIES.
  *
- * You usually will not have to remember. `.husky/pre-commit` runs this — as
- * `npm run regenerate -- --no-sync` — before `npm run complete`, and stages what it produced, so
- * the artefacts a commit carries are always a fresh run of their generators. `complete` itself
- * still only VERIFIES; a "STALE" failure from it now means a generator is non-deterministic or a
- * source moved underneath it, not that somebody forgot a step.
- *
- * Run it by hand when you want the paired repo updated too: the hook passes `--no-sync`, because a
- * commit here must not write into a checkout you are not looking at.
- *
- * ── WHY THIS IS A SCRIPT AND NOT A CHAIN OF `&&` ────────────────────────────────────────────────
- * The order is not obvious, and it needs somewhere to live:
+ * A script rather than a chain of `&&` because the order is not obvious and needs somewhere to
+ * live:
  *
  *   openapi.yaml ──► api/ ──► demo-data.json
  *
- * `api/` is generated from the contract, and the seed export runs the real application to produce
- * `demo-data.json` — the models import `@api/schemas.zod`, so it needs `api/` to exist first.
+ * The seed export runs the real application, whose models import `@api/schemas.zod`, so `api/` has
+ * to exist first. The client collections read `demo-data.json` too but are not committed, so they
+ * are not a step here.
  *
- * The four client collections read `demo-data.json` too, but they are not committed and nothing
- * generates them unasked, so they are not a step here. Ask for one after this finishes and it is
- * current by construction:
- *
- *   npm run contracts:bundle -- bruno insomnia mockoon postman
+ * See: docs/api/regenerating.md
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';

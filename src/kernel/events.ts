@@ -1,15 +1,13 @@
 /**
- * Domain events — the only sanctioned way for two modules to talk when neither can own the other.
+ * Domain events — the sanctioned way two modules talk when neither can own the other.
  *
- * The import rule says a module may reach a sibling's public barrel, and `dependsOn` says that
- * reach must form a DAG. Some relationships are genuinely mutual: deleting a product has to empty
- * it out of every cart, while the cart needs the product catalogue to price a line. Expressed as
- * imports that is a cycle; expressed here it is products emitting and cart listening, and the
- * dependency arrow points one way only.
+ * `dependsOn` must form a DAG, but some relationships are mutual: deleting a product empties it out
+ * of every cart, while the cart needs the catalogue to price a line. As imports that is a cycle; as
+ * an event it is products emitting and cart listening, and the arrow points one way.
  *
- * The payload map is open by design. A module declares its own events by augmenting
- * `DomainEventMap` from inside its own folder, so adding a domain never edits a shared file —
- * which is the whole point of the registry it belongs to.
+ * Not a substitute for the broker — no durability, no retry, no replay.
+ *
+ * See: docs/tools/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -78,19 +76,13 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
 };
 
 /**
- * Drop every subscription. Test seam: suites that register modules per case would otherwise
- * accumulate handlers across cases and see one emit fire N times.
+ * Drop every subscription. Test seam: suites registering modules per case would otherwise
+ * accumulate handlers and see one emit fire N times.
  *
- * It is a function shipped to production for the benefit of tests, and that is a real cost rather
- * than a nitpick: nothing stops application code from calling it and silently unsubscribing every
- * module. Seven suites depend on it, so it is load-bearing.
+ * Shipped to production for the benefit of tests, and that is a real cost — nothing stops
+ * application code from calling it and silently unsubscribing every module.
  *
- * The shape that would not need it is a bus **instance** owned by the registry rather than the
- * module-level map above: a fresh registry means a fresh bus, and the reset becomes the
- * constructor. The cost is that `onDomainEvent`/`emitDomainEvent` stop being importable functions
- * and have to be reached through something — a larger change than the seam is annoying, which is
- * why it has not been made. Whoever does make it is also deciding where subscription lives
- * (`AppModule.subscribe`), because those are the same question.
+ * See: docs/tools/events-and-logging.md#resetdomainevents-is-a-test-seam-with-a-real-cost
  */
 export const resetDomainEvents = (): void => {
     handlers.clear();

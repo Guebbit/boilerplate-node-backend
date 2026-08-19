@@ -1,39 +1,21 @@
 /**
  * Every document this repo produces from sources it owns.
  *
- * Two kinds, and the difference decides what is guarded. The AUTHORED ones — `openapi`, the two
- * asyncapi bundles, the frontend's analytics event names — are committed and cover the shared
- * files of `scripts/spec-identity.ts`: the ones that exist twice, once here and once in the paired
- * frontend. This repo authors them; the frontend holds byte-identical copies and never edits them.
+ * Two kinds, and the difference decides what is guarded. The AUTHORED ones are committed and cover
+ * the shared files of `scripts/spec-identity.ts` — the ones existing twice, here and in the paired
+ * frontend, which holds byte-identical copies and never edits them. The GENERATED ones (the client
+ * collections) are `.gitignore`d and listed only so the CLI can find them by name: an uncommitted
+ * file cannot be stale.
  *
- * Two of them publish a SUBSET rather than everything they are built from, and for opposite
- * reasons. `asyncapi.yaml` holds every channel this service has and stays here, because it is what
- * this repo's own types are generated from; the frontend receives `asyncapi.public.yaml`, the
- * sections whose channels an API client can reach. `analytics-events.frontend.ts` publishes only
- * the names the CLIENT emits — the backend's own names are ordinary TypeScript its controllers
- * import, so a published copy would have no reader on either side. Both splits are one `scope`
- * field over one set of sources, which is what stops the two sides from describing the same thing
- * differently — or, for analytics, from both emitting it.
- *
- * The GENERATED ones — the client collections — are `.gitignore`d and produced on demand from
- * `openapi.yaml`. They are listed here so `npm run contracts:bundle -- bruno` can find them, not
- * because anything checks them: an uncommitted file cannot be stale.
- *
- * The files in `spec-identity.ts` that are NOT here are the ones with nothing to fragment:
- * `spectral.yaml` is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are
- * tooling, and none of them names a domain. `src/types/asyncapi.generated.ts` is absent for the
- * opposite reason — it is generated from `asyncapi.yaml` by `npm run gen:asyncapi`, so it follows a bundle
- * rather than being one. `db/demo/demo-data.json` is absent for a third reason: it is not assembled
- * from text at all — `npm run seed:export` seeds a throwaway database and publishes what the API
- * serves, so its staleness check is `check:seed-export` rather than this CLI.
+ * Two publish a SUBSET, for opposite reasons. `asyncapi.yaml` keeps every channel because this
+ * repo's own types come from it, and the frontend receives the public half;
+ * `analytics-events.frontend.ts` publishes only the CLIENT's names, since the backend's are
+ * ordinary TypeScript its controllers import.
  *
  * Adding a bundle is one entry here plus its spec file: the CLI, the staleness check and the
  * cross-cutting test all iterate this list.
  *
- * The three ways a document comes to exist are described on the types in `./fragments`. Only
- * `openapi` is COMPILED — `redocly bundle` over one standalone document per module — because it is
- * the one whose sources became whole documents; the rest are still concatenated slices or derived
- * whole from a bundle.
+ * See: docs/api/contract-fragmentation.md#the-eight-bundles
  */
 
 import type { ContractBundle } from './fragments';

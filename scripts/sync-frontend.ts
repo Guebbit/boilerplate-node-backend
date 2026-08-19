@@ -2,49 +2,11 @@
 /**
  * Copy every backend-owned shared file into the paired frontend — `npm run sync:frontend`.
  *
- * ## What this replaces
+ * Four files are produced here and held byte-identical over there, three of them named differently
+ * on the other side. The list, the per-side paths and the ownership all come from `SHARED_FILES`,
+ * so a file added there is synced without touching this script.
  *
- * Four files are produced here and held byte-identical over there. Moving them was a manual
- * copy-paste of four paths, three of which are named differently on the other side — which is
- * exactly the kind of chore that gets done four times out of five. `npm run check:spec-identity` then fails
- * on the fifth, usually a day later, and reads like the contract broke.
- *
- * This does not make the copies safer to skip; it makes them impossible to get wrong. The list, the
- * per-side paths and the ownership all come from `SHARED_FILES`, so a file added there is synced
- * without touching this script.
- *
- * ## Why it refuses to run on stale sources
- *
- * Copying a stale bundle is worse than not copying: both repos then agree on a document neither
- * one's sources produce, and `check:contracts-bundle` fails HERE while `check:spec-identity` passes.
- * So the staleness gates run first and a failure stops the sync with the command that fixes it.
- *
- * ## Why `mirror` files are reported and never written
- *
- * `spectral.yaml` and the two shared scripts are maintained by hand on BOTH sides. A fork in one of
- * those is a question — which copy is right — and answering it by overwriting whichever direction a
- * script happens to run in is how work gets silently reverted. They are listed as differing and left
- * alone.
- *
- * ## Why the copy is not the whole job
- *
- * A copy alone leaves the frontend holding a current contract and a client generated from the
- * PREVIOUS one. That state type-checks over there, so nothing announces it — the frontend simply
- * ships against a contract the backend no longer serves. `--regen` closes it by running the
- * frontend's own `npm run regenerate` after a successful copy, and `package.json` passes the flag,
- * so the command anyone actually runs does the whole job.
- *
- * It stays a FLAG rather than being unconditional in this file, because it runs another repo's npm
- * scripts: a frontend whose `node_modules` is stale, or whose orval differs, fails a command in THIS
- * repo and reads like the sync broke when it did not. Keeping it a flag means the behaviour is
- * visible in `package.json` rather than buried here, a direct `tsx scripts/sync-frontend.ts` stays
- * inert over there, and the failure path below can say whose build failed. The printed instructions
- * are what the flagless run gives instead, and they remain the honest description of what is left.
- *
- * Usage:
- *   npm run sync:frontend             # copy, then regenerate over there (package.json adds --regen)
- *   npm run sync:frontend -- --dry    # say what would be copied, write nothing, run nothing
- *   tsx scripts/sync-frontend.ts      # copy only, and print what to run in the frontend
+ * See: docs/tools/pairing-and-ports.md#owned-versus-mirrored
  */
 
 import { execFileSync } from 'node:child_process';

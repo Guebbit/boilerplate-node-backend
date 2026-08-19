@@ -89,19 +89,10 @@ export const buildPaginatedMeta = (
 /**
  * Escapes every regex metacharacter, so a user's search text is matched literally.
  *
- * `$regex` with unescaped input is a remote denial of service, not a correctness nit. MongoDB
- * evaluates the pattern server-side against every candidate document, and a catastrophic
- * backtracking pattern costs seconds of CPU per document from a handful of characters —
- * `(a+)+$` against a 31-character subject takes ~45s in one engine. `POST /products/search` and
- * `GET /products?text=` are public, so that is an unauthenticated request pinning a core.
+ * Unescaped `$regex` input is a remote denial of service: MongoDB evaluates the pattern
+ * server-side against every candidate document, and both search endpoints are public.
  *
- * It is also what a search box means. Unescaped, `.` matches every character, `^` anchors, and a
- * lone `(` is a syntax error the driver raises as a 500 — so a user searching for "1.5" or
- * "50% (off)" gets wrong results or an error rather than the products they were looking for.
- *
- * Literal matching gives up regex search as a feature. Nothing in this API offered it: these
- * helpers back "type words into a box", and a query language for anonymous callers is not a
- * thing to expose accidentally.
+ * See: docs/tools/security.md#why-search-text-is-escaped-before-it-reaches-regex
  */
 export const escapeRegex = (value: string): string =>
     value.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`);
@@ -122,19 +113,11 @@ export const escapeRegex = (value: string): string =>
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
 
 /**
- * Turn caller text into a safe `$regex` pattern, or `undefined` when it says nothing.
+ * Turn caller text into a safe `$regex` pattern, or `undefined` when it says nothing: strip what
+ * the pattern language cannot hold, then escape what it would otherwise interpret.
  *
- * The one place a search term becomes a pattern, so the two things that make that safe cannot get
- * out of step: strip what the pattern language cannot hold, then escape what it would otherwise
- * interpret.
- *
- * `undefined` rather than an empty pattern is the load-bearing part. `$regex: ''` matches every
- * document, so a term that vanishes under stripping would silently turn a filter into "everything"
- * — the exact inversion of what the caller asked for. Returning `undefined` lets the caller drop
- * the filter instead, which is what it already does for a blank string.
- *
- * `"shoes\u0000"` therefore searches for `shoes`, which is what a client sending an accidental NUL
- * meant; `"\u0000"` alone is treated as blank, the same as `""` or `"   "`.
+ * `undefined` rather than an empty pattern is load-bearing — `$regex: ''` matches every document,
+ * so a term that vanishes under stripping would invert the filter into "everything".
  *
  * @param value - raw text off the request
  * @returns an escaped pattern, or `undefined` if nothing searchable remains

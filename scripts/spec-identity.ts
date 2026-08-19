@@ -1,26 +1,18 @@
 /**
  * The cross-repo contract check.
  *
- * A set of files exists in BOTH this repo and the paired frontend, byte-for-byte identical,
- * maintained by hand. Codegen on both sides reads the specs among them — orval and
- * `gen-asyncapi-types` here, orval and its own generator there — so a one-line edit in one
- * checkout silently forks what both sides believe they share. Nothing detected that: each repo's
- * CI lints its own copy and finds it perfectly valid, because a forked spec is still a valid spec.
+ * A set of files exists in BOTH this repo and the paired frontend, byte-for-byte identical.
+ * Codegen on both sides reads the specs among them, so a one-line edit in one checkout silently
+ * forks what both sides believe they share — and neither CI notices, because a forked spec is
+ * still a valid spec.
  *
- * This module is the detector. It is deliberately dumber than a semantic diff: identity, not
- * equivalence. Two specs that mean the same thing but differ in key order or comments are still a
- * fork in the making, because the next person to regenerate from one of them gets a diff nobody
- * asked for. Reordering both copies together is a two-line change; letting them drift is not.
+ * Deliberately dumber than a semantic diff: IDENTITY, not equivalence. Two specs that mean the same
+ * thing but differ in key order are still a fork in the making.
  *
- * It treats the symptom, and should say so: the cure is one source of truth — a package both
- * repos consume, or a third repo — which is a bigger decision than a CI job. Until that is made,
- * this fails the build on the commit that forks a shared file rather than on the release that
- * ships the mismatch.
+ * The frontend mirrors this file; only `THIS_REPO` differs, so a file added on one side is a
+ * one-line copy on the other.
  *
- * The frontend mirrors this file. The two are separate copies on purpose: a shared package would
- * itself be a cross-repo dependency, which is the problem rather than the fix. Only `THIS_REPO`
- * differs between them — the file list is identical, so a file added on one side is a one-line
- * copy on the other rather than a translation.
+ * See: docs/tools/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -41,15 +33,11 @@ export interface SharedFile {
     backend: string;
     frontend: string;
     /**
-     * Which side decides what this file says.
+     * Which side decides what this file says. `backend` — the frontend's copy is an output, so a
+     * fork has one correct resolution and `sync:frontend` applies it. `mirror` — both sides
+     * maintain it by hand, so a fork is a question no script may answer.
      *
-     * `backend` means the frontend's copy is an OUTPUT: it is produced here from per-module sources
-     * and copied over, so a fork has one correct resolution and `npm run sync:frontend` can apply it
-     * without asking. `mirror` means both sides maintain it by hand, so a fork is a question — which
-     * copy is right — that no script may answer on its own.
-     *
-     * Recorded here rather than inferred from the path because it is the difference between a
-     * one-command fix and a decision, and getting it wrong overwrites work in the wrong direction.
+     * See: docs/tools/pairing-and-ports.md#owned-versus-mirrored
      */
     owner: 'backend' | 'mirror';
 }
@@ -108,42 +96,20 @@ export const SHARED_FILES: readonly SharedFile[] = [
     { backend: 'spectral.yaml', frontend: 'spectral.yaml', owner: 'mirror' },
 
     /*
-     * The generated realtime types — `src/types/asyncapi.generated.ts` in BOTH repos, each built
-     * by `npm run gen:asyncapi` from that repo's own `asyncapi.yaml` — are deliberately NOT in this
-     * list, for the same reason as the API client collections below: they are an OUTPUT, and every
-     * input they have is compared already. The shared half of the spec is compared above, and
-     * `scripts/gen-asyncapi-types.ts` at the bottom.
-     *
-     * The two outputs are NOT identical, and are not meant to be: this repo's is generated from the
-     * full contract and carries the queue payloads, the frontend's from the shared subset and does
-     * not. Comparing them would demand a sameness the split exists to remove — while what a
-     * cross-repo comparison would actually add, "did this repo regenerate after the last spec
-     * edit", is answered by `npm run check:asyncapi-types` inside each repo, with no sibling
-     * checkout to find and no file to carry across.
+     * `src/types/asyncapi.generated.ts` is deliberately absent: an OUTPUT whose every input is
+     * already compared, and the two are not meant to match — this repo's carries the queue
+     * payloads. `npm run check:asyncapi-types` guards it inside each repo instead.
      */
 
     /*
-     * The four API client collections (`contract.<tool>.*` at the backend's root) are deliberately NOT here.
-     * They earned a place in this list when they were written by hand — a hand-maintained
-     * restatement of the contract forks the moment an endpoint lands on one side only. They are
-     * generated from `openapi.yaml` now, pinned to a fresh generation by the backend's
-     * contract-bundles test, and `openapi.yaml` itself is compared above: identical spec plus
-     * deterministic generator means a frontend copy could never disagree without the spec
-     * disagreeing first. So the frontend holds no copy at all, and the collections live only
-     * where they are produced.
+     * The `contract.<tool>.*` collections are deliberately absent: generated from `openapi.yaml`,
+     * which is compared above, so the frontend holds no copy at all.
      */
 
     /*
-     * The analytics event names the FRONTEND emits — its whole catalogue, and the only analytics
-     * file that crosses the boundary. Both repos write into one Umami website, so the names form
-     * one namespace, but each name has exactly one emitter: everything with an API call behind it
-     * is emitted here, and the frontend keeps only the moments no request can carry. The backend's
-     * own names are never published — a module's controllers import them directly, so a copy would
-     * have no reader on either side.
-     *
-     * Authored as `shared/contracts/analytics.frontend.ts` and published by `contracts:bundle`,
-     * the analytics twin of the `asyncapi.public.yaml` split above. Nothing else compares the two
-     * copies: each repo's suite asserts its own and passes. Different paths because the two lint
+     * The analytics names the FRONTEND emits — the only analytics file crossing the boundary. One
+     * Umami namespace, one emitter per name; the backend's own names are never published because a
+     * module's controllers import them directly. Different paths on the two sides because the lint
      * configs disagree on filename case.
      */
     {

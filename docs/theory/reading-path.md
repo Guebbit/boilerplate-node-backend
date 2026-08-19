@@ -13,6 +13,12 @@ here and why each earns its place — read **[Tools Explained](../tools/tools-ex
 the whole stack on one diagram. This page is about the code.
 :::
 
+::: tip Landed on a file instead
+This page is for reading the codebase in order. If you got here from a filename you did not
+recognise, the **[File Glossary](../reference/)** is the other direction: look the file up, get a
+sentence and a link, carry on with what you were doing.
+:::
+
 ---
 
 ## The path

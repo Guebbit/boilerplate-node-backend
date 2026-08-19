@@ -7,16 +7,15 @@ import { PDF_QUEUE, handlePdfJob } from '@infrastructure/adapters/pdf.worker';
  * Register all queue consumers.
  * Called once during app startup — no-op when RabbitMQ is disabled.
  *
- * **This file is `app`, while the handlers it wires are `infrastructure`.** Sending an email and rendering a
- * PDF are verbs that still make sense in an application with no modules at all, so each consumer
- * lives beside the adapter it is the queue-side half of. Naming *which* queues this build drains is
- * the assembly decision, and that is what stayed here. A domain-owned worker would belong to its
- * module; there is not one yet.
+ * This file is `app`; the handlers it wires are `infrastructure`, because sending an email and
+ * rendering a PDF make sense in an application with no modules at all. Naming *which* queues this
+ * build drains is the assembly decision.
  *
- * Worth knowing: **nothing publishes to `PDF_QUEUE`.** The order invoice endpoint calls
- * `renderHtmlToPdf` synchronously on the request path, so this consumer drains a queue that has no
- * producer. It is left registered deliberately — it is the working example of the async pattern,
- * and moving invoice rendering off the request path is a feature decision, not a cleanup.
+ * Worth knowing: **nothing publishes to `PDF_QUEUE`.** The invoice endpoint renders synchronously
+ * on the request path, so this consumer drains a producerless queue. Left registered on purpose as
+ * the worked example of the async pattern.
+ *
+ * See: docs/tools/rabbitmq.md
  */
 export const registerWorkers = (): Promise<void> => {
     if (!isQueueEnabled()) return Promise.resolve();

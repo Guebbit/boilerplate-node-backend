@@ -152,6 +152,80 @@ Heavy tasks (email, PDF generation) are pushed to [RabbitMQ](../tools/rabbitmq.m
 
 [Winston](../tools/winston.md), [Prometheus](../tools/prometheus.md), [OpenTelemetry](../tools/opentelemetry.md), and [Grafana](../tools/grafana.md) make it easier to debug the same request from multiple angles. Each log line carries a `trace_id` that links back to the full trace in Grafana → Tempo.
 
+## The database error interpreter
+
+`databaseErrorInterpreter` in `src/infrastructure/http/errors.ts` is the single place that decides
+which driver failures describe the **request** rather than the server. One function, so the answer
+is the same on all twelve models — a call-site `try`/`catch` is invisible to every endpoint that
+did not think to write one.
+
+| Raised by                    | Status | Why it is the caller's problem                                                                            |
+| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                     |
+| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.         |
+| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                               |
+| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`. |
+| anything else                | 500    | Genuinely unrecognised.                                                                                   |
+
+Every branch above exists because something describing the CALLER was reaching the 500 and being
+reported as a server fault. `POST /products/search` is public and takes an `id` filter, so
+`{"id": ""}` was an **unauthenticated** request producing a server error — an availability signal
+as much as a correctness one.
+
+### Three rules the branches share
+
+- **Detected by `name`, not `instanceof`.** Both `bson` and `mongoose` reach this process as
+  transitive dependencies of more than one package, and an `instanceof` against the wrong copy
+  silently returns false.
+- **The message is never the driver's.** E11000's text carries the index name and the duplicated
+  value — user-supplied data, which has no business being echoed back. Mongoose's enumerates the
+  failing paths, which describes the schema. Both are literals here instead.
+- **Neither half of the tuple comes from the error.** `message` is prose, so parsing a status out
+  of it yields `NaN`, and `res.status(NaN)` throws inside Express — a client error arriving as a 500.
+
+### Why `ValidationError` is not already impossible
+
+Request bodies are validated by Zod schemas generated from `openapi.yaml` before a controller runs,
+so a Mongoose validator firing means the model is enforcing something the contract does not.
+`POST /locales` was the worked example: a display name of one space satisfies `minLength: 1`, then
+the schema's `trim` reduces it to `''` and `required` refuses it — a 500 for a stray space, on an
+admin route, found by `tests/fuzz/endpoints.fuzz.test.ts` on its third generated case.
+
+Closing it **at the contract** is still the better fix where the constraint can be expressed there.
+This branch is the floor under that, across all twelve models at once.
+
+### Where a fifth branch goes
+
+In this function, carrying a comment naming which driver raises it and why its status is what it
+is — not in a controller, and not as a `try`/`catch` at the call site.
+`tests/fuzz/endpoints.fuzz.test.ts` is what surfaces these: a 500 out of it is this class of error
+until something proves otherwise.
+
+## What an unhandled error tells the client
+
+The global handler answers in four branches, and the order is the point: a `MulterError` becomes
+400, an `ExtendedError` is returned with the status and copy its thrower chose, a driver failure
+that `databaseErrorInterpreter` recognises as a _client_ mistake becomes that 4xx, and everything
+else is 500.
+
+### The database branch is a safety net, not a substitute
+
+Every controller ends its chain with a `.catch()` that calls `rejectDatabaseError`, so nothing
+routinely relies on this branch. But a controller added later may forget one, and forgetting is
+silent — a malformed `ObjectId` reported as a server fault rather than a bad request.
+`tests/fuzz/endpoints.fuzz.test.ts` walks every spec operation and is what catches the next one.
+
+### The 500 branch says nothing
+
+`errors[]` carries a constant, never `error.message`. An unexpected error is precisely the case
+where nobody chose the wording: a Mongoose validation error naming internal field paths, a driver
+error naming hosts and ports, an `ENOENT` naming a filesystem layout, a third-party client quoting
+a URL with a key in it. Any of those is free reconnaissance for an unauthenticated caller, and none
+of it means anything to the person reading it.
+
+The detail is not lost — it is logged with the request id and trace id, where an operator can act on
+it and a stranger cannot.
+
 ## Why the flow matters
 
 When you change behavior, ask:

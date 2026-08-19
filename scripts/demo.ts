@@ -1,19 +1,18 @@
 /**
- * The demo profile: the real API, self-contained and disposable.
+ * The demo profile: the real API, self-contained and disposable — `npm run demo`.
  *
- * Boots the actual application against an in-memory MongoDB (the same `mongodb-memory-server`
- * the test suite uses), seeds it with every enabled module's demo fixtures, and serves on
- * `NODE_PORT` (default 3000). No Docker, no Redis, no broker — cache and queue run `disabled`,
- * which is a supported deployment shape (see `/observability/health`).
+ * Boots the actual application against an in-memory MongoDB, seeds it from every enabled module's
+ * fixtures, and serves on `NODE_PORT`. No Docker, no Redis, no broker — cache and queue run
+ * `disabled`, which is a supported deployment shape.
  *
- * This is what the paired frontend's dev server and e2e suite run against instead of a
- * hand-written mock of this API: one implementation of the behaviour, served by the code that
- * owns it. `NODE_DEMO=true` additionally mounts the demo control surface (`POST /__demo/reset`,
- * `GET /__demo/emails`) — see `src/app/demo.ts`.
+ * This is what the paired frontend's dev server and e2e suite run against instead of a hand-written
+ * mock. `NODE_DEMO=true` additionally mounts the control surface in `src/app/demo.ts`.
  *
- * Several instances can run side by side (each owns its own in-memory Mongo):
+ * Several instances can run side by side, each owning its own in-memory Mongo:
  *
  *   NODE_PORT=3101 npm run demo
+ *
+ * See: docs/tools/demo-profile.md
  */
 import { MongoMemoryServer } from 'mongodb-memory-server';
 

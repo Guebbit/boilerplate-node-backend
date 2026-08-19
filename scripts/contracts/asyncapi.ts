@@ -1,52 +1,19 @@
 /**
- * The realtime/event contracts, merged from one document per section.
+ * The realtime contracts, merged from one whole AsyncAPI document per section.
  *
- * ## Two bundles, one set of sources
+ * Two bundles from one set of sources: `asyncapi.yaml` is every channel this service has,
+ * `asyncapi.public.yaml` the half an API client can reach. The split is one `scope` field per
+ * section, so the same document produces both and neither can describe a channel differently.
+ * A server travels with the section that binds to it, which is why `servers` is merged like
+ * `channels` rather than sitting in the root document.
  *
- * `asyncapi.yaml` is the whole contract — every channel this service has. `asyncapi.public.yaml`
- * is the SHARED half: the sections whose channels an API client can reach, and nothing else. The
- * paired frontend holds a byte-identical copy of the second under its own `asyncapi.yaml`, and
- * generates its types from that, so it never sees a queue it could not open a connection to if it
- * tried.
+ * Deliberately NOT `asyncapi bundle`: that dereferences every `$ref`, which triples the document
+ * and leaves `scripts/gen-asyncapi-types.ts` — which walks those refs to name its models — with
+ * nothing to follow. This merge copies four maps and refuses on a collision.
  *
- * The split is one field per section (`scope`) rather than a second set of fragments. A section is
- * shared or it is not, and nothing else about it changes — the same document produces both
- * bundles, which is what stops the two from describing the same channel differently.
+ * Merged through the YAML AST so each node keeps its authored quoting and scalar style.
  *
- * A server travels with the section that binds to it (`sseLocal` in the observability module,
- * `rabbitmqLocal` in `asyncapi.workers.yaml`), so dropping a section drops its server too. That is
- * why `servers` is merged here like `channels` instead of sitting in the root document.
- *
- * ## Why this is not `asyncapi bundle`
- *
- * The REST contract is COMPILED by `redocly bundle`, and the obvious symmetry would be to shell out
- * to `@asyncapi/cli` here. It was tried, and it does the wrong thing: `asyncapi bundle`
- * DEREFERENCES. Every `$ref` is inlined, the document grows from 239 lines to 819, each payload is
- * repeated once per channel that names it AND kept under `components`, and
- * `scripts/gen-asyncapi-types.ts` — which walks `channels[*].{publish,subscribe}.message.$ref` to
- * decide what to name a generated model — is left with nothing to follow.
- *
- * So the merge happens here, in about thirty lines, and it is deliberately dumber than a bundler:
- * it copies four maps and refuses on a collision. `$ref` strings are carried across untouched
- * because every section resolves its own refs internally — a module's messages and schemas travel
- * with its channels.
- *
- * ## What a section is
- *
- * One complete AsyncAPI document per section: `src/modules/<name>/asyncapi.yaml` for a domain, and
- * `shared/contracts/asyncapi.workers.yaml` for the `worker.*` queues that belong to no domain (the
- * async twin of filing `GET /` under `system` in the REST contract). Each is valid on its own —
- * lintable, and openable in AsyncAPI Studio — which the three-fragment layout this replaced could
- * never be: `channels.yaml`, `messages.yaml` and `schemas.yaml` were half-objects that parsed as
- * nothing until concatenated in the right order at the right indentation.
- *
- * The root document holds what describes the service rather than a domain, and no channels.
- *
- * ## Formatting
- *
- * Merged through the YAML AST (`parseDocument`), not through plain objects, so each node keeps the
- * quoting and scalar style it was authored with — a `$ref` stays single-quoted, a `|` block stays a
- * block. Only folded scalars are re-emitted, since `lineWidth: 0` unfolds them.
+ * See: docs/api/contract-fragmentation.md#asyncapi-yaml-—-one-whole-document-per-section-merged
  */
 
 import { readFileSync } from 'node:fs';

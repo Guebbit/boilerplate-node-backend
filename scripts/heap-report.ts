@@ -2,37 +2,18 @@
 /**
  * Summarises a V8 heap snapshot — `npx tsx scripts/heap-report.ts <file.heapsnapshot> [topN]`.
  *
- * ── WHY THIS EXISTS ──────────────────────────────────────────────────────────────────────────────
- * A runaway process is usually diagnosed from the outside: lower a limit, raise a worker count, swap
- * a transform, and see whether the symptom moves. That answers "did it get better", never "what is
- * in there" — so it cannot tell a fix apart from a postponement.
- *
- * A snapshot answers the second question directly. Node writes one at the moment it is about to die
- * if the process is started with:
+ * Node writes a snapshot as it is about to die when started with:
  *
  *     NODE_OPTIONS="--max-old-space-size=<mb> --heapsnapshot-near-heap-limit=1"
  *
- * Lower the limit to make the moment arrive sooner; the composition of the heap is the same.
+ * IT STREAMS, and has to: a `.heapsnapshot` of any interesting size is past V8's maximum string
+ * length, so `JSON.parse(readFileSync(...))` fails with `ERR_STRING_TOO_LONG` before parsing
+ * starts. This walks the file in chunks — header, then `nodes` aggregated and discarded, then the
+ * interned `strings` table — never holding more than one buffer.
  *
- * ── WHY IT STREAMS ───────────────────────────────────────────────────────────────────────────────
- * `.heapsnapshot` is JSON, and the obvious `JSON.parse(readFileSync(...))` cannot read one: a heap
- * of any interesting size produces a file past V8's maximum string length (~512 MB), so the read
- * fails with `ERR_STRING_TOO_LONG` before parsing begins. The irony is exact — the file is too big
- * to load for the same reason it is worth reading.
+ * Reading it: one dominant kind is a finding, an even spread is a working set.
  *
- * So this walks the file in chunks and never holds more than one buffer:
- *
- *   1. the header, for `node_fields` (the shape of a node record) and `node_types` (its type names)
- *   2. `nodes`, a flat integer array — every `node_fields.length` values is one object, aggregated
- *      as it goes and then discarded
- *   3. `strings`, the interned name table — scanned in order, keeping only the few names the
- *      largest groups actually need
- *
- * ── READING THE OUTPUT ───────────────────────────────────────────────────────────────────────────
- * One dominant kind is a finding; an even spread is a working set. That distinction is the whole
- * point: it separates "something is retained" from "this suite is simply heavy", which need
- * opposite fixes. Chrome DevTools reads the same file and is better at retainer chains — this is
- * for the prior question of whose bug it is.
+ * See: docs/tools/mutation-testing.md#reading-the-heap-itself
  */
 import { createReadStream } from 'node:fs';
 import { open } from 'node:fs/promises';

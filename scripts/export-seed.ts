@@ -2,43 +2,15 @@
 /**
  * Publish the demo dataset as the API actually serves it — `npm run seed:export`.
  *
- * ## What this replaces, and why
+ * It seeds a throwaway database with the real seeders, hands it to `db/demo/assemble.ts`, and
+ * writes what that returns. Schema defaults, derived totals and serializer omissions are in the
+ * file because the API produced them, not because a fixture claimed them.
  *
- * The two repos used to SHARE SOURCE. `db/seeds/seed-identities.ts` was a dependency-free file of
- * plain facts — ids, emails, prices — assembled from a fragment in every module and copied verbatim
- * into the frontend, where a hash check proved the copies had not forked. Each side then wrote its
- * own mapper from those facts into the shape it needed.
+ * That is the whole point: publishing the INPUT instead leaves the two repos' mappers unchecked,
+ * which is where the drift actually lived — a hand-written `active: true` in the frontend's mock,
+ * and no `locale` at all, with every spec on both sides green against its own copy.
  *
- * Sharing the facts left the MAPPERS unchecked, and that is where the drift actually lived. The
- * frontend's mock carried a hand-written `active: true` and `verified: true` because someone had
- * read the backend's schema once and copied the defaults across; it carried no `locale` at all,
- * because nobody remembered the column existed. Every spec on both sides stayed green, since each
- * was consistent with its own copy.
- *
- * So this publishes the OUTPUT instead of the input. It seeds a throwaway database with the real
- * seeders, hands it to `db/demo/assemble.ts`, and writes what that returns. Schema defaults,
- * derived totals and serializer omissions are all in the file because the API produced them, not
- * because a fixture claimed them.
- *
- * ## Why a real database rather than calling the serializers directly
- *
- * The transforms are only half of what shapes a response. `default:` values are applied by Mongoose
- * on write, the password hash is applied by a pre-save hook, and `select: false` decides what a read
- * can even see. Running the fixtures through a `mongod` is what makes the published rows the rows
- * the API would serve — anything short of it re-introduces a mapper, which is the thing being
- * removed.
- *
- * ## What this file owns, and what it does not
- *
- * Only the throwaway server, the seeding, and the read/compare/write around the artefact. The walk
- * that turns a database into those bytes is `db/demo/assemble.ts`, because
- * `tests/unit/db/migration-demo-data.test.ts` re-derives the same dataset from a MIGRATED database
- * and compares it to this one. Two implementations of that walk could disagree about what the
- * dataset is, which is the drift this whole design removes.
- *
- * Usage:
- *   npm run seed:export            # write db/demo/demo-data.json
- *   npm run check:seed-export      # fail if the committed file is stale, write nothing
+ * See: docs/api/contract-fragmentation.md#the-demo-dataset-—-not-a-bundle-at-all-any-more
  */
 
 import 'dotenv/config';

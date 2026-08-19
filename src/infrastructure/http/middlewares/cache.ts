@@ -25,16 +25,10 @@ interface CacheOptions {
     /**
      * Let the SERVER hold the answer for the full TTL, but make the browser check first.
      *
-     * The default aligns the two caches: `max-age=<ttl>` tells a browser it may answer from its
-     * own store without asking, which is right for data that changes on its own schedule. It is
-     * wrong for data a PERSON edits and then goes looking at. `invalidateCache` clears Redis on
-     * every write, but it cannot reach a copy already sitting in someone's browser — so a
-     * translator saves a string, reloads, sees the old one, and reports that saving is broken.
-     *
-     * With this set the response is still stored and still served from Redis; the browser is
-     * simply told to revalidate, which Express answers with a `304 Not Modified` and no body
-     * whenever the ETag still matches. The round trip is the cost, and it buys an edit that
-     * appears at once.
+     * `invalidateCache` clears Redis on every write and cannot reach a copy already in someone's
+     * browser — so for data a PERSON edits and then goes looking at, `max-age` is wrong. Set this
+     * and the response is still served from Redis; the browser revalidates and Express answers
+     * `304` whenever the ETag matches. One round trip, for an edit that appears at once.
      */
     browserRevalidate?: boolean;
 }

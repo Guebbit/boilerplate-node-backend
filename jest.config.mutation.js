@@ -16,7 +16,7 @@
  * tests open no database: 3963 MB -> 4447 MB -> 5045 MB across four mutants, past Node's 4288 MB
  * default cap, after which the worker is killed and restarted having finished nothing. The run
  * reported 36 hours remaining and was not converging. See
- * `docs/tools/mutation-testing.md#when-a-run-never-finishes--the-oomstrand-loop`.
+ * `docs/tools/mutation-testing.md#when-a-run-never-finishes-—-the-oom-strand-loop`.
  *
  * swc only translates. It strips the types and returns JavaScript, checking nothing, so it retains
  * nothing between mutants.

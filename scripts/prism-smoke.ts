@@ -2,13 +2,11 @@
 /**
  * Boot Prism against `openapi.yaml` and prove it answers — `npm run test:prism`.
  *
- * This is a smoke test of the CONTRACT, not of the app: Prism serves the spec's own examples, so a
- * green run means the document is complete enough to mock. It is deliberately outside the
- * pre-commit gate because it binds a real port.
+ * A smoke test of the CONTRACT, not of the app: Prism serves the spec's own examples, so a green
+ * run means the document is complete enough to mock. Outside the pre-commit gate because it binds
+ * a real port, and it owns the process it starts so a failed curl cannot leave one running.
  *
- * It replaces a package.json one-liner that did the same job with `kill $(lsof -t -i:4010)`, a bare
- * `&`, `sleep 2` and a trailing `kill $PRISM_PID` — which left the mock server running whenever
- * curl failed, so the next run killed a process it had not started.
+ * See: docs/tools/contract-testing.md
  */
 
 import { spawn } from 'node:child_process';

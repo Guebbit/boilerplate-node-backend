@@ -90,24 +90,51 @@ now lives. So `audit.ts` declares
 the port and `app.ts` supplies the implementation at boot, the same shape as `IImageStore`. The
 practical payoff: swapping the destination touches one line in `app.ts`, not the 53 call sites.
 
-## There is no in-process domain event bus
+## The domain event bus, and what it is not
 
-Deliberately, and it is a decision worth not re-litigating by accident:
+`src/kernel/events.ts` is an in-process bus, and it exists for exactly one job: letting two modules
+whose relationship is genuinely mutual talk without importing each other. Deleting a product has to
+empty it out of every cart, while the cart needs the catalogue to price a line. As imports that is a
+cycle; as an event it is `products` emitting and `cart` listening, and the dependency arrow points
+one way only.
 
-- In a single service, an in-process bus costs you the call graph — you lose "find all
-  references", stack traces stop reaching the cause, and the type checker stops telling you a
-  listener broke.
-- It buys none of what a real broker gives you. No durability, no retry, no replay. A crash
-  mid-dispatch loses the event outright.
-- The things that would have subscribed are better off without it. Emails **already** go through
-  RabbitMQ, which is durable — putting a lossy in-process hop in front of a durable queue is
-  backwards. Cache invalidation wants the opposite of async fan-out: it should happen immediately
-  after the write, in the same process.
+It is not a signal in the table above. Nothing reads it, nothing stores it, and it never leaves the
+process — it is a call graph device, and the price it pays is the call graph itself: "find all
+references" no longer reaches the handler.
 
-If cross-process fan-out is ever genuinely needed, the answer is a RabbitMQ topic exchange fed by
-a transactional outbox — not an `EventTarget`. See
+### The three properties that matter
+
+- **Handlers run sequentially and awaited.** The emitters depend on the effect having happened — a
+  product leaves every cart before it leaves the database. Fire-and-forget would turn an ordering
+  guarantee into a race.
+- **A throwing handler is logged and skipped.** It stops neither the remaining handlers nor the
+  emitter: a listener must not roll back an operation that was already authorised, and the emitting
+  module cannot decide failure modes for code it has never heard of.
+- **The payload map is open.** A module declares its own events by augmenting `DomainEventMap` from
+  inside its own folder, so adding a domain edits no shared file.
+
+### Why it is not a substitute for the broker
+
+Do not grow it into one. It has no durability, no retry and no replay, and a crash mid-dispatch
+loses the event outright. Emails already go through RabbitMQ, which is durable — putting a lossy
+in-process hop in front of a durable queue is backwards. Cache invalidation wants the opposite of
+async fan-out: it should happen immediately after the write, in the same process.
+
+If cross-process fan-out is ever genuinely needed, the answer is a RabbitMQ topic exchange fed by a
+transactional outbox. See
 [AsyncAPI Workflow](../api/asyncapi-workflow.md#naming-convention) for why a channel is only
 declared for something that actually travels on a wire.
+
+### `resetDomainEvents` is a test seam with a real cost
+
+It drops every subscription, and it ships to production so that suites registering modules per case
+do not accumulate handlers. Nothing stops application code from calling it and silently
+unsubscribing every module; seven suites depend on it, so it is load-bearing rather than removable.
+
+The shape that would not need it is a bus **instance** owned by the registry — a fresh registry
+means a fresh bus, and the reset becomes the constructor. The cost is that `onDomainEvent` and
+`emitDomainEvent` stop being importable functions. Whoever makes that change is also deciding where
+subscription lives (`AppModule.subscribe`), because those are the same question.
 
 ## Everything carries the same correlation ids
 

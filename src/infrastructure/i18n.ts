@@ -8,34 +8,18 @@ import { logger } from '@infrastructure/adapters/logger';
 /**
  * Request-scoped i18n.
  *
- * ## Why this module exists
+ * `i18next`'s default export is one global instance with one active language, so two overlapping
+ * requests in different languages interleave and one is answered in the other's. Instead:
+ * `getFixedT(locale)` binds a `t` to one language and touches no global, and an
+ * `AsyncLocalStorage` carries it down the request's async chain.
  *
- * `i18next`'s default export is a single global instance with a single active language. Importing
- * `t` from it gives every request the same language, and the only way to change it —
- * `i18next.changeLanguage()` — mutates that global AND is async. Two overlapping requests in
- * different languages interleave and one gets answered in the other's language: a bug that only
- * appears under concurrency, so never in a test and always in production.
+ * Import `t` from here, never from `'i18next'`.
  *
- * Instead: `i18next.getFixedT(locale)` returns a `t` bound to one language and touches no global,
- * and an `AsyncLocalStorage` carries it down the request's async chain so a Zod thunk twelve calls
- * deep can reach it without `t` being threaded through twelve signatures.
+ * ALS is scoped to an async CALL CHAIN. Queued work, boot-time callbacks and scripts all run
+ * outside the store and fall back to the boot locale — out-of-band work must carry its locale in
+ * the payload and bind with {@link runWithLocale}.
  *
- * Call sites import `t` from here instead of from `'i18next'` and otherwise keep their shape.
- *
- * ## Boundaries — where the ambient `t` stops working
- *
- * ALS is scoped to an async CALL CHAIN, not to a block or a variable. Anything that leaves the
- * chain leaves the store behind, and `t` silently falls back to the global instance:
- *
- * - **Queued work.** `enqueueEmail` publishes to a queue that `workers/email.worker.ts` drains
- *   later, possibly in another process. The store does not survive that hop — out-of-band work
- *   must carry its locale in the payload and bind its own `t` with {@link runWithLocale}.
- * - **Callbacks registered before the chain started** (module-scope subscriptions, timers set at
- *   boot) run outside any store.
- * - **Jobs, migrations, scripts and tests** have no request at all. The fallback to the global
- *   `i18next.t` is deliberate and is what keeps them working.
- *
- * The fallback never throws and never returns a key: outside a request you get the boot locale.
+ * See: docs/tools/i18n.md
  */
 
 /**
@@ -53,20 +37,15 @@ export const getFallbackLocale = (): string => process.env.NODE_FALLBACK_LOCALE 
 let supportedLocalesCache: string[] | undefined;
 
 /**
- * The locales this API can answer in.
+ * The locales this API can answer in — `NODE_SUPPORTED_LOCALES` when set, otherwise the directory
+ * listing.
  *
- * `NODE_SUPPORTED_LOCALES` wins when set (useful to ship a dictionary without exposing it yet);
- * otherwise the directory listing IS the list, so adding `src/locales/xx.json` is the only step
- * needed to add a language. The service runs from source under `tsx` — there is no emit step that
- * could leave the directory behind.
+ * READ ONCE, THEN CACHED, and that is load-bearing: `i18next.init()` registers its resources from
+ * this list at boot and never revisits them, so a per-request read would let the middleware
+ * negotiate a language i18next cannot resolve. A `Content-Language` header that lies is worse than
+ * the language being unavailable.
  *
- * **Read once, then cached, and that is load-bearing.** `i18next.init()` registers its
- * `resources` from this list at boot and never revisits them, so a per-request directory read
- * would let the two disagree: drop in `es.json` on a running server and the middleware starts
- * negotiating `es` — answering `Content-Language: es` — while i18next has no Spanish resource and
- * silently serves the fallback. A header that lies is worse than the language being unavailable.
- * Caching makes "what we negotiate" and "what we can actually resolve" the same list, at the cost
- * of a restart to add a locale — which is what a deploy does anyway.
+ * See: docs/tools/i18n.md#which-languages-exist
  */
 export const listSupportedLocales = (): string[] => {
     if (supportedLocalesCache) return supportedLocalesCache;
@@ -155,16 +134,11 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * One language's dictionary: the shared keys, plus every registered module's contribution.
+ * One language's dictionary: the shared keys plus every registered module's contribution, layered
+ * on top — so a module CAN shadow a shared key. Nothing does, and
+ * `tests/cross-cutting/locale-namespaces.test.ts` fails if one starts.
  *
- * Exported for `GET /locales/:locale`, which serves the API's own dictionary to clients that want
- * to render API copy themselves — so that endpoint sees the merged result too, not just the
- * shared half.
- *
- * The shared file is read first and contributions are layered on top, which means a module CAN
- * shadow a shared key. Nothing does, and `tests/cross-cutting/locale-namespaces.test.ts` fails if
- * one starts: a module quietly overriding `generic.error-internal` would change copy the paired
- * frontend also reads.
+ * Exported for `GET /locales/:locale`, so that endpoint sees the merged result too.
  */
 export const readLocaleDictionary = (locale: string): Record<string, unknown> => {
     // Shared file first, module contributions layered on top — hence a module CAN shadow a key.
@@ -193,37 +167,12 @@ export const loadLocaleResources = (): Resource =>
     );
 
 /*
- * ---------------------------------------------------------------------------------------------
- * Database overrides
+ * ── Database overrides ───────────────────────────────────────────────────────────────────────
+ * The files above are DEFAULTS; admin edits overlay them. Three properties this layer keeps:
+ * nothing here is awaited on the request path, a refresh restores the file baseline BEFORE
+ * re-applying, and only a language with a file can be overridden.
  *
- * The files above are DEFAULTS. A person who does not open a code editor can override any one of
- * their keys from the admin screens, and the rows that carry those edits are `api`-scoped entries
- * in the `locales` module's collection — the counterpart to the `app`-scoped rows a frontend
- * downloads for its own dictionary.
- *
- * Three properties this layer keeps, in the order they matter:
- *
- *   The files still stand alone. Nothing below is awaited on the request path, and an empty
- *   overlay is indistinguishable from no overlay. Mongo down, the provider unregistered, the
- *   refresh never called — `t()` resolves from the deployed files exactly as it did before this
- *   existed, which is the property the whole locales module was arranged around and the one this
- *   addition was most at risk of quietly spending.
- *
- *   Overrides never accumulate. A refresh restores the file baseline BEFORE re-applying, so
- *   deleting a row actually removes its effect. Merging onto whatever the last refresh left would
- *   make a deleted override permanent until a restart, which is the failure nobody reports because
- *   it looks like the delete simply did not save.
- *
- *   Only a language the API already has a FILE for can be overridden. `listSupportedLocales()` is
- *   read once at boot and is what the middleware negotiates against, so a language reachable only
- *   through the database would be one this instance answers `Content-Language` for and cannot
- *   actually resolve. Rows for such a language are skipped and logged rather than applied.
- *
- * Cross-worker staleness is real and bounded: each worker holds its own overlay, so an edit is
- * visible in the worker that served the write immediately and in the others within one refresh
- * interval. That is the cost of not putting a read on the request path, and it is the right trade
- * for copy.
- * ---------------------------------------------------------------------------------------------
+ * See: docs/tools/i18n.md#database-overrides
  */
 
 /**
@@ -276,15 +225,11 @@ export const applyLocaleOverrides = (
     const supported = new Set(listSupportedLocales());
 
     /*
-     * EVERY supported language is restored, not just the ones this call carries overrides for.
+     * EVERY supported language is restored, not only the ones this call carries overrides for —
+     * otherwise deleting the last override of a language would restore nothing and change nothing.
      *
-     * Restoring only the languages named would leave the previous refresh's overrides answering
-     * for every language dropped since — and the emptiest case, a provider that now returns
-     * nothing at all, would restore nothing and change nothing. Deleting the last override of a
-     * language has to work, and when it does not it looks exactly like a delete that never saved.
-     *
-     * Synchronous from here to the end of the loop below, so nothing can observe the moment where
-     * a language is briefly back on its file.
+     * Synchronous to the end of the loop below, so nothing observes a language briefly back on its
+     * file.
      */
     resetLocaleOverrides();
 

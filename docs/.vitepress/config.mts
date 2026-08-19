@@ -14,7 +14,8 @@ export default withMermaid(
                 { text: 'Start', link: '/getting-started' },
                 { text: 'Theory', link: '/theory/' },
                 { text: 'Tools', link: '/tools/' },
-                { text: 'API', link: '/api/' }
+                { text: 'API', link: '/api/' },
+                { text: 'Files', link: '/reference/' }
             ],
             sidebar: {
                 '/theory/': [
@@ -57,6 +58,7 @@ export default withMermaid(
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
                             { text: 'Pairing & Ports', link: '/tools/pairing-and-ports' },
                             { text: 'Runtime', link: '/tools/runtime' },
+                            { text: 'Internationalisation', link: '/tools/i18n' },
                             { text: 'Demo profile', link: '/tools/demo-profile' },
                             { text: 'Security', link: '/tools/security' }
                         ]
@@ -123,6 +125,23 @@ export default withMermaid(
                             },
                             { text: 'Mutation Testing', link: '/tools/mutation-testing' },
                             { text: 'Load Testing', link: '/tools/load-testing' }
+                        ]
+                    }
+                ],
+                '/reference/': [
+                    {
+                        text: 'File Glossary',
+                        items: [
+                            { text: 'Overview', link: '/reference/' },
+                            { text: 'Repository Root', link: '/reference/root' },
+                            { text: 'App, Kernel & Types', link: '/reference/src-app' },
+                            { text: 'Infrastructure', link: '/reference/src-infrastructure' },
+                            { text: 'Modules', link: '/reference/src-modules' },
+                            { text: 'Contracts', link: '/reference/contracts' },
+                            { text: 'Data', link: '/reference/data' },
+                            { text: 'Scripts & Hooks', link: '/reference/scripts' },
+                            { text: 'Tests', link: '/reference/tests' },
+                            { text: 'Ops & Assets', link: '/reference/ops' }
                         ]
                     }
                 ],

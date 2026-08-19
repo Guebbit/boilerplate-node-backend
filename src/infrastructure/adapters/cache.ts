@@ -13,24 +13,15 @@ import { createClient, type RedisClientType } from 'redis';
 import { logger } from '@infrastructure/adapters/logger';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 
-/**
- * Redis = a very fast in-memory data store.
- * Here we use it as a shared cache, so repeated GET requests can be served faster.
- *
- * What we store per key: enough to replay an HTTP response verbatim — the status code
- * and the already-serialized body.
- */
+/** Enough to replay an HTTP response verbatim: the status code and the serialized body. */
 interface CacheValue {
     status: number;
     body: unknown;
 }
 
 /**
- * Prefix all Redis keys so this app does not collide with other apps/environments.
- *
- * Redis has no namespaces beyond numbered databases, so prefixing is the conventional
- * isolation mechanism. Give staging and production different prefixes (or different
- * instances) or they will read each other's cached responses.
+ * Prefix for every key this app owns. Redis has no namespaces beyond numbered databases, so
+ * staging and production need different prefixes or they read each other's cached responses.
  */
 const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-backend';
 
@@ -48,28 +39,15 @@ const getRedisUrl = (): string | undefined => {
     return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
 };
 
-/**
- * Hold the shared Redis client instance.
- *
- * One TCP connection (with its own internal pool) per process. Creating a client per request
- * would exhaust Redis' connection limit almost immediately under load.
- */
+/** The shared client: one connection per process — a client per request exhausts Redis' limit. */
 let client: RedisClientType | undefined;
 
-/**
- * Hold the in-flight connect promise so parallel requests reuse the same connection attempt.
- *
- * Without this, a burst of requests arriving during startup would each fire their own
- * `connect()` — the classic thundering-herd on a cold cache.
- */
+/** The in-flight connect, so a burst during startup does not thunder-herd its own `connect()`. */
 let connectPromise: Promise<RedisClientType | undefined> | undefined;
 
 /**
- * Avoid logging the same "Redis is down" warning again and again.
- *
- * The client emits `error` on every failed operation, so an unreachable Redis would
- * otherwise produce one log line per request. Reset to `false` on a successful connect
- * so a *later* outage is still reported.
+ * Latches the "Redis is down" warning: the client emits `error` per failed operation, which would
+ * be one log line per request. Reset on a successful connect so a later outage is still reported.
  */
 let connectionWarningLogged = false;
 
@@ -85,12 +63,8 @@ const isCacheEnabled = () => Boolean(getRedisUrl()) && process.env.NODE_REDIS_CA
 /**
  * What this adapter's connection is doing, for `GET /observability/health`.
  *
- * Reads the client's own flags rather than pinging: `isReady` is the exact condition `getClient()`
- * treats as usable, so what the health payload reports is what the next cache lookup will actually
- * do — not a second opinion obtained by opening a socket the application would not have opened.
- *
- * `isOpen` without `isReady` is the handshake window, reported as `connecting` so a deploy in its
- * start-up grace period does not look like an outage.
+ * Reads the client's own flags rather than pinging, so health reports what the next lookup will
+ * actually do. `isOpen` without `isReady` is the handshake window, reported as `connecting`.
  */
 export const cacheState = (): DependencyStatus => {
     if (!isCacheEnabled()) return 'disabled';
@@ -100,19 +74,12 @@ export const cacheState = (): DependencyStatus => {
 };
 
 /**
- * Longest TTL allowed outside production, in seconds.
+ * Longest TTL allowed outside production, in seconds — the bound on how long a write that bypassed
+ * the API (a seed, a migration, a `mongosh` session) can keep serving a stale answer. Production is
+ * never clamped, because there the API is the only writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts
+ * out.
  *
- * Cache invalidation only fires for writes that go *through the API*. Anything that writes
- * straight to Mongo — `db:seed`, a migration, a `mongosh` session — leaves the cache serving
- * the old answer until it expires on its own. A 3600s route TTL therefore means "up to an hour
- * of visibly wrong data" the first time you touch the database by hand.
- *
- * Capping the TTL in dev bounds the damage from *every* such writer, including the ones nobody
- * has thought of yet, at the cost of fewer cache hits while developing. The caching layer still
- * demonstrably works — you just stop losing an afternoon to it. Production keeps the route's
- * declared TTL, because there the API is the only writer.
- *
- * Set `NODE_REDIS_CACHE_DEV_TTL_MAX=0` to disable the cap and use the declared TTLs everywhere.
+ * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
  */
 const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
 
@@ -295,15 +262,11 @@ export const getCacheValue = (key: string): Promise<CacheValue | undefined> =>
 /**
  * Largest response body this cache will store, in bytes.
  *
- * A cache turns a cheap request into long-lived server state, which is a different risk from
- * simply answering it: `GET /products` is public, its responses are held for an hour, and the key
- * includes the full URL — so an unauthenticated caller can mint a distinct entry per query string
- * and keep every one of them resident. Bounding the *entry* is what keeps that from being an
- * amplifier, independently of whatever page size the request layer happens to allow.
+ * A cache turns a cheap request into long-lived server state: the key includes the full URL, so an
+ * unauthenticated caller can mint an entry per query string and keep every one resident. Bounding
+ * the ENTRY is what stops that being an amplifier.
  *
- * 256 KB leaves generous room for a full page of results (a hundred products serialize to roughly
- * 50 KB) while refusing anything that could only have come from an endpoint returning far more
- * than a page.
+ * See: docs/tools/redis-cache.md#entry-size-is-bounded
  */
 const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
 
@@ -391,14 +354,12 @@ export const setCacheValue = (
 };
 
 /**
- * Remove all cached responses linked to the given tags.
- * We use this after successful writes so old/stale GET responses disappear.
+ * Remove every cached response linked to the given tags — called after a successful write.
  *
- * Like `clearCache`, this needs no cross-instance broadcast: the entries and their tag sets
- * live in shared Redis, so one call invalidates them for every worker and every replica. The
- * next read on any instance misses and re-renders from Mongo. A pub/sub fan-out would only
- * become necessary if an instance ever kept a process-local (L1) copy in front of Redis —
- * there is no such tier, and if one is added the broadcast belongs in the same commit as it.
+ * No cross-instance broadcast is needed: the entries live in shared Redis, so one call invalidates
+ * them for every worker and replica.
+ *
+ * See: docs/tools/redis-cache.md#why-there-is-no-cross-instance-broadcast
  */
 export const invalidateCacheTags = (tags: string[]): Promise<void> => {
     const cacheTags = [...new Set(tags.filter(Boolean))];
@@ -462,24 +423,16 @@ export interface ClearCacheResult {
 }
 
 /**
- * Delete every cached response and tag set belonging to this app.
+ * Delete every cached response and tag set belonging to this app — the escape hatch for writes
+ * that never ran `invalidateCache`.
  *
- * The escape hatch for writes that bypass the API entirely — `db:seed`, `migrate-mongo`, a
- * manual `mongosh` edit. Those change Mongo without ever running `invalidateCache`, so the
- * cached answers survive them; this drops the lot.
+ * Deliberately **not** `FLUSHALL`: scoped to `<CACHE_PREFIX>:*`, so a shared Redis is untouched.
+ * `SCAN` iterates in batches rather than blocking the server the way `KEYS` would.
  *
- * Deliberately **not** `FLUSHALL`: the delete is scoped to `<CACHE_PREFIX>:*`, so a Redis
- * instance shared with another app (or another environment using a different prefix) is
- * untouched. `SCAN` iterates in small batches instead of blocking the server the way `KEYS`
- * would on a large keyspace.
+ * Never rejects, but REPORTS via `reachable`, so fail-open is each caller's choice: `db:seed`
+ * ignores it, `db:cache:clear` exits non-zero on it.
  *
- * Because the keys live in shared Redis, one call clears the cache for every app instance —
- * no pub/sub broadcast needed.
- *
- * Still fails open — it never rejects — but it now *reports* the failure instead of hiding it,
- * so fail-open is a choice each caller makes rather than one baked in here. `db:seed` ignores
- * `reachable` on purpose (§9: an unreachable Redis must not break seeding); `db:cache:clear`
- * exits non-zero on it, because clearing the cache is the entire job.
+ * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
  */
 export const clearCache = (): Promise<ClearCacheResult> =>
     getClient()

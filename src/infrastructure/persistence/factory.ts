@@ -1,30 +1,14 @@
 /**
  * The bit of fixture-building every module's `factory.ts` would otherwise repeat: an `_id`, a pair
- * of timestamps, and the type of the overrides bag.
+ * of timestamps, and the type of the overrides bag. In `infrastructure` for the same reason
+ * `./seed` is — it knows a document has an `_id` and nothing about what the document means.
  *
- * Lives in `infrastructure` for the same reason `./seed` does — it knows a document has an `_id`
- * and nothing about what the document means.
+ * TIMESTAMPS ARE PINNED, not left to Mongoose: the seed export commits what it reads back, so a
+ * `createdAt` of "whenever the export ran" would make the artefact permanently stale. Fixtures
+ * state their own dates and the seeder saves with `{ timestamps: false }`.
  *
- * ## Why the timestamps are pinned rather than left to Mongoose
- *
- * `scripts/export-seed.ts` seeds a throwaway database and commits what it reads back. With
- * `timestamps: true` doing the writing, `createdAt` would be the moment the export ran, the file
- * would differ on every run, and `npm run check:seed-export` could never pass — the artefact would
- * be permanently "stale" and the cross-repo hash check permanently red.
- *
- * So a fixture states its own dates and the seeder saves with `{ timestamps: false }`.
- *
- * ## What this deliberately does NOT guarantee
- *
- * That the three dates make sense together. A fixture can carry a `deletedAt` that precedes its
- * `createdAt`, two fixtures built in the same second share a `createdAt` to the second, and an
- * `updatedAt` need not be later than either.
- *
- * Preventing that would cost more than it is worth: a clock the factories share, an ordering rule
- * per collection, and a class of failure where adding a fixture silently renumbers another one's
- * dates. A test that cares about ordering should state the dates it needs — every factory takes
- * them — and one that does not should not have machinery protecting it from a question it never
- * asks.
+ * It does NOT guarantee the three dates make sense together — a test that cares about ordering
+ * states the dates it needs, and every factory takes them.
  */
 
 import { Types } from 'mongoose';

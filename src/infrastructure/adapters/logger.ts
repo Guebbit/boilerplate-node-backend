@@ -179,20 +179,14 @@ const prettyFormat = winston.format.combine(
 );
 
 /**
- * Pick the console format from who is reading the output, not from `NODE_ENV`.
+ * Pick the console format from WHO IS READING, not from `NODE_ENV` — the two are different
+ * questions, and conflating them silently breaks log shipping.
  *
- * The two are not the same question, and conflating them is what silently breaks log shipping:
- * the compose stack runs `NODE_ENV=development`, so an environment-keyed choice hands every
- * container line to Promtail as colourised prose. Promtail's pipeline parses each line as JSON to
- * lift `level`, `service` and `trace_id` out of it, so those lines reach Loki carrying no labels
- * at all — `{service="api"}` and `{level="error"}` match nothing, and the log-to-trace link never
- * fires. The logs ship and are unqueryable, with no error anywhere to say so.
+ * `isTTY` is true only for an interactive terminal and false for a pipe or a container log file,
+ * which is exactly when something downstream has to parse the line. Production stays JSON
+ * regardless.
  *
- * `isTTY` answers the question that actually matters. It is true only when stdout is an
- * interactive terminal — someone running `npm run dev` by hand — and false whenever the stream is
- * a pipe or a container log file, which is exactly when something downstream has to parse it.
- * Production stays JSON regardless, because a TTY there would mean a container started
- * interactively and its logs are still collected.
+ * See: docs/tools/loki.md
  */
 /* Exported so the matrix can be asserted rather than assumed. */
 export const resolveConsoleFormat = (): winston.Logform.Format =>

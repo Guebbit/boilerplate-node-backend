@@ -1,19 +1,14 @@
 /**
- * Who is making this request — asked by the kernel, answered by a module.
+ * Who is making this request — a port the kernel declares and `account` supplies at boot.
  *
- * The guard in `kernel/middlewares/authorizations.ts` protects every module's routes, so it cannot
- * import one (`users → account → users` would close a cycle) and cannot do the work itself (which
- * secret signed the token, which collection holds the record — that is domain knowledge). So the
- * kernel declares the port and `account` supplies it at boot, like `AuditSink` and `ImageStore`.
+ * Two outcomes, and callers depend on the difference:
  *
- * TWO OUTCOMES, and callers depend on the difference:
- *
- *   - **Rejects** — token absent, malformed, expired or wrongly signed. `getAuth` carries on
- *     anonymously; `isAdminViaCookie` answers 401.
- *   - **Resolves `undefined`** — token verified, user no longer exists. `isAdminViaCookie` answers
- *     403, because the caller proved who they were.
+ *   - **Rejects** — token absent, malformed, expired or wrongly signed.
+ *   - **Resolves `undefined`** — token verified, user no longer exists.
  *
  * Collapsing them turns a deleted admin's 403 into a 401: "log in again" for an account that cannot.
+ *
+ * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
  */
 
 /** The subset of a user the request context carries. Deliberately not the module's document type. */
@@ -46,8 +41,7 @@ export const registerAuthResolver = (implementation: AuthResolver): void => {
  * The registered resolver.
  *
  * Unregistered is a real state, not a misconfiguration: a build with no `account` module has no
- * authentication, and every guard must then refuse rather than crash. It rejects for the same
- * reason a bad token does, so the guards need no extra branch.
+ * authentication. Rejecting for the same reason a bad token does means the guards need no branch.
  */
 const requireResolver = (): AuthResolver => {
     if (!resolver)

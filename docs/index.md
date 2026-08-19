@@ -69,7 +69,7 @@ flowchart TD
 - **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
 - **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
 
-## Three sections, three jobs
+## Four sections, four jobs
 
 ### [Theory](./theory/)
 
@@ -83,6 +83,11 @@ New to the stack? Start at [Tools Explained](./tools/tools-explained.md) for a p
 ### [API](./api/)
 
 Contract-first workflow: OpenAPI + AsyncAPI, codegen, mocks, and implementation alignment.
+
+### [Files](./reference/)
+
+The lookup surface: every file in the repository, what it is, and which page above explains it.
+Start here when you have landed on a filename rather than on a question.
 
 ## Quick visual of the current repo
 
@@ -123,6 +128,7 @@ flowchart LR
 ## Good starting points
 
 - Never run this repo before? Start at [Getting Started](./getting-started.md) — four commands to a browsable API.
+- Found a file and have no idea what it is? [File Glossary](./reference/) — one hop to an answer.
 - Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./api/regenerating.md).
 - Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
 - Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.

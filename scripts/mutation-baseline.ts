@@ -1,43 +1,24 @@
 /**
  * The per-file mutation ratchet.
  *
- * ── Why this exists ──────────────────────────────────────────────────────────
- * Stryker's `thresholds` are GLOBAL — `high`, `low`, `break`, and nothing else. There is no
- * per-file threshold. So a single `break` over a whole `mutate` scope has exactly the failure mode
- * that directory-shaped coverage thresholds have one level down: a strong file carries a weak one,
- * and the number that passes the gate is an average nobody can act on.
- *
- * That matters most precisely when `mutate` is widened to cover everything, which is the direction
- * this repo is going. A wider scope makes the pooled average LESS informative, not more.
- *
- * ── What it does ─────────────────────────────────────────────────────────────
- * A ratchet, not a wall. `mutation-baseline.json` records what each file scored on a real run.
- * Afterwards:
+ * Stryker's thresholds are GLOBAL, so one `break` over a whole `mutate` scope lets a strong file
+ * carry a weak one and reports an average nobody can act on. This records what each file scored on
+ * a real run, then:
  *
  *   - a file that DROPS below its recorded score fails the check;
- *   - a file that IMPROVES has its baseline rewritten upward (`--update`), so the gain is locked
- *     in and cannot silently be given back;
- *   - a NEW file is recorded at whatever it first measures, with an explicit entry — including
- *     `0`. An honest zero on the record beats a zero hidden in an average, and it means a file
- *     arriving untested is visible in a diff rather than absorbed by the pool.
+ *   - a file that IMPROVES has its baseline rewritten upward (`--update`);
+ *   - a NEW file is recorded at whatever it first measures, including an explicit `0`.
  *
- * Nothing here ever lowers a baseline on its own. Lowering one is a decision a person makes, in a
- * commit, with a reason — which is the same rule the `break` threshold already carries.
+ * Nothing here ever lowers a baseline on its own — that is a decision a person makes, in a commit,
+ * with a reason.
  *
- * ── The tolerance ────────────────────────────────────────────────────────────
- * `SCORE_TOLERANCE` is not slack, it is a measurement error bar. Some mutants HANG rather than
- * fail, and whether Stryker records one as a timeout (counted as killed) or as a survivor depends
- * on how loaded the machine is — `stryker.config.json` documents this for `plugins/http/index.ts`
- * in the frontend. Without a tolerance the ratchet would fail on machine load, and a gate that
- * fails randomly gets switched off. It is deliberately small: a real regression moves a file by
- * far more than a rounding of the timeout race.
- *
- * ── Re-baselining ────────────────────────────────────────────────────────────
- * When `mutate` changes, the POPULATION changes, and old and new numbers are not measurements of
- * the same thing. `--update` in the same commit as the `mutate` change is the sanctioned way to
- * re-record; at any other time an unexplained baseline rewrite should be questioned in review.
+ * `SCORE_TOLERANCE` is a measurement error bar, not slack: whether a hanging mutant is recorded as
+ * a timeout or a survivor depends on machine load, and a gate that fails randomly gets switched
+ * off. Deliberately small — a real regression moves a file by far more.
  *
  * The frontend mirrors this file.
+ *
+ * See: docs/tools/mutation-testing.md#the-per-file-ratchet
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -160,14 +141,10 @@ export const compareToBaseline = (
 /**
  * Whether a report covers enough of the baseline to be safe to record.
  *
- * A PARTIAL run — `stryker run --mutate 'src/one/file.ts'`, which is the normal way to check one
- * file quickly — produces a report containing only that file. Recording it would drop every other
- * file from the baseline, because `nextBaseline` builds from the report's keys. The ratchet would
- * lose its memory silently, and the next full run would re-record today's scores as if they had
- * always been the baseline, laundering any regression in between.
- *
- * So a report that is missing files the baseline knows about is refused. It is not an error to
- * RUN a partial mutation — it is only an error to record one.
+ * A partial run (`--mutate` on one file) produces a report holding only that file, and
+ * `nextBaseline` builds from the report's keys — so recording one would drop every other file and
+ * the ratchet would lose its memory silently. Running a partial mutation is fine; recording one is
+ * not.
  */
 export const missingFromReport = (
     current: Record<string, number>,

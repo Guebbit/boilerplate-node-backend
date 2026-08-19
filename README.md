@@ -109,6 +109,7 @@ Four ideas carry the whole repository:
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Get it running                | [Getting Started](./docs/getting-started.md)                                                                            |
 | **Read the code, first time** | **[Reading Path](./docs/theory/reading-path.md)** — nine files, in order                                                |
+| Know what one file _is_       | [File Glossary](./docs/reference/) — every file in the repo, one hop to an answer                                       |
 | Understand the shape          | [Architecture](./docs/theory/architecture.md) · [Layers](./docs/theory/layers.md) · [Modules](./docs/theory/modules.md) |
 | Add or remove a domain        | [Adding & Removing a Module](./docs/theory/module-lifecycle.md)                                                         |
 | Change an endpoint            | [OpenAPI Workflow](./docs/api/openapi-workflow.md) · [Regenerating](./docs/api/regenerating.md)                         |

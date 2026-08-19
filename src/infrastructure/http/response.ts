@@ -106,16 +106,10 @@ const resolveErrorCode = (status: number) => {
 };
 
 /**
- * The envelope's `message`, derived from the status and nothing else.
+ * The envelope's `message`, DERIVED from the status and nothing else — callers cannot supply one,
+ * so there is exactly one wording per status and no handler name leaks into a 404.
  *
- * Derived rather than passed, which is the whole point: callers cannot supply one, so there is
- * exactly one wording per status across the API, rather than a bare `'Not Found'` next to an
- * operation-prefixed `'getProductItem - not found'`. An operation prefix locates the failing
- * handler, but `request_id` and `trace_id` on every log line already do that — so it buys nothing
- * and leaks the handler layout to anyone reading a 404.
- *
- * `message` is the developer-facing summary. The user-facing, translated text is `errors[]` — see
- * the i18n note in `@infrastructure/http/request`.
+ * `message` is developer-facing; the translated, user-facing text is `errors[]`.
  *
  * @param status - HTTP status code
  * @returns the canonical reason phrase for that status

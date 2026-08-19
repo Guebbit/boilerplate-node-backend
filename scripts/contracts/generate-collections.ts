@@ -1,63 +1,25 @@
 /**
  * The four API client collections — `contract.{bruno,insomnia,mockoon,postman}.*` at the repo root.
  *
- * They restate the REST contract one request at a time, with auth, bodies and example responses.
- * Being developer tooling, nothing reads them closely enough to notice a gap, so a missing endpoint
- * is invisible until someone opens the collection and finds it useless — which is why they are
- * DERIVED rather than written by hand, and why the generator itself is what
- * `tests/cross-cutting/contract-bundles.test.ts` exercises.
- *
- * GENERATED ON DEMAND, NOT COMMITTED. `.gitignore` holds all four. Their only reader is a human
- * about to open one in the tool, and committing them put 1.9 MB of derived text in the diff of
- * every contract change. Ask for one when you want it:
+ * GENERATED ON DEMAND, NOT COMMITTED (all four are `.gitignore`d): their only reader is a human
+ * about to open one, and committing them put ~1.9 MB of derived text in every contract diff.
  *
  *   npm run contracts:bundle -- bruno insomnia mockoon postman
  *
- * A full `npm run contracts:bundle` assembles the AUTHORED documents only, and
- * `check:contracts-bundle` checks only those — there is no committed collection left to be stale.
+ * This file is CONFIGURATION, not machinery — the traversal, example synthesis and emitters live
+ * in `@guebbit/openapi-runnable-collections`. What stays here is the three things only this repo
+ * can answer:
  *
- * WHY DERIVED. They were hand-written restatements of `openapi.yaml`, and they rotted exactly as a
- * copy does. Measured before this existed: Bruno and Mockoon each covered 37 of the contract's 56
- * operations and named no `feedback`, `locales` or `observability` endpoint at all; Insomnia had 30
- * requests pointing at URLs (`POST /products/add`, `GET /products/details/{id}`, `GET /heavy`) that
- * the application stopped serving. Mockoon was worse than incomplete — its bodies predated the
- * response envelope, so `GET /account` mocked a bare user where the API returns `UserEnvelope`, and
- * every error body was the old `{ success, error, traceId }` shape. A mock server serving shapes
- * the frontend cannot parse is worse than no mock server.
+ *   1. Which module owns which path — read from the module contracts, never restated.
+ *   2. Where the values come from — `db/demo/demo-data.json`, so a generated request asks for a
+ *      product that exists and sends credentials that work.
+ *   3. What the contract cannot describe — each module's `probes.ts`, the requests that prove the
+ *      API REJECTS things. A spec declares valid calls, so no generator can derive a bogus token.
  *
- * WHAT THIS FILE IS. Configuration, not machinery. The traversal, the example synthesis and the
- * emitters live in `@guebbit/openapi-runnable-collections`, which knows nothing about this repo.
- * What stays here is the three things only this repo can answer:
+ * Postman is its own emitter rather than a renamed Insomnia: Collection Format v2.1 splits a URL
+ * into parts and reads those rather than the string, and the compatibility runs one way only.
  *
- *   1. WHICH MODULE OWNS WHICH PATH — read from the module contracts, never restated. A path in
- *      `src/modules/orders/openapi.yaml` is the orders module's, so a path that moves between
- *      modules moves in all four collections with it.
- *   2. WHERE THE VALUES COME FROM — `db/demo/demo-data.json`, which is what the API answers with
- *      after `npm run db:seed`: `npm run seed:export` seeds a throwaway database and records the
- *      serialized rows. That is why a generated request is not a schema-shaped placeholder full of
- *      empty strings — `GET /products/{id}` asks for a product that exists, and
- *      `POST /account/login` sends credentials that work against a seeded database. It is also why
- *      the examples carry real derived values: an order's `totalPrice` here is the number the
- *      serializer computed, not arithmetic this file repeated.
- *   3. WHAT THE CONTRACT CANNOT DESCRIBE — each module's `probes.ts`, the requests that prove the
- *      API REJECTS things. A spec declares valid calls and their declared answers, so no generator
- *      can derive an invalid body or a bogus token.
- *
- * ONE STEP, ONE FILE PER TOOL. The generator returns whole documents, so there is no intermediate
- * on disk: no per-module slice to hand-edit, no header to keep in step with a footer, and nothing
- * under `src/` that must never be opened. Deleting `src/modules/products` removes its paths, its
- * probes and therefore its folder in all four collections — because the collections are a
- * function of the modules rather than a copy of them.
- *
- * TWO SERIALISATIONS. Bruno and Insomnia are YAML; Mockoon and Postman are JSON. Mockoon needs one
- * thing the others do not — every route appears twice, once in `routes` and once as a
- * `rootChildren` reference fixing the order its UI shows them in — and the generator handles that
- * inside its own document.
- *
- * WHY POSTMAN IS ITS OWN EMITTER AND NOT A RENAMED INSOMNIA. Insomnia exports
- * `collection.insomnia.rest/5.0` YAML; Postman reads Collection Format v2.1 JSON, which splits a URL
- * into `raw`/`host`/`path`/`query` and reads the parts rather than the string. The compatibility
- * runs one way only: Insomnia imports Postman, Postman does not import Insomnia.
+ * See: docs/api/contract-fragmentation.md#the-client-collections-generated
  */
 
 import path from 'node:path';

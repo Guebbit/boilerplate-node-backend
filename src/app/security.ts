@@ -1,13 +1,13 @@
 /**
  * Transport-level protections and body parsing.
  *
- * Grouped because the order inside matters and is not obvious: `trust proxy` must be set before
- * the rate limiter, which keys its buckets on `request.ip`, and the body parsers must precede
- * everything that reads `request.body`.
+ * Grouped because the order matters and is not obvious: `trust proxy` before the rate limiter,
+ * which keys buckets on `request.ip`; body parsers before anything reading `request.body`.
  *
- * The limiter itself is substrate and lives in `@infrastructure/http/middlewares/security`; what stays here
- * is the decision of which protections THIS application installs and in what order. That is an
- * assembly fact, so it belongs to `app` — infrastructure supplies the handlers, app arranges them.
+ * Infrastructure supplies the handlers; this file decides which ones this application installs and
+ * in what order.
+ *
+ * See: docs/tools/security.md#main-security-tools
  */
 
 import express from 'express';
@@ -36,32 +36,15 @@ const allowedOrigins = new Set(
  * @param app - the express application to configure
  */
 export const installSecurity = (app: Express): void => {
-    /**
-     * Disable weak ETag generation (which is the default in Express) to ensure proper caching behavior.
-     * With weak ETags, the server may return a 304 Not Modified response even if the content has changed,
-     * which can lead to stale data being served.
-     * By using strong ETags, we ensure that clients receive updated content when it changes.
-     */
+    // Strong rather than Express's default weak ETags: a weak comparison can answer 304 for content
+    // that did change, serving stale data.
     app.set('etag', 'strong');
 
-    /**
-     * How many reverse proxies sit in front of this process.
+    /*
+     * How many reverse proxies sit in front of this process — the COUNT, never `true`, so Express
+     * counts back from the forgeable end of `X-Forwarded-For`. `0` means "use the socket address".
      *
-     * Everything that identifies a caller by address — the rate limiter's bucket key, the audit
-     * log's `ip` — reads `request.ip`, and behind a proxy that is the PROXY's address unless Express
-     * is told otherwise. Both failure modes are bad and neither is visible:
-     *
-     * - **Unset (Express's default) behind a proxy**: every request looks like one client, so the
-     *   per-IP limiter becomes one shared bucket. It stops protecting anything, and a single busy
-     *   caller 429s everyone else. The audit log records the proxy for every actor.
-     * - **`true` (trust everything)**: `X-Forwarded-For` is client-supplied, so a caller sets it to a
-     *   random value per request and never hits the limit at all. `true` is strictly worse than
-     *   unset for anything security-related, which is why it is not the default here.
-     *
-     * The correct value is the NUMBER of proxies you actually run, so Express counts back from the
-     * right-hand end of `X-Forwarded-For` — the part a client cannot forge. `0` (the default here)
-     * means "no proxy, use the socket address", which is right for local development and for the
-     * compose stack, where the API is published directly.
+     * See: docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
      */
     app.set('trust proxy', Number.parseInt(process.env.NODE_TRUST_PROXY_HOPS ?? '0', 10) || 0);
 

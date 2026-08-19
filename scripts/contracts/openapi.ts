@@ -1,31 +1,18 @@
 /**
  * `openapi.yaml` — the REST contract, compiled from one standalone document per module.
  *
- * WHAT A MODULE OWNS. `src/modules/<name>/openapi.yaml` is a complete, valid OpenAPI document: the
- * paths under that module's `basePath`, and the schemas only those paths reference. You can lint
- * one on its own, open one in Swagger Editor, and read one without holding the rest of the contract
- * in your head. Everything two or more modules reference — the error envelope, the pagination
- * parameters, the scalars, the entities a cart line embeds — lives in `openapi.root.yaml`, and a
- * module reaches it by `$ref` across the file boundary rather than by assuming a neighbour's text
- * will be concatenated above its own.
+ * WHAT A MODULE OWNS: `src/modules/<name>/openapi.yaml` is a complete, valid OpenAPI document —
+ * the paths under that module's `basePath` and the schemas only those paths reference. Anything
+ * two or more modules use lives in `openapi.root.yaml` and is reached by `$ref` across the file
+ * boundary, never by assuming a neighbour's text is concatenated above.
  *
- * WHY REDOCLY AND NOT A CONCATENATOR. This document used to be assembled by pasting verbatim line
- * slices together, because a YAML round trip loses comments and the comments are load-bearing. What
- * changed is where the comments have to survive: in the MODULE files, which are authored, and not
- * in the bundle, which nobody reads by hand. Once that is true, `redocly bundle` does the job the
- * standard way — resolving `$ref` — and the layout becomes one every editor, linter and codegen
- * already understands.
+ * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand.
  *
- * THE ANCHORS HAD TO GO. The old fragments shared the success-envelope preamble through YAML
- * anchors (`*envelopeSuccess`), which is why nothing could ever parse them: an anchor cannot cross a
- * file, so a fragment was only valid once pasted. They are named schemas now — `EnvelopeSuccess`,
- * `EnvelopeStatus`, `EnvelopeMessage` — which is the same sharing expressed in a way a `$ref` can
- * reach. `additionalProperties: false` is unaffected: it constrains property NAMES, so a `$ref` at
- * a property's value position is not the `allOf` problem the anchors were avoiding.
+ * Deleting a module is `rm -rf` of its folder plus its block in the root's path index; forgetting
+ * the second half is a bundle failure naming the exact line.
  *
- * DELETING A MODULE is `rm -rf` of its folder plus its block in the root's path index. Forgetting
- * the second half is a bundle failure naming the exact line, which is the point — a bundler that
- * quietly dropped a section would fork this repo from the frontend's copy silently.
+ * See: docs/api/contract-fragmentation.md#why-the-rest-contract-stopped-concatenating-and-the-rest-did-not
  */
 
 import { execFileSync } from 'node:child_process';

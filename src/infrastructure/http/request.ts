@@ -103,18 +103,11 @@ const firstEntry = (value: unknown): unknown => (Array.isArray(value) ? value[0]
 export type RequestInputSource = 'params' | 'body' | 'query';
 
 /**
- * Which route surface is reading, which is what determines the sources and their precedence.
+ * Which route surface is reading — a CLOSED set, so precedence is a property of the surface rather
+ * than an ordering chosen by whoever wrote the newest controller. A fifth combination has to be
+ * added deliberately, where it can be reviewed against the spec.
  *
- * A closed set, and a route names one rather than spelling an array. The sources themselves are
- * unchanged — writes really do read two and deletes really do read three, because several
- * spellings of one operation reaching a single controller is a pattern these boilerplates exist
- * to demonstrate (see `docs/theory/request-input.md`).
- *
- * What the closed set removes is the freedom to invent a FIFTH combination. Hand-written arrays
- * at each call site may agree, but nothing says they have to, and an ordering chosen by whoever
- * wrote the newest controller is a precedence rule nothing records. Here precedence is a property
- * of the surface, stated once below, and a new shape has to be added deliberately — where it can
- * be reviewed against the spec.
+ * See: docs/theory/request-input.md
  */
 export type RequestSurface = 'search' | 'write' | 'delete' | 'path';
 
@@ -168,11 +161,8 @@ export type RequestInput<TId extends string> = Record<string, unknown> &
     Partial<Record<TId, string>>;
 
 /**
- * Read a route's input according to one declaration.
- *
- * One declaration per route, so the rules of the multi-source polymorphism are not re-assembled
- * at every call site — which is how one field ends up reading three sources and its neighbour two,
- * in an order nothing records.
+ * Read a route's input according to one declaration, so the multi-source rules are not
+ * re-assembled at every call site.
  *
  * Four rules:
  *
