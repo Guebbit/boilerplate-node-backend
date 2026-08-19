@@ -87,6 +87,39 @@ describe('GET /orders/{id}', () => {
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
     });
+
+    /*
+     * One case per role, because the two roles take different queries into `getById` and used to
+     * answer differently for the same malformed id: the admin's `findById` raised a Mongoose
+     * `CastError`, which the controller mapped to 404, while the scoped aggregate's own coercion
+     * raised a driver `BSONError`, which reached the interpreter and answered 422. A single
+     * assertion over one role would have passed throughout.
+     */
+    it.each([['admin'], ['user']] as const)(
+        '404s on a malformed id for a %s caller',
+        async (role) => {
+            const { bearer } = await authenticateAs(role);
+
+            const response = await api().get('/orders/not-an-id').set('Authorization', bearer);
+
+            expect(response.status).toBe(404);
+            expect(response).toSatisfyApiSpec();
+        }
+    );
+
+    it.each([['admin'], ['user']] as const)(
+        'the invoice route answers the same 404 for a %s caller',
+        async (role) => {
+            const { bearer } = await authenticateAs(role);
+
+            const response = await api()
+                .get('/orders/not-an-id/invoice')
+                .set('Authorization', bearer);
+
+            expect(response.status).toBe(404);
+            expect(response).toSatisfyApiSpec();
+        }
+    );
 });
 
 describe('POST /orders/{id}/cancel', () => {

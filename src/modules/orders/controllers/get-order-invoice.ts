@@ -8,6 +8,7 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import ejs from 'ejs';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
+import { isValidObjectId } from '@infrastructure/http/request';
 
 /**
  * GET /orders/:id/invoice
@@ -17,9 +18,16 @@ import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
  * WARNING: Images and other link-related resources will NOT work in the PDF.
  * To embed them, convert images to base64.
  */
-export const getOrderInvoice = (request: Request, response: Response) =>
-    orderService
-        .getById(String(request.params.id), orderService.callerScope(request.authContext))
+export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
+    // 404 on an unusable id, and checked before the query for the reason `get-order-item.ts`
+    // spells out: the two role branches raise different error classes for it.
+    if (!isValidObjectId(request.params.id)) {
+        rejectResponse(response, 404, [t('orders.not-found')]);
+        return;
+    }
+
+    return orderService
+        .getById(request.params.id, orderService.callerScope(request.authContext))
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);
@@ -64,3 +72,4 @@ export const getOrderInvoice = (request: Request, response: Response) =>
         .catch((error: Error) => {
             rejectDatabaseError(response, 'Invoice generation failed', error);
         });
+};
