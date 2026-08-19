@@ -23,7 +23,6 @@ import {
     successResponse,
     rejectResponse
 } from '@infrastructure/http/response';
-import type { Response } from 'express';
 import { makeResponseStub } from '@tests/express';
 
 /** Express response stub with a chainable status().json(). */

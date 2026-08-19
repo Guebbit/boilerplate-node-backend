@@ -63,8 +63,13 @@ const buildProcessors = (): SpanProcessor[] => {
                 // Parsed here into the `Record<string, string>` the exporter expects.
                 headers: process.env.OTEL_EXPORTER_OTLP_HEADERS
                     ? Object.fromEntries(
-                          process.env.OTEL_EXPORTER_OTLP_HEADERS.split(',').map((h) =>
-                              h.split('=').map((p) => p.trim())
+                          process.env.OTEL_EXPORTER_OTLP_HEADERS.split(',').map(
+                              (header): [string, string] => {
+                                  const [key = '', value = ''] = header
+                                      .split('=')
+                                      .map((part) => part.trim());
+                                  return [key, value];
+                              }
                           )
                       )
                     : {}

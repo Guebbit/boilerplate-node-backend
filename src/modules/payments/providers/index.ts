@@ -60,7 +60,7 @@ let provider: PaymentProvider | undefined;
 export const resolvePaymentProvider = (): PaymentProvider => {
     if (provider) return provider;
     const name = process.env.NODE_PAYMENT_PROVIDER ?? 'fake';
-    const resolved = PROVIDERS[name];
+    const resolved = PROVIDERS[name] as (typeof PROVIDERS)[string] | undefined;
     if (!resolved)
         throw new Error(
             `Unknown payment provider "${name}" — known: ${Object.keys(PROVIDERS).join(', ')}`

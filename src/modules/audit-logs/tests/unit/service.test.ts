@@ -74,6 +74,7 @@ describe('auditLogService.record', () => {
         // request wait on the audit trail, which is the coupling `record` exists to avoid.
         mockedRepository.create.mockResolvedValue({} as AuditLogDocument);
 
+        // eslint-disable-next-line @typescript-eslint/no-confusing-void-expression -- the assertion IS that record() returns undefined (fire-and-forget contract)
         expect(auditLogService.record(makeEntry())).toBeUndefined();
     });
 

@@ -29,7 +29,6 @@ import {
 } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
-import { createLocaleContext, getCurrentLocale } from '@infrastructure/i18n';
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
 // consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
@@ -154,7 +153,8 @@ export const nodemailer = (
             [ATTR_MESSAGING_SYSTEM]: 'smtp',
             // `messaging.destination.name` — the recipient. `request.to` can be a string, an
             // address object, or an array, hence the String() coercion.
-            [ATTR_MESSAGING_DESTINATION_NAME]: String(request.to ?? ''),
+            [ATTR_MESSAGING_DESTINATION_NAME]:
+                typeof request.to === 'string' ? request.to : JSON.stringify(request.to ?? ''),
             // Custom attribute: email template used to render the body.
             'email.template': templateName
         });
@@ -186,7 +186,7 @@ export const nodemailer = (
                         ...request
                     })
                 )
-                .then((info: SentMessageInfo) => {
+                .then((info: { messageId: string }) => {
                     // `messageId` is the SMTP server's identifier — the handle you need to trace
                     // a specific email through mail-server logs or a provider dashboard.
                     logger.info('Message sent: %s', info.messageId);
@@ -258,9 +258,9 @@ export const enqueueEmail = (
     templateName: string,
     data: Data
 ): Promise<void> => {
-    // No broker configured → send inline. `.then(() => {})` discards SentMessageInfo so both
+    // No broker configured → send inline. `.then(() => undefined)` discards SentMessageInfo so both
     // branches share the same `Promise<void>` return type.
-    if (!isQueueEnabled()) return nodemailer(request, templateName, data).then(() => {});
+    if (!isQueueEnabled()) return nodemailer(request, templateName, data).then(() => undefined);
 
     // The type argument is the point: this literal is checked against the very type the worker
     // declares, so producer and consumer cannot drift apart silently.
@@ -272,7 +272,7 @@ export const enqueueEmail = (
     }).then((published) => {
         if (!published) {
             // Fallback: queue publish failed, send directly.
-            return nodemailer(request, templateName, data).then(() => {});
+            return nodemailer(request, templateName, data).then(() => undefined);
         }
         // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
         logger.debug({

@@ -50,8 +50,8 @@
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { SHARED_FILES, hashFile, THIS_REPO } from './specIdentity';
-import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './frontendPath';
+import { SHARED_FILES, hashFile, THIS_REPO } from './spec-identity';
+import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './frontend-path';
 
 const dryRun = process.argv.includes('--dry');
 const forcedRun = process.argv.includes('--forced');

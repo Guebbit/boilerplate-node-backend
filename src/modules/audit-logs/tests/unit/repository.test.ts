@@ -1,3 +1,4 @@
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { auditLogRepository } from '@modules/audit-logs/repository';
 import { coreAuditActions, type AuditEntry } from '@infrastructure/observability/audit';
@@ -138,7 +139,7 @@ describe('auditLogRepository', () => {
 
         it('drops _id and __v, and returns timestamp as an ISO-8601 string', async () => {
             const { items } = await auditLogRepository.search({ limit: 1 });
-            const item = items[0] as unknown as Record<string, unknown>;
+            const item = asStub<Record<string, unknown>>(items[0]);
 
             expect(item._id).toBeUndefined();
             expect(item.__v).toBeUndefined();

@@ -139,7 +139,7 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                 path: pathName,
                 method,
                 operationId: operation.operationId as string | undefined,
-                pathParameters: [...pathName.matchAll(/{(\w+)}/g)].map(([, name]) => name!),
+                pathParameters: [...pathName.matchAll(/{(\w+)}/g)].map(([, name]) => name),
                 bodySchema: resolveSchema(content?.['application/json']?.schema, spec),
                 isMultipart: Boolean(content?.['multipart/form-data']),
                 requiresAuth: Array.isArray(operation.security) && operation.security.length > 0,

@@ -20,6 +20,7 @@ export type { EmailJob } from '@infrastructure/adapters/mailer';
 export const handleEmailJob = (job: Partial<EmailJob>): Promise<boolean> => {
     // The optional chain does the narrowing on its own — past this point TypeScript knows both
     // fields are there, which is why no type predicate is needed to say so.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
     if (!job?.request?.to || !job.templateName) {
         logger.warn({ message: 'Invalid email job payload, discarding.', job });
         return Promise.resolve(false);

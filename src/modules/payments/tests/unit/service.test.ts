@@ -92,7 +92,7 @@ describe('createIntent', () => {
         const result = await createIntent(String(order._id), auth(user));
 
         expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0]!.code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
     });
 });
 
@@ -125,7 +125,7 @@ describe('confirmPayment', () => {
         );
 
         expect(asReject(declined).status).toBe(409);
-        expect(asReject(declined).errors[0]!.code).toBe('PAYMENT_DECLINED');
+        expect(asReject(declined).errors[0].code).toBe('PAYMENT_DECLINED');
         await expect(
             orderService.getById(String(order._id)).then((stored) => stored!.status)
         ).resolves.toBe('pending');
@@ -155,7 +155,7 @@ describe('confirmPayment', () => {
         const again = await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
 
         expect(asReject(again).status).toBe(409);
-        expect(asReject(again).errors[0]!.code).toBe('PAYMENT_NOT_CONFIRMABLE');
+        expect(asReject(again).errors[0].code).toBe('PAYMENT_NOT_CONFIRMABLE');
     });
 
     it('refuses a new intent once the money moved', async () => {
@@ -167,7 +167,7 @@ describe('confirmPayment', () => {
         const result = await createIntent(String(order._id), auth(user));
 
         expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0]!.code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
     });
 });
 

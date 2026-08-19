@@ -60,7 +60,7 @@ describe('cancelById', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
-        expect(result.success === false && result.errors[0]).toMatchObject({
+        expect(!result.success && result.errors[0]).toMatchObject({
             code: 'ORDER_NOT_CANCELLABLE'
         });
         const stored = await orderRepository.findById(String(order._id));

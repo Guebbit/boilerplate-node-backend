@@ -14,7 +14,6 @@
 import type { Request, Response } from 'express';
 // `ParamsDictionary` is Express' default type for `request.params` (a `Record<string, string>`).
 // Naming it explicitly in generics keeps `request.params.id` typed instead of `any`.
-import type { ParamsDictionary } from 'express-serve-static-core';
 // i18next translation function — messages are resolved against the request's locale, which the
 // i18next middleware has already set up by the time a controller runs.
 import { t } from '@infrastructure/i18n';
@@ -33,7 +32,7 @@ import { rejectResponse } from '@infrastructure/http/response';
  * Typed as a `Record` rather than `any`: body values come off the wire and are `unknown` until
  * something validates them.
  */
-const getRequestBody = (request: Request<ParamsDictionary>): Record<string, unknown> =>
+const getRequestBody = (request: Request): Record<string, unknown> =>
     (request.body ?? {}) as Record<string, unknown>;
 
 /**
@@ -48,8 +47,7 @@ const getRequestBody = (request: Request<ParamsDictionary>): Record<string, unkn
  * Note express answers `null`, not `false`, for a request with no body at all — a distinction
  * `!!` has to flatten, or a body-less request would be treated as a form.
  */
-const isMultipartRequest = (request: Request<ParamsDictionary>): boolean =>
-    !!request.is('multipart/form-data');
+const isMultipartRequest = (request: Request): boolean => !!request.is('multipart/form-data');
 
 /** String spellings of a boolean, as URLs, HTML forms and common clients send them. */
 const FORM_BOOLEANS: Record<string, boolean> = {
@@ -166,9 +164,8 @@ export interface RequestInputDeclaration<TId extends string> {
  * not validate, and whatever it could not recognise has to reach the schema downstream intact.
  * Declared ids are the one exception, because their resolution rule already determines their type.
  */
-export type RequestInput<TId extends string> = Record<string, unknown> & {
-    [K in TId]?: string;
-};
+export type RequestInput<TId extends string> = Record<string, unknown> &
+    Partial<Record<TId, string>>;
 
 /**
  * Read a route's input according to one declaration.
@@ -192,7 +189,7 @@ export type RequestInput<TId extends string> = Record<string, unknown> & {
  *   JSON body carries its own types and coercing it is what swallows a contract violation.
  */
 export const readInput = <TId extends string = never>(
-    request: Request<ParamsDictionary>,
+    request: Request,
     declaration: RequestInputDeclaration<TId>
 ): RequestInput<TId> => {
     const booleans = declaration.booleans ?? [];
@@ -234,7 +231,7 @@ export const readInput = <TId extends string = never>(
     // Assigned lowest-precedence first, so the higher ones overwrite. `Object.assign` copies own
     // keys the same way a spread does — including keys whose value is `undefined`, which the
     // second pass below then removes.
-    const merged: Record<string, unknown> = Object.assign({}, ...sources.toReversed());
+    const merged = Object.assign({}, ...sources.toReversed()) as Record<string, unknown>;
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(merged)) if (value !== undefined) result[key] = value;
 
@@ -250,6 +247,7 @@ export const readInput = <TId extends string = never>(
             }
             if (value !== undefined) resolved ??= value;
         }
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- stripping the caller-named key from a plain record is the whole job
         if (resolved === undefined) delete result[key];
         else result[key] = resolved;
     }
@@ -272,9 +270,9 @@ export const readInput = <TId extends string = never>(
  * @param entityLabel - used in the developer-facing message ('Product - missing id')
  */
 export const extractAndValidateId = (
-    request: Request<ParamsDictionary>,
+    request: Request,
     response: Response,
-    entityLabel: string
+    _entityLabel: string
 ): string | undefined => {
     // Route param first (`/products/:id`), then body — a param is the more explicit intent.
     const { id } = readInput(request, { surface: 'write', ids: ['id'] });

@@ -53,7 +53,7 @@ const migrations = fs
     .toSorted()
     .map((file) => ({
         name: file,
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- migrations are CommonJS; require is how migrate-mongo itself loads them
         module: require(path.join(MIGRATIONS_DIR, file)) as {
             up: (db: unknown) => Promise<void>;
         }
@@ -77,7 +77,8 @@ const runMigrations = async () => {
  * belong in a test, and the walk over `enabledModules` is the only part that writes rows. Calling
  * the manifest entry directly means a module added tomorrow is seeded here without an edit.
  */
-const runSeeders = () => Promise.all(enabledModules.map((appModule) => appModule.seeds?.() ?? []));
+const runSeeders = () =>
+    Promise.all(enabledModules.map((appModule) => appModule.seeds?.() ?? Promise.resolve([])));
 
 /**
  * Empty every collection without dropping the database.

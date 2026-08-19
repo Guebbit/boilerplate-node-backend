@@ -220,7 +220,7 @@ jobs:
         #
         # Eleven files exist in BOTH repos, byte-identical — the two specs and the spectral
         # ruleset, the seed identities, the generated realtime types, the analytics event names,
-        # the three API client collections, and two shared scripts. `scripts/specIdentity.ts`
+        # the three API client collections, and two shared scripts. `scripts/spec-identity.ts`
         # holds the list and says, per entry, what a fork of it would break.
         #
         # Seven of them are ASSEMBLED HERE from per-module fragments and copied to the frontend,

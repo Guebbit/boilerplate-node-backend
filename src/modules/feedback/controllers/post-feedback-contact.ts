@@ -4,7 +4,7 @@ import { CreateFeedbackRequestBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { getDefaultLocale } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import type { CreateFeedbackRequest } from '@types';
 import { contactRequestEmail } from '../emails';
@@ -17,7 +17,7 @@ import { feedbackRequestService } from '../service';
  */
 const createFeedbackSchema = CreateFeedbackRequestBody.extend({
     name: z.string().trim().max(120).optional(),
-    email: z.string().trim().email(),
+    email: z.string().trim().pipe(z.email()),
     subject: z.string().trim().min(1).max(200),
     message: z.string().trim().min(1).max(5000)
 });

@@ -102,13 +102,13 @@ const sections = (): Section[] =>
  * indices are stable across exports. The admin sorts before the ordinary user because their
  * ObjectIds encode the order the two accounts were created in.
  */
-const { credentials } = dataset;
-const [seedAdmin, seedUser] = dataset.collections.users;
-const [seedProduct] = dataset.collections.products;
-const [seedOrder] = dataset.collections.orders;
-const [seedCart] = dataset.collections.carts;
-const seedProducts = dataset.collections.products;
-const seedOrders = dataset.collections.orders;
+const { credentials, collections } = dataset;
+const [seedAdmin, seedUser] = collections.users;
+const [seedProduct] = collections.products;
+const [seedOrder] = collections.orders;
+const [seedCart] = collections.carts;
+const seedProducts = collections.products;
+const seedOrders = collections.orders;
 
 const values: ValueSources = {
     /*

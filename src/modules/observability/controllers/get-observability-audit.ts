@@ -13,7 +13,10 @@ const DEFAULT_LIMIT = 50;
  * Recent audit events, filtered by actor, action, outcome, since, and limit.
  */
 export const getObservabilityAuditLogs = (request: Request, response: Response) => {
-    const { actor, action, outcome, since, limit } = request.query as Record<string, string>;
+    const { actor, action, outcome, since, limit } = request.query as Record<
+        string,
+        string | undefined
+    >;
 
     const parsedLimit = Number.parseInt(limit ?? String(DEFAULT_LIMIT), 10);
     // `parseInt` answers NaN for a non-numeric `?limit=abc`, and NaN survives both Math.min and

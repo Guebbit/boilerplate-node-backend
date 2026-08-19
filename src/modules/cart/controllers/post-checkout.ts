@@ -36,7 +36,7 @@ export const postCheckout = (request: Request, response: Response) => {
                 return;
             }
             cartCheckoutTotal.inc({ status: 'success' });
-            const orderId = result.data?._id?.toString() ?? '';
+            const orderId = result.data?._id.toString() ?? '';
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
                 event: cartAnalyticsEvents.CHECKOUT_COMPLETED,

@@ -77,12 +77,12 @@ describe('withSpan — success', () => {
     });
 
     it('resolves with the callback return value', async () => {
-        const result = await withSpan('my-span', async () => 42);
+        const result = await withSpan('my-span', () => Promise.resolve(42));
         expect(result).toBe(42);
     });
 
     it('exports a finished span with the given name', async () => {
-        await withSpan('export-test', async () => 'done');
+        await withSpan('export-test', () => Promise.resolve('done'));
         const spans = exporter.getFinishedSpans();
         expect(spans.some((s) => s.name === 'export-test')).toBe(true);
     });
@@ -91,7 +91,7 @@ describe('withSpan — success', () => {
         await withSpan('attr-test', async () => {}, { testKey: 'testValue' });
         const spans = exporter.getFinishedSpans();
         const span = spans.find((s) => s.name === 'attr-test');
-        expect(span?.attributes['testKey']).toBe('testValue');
+        expect(span?.attributes.testKey).toBe('testValue');
     });
 });
 
@@ -113,24 +113,20 @@ describe('withSpan — error', () => {
 
     it('re-throws the error', async () => {
         await expect(
-            withSpan('failing-span', async () => {
-                throw new Error('oops');
-            })
+            withSpan('failing-span', () => Promise.reject(new Error('oops')))
         ).rejects.toThrow('oops');
     });
 
     it('still ends the span even when the callback throws', async () => {
-        await withSpan('failing-span-2', async () => {
-            throw new Error('boom');
-        }).catch(() => {});
+        await withSpan('failing-span-2', () => Promise.reject(new Error('boom'))).catch(() => {});
         const spans = exporter.getFinishedSpans();
         expect(spans.some((s) => s.name === 'failing-span-2')).toBe(true);
     });
 
     it('records an exception event on the span', async () => {
-        await withSpan('exc-span', async () => {
-            throw new Error('exception message');
-        }).catch(() => {});
+        await withSpan('exc-span', () => Promise.reject(new Error('exception message'))).catch(
+            () => {}
+        );
         const spans = exporter.getFinishedSpans();
         const span = spans.find((s) => s.name === 'exc-span');
         const exceptionEvent = span?.events.find((e) => e.name === 'exception');
@@ -160,8 +156,8 @@ describe('getActiveSpanContext', () => {
         expect(result.spanId).toBeUndefined();
     });
 
-    it('returns valid IDs within an active span', async () => {
-        await getTracer().startActiveSpan('ctx-test', async (span) => {
+    it('returns valid IDs within an active span', () => {
+        getTracer().startActiveSpan('ctx-test', (span) => {
             const result = getActiveSpanContext();
             expect(result.traceId).toMatch(/^[\da-f]{32}$/);
             expect(result.spanId).toMatch(/^[\da-f]{16}$/);
@@ -190,8 +186,8 @@ describe('recordErrorOnActiveSpan', () => {
         expect(() => recordErrorOnActiveSpan(new Error('no span'))).not.toThrow();
     });
 
-    it('records the exception event on the active span', async () => {
-        await getTracer().startActiveSpan('err-span', async (span) => {
+    it('records the exception event on the active span', () => {
+        getTracer().startActiveSpan('err-span', (span) => {
             recordErrorOnActiveSpan(new Error('recorded'));
             span.end();
         });
@@ -202,8 +198,8 @@ describe('recordErrorOnActiveSpan', () => {
         expect(exceptionEvent?.attributes?.['exception.message']).toBe('recorded');
     });
 
-    it('accepts non-Error values', async () => {
-        await getTracer().startActiveSpan('str-err-span', async (span) => {
+    it('accepts non-Error values', () => {
+        getTracer().startActiveSpan('str-err-span', (span) => {
             // Should not throw — string errors are handled gracefully.
             recordErrorOnActiveSpan('string error');
             span.end();

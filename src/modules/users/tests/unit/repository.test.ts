@@ -1,8 +1,8 @@
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
 import { userModel as Users, TokenType, type UserDocument } from '@modules/users';
-import { Types } from 'mongoose';
 
 setupTestDb();
 
@@ -28,7 +28,7 @@ describe('userRepository', () => {
     describe('findById', () => {
         it('returns the user document when the id exists', async () => {
             const created = await createUser();
-            const id = (created._id as Types.ObjectId).toString();
+            const id = created._id.toString();
 
             const found = await userRepository.findById(id);
 
@@ -120,7 +120,7 @@ describe('userRepository', () => {
             const [user] = await userRepository.findAll();
 
             // Lean objects have no Mongoose save() method
-            expect(typeof (user as unknown as { save?: unknown }).save).toBe('undefined');
+            expect(typeof asStub<{ save?: unknown }>(user).save).toBe('undefined');
         });
     });
 
@@ -156,7 +156,7 @@ describe('userRepository', () => {
     describe('save', () => {
         it('persists in-memory mutations to the database', async () => {
             const user = await createUser();
-            const id = (user._id as Types.ObjectId).toString();
+            const id = user._id.toString();
 
             // Mutate the Mongoose document in memory…
             user.username = 'updated-username';
@@ -171,7 +171,7 @@ describe('userRepository', () => {
     describe('deleteOne', () => {
         it('removes the document permanently from the database', async () => {
             const user = await createUser();
-            const id = (user._id as Types.ObjectId).toString();
+            const id = user._id.toString();
 
             await userRepository.deleteOne(user);
 
@@ -237,9 +237,7 @@ describe('userRepository', () => {
             });
 
             await user.tokenRemoveAll(TokenType.REFRESH);
-            const refreshed = await userRepository.findByIdWithCredentials(
-                (user._id as Types.ObjectId).toString()
-            );
+            const refreshed = await userRepository.findByIdWithCredentials(user._id.toString());
 
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
@@ -266,9 +264,7 @@ describe('userRepository', () => {
             });
 
             const result = await Users.tokenRemoveExpired();
-            const refreshed = await userRepository.findByIdWithCredentials(
-                (user._id as Types.ObjectId).toString()
-            );
+            const refreshed = await userRepository.findByIdWithCredentials(user._id.toString());
 
             expect(result.success).toBe(true);
             expect(result.status).toBe(200);

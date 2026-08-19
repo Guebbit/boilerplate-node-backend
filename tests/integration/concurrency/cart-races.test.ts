@@ -78,7 +78,7 @@ describe('R3 — concurrent adds of DIFFERENT products', () => {
             api()
                 .post('/cart')
                 .set('Authorization', bearer)
-                .send({ productId: String(products[index]!._id), quantity: 1 })
+                .send({ productId: String(products[index]._id), quantity: 1 })
         );
 
         expectNoServerErrors(results);

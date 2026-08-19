@@ -49,10 +49,10 @@ const readHeader = async () => {
     const { buffer } = await handle.read(Buffer.alloc(131_072), 0, 131_072, 0);
     await handle.close();
     const head = buffer.toString('utf8');
-    const nodeFields = JSON.parse(/"node_fields":(\[[^\]]*\])/.exec(head)![1]!) as string[];
-    const nodeTypes = JSON.parse(/"node_types":\[(\[[^\]]*\])/.exec(head)![1]!) as string[];
-    const edgeFields = JSON.parse(/"edge_fields":(\[[^\]]*\])/.exec(head)![1]!) as string[];
-    const edgeTypes = JSON.parse(/"edge_types":\[(\[[^\]]*\])/.exec(head)![1]!) as string[];
+    const nodeFields = JSON.parse(/"node_fields":(\[[^\]]*])/.exec(head)![1]) as string[];
+    const nodeTypes = JSON.parse(/"node_types":\[(\[[^\]]*])/.exec(head)![1]) as string[];
+    const edgeFields = JSON.parse(/"edge_fields":(\[[^\]]*])/.exec(head)![1]) as string[];
+    const edgeTypes = JSON.parse(/"edge_types":\[(\[[^\]]*])/.exec(head)![1]) as string[];
     const nodeCount = Number(/"node_count":(\d+)/.exec(head)![1]);
     const edgeCount = Number(/"edge_count":(\d+)/.exec(head)![1]);
     return { nodeFields, nodeTypes, edgeFields, edgeTypes, nodeCount, edgeCount };
@@ -83,8 +83,9 @@ const streamArray = (key: string, onChunk: (text: string) => void): Promise<void
                 text = text.slice(at + opener.length);
             }
             let cut = text.length;
-            for (let index = 0; index < text.length; index += 1) {
-                const character = text[index]!;
+            // UTF-16 offsets on purpose: `cut` feeds `text.slice()`, which counts the same units.
+            for (let index = 0; index < text.length; index++) {
+                const character = text.charAt(index);
                 if (escaped) {
                     escaped = false;
                     continue;
@@ -156,30 +157,30 @@ const main = async () => {
     let running = 0;
     for (let i = 0; i < meta.nodeCount; i += 1) {
         edgeStart[i] = running;
-        running += nodes[i * nodeStride + nEdgeCountAt]!;
+        running += nodes[i * nodeStride + nEdgeCountAt];
     }
     edgeStart[meta.nodeCount] = running;
 
     // Reverse index: for each node, which nodes point at it. Built as CSR to stay compact.
     const inDegree = new Int32Array(meta.nodeCount + 1);
     for (let e = 0; e < meta.edgeCount; e += 1) {
-        const to = edges[e * edgeStride + eToAt]! / nodeStride;
+        const to = edges[e * edgeStride + eToAt] / nodeStride;
         inDegree[to] = (inDegree[to] ?? 0) + 1;
     }
-    const retStart = new Int32Array(meta.nodeCount + 1);
+    const returnValueStart = new Int32Array(meta.nodeCount + 1);
     running = 0;
     for (let i = 0; i < meta.nodeCount; i += 1) {
-        retStart[i] = running;
-        running += inDegree[i]!;
+        returnValueStart[i] = running;
+        running += inDegree[i];
     }
-    retStart[meta.nodeCount] = running;
-    const cursor = Int32Array.from(retStart);
+    returnValueStart[meta.nodeCount] = running;
+    const cursor = Int32Array.from(returnValueStart);
     const retainer = new Int32Array(running);
     const retainerEdge = new Int32Array(running);
     for (let node = 0; node < meta.nodeCount; node += 1) {
-        for (let e = edgeStart[node]!; e < edgeStart[node + 1]!; e += 1) {
-            const to = edges[e * edgeStride + eToAt]! / nodeStride;
-            const slot = cursor[to]!;
+        for (let e = edgeStart[node]; e < edgeStart[node + 1]; e += 1) {
+            const to = edges[e * edgeStride + eToAt] / nodeStride;
+            const slot = cursor[to];
             retainer[slot] = node;
             retainerEdge[slot] = e;
             cursor[to] = slot + 1;
@@ -189,8 +190,8 @@ const main = async () => {
     // Only the string indices actually printed get resolved, in one later pass.
     const wantedStrings = new Set<number>();
     const nodeLabel = (node: number) => {
-        const type = meta.nodeTypes[nodes[node * nodeStride + nTypeAt]!] ?? '?';
-        const nameIndex = nodes[node * nodeStride + nNameAt]!;
+        const type = meta.nodeTypes[nodes[node * nodeStride + nTypeAt]] ?? '?';
+        const nameIndex = nodes[node * nodeStride + nNameAt];
         wantedStrings.add(nameIndex);
         return { type, nameIndex };
     };
@@ -206,14 +207,14 @@ const main = async () => {
         const parts = (stringCarry + text).split('","');
         stringCarry = parts.pop() ?? '';
         for (const part of parts) {
-            const clean = part.replace(/^"|"$/g, '');
+            const clean = part.replaceAll(/^"|"$/g, '');
             if (clean.includes(wantedKind) || clean.length < 90) nameOf.set(stringIndex, clean);
             stringIndex += 1;
         }
     });
 
     for (let node = 0; node < meta.nodeCount; node += 1) {
-        const nameIndex = nodes[node * nodeStride + nNameAt]!;
+        const nameIndex = nodes[node * nodeStride + nNameAt];
         let match = nameIndexCache.get(nameIndex);
         if (match === undefined) {
             match = (nameOf.get(nameIndex) ?? '').includes(wantedKind);
@@ -222,7 +223,7 @@ const main = async () => {
         if (match) targets.push(node);
     }
 
-    const totalBytes = targets.reduce((sum, n) => sum + nodes[n * nodeStride + nSizeAt]!, 0);
+    const totalBytes = targets.reduce((sum, n) => sum + nodes[n * nodeStride + nSizeAt], 0);
     console.log(
         `\n${targets.length.toLocaleString()} nodes matching "${wantedKind}", ${mb(totalBytes)} MB total\n`
     );
@@ -234,25 +235,25 @@ const main = async () => {
         let current = target;
         const seen = new Set<number>([current]);
         for (let level = 0; level < depth; level += 1) {
-            const from = retStart[current]!;
-            const to = retStart[current + 1]!;
+            const from = returnValueStart[current];
+            const to = returnValueStart[current + 1];
             if (from === to) {
                 parts.push('<root>');
                 break;
             }
             // Prefer a retainer that is not itself the same kind, to escape buffer->buffer chains.
-            let chosen = retainer[from]!;
-            let chosenEdge = retainerEdge[from]!;
+            let chosen = retainer[from];
+            let chosenEdge = retainerEdge[from];
             for (let r = from; r < to; r += 1) {
-                if (!seen.has(retainer[r]!)) {
+                if (!seen.has(retainer[r])) {
                     chosen = retainer[r]!;
                     chosenEdge = retainerEdge[r]!;
                     break;
                 }
             }
             const { type, nameIndex } = nodeLabel(chosen);
-            const edgeType = meta.edgeTypes[edges[chosenEdge * edgeStride + eTypeAt]!] ?? '?';
-            const edgeNameIndex = edges[chosenEdge * edgeStride + eNameAt]!;
+            const edgeType = meta.edgeTypes[edges[chosenEdge * edgeStride + eTypeAt]] ?? '?';
+            const edgeNameIndex = edges[chosenEdge * edgeStride + eNameAt];
             const edgeName =
                 edgeType === 'element' || edgeType === 'hidden'
                     ? `[${edgeNameIndex}]`
@@ -265,11 +266,11 @@ const main = async () => {
         const key = parts.join('  <-  ');
         const entry = chains.get(key) ?? { count: 0, bytes: 0 };
         entry.count += 1;
-        entry.bytes += nodes[target * nodeStride + nSizeAt]!;
+        entry.bytes += nodes[target * nodeStride + nSizeAt];
         chains.set(key, entry);
     }
 
-    const ranked = [...chains.entries()].sort((a, b) => b[1].bytes - a[1].bytes).slice(0, 20);
+    const ranked = [...chains.entries()].toSorted((a, b) => b[1].bytes - a[1].bytes).slice(0, 20);
     console.log(`${'bytes'.padStart(10)}  ${'count'.padStart(8)}  retainer chain (nearest first)`);
     console.log('-'.repeat(100));
     for (const [chain, { count, bytes }] of ranked) {

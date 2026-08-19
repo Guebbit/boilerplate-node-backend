@@ -13,7 +13,7 @@
  * Both are asserted here, because either one alone would let the leak back in through a path
  * the other does not cover.
  */
-import { Types } from 'mongoose';
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
@@ -45,7 +45,7 @@ describe('user credential exposure', () => {
     describe('select: false (the safety net)', () => {
         it('findById does not load password or tokens', async () => {
             const user = await withTokens();
-            const found = await userRepository.findById((user._id as Types.ObjectId).toString());
+            const found = await userRepository.findById(user._id.toString());
 
             expect(found!.password).toBeUndefined();
             expect(found!.tokens).toBeUndefined();
@@ -70,9 +70,7 @@ describe('user credential exposure', () => {
 
         it('the *WithCredentials finders still return them', async () => {
             const user = await withTokens();
-            const found = await userRepository.findByIdWithCredentials(
-                (user._id as Types.ObjectId).toString()
-            );
+            const found = await userRepository.findByIdWithCredentials(user._id.toString());
 
             expect(typeof found!.password).toBe('string');
             expect(found!.tokens).toHaveLength(1);
@@ -82,9 +80,7 @@ describe('user credential exposure', () => {
     describe('applyUserTransform (the contract boundary)', () => {
         it('strips credentials even from a document that carries them', async () => {
             const seeded = await withTokens();
-            const user = await userRepository.findByIdWithCredentials(
-                (seeded._id as Types.ObjectId).toString()
-            );
+            const user = await userRepository.findByIdWithCredentials(seeded._id.toString());
 
             // Precondition: this document really does hold the secrets
             expect(user!.password).toBeTruthy();
@@ -97,7 +93,7 @@ describe('user credential exposure', () => {
             const user = await withTokens();
             const json = user.toJSON() as Record<string, unknown>;
 
-            expect(json.id).toBe((user._id as Types.ObjectId).toString());
+            expect(json.id).toBe(user._id.toString());
             expect(JSON.stringify(json)).not.toContain('_id');
             expect(JSON.stringify(json)).not.toContain('__v');
         });
@@ -179,13 +175,13 @@ describe('user credential exposure', () => {
             const { items } = await userService.search({});
 
             expect(items).toHaveLength(1);
-            expect((items[0] as unknown as { id: string }).id).toMatch(/^[\da-f]{24}$/);
+            expect(asStub<{ id: string }>(items[0]).id).toMatch(/^[\da-f]{24}$/);
             expectNoCredentials(items);
         });
 
         it('normalizes a single lookup via userService.getById (no .toObject() pre-flattening)', async () => {
             const seeded = await createUser({ email: 'lookup@example.com' });
-            const found = await userService.getById((seeded._id as Types.ObjectId).toString());
+            const found = await userService.getById(seeded._id.toString());
 
             expect(found!.toJSON()).toMatchObject({ id: seeded.id, email: 'lookup@example.com' });
         });

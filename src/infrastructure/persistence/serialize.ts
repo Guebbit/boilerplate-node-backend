@@ -65,11 +65,12 @@ export const applySerialization = (
     const transform: SerializeTransform = (serialized) => {
         if (dropId) delete serialized._id;
         else if (serialized._id) {
-            serialized.id = serialized._id.toString();
+            serialized.id = String(serialized._id as { toString(): string });
             delete serialized._id;
         }
         delete serialized.__v;
 
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- stripping the caller-named keys from a plain record is the whole job
         for (const key of omit) delete serialized[key];
 
         after?.(serialized);

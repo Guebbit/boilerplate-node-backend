@@ -191,7 +191,9 @@ describe('createRefreshToken', () => {
         await expect(verifyRefreshToken(second)).resolves.toMatchObject({ id: String(user._id) });
 
         const reloaded = await userRepository.findByIdWithCredentials(String(user._id));
-        const refreshTokens = reloaded!.tokens.filter((entry) => entry.type === TokenType.REFRESH);
+        const refreshTokens = reloaded!.tokens.filter(
+            (entry) => entry.type === (TokenType.REFRESH as string)
+        );
         expect(refreshTokens).toHaveLength(2);
     });
 });

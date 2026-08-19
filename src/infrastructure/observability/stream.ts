@@ -102,7 +102,7 @@ const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) 
         .then((payload) => {
             writeEvent(response, eventName, payload);
         })
-        .catch(() => {});
+        .catch(() => undefined);
 };
 
 /**

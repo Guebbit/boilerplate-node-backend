@@ -9,7 +9,7 @@ import {
 /**
  * Extra cache metadata for middleware users.
  */
-type CacheOptions = {
+interface CacheOptions {
     tags?: string[];
     /**
      * The query parameters this endpoint's answer actually depends on.
@@ -37,7 +37,7 @@ type CacheOptions = {
      * appears at once.
      */
     browserRevalidate?: boolean;
-};
+}
 
 /**
  * Keep cache entries separated by user.

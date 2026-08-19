@@ -146,7 +146,7 @@ export const resolveErrorMessage = (status: number) => {
  */
 const normalizeErrors = (
     status: number,
-    errors: Array<string | ResponseErrorItem>
+    errors: (string | ResponseErrorItem)[]
 ): ResponseErrorItem[] => {
     const fallbackMessage = resolveErrorMessage(status);
     // Guarantee at least one item: a failure response with `errors: []` would force every
@@ -182,7 +182,7 @@ const normalizeErrors = (
  * There is no `message` parameter on purpose — see {@link resolveErrorMessage}. `errors` is where
  * a caller says something specific, and it is the half the client is meant to read.
  */
-export const generateReject = (status = 400, errors: Array<string | ResponseErrorItem> = []) =>
+export const generateReject = (status = 400, errors: (string | ResponseErrorItem)[] = []) =>
     ({
         success: false,
         status,
@@ -202,5 +202,5 @@ export const generateReject = (status = 400, errors: Array<string | ResponseErro
 export const rejectResponse = (
     response: Response,
     status = 400,
-    errors: Array<string | ResponseErrorItem> = []
+    errors: (string | ResponseErrorItem)[] = []
 ) => response.status(status).json(generateReject(status, errors)) as Response<ResponseReject>;

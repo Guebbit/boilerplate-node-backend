@@ -176,7 +176,7 @@ describe('locale discovery', () => {
         expect(italian).toMatchObject(itTranslation);
         // ...and the modules layer their own namespaces on top. `users` is asserted rather than
         // just "something was added", so a merge that silently dropped a contribution fails.
-        expect(italian['users']).toMatchObject(itUsers.users);
+        expect(italian.users).toMatchObject(itUsers.users);
     });
 
     it('shapes every dictionary for i18next.init', () => {

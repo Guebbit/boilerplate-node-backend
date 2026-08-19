@@ -31,7 +31,7 @@ describe('contract scalars', () => {
     it('agrees with every operation on the maximum page size', () => {
         const disagreeing = constantsEndingIn('PageSizeMax')
             // The largest value core accepts is the bound it was built with.
-            .filter(([, value]) => pageSizeSchema.safeParse(value).success === false)
+            .filter(([, value]) => !pageSizeSchema.safeParse(value).success)
             .map(([name, value]) => `${name} = ${String(value)}`);
 
         expect(disagreeing).toEqual([]);
@@ -41,7 +41,7 @@ describe('contract scalars', () => {
         // The other half: core must not accept MORE than the contract allows either, or a
         // lowered `maximum` would pass unnoticed.
         const tooPermissive = constantsEndingIn('PageSizeMax')
-            .filter(([, value]) => pageSizeSchema.safeParse((value as number) + 1).success === true)
+            .filter(([, value]) => pageSizeSchema.safeParse((value as number) + 1).success)
             .map(([name]) => name);
 
         expect(tooPermissive).toEqual([]);

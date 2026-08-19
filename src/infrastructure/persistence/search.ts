@@ -118,6 +118,7 @@ export const escapeRegex = (value: string): string =>
  * a search box, none of it is meaningful to match on, and a rule with one exception is a rule
  * someone has to remember.
  */
+// eslint-disable-next-line no-control-regex -- stripping control characters is this regex's entire purpose
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
 
 /**
@@ -139,7 +140,7 @@ const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
  * @returns an escaped pattern, or `undefined` if nothing searchable remains
  */
 export const toSearchPattern = (value: unknown): string | undefined => {
-    if (value === undefined || value === null) return undefined;
+    if (typeof value !== 'string' && typeof value !== 'number') return undefined;
     const cleaned = String(value).replaceAll(CONTROL_CHARACTERS, '').trim();
     return cleaned === '' ? undefined : escapeRegex(cleaned);
 };

@@ -92,6 +92,7 @@ describe('escapeRegex', () => {
                 // moved between fast-check majors; this spelling does not care which one is
                 // installed.
                 fc
+                    // eslint-disable-next-line @typescript-eslint/no-misused-spread -- ASCII regex metacharacters only; no surrogate pairs to mishandle
                     .array(fc.constantFrom(...metacharacters), { minLength: 1, maxLength: 12 })
                     .map((characters) => characters.join('')),
                 (pattern) => {

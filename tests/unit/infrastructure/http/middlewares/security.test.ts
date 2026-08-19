@@ -21,7 +21,8 @@
  * a small fraction of the browsing budget, because the reason it exists is that they must not
  * share a bucket.
  */
-import type { NextFunction, Request, Response } from 'express';
+import { asStub } from '@tests/stub';
+import type { Request } from 'express';
 import {
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_RATE_LIMIT_WINDOW_MS,
@@ -33,10 +34,10 @@ import { makeResponseStub } from '@tests/express';
 /** Captures the status/body pair `rejectResponse` writes, without an HTTP server. */
 
 const makeRequest = (authorization?: string) =>
-    ({
+    asStub<Request>({
         header: (name: string) =>
             name.toLowerCase() === 'authorization' ? authorization : undefined
-    }) as unknown as Request;
+    });
 
 const originalToken = process.env.NODE_METRICS_TOKEN;
 

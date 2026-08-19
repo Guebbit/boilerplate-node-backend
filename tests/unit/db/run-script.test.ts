@@ -99,6 +99,7 @@ describe('runScript', () => {
 
     it('reports a non-Error throw without crashing on `.message`', async () => {
         await runScript(
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- the non-Error rejection IS the case under test
             () => Promise.reject('a bare string'),
             () => Promise.resolve()
         );

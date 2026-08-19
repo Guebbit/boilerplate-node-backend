@@ -861,7 +861,7 @@ and a floor moved twice is worse than a floor moved once.
 | ------------------------------------ | ------------------------------------------------------------------------------ |
 | `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters |
 | `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.  |
-| `scripts/mutationBaseline.ts`        | Ratchet logic — scoring, comparison, the "never lower" rule                    |
+| `scripts/mutation-baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                    |
 | `scripts/check-mutation-baseline.ts` | CLI for the two commands below                                                 |
 | `scripts/heap-report.ts`             | Groups a `.heapsnapshot` by kind — what a runaway worker is holding            |
 | `scripts/heap-retainers.ts`          | Walks the same snapshot backwards — which code is holding it                   |

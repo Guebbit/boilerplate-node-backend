@@ -64,7 +64,7 @@ flowchart LR
 
 The four client collections are **generated from `openapi.yaml`**, so the contract has to be
 assembled before they can be produced — and they also read `db/demo/demo-data.json`
-(`scripts/contracts/generateCollections.ts` imports it) for their example request bodies. That file
+(`scripts/contracts/generate-collections.ts` imports it) for their example request bodies. That file
 is produced by `seed:export`, which runs the real application and so needs `api/`, which is itself
 generated from the contract:
 
@@ -221,7 +221,7 @@ src/modules/<name>/probes.ts         the requests a spec cannot describe
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
 good sign rather than an omission. Deleting a module is `rm -rf` of the folder, one line out of
 `src/modules.ts`, and one line out of each section list it appeared in. A module that declared
-probes is also named in `scripts/contracts/generateCollections.ts`, and that one announces itself:
+probes is also named in `scripts/contracts/generate-collections.ts`, and that one announces itself:
 the import stops compiling.
 
 ## Related pages

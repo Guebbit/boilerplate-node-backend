@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import { Types } from 'mongoose';
 import { accountService } from '../services';
 import { createRefreshToken, createAccessToken, RefreshTokenExpiryTime } from '../session/jwt';
 import { createRefreshCookie, createLoggedCookie } from '../session/cookies';
@@ -85,8 +84,14 @@ export const postLogin = (
              * Authentication successful.
              * Create refresh token and add it to the client cookies.
              */
-            const userId = (result.data?._id as Types.ObjectId)?.toString();
-            const isAdmin = !!result.data?.admin;
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without a user is a broken service contract, not a login failure.
+                rejectResponse(response, 500, []);
+                return;
+            }
+            const userId = data._id.toString();
+            const isAdmin = !!data.admin;
 
             return createRefreshToken(userId, remember)
                 .then((refreshToken) => {

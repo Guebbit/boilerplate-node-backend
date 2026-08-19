@@ -66,8 +66,8 @@ describe('the filters that reach MongoDB', () => {
 
         addTextFilter(where, '(a+)+$', ['title', 'description']);
 
-        for (const clause of where.$or as { [k: string]: { $regex: string } }[])
-            expect(Object.values(clause)[0]!.$regex).not.toBe('(a+)+$');
+        for (const clause of where.$or as Record<string, { $regex: string }>[])
+            expect(Object.values(clause)[0].$regex).not.toBe('(a+)+$');
     });
 
     it('escapes a single-field filter', () => {

@@ -37,6 +37,7 @@
         "tests/**/*.ts",
         "db/**/*.ts",
         "db/demo/demo-data.json",
+        "eslint/**/*.ts",
         "scripts/**/*.ts",
         "shared/contracts/*.ts"
     ]

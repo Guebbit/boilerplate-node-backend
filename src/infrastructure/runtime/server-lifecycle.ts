@@ -44,7 +44,10 @@ export const getShutdownTimeoutMs = () => {
 export const closeServer = (server: Server) =>
     new Promise<void>((resolve, reject) => {
         server.close((error) => {
-            if (error) return reject(error);
+            if (error) {
+                reject(error);
+                return;
+            }
             resolve();
         });
     });

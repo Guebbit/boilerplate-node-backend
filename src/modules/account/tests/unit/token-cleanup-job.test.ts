@@ -50,8 +50,14 @@ const mockTokenRemoveExpired = Users.tokenRemoveExpired as jest.MockedFunction<
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
 /** Every message the job passed to `logger.info`, flattened for substring assertions. */
-const infoMessages = () => mockedLogger.info.mock.calls.map(([message]) => String(message));
-const errorMessages = () => mockedLogger.error.mock.calls.map(([message]) => String(message));
+const infoMessages = () =>
+    mockedLogger.info.mock.calls.map(([message]) =>
+        typeof message === 'string' ? message : JSON.stringify(message)
+    );
+const errorMessages = () =>
+    mockedLogger.error.mock.calls.map(([message]) =>
+        typeof message === 'string' ? message : JSON.stringify(message)
+    );
 
 beforeEach(() => {
     jest.clearAllMocks();

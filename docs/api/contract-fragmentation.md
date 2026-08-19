@@ -55,7 +55,7 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
 
 The four shared files that are **not** bundled are the four that name no domain: `spectral.yaml`
-is a lint ruleset, and `check-mutation-baseline.ts`, `testReport.ts` and `gen-asyncapi-types.ts`
+is a lint ruleset, and `check-mutation-baseline.ts`, `test-report.ts` and `gen-asyncapi-types.ts`
 are tooling. All four are hand-maintained on both sides — `npm run sync:frontend` reports them as
 differing and never writes them, because a fork in one of those is a question (which copy is
 right?) that no script may answer on its own.
@@ -107,7 +107,7 @@ It would be tidier to ship only fragments and bundle on demand. Three reasons no
 
 - **The frontend's toolchain reads one file.** `orval.config.ts` there points at `./openapi.yaml`
   three times, and `spectral lint openapi.yaml` runs in both repos.
-- **Byte-identity is enforced by a test.** `scripts/specIdentity.ts` compares this repo's copy with
+- **Byte-identity is enforced by a test.** `scripts/spec-identity.ts` compares this repo's copy with
   the frontend's and fails the build when they fork. That check needs one file on each side to
   compare.
 - **Regeneration is not reproducible across repos.** `redocly bundle` output depends on the
@@ -116,7 +116,7 @@ It would be tidier to ship only fragments and bundle on demand. Three reasons no
   match.
 
 That last point is the one that bites. **If the bundle step ever produces different bytes here than
-what the frontend holds, `specIdentity` fails and neither repo can build.** Bundle once, commit the
+what the frontend holds, `check:spec-identity` fails and neither repo can build.** Bundle once, commit the
 result, copy that.
 
 The comments do **not** travel into `openapi.yaml` — a parse cannot keep them, and Redocly parses.
@@ -307,7 +307,7 @@ point of doing this textually.
 What is already true and does not change:
 
 - the module registry, the `basePath` per module, and the one-line enable/disable in `src/modules.ts`
-- `npm run lint:openapi`, `npm run gen:api`, and the `specIdentity` check
+- `npm run lint:openapi`, `npm run gen:api`, and the `check:spec-identity` check
 - the frontend holding a byte-identical copy
 
 ## The other six, and what each one taught
@@ -433,7 +433,7 @@ than incomplete: its bodies predated the response envelope, so it mocked a bare 
 `{ success, error, traceId }` shape. **A mock server serving shapes the frontend cannot parse is
 worse than no mock server.**
 
-So `scripts/contracts/generateCollections.ts` produces them instead — **one committed file per
+So `scripts/contracts/generate-collections.ts` produces them instead — **one committed file per
 tool, generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
 header to keep in step with a footer, and nothing under `src/` that must never be opened.
 
@@ -469,7 +469,7 @@ requests, it does not send them.
 
 They are TypeScript rather than YAML, and the generator is called with them directly. That buys two
 things a data file cannot: the seed tokens and the probe shape are typechecked, and a module deleted
-without its probes leaving `scripts/contracts/generateCollections.ts` stops the build — which is the
+without its probes leaving `scripts/contracts/generate-collections.ts` stops the build — which is the
 failure [module lifecycle](../theory/module-lifecycle.md) asks for, rather than a collection that
 silently comes out short.
 

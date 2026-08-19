@@ -56,7 +56,7 @@ export const getFeedback = (
             text,
             email,
             // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping
-            status: status ? String(status) : undefined
+            status: status || undefined
         })
         .then((result) => {
             emitAuditEvent(

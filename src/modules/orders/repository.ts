@@ -62,8 +62,8 @@ const search = async (
     const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: { createdAt: -1 } }];
 
     return aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }]).then(
-        ([countResult]) => {
-            const totalItems = countResult?.totalItems ?? 0;
+        (countResults) => {
+            const totalItems = countResults.at(0)?.totalItems ?? 0;
 
             return aggregate([
                 ...basePipeline,
@@ -107,7 +107,10 @@ const findByIdScoped = (
     if (!scope) return base.findById(id).then((order) => order ?? undefined);
 
     return aggregate([{ $match: { _id: toObjectId(id), ...scope } }, { $limit: 1 }]).then(
-        ([result]) => (result ? base.normalize([result])[0] : undefined)
+        (results) => {
+            const result = results.at(0);
+            return result ? base.normalize([result])[0] : undefined;
+        }
     );
 };
 

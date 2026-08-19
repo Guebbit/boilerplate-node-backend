@@ -18,6 +18,7 @@
  *   another's order by id.
  */
 
+import { asStub } from '@tests/stub';
 import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
@@ -163,7 +164,7 @@ describe('getById', () => {
         const found = await getById(String(order._id), { userId: user._id });
 
         expect(found).toBeDefined();
-        expect(String((found as unknown as { id: string }).id)).toBe(String(order._id));
+        expect(asStub<{ id: string }>(found).id).toBe(String(order._id));
     });
 
     /**
@@ -186,10 +187,12 @@ describe('getById', () => {
     it('returns a transformed plain object when scoped, and a document when not', async () => {
         const { order, user } = await seedOrder();
 
-        const scoped = (await getById(String(order._id), {
-            userId: user._id
-        })) as unknown as Record<string, unknown>;
-        const unscoped = (await getById(String(order._id))) as unknown as Record<string, unknown>;
+        const scoped = asStub<Record<string, unknown>>(
+            await getById(String(order._id), {
+                userId: user._id
+            })
+        );
+        const unscoped = asStub<Record<string, unknown>>(await getById(String(order._id)));
 
         expect(scoped._id).toBeUndefined();
         expect(scoped.id).toBe(String(order._id));

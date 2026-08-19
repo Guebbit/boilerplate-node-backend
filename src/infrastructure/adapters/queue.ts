@@ -58,7 +58,7 @@ let connection: ChannelModel | undefined;
 let channel: Channel | undefined;
 
 /** In-flight connect, shared by concurrent callers to avoid a connection storm. */
-let connectPromise: Promise<Channel | void> | undefined;
+let connectPromise: Promise<Channel | undefined> | undefined;
 
 /**
  * What this adapter's connection is doing, for `GET /observability/health`.
@@ -97,17 +97,17 @@ const logConnectionWarning = (error: unknown) => {
  * Resolving with `void` (instead of rejecting) is what makes every public function in this
  * file a safe no-op when the broker is absent.
  */
-const getChannel = (): Promise<Channel | void> => {
-    if (!isQueueEnabled()) return Promise.resolve();
+const getChannel = (): Promise<Channel | undefined> => {
+    if (!isQueueEnabled()) return Promise.resolve(undefined);
     // Reuse the live channel — creating one per publish leaks channels on the broker.
     if (channel) return Promise.resolve(channel);
     // Join an in-flight attempt rather than opening a second connection.
     if (connectPromise) return connectPromise;
 
     const url = getAmqpUrl();
-    if (!url) return Promise.resolve();
+    if (!url) return Promise.resolve(undefined);
 
-    connectPromise = amqplib
+    const attempt: Promise<Channel | undefined> = amqplib
         // Opens the TCP connection and performs the AMQP handshake (auth + vhost negotiation).
         .connect(url)
         .then((conn) => {
@@ -132,23 +132,25 @@ const getChannel = (): Promise<Channel | void> => {
             return ch;
         })
         .catch((error: unknown) => {
-            // Swallow: publish/consume callers treat void as "queue unavailable".
+            // Swallow: publish/consume callers treat undefined as "queue unavailable".
             logConnectionWarning(error);
-            return;
+            return undefined;
         })
         .finally(() => {
             // Always clear, so a failed attempt does not poison subsequent calls.
             connectPromise = undefined;
         });
 
-    return connectPromise;
+    connectPromise = attempt;
+
+    return attempt;
 };
 
 /**
  * Warm up RabbitMQ connection during app startup.
  * Pays the handshake cost at boot instead of on the first user request.
  */
-export const startQueue = (): Promise<void> => getChannel().then(() => {});
+export const startQueue = (): Promise<void> => getChannel().then(() => undefined);
 
 /**
  * Gracefully close the RabbitMQ connection.
@@ -166,7 +168,7 @@ export const stopQueue = (): Promise<void> => {
             // for another consumer — the reason `prefetch` is kept low (see `consumeFromQueue`).
             .close()
             // Already-dead socket: nothing to salvage, and we are exiting anyway.
-            .catch(() => {})
+            .catch(() => undefined)
             .finally(() => {
                 channel = undefined;
                 connection = undefined;
@@ -316,6 +318,7 @@ export const consumeFromQueue = <TPayload = unknown>(
                         if (!incoming) return;
 
                         let parsed: unknown;
+                        // eslint-disable-next-line no-restricted-syntax -- JSON.parse has no non-throwing form; a malformed message is dropped, not a crash
                         try {
                             // `.content` is a Buffer; `toString()` assumes UTF-8 JSON, matching
                             // what `publishToQueue` writes.
@@ -355,6 +358,6 @@ export const consumeFromQueue = <TPayload = unknown>(
                     })
                 )
                 // Discard the consumerTag reply; callers only need "consumer registered".
-                .then(() => {})
+                .then(() => undefined)
         );
     });

@@ -20,10 +20,10 @@ import type { DependencyStatus } from '@infrastructure/observability/dependency-
  * What we store per key: enough to replay an HTTP response verbatim — the status code
  * and the already-serialized body.
  */
-type CacheValue = {
+interface CacheValue {
     status: number;
     body: unknown;
-};
+}
 
 /**
  * Prefix all Redis keys so this app does not collide with other apps/environments.
@@ -62,7 +62,7 @@ let client: RedisClientType | undefined;
  * Without this, a burst of requests arriving during startup would each fire their own
  * `connect()` — the classic thundering-herd on a cold cache.
  */
-let connectPromise: Promise<RedisClientType | void> | undefined;
+let connectPromise: Promise<RedisClientType | undefined> | undefined;
 
 /**
  * Avoid logging the same "Redis is down" warning again and again.
@@ -170,9 +170,9 @@ const logConnectionWarning = (error: unknown) => {
  * Reuse one Redis client for the whole app.
  * If Redis is off/unreachable, we fail open and just skip server-side caching.
  */
-const getClient = (): Promise<RedisClientType | void> => {
+const getClient = (): Promise<RedisClientType | undefined> => {
     // Disabled → resolve with nothing. Every caller treats a void result as "skip the cache".
-    if (!isCacheEnabled()) return Promise.resolve();
+    if (!isCacheEnabled()) return Promise.resolve(undefined);
     // `isReady` (as opposed to `isOpen`) means the socket is up *and* the handshake finished,
     // so commands can be issued immediately.
     if (client?.isReady) return Promise.resolve(client);
@@ -182,7 +182,7 @@ const getClient = (): Promise<RedisClientType | void> => {
     // Create the client only once, then reuse it for the rest of the app lifetime.
     if (!client) {
         const redisUrl = getRedisUrl();
-        if (!redisUrl) return Promise.resolve();
+        if (!redisUrl) return Promise.resolve(undefined);
 
         client = createClient({
             // `redis://[:password@]host:port[/db]` — parsed by node-redis itself.
@@ -207,7 +207,7 @@ const getClient = (): Promise<RedisClientType | void> => {
     // module-level `let` that `stopCache()` can clear while this promise is still pending.
     const redisClient = client;
 
-    const promise: Promise<RedisClientType | void> = redisClient
+    const promise: Promise<RedisClientType | undefined> = redisClient
         .connect()
         .then(() => {
             // If connect worked, allow future warnings again for later failures.
@@ -215,9 +215,9 @@ const getClient = (): Promise<RedisClientType | void> => {
             return redisClient;
         })
         .catch((error: unknown) => {
-            // Resolve (not reject) with void: connection failure is a cache miss, not a request failure.
+            // Resolve (not reject) with undefined: connection failure is a cache miss, not a request failure.
             logConnectionWarning(error);
-            return;
+            return undefined;
         })
         .finally(() => {
             // Clear the in-flight marker either way, so the *next* call can retry a dead Redis.
@@ -250,10 +250,10 @@ export const stopCache = (): Promise<void> => {
             // `quit()` sends the QUIT command and waits for queued replies — the polite close.
             .quit()
             .then(
-                () => {},
-                // If QUIT itself fails (already-dead socket), `disconnect()` drops the socket
+                () => undefined,
+                // If QUIT itself fails (already-dead socket), `destroy()` drops the socket
                 // immediately, discarding anything still queued.
-                () => redisClient.disconnect()
+                () => redisClient.destroy()
             )
             .finally(() => {
                 // Reset module state so a subsequent `getClient()` (e.g. in a test that restarts
@@ -270,14 +270,14 @@ export const stopCache = (): Promise<void> => {
  * Resolves with `undefined` on a miss, on a Redis failure, and when caching is disabled —
  * the caller cannot distinguish them, and does not need to.
  */
-export const getCacheValue = (key: string): Promise<CacheValue | void> =>
+export const getCacheValue = (key: string): Promise<CacheValue | undefined> =>
     getClient()
         .then((redisClient) => {
-            if (!redisClient) return;
+            if (!redisClient) return undefined;
 
             // Redis GET on a string key. Returns `null` when the key is absent or has expired.
             return redisClient.get(prefix(`key:${key}`)).then((raw) => {
-                if (!raw) return;
+                if (!raw) return undefined;
                 // Redis stores bytes, so the envelope was JSON-serialized on write.
                 // A throw here (corrupt value) is caught by the `.catch` below → treated as a miss.
                 return JSON.parse(raw) as CacheValue;
@@ -289,7 +289,7 @@ export const getCacheValue = (key: string): Promise<CacheValue | void> =>
                 key,
                 error: error instanceof Error ? error.message : String(error)
             });
-            return;
+            return undefined;
         });
 
 /**
@@ -378,7 +378,7 @@ export const setCacheValue = (
                         )
                     )
                     // Collapse the SADD reply counts to void — callers only care that it finished.
-                    .then(() => {})
+                    .then(() => undefined)
             );
         })
         .catch((error) => {
@@ -429,7 +429,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
                     );
                 })
                 // Collapse the per-tag delete counts to void.
-            ).then(() => {});
+            ).then(() => undefined);
         })
         .catch((error) => {
             logger.warn({

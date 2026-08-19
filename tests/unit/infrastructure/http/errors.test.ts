@@ -16,6 +16,7 @@
  *   the driver's prose into the body.
  */
 
+import { asStub } from '@tests/stub';
 import {
     ExtendedError,
     databaseErrorInterpreter,
@@ -23,7 +24,6 @@ import {
     rejectDatabaseEnvelope,
     rejectDatabaseError
 } from '@infrastructure/http/errors';
-import type { Response } from 'express';
 import { logger } from '@infrastructure/adapters/logger';
 import type { CastError } from 'mongoose';
 import { makeResponseStub } from '@tests/express';
@@ -42,11 +42,13 @@ const mockedLogger = logger as jest.Mocked<typeof logger>;
 
 /** A CastError-shaped object: `kind` as an own property is the discriminator. */
 const makeCastError = (): CastError =>
-    Object.assign(new Error('Cast to ObjectId failed for value "abc" at path "_id"'), {
-        kind: 'ObjectId',
-        path: '_id',
-        value: 'abc'
-    }) as unknown as CastError;
+    asStub<CastError>(
+        Object.assign(new Error('Cast to ObjectId failed for value "abc" at path "_id"'), {
+            kind: 'ObjectId',
+            path: '_id',
+            value: 'abc'
+        })
+    );
 
 describe('ExtendedError', () => {
     it('exposes the name, status, operational flag and user-facing errors it was given', () => {
@@ -190,9 +192,11 @@ describe('databaseErrorInterpreter', () => {
         it('ignores any number that happens to lead the prose message', () => {
             // The old branch read the status out of the message text, so a Mongoose message
             // starting with a number silently became the HTTP status.
-            const castError = Object.assign(new Error('404 not castable'), {
-                kind: 'ObjectId'
-            }) as unknown as CastError;
+            const castError = asStub<CastError>(
+                Object.assign(new Error('404 not castable'), {
+                    kind: 'ObjectId'
+                })
+            );
 
             expect(databaseErrorInterpreter(castError)).toEqual([422, 'Invalid identifier']);
         });

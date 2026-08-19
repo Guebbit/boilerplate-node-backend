@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
@@ -18,7 +18,7 @@ describe('orderRepository', () => {
 
             expect(order._id).toBeDefined();
             expect(order.email).toBe(user.email);
-            expect(order.userId.toString()).toBe((user._id as Types.ObjectId).toString());
+            expect(order.userId.toString()).toBe(user._id.toString());
         });
 
         it('stores the correct quantity for each order line', async () => {
@@ -163,7 +163,7 @@ describe('orderRepository', () => {
             const user = await createUser();
             const product = await createProduct();
             const order = await createOrder(user, [toOrderItem(product, 1)]);
-            const expected = (order._id as Types.ObjectId).toString();
+            const expected = order._id.toString();
 
             const asAdmin = await orderRepository.findByIdScoped(expected);
             const asOwner = await orderRepository.findByIdScoped(
@@ -173,8 +173,8 @@ describe('orderRepository', () => {
 
             // Not `toBeDefined()`: the failure this guards against is a value that stringifies
             // to the literal 'undefined', which is defined enough to pass a laxer assertion.
-            expect(String((asAdmin as unknown as { id?: unknown }).id)).toBe(expected);
-            expect(String((asOwner as unknown as { id?: unknown }).id)).toBe(expected);
+            expect(String(asStub<{ id?: unknown }>(asAdmin).id)).toBe(expected);
+            expect(String(asStub<{ id?: unknown }>(asOwner).id)).toBe(expected);
         });
 
         it('drops `_id` on the scoped branch, which is why `id` is the field to read', async () => {
@@ -191,7 +191,7 @@ describe('orderRepository', () => {
             // implicit: it is the half of the contract that makes reading `_id` a silent,
             // role-dependent bug instead of a loud one.
             expect(asOwner).toBeDefined();
-            expect((asOwner as unknown as { _id?: unknown })._id).toBeUndefined();
+            expect(asStub<{ _id?: unknown }>(asOwner)._id).toBeUndefined();
         });
 
         it('still refuses an order the scope does not cover', async () => {

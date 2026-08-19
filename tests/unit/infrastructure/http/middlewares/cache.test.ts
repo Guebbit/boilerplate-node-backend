@@ -1,3 +1,4 @@
+import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import * as cache from '@infrastructure/adapters/cache';
@@ -17,7 +18,8 @@ const createResponse = () => {
     const headers: Record<string, string> = {};
     const listeners = new Map<string, () => void>();
 
-    const response = {
+    // Annotated: the stub's own callbacks return `response`, so inference would be circular.
+    const response: Response = asStub<Response>({
         statusCode: 200,
         set: jest.fn((name: string, value: string) => {
             headers[name.toLowerCase()] = value;
@@ -31,8 +33,8 @@ const createResponse = () => {
         // from CORS — so the mock has to append too, or a test could pass while the real response
         // dropped a header it must keep.
         vary: jest.fn((field: string) => {
-            const existing = headers['vary'];
-            headers['vary'] = existing ? `${existing}, ${field}` : field;
+            const existing = headers.vary;
+            headers.vary = existing ? `${existing}, ${field}` : field;
             return response;
         }),
         json: jest.fn((body: unknown) => body),
@@ -40,7 +42,7 @@ const createResponse = () => {
             listeners.set(event, handler);
             return response;
         })
-    } as unknown as Response;
+    });
 
     return { response, headers, listeners };
 };
@@ -54,11 +56,11 @@ const keyFor = async (
     mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
     const middleware = setCache(60, { tags: ['products'], keyParameters });
     await middleware(
-        { method: 'GET', originalUrl, query, locale: 'en' } as unknown as Request,
+        asStub<Request>({ method: 'GET', originalUrl, query, locale: 'en' }),
         createResponse().response,
         jest.fn() as NextFunction
     );
-    const calls = mockedCache.getCacheValue.mock.calls;
+    const { calls } = mockedCache.getCacheValue.mock;
     return calls.at(-1)?.[0];
 };
 
@@ -77,12 +79,12 @@ describe('setCache', () => {
         const middleware = setCache(60, { tags: ['products'], keyParameters: ['page'] });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
-        const request = {
+        const request = asStub<Request>({
             method: 'GET',
             originalUrl: '/products?page=1',
             query: { page: '1' },
             locale: 'en'
-        } as unknown as Request;
+        });
 
         await middleware(request, response, next);
 
@@ -99,7 +101,7 @@ describe('setCache', () => {
         const middleware = setCache(120, { tags: ['products'], keyParameters: [] });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
-        const request = {
+        const request = asStub<Request>({
             method: 'GET',
             originalUrl: '/products',
             query: {},
@@ -107,7 +109,7 @@ describe('setCache', () => {
             authContext: {
                 id: '507f1f77bcf86cd799439011'
             }
-        } as unknown as Request;
+        });
 
         await middleware(request, response, next);
 
@@ -135,11 +137,11 @@ describe('setCache', () => {
 
         const middleware = setCache(3600, { tags: ['products'], keyParameters: [] });
         const { response, headers } = createResponse();
-        const request = {
+        const request = asStub<Request>({
             method: 'GET',
             originalUrl: '/products',
             query: {}
-        } as unknown as Request;
+        });
 
         await middleware(request, response, jest.fn() as NextFunction);
 
@@ -184,16 +186,16 @@ describe('setCache', () => {
                 keyParameters: ['page', 'pageSize']
             });
             const { response, headers } = createResponse();
-            const request = {
+            const request = asStub<Request>({
                 method: 'GET',
                 originalUrl: '/products?page=1&pageSize=10',
                 query: { page: '1', pageSize: '10' },
                 ...extraRequest
-            } as unknown as Request;
+            });
 
             await middleware(request, response, jest.fn() as NextFunction);
 
-            expect(headers['vary']).toBe('Authorization, Accept-Language');
+            expect(headers.vary).toBe('Authorization, Accept-Language');
             expect(headers['cache-control']).toBe(cacheControl);
         }
     );
@@ -210,12 +212,12 @@ describe('setCache', () => {
 
         for (const locale of ['en', 'it'])
             await middleware(
-                {
+                asStub<Request>({
                     method: 'GET',
                     originalUrl: '/products',
                     query: {},
                     locale
-                } as unknown as Request,
+                }),
                 createResponse().response,
                 jest.fn() as NextFunction
             );
@@ -291,11 +293,11 @@ describe('setCache', () => {
         const middleware = setCache(3600, { tags: ['products'], keyParameters: [] });
         const { response } = createResponse();
         const next = jest.fn() as NextFunction;
-        const request = {
+        const request = asStub<Request>({
             method: 'GET',
             originalUrl: '/products',
             query: {}
-        } as unknown as Request;
+        });
 
         await middleware(request, response, next);
 

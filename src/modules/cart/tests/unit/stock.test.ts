@@ -115,7 +115,7 @@ describe('checkout holds units without selling them', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
-        expect(result.success === false && result.errors[0]).toMatchObject({
+        expect(!result.success && result.errors[0]).toMatchObject({
             code: 'CART_INSUFFICIENT_STOCK',
             // Which line, and what is actually left. Without this the customer is editing the
             // cart by trial and error.
@@ -173,7 +173,7 @@ describe('checkout holds units without selling them', () => {
         const result = await cartService.orderConfirm(user.id);
 
         expect(result.success).toBe(false);
-        const details = result.success === false ? result.errors[0].details : undefined;
+        const details = result.success ? undefined : result.errors[0].details;
         // Both short lines, with titles, and the healthy one absent — a customer trimming one
         // line only to be refused on the next is being made to binary-search their own basket.
         expect(details?.lines).toEqual([
@@ -224,7 +224,7 @@ describe('checkout holds units without selling them', () => {
          * the state the winner left behind rather than anything the loser saw earlier.
          */
         const loser = first.success ? second : first;
-        expect(loser.success === false && loser.errors[0]).toMatchObject({
+        expect(!loser.success && loser.errors[0]).toMatchObject({
             code: 'CART_INSUFFICIENT_STOCK',
             details: {
                 lines: [{ productId: String(lastOne._id), requested: 1, available: 0 }]
@@ -263,7 +263,7 @@ describe('the admin order create holds units like checkout', () => {
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
         // The admin path names the blocker too — it sells the same shelf and refuses the same way.
-        expect(result.success === false && result.errors[0]).toMatchObject({
+        expect(!result.success && result.errors[0]).toMatchObject({
             code: 'ORDER_INSUFFICIENT_STOCK',
             details: {
                 lines: [{ productId: String(scarce._id), requested: 5, available: 1 }]

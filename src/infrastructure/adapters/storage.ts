@@ -240,7 +240,10 @@ const withLocaleRestored =
     (middleware: RequestHandler): RequestHandler =>
     (request, response, next) =>
         middleware(request, response, (error?: unknown) => {
-            if (error || !request.locale) return next(error);
+            if (error || !request.locale) {
+                next(error);
+                return;
+            }
             runWithLocaleContext(createLocaleContext(request.locale), () => next());
         });
 
@@ -263,7 +266,10 @@ const withLocaleRestored =
  */
 export const validateUploadedImages: RequestHandler = (request, _response, next) => {
     const paths = getFormFiles(request);
-    if (!paths || paths.length === 0) return next();
+    if (!paths || paths.length === 0) {
+        next();
+        return;
+    }
 
     // The declared type decided the stored EXTENSION, and the extension decides the
     // `Content-Type` a static file server sends — so the bytes have to match the declaration,
@@ -279,7 +285,10 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
                     identified[index] === undefined ||
                     (declared !== undefined && identified[index] !== declared)
             );
-            if (rejected.length === 0) return next();
+            if (rejected.length === 0) {
+                next();
+                return;
+            }
 
             // Logged, because a mismatch between the declared type and the bytes is not a typo —
             // it is either a broken client or someone probing what this endpoint will store.
@@ -327,7 +336,10 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
  */
 export const storeUploadedImages: RequestHandler = (request, _response, next) => {
     const staged = getFormFiles(request);
-    if (!staged || staged.length === 0) return next();
+    if (!staged || staged.length === 0) {
+        next();
+        return;
+    }
 
     // `allSettled`, not `all`: with several files the interesting failure is the partial one, and
     // `all` rejects while the successful puts are still in flight — leaving images committed to
@@ -339,7 +351,8 @@ export const storeUploadedImages: RequestHandler = (request, _response, next) =>
                 request.storedImageUrls = results.map(
                     (result) => (result as PromiseFulfilledResult<string>).value
                 );
-                return next();
+                next();
+                return;
             }
 
             return Promise.all([

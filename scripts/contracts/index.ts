@@ -3,7 +3,7 @@
  *
  * Two kinds, and the difference decides what is guarded. The AUTHORED ones — `openapi`, the two
  * asyncapi bundles, the frontend's analytics event names — are committed and cover the shared
- * files of `scripts/specIdentity.ts`: the ones that exist twice, once here and once in the paired
+ * files of `scripts/spec-identity.ts`: the ones that exist twice, once here and once in the paired
  * frontend. This repo authors them; the frontend holds byte-identical copies and never edits them.
  *
  * Two of them publish a SUBSET rather than everything they are built from, and for opposite
@@ -19,7 +19,7 @@
  * `openapi.yaml`. They are listed here so `npm run contracts:bundle -- bruno` can find them, not
  * because anything checks them: an uncommitted file cannot be stale.
  *
- * The files in `specIdentity.ts` that are NOT here are the ones with nothing to fragment:
+ * The files in `spec-identity.ts` that are NOT here are the ones with nothing to fragment:
  * `spectral.yaml` is a lint ruleset, `check-mutation-baseline.ts` and `gen-asyncapi-types.ts` are
  * tooling, and none of them names a domain. `src/types/asyncapi.generated.ts` is absent for the
  * opposite reason — it is generated from `asyncapi.yaml` by `npm run gen:asyncapi`, so it follows a bundle
@@ -39,8 +39,8 @@
 import type { ContractBundle } from './fragments';
 import { openapiBundle } from './openapi';
 import { asyncapiBundle, asyncapiPublicBundle } from './asyncapi';
-import { analyticsEventsBundle } from './analyticsEvents';
-import { brunoBundle, insomniaBundle, mockoonBundle, postmanBundle } from './generateCollections';
+import { analyticsEventsBundle } from './analytics-events';
+import { brunoBundle, insomniaBundle, mockoonBundle, postmanBundle } from './generate-collections';
 
 export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,

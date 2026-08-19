@@ -72,7 +72,7 @@ export const start = () => {
         // sets `mongoose.connection`, so everything else in the app is wired up as a side effect.
         mongoose.connect(getDatabaseUri()).then(
             // Swallow the resolved Mongoose instance: callers only need "connected", not the handle.
-            () => {},
+            () => undefined,
             () => {
                 // Budget exhausted — propagate so the boot sequence aborts the process.
                 if (attempt >= MAX_RETRIES - 1)
@@ -99,7 +99,7 @@ export const start = () => {
  */
 export const stopDatabase = () =>
     mongoose.disconnect().then(
-        () => {},
+        () => undefined,
         (error: unknown) => {
             logger.warn({
                 message: 'MongoDB disconnect failed.',
@@ -118,4 +118,4 @@ export const stopDatabase = () =>
  * immediately at import time and is populated by `connect()`, so grabbing the reference
  * before `start()` runs is safe.
  */
-export const connection = mongoose.connection;
+export const { connection } = mongoose;

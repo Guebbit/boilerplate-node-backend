@@ -74,7 +74,7 @@ describe('the one-default invariant', () => {
         await accountService.addressAdd(user.id, HOME);
         const view = await accountService.addressesGet(user.id);
 
-        await accountService.addressUpdate(user.id, view.addresses[0]!.id, {
+        await accountService.addressUpdate(user.id, view.addresses[0].id, {
             default: false,
             city: 'Bologna'
         });
@@ -109,7 +109,7 @@ describe('ownership', () => {
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         await accountService.addressAdd(owner.id, HOME);
         const view = await accountService.addressesGet(owner.id);
-        const entryId = view.addresses[0]!.id;
+        const entryId = view.addresses[0].id;
 
         const update = await accountService.addressUpdate(stranger.id, entryId, {
             city: 'Hacked'

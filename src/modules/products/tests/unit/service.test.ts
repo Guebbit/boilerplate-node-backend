@@ -1,7 +1,7 @@
-import { Types } from 'mongoose';
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
-import { createProduct, makeProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/factory';
 import * as productService from '@modules/products/service';
 import { productRepository } from '@modules/products';
 import { cartRepository } from '@modules/cart';
@@ -266,19 +266,19 @@ describe('productService.search', () => {
 describe('productService.getById', () => {
     it('returns a lean product object for an active product (non-admin)', async () => {
         const product = await createProduct({ active: true });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const found = await productService.getById(id, false);
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
         // A real Mongoose document — schema's toJSON transform normalizes it on the way out
-        expect(typeof (found as unknown as { save: unknown }).save).toBe('function');
+        expect(typeof asStub<{ save: unknown }>(found).save).toBe('function');
     });
 
     it('returns null for an inactive product when called as non-admin', async () => {
         const product = await createProduct({ active: false });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const found = await productService.getById(id, false);
 
@@ -287,7 +287,7 @@ describe('productService.getById', () => {
 
     it('returns an inactive product when called as admin', async () => {
         const product = await createProduct({ active: false });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const found = await productService.getById(id, true);
 
@@ -318,7 +318,7 @@ describe('productService.create', () => {
 describe('productService.updateById', () => {
     it('updates title, price and description of an existing product', async () => {
         const product = await createProduct();
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const result = await productService.updateById(id, {
             title: 'Updated Title',
@@ -335,7 +335,7 @@ describe('productService.updateById', () => {
 
     it('changes the active flag', async () => {
         const product = await createProduct({ active: true });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const result = await productService.updateById(id, { active: false });
 
@@ -344,7 +344,7 @@ describe('productService.updateById', () => {
 
     it('updates the imageUrl and removes the old image from the store', async () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         await productService.updateById(id, { imageUrl: '/images/new.jpg' });
 
@@ -357,7 +357,7 @@ describe('productService.updateById', () => {
     /* The image is only replaced when a new one arrives; every other edit must leave it alone. */
     it('keeps the image when an update carries no imageUrl', async () => {
         const product = await createProduct({ imageUrl: '/images/keep.jpg' });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const result = await productService.updateById(id, { title: 'Renamed Product' });
 
@@ -368,7 +368,7 @@ describe('productService.updateById', () => {
     /* Re-submitting the same url is not a replacement — deleting here would delete the live image. */
     it('keeps the image when the update repeats the current imageUrl', async () => {
         const product = await createProduct({ imageUrl: '/images/same.jpg' });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         await productService.updateById(id, { imageUrl: '/images/same.jpg' });
 
@@ -407,7 +407,7 @@ describe('productService.update', () => {
 describe('productService.removeById', () => {
     it('soft-deletes a product by setting deletedAt', async () => {
         const product = await createProduct({ active: true });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const result = await productService.removeById(id, false);
 
@@ -418,7 +418,7 @@ describe('productService.removeById', () => {
 
     it('restores a soft-deleted product when called again (toggle)', async () => {
         const product = await createProduct({ deletedAt: new Date() });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         await productService.removeById(id, false);
 
@@ -447,11 +447,11 @@ describe('productService.removeById', () => {
         ]);
 
         const product = await createProduct({ active: true });
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = product._id.toString();
 
         // A user adds the product to their cart
         const user = await createUser();
-        const userId = (user._id as Types.ObjectId).toString();
+        const userId = user._id.toString();
         const { cartService } = await import('@modules/cart');
         await cartService.cartItemSetById(userId, pid, 1);
 
@@ -471,7 +471,7 @@ describe('productService.removeById', () => {
     /* Hard delete is the only path that destroys bytes; the row is gone, so nothing else can. */
     it('removes the image from the store on a hard delete', async () => {
         const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         await productService.removeById(id, true);
 
@@ -484,7 +484,7 @@ describe('productService.removeById', () => {
      */
     it('keeps the image on a soft delete', async () => {
         const product = await createProduct({ imageUrl: '/images/survives.jpg' });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         await productService.removeById(id, false);
 
@@ -502,7 +502,7 @@ describe('productService.removeById', () => {
 describe('productService.remove', () => {
     it('soft-deletes a product document directly', async () => {
         const product = await createProduct({ active: true });
-        const id = (product._id as Types.ObjectId).toString();
+        const id = product._id.toString();
 
         const result = await productService.remove(product, false);
 
@@ -513,7 +513,7 @@ describe('productService.remove', () => {
 
     it('hard-deletes a product document directly', async () => {
         const product = await createProduct({ active: true });
-        const pid = (product._id as Types.ObjectId).toString();
+        const pid = product._id.toString();
 
         const result = await productService.remove(product, true);
 

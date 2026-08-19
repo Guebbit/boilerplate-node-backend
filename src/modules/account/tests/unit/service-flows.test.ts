@@ -14,7 +14,6 @@
  * one file while both domains shared a `services/` directory; the split is what made the mismatch
  * visible.
  */
-import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as accountService from '@modules/account/services';
@@ -132,7 +131,7 @@ describe('accountService.tokenAdd', () => {
 
     it('persists the token to the database', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         await accountService.tokenAdd(user, 'email-verify');
 
@@ -143,7 +142,7 @@ describe('accountService.tokenAdd', () => {
 
     it('sets an expiration date when expirationTime is provided', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
         const now = Date.now();
 
         await accountService.tokenAdd(user, 'reset', 3_600_000);
@@ -180,7 +179,7 @@ describe('accountService.passwordChange', () => {
 
     it('actually changes the password so the new one can be used to log in', async () => {
         const user = await createUser({ email: 'pwdchange@example.com' });
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         await accountService.passwordChange(user, 'BrandNew1!', 'BrandNew1!');
 

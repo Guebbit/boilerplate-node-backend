@@ -73,7 +73,8 @@ const DATABASE_STATES: Record<number, DependencyStatus> = {
  * Read every dependency's current state. No I/O — see this file's header.
  */
 export const dependencyHealth = (): DependencyHealth => ({
-    database: DATABASE_STATES[connection.readyState] ?? 'unavailable',
+    database:
+        (DATABASE_STATES[connection.readyState] as DependencyStatus | undefined) ?? 'unavailable',
     cache: cacheState(),
     queue: queueState()
 });

@@ -57,7 +57,7 @@ const resolvePayerId = (orderUserId: string): Promise<string> =>
     userRepository
         .findById(orderUserId)
         .then((user) => {
-            if (user) return String(user.id);
+            if (user) return user.id;
             logger.warn(
                 `Payment intent for a user that no longer resolves (${orderUserId}) — recording the order's id unverified`
             );

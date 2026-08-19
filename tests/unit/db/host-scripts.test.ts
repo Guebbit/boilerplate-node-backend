@@ -64,7 +64,7 @@ const hostScript = packageScripts.host;
 const migrateMongoUri = (): string => {
     let url = '';
     jest.isolateModules(() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.isolateModules needs a synchronous require to re-read the env
         url = (require(path.join(ROOT, 'migrate-mongo-config.js')) as { mongodb: { url: string } })
             .mongodb.url;
     });

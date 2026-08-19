@@ -356,8 +356,8 @@ describe('tokenAdd', () => {
         expect(withExpiry?.expiration).toBeInstanceOf(Date);
         // Offset from *now*, not an absolute constant: an expiry computed from the wrong origin
         // is either already expired or effectively permanent.
-        expect(withExpiry!.expiration!.getTime()).toBeGreaterThanOrEqual(before + 60_000);
-        expect(withExpiry!.expiration!.getTime()).toBeLessThan(before + 60_000 + 10_000);
+        expect(withExpiry.expiration!.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+        expect(withExpiry.expiration!.getTime()).toBeLessThan(before + 60_000 + 10_000);
 
         expect(withoutExpiry?.expiration).toBeUndefined();
     });

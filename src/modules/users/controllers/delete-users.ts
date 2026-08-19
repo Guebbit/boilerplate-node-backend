@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import type { CastError } from 'mongoose';
 import { userService } from '../service';
@@ -17,7 +16,7 @@ import { usersAuditActions } from '../audit';
  * Pass ?hardDelete=true (query) or { hardDelete: true } (body) to permanently
  * delete; otherwise the user is soft-deleted (sets deletedAt).
  */
-export const deleteUsers = (request: Request<ParamsDictionary>, response: Response) => {
+export const deleteUsers = (request: Request, response: Response) => {
     const id = extractAndValidateId(request, response, 'deleteUser');
     if (!id) return Promise.resolve();
 

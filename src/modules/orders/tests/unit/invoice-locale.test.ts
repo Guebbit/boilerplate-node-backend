@@ -1,3 +1,4 @@
+import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
 import { runWithLocale, getLocaleContext } from '@infrastructure/i18n';
 import enOrders from '@modules/orders/locales/en.json';
@@ -170,10 +171,13 @@ describe('every upload method restores the locale', () => {
         const [localeAware] =
             method === 'fields' ? upload.fields([]) : (upload[method] as () => unknown[])();
 
-        const observed = await runMiddleware(localeAware, {
-            locale: 'it',
-            headers: {}
-        } as unknown as Request);
+        const observed = await runMiddleware(
+            localeAware,
+            asStub<Request>({
+                locale: 'it',
+                headers: {}
+            })
+        );
 
         expect(observed).toBe('it');
     });
@@ -182,7 +186,7 @@ describe('every upload method restores the locale', () => {
         const { upload } = await import('@infrastructure/adapters/storage');
         const [localeAware] = upload.none();
 
-        const observed = await runMiddleware(localeAware, { headers: {} } as unknown as Request);
+        const observed = await runMiddleware(localeAware, asStub<Request>({ headers: {} }));
 
         expect(observed).toBeUndefined();
     });

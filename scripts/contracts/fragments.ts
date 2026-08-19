@@ -57,7 +57,7 @@ interface BundleIdentity {
     output: string;
     /**
      * Whether the paired frontend holds a copy of this document, and so whether it belongs in
-     * `scripts/specIdentity.ts`.
+     * `scripts/spec-identity.ts`.
      *
      * Absent means yes, because that is what a document assembled from every domain's fragments is
      * for. `asyncapi.yaml` is the one `false`: the frontend receives `asyncapi.public.yaml`, the
@@ -126,7 +126,7 @@ export const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =
     'generated' in bundle && bundle.generated === true;
 
 const isCompiled = (bundle: ContractBundle): bundle is CompiledBundle =>
-    'compiled' in bundle && bundle.compiled === true;
+    'compiled' in bundle && bundle.compiled;
 
 /**
  * Read a fragment, failing with the reason rather than an ENOENT.

@@ -274,7 +274,7 @@ describe('adjust', () => {
          */
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
-        expect(result.success === false && result.errors[0]).toMatchObject({
+        expect(!result.success && result.errors[0]).toMatchObject({
             code: 'INVENTORY_BELOW_RESERVED'
         });
         expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 8 });

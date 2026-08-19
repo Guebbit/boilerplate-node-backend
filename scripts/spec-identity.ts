@@ -169,7 +169,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     {
         backend: 'src/infrastructure/observability/analytics-events.frontend.ts',
-        frontend: 'src/infrastructure/observability/analyticsEvents.ts',
+        frontend: 'src/infrastructure/observability/analytics-events.ts',
         owner: 'backend'
     },
 
@@ -178,7 +178,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * are read by CI on both sides, so a fix applied to one copy and not the other is a CI job
      * that behaves differently per repo while claiming to be the same gate.
      *
-     * `specIdentity.ts` and `mutationBaseline.ts` are NOT here: they carry per-repo prose (this
+     * `spec-identity.ts` and `mutation-baseline.ts` are NOT here: they carry per-repo prose (this
      * file names the frontend as its sibling; the frontend's names the backend), so they are
      * mirrors rather than copies.
      */
@@ -194,8 +194,8 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * what their own test suites cost.
      */
     {
-        backend: 'scripts/testReport.ts',
-        frontend: 'scripts/testReport.ts',
+        backend: 'scripts/test-report.ts',
+        frontend: 'scripts/test-report.ts',
         owner: 'mirror'
     },
     {

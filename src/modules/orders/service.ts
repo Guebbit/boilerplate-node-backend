@@ -76,7 +76,7 @@ export const create = (
     // still costs no round trip. The rule is in `domain/rules.ts`; mapping it to a status code
     // and translated copy is this layer's job.
     return Promise.all(
-        (items ?? []).map((item) =>
+        items.map((item) =>
             productRepository.findByIdRaw(item.productId).then((product) => ({ item, product }))
         )
     ).then(async (resolvedItems) => {
@@ -275,9 +275,10 @@ export const removeById = (
  * That is the safe direction — a request with no auth context errors out instead of quietly
  * widening the scope to every user's data.
  */
-export const callerScope = (
-    authContext?: { id?: string; admin?: boolean } | undefined
-): Record<string, unknown> | undefined =>
+export const callerScope = (authContext?: {
+    id?: string;
+    admin?: boolean;
+}): Record<string, unknown> | undefined =>
     authContext?.admin ? undefined : orderRepository.visibleScope(authContext?.id ?? '');
 
 /**

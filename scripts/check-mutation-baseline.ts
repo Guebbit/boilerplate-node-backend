@@ -21,7 +21,7 @@ import {
     readReport,
     writeBaseline,
     MUTATION_BASELINE_PATH
-} from './mutationBaseline';
+} from './mutation-baseline';
 
 const update = process.argv.includes('--update');
 

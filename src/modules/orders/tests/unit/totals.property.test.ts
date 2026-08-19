@@ -147,7 +147,7 @@ describe('sumLineItems — arithmetic invariants', () => {
             fc.property(fc.array(lineItem(), { maxLength: 20 }), (items) => {
                 const single = sumLineItems(items);
                 const doubled = sumLineItems(
-                    items.map((item) => ({ ...item, quantity: (item.quantity as number) * 2 }))
+                    items.map((item) => ({ ...item, quantity: item.quantity * 2 }))
                 );
 
                 expect(doubled.quantity).toBe(single.quantity * 2);

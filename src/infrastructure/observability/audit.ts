@@ -39,7 +39,7 @@ type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
  * extension point, and its members live with the domains that emit them. The augmentation is
  * type-only, so the vocabulary stays closed and `infrastructure` still imports nothing from a module.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own actions
 export interface AuditActionMap {}
 
 /**
@@ -100,9 +100,7 @@ export interface AuditEntry extends AuditEvent {
  *
  * Implementations MUST NOT throw and MUST NOT reject. See {@link registerAuditSink}.
  */
-export interface AuditSink {
-    (entry: AuditEntry): void;
-}
+export type AuditSink = (entry: AuditEntry) => void;
 
 /**
  * The registered sink, if any.
@@ -147,6 +145,7 @@ export const emitAuditEvent = (event: AuditEvent): void => {
     const entry: AuditEntry = { ...event, timestamp: new Date(), level };
     // Belt and braces: the sink contract forbids throwing, and this catch is what makes a sink
     // that breaks the contract anyway unable to take down the request that triggered it.
+    // eslint-disable-next-line no-restricted-syntax -- the sink contract forbids throwing; this contains a sink that breaks it anyway
     try {
         auditSink(entry);
     } catch (error) {

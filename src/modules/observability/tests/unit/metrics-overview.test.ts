@@ -16,6 +16,7 @@
  * behind and it must stay a zero rather than a crash.
  */
 
+import { asStub } from '@tests/stub';
 import { getObservabilityMetricsOverview } from '@modules/observability/controllers/get-observability-metrics-overview';
 import { successResponse } from '@infrastructure/http/response';
 import { metricsRegistry } from '@infrastructure/observability/metrics-http';
@@ -51,14 +52,14 @@ interface Overview {
  * it back to `Counter` would mean asserting the very thing the lookup is here to leave open.
  */
 const counter = (name: string) =>
-    metricsRegistry.getSingleMetric(name) as unknown as {
+    asStub<{
         inc: (labelsOrValue?: Record<string, string> | number, value?: number) => void;
-    };
+    }>(metricsRegistry.getSingleMetric(name));
 
 /** Run the controller and return the payload it handed to `successResponse`. */
 const runOverview = async (): Promise<Overview> => {
     await getObservabilityMetricsOverview({} as never, {} as never);
-    const calls = (successResponse as jest.Mock).mock.calls;
+    const { calls } = (successResponse as jest.Mock).mock;
     return calls.at(-1)?.[1] as Overview;
 };
 

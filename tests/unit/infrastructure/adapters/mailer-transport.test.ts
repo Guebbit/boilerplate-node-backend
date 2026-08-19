@@ -60,7 +60,7 @@ const transportOptions = async (
         else process.env[key] = value;
     }
 
-    return createTransportMock.mock.calls[0]![0] as Record<string, unknown>;
+    return createTransportMock.mock.calls[0][0] as Record<string, unknown>;
 };
 
 const SMTP_ENVIRONMENT = {

@@ -1,3 +1,4 @@
+import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
 import { requestLogger } from '@infrastructure/http/middlewares/request-logger';
 
@@ -26,16 +27,16 @@ import { logger } from '@infrastructure/adapters/logger';
 const mockLog = logger.log as jest.MockedFunction<typeof logger.log>;
 
 const buildRequest = (overrides: Partial<Request> = {}): Request =>
-    ({
+    asStub<Request>({
         method: 'GET',
         path: '/products',
         originalUrl: '/products',
         requestId: 'req-1',
         ...overrides
-    }) as unknown as Request;
+    });
 
 const buildResponse = (statusCode = 200): Response => {
-    const listeners = new Map<string, Array<() => void>>();
+    const listeners = new Map<string, (() => void)[]>();
     const once = (event: string, handler: () => void) => {
         const existing = listeners.get(event) ?? [];
         existing.push(handler);
@@ -48,9 +49,9 @@ const buildResponse = (statusCode = 200): Response => {
         listeners.delete(event);
         return true;
     };
-    // eslint-disable-next-line prefer-const
+    // eslint-disable-next-line prefer-const -- the stub's own callbacks close over the variable they populate
     let response: Response;
-    response = { statusCode, once, emit } as unknown as Response;
+    response = asStub<Response>({ statusCode, once, emit });
     return response;
 };
 
@@ -95,10 +96,10 @@ describe('requestLogger', () => {
             status_code: 200,
             duration_ms: expect.any(Number)
         });
-        expect(meta['headers']).toBeUndefined();
-        expect(meta['user_id']).toBeUndefined();
-        expect(meta['ip']).toBeUndefined();
-        expect(meta['user_agent']).toBeUndefined();
+        expect(meta.headers).toBeUndefined();
+        expect(meta.user_id).toBeUndefined();
+        expect(meta.ip).toBeUndefined();
+        expect(meta.user_agent).toBeUndefined();
     });
 
     it('does not log twice when finish fires more than once', () => {

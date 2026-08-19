@@ -35,19 +35,17 @@ let _client: PostHog | undefined;
  * the non-null assertion on the API key below safe.
  */
 const getClient = (): PostHog => {
-    if (!_client) {
-        // First argument is the project API key (a *write-only* key, safe on a server).
-        _client = new PostHog(process.env.NODE_POSTHOG_API_KEY!, {
-            // Target instance: PostHog cloud region or a self-hosted URL.
-            host: process.env.NODE_POSTHOG_HOST,
-            // Disable auto-flush; we flush manually on shutdown.
-            // `flushAt` — send once 20 events have accumulated.
-            flushAt: 20,
-            // `flushInterval` — or after 10s, whichever comes first. The pair bounds both
-            // request overhead (batching) and data staleness (the timer).
-            flushInterval: 10_000
-        });
-    }
+    // First argument is the project API key (a *write-only* key, safe on a server).
+    _client ??= new PostHog(process.env.NODE_POSTHOG_API_KEY!, {
+        // Target instance: PostHog cloud region or a self-hosted URL.
+        host: process.env.NODE_POSTHOG_HOST,
+        // Disable auto-flush; we flush manually on shutdown.
+        // `flushAt` — send once 20 events have accumulated.
+        flushAt: 20,
+        // `flushInterval` — or after 10s, whichever comes first. The pair bounds both
+        // request overhead (batching) and data staleness (the timer).
+        flushInterval: 10_000
+    });
     return _client;
 };
 

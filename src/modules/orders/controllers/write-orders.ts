@@ -84,7 +84,7 @@ export const writeOrders = (
                 }
 
                 orderCreatedTotal.inc();
-                const orderId = result.data?._id?.toString() ?? '';
+                const orderId = result.data?._id.toString() ?? '';
                 emitAuditEvent(
                     buildAuditEvent(request, {
                         action: ordersAuditActions.ADMIN_ORDER_CREATED,

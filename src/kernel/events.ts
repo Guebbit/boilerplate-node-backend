@@ -20,16 +20,16 @@ import { logger } from '@infrastructure/adapters/logger';
  * Intentionally empty here: this is the extension point, and its members live with the domains
  * that emit them rather than in a list that every new domain has to edit.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own events
 export interface DomainEventMap {}
 
-type DomainEventName = keyof DomainEventMap & string;
+type DomainEventName = Extract<keyof DomainEventMap, string>;
 
 type DomainEventHandler<TEventName extends DomainEventName> = (
     payload: DomainEventMap[TEventName]
-) => Promise<unknown> | unknown;
+) => unknown;
 
-const handlers = new Map<string, ((payload: never) => Promise<unknown> | unknown)[]>();
+const handlers = new Map<string, ((payload: never) => unknown)[]>();
 
 /**
  * Subscribe to a domain event.
@@ -45,7 +45,7 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
     handler: DomainEventHandler<TEventName>
 ): void => {
     const existing = handlers.get(name) ?? [];
-    existing.push(handler as (payload: never) => Promise<unknown> | unknown);
+    existing.push(handler as (payload: never) => unknown);
     handlers.set(name, existing);
 };
 
@@ -69,6 +69,7 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
 ): Promise<void> => {
     // Caught per handler, so one subscriber's failure cannot stop the ones queued behind it.
     for (const handler of handlers.get(name) ?? [])
+        // eslint-disable-next-line no-restricted-syntax -- caught per handler: one subscriber's failure must not stop the ones queued behind it
         try {
             await (handler as DomainEventHandler<TEventName>)(payload);
         } catch (error) {

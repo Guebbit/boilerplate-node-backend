@@ -42,7 +42,7 @@ import { noneAnalyticsProvider } from './none';
  * to be declared here, in the layer that must know no domain at all; now deleting a module takes
  * its names out of the funnel with it, and this file is left holding the transport.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own events
 export interface AnalyticsEventMap {}
 
 /**
@@ -131,7 +131,7 @@ let provider: AnalyticsProvider | undefined;
 export const resolveAnalyticsProvider = (): AnalyticsProvider => {
     if (provider) return provider;
     const name = process.env.NODE_ANALYTICS_PROVIDER ?? 'umami';
-    const resolved = PROVIDERS[name];
+    const resolved = PROVIDERS[name] as (typeof PROVIDERS)[string] | undefined;
     if (!resolved)
         throw new Error(
             `Unknown analytics provider "${name}" — known: ${Object.keys(PROVIDERS).join(', ')}`

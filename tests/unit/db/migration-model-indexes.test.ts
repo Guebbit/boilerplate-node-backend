@@ -52,7 +52,7 @@ const MODULES_ROOT = path.join(__dirname, '../../../src/modules');
 const registeredModels = fs
     .readdirSync(MODULES_ROOT)
     .filter((name) => fs.existsSync(path.join(MODULES_ROOT, name, 'model.ts')))
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS under ts-jest; a synchronous require resolves the module in place
     .map((name) => require(path.join(MODULES_ROOT, name, 'model.ts')) as Record<string, unknown>);
 
 const MIGRATIONS_DIR = path.join(__dirname, '../../../db/migrations');
@@ -64,7 +64,7 @@ const migrations = fs
     .toSorted()
     .map((file) => ({
         name: file,
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS under ts-jest; a synchronous require resolves the module in place
         module: require(path.join(MIGRATIONS_DIR, file)) as {
             up: (db: unknown) => Promise<void>;
         }

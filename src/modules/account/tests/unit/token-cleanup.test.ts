@@ -1,3 +1,4 @@
+import { asStub } from '@tests/stub';
 import { postLogin } from '@modules/account/controllers/post-login';
 import { getRefreshToken } from '@modules/account/controllers/get-refresh-token';
 import { accountService, runTokenCleanup } from '@modules/account/services';
@@ -72,7 +73,7 @@ describe('Auth controllers token cleanup trigger', () => {
         };
         const response = {} as Parameters<typeof postLogin>[1];
 
-        await postLogin(request as unknown as Parameters<typeof postLogin>[0], response);
+        await postLogin(asStub<Parameters<typeof postLogin>[0]>(request), response);
 
         expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
         expect(mockLogin).toHaveBeenCalledTimes(1);
@@ -92,10 +93,7 @@ describe('Auth controllers token cleanup trigger', () => {
         };
         const response = {} as Parameters<typeof getRefreshToken>[1];
 
-        await getRefreshToken(
-            request as unknown as Parameters<typeof getRefreshToken>[0],
-            response
-        );
+        await getRefreshToken(asStub<Parameters<typeof getRefreshToken>[0]>(request), response);
 
         expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
         expect(mockCreateAccessToken).toHaveBeenCalledWith('refresh-token');
@@ -111,10 +109,7 @@ describe('Auth controllers token cleanup trigger', () => {
         };
         const response = {} as Parameters<typeof getRefreshToken>[1];
 
-        await getRefreshToken(
-            request as unknown as Parameters<typeof getRefreshToken>[0],
-            response
-        );
+        await getRefreshToken(asStub<Parameters<typeof getRefreshToken>[0]>(request), response);
 
         expect(mockRunTokenCleanup).not.toHaveBeenCalled();
         expect(mockCreateAccessToken).not.toHaveBeenCalled();

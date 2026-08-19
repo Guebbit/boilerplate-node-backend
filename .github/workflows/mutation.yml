@@ -75,7 +75,7 @@ jobs:
             - name: Check the per-file baseline
               # The real gate. Stryker's thresholds are global — a strong file carries a weak one
               # — so this compares every file against `mutation-baseline.json` and fails naming
-              # the ones that dropped. See scripts/mutationBaseline.ts for why it is a ratchet.
+              # the ones that dropped. See scripts/mutation-baseline.ts for why it is a ratchet.
               id: baseline
               continue-on-error: true
               run: npm run test:mutation:check

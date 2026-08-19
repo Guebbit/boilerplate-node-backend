@@ -3,7 +3,7 @@
  * `_id`/`__v`, on either response path — a real document (`toJSON`) or a `.lean()`
  * list result (mapped manually via `applyFeedbackRequestTransform`).
  */
-import { Types } from 'mongoose';
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { feedbackRequestRepository } from '@modules/feedback/repository';
 import * as feedbackRequestService from '@modules/feedback/service';
@@ -22,7 +22,7 @@ describe('feedback request serialization', () => {
         const feedback = await createFeedback();
         const json = feedback.toJSON() as Record<string, unknown>;
 
-        expect(json.id).toBe((feedback._id as Types.ObjectId).toString());
+        expect(json.id).toBe(feedback._id.toString());
         expect(JSON.stringify(json)).not.toContain('_id');
         expect(JSON.stringify(json)).not.toContain('__v');
     });
@@ -32,7 +32,7 @@ describe('feedback request serialization', () => {
         const { items } = await feedbackRequestService.search({});
 
         expect(items).toHaveLength(1);
-        const item = items[0] as unknown as Record<string, unknown>;
+        const item = asStub<Record<string, unknown>>(items[0]);
         expect(item.id).toMatch(/^[\da-f]{24}$/);
         expect(item._id).toBeUndefined();
         expect(item.__v).toBeUndefined();

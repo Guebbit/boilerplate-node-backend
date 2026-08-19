@@ -77,9 +77,15 @@ export const installSecurity = (app: Express): void => {
         cors({
             origin(origin, callback) {
                 // Allow non-browser requests (no Origin header), like curl/healthchecks
-                if (!origin) return callback(null, true);
-                if (allowedOrigins.has(origin)) return callback(null, true);
-                return callback(new Error(`CORS blocked for origin: ${origin}`));
+                if (!origin) {
+                    callback(null, true);
+                    return;
+                }
+                if (allowedOrigins.has(origin)) {
+                    callback(null, true);
+                    return;
+                }
+                callback(new Error(`CORS blocked for origin: ${origin}`));
             },
             credentials: true,
             methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

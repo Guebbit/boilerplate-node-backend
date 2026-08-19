@@ -114,7 +114,7 @@ repo's carries `EmailJobPayload`, `PdfJobPayload` and `WORKER_CHANNELS`. Everyth
 does carry, it carries identically, because the shared half of the spec is one document copied
 across.
 
-`asyncapi.public.yaml` and this script are in `SHARED_FILES` (`scripts/specIdentity.ts`), so
+`asyncapi.public.yaml` and this script are in `SHARED_FILES` (`scripts/spec-identity.ts`), so
 `check:spec-identity` fails on the commit that forks either. **The generated outputs are not**, and
 deliberately: they legitimately differ now, and even where they overlap a cross-repo comparison
 would only re-ask a question the two entries above already answer, at the price of carrying another

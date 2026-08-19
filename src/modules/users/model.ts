@@ -82,14 +82,14 @@ export interface UserDocument extends UserRecord, UserMethods, Document {
 /**
  * User Document instance methods.
  */
-export type UserMethods = {
+export interface UserMethods {
     // `Token['type']` rather than `TokenType`: the enum names the two token types the JWT
     // layer knows about, while `tokens` also carries the account-deletion type the account
     // endpoints issue. The stored field is a string, and the method has to accept every value
     // that legitimately appears in it.
     tokenAdd: (type: Token['type'], expirationMs: number, token: string) => Promise<string>;
     tokenRemoveAll: (type: Token['type']) => Promise<void>;
-};
+}
 
 /**
  * User Document model type.
@@ -122,9 +122,8 @@ export type UserModel = Model<UserDocument, unknown, UserMethods> & {
  */
 export const zodUserSchema = CreateUserBody.extend({
     email: z
-        .string()
-        .min(1, { error: () => t('users.field-email-required') })
-        .email({ error: () => t('users.field-email-invalid') }),
+        .email({ error: () => t('users.field-email-invalid') })
+        .min(1, { error: () => t('users.field-email-required') }),
 
     username: z
         .string()
@@ -345,6 +344,7 @@ userSchema.methods.tokenAdd = function (
         .then(() => {
             // Guarded: see the note above `tokenAdd` — `tokens` is `select: false`, so an
             // unloaded array is `undefined` and pushing to it would throw after the write landed.
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `tokens` is always loaded; `select: false` makes that a lie
             this.tokens?.push(entry);
             return token;
         });
@@ -360,6 +360,7 @@ userSchema.methods.tokenRemoveAll = function (type: Token['type']) {
             // Guarded: see the note above `tokenAdd`. The `$pull` above has already revoked the
             // tokens in the database — reporting a failure here would be a lie about a logout
             // that succeeded.
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `tokens` is always loaded; `select: false` makes that a lie
             if (this.tokens) this.tokens = this.tokens.filter((t: Token) => t.type !== type);
         });
 };
@@ -379,7 +380,7 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
         { $pull: { tokens: { expiration: { $lt: now } } } }
     )
         .then(() => ({ status: 200, success: true }))
-        .catch((error) => {
+        .catch((error: unknown) => {
             logger.error({
                 message: 'tokenRemoveExpired failed',
                 error

@@ -30,7 +30,7 @@ import { handlePdfJob, PDF_QUEUE as workerPdfQueue } from '@infrastructure/adapt
 
 const mockedMailer = nodemailer as jest.MockedFunction<typeof nodemailer>;
 const mockedPdf = renderHtmlToPdf as jest.MockedFunction<typeof renderHtmlToPdf>;
-const mockedEjs = ejs.renderFile as unknown as jest.Mock;
+const mockedEjs = jest.mocked(ejs.renderFile) as jest.Mock;
 
 beforeEach(() => {
     jest.clearAllMocks();

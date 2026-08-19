@@ -1,4 +1,3 @@
-import type { Types } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
@@ -177,7 +176,7 @@ export const remove = (
     product: ProductDocument,
     hardDelete = false
 ): Promise<ResponseSuccess<ProductDocument> | ResponseSuccess<undefined> | ResponseReject> => {
-    const id = (product._id as Types.ObjectId).toString();
+    const id = product._id.toString();
 
     // HARD delete
     if (hardDelete)

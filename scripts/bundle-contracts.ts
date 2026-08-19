@@ -38,9 +38,9 @@ import {
     type ContractBundle
 } from './contracts';
 
-const args = process.argv.slice(2);
-const checkOnly = args.includes('--check');
-const named = args.filter((arg) => !arg.startsWith('--'));
+const arguments_ = process.argv.slice(2);
+const checkOnly = arguments_.includes('--check');
+const named = arguments_.filter((argument) => !argument.startsWith('--'));
 
 const unknown = named.filter((name) => !findBundle(name));
 if (unknown.length > 0) {
@@ -57,7 +57,7 @@ const isStale = (bundle: ContractBundle): boolean =>
 
 /** Assemble the given bundles, writing only the ones that actually drifted. */
 const bundle = (bundles: readonly ContractBundle[]): ContractBundle[] => {
-    const stale = bundles.filter(isStale);
+    const stale = bundles.filter((item) => isStale(item));
     if (!checkOnly) for (const item of stale) writeFileSync(item.output, assembleBundle(item));
     return stale;
 };
@@ -70,7 +70,7 @@ const fail = (message: string): never => {
 if (named.length > 0) {
     // Narrowed: exactly the bundles asked for, from what is committed. A collection named here is
     // regenerated from the COMMITTED contract rather than from one this run just assembled.
-    const selected = named.map((name) => findBundle(name) as ContractBundle);
+    const selected = named.map((name) => findBundle(name)!);
 
     /*
      * `--check` asks "is the committed file current". The collections are not committed, so the

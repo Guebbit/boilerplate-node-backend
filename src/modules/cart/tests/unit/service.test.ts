@@ -587,7 +587,7 @@ describe('orderConfirm', () => {
         const result = await orderConfirm(user.id, undefined, 'teleport');
 
         expect(asReject(result).status).toBe(404);
-        expect(asReject(result).errors[0]!.code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
+        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
         // Nothing moved: no order, full shelf, full cart.
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
         const stored = await productRepository.findByIdRaw(String(product._id));

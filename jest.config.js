@@ -271,14 +271,14 @@ module.exports = {
     globalSetup: '<rootDir>/tests/support/global-setup.ts',
     globalTeardown: '<rootDir>/tests/support/global-teardown.ts',
     setupFiles: ['<rootDir>/tests/support/setup.ts'],
-    testTimeout: 30000,
+    testTimeout: 30_000,
     transform: {
         '^.+\\.tsx?$': [
             'ts-jest',
             {
                 tsconfig: 'tsconfig.jest.json',
                 diagnostics: {
-                    ignoreCodes: [151002]
+                    ignoreCodes: [151_002]
                 }
             }
         ]

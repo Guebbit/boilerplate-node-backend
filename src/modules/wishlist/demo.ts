@@ -13,7 +13,6 @@ import { makeWishlist } from './factory';
 import { wishlistModel } from './model';
 import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { wishlistRepository } from './repository';
-import type { WishlistDocument } from './model';
 
 export const wishlistFixtures = [
     /* root — one saved product, enough for the admin account to show a non-empty page. */

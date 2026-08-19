@@ -36,7 +36,8 @@
  * is a shared vocabulary — a seed quoted in a failure report is a number both repos understand
  * how to act on, instead of one that means something in only one of them.
  */
-import type { ZodTypeAny } from 'zod';
+import { asStub } from './stub';
+import type { ZodType } from 'zod';
 
 // ─── seeded PRNG ────────────────────────────────────────────────────────────────
 //
@@ -68,7 +69,7 @@ const ensureSeeded = (): void => {
     const seed = resolveContractDataSeed();
     random = createRandom(seed);
     seeded = true;
-    // eslint-disable-next-line no-console
+    // eslint-disable-next-line no-console -- the reproduction seed must reach the terminal even where the logger is mocked
     console.log(`[contract-data] seed=${seed} (rerun with RANDOM_DATA_SEED=${seed} to reproduce)`);
 };
 
@@ -103,19 +104,18 @@ interface ZodCheckDef {
 
 interface ZodDef {
     type: string;
-    shape?: Record<string, ZodTypeAny>;
-    element?: ZodTypeAny;
-    innerType?: ZodTypeAny;
-    valueType?: ZodTypeAny;
+    shape?: Record<string, ZodType>;
+    element?: ZodType;
+    innerType?: ZodType;
+    valueType?: ZodType;
     format?: string;
     checks?: { _zod: { def: ZodCheckDef } }[];
     entries?: Record<string, unknown>;
     values?: unknown[];
-    options?: ZodTypeAny[];
+    options?: ZodType[];
 }
 
-const defOf = (schema: ZodTypeAny): ZodDef =>
-    (schema as unknown as { _zod: { def: ZodDef } })._zod.def;
+const defOf = (schema: ZodType): ZodDef => asStub<{ _zod: { def: ZodDef } }>(schema)._zod.def;
 
 const checksOf = (def: ZodDef): ZodCheckDef[] => (def.checks ?? []).map((check) => check._zod.def);
 
@@ -132,16 +132,16 @@ const checksOf = (def: ZodDef): ZodCheckDef[] => (def.checks ?? []).map((check) 
  * `nullable` deliberately does NOT count. A nullable field still has to be present; it may only
  * hold `null`. Folding it in here would silently drop real "missing required field" coverage.
  */
-const isOptionalField = (schema: ZodTypeAny): boolean => {
+const isOptionalField = (schema: ZodType): boolean => {
     const { type } = defOf(schema);
     return type === 'optional' || type === 'default';
 };
 
 /** Unwraps optional/nullable/default wrappers to the schema whose constraints actually apply. */
-const unwrapField = (schema: ZodTypeAny): ZodTypeAny => {
+const unwrapField = (schema: ZodType): ZodType => {
     const def = defOf(schema);
     if (def.type === 'optional' || def.type === 'nullable' || def.type === 'default')
-        return unwrapField(def.innerType as ZodTypeAny);
+        return unwrapField(def.innerType!);
     return schema;
 };
 
@@ -219,7 +219,7 @@ const clampStringLength = (value: string, checks: ZodCheckDef[]): string => {
     return result;
 };
 
-const buildValue = (schema: ZodTypeAny): unknown => {
+const buildValue = (schema: ZodType): unknown => {
     const def = defOf(schema);
     switch (def.type) {
         case 'string': {
@@ -257,7 +257,7 @@ const buildValue = (schema: ZodTypeAny): unknown => {
             const minItems =
                 checksOf(def).find((check) => check.check === 'min_length')?.minimum ?? 1;
             const count = Math.max(minItems, 1);
-            return Array.from({ length: count }, () => buildValue(def.element as ZodTypeAny));
+            return Array.from({ length: count }, () => buildValue(def.element!));
         }
         case 'object': {
             const result: Record<string, unknown> = {};
@@ -268,13 +268,13 @@ const buildValue = (schema: ZodTypeAny): unknown => {
         case 'optional':
         case 'nullable':
         case 'default': {
-            return buildValue(def.innerType as ZodTypeAny);
+            return buildValue(def.innerType!);
         }
         case 'record': {
-            return { [randomStringForFormat()]: buildValue(def.valueType as ZodTypeAny) };
+            return { [randomStringForFormat()]: buildValue(def.valueType!) };
         }
         case 'union': {
-            return buildValue((def.options ?? [])[0] as ZodTypeAny);
+            return buildValue((def.options ?? [])[0]);
         }
         case 'unknown':
         case 'any': {
@@ -290,7 +290,8 @@ const buildValue = (schema: ZodTypeAny): unknown => {
  * Builds a payload that satisfies `schema` — every field, including optional ones, populated
  * with a contract-valid value.
  */
-export const validPayload = <T = Record<string, unknown>>(schema: ZodTypeAny): T => {
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- the type parameter is the call site's cast: validPayload<CreateUserBody>(schema)
+export const validPayload = <T = Record<string, unknown>>(schema: ZodType): T => {
     ensureSeeded();
     return buildValue(schema) as T;
 };
@@ -301,7 +302,7 @@ export interface InvalidPayloadCase {
     payload: Record<string, unknown>;
 }
 
-const violationsForField = (fieldSchema: ZodTypeAny): { violation: string; value: unknown }[] => {
+const violationsForField = (fieldSchema: ZodType): { violation: string; value: unknown }[] => {
     const def = defOf(unwrapField(fieldSchema));
     const checks = checksOf(def);
     const violations: { violation: string; value: unknown }[] = [];
@@ -387,7 +388,7 @@ const violationsForField = (fieldSchema: ZodTypeAny): { violation: string; value
  * (for a field carrying a min/max/format constraint). Only object schemas are supported; every
  * `*Body` export in `api/schemas.zod.ts` is one.
  */
-export const invalidPayloads = (schema: ZodTypeAny): InvalidPayloadCase[] => {
+export const invalidPayloads = (schema: ZodType): InvalidPayloadCase[] => {
     ensureSeeded();
     const def = defOf(schema);
     if (def.type !== 'object')

@@ -51,7 +51,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { isMap, parseDocument, type Document, type YAMLMap } from 'yaml';
+import { isMap, parseDocument, type Document } from 'yaml';
 import { REPO_ROOT, type ContractBundle } from './fragments';
 
 /**
@@ -70,13 +70,13 @@ export const ASYNC_SECTION_ORDER = ['observability', 'workers'] as const;
 export type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
 
 /** Which sections an API client shares. Everything absent from here is backend-only. */
-const SHARED_SECTIONS: readonly AsyncSectionName[] = ['observability'];
+const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability']);
 
 /** The sections one bundle is built from, in merge order. */
 const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
     scope === 'backend'
         ? ASYNC_SECTION_ORDER
-        : ASYNC_SECTION_ORDER.filter((section) => SHARED_SECTIONS.includes(section));
+        : ASYNC_SECTION_ORDER.filter((section) => SHARED_SECTIONS.has(section));
 
 /** Where a section's document lives — a module's own file, or the shared one for the queues. */
 export const asyncSectionDocument = (section: AsyncSectionName): string =>
@@ -140,7 +140,7 @@ const mergeInto = (
         return;
     }
 
-    for (const item of (source as YAMLMap).items) {
+    for (const item of source.items) {
         const key = String(item.key);
         if (existing.has(key))
             throw new Error(

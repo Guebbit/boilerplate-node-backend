@@ -23,14 +23,14 @@
  */
 
 /* The fixtures `db/seeds/fixtures.ts` references, which moved into `/images/seed/`. */
-const SEED_IMAGE_FILENAMES = [
+const SEED_IMAGE_FILENAMES = new Set([
     '043cf5b2517fc99ce9a2c2f84288416d.jpg',
     '60de15db7aed7174ef2d53d21e1f57a5.jpg',
     '96346b77daf138a279677cb75c400ee9.jpg',
     '9726c4217f5998511f372afab4800ac8.jpg',
     'ad2e01890eebf72d06481c4fac3522ac.jpg',
     'f12ba2e44fe347010397f1dcba399808.jpg'
-];
+]);
 
 /**
  * Rewrite one string field across a collection, applying `mapper` to each distinct value found.
@@ -74,11 +74,11 @@ const ORDER_ITEM_ELEMENT = {
     filter: 'item.product.imageUrl'
 };
 
-const toPosix = (value) => value.replace(/\\/g, '/');
+const toPosix = (value) => value.replaceAll('\\', '/');
 
 const intoSeedDirectory = (value) => {
     const filename = value.slice(value.lastIndexOf('/') + 1);
-    return SEED_IMAGE_FILENAMES.includes(filename) ? `/images/seed/${filename}` : value;
+    return SEED_IMAGE_FILENAMES.has(filename) ? `/images/seed/${filename}` : value;
 };
 
 module.exports = {

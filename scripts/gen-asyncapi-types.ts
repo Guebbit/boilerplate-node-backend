@@ -214,7 +214,7 @@ const collectChannelMessageEntries = (
     channels: Record<string, AsyncApiChannel>,
     prefix: string,
     operation: 'publish' | 'subscribe'
-): Array<{ channelName: string; messageType: string }> =>
+): { channelName: string; messageType: string }[] =>
     Object.entries(channels)
         .filter(([channelName]) => channelName.startsWith(prefix))
         .map(([channelName, channel]) => ({
@@ -246,7 +246,7 @@ const renderLiteralArray = (exportName: string, values: string[]): string => {
  */
 const renderPayloadMap = (
     interfaceName: string,
-    entries: Array<{ channelName: string; messageType: string }>
+    entries: { channelName: string; messageType: string }[]
 ): string => {
     const rows = entries
         .map(
@@ -391,29 +391,35 @@ const buildOutput = (modelBlocks: string[]): string => {
 /*
  * Generates contract models, then writes the realtime types file or asserts it is already current.
  */
-generator.generate(specText).then((models) => {
-    const modelBlocks = models.map(
-        (model) =>
-            `export ${model.result.replaceAll('Map<string, any>', 'Record<string, unknown>')}`
-    );
-    const output = buildOutput(modelBlocks);
+generator
+    .generate(specText)
+    .then((models) => {
+        const modelBlocks = models.map(
+            (model) =>
+                `export ${model.result.replaceAll('Map<string, any>', 'Record<string, unknown>')}`
+        );
+        const output = buildOutput(modelBlocks);
 
-    if (!checkOnly) {
-        writeFileSync(OUTPUT, output, 'utf8');
-        console.log(`✓ Generated ${OUTPUT}`);
-        return;
-    }
+        if (!checkOnly) {
+            writeFileSync(OUTPUT, output, 'utf8');
+            console.log(`✓ Generated ${OUTPUT}`);
+            return;
+        }
 
-    if (existsSync(OUTPUT) && readFileSync(OUTPUT, 'utf8') === output) {
-        console.log(`✓ ${OUTPUT} is current with asyncapi.yaml`);
-        return;
-    }
+        if (existsSync(OUTPUT) && readFileSync(OUTPUT, 'utf8') === output) {
+            console.log(`✓ ${OUTPUT} is current with asyncapi.yaml`);
+            return;
+        }
 
-    // Names the one command that fixes it: the file is an output, so there is nothing to decide.
-    console.error(
-        `${OUTPUT} is not what asyncapi.yaml generates.\n` +
-            `  Run: npm run gen:asyncapi\n` +
-            `  Then commit the result.`
-    );
-    process.exit(1);
-});
+        // Names the one command that fixes it: the file is an output, so there is nothing to decide.
+        console.error(
+            `${OUTPUT} is not what asyncapi.yaml generates.\n` +
+                `  Run: npm run gen:asyncapi\n` +
+                `  Then commit the result.`
+        );
+        process.exit(1);
+    })
+    .catch((error: unknown) => {
+        console.error(error);
+        process.exit(1);
+    });

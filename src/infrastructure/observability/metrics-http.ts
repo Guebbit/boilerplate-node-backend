@@ -223,7 +223,7 @@ export const decrementInflight = (): void => {
  * A metric's `get()` returns one entry per label combination, so totalling across every
  * method/route/status series is the only way to get a single overall number.
  */
-const sumMetricValues = (values: Array<{ value: number }>) =>
+const sumMetricValues = (values: { value: number }[]) =>
     values.reduce((sum, value) => sum + value.value, 0);
 
 /** One histogram bucket: its upper bound and the *cumulative* count at or below it. */
@@ -239,11 +239,11 @@ interface LatencyBucket {
  * The +Inf bucket gives the total request count.
  */
 const aggregateLatencyBuckets = (
-    values: Array<{
+    values: {
         value: number;
         labels: Record<string, string | number | undefined>;
         metricName?: string;
-    }>
+    }[]
 ): { buckets: LatencyBucket[]; totalCount: number } => {
     // Keyed by bucket boundary, summing across every method/route series — the goal is one
     // service-wide latency distribution, not a per-route one.
@@ -255,7 +255,7 @@ const aggregateLatencyBuckets = (
         // rows leave it undefined. Including them would inflate the counts badly.
         if (metricName) continue; // skip _sum / _count rows
         // `le` ("less than or equal") is the standard Prometheus bucket-boundary label.
-        const le = labels.le;
+        const { le } = labels;
         if (le === undefined) continue;
         // The `+Inf` bucket counts *every* observation, so it is the total sample count.
         if (le === '+Inf') {

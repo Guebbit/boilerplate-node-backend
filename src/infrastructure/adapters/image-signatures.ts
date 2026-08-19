@@ -84,6 +84,7 @@ export const identifyImage = (header: Buffer): string | undefined =>
  */
 export const identifyImageFile = async (filePath: string): Promise<string | undefined> => {
     let handle;
+    // eslint-disable-next-line no-restricted-syntax -- an unreadable file is an unidentifiable file, and the finally owns the handle
     try {
         handle = await open(filePath, 'r');
         const header = Buffer.alloc(HEADER_LENGTH);

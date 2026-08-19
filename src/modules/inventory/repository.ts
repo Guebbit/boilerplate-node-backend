@@ -96,7 +96,7 @@ export const reservationRepository: BaseRepository<ReservationDocument> & {
             })
             .then((reservation): ReservationDocument | null => reservation)
             .catch((error: { code?: number }) => {
-                if (error?.code === 11_000) return null;
+                if (error.code === 11_000) return null;
                 throw error;
             }),
 

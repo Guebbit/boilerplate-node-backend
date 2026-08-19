@@ -44,7 +44,7 @@ export const getSessions = (request: Request, response: Response) => {
                  * not sessions, and listing them would leak that such an operation is pending.
                  */
                 const sessions = user.tokens
-                    .filter((token) => token.type === String(TokenType.REFRESH))
+                    .filter((token) => token.type === (TokenType.REFRESH as string))
                     .map((token) => toSession(token, cookieToken));
 
                 successResponse(response, { sessions });

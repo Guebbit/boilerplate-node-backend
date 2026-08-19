@@ -15,6 +15,7 @@
  * actually receives; only the audit sink and the JWT/DB boundaries are stubbed.
  */
 
+import { asStub } from '@tests/stub';
 import type { Request, Response, NextFunction } from 'express';
 import {
     getTokenBearer,
@@ -58,7 +59,7 @@ const mockedEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAu
 
 /** Request stub carrying an optional Authorization header and auth context. */
 const makeRequest = (options: { authorization?: string; authContext?: unknown } = {}) =>
-    ({
+    asStub<Request>({
         header: jest.fn((name: string) =>
             name === 'Authorization' ? options.authorization : undefined
         ),
@@ -66,17 +67,17 @@ const makeRequest = (options: { authorization?: string; authContext?: unknown } 
         path: '/protected',
         method: 'GET',
         headers: {}
-    }) as unknown as Request;
+    });
 
 /** Request stub carrying a refresh cookie, for the cookie-authenticated middleware. */
 const makeCookieRequest = (jwt?: string) =>
-    ({
+    asStub<Request>({
         cookies: jwt === undefined ? {} : { jwt },
         header: jest.fn(),
         path: '/orders/1/invoice',
         method: 'GET',
         headers: {}
-    }) as unknown as Request;
+    });
 
 /** Response stub with a chainable status().json(), capturing the real envelope. */
 
@@ -90,7 +91,7 @@ const runUntilNext = async (
     const called = new Promise<void>((resolve) => {
         next.mockImplementation(() => resolve());
     });
-    middleware(request, response, next as unknown as NextFunction);
+    middleware(request, response, asStub<NextFunction>(next));
     await called;
     return next;
 };
@@ -398,11 +399,11 @@ describe('isAdminViaCookie', () => {
         imageUrl: '/images/root.png'
     };
 
-    it('rejects with 401 when there is no session cookie at all', async () => {
+    it('rejects with 401 when there is no session cookie at all', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        isAdminViaCookie(makeCookieRequest(), response, next as unknown as NextFunction);
+        isAdminViaCookie(makeCookieRequest(), response, asStub<NextFunction>(next));
 
         expect(response.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
@@ -410,10 +411,10 @@ describe('isAdminViaCookie', () => {
         expect(mockedVerifyRefreshToken).not.toHaveBeenCalled();
     });
 
-    it('rejects an empty cookie value the same way as a missing one', async () => {
+    it('rejects an empty cookie value the same way as a missing one', () => {
         const response = makeResponseStub();
 
-        isAdminViaCookie(makeCookieRequest(''), response, jest.fn() as unknown as NextFunction);
+        isAdminViaCookie(makeCookieRequest(''), response, asStub<NextFunction>(jest.fn()));
 
         expect(response.status).toHaveBeenCalledWith(401);
     });
@@ -469,11 +470,7 @@ describe('isAdminViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        isAdminViaCookie(
-            makeCookieRequest('cookie.jwt'),
-            response,
-            next as unknown as NextFunction
-        );
+        isAdminViaCookie(makeCookieRequest('cookie.jwt'), response, asStub<NextFunction>(next));
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(response.status).toHaveBeenCalledWith(403);
@@ -488,7 +485,7 @@ describe('isAdminViaCookie', () => {
         isAdminViaCookie(
             makeCookieRequest('cookie.jwt'),
             response,
-            jest.fn() as unknown as NextFunction
+            asStub<NextFunction>(jest.fn())
         );
         await new Promise((resolve) => setImmediate(resolve));
 
@@ -505,7 +502,7 @@ describe('isAdminViaCookie', () => {
         isAdminViaCookie(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
-            jest.fn() as unknown as NextFunction
+            asStub<NextFunction>(jest.fn())
         );
         await new Promise((resolve) => setImmediate(resolve));
 
@@ -525,7 +522,7 @@ describe('isAdminViaCookie', () => {
         isAdminViaCookie(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
-            jest.fn() as unknown as NextFunction
+            asStub<NextFunction>(jest.fn())
         );
         await new Promise((resolve) => setImmediate(resolve));
 
@@ -541,11 +538,7 @@ describe('isAdminViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        isAdminViaCookie(
-            makeCookieRequest('forged.jwt'),
-            response,
-            next as unknown as NextFunction
-        );
+        isAdminViaCookie(makeCookieRequest('forged.jwt'), response, asStub<NextFunction>(next));
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(response.status).toHaveBeenCalledWith(401);
@@ -561,7 +554,7 @@ describe('isAdminViaCookie', () => {
         isAdminViaCookie(
             makeCookieRequest('cookie.jwt'),
             response,
-            jest.fn() as unknown as NextFunction
+            asStub<NextFunction>(jest.fn())
         );
         await new Promise((resolve) => setImmediate(resolve));
 

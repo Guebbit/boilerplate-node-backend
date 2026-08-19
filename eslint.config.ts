@@ -1,222 +1,40 @@
+import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
 import configPrettier from 'eslint-config-prettier';
 import pluginUnicorn from 'eslint-plugin-unicorn';
+import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import { globalIgnores } from 'eslint/config';
-import pluginOxlint from 'eslint-plugin-oxlint';
 import path from 'node:path';
+import localRules from './eslint/rules';
 
 /**
- * Project-local rules.
- *
- * Both of these used to be tests under `tests/cross-cutting/`, and both were the same mistake: a
- * syntactic property of the source, asserted by reading the source as TEXT. One grepped every
- * controller for the string `.catch(`; the other carried a hand-written tokenizer — 60 lines
- * tracking quote state, escape characters and paren depth — to find one argument of one call.
- *
- * A lint rule gets the parsed AST for free, reports at the offending line instead of naming a
- * file, and shows up in the editor while the code is being written rather than in CI afterwards.
- * The tokenizer's failure modes (a paren inside a template literal, a comment containing `.catch(`)
- * simply do not exist here.
- *
- * They live inline rather than in a published plugin package because they are about THIS repo's
- * conventions and have exactly one consumer.
+ * `x as unknown as T` — the double cast that erases the type system's objection instead of
+ * answering it — is banned everywhere, tests included. `no-restricted-syntax` does not merge
+ * across configs (the nearest match REPLACES the list), so every block that configures that
+ * rule spreads this in, or the ban would silently lift for exactly those files.
  */
-const localRules = {
-    /**
-     * A promise chain started in a controller must end in `.catch()`.
-     *
-     * The global handler in `app.ts` answers a client-shaped status for an unhandled rejection,
-     * so a missing `.catch()` usually looks right — until it does not: `POST /orders` with a
-     * malformed `productId` answered 500 for exactly this reason, an ordinary bad request
-     * reported as a server fault. The net also cannot clean up (an upload from a failed write
-     * stays orphaned) or record a domain metric (a failed checkout still needs its counter).
-     */
-    'controller-chain-must-catch': {
-        meta: {
-            type: 'problem',
-            docs: { description: 'Promise chains in controllers must end in .catch()' },
-            schema: [],
-            messages: {
-                missing:
-                    'This promise chain has no .catch(). The global error handler is a net, not a ' +
-                    'substitute: it cannot clean up after the failure or record the domain metric.'
-            }
-        },
-        create(context: any) {
-            /** The method names of a chain, read from its outermost call inwards. */
-            const chainMethods = (call: any): string[] => {
-                const names: string[] = [];
-                let current = call;
-                while (
-                    current?.type === 'CallExpression' &&
-                    current.callee?.type === 'MemberExpression'
-                ) {
-                    const { property } = current.callee;
-                    if (property?.type === 'Identifier') names.push(property.name);
-                    current = current.callee.object;
-                }
-                return names;
-            };
-
-            const HANDLER_METHODS = new Set(['then', 'catch', 'finally']);
-
-            /**
-             * Is this chain already governed by an outer chain's `.catch()`?
-             *
-             * A chain written INSIDE a promise handler — the cleanup in
-             * `.catch((error) => deleteUpload().then(...))`, or a guard's
-             * `return deleteUpload().then(...)` inside a `.then` — rejects into the chain that
-             * owns the callback. Reporting it would be asking for a `.catch()` on something that
-             * already has one, which is how a rule teaches people to silence it.
-             */
-            const insidePromiseHandler = (node: any): boolean => {
-                let current = node.parent;
-                while (current) {
-                    const isFunction =
-                        current.type === 'ArrowFunctionExpression' ||
-                        current.type === 'FunctionExpression';
-                    const parent = current.parent;
-                    if (
-                        isFunction &&
-                        parent?.type === 'CallExpression' &&
-                        parent.callee?.type === 'MemberExpression' &&
-                        parent.callee.property?.type === 'Identifier' &&
-                        HANDLER_METHODS.has(parent.callee.property.name)
-                    )
-                        return true;
-                    current = parent;
-                }
-                return false;
-            };
-
-            /**
-             * Is the enclosing function the module's exported handler?
-             *
-             * Only that one owes the chain a `.catch()`, and the reason is who calls it: Express,
-             * which does nothing with a returned promise. A private helper that returns its chain
-             * is delegating to its caller — `post-reset-request.ts` does exactly this, and the
-             * caller's `.catch` is deliberately the one that swallows, to keep the response
-             * identical for a known and an unknown email.
-             */
-            const insideExportedFunction = (node: any): boolean => {
-                let outermostFunction;
-                let current = node.parent;
-                while (current) {
-                    if (
-                        current.type === 'ArrowFunctionExpression' ||
-                        current.type === 'FunctionExpression' ||
-                        current.type === 'FunctionDeclaration'
-                    )
-                        outermostFunction = current;
-                    current = current.parent;
-                }
-                if (!outermostFunction) return false;
-
-                const owner =
-                    outermostFunction.parent?.type === 'VariableDeclarator'
-                        ? outermostFunction.parent.parent?.parent
-                        : outermostFunction.parent;
-                return (
-                    owner?.type === 'ExportNamedDeclaration' ||
-                    owner?.type === 'ExportDefaultDeclaration'
-                );
-            };
-
-            return {
-                CallExpression(node: any) {
-                    // Only judge the OUTERMOST call of a chain: an inner `.then` is part of the
-                    // same expression and would otherwise be reported a second time.
-                    const { parent } = node;
-                    if (parent?.type === 'MemberExpression' && parent.object === node) return;
-
-                    const methods = chainMethods(node);
-                    if (!methods.includes('then') || methods.includes('catch')) return;
-                    if (insidePromiseHandler(node)) return;
-                    if (!insideExportedFunction(node)) return;
-
-                    context.report({ node, messageId: 'missing' });
-                }
-            };
-        }
+const bannedDoubleCasts = [
+    {
+        selector: 'TSAsExpression > TSAsExpression[typeAnnotation.type="TSUnknownKeyword"]',
+        message:
+            '`as unknown as T` erases the type error instead of answering it. Type the source honestly (`.lean<T>()`, a typed factory) — or, for a hand-built test stub, use the one sanctioned seam: `asStub<T>()` from tests/support/stub.ts.'
     },
-
-    /**
-     * User-facing copy comes from a dictionary, never from a literal at the call site.
-     *
-     * `rejectResponse(response, status, errors)` and `generateReject(status, errors)` carry the
-     * only text a user reads — the envelope's own `message` is derived from the status by
-     * `resolveErrorMessage` and cannot be passed. So this checks the `errors` argument, and
-     * within it only the parts a user reads: a bare string element, or the `message:` of an error
-     * object. `code:` identifiers, log lines, audit actions, span names and thrown `Error`
-     * messages are technician-facing by convention and are not flagged.
-     */
-    'no-hardcoded-user-text': {
-        meta: {
-            type: 'problem',
-            docs: { description: 'User-facing error text must come from i18n, not a literal' },
-            schema: [],
-            messages: {
-                literal:
-                    'User-facing text must come from a dictionary: use t(…) instead of a literal ' +
-                    'in the errors argument of {{callee}}().'
-            }
-        },
-        create(context: any) {
-            const CARRIERS = new Set(['rejectResponse', 'generateReject']);
-
-            /** A string literal, or a template with no expressions — both are hardcoded copy. */
-            const isLiteralText = (node: any): boolean =>
-                (node?.type === 'Literal' && typeof node.value === 'string') ||
-                (node?.type === 'TemplateLiteral' && node.expressions.length === 0);
-
-            return {
-                CallExpression(node: any) {
-                    const callee =
-                        node.callee?.type === 'Identifier' ? node.callee.name : undefined;
-                    if (!callee || !CARRIERS.has(callee)) return;
-
-                    const errors = node.arguments.find(
-                        (argument: any) => argument?.type === 'ArrayExpression'
-                    );
-                    if (!errors) return;
-
-                    for (const element of errors.elements) {
-                        if (isLiteralText(element)) {
-                            context.report({
-                                node: element,
-                                messageId: 'literal',
-                                data: { callee }
-                            });
-                            continue;
-                        }
-                        if (element?.type !== 'ObjectExpression') continue;
-                        for (const property of element.properties) {
-                            const key = property?.key;
-                            const isMessage =
-                                (key?.type === 'Identifier' && key.name === 'message') ||
-                                (key?.type === 'Literal' && key.value === 'message');
-                            if (isMessage && isLiteralText(property.value))
-                                context.report({
-                                    node: property.value,
-                                    messageId: 'literal',
-                                    data: { callee }
-                                });
-                        }
-                    }
-                }
-            };
-        }
+    {
+        selector: 'TSAsExpression > TSAsExpression[typeAnnotation.type="TSAnyKeyword"]',
+        message:
+            '`as any as T` erases the type error instead of answering it. Type the source honestly — or, for a hand-built test stub, use `asStub<T>()` from tests/support/stub.ts.'
     }
-};
+];
 
 export default tseslint.config(
-    {
-        files: ['**/*.{ts,mts,tsx}']
-    },
-
     /**
-     * Excluded files
+     * Excluded files — GENERATED OR FOREIGN ONLY.
+     *
+     * The bar for an entry here: linting it is impossible or meaningless, not merely
+     * inconvenient. Tool configs, migrations and CLI scripts used to sit in this list because
+     * they fall outside the `tsconfig` project; they are linted now, through the scoped blocks
+     * near the bottom that switch off the type-aware program instead of the whole linter.
      */
     globalIgnores([
         /*
@@ -226,11 +44,13 @@ export default tseslint.config(
          * rules written for the app on a file the app never loads.
          */
         'k6/**',
-        '**/dist/**',
-        '**/dist-ssr/**',
-        '**/coverage/**',
-        '**/docs/**',
         '**/node_modules/**',
+        '**/dist/**',
+        '**/coverage/**',
+        // The built docs site and its build cache; the authored source under `docs/` is markdown,
+        // and the VitePress config is linted through the tool-config block below.
+        'docs/.vitepress/dist/**',
+        'docs/.vitepress/cache/**',
         /*
          * Stryker copies the whole project here per run. Without this, `npm run lint` fails with
          * one parser error per generated file the moment a mutation run is in flight — or forever,
@@ -241,41 +61,38 @@ export default tseslint.config(
         '.stryker-tmp/**',
         // Per-run in-memory Mongo data directories — see tests/support/global-setup.ts
         '.tmp/**',
-        '**/eslint.config.ts',
-        '**/orval.config.ts',
-        '**/migrate-mongo-config.ts',
-        '**/migrate-mongo-config.js',
-        /*
-         * Jest's own config, alongside the other tool configs above. It is plain CommonJS and
-         * therefore outside the `tsconfig` project `parserOptions.project` resolves against, so
-         * linting it is a parser error rather than a finding. (It is a `.js` and not the `.json`
-         * it used to be because the per-file coverage thresholds inside it need an explanation
-         * attached, and JSON cannot carry a comment.)
-         */
-        '**/jest.config.js',
-        // Same reasoning, for the swc-transform override the mutation run uses.
-        '**/jest.config.mutation.js',
-        '**/commitlint.config.cjs',
-        'db/migrations/**/*.js',
-        'docs/**',
-        'api',
-        // Generated by `npm run gen:asyncapi`, same as `api` above — do not lint generated output
+        // Generated by orval — do not lint generated output
+        'api/**',
+        // Generated by `npm run gen:asyncapi`, same as `api` above
         'src/types/asyncapi.generated.ts',
-        '.prism',
-        '.dev',
-        'scripts/**'
+        '.prism/**',
+        '.dev/**'
     ]),
 
     /**
-     * Base eslint
+     * Base eslint + typescript presets.
+     *
+     * The three type-checked tiers are the point of setting `parserOptions.project` at all:
+     * the type information is already being built for the parser, so the rules that consume it
+     * (`no-floating-promises`, `no-misused-promises`, `no-unnecessary-condition`, …) cost almost
+     * nothing extra and catch the bugs a syntax-only pass cannot see.
      */
-    ...tseslint.configs['recommended'],
-    ...pluginOxlint.configs['flat/recommended'],
+    js.configs.recommended,
+    ...tseslint.configs.strictTypeChecked,
+    ...tseslint.configs.stylisticTypeChecked,
 
     /**
      * Unicorn plugin
      */
     pluginUnicorn.configs['flat/recommended'],
+
+    /**
+     * Every `eslint-disable` must say why. The two project-local rules and the `TryStatement`
+     * restriction below are deliberately annoying; a bare disable comment converts "deliberately
+     * annoying" into "silently ignored", and the description requirement is what keeps each
+     * exemption an argument instead of a shrug.
+     */
+    comments.recommended,
 
     /**
      * All global rules
@@ -285,8 +102,9 @@ export default tseslint.config(
             parserOptions: {
                 project: path.resolve('./tsconfig.json')
             },
+            // A server: `process`, `Buffer` and friends are the environment, `window` is not.
             globals: {
-                ...globals.browser
+                ...globals.node
             },
             ecmaVersion: 'latest',
             sourceType: 'module'
@@ -299,15 +117,15 @@ export default tseslint.config(
         rules: {
             'no-console': 'warn',
             'no-debugger': 'warn',
+            'no-restricted-syntax': ['error', ...bannedDoubleCasts],
             '@typescript-eslint/no-non-null-assertion': 'off',
-            // '@typescript-eslint/no-confusing-void-expression': 'off',
             '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
             'no-nested-ternary': 'off',
             'unicorn/no-nested-ternary': 'off',
             'unicorn/prefer-top-level-await': 'off',
 
             /*
-             * Three unicorn rules turned off rather than exempted seventeen times.
+             * Four unicorn rules turned off rather than exempted seventeen times.
              *
              * Each was being disabled inline wherever it fired, which is the signal that the rule
              * disagrees with the stack rather than with the code:
@@ -319,17 +137,88 @@ export default tseslint.config(
              *                        note in `infrastructure/http/response.ts`).
              *   no-process-exit    — this is a server with a shutdown path; `server-lifecycle.ts`
              *                        exits deliberately, four times, after draining.
+             *   prefer-module      — it flags every `__dirname`, and `__dirname` is how this
+             *                        stack actually runs: tsx and jest both execute the TS as
+             *                        CommonJS, so `import.meta.dirname` would be `undefined` at
+             *                        runtime. Fifty findings, every one a rename into a crash.
              *
              * A rule that needs six exemptions is not catching bugs, it is collecting signatures.
              */
             'unicorn/no-null': 'off',
             'unicorn/no-useless-undefined': 'off',
             'unicorn/no-process-exit': 'off',
+            'unicorn/prefer-module': 'off',
 
             '@typescript-eslint/restrict-plus-operands': [
                 'error',
                 {
                     allowNumberAndString: true
+                }
+            ],
+
+            /*
+             * strictTypeChecked's default rejects numbers in template literals, which turns every
+             * log line and metric label into a `String()` ceremony. Numbers stringify one way;
+             * the risk the rule guards against is objects and `undefined`, which stay banned.
+             */
+            '@typescript-eslint/restrict-template-expressions': [
+                'error',
+                {
+                    allowNumber: true
+                }
+            ],
+
+            /*
+             * `value || fallback` on a STRING is this codebase's idiom for "empty means unset" —
+             * the `host` npm script deliberately sets `NODE_DB_URI=` to blank, and a blank
+             * feedback name falls back to translated copy. For everything non-string, `??` stays
+             * the required spelling.
+             */
+            '@typescript-eslint/prefer-nullish-coalescing': [
+                'error',
+                {
+                    ignorePrimitives: { string: true }
+                }
+            ],
+
+            /*
+             * `(request, response) => response.json(body)` is the shape of half the controllers
+             * in an Express app; the "confusing" void return is Express's own idiom, and the
+             * fixer's `{ response.json(body); }` says nothing the shorthand does not.
+             */
+            '@typescript-eslint/no-confusing-void-expression': [
+                'error',
+                {
+                    ignoreArrowShorthand: true
+                }
+            ],
+
+            /*
+             * An underscore prefix is the deliberate spelling of "unused on purpose" — a handler
+             * signature that must take `(error, request, response, next)` to be an error handler,
+             * a destructuring that drops a key. Everything unprefixed stays an error.
+             */
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {
+                    argsIgnorePattern: '^_',
+                    varsIgnorePattern: '^_',
+                    caughtErrorsIgnorePattern: '^_'
+                }
+            ],
+
+            /*
+             * `const { name } = user` over `const name = user.name` — one read of the object per
+             * binding site instead of a scatter of member accesses. Only for declarations that
+             * read a property into a same-named variable; assignments and arrays are exempt
+             * because `[first] = parts` hides which index is being read.
+             */
+            'prefer-destructuring': 'off',
+            '@typescript-eslint/prefer-destructuring': [
+                'error',
+                {
+                    VariableDeclarator: { array: false, object: true },
+                    AssignmentExpression: { array: false, object: false }
                 }
             ],
 
@@ -414,14 +303,14 @@ export default tseslint.config(
                 }
             ],
 
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/consistent-destructuring.md
-            'unicorn/better-regex': 'warn',
-
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/better-regex.md
-            'unicorn/consistent-destructuring': 'warn',
+            'unicorn/better-regex': 'error',
+
+            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/consistent-destructuring.md
+            'unicorn/consistent-destructuring': 'error',
 
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/filename-case.md
-            // Every file is camelCase
+            // Every file is kebab-case
             'unicorn/filename-case': [
                 'error',
                 {
@@ -456,27 +345,13 @@ export default tseslint.config(
                         }
                     }
                 }
-            ]
+            ],
 
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/string-content.md
-            // 'unicorn/string-content': [
-            //   'error',
-            //   {
-            //     patterns: {
-            //       unicorn: '🦄',
-            //       awesome: {
-            //         suggest: '😎',
-            //         message: 'Please use `😎` instead of `awesome`.',
-            //       },
-            //       cool: {
-            //         suggest: '😎',
-            //         fix: false,
-            //       },
-            //     },
-            //   },
-            // ],
+            // A bare `eslint-disable` is an unexplained hole in every rule above.
+            '@eslint-community/eslint-comments/require-description': 'error'
         }
     },
+
     /**
      * A migration talks to the DRIVER, never to this application.
      *
@@ -485,46 +360,57 @@ export default tseslint.config(
      * today's schema — hooks, defaults, validators and all — against yesterday's documents, which
      * is how a migration stops being replayable.
      *
-     * The list names only aliases and paths that exist. It used to carry `@services/*`,
-     * `@repositories/*` and their relative spellings as well; those directories are gone and
-     * their aliases no longer resolve, so banning them guarded nothing while implying it did.
+     * Migrations are CommonJS `.js`, so the guard is `no-restricted-syntax` over `require()`
+     * calls: `no-restricted-imports` only matches `import` declarations, which a `.js` migration
+     * never contains. (Its predecessor matched `db/migrations/**\/*.ts` — a glob with zero
+     * matching files, so the rule it carried never fired.) The path aliases are unresolvable at
+     * migrate-mongo runtime anyway; `../../src/` is the spelling a mistake would actually use.
      */
     {
-        files: ['db/migrations/**/*.ts'],
+        files: ['db/migrations/**/*.js'],
         rules: {
-            'no-restricted-imports': [
+            'no-restricted-syntax': [
                 'error',
                 {
-                    patterns: [
-                        '@app/*',
-                        '@infrastructure/*',
-                        '@modules/*',
-                        '@kernel/*',
-                        '../../src/app',
-                        '../../src/app/*',
-                        '../../src/cluster',
-                        '../../src/infrastructure/*',
-                        '../../src/modules',
-                        '../../src/modules/*',
-                        '../../src/kernel/*'
-                    ]
+                    selector: String.raw`CallExpression[callee.name="require"] > Literal[value=/^(@app|@infrastructure|@modules|@kernel)\u002F/]`,
+                    message:
+                        'A migration talks to the driver, never to this application — replaying it against an old database must not run today’s schema. Use the `db` handle migrate-mongo passes in.'
+                },
+                {
+                    selector: String.raw`CallExpression[callee.name="require"] > Literal[value=/\u002Fsrc\u002F/]`,
+                    message:
+                        'A migration talks to the driver, never to this application — replaying it against an old database must not run today’s schema. Use the `db` handle migrate-mongo passes in.'
                 }
             ]
         }
     },
 
     /**
-     * The two project-local rules, replacing the source-scanning tests that used to live in
-     * `tests/cross-cutting/`. See their definitions at the top of this file.
+     * The two project-local rules — defined in `eslint/rules/`, unit-tested in
+     * `tests/unit/eslint/` — plus the try/catch restriction.
      *
      * Scoped to `src/`, deliberately: a test asserting what the reject envelope does with a
      * string is not shipping user-facing copy, and `tests/unit/infrastructure/http/response.test.ts` passes
-     * a dozen literals for exactly that reason.
+     * a dozen literals for exactly that reason. Likewise a test may try/catch freely to assert on
+     * what was thrown, and a CLI script's try around an optional read is its error handling.
+     *
+     * The `TryStatement` restriction is a speed bump, not a wall: production code prefers typed
+     * verdicts and promise rejection into the pipeline's handlers, and each surviving try/catch
+     * carries an `eslint-disable` whose description (enforced above) says what it is protecting.
      */
     {
         files: ['src/**/*.ts'],
         rules: {
-            'local/no-hardcoded-user-text': 'error'
+            'local/no-hardcoded-user-text': 'error',
+            'no-restricted-syntax': [
+                'error',
+                ...bannedDoubleCasts,
+                {
+                    selector: 'TryStatement',
+                    message:
+                        'try/catch in production code is for the rare spot where a throwing API has no safe wrapper and the failure has a local answer. Prefer returning a verdict or letting the rejection reach the pipeline’s handler; if this spot truly needs one, disable this rule on the line with a description of what is being contained.'
+                }
+            ]
         }
     },
 
@@ -737,12 +623,17 @@ export default tseslint.config(
      * Scoped to where names are AUTHORED: a module's own file, and the client's half in
      * `shared/contracts/analytics.frontend.ts`. The published catalogue is generated from these
      * and carries `DO NOT EDIT`, so linting it would only ever report a bug in the bundler.
+     *
+     * The `TryStatement` selector is repeated from the `src/**` block: `no-restricted-syntax`
+     * does not merge across configs — the nearest match REPLACES the list — so leaving it out
+     * here would silently lift the try/catch restriction for exactly these files.
      */
     {
         files: ['src/modules/*/analytics.ts', 'shared/contracts/analytics.frontend.ts'],
         rules: {
             'no-restricted-syntax': [
                 'error',
+                ...bannedDoubleCasts,
                 {
                     selector:
                         'Property > Literal[value]:not([value=/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/])',
@@ -753,8 +644,104 @@ export default tseslint.config(
                     selector: 'Property > Identifier.key:not([name=/^[A-Z][A-Z0-9_]*$/])',
                     message:
                         'An analytics event constant is SCREAMING_SNAKE — `CART_ITEM_ADDED`. The published catalogue is sliced out of this declaration by matching that shape, so a differently-cased key is dropped from the frontend copy without failing anything.'
+                },
+                {
+                    selector: 'TryStatement',
+                    message:
+                        'try/catch in production code is for the rare spot where a throwing API has no safe wrapper and the failure has a local answer. Prefer returning a verdict or letting the rejection reach the pipeline’s handler; if this spot truly needs one, disable this rule on the line with a description of what is being contained.'
                 }
             ]
+        }
+    },
+
+    /**
+     * CLI tooling and seeders: node programs inside the `tsconfig` project, so they keep the
+     * type-aware rules — but a script's interface is the terminal and its exit code, so
+     * `no-console` would flag every line of output it exists to produce.
+     */
+    {
+        files: ['scripts/**/*.ts', 'db/**/*.ts'],
+        languageOptions: {
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            'no-console': 'off'
+        }
+    },
+
+    /**
+     * The local rule definitions. In the `tsconfig` project so their tests can import them, but
+     * an ESLint rule walks an untyped AST — `context` and every node come in as `any`, and typing
+     * them properly means depending on `@types/estree` for two rules with their own unit tests.
+     * The `no-unsafe-*` family follows `no-explicit-any` out for the same reason: every node
+     * access in an AST walk is "unsafe" to a checker that has no ESTree types to check against.
+     */
+    {
+        files: ['eslint/**/*.ts'],
+        languageOptions: {
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/no-unsafe-member-access': 'off',
+            '@typescript-eslint/no-unsafe-call': 'off',
+            '@typescript-eslint/no-unsafe-argument': 'off',
+            '@typescript-eslint/no-unsafe-return': 'off'
+        }
+    },
+
+    /**
+     * Tool configs at the repo root, and the VitePress config: TypeScript, but OUTSIDE the
+     * `tsconfig` project, so the type-aware program is switched off — for these files it would be
+     * a parser error, not a finding. Everything syntax-level still applies.
+     */
+    {
+        files: ['eslint.config.ts', 'orval.config.ts', 'docs/.vitepress/**/*.{ts,mts}'],
+        extends: [tseslint.configs.disableTypeChecked],
+        languageOptions: {
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            'no-console': 'off',
+            // `props`, `env`, `dir`: the VitePress/orval config surface spells its own keys.
+            'unicorn/prevent-abbreviations': 'off'
+        }
+    },
+
+    /**
+     * Plain CommonJS tooling: jest's configs (a `.js` because the per-file coverage thresholds
+     * inside need an explanation attached, and JSON cannot carry a comment), commitlint,
+     * migrate-mongo's config and the migrations it replays. Outside the `tsconfig` project, so
+     * the type-aware program is off; CommonJS, so the ESM-preference rules yield.
+     */
+    {
+        files: [
+            'jest.config.js',
+            'jest.config.mutation.js',
+            'commitlint.config.cjs',
+            'migrate-mongo-config.js',
+            'db/migrations/**/*.js'
+        ],
+        extends: [tseslint.configs.disableTypeChecked],
+        languageOptions: {
+            sourceType: 'commonjs',
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            'no-console': 'off',
+            '@typescript-eslint/no-require-imports': 'off',
+            // `up(db, client)` is migrate-mongo's signature and `moduleNameMapper` is jest's key:
+            // these files spell what their tools spell.
+            'unicorn/prevent-abbreviations': 'off'
         }
     },
 
@@ -768,6 +755,36 @@ export default tseslint.config(
             'unicorn/prevent-abbreviations': 'off'
         }
     },
+
+    /**
+     * Type-aware relief for test code, and only the relief the mocking idiom actually needs.
+     *
+     * `jest.mock` factories, `jest.requireActual`, and every `expect.any(...)` shape come back
+     * `any` — the `no-unsafe-*` family would demand a cast ceremony on top of each one that
+     * asserts nothing the test does not already assert. `no-unnecessary-condition` reads
+     * `?.`-probing of a payload as redundant, but probing IS the assertion in a test; and a test
+     * legitimately deletes `process.env` keys (`no-dynamic-delete`) and passes `() => {}` as the
+     * callback it is not exercising (`no-empty-function`). Everything else — including the
+     * deprecation and floating-promise checks — stays on.
+     */
+    {
+        files: ['tests/**/*.ts', 'src/modules/*/tests/**/*.ts'],
+        rules: {
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/no-unsafe-member-access': 'off',
+            '@typescript-eslint/no-unsafe-call': 'off',
+            '@typescript-eslint/no-unsafe-argument': 'off',
+            '@typescript-eslint/no-unsafe-return': 'off',
+            '@typescript-eslint/no-unnecessary-condition': 'off',
+            '@typescript-eslint/no-dynamic-delete': 'off',
+            '@typescript-eslint/no-empty-function': 'off',
+            // `expect(mock.method)` hands the method around unbound by design,
+            // and a test try/catches to assert on what was thrown. The double-cast ban stays:
+            // tests are where that idiom bred.
+            '@typescript-eslint/unbound-method': 'off',
+            'no-restricted-syntax': ['error', ...bannedDoubleCasts]
+        }
+    },
     {
         files: ['**/*.d.ts'],
         rules: {
@@ -776,10 +793,10 @@ export default tseslint.config(
     },
 
     /**
-     *
+     * Jest's globals, for the standalone suites and the co-located module specs alike.
      */
     {
-        files: ['tests/**/*'],
+        files: ['tests/**/*', 'src/modules/*/tests/**/*'],
 
         languageOptions: {
             globals: {

@@ -1,5 +1,5 @@
 /**
- * `scripts/specIdentity.ts` — the cross-repo contract check.
+ * `scripts/spec-identity.ts` — the cross-repo contract check.
  *
  * Two separate things are worth testing here, and only one of them is the comparison logic:
  *
@@ -32,8 +32,8 @@ import {
     hashFile,
     sharedFileProblems,
     type RepoRole
-} from '../../../scripts/specIdentity';
-import { resolveFrontendPath } from '../../../scripts/frontendPath';
+} from '../../../scripts/spec-identity';
+import { resolveFrontendPath } from '../../../scripts/frontend-path';
 
 /** Builds a throwaway repo root holding the named files with the given contents. */
 const makeRoot = (files: Record<string, string>): string => {
@@ -211,7 +211,7 @@ describe('compareSharedFiles', () => {
     });
 
     it('names spectral.yaml too, not only the two specs', () => {
-        // The ruleset is as shared as the documents it lints — see the note in specIdentity.ts.
+        // The ruleset is as shared as the documents it lints — see the note in spec-identity.ts.
         const here = root(sharedFiles(HERE));
         const there = root(sharedFilesWith(THERE, SPECTRAL, 'different rules'));
 
@@ -325,7 +325,7 @@ describe(`the paired frontend at ${siblingRoot}`, () => {
         if (siblingPresent) return;
 
         const message = `Shared-contract checks skipped: no sibling repo at ${siblingRoot}.`;
-        // eslint-disable-next-line no-console
+        // eslint-disable-next-line no-console -- the skip warning must reach a terminal that has no logger configured
         if (!process.env.CI) console.warn(`⚠️  ${message}`);
         expect(process.env.CI ? message : '').toBe('');
     });

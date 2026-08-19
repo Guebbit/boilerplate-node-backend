@@ -1,6 +1,5 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { z } from 'zod';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../service';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';

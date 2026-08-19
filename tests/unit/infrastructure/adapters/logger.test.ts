@@ -45,16 +45,16 @@ describe('redactSensitiveFields', () => {
             contentType: 'application/json'
         };
         const result = redactSensitiveFields(input) as Record<string, unknown>;
-        expect(result['authorization']).toBe('[REDACTED]');
-        expect(result['cookie']).toBe('[REDACTED]');
-        expect(result['contentType']).toBe('application/json');
+        expect(result.authorization).toBe('[REDACTED]');
+        expect(result.cookie).toBe('[REDACTED]');
+        expect(result.contentType).toBe('application/json');
     });
 
     it('is case-insensitive for sensitive field names', () => {
         const input = { Password: 'secret', PASSWORD: 'secret' };
         const result = redactSensitiveFields(input) as Record<string, unknown>;
-        expect(result['Password']).toBe('[REDACTED]');
-        expect(result['PASSWORD']).toBe('[REDACTED]');
+        expect(result.Password).toBe('[REDACTED]');
+        expect(result.PASSWORD).toBe('[REDACTED]');
     });
 
     it('redacts nested sensitive fields', () => {
@@ -76,8 +76,8 @@ describe('redactSensitiveFields', () => {
 describe('serializeError', () => {
     it('extracts name and message from an Error instance', () => {
         const result = serializeError(new Error('something went wrong'));
-        expect(result['name']).toBe('Error');
-        expect(result['message']).toBe('something went wrong');
+        expect(result.name).toBe('Error');
+        expect(result.message).toBe('something went wrong');
     });
 
     it('wraps non-Error values in a raw field', () => {
@@ -93,8 +93,8 @@ describe('serializeError', () => {
             }
         }
         const result = serializeError(new ValidationError('bad input'));
-        expect(result['name']).toBe('ValidationError');
-        expect(result['message']).toBe('bad input');
+        expect(result.name).toBe('ValidationError');
+        expect(result.message).toBe('bad input');
     });
 });
 
@@ -479,7 +479,7 @@ describe('resolveConsoleFormat', () => {
 /** Re-import the module so both loggers are rebuilt from the environment as it stands now. */
 const loadLoggers = async () => {
     jest.resetModules();
-    return (await import('@infrastructure/adapters/logger')) as typeof import('@infrastructure/adapters/logger');
+    return await import('@infrastructure/adapters/logger');
 };
 
 describe('the two loggers are configured independently', () => {

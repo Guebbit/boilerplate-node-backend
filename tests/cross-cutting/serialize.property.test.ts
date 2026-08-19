@@ -184,9 +184,7 @@ describe('applySerialization — universal guarantees', () => {
     it('never throws, for any document shape', () => {
         fc.assert(
             fc.property(fc.dictionary(documentKey(), fc.anything(), { maxKeys: 8 }), (body) => {
-                expect(() =>
-                    buildTransform({ omit: ['password'] })(body as Record<string, unknown>)
-                ).not.toThrow();
+                expect(() => buildTransform({ omit: ['password'] })(body)).not.toThrow();
             }),
             RUN
         );

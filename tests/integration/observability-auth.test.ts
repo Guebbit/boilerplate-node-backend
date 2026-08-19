@@ -26,7 +26,7 @@ const signIn = async (role: 'admin' | 'user') => {
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
 
-    const cookies = response.headers['set-cookie'] as unknown as string[];
+    const cookies = response.get('Set-Cookie') ?? [];
     return { user, cookie: cookies.find((cookie) => cookie.startsWith('jwt='))! };
 };
 

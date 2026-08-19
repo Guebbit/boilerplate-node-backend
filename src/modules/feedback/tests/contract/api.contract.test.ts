@@ -54,7 +54,7 @@ describe('POST /feedback/contact', () => {
     });
 
     it('matches the contract without the optional name', async () => {
-        const { name, ...withoutName } = CONTACT_PAYLOAD;
+        const { name: _name, ...withoutName } = CONTACT_PAYLOAD;
         const response = await api().post('/feedback/contact').send(withoutName);
 
         expect(response.status).toBe(201);
@@ -71,7 +71,7 @@ describe('POST /feedback/contact', () => {
     });
 
     it('matches the error contract for a missing message', async () => {
-        const { message, ...withoutMessage } = CONTACT_PAYLOAD;
+        const { message: _message, ...withoutMessage } = CONTACT_PAYLOAD;
         const response = await api().post('/feedback/contact').send(withoutMessage);
 
         expect(response.status).toBe(422);

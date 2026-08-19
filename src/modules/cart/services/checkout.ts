@@ -36,7 +36,7 @@ import { isJoined, readCartLines, type JoinedCartLine } from './view';
  * @returns the same lines as stock claims
  */
 const toStockLines = (lines: readonly JoinedCartLine[]) =>
-    lines.map((line) => ({ productId: String(line.productId), quantity: line.quantity }));
+    lines.map((line) => ({ productId: line.productId, quantity: line.quantity }));
 
 /**
  * The snapshot an order embeds, from a book entry: the shipment's fields, none of the book's.

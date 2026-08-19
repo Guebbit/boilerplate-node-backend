@@ -10,7 +10,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { filesystemImageStore, imageStore } from '@infrastructure/adapters/image-store';
+import { filesystemImageStore } from '@infrastructure/adapters/image-store';
 
 const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
 

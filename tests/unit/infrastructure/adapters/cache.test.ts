@@ -123,12 +123,13 @@ jest.mock('@infrastructure/adapters/logger', () => ({
  */
 const freshCache = () => {
     jest.resetModules();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require
     return require('@infrastructure/adapters/cache') as typeof import('@infrastructure/adapters/cache');
 };
 
 /** Turn a list of key batches into the async iterable node-redis' `scanIterator` returns. */
 const scanBatches = (batches: string[][]) =>
+    // eslint-disable-next-line @typescript-eslint/require-await -- the async wrapper is the contract: node-redis' scanIterator is an AsyncIterable
     (async function* () {
         for (const batch of batches) yield batch;
     })();

@@ -92,12 +92,12 @@ export const productRepository: BaseRepository<ProductDocument> & {
                     }
                 }
             ])
-            .then(([result]) => ({
-                categories: (result?.categories ?? []).map(({ _id, count }) => ({
+            .then((results) => ({
+                categories: (results.at(0)?.categories ?? []).map(({ _id, count }) => ({
                     name: _id,
                     count
                 })),
-                tags: (result?.tags ?? []).map(({ _id, count }) => ({ name: _id, count }))
+                tags: (results.at(0)?.tags ?? []).map(({ _id, count }) => ({ name: _id, count }))
             })),
 
     /*
@@ -255,7 +255,7 @@ export const productRepository: BaseRepository<ProductDocument> & {
     sumReserved: () =>
         productModel
             .aggregate<{ total: number }>([{ $group: { _id: null, total: { $sum: '$reserved' } } }])
-            .then(([result]) => result?.total ?? 0),
+            .then((results) => results.at(0)?.total ?? 0),
 
     /**
      * A page of the stock board — counters plus availability, scarcest first.
@@ -320,8 +320,8 @@ export const productRepository: BaseRepository<ProductDocument> & {
                     }
                 }
             ])
-            .then(([result]) => ({
-                items: result?.items ?? [],
-                totalItems: result?.total?.[0]?.count ?? 0
+            .then((results) => ({
+                items: results.at(0)?.items ?? [],
+                totalItems: results.at(0)?.total.at(0)?.count ?? 0
             }))
 };

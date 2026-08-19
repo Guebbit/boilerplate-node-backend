@@ -51,7 +51,7 @@ export const DEMO_DATA_PATH = path.join(__dirname, 'demo-data.json');
  * the structured-clone algorithm, which never calls `toJSON`. An ObjectId would survive as an
  * object and a Date as a Date, which is precisely the state this converts away from.
  */
-// eslint-disable-next-line unicorn/prefer-structured-clone
+// eslint-disable-next-line unicorn/prefer-structured-clone -- the JSON round-trip is the point: it converts ObjectId and Date to the forms the file stores
 const toPlainJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /**
@@ -166,7 +166,7 @@ const reconcileShapes = (
 
 export const assembleDemoDataset = async (): Promise<string> => {
     const sections = await Promise.all(
-        enabledModules.map((appModule) => appModule.seedExport?.() ?? {})
+        enabledModules.map((appModule) => appModule.seedExport?.() ?? Promise.resolve({}))
     );
 
     /*
@@ -174,7 +174,7 @@ export const assembleDemoDataset = async (): Promise<string> => {
      * reordering `enabledModules` — or renaming a module, which moves it in that list — does not
      * rewrite the file and light up the cross-repo hash check for no reason.
      */
-    const merged: Record<string, unknown[]> = Object.assign({}, ...sections);
+    const merged = Object.assign({}, ...sections) as Record<string, unknown[]>;
     const collections = toPlainJson(merged);
 
     /*
@@ -183,10 +183,10 @@ export const assembleDemoDataset = async (): Promise<string> => {
      * has the answer in the file they already have open. `sortKeys` orders the map, exactly as it
      * orders everything else here.
      */
-    const shapes: Record<string, DemoShape> = Object.assign(
+    const shapes = Object.assign(
         {},
         ...enabledModules.map((appModule) => appModule.demoShapes ?? {})
-    );
+    ) as Record<string, DemoShape>;
     reconcileShapes(collections, shapes);
 
     const dataset = { _meta: { shapes }, credentials: seedCredentials, collections };

@@ -37,7 +37,7 @@ const readCallArguments = (source: string, openIndex: number): string[] => {
     let quote = '';
 
     for (let index = openIndex; index < source.length; index++) {
-        const character = source[index]!;
+        const character = source[index];
 
         if (quote) {
             current += character;
@@ -81,7 +81,7 @@ const findUserFacingLiterals = (errorsArgument: string): string[] =>
         ...errorsArgument.matchAll(/message:\s*(["'`])((?:(?!\1).)*)\1/g),
         // a bare string element of the array, e.g. `[ 'some message' ]` or `, 'some message']`
         ...errorsArgument.matchAll(/[,[]\s*(["'`])((?:(?!\1).)*)\1\s*(?=[,\]])/g)
-    ].map((match) => match[2]!);
+    ].map((match) => match[2]);
 
 /**
  * The two envelope builders, and which argument of each is the user-facing `errors` array.

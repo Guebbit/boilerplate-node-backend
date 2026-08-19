@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import type { CastError } from 'mongoose';
 import { productService } from '../service';
@@ -15,7 +14,7 @@ import { productsAuditActions } from '../audit';
  * Delete a product by path id (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-export const deleteProducts = (request: Request<ParamsDictionary>, response: Response) => {
+export const deleteProducts = (request: Request, response: Response) => {
     const id = extractAndValidateId(request, response, 'deleteProduct');
     if (!id) return Promise.resolve();
 

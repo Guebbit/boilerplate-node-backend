@@ -406,7 +406,9 @@ export const getLocaleContext = (): LocaleContext | undefined => localeStorage.g
  * The locale in effect right now: the request's, or the instance's boot language.
  */
 export const getCurrentLocale = (): string =>
-    localeStorage.getStore()?.locale ?? i18next.language ?? getDefaultLocale();
+    localeStorage.getStore()?.locale ??
+    (i18next.language as string | undefined) ??
+    getDefaultLocale();
 
 /**
  * Picks the best supported locale for an `Accept-Language` header.

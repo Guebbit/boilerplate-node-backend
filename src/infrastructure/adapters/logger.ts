@@ -118,8 +118,8 @@ export const redactFormat = winston.format((info) => {
 
     // Turn a raw thrown Error into a serializable object *before* redaction, otherwise
     // the walk above would return an empty `{}` for it.
-    if (rest['error'] && rest['error'] instanceof Error) {
-        rest['error'] = serializeError(rest['error']);
+    if (rest.error && rest.error instanceof Error) {
+        rest.error = serializeError(rest.error);
     }
 
     const redacted = redactSensitiveFields(rest);

@@ -1,4 +1,3 @@
-import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
@@ -103,7 +102,7 @@ describe('orderService.search', () => {
         await createOrder(user2, [toOrderItem(product, 2)]);
 
         const result = await orderService.search({
-            userId: (user1._id as Types.ObjectId).toString()
+            userId: user1._id.toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -136,7 +135,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderItem(product, 2)]);
 
         const result = await orderService.search({
-            id: (target._id as Types.ObjectId).toString()
+            id: target._id.toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -154,7 +153,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderItem(p2, 1)]);
 
         const result = await orderService.search({
-            productId: (p1._id as Types.ObjectId).toString()
+            productId: p1._id.toString()
         });
 
         expect(result.items).toHaveLength(1);
@@ -200,7 +199,7 @@ describe('orderService.search', () => {
         await createOrder(user2, [toOrderItem(product, 2)]);
 
         // The scope parameter is a raw Mongoose filter merged into the $match stage
-        const result = await orderService.search({}, { userId: user1._id as Types.ObjectId });
+        const result = await orderService.search({}, { userId: user1._id });
 
         expect(result.items).toHaveLength(1);
     });

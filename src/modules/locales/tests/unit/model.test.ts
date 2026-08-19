@@ -12,7 +12,7 @@
  * quietly rewrite the file the paired frontend mocks from.
  */
 
-import { Types } from 'mongoose';
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { LocaleDirection } from '@types';
 import { localeRepository, localeMessageRepository } from '@modules/locales/repository';
@@ -30,7 +30,7 @@ describe('language serialization', () => {
         });
         const json = language.toJSON() as Record<string, unknown>;
 
-        expect(json.id).toBe((language._id as Types.ObjectId).toString());
+        expect(json.id).toBe(language._id.toString());
         expect(JSON.stringify(json)).not.toContain('_id');
         expect(JSON.stringify(json)).not.toContain('__v');
     });
@@ -68,7 +68,7 @@ describe('entry serialization', () => {
         });
 
         const result = await localeService.searchEntries('es');
-        const item = result.data?.items[0] as unknown as Record<string, unknown>;
+        const item = asStub<Record<string, unknown>>(result.data?.items[0]);
 
         expect(item.id).toMatch(/^[\da-f]{24}$/);
         expect(item._id).toBeUndefined();

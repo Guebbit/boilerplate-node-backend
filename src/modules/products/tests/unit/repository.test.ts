@@ -1,7 +1,7 @@
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeProduct, createProduct } from '@modules/products/tests/factory';
 import { productRepository } from '@modules/products';
-import { Types } from 'mongoose';
 
 setupTestDb();
 
@@ -29,7 +29,7 @@ describe('productRepository', () => {
     describe('findById', () => {
         it('returns the product when the id exists', async () => {
             const created = await createProduct({ title: 'Widget' });
-            const id = (created._id as Types.ObjectId).toString();
+            const id = created._id.toString();
 
             const found = await productRepository.findById(id);
 
@@ -120,7 +120,7 @@ describe('productRepository', () => {
 
             const [product] = await productRepository.findAll();
 
-            expect(typeof (product as unknown as { save?: unknown }).save).toBe('undefined');
+            expect(typeof asStub<{ save?: unknown }>(product).save).toBe('undefined');
         });
     });
 
@@ -147,7 +147,7 @@ describe('productRepository', () => {
     describe('save', () => {
         it('persists mutations to an existing document', async () => {
             const product = await createProduct();
-            const id = (product._id as Types.ObjectId).toString();
+            const id = product._id.toString();
 
             product.title = 'Updated Title';
             product.price = 99.99;
@@ -162,7 +162,7 @@ describe('productRepository', () => {
     describe('deleteOne', () => {
         it('removes the document permanently from the collection', async () => {
             const product = await createProduct();
-            const id = (product._id as Types.ObjectId).toString();
+            const id = product._id.toString();
 
             await productRepository.deleteOne(product);
 

@@ -10,9 +10,7 @@
  * two overlapping requests in different languages would answer each other's.
  */
 import { api } from '@tests/http';
-import enTranslation from '../../src/locales/en.json';
 import enUsers from '@modules/users/locales/en.json';
-import itTranslation from '../../src/locales/it.json';
 import itUsers from '@modules/users/locales/it.json';
 
 const INVALID_SIGNUP = {
@@ -69,7 +67,7 @@ describe('Accept-Language negotiation', () => {
     it('declares Accept-Language in Vary, so a shared cache cannot mix languages', async () => {
         const response = await signupWith('it').send(INVALID_SIGNUP);
 
-        expect(String(response.headers.vary).toLowerCase()).toContain('accept-language');
+        expect(response.headers.vary.toLowerCase()).toContain('accept-language');
     });
 
     /**

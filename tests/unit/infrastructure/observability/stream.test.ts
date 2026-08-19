@@ -16,6 +16,7 @@
  *
  * `getHttpRequestCounters` is mocked and the clock is faked, so the frames are deterministic.
  */
+import { asStub } from '@tests/stub';
 import type { Response } from 'express';
 
 const getHttpRequestCounters = jest.fn(() =>
@@ -66,7 +67,7 @@ const makeResponse = (): FakeResponse => {
         return true;
     });
 
-    const response = {
+    const response = asStub<Response>({
         status,
         flushHeaders,
         write,
@@ -76,7 +77,7 @@ const makeResponse = (): FakeResponse => {
         on: jest.fn((event: string, handler: () => void) => {
             if (event === 'close') closeHandlers.push(handler);
         })
-    } as unknown as Response;
+    });
 
     return {
         response,
@@ -210,14 +211,14 @@ describe('the SSE metrics stream', () => {
             await jest.advanceTimersByTimeAsync(0);
 
             expect(fake.frames).toHaveLength(1);
-            expect(parseFrame(fake.frames[0]!).event).toBe('observability.metrics.snapshot');
+            expect(parseFrame(fake.frames[0]).event).toBe('observability.metrics.snapshot');
         });
 
         it('writes a frame the SSE format actually terminates', async () => {
             const fake = open();
             await jest.advanceTimersByTimeAsync(0);
 
-            const frame = fake.frames[0]!;
+            const frame = fake.frames[0];
 
             expect(frame.startsWith('event: ')).toBe(true);
             expect(frame).toContain('\ndata: ');
@@ -230,11 +231,11 @@ describe('the SSE metrics stream', () => {
             const fake = open();
             await jest.advanceTimersByTimeAsync(0);
 
-            const [, dataLine] = fake.frames[0]!.split('\n');
+            const [, dataLine] = fake.frames[0].split('\n');
 
             expect(dataLine).toBeDefined();
             expect(dataLine).not.toContain('\n');
-            expect(() => JSON.parse(dataLine!.replace('data: ', ''))).not.toThrow();
+            expect(() => JSON.parse(dataLine.replace('data: ', ''))).not.toThrow();
         });
     });
 

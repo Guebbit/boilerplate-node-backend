@@ -54,8 +54,8 @@ const readHeader = async () => {
     const head = buffer.toString('utf8');
 
     // `[^\]]*` rather than a dot-all `.*?`: both arrays hold flat strings, no nested brackets
-    const fields = JSON.parse(/"node_fields":(\[[^\]]*\])/.exec(head)![1]!) as string[];
-    const types = JSON.parse(/"node_types":\[(\[[^\]]*\])/.exec(head)![1]!) as string[];
+    const fields = JSON.parse(/"node_fields":(\[[^\]]*])/.exec(head)![1]) as string[];
+    const types = JSON.parse(/"node_types":\[(\[[^\]]*])/.exec(head)![1]) as string[];
     return { fields, types };
 };
 
@@ -94,6 +94,7 @@ const streamArray = (key: string, onChunk: (text: string) => void): Promise<void
             }
 
             let cut = text.length;
+            // eslint-disable-next-line @typescript-eslint/no-misused-spread -- JSON string content is scanned code point by code point on purpose
             for (const [index, character] of [...text].entries()) {
                 if (escaped) {
                     escaped = false;
@@ -153,15 +154,26 @@ const main = async () => {
 
         for (const raw of values) {
             const value = Number(raw);
-            if (column === typeAt) type = value;
-            else if (column === nameAt) nameIndex = value;
-            else if (column === sizeAt) {
-                total += value;
-                const key = `${type}|${nameIndex}`;
-                const entry = byKind.get(key) ?? { bytes: 0, count: 0 };
-                entry.bytes += value;
-                entry.count += 1;
-                byKind.set(key, entry);
+            switch (column) {
+                case typeAt: {
+                    type = value;
+                    break;
+                }
+                case nameAt: {
+                    nameIndex = value;
+                    break;
+                }
+                case sizeAt: {
+                    total += value;
+                    const key = `${type}|${nameIndex}`;
+                    const entry = byKind.get(key) ?? { bytes: 0, count: 0 };
+                    entry.bytes += value;
+                    entry.count += 1;
+                    byKind.set(key, entry);
+
+                    break;
+                }
+                // No default
             }
             column += 1;
             if (column === stride) {
@@ -171,7 +183,7 @@ const main = async () => {
         }
     });
 
-    const ranked = [...byKind.entries()].sort((a, b) => b[1].bytes - a[1].bytes).slice(0, topN);
+    const ranked = [...byKind.entries()].toSorted((a, b) => b[1].bytes - a[1].bytes).slice(0, topN);
     const wanted = new Set(ranked.map(([key]) => Number(key.split('|')[1])));
 
     // Second pass: resolve only the names the ranking actually prints.
@@ -182,7 +194,7 @@ const main = async () => {
         const parts = (stringCarry + text).split('","');
         stringCarry = parts.pop() ?? '';
         for (const part of parts) {
-            if (wanted.has(index)) names.set(index, part.replace(/^"|"$/g, '').slice(0, 60));
+            if (wanted.has(index)) names.set(index, part.replaceAll(/^"|"$/g, '').slice(0, 60));
             index += 1;
         }
     });
@@ -192,7 +204,7 @@ const main = async () => {
     console.log('-'.repeat(78));
     for (const [key, { bytes, count }] of ranked) {
         const [typeIndex, stringIndex] = key.split('|').map(Number);
-        const label = `${types[typeIndex!] ?? '?'} ${names.get(stringIndex!) ?? ''}`.trim();
+        const label = `${types[typeIndex] ?? '?'} ${names.get(stringIndex) ?? ''}`.trim();
         console.log(
             `${`${mb(bytes)} MB`.padStart(10)}  ${count.toLocaleString().padStart(11)}  ${label}`
         );

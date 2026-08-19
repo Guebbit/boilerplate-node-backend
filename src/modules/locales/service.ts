@@ -88,6 +88,7 @@ export const isRightToLeft = (tag: string): boolean =>
  * fact this code cannot fix.
  */
 export const describeLanguage = (tag: string, inLanguage: string): string => {
+    // eslint-disable-next-line no-restricted-syntax -- Intl.DisplayNames throws on malformed tags; the tag itself is the only sane fallback
     try {
         return new Intl.DisplayNames([inLanguage], { type: 'language' }).of(tag) ?? tag;
     } catch {
@@ -183,6 +184,7 @@ export const readDynamicTier = async (
     languages: LocaleDocument[];
     entryCounts: Map<string, number>;
 }> => {
+    // eslint-disable-next-line no-restricted-syntax -- a dead database serves the static tier, not a 500 — the catch is that degradation
     try {
         const [languages, entryCounts] = await Promise.all([
             // `active` gates what a VISITOR may select and nothing else — the admin, who is the
@@ -325,7 +327,7 @@ export const readMessages = async (
     tag: string
 ): Promise<ResponseSuccess<LocaleMessages> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
-    if (!language || !language.active) return languageNotFound();
+    if (!language?.active) return languageNotFound();
 
     const entries = await localeMessageRepository.listEntries(language.tag, LocaleScope.app);
 
@@ -508,7 +510,7 @@ export const updateEntry = async (
     payload: UpdateLocaleEntryRequest
 ): Promise<ResponseSuccess<LocaleMessageDocument> | ResponseReject> => {
     const entry = await localeMessageRepository.findById(entryId);
-    if (!entry || entry.locale !== tag.trim().toLowerCase())
+    if (entry?.locale !== tag.trim().toLowerCase())
         return generateReject(404, [t('locales.error-entry-not-found')]);
 
     const { entry: saved } = await localeMessageRepository.saveEntryValue(entry, payload.value);
@@ -522,7 +524,7 @@ export const deleteEntry = async (
     entryId: string
 ): Promise<ResponseSuccess<{ key: string }> | ResponseReject> => {
     const entry = await localeMessageRepository.findById(entryId);
-    if (!entry || entry.locale !== tag.trim().toLowerCase())
+    if (entry?.locale !== tag.trim().toLowerCase())
         return generateReject(404, [t('locales.error-entry-not-found')]);
 
     const { key } = entry;
@@ -622,6 +624,7 @@ export const readApiOverrides = async (): Promise<Record<string, Record<string, 
 
     const overrides: Record<string, Record<string, unknown>> = {};
     for (const [locale, entries] of byLocale) {
+        // eslint-disable-next-line no-restricted-syntax -- caught per locale: one language's malformed keys must not take down the rest
         try {
             overrides[locale] = buildMessageTree(entries);
         } catch (error) {

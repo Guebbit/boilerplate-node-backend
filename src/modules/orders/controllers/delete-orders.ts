@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import type { CastError } from 'mongoose';
 import { orderService } from '../service';
@@ -16,7 +15,7 @@ import { ordersAuditActions } from '../audit';
  * DELETE /orders/:id/hard — the same operation with the flag spelled in the path (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
-export const deleteOrders = (request: Request<ParamsDictionary>, response: Response) => {
+export const deleteOrders = (request: Request, response: Response) => {
     const id = extractAndValidateId(request, response, 'deleteOrder');
     if (!id) return Promise.resolve();
 

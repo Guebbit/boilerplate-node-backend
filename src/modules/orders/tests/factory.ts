@@ -23,7 +23,6 @@
  * cannot rewrite what a customer was charged. That is why `toOrderItem` copies the document.
  */
 
-import type { Types } from 'mongoose';
 import type { OrderDocument } from '@modules/orders';
 import type { UserDocument } from '@modules/users';
 import type { ProductDocument } from '@modules/products';

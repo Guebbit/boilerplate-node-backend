@@ -66,7 +66,9 @@ const run = async (): Promise<number> => {
 
     try {
         await mongoose.connect(process.env.NODE_DB_URI);
-        await Promise.all(enabledModules.map((appModule) => appModule.seeds?.() ?? []));
+        await Promise.all(
+            enabledModules.map((appModule) => appModule.seeds?.() ?? Promise.resolve([]))
+        );
 
         const assembled = await assembleDemoDataset();
         const committed = existsSync(DEMO_DATA_PATH) ? readFileSync(DEMO_DATA_PATH, 'utf8') : '';

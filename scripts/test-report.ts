@@ -37,7 +37,7 @@ import path from 'node:path';
  * `process.cwd()`, not `__dirname`: this file is byte-identical in a CommonJS repo and an ESM one,
  * and `__dirname` does not exist in the second. `import.meta.url` is the mirror-image problem. The
  * cwd is the package root for anything started by `npm run`, which is the only way this is
- * invoked — the same trade `scripts/mutationBaseline.ts` already makes.
+ * invoked — the same trade `scripts/mutation-baseline.ts` already makes.
  */
 const REPO_ROOT = process.cwd();
 
@@ -86,7 +86,7 @@ const bucketOf = (file: string): string => {
     const relative = path.relative(REPO_ROOT, file).replaceAll('\\', '/');
 
     const module = /^src\/modules\/([^/]+)\//.exec(relative);
-    if (module) return module[1]!;
+    if (module) return module[1];
 
     const layer = /^tests\/([^/]+)\//.exec(relative);
     if (layer) return `(${layer[1]})`;
@@ -163,7 +163,7 @@ const wall = report.testResults.reduce(
 console.log(
     `\n[test-report] ${total} tests in ${report.testResults.length} suites — ` +
         `${report.numPassedTests ?? 0} passed, ${failed} failed` +
-        `${report.numPendingTests ? `, ${report.numPendingTests} pending` : ''}` +
+        (report.numPendingTests ? `, ${report.numPendingTests} pending` : '') +
         ` (${seconds(wall)} of suite time)\n`
 );
 
@@ -173,7 +173,7 @@ for (const [label, bucket] of rows)
     console.log(
         `  ${label.padEnd(width)}  ${String(bucket.suites).padStart(6)}  ` +
             `${String(bucket.tests).padStart(5)}  ${String(bucket.failed).padStart(6)}  ` +
-            `${seconds(bucket.milliseconds).padStart(7)}`
+            seconds(bucket.milliseconds).padStart(7)
     );
 
 /* ── Where the time went ────────────────────────────────────────────────────────────────────── */
@@ -278,7 +278,7 @@ if (coverage) {
     for (const [label, { hit, found }] of covered)
         console.log(
             `  ${label.padEnd(labelWidth)}  ${String(found).padStart(6)}  ` +
-                `${(found === 0 ? '—' : `${((hit / found) * 100).toFixed(1)}%`).padStart(8)}`
+                (found === 0 ? '—' : `${((hit / found) * 100).toFixed(1)}%`).padStart(8)
         );
 }
 

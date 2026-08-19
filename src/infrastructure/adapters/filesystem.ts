@@ -36,6 +36,7 @@ import { logger } from '@infrastructure/adapters/logger';
  * @param destination - path to move to; its directory must exist
  */
 export const moveFile = async (source: string, destination: string) => {
+    // eslint-disable-next-line no-restricted-syntax -- rename() throws EXDEV across mounts; the catch IS the copy-then-unlink fallback
     try {
         await rename(source, destination);
     } catch (error) {

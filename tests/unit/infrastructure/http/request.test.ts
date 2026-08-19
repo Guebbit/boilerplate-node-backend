@@ -10,8 +10,8 @@
  * — express 5 leaves `request.body` **undefined** when a request carries none (express 4
  * defaulted it to `{}`), so a body-less `DELETE /cart/:productId` is a 500 waiting to happen.
  */
+import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import { extractAndValidateId, isValidObjectId, readInput } from '@infrastructure/http/request';
 
 /** A valid 24-hex ObjectId, used wherever the format has to pass. */
@@ -34,7 +34,7 @@ const makeRequest = (
         contentType?: string;
     } = {}
 ) =>
-    ({
+    asStub<Request>({
         params: overrides.params ?? {},
         body: overrides.body,
         query: overrides.query ?? {},
@@ -44,12 +44,12 @@ const makeRequest = (
                 : overrides.contentType === type
                   ? type
                   : false
-    }) as unknown as Request<ParamsDictionary>;
+    });
 
 /** Response stand-in capturing the status/payload `rejectResponse` writes. */
 const makeResponse = () => {
     const sent: { status?: number; payload?: unknown } = {};
-    const response = {
+    const response = asStub<Response>({
         status(code: number) {
             sent.status = code;
             return this;
@@ -58,7 +58,7 @@ const makeResponse = () => {
             sent.payload = payload;
             return this;
         }
-    } as unknown as Response;
+    });
     return { response, sent };
 };
 

@@ -72,7 +72,7 @@ The five layers answer "did it break". None answers **which module owns the brea
 
 Plus slowest suites, slowest tests, per-module line coverage when `coverage/lcov.info` exists, and every failure named by the module that owns it.
 
-`scripts/testReport.ts` is **byte-identical in the paired frontend** — Vitest's `json` reporter emits the shape Jest's `--json` does, so one reader genuinely serves both, and `check:spec-identity` stops the two drifting.
+`scripts/test-report.ts` is **byte-identical in the paired frontend** — Vitest's `json` reporter emits the shape Jest's `--json` does, so one reader genuinely serves both, and `check:spec-identity` stops the two drifting.
 
 ## Where test data comes from
 

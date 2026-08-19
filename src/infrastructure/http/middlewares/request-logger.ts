@@ -14,14 +14,14 @@ export const requestLogger = (request: Request, response: Response, next: NextFu
     response.once('finish', () => {
         const durationMs = Number(process.hrtime.bigint() - startTime) / 1_000_000;
         const route = getRouteLabel(request);
-        const statusCode = response.statusCode;
-        const method = request.method;
+        const { statusCode } = response;
+        const { method, requestId } = request;
         // A 4xx is the caller's fault and a 5xx is ours, so they must not share a severity.
         const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
 
         // `route` is the pattern, never the concrete path — an id in a log label explodes it.
         logger.log(level, `${method} ${route} ${statusCode} ${durationMs.toFixed(1)}ms`, {
-            request_id: request.requestId,
+            request_id: requestId,
             trace_id: getActiveSpanContext().traceId,
             method,
             route,

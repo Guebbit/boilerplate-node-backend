@@ -15,6 +15,7 @@
  *     silently does nothing.
  */
 
+import { asStub } from '@tests/stub';
 import type { Response } from 'express';
 import {
     createRefreshCookie,
@@ -26,13 +27,15 @@ import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 
 /** Captures the (name, value, options) triples the module hands to Express. */
 const makeResponse = () =>
-    ({
+    asStub<
+        Response & {
+            cookie: jest.Mock;
+            clearCookie: jest.Mock;
+        }
+    >({
         cookie: jest.fn(),
         clearCookie: jest.fn()
-    }) as unknown as Response & {
-        cookie: jest.Mock;
-        clearCookie: jest.Mock;
-    };
+    });
 
 const originalNodeEnvironment = process.env.NODE_ENV;
 const originalShort = process.env.NODE_TOKEN_REFRESH_TIME_SHORT;

@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as userService from '@modules/users/service';
@@ -187,9 +187,9 @@ describe('userService.search', () => {
 
         // The deleted-but-active account is included: deletion is a separate fact, and this
         // filter does not ask about it.
-        expect(
-            active.items.map((item) => (item as unknown as { username: string }).username)
-        ).toEqual(expect.arrayContaining(['enabled', 'deleted']));
+        expect(active.items.map((item) => asStub<{ username: string }>(item).username)).toEqual(
+            expect.arrayContaining(['enabled', 'deleted'])
+        );
         expect(active.items).toHaveLength(2);
     });
 
@@ -199,7 +199,7 @@ describe('userService.search', () => {
         const inactive = await userService.search({ active: false });
 
         expect(inactive.items).toHaveLength(1);
-        expect((inactive.items[0] as unknown as { username: string }).username).toBe('disabled');
+        expect(asStub<{ username: string }>(inactive.items[0]).username).toBe('disabled');
     });
 
     it('returns every account when active is not filtered on', async () => {
@@ -235,14 +235,14 @@ describe('userService.search', () => {
 describe('userService.getById', () => {
     it('returns a real document for an existing user', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         const found = await userService.getById(id);
 
         expect(found).toBeDefined();
         expect(found!.email).toBe('user@example.com');
         // A real Mongoose document — schema's toJSON transform normalizes it on the way out
-        expect(typeof (found as unknown as { save: unknown }).save).toBe('function');
+        expect(typeof asStub<{ save: unknown }>(found).save).toBe('function');
     });
 
     it('returns undefined for a non-existent id', async () => {
@@ -284,7 +284,7 @@ describe('userService.create', () => {
 describe('userService.updateById', () => {
     it('updates the username and admin flag of an existing user', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         const result = await userService.updateById(id, {
             username: 'new-name',
@@ -299,7 +299,7 @@ describe('userService.updateById', () => {
 
     it('changes the password when a non-empty password is supplied', async () => {
         const user = await createUser({ email: 'pwdupdate@example.com' });
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
         const originalHash = user.password;
 
         await userService.updateById(id, { password: 'UpdatedPwd1!' });
@@ -310,7 +310,7 @@ describe('userService.updateById', () => {
 
     it('does not touch the password when an empty string is supplied', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
         const originalHash = user.password;
 
         await userService.updateById(id, { password: '' });
@@ -342,7 +342,7 @@ describe('userService.update', () => {
 describe('userService.removeById', () => {
     it('soft-deletes a user by setting deletedAt', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         const result = await userService.removeById(id);
 
@@ -353,7 +353,7 @@ describe('userService.removeById', () => {
 
     it('restores a soft-deleted user when called again (toggle)', async () => {
         const user = await createUser({ deletedAt: new Date() });
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         await userService.removeById(id);
 
@@ -363,7 +363,7 @@ describe('userService.removeById', () => {
 
     it('hard-deletes a user when hardDelete is true', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         await userService.removeById(id, true);
 
@@ -381,7 +381,7 @@ describe('userService.removeById', () => {
 describe('userService.remove', () => {
     it('soft-deletes a user document directly', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         const result = await userService.remove(user);
 
@@ -392,7 +392,7 @@ describe('userService.remove', () => {
 
     it('hard-deletes a user document directly', async () => {
         const user = await createUser();
-        const id = (user._id as Types.ObjectId).toString();
+        const id = user._id.toString();
 
         await userService.remove(user, true);
 

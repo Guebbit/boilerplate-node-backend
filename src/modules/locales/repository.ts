@@ -89,9 +89,7 @@ const findByTag = (tag: string): Promise<LocaleDocument | null> =>
  * languages is the kind of bug that only appears on the deployment that grew.
  */
 const listActive = (): Promise<LocaleDocument[]> =>
-    localeModel.find({ active: true }).sort({ tag: 1 }).lean().exec() as unknown as Promise<
-        LocaleDocument[]
-    >;
+    localeModel.find({ active: true }).sort({ tag: 1 }).lean<LocaleDocument[]>().exec();
 
 /**
  * Every language, inactive included — the ADMIN's read. Same unpaginated reasoning as
@@ -99,7 +97,7 @@ const listActive = (): Promise<LocaleDocument[]> =>
  * admin callers pass nothing.
  */
 const listAll = (): Promise<LocaleDocument[]> =>
-    localeModel.find({}).sort({ tag: 1 }).lean().exec() as unknown as Promise<LocaleDocument[]>;
+    localeModel.find({}).sort({ tag: 1 }).lean<LocaleDocument[]>().exec();
 
 /**
  * How many DOWNLOADABLE entries each language has, in one query rather than one per language.
@@ -132,9 +130,11 @@ const countEntriesByLocale = async (): Promise<Map<string, number>> => {
  * never authored. `(locale, scope)` is a prefix of the unique index, so this stays one lookup.
  */
 const listEntries = (locale: string, scope: LocaleScope): Promise<LocaleMessageDocument[]> =>
-    localeMessageModel.find({ locale, scope }).sort({ key: 1 }).lean().exec() as unknown as Promise<
-        LocaleMessageDocument[]
-    >;
+    localeMessageModel
+        .find({ locale, scope })
+        .sort({ key: 1 })
+        .lean<LocaleMessageDocument[]>()
+        .exec();
 
 /**
  * Every row of one dictionary, across every language, for the override overlay.
@@ -150,8 +150,8 @@ const listEntriesByScope = (scope: LocaleScope): Promise<LocaleMessageDocument[]
     localeMessageModel
         .find({ scope })
         .sort({ locale: 1, key: 1 })
-        .lean()
-        .exec() as unknown as Promise<LocaleMessageDocument[]>;
+        .lean<LocaleMessageDocument[]>()
+        .exec();
 
 /**
  * Just the keys of one language.
@@ -163,10 +163,10 @@ const listKeys = async (locale: string, scope: LocaleScope): Promise<string[]> =
     const rows = await localeMessageModel
         .find({ locale, scope })
         .select({ key: 1, _id: 0 })
-        .lean()
+        .lean<{ key: string }[]>()
         .exec();
 
-    return (rows as unknown as { key: string }[]).map(({ key }) => key);
+    return rows.map(({ key }) => key);
 };
 
 /**

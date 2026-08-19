@@ -16,6 +16,7 @@ export { PDF_QUEUE } from '@infrastructure/adapters/queue';
 export const handlePdfJob = (job: Partial<PdfJobPayload>): Promise<boolean> => {
     // Both ends of the render: what to render, and where to write it. The check narrows on its
     // own — see the same guard in `email.worker.ts`.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
     if (!job?.templatePath || !job.outputPath) {
         logger.warn({ message: 'Invalid PDF job payload, discarding.', job });
         return Promise.resolve(false);

@@ -60,7 +60,7 @@ async function seed() {
      * first.
      */
     const perModule = await Promise.all(
-        enabledModules.map((appModule) => appModule.seeds?.() ?? [])
+        enabledModules.map((appModule) => appModule.seeds?.() ?? Promise.resolve([]))
     );
     const results = perModule.flat();
 

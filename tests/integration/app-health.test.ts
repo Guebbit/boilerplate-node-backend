@@ -55,16 +55,14 @@ describe('Observability routes', () => {
         const login = await api()
             .post('/account/login')
             .send({ email: admin.email, password: PLAIN_PASSWORD });
-        const cookie = (login.headers['set-cookie'] as unknown as string[]).find((value) =>
-            value.startsWith('jwt=')
-        )!;
+        const cookie = (login.get('Set-Cookie') ?? []).find((value) => value.startsWith('jwt='))!;
 
         const response = await api()
             .get('/observability/events')
             .set('Cookie', cookie)
             .buffer(true)
-            .parse((res, callback) => {
-                const stream = res as unknown as IncomingMessage;
+            .parse((res: unknown, callback) => {
+                const stream = res as IncomingMessage;
                 let text = '';
                 let settled = false;
                 const finish = () => {

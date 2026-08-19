@@ -25,7 +25,7 @@
  */
 
 jest.mock('@infrastructure/adapters/cache', () => {
-    const actual = jest.requireActual('@infrastructure/adapters/cache') as Record<string, unknown>;
+    const actual = jest.requireActual('@infrastructure/adapters/cache');
 
     const responses = new Map<string, unknown>();
     const tagged = new Map<string, Set<string>>();

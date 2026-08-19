@@ -96,7 +96,7 @@ describe('email templates render in every supported locale', () => {
     const render = (template: string, locale: string) =>
         ejs.renderFile(
             path.resolve(EMAIL_TEMPLATES_DIR, template),
-            contentFor(locale)[template]!.data
+            contentFor(locale)[template].data
         );
 
     it('has copy registered for every template in the directory', () => {

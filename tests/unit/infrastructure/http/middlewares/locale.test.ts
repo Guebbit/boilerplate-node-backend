@@ -17,21 +17,22 @@
  * The last two are asserted for the append, not the assignment: `response.vary` must add to
  * whatever CORS already put there rather than replace it.
  */
+import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
 import { attachLocale } from '@infrastructure/http/middlewares/locale';
 import { getCurrentLocale, getLocaleContext, listSupportedLocales } from '@infrastructure/i18n';
 
 const makeRequest = (acceptLanguage?: string) =>
-    ({
+    asStub<Request>({
         get: (name: string) =>
             name.toLowerCase() === 'accept-language' ? acceptLanguage : undefined
-    }) as unknown as Request;
+    });
 
 const makeResponse = () =>
-    ({
+    asStub<Response & { set: jest.Mock; vary: jest.Mock }>({
         set: jest.fn(),
         vary: jest.fn()
-    }) as unknown as Response & { set: jest.Mock; vary: jest.Mock };
+    });
 
 describe('attachLocale', () => {
     it('puts the negotiated locale and its bound t on the request', () => {

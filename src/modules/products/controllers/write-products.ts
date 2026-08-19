@@ -81,7 +81,7 @@ export const writeProducts = (
                 // The answer does not depend on the cleanup succeeding. Without this catch, a
                 // storage backend having a bad moment turns a plain 422 into a 500 — and the
                 // client is told the server broke when what it sent was simply invalid.
-                .catch(() => {})
+                .catch(() => undefined)
                 .then(() => {
                     rejectResponse(response, 422, errors);
                 })

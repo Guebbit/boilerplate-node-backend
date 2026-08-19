@@ -86,7 +86,7 @@ describe('service namespaces across modules', () => {
             const namespaces = Object.entries(loaded).filter(([, value]) => isNamespace(value));
 
             expect(namespaces).toHaveLength(1);
-            expect(namespaces[0]![0]).toMatch(/Service$/);
+            expect(namespaces[0][0]).toMatch(/Service$/);
         }
     );
 

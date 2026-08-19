@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sign, verify } from 'jsonwebtoken';
 import { userModel as Users, TokenType } from '@modules/users';
-import type { Token } from '@modules/users';
 import type { CastError } from 'mongoose';
 import {
     getAccessTokenSecret,
@@ -34,7 +33,10 @@ export { RefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from
 export const verifyAccessToken = (token: string): Promise<TokenData> =>
     new Promise((resolve, reject) => {
         verify(token, getAccessTokenSecret(), (error, data) => {
-            if (error) return reject(error);
+            if (error) {
+                reject(error);
+                return;
+            }
             resolve(data as TokenData);
         });
     });
@@ -95,7 +97,7 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
                 expiresIn: getExpiryTime(remember),
                 algorithm: 'HS256',
                 jwtid: randomUUID()
-            }) as Token['token'];
+            });
             return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 

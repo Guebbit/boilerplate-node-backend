@@ -61,7 +61,7 @@ describe('audit actions across modules', () => {
         expect(readdirSync(MODULES_ROOT).length).toBeGreaterThan(0);
         expect(files.length).toBeGreaterThanOrEqual(1);
 
-        for (const { module, file } of files)
+        for (const { file } of files)
             expect(Object.keys(await readActions(file)).length).toBeGreaterThan(0);
     });
 

@@ -9,8 +9,7 @@
 /** Re-imports the audit model with a fresh module registry, so the import-time read runs again. */
 const loadSchema = async () => {
     jest.resetModules();
-    const module_ =
-        (await import('@modules/audit-logs/model')) as typeof import('@modules/audit-logs/model');
+    const module_ = await import('@modules/audit-logs/model');
     return module_.auditLogSchema;
 };
 

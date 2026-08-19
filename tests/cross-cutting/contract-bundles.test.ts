@@ -43,9 +43,9 @@ import {
     type ContractBundle
 } from '../../scripts/contracts';
 import { MODULE_SECTIONS, moduleSpec, ROOT_SPEC } from '../../scripts/contracts/openapi';
-import { ANALYTICS_SECTIONS } from '../../scripts/contracts/analyticsEvents';
-import { allProbes } from '../../scripts/contracts/generateCollections';
-import { SHARED_FILES } from '../../scripts/specIdentity';
+import { ANALYTICS_SECTIONS } from '../../scripts/contracts/analytics-events';
+import { allProbes } from '../../scripts/contracts/generate-collections';
+import { SHARED_FILES } from '../../scripts/spec-identity';
 import { analyticsEvents } from '../../src/infrastructure/observability/analytics-events.frontend';
 import type { AnalyticsEventName } from '../../src/infrastructure/observability/analytics';
 

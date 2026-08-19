@@ -144,8 +144,8 @@ export const compareToBaseline = (
     const files = [...new Set([...Object.keys(previous), ...Object.keys(current)])].toSorted();
 
     return files.map((file) => {
-        const before = previous[file];
-        const now = current[file];
+        const before = previous[file] as number | undefined;
+        const now = current[file] as number | undefined;
 
         if (before === undefined) return { file, current: now, verdict: 'new' as const };
         if (now === undefined) return { file, baseline: before, verdict: 'removed' as const };
@@ -192,8 +192,8 @@ export const nextBaseline = (
     const files: Record<string, number> = {};
 
     for (const file of Object.keys(current).toSorted()) {
-        const before = previous[file];
-        files[file] = before === undefined ? current[file]! : Math.max(before, current[file]!);
+        const before = previous[file] as number | undefined;
+        files[file] = before === undefined ? current[file] : Math.max(before, current[file]);
     }
 
     return { generatedAt: new Date().toISOString(), files };

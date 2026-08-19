@@ -49,9 +49,9 @@ jest.mock('@infrastructure/adapters/logger', () => ({
     }
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- the mocked class is reached through jest's module registry, not an import
 const { PostHog: mockedPostHog } = require('posthog-node') as {
-    PostHog: jest.MockedClass<{ new (...args: unknown[]): unknown }>;
+    PostHog: jest.MockedClass<new (...args: unknown[]) => unknown>;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

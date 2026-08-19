@@ -73,7 +73,7 @@ export type Transform = (serialized: Record<string, unknown>) => Record<string, 
 
 /** Treat empty/blank/nullish as "the caller did not filter on this". */
 const isPresent = (value: unknown): boolean =>
-    value !== undefined && value !== null && String(value).trim() !== '';
+    value !== undefined && value !== null && (typeof value !== 'string' || value.trim() !== '');
 
 /**
  * Coerce an id to a BSON ObjectId.
@@ -216,14 +216,17 @@ export function createBaseRepository<TDocument extends Document>(
     /**
      * Normalize a batch of lean/aggregate results.
      *
-     * The double cast is unavoidable and confined to this one line: `.lean()` returns plain
-     * objects, the transform rewrites their keys, the app types the outcome as the document.
-     * One copy, so there is one place to get it wrong.
+     * `.lean()` returns plain objects, the transform rewrites their keys, and the app types the
+     * outcome as the document. The conversion is spelled as two honest single steps — into the
+     * record the transform reads, out of the `unknown[]` it leaves — confined to this one
+     * function, so there is one place to get it wrong.
      */
-    const normalize = (items: unknown[]): TDocument[] =>
-        (items as Record<string, unknown>[]).map((item) =>
-            transform(item)
-        ) as unknown as TDocument[];
+    const normalize = (items: unknown[]): TDocument[] => {
+        const transformed: unknown[] = items.map((item) =>
+            transform(item as Record<string, unknown>)
+        );
+        return transformed as TDocument[];
+    };
 
     /** Hydrated — callers may mutate and `save()` the result. */
     const findById = (id: string): Promise<TDocument | null> => mongooseModel.findById(id).exec();
@@ -234,13 +237,14 @@ export function createBaseRepository<TDocument extends Document>(
 
     /** Lean and untransformed, so the `_id` survives — for embedded snapshots. */
     const findByIdRaw = (id: string): Promise<TDocument | null> =>
-        mongooseModel.findById(id).lean().exec() as unknown as Promise<TDocument | null>;
+        mongooseModel.findById(id).lean<TDocument | null>().exec();
 
     /**
      * Filtered, sorted, paginated list.
      *
-     * The cast is the `.lean()` lie made explicit: these are plain objects typed as hydrated
-     * documents, and they are NOT normalized — `search()` is the path that also normalizes.
+     * `.lean<TDocument[]>()` is the `.lean()` lie made explicit: these are plain objects typed
+     * as hydrated documents, and they are NOT normalized — `search()` is the path that also
+     * normalizes.
      */
     const findAll = (
         where: QueryFilter<TDocument> = {},
@@ -248,12 +252,12 @@ export function createBaseRepository<TDocument extends Document>(
     ): Promise<TDocument[]> =>
         mongooseModel
             .find({ ...where })
-            .lean()
-            // eslint-disable-next-line unicorn/no-array-sort
+            .lean<TDocument[]>()
+            // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
             .sort(sort)
             .skip(skip)
             .limit(limit)
-            .exec() as unknown as Promise<TDocument[]>;
+            .exec();
 
     /** Count the documents matching a filter. */
     const count = (where: QueryFilter<TDocument> = {}): Promise<number> =>
@@ -275,9 +279,8 @@ export function createBaseRepository<TDocument extends Document>(
 
     /** Remove a single document. */
     const deleteOne = (document: TDocument): Promise<void> =>
-        document.deleteOne().then(() => {
-            // explicit void return
-        });
+        // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
+        (document.deleteOne() as Promise<unknown>).then(() => undefined);
 
     /**
      * Filter → count → page → normalize, in one call.

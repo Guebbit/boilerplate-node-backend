@@ -165,5 +165,5 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
      * Workers execute the app module
      */
 
-    import('./app');
+    void import('./app');
 }

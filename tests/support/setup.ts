@@ -68,11 +68,11 @@ process.env.NODE_METRICS_TOKEN ??= 'test-metrics-token';
  * If the binary is absent, mongodb-memory-server will download it automatically at runtime.
  * So first run may be slow (download is 100mb)
  */
-const systemBinary = process.env['MONGOMS_SYSTEM_BINARY'] ?? '/tmp/mongod';
+const systemBinary = process.env.MONGOMS_SYSTEM_BINARY ?? '/tmp/mongod';
 if (existsSync(systemBinary)) {
-    process.env['MONGOMS_SYSTEM_BINARY'] = systemBinary;
-    process.env['MONGOMS_SYSTEM_BINARY_VERSION_CHECK'] = 'false';
-    process.env['MONGOMS_MD5_CHECK'] = 'false';
+    process.env.MONGOMS_SYSTEM_BINARY = systemBinary;
+    process.env.MONGOMS_SYSTEM_BINARY_VERSION_CHECK = 'false';
+    process.env.MONGOMS_MD5_CHECK = 'false';
 }
 
 /**

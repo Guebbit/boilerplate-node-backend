@@ -18,7 +18,6 @@ import { makeCart } from './factory';
 import { cartModel } from './model';
 import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { cartRepository } from './repository';
-import type { CartDocument } from './model';
 
 export const cartFixtures = [
     makeCart({

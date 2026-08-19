@@ -14,7 +14,7 @@
 //  - `Span` — one timed operation; `Attributes` — its key/value metadata.
 // Because this is only the API, importing it when no SDK is registered is harmless: every
 // call becomes a no-op. That is what lets tests run without booting OpenTelemetry.
-import { trace, context, SpanStatusCode, type Span, type Attributes } from '@opentelemetry/api';
+import { trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetry/api';
 
 // Single tracer scoped to this service.
 // The tracer name identifies the *instrumentation source* and shows up on every span, letting

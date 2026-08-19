@@ -22,6 +22,7 @@
  * call COUNT, not just the final payload. "Answered 422 once" and "answered 200 then 422" are
  * different bugs, and only the mock can tell them apart.
  */
+import { asStub } from './stub';
 import type { Response } from 'express';
 
 /** A `Response` whose `status`/`json` are jest mocks, so tests can assert on what was sent. */
@@ -34,10 +35,10 @@ export type ResponseStub = Response & { status: jest.Mock; json: jest.Mock };
  *          response itself, so `status(...).json(...)` works as it does in production code
  */
 export const makeResponseStub = (): ResponseStub => {
-    const response = {
+    const response = asStub<ResponseStub>({
         status: jest.fn(),
         json: jest.fn()
-    } as unknown as ResponseStub;
+    });
 
     response.status.mockReturnValue(response);
     response.json.mockReturnValue(response);

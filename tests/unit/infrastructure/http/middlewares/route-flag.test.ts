@@ -7,12 +7,11 @@
  * route's handler chain — is verified end-to-end by the products/users integration suites; these
  * cases pin the middleware's own behaviour.
  */
+import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
-import type { ParamsDictionary } from 'express-serve-static-core';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
-const makeRequest = (params: Record<string, string> = {}) =>
-    ({ params }) as unknown as Request<ParamsDictionary>;
+const makeRequest = (params: Record<string, string> = {}) => asStub<Request>({ params });
 
 const response = {} as Response;
 
