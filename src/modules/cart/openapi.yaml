@@ -113,7 +113,10 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed product id that matches no cart line. 422 covers the malformed case.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `{productId}` is not a usable ObjectId — the controller answers before querying.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /cart/summary:

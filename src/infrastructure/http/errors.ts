@@ -107,6 +107,14 @@ export const isDuplicateKey = (error: unknown): boolean =>
  * The 500 at the end is for genuinely unrecognised failures only. Every branch above exists because
  * something that describes the CALLER was reaching it and being reported as a server fault.
  *
+ * WHERE A FIFTH ONE GOES. Another driver error that turns out to describe the request belongs in
+ * this function, as a branch carrying a comment that names which driver raises it and why its
+ * status is what it is — not in a controller, and not as a `try`/`catch` at the call site. One
+ * function is what makes the answer the same on all twelve models, and a call-site catch is
+ * invisible to every endpoint that did not think to write one. `tests/fuzz/endpoints.fuzz.test.ts`
+ * is what surfaces these: it runs on every commit, and a 500 out of it is this class of error until
+ * something proves otherwise.
+ *
  * @param error - anything Mongoose threw
  */
 export function databaseErrorInterpreter(error: CastError | Error): [number, string] {

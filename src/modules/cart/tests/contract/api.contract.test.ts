@@ -186,6 +186,15 @@ describe('DELETE /cart/{productId}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('matches the error contract for a malformed product id', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().delete('/cart/not-an-id').set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('matches the error contract when unauthenticated', async () => {
         const response = await api().delete(`/cart/${MISSING_ID}`);
 

@@ -661,6 +661,18 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('422s on a malformed entry id for the delete route too', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .delete('/locales/pt/entries/not-an-id')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('403s for a non-admin caller', async () => {
         const { bearer } = await authenticateAs('user');
 
